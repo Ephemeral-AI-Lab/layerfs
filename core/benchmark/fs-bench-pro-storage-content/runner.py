@@ -73,6 +73,7 @@ import analyze  # noqa: E402
 import copyladder  # noqa: E402
 import history_corpus  # noqa: E402
 import invariants  # noqa: E402
+import isolation  # noqa: E402
 import phases as phases_module  # noqa: E402
 import receipt  # noqa: E402
 import space  # noqa: E402
@@ -81,8 +82,13 @@ import trace as trace_module  # noqa: E402
 BINARY = HARNESS_ROOT / "target" / "release" / "fs-bench-storage-content"
 MANIFEST = HARNESS_ROOT / "Cargo.toml"
 TOOLCHAIN = "+1.85.1"
-LOCK_PATH = HARNESS_ROOT / ".measurement.lock"
-RESULTS_ROOT = REPO_ROOT / "benchmark-results" / "fs-bench-pro-storage-content"
+# One namespace per worktree (owner direction, 2026-09-21): the measurement lock,
+# the prepared masters and the Cargo target belong to this worktree alone. Builds
+# and measurements in other worktrees run freely; the interference that costs a
+# timed phase is recorded on the row rather than excluded by a machine-global lock.
+SPACE = isolation.namespace(HARNESS_ROOT)
+LOCK_PATH = SPACE.lock_path
+RESULTS_ROOT = SPACE.results_root
 
 # Cases whose complete command is a declared exception on the <= 25 s list.
 # Owner decision D4: over-budget tiers are declared, never cut and never shrunk.
@@ -255,7 +261,13 @@ def cargo(*arguments: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def build(release: bool = True, locked: bool = True) -> None:
-    """Builds the harness binary."""
+    """Builds the harness binary.
+
+    The effective Cargo target directory is checked first. Two worktrees sharing
+    one target directory is the build/build conflict per-worktree isolation exists
+    to refuse, and an inherited `CARGO_TARGET_DIR` is how it happens by accident.
+    """
+    isolation.assert_target_owned(SPACE, MANIFEST)
     arguments = ["build"]
     if release:
         arguments.append("--release")
@@ -614,8 +626,9 @@ def cmd_prune(arguments: argparse.Namespace) -> int:
       consume one, so it is dead weight.
 
     It holds the measurement lock, because deleting a master a running lane is about
-    to load would corrupt that lane rather than fail it. `--dry-run` reports and
-    removes nothing.
+    to load would corrupt that lane rather than fail it. That lock is the worktree's
+    own: a prune here never blocks, and is never blocked by, another worktree.
+    `--dry-run` reports and removes nothing.
     """
     root = Path(arguments.out) if arguments.out else artifact_root()
     if not root.exists():
@@ -902,6 +915,10 @@ def run_case(
         artifact = artifact_root() / case_id
         acquisition = acquire(case_id, artifact_root(), identity, row_of(case_id))
         command += ["--load-input", str(artifact)]
+    # Taken at the instant before the timed child starts. Another worktree's build
+    # or measurement is allowed to run now, so the row records what was live rather
+    # than assuming the quiet host it no longer excludes.
+    resource_isolation = isolation.observe(SPACE, MANIFEST)
     started = time.monotonic_ns()
     result = subprocess.run(
         command,
@@ -1128,6 +1145,7 @@ def run_case(
         "budget": budget.as_fields(),
         "acquisition": acquisition,
         "verification": verification,
+        "resource_isolation": resource_isolation,
         "identity": identity.as_fields(),
         "receipt_path": str(case_dir / "receipt.json"),
     }
@@ -1179,6 +1197,7 @@ def cmd_perf(arguments: argparse.Namespace) -> int:
         ),
         "registry_self_check": registry_self_check(),
         "golden_matches": golden_matches(),
+        "resource_isolation": isolation.observe(SPACE, MANIFEST),
         "identity": identity.as_fields(),
     }
     started = time.monotonic_ns()
@@ -1424,6 +1443,7 @@ def cmd_verify(arguments: argparse.Namespace) -> int:
         "findings": findings,
         "sealed_call_graph": call_graph,
         "runtime_tripwires": tripwire,
+        "resource_isolation": isolation.observe(SPACE, MANIFEST),
         "wall_ns": time.monotonic_ns() - started,
     }
     document["budget"] = receipt.verification_budget(document["wall_ns"]).as_fields()
@@ -1665,6 +1685,7 @@ def cmd_self_check(_: argparse.Namespace) -> int:
         "phases": phases_module.self_check(),
         "invariants": invariants.self_check(),
         "history": history_corpus.self_check(),
+        "isolation": isolation.self_check(),
     }
     for name, found in checks.items():
         if found:

@@ -44,8 +44,14 @@ from that ID, and validates its actual image, mounts and resource limits.
 Readiness and capability capture share one exec; both command-window cgroup
 snapshots retain their original boundaries.
 See the [#105 build-loop report](../../docs/roadmap/0.1/0.1.5/issue105/results.md)
-for exact measurement boundaries, cache states, and remaining limits. Builds, performance and verification share a measurement lock: do
-not overlap resource-sensitive work or interrupt another owner's live run.
+for exact measurement boundaries, cache states, and remaining limits. The
+measurement lock is **per worktree**: two runs in one worktree still never
+overlap, and builds, performance and verification in *different* worktrees run
+freely without excluding each other (owner direction, 2026-09-21 —
+[build and measurement isolation](../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)).
+A build may now overlap a timed phase in another worktree, so a row records the
+competing work it observed instead of assuming a quiet host; see that document
+before promoting any number.
 The standard container has 2 CPUs, 2 GiB RAM, no swap and 256 PIDs. Host CPU and
 memory remain separate resource scopes.
 

@@ -111,8 +111,13 @@ the report.
    needs a rebuilt matched arm; a harness change invalidates the pair.
 4. Verify separately, in verification mode, with the exact identities from the
    performance receipt. A performance PASS is not release admission.
-5. Respect the measurement lock: never overlap resource-sensitive work, never
-   interrupt another owner's run.
+5. Respect the measurement lock — it is **per worktree** (owner direction,
+   2026-09-21): builds and measurements in different worktrees do not exclude each
+   other, two runs in one worktree still never overlap, and no build may take a
+   Cargo target directory outside its own worktree. A build that overlaps a timed
+   phase is recorded as declared interference on the row rather than prevented;
+   see [`measurement-isolation.md`](docs/roadmap/0.1/0.1.7/measurement-isolation.md).
+   Never interrupt another owner's run.
 6. Record it: append an entry to the active ledger
    (`docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md` and its
    successors) with exact numbers, limits, the arithmetic, the identities, the

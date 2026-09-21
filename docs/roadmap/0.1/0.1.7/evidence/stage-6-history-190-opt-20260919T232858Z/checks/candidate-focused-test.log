@@ -1,0 +1,70 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.10s
+     Running tests/filesystem_parent_lookup.rs (core/target/debug/deps/filesystem_parent_lookup-17f566aec9fff5f1)
+
+running 4 tests
+quota pending=1 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+quota pending=1 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 192 }
+parent lookup demands for batches 1/3/64: [18, 9, 6]
+explicit parent value demands for batches 1/3/64: [18, 9, 6]
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+quota pending=1test partial_parent_batches_preserve_values_new_directories_and_removals ... ok bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+
+quota pending=1 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 288 }
+quota pending=1 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 480 }
+quota pending=1 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 480 }
+quota pending=1 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 672 }
+quota pending=1 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 672 }
+quota pending=1 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 768 }
+quota pending=1 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=1 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=1 bytes=864 batch=1 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=1 bytes=864 batch=64 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=1 bytes=960 batch=1 outcome=ERR ObjectLimitExceeded { limit: 960, actual: 1056 }
+quota pending=1 bytes=960 batch=64 outcome=ERR ObjectLimitExceeded { limit: 960, actual: 1056 }
+quota pending=1 bytes=1152 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1152 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=1 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=96 batch=1 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=96 batch=64 outcome=ERR ObjectLimitExceeded { limit: 96, actual: 384 }
+quota pending=2 bytes=192 batch=1 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=192 batch=64 outcome=ERR ObjectLimitExceeded { limit: 192, actual: 384 }
+quota pending=2 bytes=288 batch=1 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=288 batch=64 outcome=ERR ObjectLimitExceeded { limit: 288, actual: 384 }
+quota pending=2 bytes=384 batch=1 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=384 batch=64 outcome=ERR ObjectLimitExceeded { limit: 384, actual: 576 }
+quota pending=2 bytes=480 batch=1 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=480 batch=64 outcome=ERR ObjectLimitExceeded { limit: 480, actual: 576 }
+quota pending=2 bytes=576 batch=1 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=576 batch=64 outcome=ERR ObjectLimitExceeded { limit: 576, actual: 960 }
+quota pending=2 bytes=672 batch=1 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=672 batch=64 outcome=ERR ObjectLimitExceeded { limit: 672, actual: 960 }
+quota pending=2 bytes=768 batch=1 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=768 batch=64 outcome=ERR ObjectLimitExceeded { limit: 768, actual: 960 }
+quota pending=2 bytes=864 batch=1 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=864 batch=64 outcome=ERR ObjectLimitExceeded { limit: 864, actual: 960 }
+quota pending=2 bytes=960 batch=1 outcome=ERR ObjectLimitExceeded { limit: 960, actual: 1248 }
+quota pending=2 bytes=960 batch=64 outcome=ERR ObjectLimitExceeded { limit: 960, actual: 1248 }
+quota pending=2 bytes=1152 batch=1 outcome=ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }
+quota pending=2 bytes=1152 batch=64 outcome=ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }
+quota pending=2 bytes=1536 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=1536 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=2304 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=1 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+quota pending=2 bytes=3072 batch=64 outcome=OK root=FilesystemRootId(ObjectId("ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17"))
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

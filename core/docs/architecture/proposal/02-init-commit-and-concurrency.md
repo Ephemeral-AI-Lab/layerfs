@@ -3,12 +3,46 @@
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 >
 > **DRAFT — NOT FINALIZED.** Nothing in this document is implemented or measured.
-> §1–§4 and the parts marked *read from source* describe code that exists. §5–§10
+> §1–§4 and the parts marked *read from source* describe the original source pin. §5–§10
 > describe a concurrency design that does **not** exist and would require the
 > changes listed in §8. Every "safe" claim is scoped to the configuration it is
 > stated under.
 
 Parent: [`core/docs/architecture/`](../README.md). Source pin `ce2d738ff`.
+
+## Current pair-2 recommendation — 2026-09-21
+
+The [commit/history investigation](03-history.md) now supplies the semantic half
+and the proposed implementation boundary. The older sections below retain their
+original source/concurrency analysis; their "holds today" labels refer to that
+historical pin, not the current core. Where they differ, use the new proposal:
+
+- Keep the reference's **two publications**: Commit CASes Branch head/base;
+  publishing a Layer separately CASes LayerStack head. A stage precedes Commit.
+  Different Branches in one stack still share its publication head.
+- C1/C2 stay service-local. Workspace sends bounded stable logical input; the
+  old diagram placing C1 construction in Workspace is superseded.
+- The original inspection's C2 schema 6 has **five** tables and rejects extra tables. Recommend a
+  separately versioned C5 catalog; do not inject history SQL or transaction
+  callbacks into C2. Save success followed by history failure can orphan content.
+- A complete C2 save can span bounded transactions. The physical write phase is
+  not one atomic transaction for the whole logical Commit. Save completion,
+  stage insertion, branch Commit and Layer publication have separate outcomes.
+- Different metadata rows do not remove SQLite writer contention. The later
+  pair-3/C2 implementation has **two private saves and schema 7 with six
+  tables**, as recorded in the history investigation's later-inspection section.
+  It is implemented differently from these older sketches and is not in PR #200's
+  merged schema-6 foundation; it subsequently landed on main in `eb319aaa9`.
+  Use the selected checkpoint's ownership/admission
+  and matched evidence, not an inference from #177/#178's status.
+- A stage is authoritative stored metadata with frozen expected context and an
+  exact token. No phase promises crash durability. The reference's synchronous
+  FULL allocator cannot be ported under core's policy; writable recovery needs
+  an explicit allocation-continuity contract.
+- Return stale-head failure once. No automatic rebase, retry or backoff queue.
+
+These are design recommendations, not implemented or measured behavior. See the
+new document for source findings, schema, error/portability contracts and checks.
 
 **Current sequencing:** this is pair 2's operational design input. Under the
 [2026-09-20 implementation order](README.md#implementation-order-pair-3-then-pair-1-then-pair-2),
@@ -486,23 +520,27 @@ costs about three row operations and is not a throughput concern.**
 **A stale commit reverted by time is still stale.** The staleness check is not
 conservatism — it is what prevents silent data loss.
 
-### 9.3 Where the queue belongs
+### 9.3 Explicit rebase belongs to Workspace
 
 ```text
    ✗ STORE-SIDE QUEUE          "apply merges in arrival order"
                                ⇒ silent reverts.  WRONG.
 
-   ✓ RUNTIME-SIDE QUEUE        for each pending merge:
-                                   1. re-read the branch head
-                                   2. REBASE this workspace's edits onto it
-                                   3. CAS merge; on HeadMoved, loop with backoff
+   ✓ EXPLICIT CALLER ACTION    after receiving HeadMoved:
+                                   1. inspect the current head
+                                   2. explicitly request Workspace rebase
+                                   3. build/save/stage a new candidate
+                                   4. attempt conditional publication once
 
    ⇒ the store CANNOT do this: it holds a staged ROOT, not the EDITS.
      Rebasing requires the caller's edit stream, which lives in the consumer.
 ```
 
-**The unit of work is "rebase, then merge" — never "merge".** That is why a merge
-queue is a runtime feature, not a storage one.
+The former automatic runtime queue/backoff suggestion is withdrawn under the
+owner's one-attempt/no-automatic-rebase policy. C5 cannot rebase a root: only
+Workspace has the caller's edits. An explicit rebase is a separate operation and
+still lacks overlap detection until #164; it is not an implicit response to CAS
+failure.
 
 ---
 
@@ -582,11 +620,11 @@ was intended, and nothing reports it.
 | 1 | Everything in SQLite; packs not externalised | **decided** |
 | 2 | Duplicated bytes accepted for identical concurrent submissions | **decided** |
 | 3 | Objects immutable, packs append-only, one mutable value | **holds today** |
-| 4 | Commit stages; merge is a separate per-branch CAS | **holds today** |
-| 5 | Per-branch serialization costs ~3 row operations | **verified** |
+| 4 | Stage precedes Commit/Branch CAS; Layer publication separately CASes the stack | **reference semantics; see current proposal** |
+| 5 | Publication reuses the root with bounded history-row operations | **source structure only; not measured** |
 | 6 | Init namespace is the multi-worker exception, 2.7 s cold Init target | **holds today** |
 | 7 | Reject stale merges; never queue-and-apply | **holds today** |
-| 8 | Merge queue belongs in the runtime, unit = rebase + merge | **proposed** |
+| 8 | Rebase is explicit Workspace work; no automatic queue/retry | **current policy; former loop withdrawn** |
 | 9 | Insert-or-reuse (§8.1) | **open — required** |
 | 10 | Private packs (§8.2) | **open — required** |
 | 11 | Per-**save** publication (§8.3) | **open — required, schema** |

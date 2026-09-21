@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-content",
+    "--test",
+    "filesystem_bounds",
+    "a_branch_materialization_reads_children_in_one_wave",
+    "--",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "wall_ns": 7568808333
+}

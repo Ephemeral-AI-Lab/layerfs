@@ -11,6 +11,12 @@ component and file ownership are in [01](01-architecture-and-portability.md) and
 the implementation contract. No transport code or cloud provider exists by virtue
 of this document.
 
+The [telemetry and retention proposal](08-telemetry-and-retention.md) defines
+optional process observation, operation-report composition, disable behavior and
+bounded output/cleanup. Its candidate 100 ms operational sampler is not a new
+benchmark instrument contract or proof of a phase peak. Include enabled telemetry
+in resource accounting and report unavailable/incomplete required evidence.
+
 **Primary acceptance is network delivery between separate processes:** an actual
 Linux Docker daemon connects to the actual native macOS host service. A bounded
 host test driver supplies daemon stdin and consumes daemon stdout; inputs and
@@ -290,6 +296,12 @@ this checklist alone.
 
 ## 7. Measuring the implementation without misleading speed claims
 
+The [direct/forward benchmark-verification draft](implementation/04-benchmark-direct-forward.md)
+turns these accounting requirements into a prospective comparison contract. Its
+implementation follows product correctness/deployment work; workload membership,
+numeric gates and actual runner flags still need a committed freeze.
+
+
 Follow the repository [benchmark rules](../../../../../docs/general/benchmark_rules.md),
 [benchmark-tree rules](../../../../../benchmark/AGENTS.md),
 [runner mechanics](../../../../../benchmark/fs-bench-pro/QUICKSTART.md) and
@@ -344,7 +356,9 @@ only with matched operation/workload/harness/cache semantics and exact identitie
 Reuse prepared pristine inputs/builds/images under the existing seals and clone
 contract; use fresh outputs and samples. Reuse never moves measured work outside
 its phase or credits resident bytes to a cold claim. Separate verifier readback
-from operation timing. Respect the measurement lock and other owners' runs.
+from operation timing. Respect the measurement lock, which is per worktree
+(owner direction, 2026-09-21 — [isolation](../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)), and other owners' runs: two
+runs in one worktree never overlap, while another worktree is not excluded.
 
 Unavailable counters/phase peaks are unavailable, not zero. No meaningful
 percentile follows from one sample. Missing required proof is INCOMPLETE/NOT_RUN,

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked"
+  ],
+  "exit_code": 0,
+  "wall_ns": 12331748417,
+  "build_mode": "incremental existing target",
+  "dependency_reuse": "cargo locked existing registry/target",
+  "CARGO_BUILD_JOBS": "4",
+  "locks": "core O_EXCL + TMPDIR and /tmp flock"
+}

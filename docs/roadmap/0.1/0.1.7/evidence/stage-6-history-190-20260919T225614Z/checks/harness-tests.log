@@ -1,0 +1,228 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-storage)
+   Compiling fs-bench-pro-storage-content v0.1.0 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content)
+warning: variable `prior_roots` is assigned to, but never used
+    --> src/ops/history.rs:1715:33
+     |
+1715 |                         let mut prior_roots: BTreeMap<Vec<u8>, ObjectId> = BTreeMap::new();
+     |                                 ^^^^^^^^^^^
+     |
+     = note: consider using `_prior_roots` instead
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: value assigned to `prior_roots` is never read
+    --> src/ops/history.rs:1746:46
+     |
+1746 | ...                   Ok(built) => prior_roots = built,
+     |                                    ^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` on by default
+
+warning: variable does not need to be mutable
+    --> src/ops/history.rs:1518:9
+     |
+1518 |     let mut prior_unavailable: u64 = 0;
+     |         ----^^^^^^^^^^^^^^^^^
+     |         |
+     |         help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+warning: `fs-bench-pro-storage-content` (lib test) generated 3 warnings (3 duplicates)
+warning: `fs-bench-pro-storage-content` (lib) generated 3 warnings (run `cargo fix --lib -p fs-bench-pro-storage-content` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.78s
+     Running unittests src/lib.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/fs_bench_storage_content-7aea256f5286ce0b)
+
+running 23 tests
+test workload::history::tests::path_states_are_not_the_manifest_file_count ... ok
+test workload::history::tests::hex_decoding_refuses_odd_lengths_and_non_hex ... ok
+test workload::history::tests::a_selection_that_is_not_the_declared_shape_is_refused ... ok
+test workload::history::tests::a_transition_counts_and_sizes_only_what_it_added_or_modified ... ok
+test workload::gitoid::tests::a_blob_oid_is_the_header_plus_the_bytes ... ok
+test workload::history::tests::a_missing_corpus_is_refused_rather_than_defaulted ... ok
+test workload::gitoid::tests::object_ids_parse_and_render_round_trip ... ok
+test workload::history::tests::a_malformed_oracle_is_refused_rather_than_counted ... ok
+test workload::history::tests::an_oracle_parses_files_and_directories_apart ... ok
+test workload::history::tests::the_pinned_totals_agree_with_the_selections ... ok
+test workload::history::tests::the_three_selections_are_the_declared_indices ... ok
+test workload::history::tests::a_blob_that_does_not_identify_is_refused_both_ways ... ok
+test workload::json::tests::a_duplicate_key_is_refused_rather_than_resolved ... ok
+test workload::json::tests::accessors_are_typed_rather_than_coercing ... ok
+test workload::gitoid::tests::the_buffer_boundaries_are_exact ... ok
+test workload::json::tests::escapes_resolve_including_a_surrogate_pair ... ok
+test workload::json::tests::counting_agrees_with_building ... ok
+test workload::json::tests::malformed_documents_are_refused ... ok
+test workload::json::tests::scalars_and_containers_round_trip ... ok
+test workload::history::tests::a_tree_line_parses_in_the_corpus_column_order ... ok
+test workload::json::tests::the_depth_guard_refuses_rather_than_overflowing ... ok
+test workload::history::tests::a_malformed_tree_line_names_its_line_and_is_refused ... ok
+test workload::gitoid::tests::sha1_matches_the_published_vectors ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/main.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/fs_bench_storage_content-d890f447783d535e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/digest_vectors.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/digest_vectors-6fcb293def21e60b)
+
+running 10 tests
+test a_binary_multi_block_input_matches ... ok
+test an_empty_update_is_a_no_op ... ok
+test the_448_bit_padding_edge_is_a_second_block ... ok
+test the_896_bit_padding_edge_is_a_second_block ... ok
+test fips_180_4_published_vectors_match ... ok
+test two_agreeing_wrong_digests_would_still_compare_equal ... ok
+test a_single_flipped_byte_changes_the_digest ... ok
+test streaming_and_one_shot_agree_at_every_chunk_boundary ... ok
+test the_million_a_vector_matches_across_many_blocks ... ok
+test the_accelerated_and_scalar_routes_agree ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/fixture_declarations.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/fixture_declarations-e7667a2a335c899c)
+
+running 1 test
+test the_declared_chunk_dense_run_is_cut_below_the_profile_target ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gates_bands.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/gates_bands-978c91a9914663b0)
+
+running 23 tests
+test a_band_contains_its_bounds_inclusively_and_is_one_sided_at_the_top ... ok
+test attribution_refuses_a_shared_with_master_row ... ok
+test band_describe_renders_closed_and_one_sided_forms ... ok
+test aggregate_returns_the_worst_gate ... ok
+test doublings_refuses_degenerate_steps ... ok
+test device_attestation_demands_ninety_percent_from_the_device ... ok
+test a_gating_metric_can_produce_fail_and_a_missing_tier_is_incomplete ... ok
+test every_growth_and_metric_pair_has_its_frozen_band ... ok
+test gate_class_tokens_are_the_frozen_seven ... ok
+test only_time_is_stripped_of_the_power_to_decide ... ok
+test pack_accounting_refuses_a_fabricated_zero ... ok
+test per_doubling_is_identity_for_a_constant_and_refuses_non_positive ... ok
+test per_doubling_normalises_the_raw_ratio_on_the_real_ladders ... ok
+test require_maps_a_boolean_onto_a_named_limit ... ok
+test residency_and_swap_gates_fail_closed_on_a_missing_reading ... ok
+test severity_orders_not_run_above_target_miss ... ok
+test slope_on_the_real_byte_ladder_recovers_a_linear_growth ... ok
+test slope_recovers_a_known_exponent ... ok
+test slope_refuses_what_it_cannot_fit ... ok
+test the_byte_ladder_has_no_doublings ... ok
+test the_normalised_ratio_is_what_the_band_judges ... ok
+test timing_purity_turns_a_clipped_tree_into_a_hard_failure ... ok
+test time_never_produces_fail_whatever_the_value ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/instruments_selfcheck.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/instruments_selfcheck-006db4c00ecab5ea)
+
+running 8 tests
+test the_page_size_is_read_rather_than_assumed ... ok
+test the_rss_bundle_refuses_a_peak_it_cannot_stand_behind ... ok
+test a_zero_length_file_is_resident_by_definition_not_by_reading ... ok
+test an_allocating_window_charges_more_than_a_quiet_one ... ok
+test residency_sees_a_file_this_process_just_wrote_and_de_warm_clears_it ... ok
+test the_heap_window_attributes_a_known_allocation_pattern ... ok
+test the_rss_sampler_takes_a_series_and_keeps_its_own_interval ... ok
+test the_rusage_readings_are_available_on_this_host ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/oracle_independence.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/oracle_independence-df745ea964e92d7e)
+
+running 16 tests
+test a_read_back_that_matches_passes_both_halves ... ok
+test a_head_splice_matches_a_materialised_splice ... ok
+test a_read_back_whose_bytes_differ_fails_the_digest_gate ... ok
+test a_middle_splice_matches_a_materialised_splice ... ok
+test a_read_back_with_the_wrong_length_fails_even_when_the_prefix_agrees ... ok
+test sampled_ranges_never_exceed_the_declared_range_count ... ok
+test sampled_ranges_stay_inside_the_file_and_the_frozen_bounds ... ok
+test an_expectation_of_bytes_hashes_those_bytes ... ok
+test a_pure_insert_matches_a_materialised_splice ... ok
+test the_census_is_the_recipe_and_totals_its_own_entries ... ok
+test a_tail_splice_matches_a_materialised_splice ... ok
+test a_pure_delete_matches_a_materialised_splice ... ok
+test the_splice_oracle_recomputes_rather_than_reusing_the_base ... ok
+test the_zero_length_edges_match_a_materialised_splice ... ok
+test the_hashing_sink_streams_to_the_same_digest_as_one_shot ... ok
+test the_hashing_sink_retains_nothing ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/pinned_expectations.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/pinned_expectations-981f88fcaadce0bf)
+
+running 8 tests
+test an_identity_digest_commits_to_order ... ok
+test a_pinned_digest_gate_is_two_sided ... ok
+test the_pinned_table_parses_and_carries_constants ... ok
+test a_case_with_no_pinned_constant_is_incomplete ... ok
+test an_invocation_that_gates_nothing_is_incomplete ... ok
+test a_counter_published_by_the_other_invocation_is_not_a_defect_here ... ok
+test a_moved_counter_fails_and_names_both_numbers ... ok
+test every_admission_case_pins_at_least_one_counter ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/registry_golden.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/registry_golden-d11e751eda995177)
+
+running 2 tests
+test golden_table_names_every_row_once ... ok
+test golden_table_matches_the_registry ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/registry_negative.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/registry_negative-8fcbc52f3b83f909)
+
+running 9 tests
+test the_profile_per_tier_ruling_is_fixed ... ok
+test the_byte_ladder_families_carry_both_profiles_too ... ok
+test the_registry_owns_one_row_per_family_module_entry ... ok
+test the_ruling_is_visible_in_the_rows_it_governs ... ok
+test every_real_family_is_registered_and_an_unknown_name_would_be_caught ... ok
+test every_real_case_id_is_unique_and_a_duplicate_would_be_caught ... ok
+test the_registry_is_clean_under_its_own_self_check ... ok
+test the_frozen_cardinality_array_is_what_the_registry_holds ... ok
+test the_lane_sizes_and_admission_split_are_the_frozen_ones ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/walk_ceiling.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/walk_ceiling-5d287599d50d7272)
+
+running 4 tests
+test a_single_build_of_the_ceiling_plus_one_is_refused_by_the_walk ... ok
+test every_batch_stays_under_the_ceiling_and_states_new_files_only ... ok
+test a_single_build_of_exactly_the_ceiling_is_accepted ... ok
+test the_batched_route_is_served_by_a_non_retaining_measured_phase ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.64s
+
+     Running tests/window_containment.rs (core/benchmark/fs-bench-pro-storage-content/target/debug/deps/window_containment-d243d4e2d2459789)
+
+running 12 tests
+test a_balanced_tree_is_a_valid_envelope ... ok
+test a_bracket_outside_the_root_is_reported ... ok
+test a_bracket_that_closes_before_it_opens_is_unbalanced ... ok
+test an_empty_tree_has_no_defects_and_no_elapsed ... ok
+test a_child_may_touch_its_parent_bounds_exactly ... ok
+test a_matching_elapsed_sum_is_not_used_as_an_attach_detector ... ok
+test an_unknown_parent_is_reported_and_not_contained ... ok
+test a_child_that_extends_past_its_parent_is_not_contained ... ok
+test siblings_that_merely_touch_do_not_overlap ... ok
+test siblings_that_overlap_are_reported ... ok
+test the_one_clock_domain_is_readable_and_non_decreasing ... ok
+test the_recorded_api_links_children_and_closes_a_real_envelope ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests fs_bench_storage_content
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

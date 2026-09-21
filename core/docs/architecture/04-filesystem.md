@@ -4,7 +4,8 @@
 
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
-[index](README.md).
+[index](README.md). The directory-parent batching and reuse addendum below describes
+the #190 working-tree change over `9f35c49ad62956f131dc2676787f99d69659686e`.
 
 ---
 
@@ -284,3 +285,35 @@ after.
 `FilesystemUpdateCounters` broken out across objects, directories, inodes,
 references, release and validation. Completion here is **this operation's own
 result**; acknowledged persistence is the consumer's.
+
+### 5.7 Bounded directory-parent acquisition and reuse (#190)
+
+`core/crates/layerfs-content/src/filesystem/update.rs` consumes the validated,
+strictly ordered directory-update slice in batches bounded by the smaller of
+`FilesystemResources.base_read_batch` and `MAXIMUM_READ_DEMANDS`. It excludes
+unreachable and declared-new parents from base demands; a build has no base
+lookup. Existing `lookup_many` shares ancestors within each batch. Input
+validation already proved parent order and uniqueness.
+
+The operation retains only the final nonempty parent batch's authenticated
+`InodeValue` records. After all directory effects have been observed, it overlays
+new content roots onto caller-supplied metadata, or onto base metadata when the
+caller omitted a typed value. A base record in the retained window is reused;
+earlier omitted records are read again in bounded groups. This is window reuse,
+not a memo of every parent. Supplied metadata still takes precedence.
+
+The original `contents` map and ascending final-value insertion order remain.
+An attempted interleaving of final values with directory binding effects was
+rejected: it increased required spill space and caused previously accepted
+requests to fail at unchanged ordering quotas. The implemented route preserves
+all reducer insertion events and their order. Batching can still change which
+physical read fails first when multiple demanded objects are faulty; failures
+remain explicit, with no retry or successful root publication.
+
+Extra retained state is bounded to the final parent window plus the current
+lookup window (at most twice the batch's record count), with bounded serial and
+reference vectors. The existing per-read ceiling is unchanged. No unbounded
+record cache, format change, or validation shortcut is introduced; validation's
+existing memo is not extended across phases. Directory value overlay remains
+outside the `directories` phase, as before. Exact roots, quota outcomes and read
+counts are checked externally; this description makes no latency claim.

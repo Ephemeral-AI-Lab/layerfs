@@ -16,6 +16,7 @@ import time
 import uuid
 import runner
 import runtime
+import isolation
 from deepseek_ten import PROFILES as SELECTED_DEEPSEEK
 
 CONTRACT = "docs/roadmap/0.1/0.1.4/implementation-smoke-contract-v1.md"
@@ -489,7 +490,7 @@ def main(argv=None):
     args = p.parse_args(argv)
     if not args.image or (args.output is None) == (args.storage_verify_run is None) or (args.storage_compat_run and (not args.output or args.storage_verify_run)):
         p.error("--image and exactly one of --output / --storage-verify-run required")
-    with (Path(os.environ.get("TMPDIR","/tmp"))/"layerfs-infra-measurement.lock").open("a") as lock:
+    with isolation.worktree_lock_path().open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         start = time.monotonic_ns()
         current = runner.source_build_args()

@@ -1,0 +1,114 @@
+[
+ {
+  "case": "tcp-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.474,
+  "GBps": 2.2653,
+  "us_per_16KiB_frame": 7.233,
+  "wall_seconds": 0.474
+ },
+ {
+  "case": "tcp-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.4943,
+  "GBps": 2.172,
+  "us_per_16KiB_frame": 7.543,
+  "wall_seconds": 0.495
+ },
+ {
+  "case": "tcp-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.4137,
+  "GBps": 2.5956,
+  "us_per_16KiB_frame": 6.312,
+  "wall_seconds": 0.414
+ },
+ {
+  "case": "tcp-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.8481,
+  "GBps": 1.266,
+  "us_per_16KiB_frame": 12.942,
+  "wall_seconds": 0.848
+ },
+ {
+  "case": "tcp-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.8526,
+  "GBps": 1.2593,
+  "us_per_16KiB_frame": 13.01,
+  "wall_seconds": 0.853
+ },
+ {
+  "case": "tcp-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 0.8766,
+  "GBps": 1.2249,
+  "us_per_16KiB_frame": 13.376,
+  "wall_seconds": 0.877
+ },
+ {
+  "case": "noise-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.2396,
+  "GBps": 0.8662,
+  "us_per_16KiB_frame": 18.915,
+  "wall_seconds": 1.24
+ },
+ {
+  "case": "noise-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.0317,
+  "GBps": 1.0407,
+  "us_per_16KiB_frame": 15.743,
+  "wall_seconds": 1.032
+ },
+ {
+  "case": "noise-upload-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.029,
+  "GBps": 1.0435,
+  "us_per_16KiB_frame": 15.701,
+  "wall_seconds": 1.029
+ },
+ {
+  "case": "noise-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.4347,
+  "GBps": 0.7484,
+  "us_per_16KiB_frame": 21.891,
+  "wall_seconds": 1.435
+ },
+ {
+  "case": "noise-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.3726,
+  "GBps": 0.7823,
+  "us_per_16KiB_frame": 20.945,
+  "wall_seconds": 1.373
+ },
+ {
+  "case": "noise-download-1",
+  "payload_bytes": 1073741824,
+  "transfer_seconds": 1.3469,
+  "GBps": 0.7972,
+  "us_per_16KiB_frame": 20.552,
+  "wall_seconds": 1.347
+ },
+ {
+  "case": "noise-upload-2",
+  "payload_bytes": 2147483648,
+  "transfer_seconds": 1.0471,
+  "GBps": 2.0508,
+  "us_per_16KiB_frame": 7.989,
+  "wall_seconds": 1.047
+ },
+ {
+  "case": "noise-download-2",
+  "payload_bytes": 2147483648,
+  "transfer_seconds": 1.3937,
+  "GBps": 1.5408,
+  "us_per_16KiB_frame": 10.633,
+  "wall_seconds": 1.394
+ }
+]

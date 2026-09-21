@@ -146,9 +146,9 @@ is retained as research with the later owner direction appended.
 
 | Document | Pair | State |
 | --- | --- | --- |
-| [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | **initialized** — decisions open |
-| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | written — the operational half |
-| [`03-history.md`](03-history.md) | 2 | **initialized** — decisions open |
+| [`FUSE / Workspace / snapshot overlay`](fuse-workspace-snapshot-overlay/README.md) | 1 | detailed proposal: filesystem contract, overlay capture, merged history integration and implementation/verification plan; no mounted qualification |
+| [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | historical operational/concurrency sketch with current corrections |
+| [`03-history.md`](03-history.md) | 2 | source-backed implementation proposal: reference semantics, separate catalog, frozen stages, portability and allocation limits; implementation unrun |
 | [`04-boundary-and-trust.md`](04-boundary-and-trust.md) | 3 | **initialized** — decisions open |
 | [`service-daemon-transport/`](service-daemon-transport/README.md) | 3 foundation; later 1 integration | detailed architecture, layout, operations and resource proposal — implementation/qualification open |
 

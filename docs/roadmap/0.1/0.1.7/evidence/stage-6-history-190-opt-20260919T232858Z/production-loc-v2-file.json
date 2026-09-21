@@ -1,0 +1,7 @@
+{
+  "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+  "before": 405,
+  "after": 454,
+  "delta": 49,
+  "method": "same tools/production_loc.py counter: HEAD source versus final working-tree file; full-scope recount pending current checks"
+}

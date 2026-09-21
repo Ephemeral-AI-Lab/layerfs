@@ -1,0 +1,10 @@
+[package]
+name = "phase1std"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+codegen-units = 1

@@ -1,0 +1,9 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.76s
+     Running tests/filesystem_bounds.rs (core/target/debug/deps/filesystem_bounds-333a88aeb2dd7278)
+
+running 1 test
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 4.96s
+

@@ -1,0 +1,14 @@
+# E2c upload: container client (--cpus=1) -> host server, 1 GiB per variant, single run
+# host: Apple M3 Max | image: layerfs-issue192-probe-75938:latest (arm64 linux, scratch)
+# rustc: rustc 1.85.1 (4eb161250 2025-03-15) | target: aarch64-unknown-linux-musl (rust-lld), profile release
+{"role":"container-client-send","variant":"Plain16k","seconds":0.5466,"GBps":1.964,"us_per_unit":8.34,"calls_per_unit":1.00}
+{"role":"container-client-send","variant":"Record2Setsockopt","seconds":1.3855,"GBps":0.775,"us_per_unit":21.14,"calls_per_unit":4.00}
+{"role":"container-client-send","variant":"Record2","seconds":1.2384,"GBps":0.867,"us_per_unit":18.90,"calls_per_unit":2.00}
+{"role":"container-client-send","variant":"Writev16k","seconds":1.2385,"GBps":0.867,"us_per_unit":18.90,"calls_per_unit":1.00}
+{"role":"container-client-send","variant":"Record256k","seconds":0.5199,"GBps":2.065,"us_per_unit":126.93,"calls_per_unit":1.00}
+# host server view:
+{"role":"host-server-recv","variant":"Plain16k","seconds":0.5491,"GBps":1.955,"us_per_unit":8.38,"calls_per_unit":1.00}
+{"role":"host-server-recv","variant":"Record2Setsockopt","seconds":1.3881,"GBps":0.774,"us_per_unit":21.18,"calls_per_unit":4.00}
+{"role":"host-server-recv","variant":"Record2","seconds":1.2412,"GBps":0.865,"us_per_unit":18.94,"calls_per_unit":2.00}
+{"role":"host-server-recv","variant":"Writev16k","seconds":1.2388,"GBps":0.867,"us_per_unit":18.90,"calls_per_unit":1.00}
+{"role":"host-server-recv","variant":"Record256k","seconds":0.5224,"GBps":2.055,"us_per_unit":127.55,"calls_per_unit":1.00}

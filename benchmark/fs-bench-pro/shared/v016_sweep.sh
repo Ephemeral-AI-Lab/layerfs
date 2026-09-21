@@ -1,8 +1,10 @@
 #!/bin/bash
 # The complete v0.1.6 selected-invocation matrix: every registered regular case
 # and the three explicit extended cases, one performance receipt and one
-# separate verification receipt each, on one final source and image. The shared
-# measurement lock is waited for, never stolen; every completed invocation is
+# separate verification receipt each, on one final source and image. The
+# measurement lock is this worktree's own (owner direction, 2026-09-21: see
+# docs/roadmap/0.1/0.1.7/measurement-isolation.md); it is waited for, never
+# stolen, and another worktree is not excluded. Every completed invocation is
 # retained exactly as it landed and superseded receipts are archived, not
 # deleted.
 set -u

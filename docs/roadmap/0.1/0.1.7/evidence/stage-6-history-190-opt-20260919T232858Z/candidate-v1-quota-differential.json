@@ -1,0 +1,142 @@
+{
+  "baseline_rows": 56,
+  "candidate_rows": 55,
+  "differences": [
+    {
+      "pending": "1",
+      "bytes": "192",
+      "batch": "1",
+      "baseline": "ERR ObjectLimitExceeded { limit: 192, actual: 288 }",
+      "candidate_v1": null
+    },
+    {
+      "pending": "1",
+      "bytes": "768",
+      "batch": "1",
+      "baseline": "ERR ObjectLimitExceeded { limit: 768, actual: 864 }",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 768, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "768",
+      "batch": "64",
+      "baseline": "ERR ObjectLimitExceeded { limit: 768, actual: 864 }",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 768, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "864",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "864",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "960",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "960",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "960",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "960",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "1152",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "1152",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    }
+  ],
+  "success_to_refusal_regressions": [
+    {
+      "pending": "1",
+      "bytes": "864",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "864",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 864, actual: 960 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "960",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": "1",
+      "bytes": "960",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1056 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "960",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "960",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 960, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "1152",
+      "batch": "1",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    },
+    {
+      "pending": "2",
+      "bytes": "1152",
+      "batch": "64",
+      "baseline": "OK root=FilesystemRootId(ObjectId(\"ceb15e7f42388b671859c96e36493c292499f447536ddd1c3e9bbe6cc6cb7d17\"))",
+      "candidate_v1": "ERR ObjectLimitExceeded { limit: 1152, actual: 1248 }"
+    }
+  ],
+  "decision": "REJECTED before performance; preserve reducer ordering and repair regression, no ceiling increase"
+}

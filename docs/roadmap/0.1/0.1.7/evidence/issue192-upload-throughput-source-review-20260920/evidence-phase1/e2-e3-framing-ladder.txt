@@ -1,0 +1,27 @@
+# E2/E3 framing ladder
+# host: Apple M3 Max, 14 cpus | rustc: rustc 1.85.1 (4eb161250 2025-03-15)
+# command: ./target/release/phase1bench e2   (1 GiB per variant, 127.0.0.1 loopback, TCP_NODELAY)
+## run 1
+E2/E3 framing ladder — 1 GiB, 127.0.0.1 loopback, nodelay, one sender + one receiver
+variant                  seconds       GB/s     us/frame counted syscalls/frame
+plain-16k (control)        0.301      3.566         4.59           2.00
+record 2 writes+sockopt     0.717      1.497        10.95           8.00
+record 2 writes            0.715      1.502        10.91           4.00
+record 1 writev            0.434      2.477         6.61           2.00
+record 256k writev         0.176      6.089        43.05           2.00
+## run 2
+E2/E3 framing ladder — 1 GiB, 127.0.0.1 loopback, nodelay, one sender + one receiver
+variant                  seconds       GB/s     us/frame counted syscalls/frame
+plain-16k (control)        0.347      3.095         5.29           2.00
+record 2 writes+sockopt     0.609      1.764         9.29           8.00
+record 2 writes            0.612      1.754         9.34           4.00
+record 1 writev            0.441      2.435         6.73           2.00
+record 256k writev         0.176      6.091        43.04           2.00
+## run 3
+E2/E3 framing ladder — 1 GiB, 127.0.0.1 loopback, nodelay, one sender + one receiver
+variant                  seconds       GB/s     us/frame counted syscalls/frame
+plain-16k (control)        0.393      2.732         6.00           2.00
+record 2 writes+sockopt     0.868      1.238        13.24           8.00
+record 2 writes            0.701      1.531        10.70           4.00
+record 1 writev            0.477      2.253         7.27           2.00
+record 256k writev         0.178      6.029        43.48           2.00

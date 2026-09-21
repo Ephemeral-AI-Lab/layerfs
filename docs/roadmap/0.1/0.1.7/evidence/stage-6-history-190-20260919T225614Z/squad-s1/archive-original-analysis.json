@@ -1,0 +1,204 @@
+{
+  "source": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-190-20260919T225614Z/squad-s1/archive-original",
+  "operation_ns": 32566067669,
+  "root_ns": 44831509917,
+  "root_outside_states_ns": 12265442248,
+  "parts_ns": {
+    "content": 1115152085,
+    "store.create": 2469708,
+    "input": 65188166,
+    "build": 23520347667,
+    "save": 7769904041,
+    "state.residual": 93006002
+  },
+  "states": [
+    {
+      "state": "history.state.1",
+      "operation_ns": 37022000,
+      "parts_ns": {
+        "content": 4696250,
+        "store.create": 2469708,
+        "input": 340291,
+        "build": 531750,
+        "save": 28739167,
+        "state.residual": 244834
+      }
+    },
+    {
+      "state": "history.state.2",
+      "operation_ns": 194775084,
+      "parts_ns": {
+        "content": 18745917,
+        "input": 1120167,
+        "build": 73406916,
+        "save": 99639833,
+        "state.residual": 1862251
+      }
+    },
+    {
+      "state": "history.state.3",
+      "operation_ns": 277627000,
+      "parts_ns": {
+        "content": 25980000,
+        "input": 1166583,
+        "build": 125935458,
+        "save": 122972584,
+        "state.residual": 1572375
+      }
+    },
+    {
+      "state": "history.state.4",
+      "operation_ns": 438791750,
+      "parts_ns": {
+        "content": 27665958,
+        "input": 1477084,
+        "build": 271863750,
+        "save": 135908917,
+        "state.residual": 1876041
+      }
+    },
+    {
+      "state": "history.state.5",
+      "operation_ns": 903992167,
+      "parts_ns": {
+        "content": 50678667,
+        "input": 2849417,
+        "build": 556033125,
+        "save": 291628791,
+        "state.residual": 2802167
+      }
+    },
+    {
+      "state": "history.state.6",
+      "operation_ns": 942292000,
+      "parts_ns": {
+        "content": 46803125,
+        "input": 2472416,
+        "build": 616797625,
+        "save": 273296958,
+        "state.residual": 2921876
+      }
+    },
+    {
+      "state": "history.state.7",
+      "operation_ns": 1333462416,
+      "parts_ns": {
+        "content": 53088042,
+        "input": 3323416,
+        "build": 894872625,
+        "save": 378592500,
+        "state.residual": 3585833
+      }
+    },
+    {
+      "state": "history.state.8",
+      "operation_ns": 1351428917,
+      "parts_ns": {
+        "content": 38340708,
+        "input": 2723667,
+        "build": 1043704334,
+        "save": 263737833,
+        "state.residual": 2922375
+      }
+    },
+    {
+      "state": "history.state.9",
+      "operation_ns": 1564124750,
+      "parts_ns": {
+        "content": 56873792,
+        "input": 3450750,
+        "build": 1113079125,
+        "save": 386441917,
+        "state.residual": 4279166
+      }
+    },
+    {
+      "state": "history.state.10",
+      "operation_ns": 1694802708,
+      "parts_ns": {
+        "content": 51117375,
+        "input": 3072750,
+        "build": 1277410833,
+        "save": 359594958,
+        "state.residual": 3606792
+      }
+    },
+    {
+      "state": "history.state.11",
+      "operation_ns": 2919255834,
+      "parts_ns": {
+        "content": 83469250,
+        "input": 5054042,
+        "build": 2232000542,
+        "save": 592539041,
+        "state.residual": 6192959
+      }
+    },
+    {
+      "state": "history.state.12",
+      "operation_ns": 2931409834,
+      "parts_ns": {
+        "content": 91436792,
+        "input": 5463250,
+        "build": 2191169625,
+        "save": 632330167,
+        "state.residual": 11010000
+      }
+    },
+    {
+      "state": "history.state.13",
+      "operation_ns": 3243867708,
+      "parts_ns": {
+        "content": 90358875,
+        "input": 5223250,
+        "build": 2456608125,
+        "save": 684358458,
+        "state.residual": 7319000
+      }
+    },
+    {
+      "state": "history.state.14",
+      "operation_ns": 3971637542,
+      "parts_ns": {
+        "content": 122183917,
+        "input": 7038583,
+        "build": 2918463000,
+        "save": 912738208,
+        "state.residual": 11213834
+      }
+    },
+    {
+      "state": "history.state.15",
+      "operation_ns": 3906736584,
+      "parts_ns": {
+        "content": 131850417,
+        "input": 8020666,
+        "build": 2777986542,
+        "save": 976061209,
+        "state.residual": 12817750
+      }
+    },
+    {
+      "state": "history.state.16",
+      "operation_ns": 3284932750,
+      "parts_ns": {
+        "content": 108359000,
+        "input": 5856750,
+        "build": 2376118625,
+        "save": 783523083,
+        "state.residual": 11075292
+      }
+    },
+    {
+      "state": "history.state.17",
+      "operation_ns": 3569908625,
+      "parts_ns": {
+        "content": 113504000,
+        "input": 6535084,
+        "build": 2594365667,
+        "save": 847800417,
+        "state.residual": 7703457
+      }
+    }
+  ]
+}

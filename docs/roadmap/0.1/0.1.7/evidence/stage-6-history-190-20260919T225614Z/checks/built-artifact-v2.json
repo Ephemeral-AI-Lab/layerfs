@@ -1,0 +1,12 @@
+{
+  "source_commit": "9f35c49ad62956f131dc2676787f99d69659686e",
+  "source_dirty": true,
+  "product_diff": "",
+  "harness_source_sha256": "8c8d6087550b0b9ad1d5ed41649aeaa8ad741e917965b72f3497e0ba8514dcc9",
+  "harness_binary_sha256": "3cc3e1ad2ad4f663c4a7b1cdd5e4ab37090eb73b9a5a88535995a4337430a025",
+  "core_lock_sha256": "bb44c9eea06980955a3dc4b1bb45ea2365b6fda2766e0b70045c1d9f2b748991",
+  "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
+  "build_mode": "incremental",
+  "CARGO_BUILD_JOBS": 4,
+  "note": "Built instrumentation artifact, not a performance receipt"
+}

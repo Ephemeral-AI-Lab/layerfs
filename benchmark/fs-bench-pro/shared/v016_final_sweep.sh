@@ -3,8 +3,10 @@
 # regular case and the three explicit extended cases, seeds 1, 2 and 3, one
 # performance receipt and one separate verification receipt each. Every receipt
 # is recollected on the final seal, so perf and verify always share one source
-# and image. The shared measurement lock is waited for, never stolen;
-# superseded receipts are archived, never deleted.
+# and image. The measurement lock is this worktree's own (owner direction,
+# 2026-09-21: docs/roadmap/0.1/0.1.7/measurement-isolation.md); it is waited for,
+# never stolen, and another worktree is not excluded. Superseded receipts are
+# archived, never deleted.
 #
 # Cases whose workload is not implemented yet are still registered: they are run
 # and their real outcome is retained instead of being relabelled.

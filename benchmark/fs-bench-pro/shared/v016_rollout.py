@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import isolation
 import subprocess
 import sys
 import time
@@ -26,7 +27,7 @@ import time
 REPO = Path(__file__).resolve().parents[3]
 BENCH = REPO / "benchmark" / "fs-bench-pro"
 CASES = json.loads((REPO / "docs/roadmap/0.1/0.1.6/cases.json").read_text())["cases"]
-LOCK = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+LOCK = isolation.worktree_lock_path()
 
 # The 15-second regular family target, the narrower ≤25 s declared exception band,
 # and the owner-granted 60-second complete-command allowance for a regular v0.1.6

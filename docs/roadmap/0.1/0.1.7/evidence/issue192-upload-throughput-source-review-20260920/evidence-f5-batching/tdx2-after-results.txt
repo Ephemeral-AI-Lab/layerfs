@@ -1,0 +1,4 @@
+case                        payload        sec     GB/s   us/frame
+tcp-upload-1                  1073741824    0.541    1.983       8.26
+noise-upload-1                1073741824    3.592    0.299      54.81
+noise-upload-2                2147483648    3.607    0.595      27.52

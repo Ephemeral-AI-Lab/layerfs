@@ -356,7 +356,7 @@ ran at 0.004-1.7 s per command, so the budget is comfortable at these sizes; a
 - **Fresh `--output` per run**; receipts are append-only and are never overwritten. Every example already refuses an existing `--output` (`measure_pooled.rs:76`, `measure_edits.rs:160-167`, `measure_components.rs:97-104`).
 - **The sample Store is disposable**, because cleanup mutates the artifact: `cleanup.rs:65,120` issue paged `DELETE`s. This is why **arms can never share a Store**.
 - **Sample cleanup must not delete the master.**
-- **The measurement lock is held per `perf`/`verify` invocation**, not across a family run, so preparation can proceed independently while measurement stays exclusive.
+- **The measurement lock is held per `perf`/`verify` invocation**, not across a family run, so preparation can proceed independently while measurement stays exclusive — within the worktree that owns the lock (owner direction, 2026-09-21 — [isolation](../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)); a run in another worktree is not excluded.
 - **Failed and discarded attempts stay on disk** with their exit codes.
 - Deferred packs of a failed save stay unreadable by design (the watermark does not advance), so a discarded sample proves nothing about durability and must not be cited as if it did.
 

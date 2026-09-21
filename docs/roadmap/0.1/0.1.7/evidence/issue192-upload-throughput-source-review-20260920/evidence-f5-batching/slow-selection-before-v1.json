@@ -1,0 +1,67 @@
+{
+  "selection": "slow",
+  "kind": "functional-deployment",
+  "performance": "NOT_RUN",
+  "cases": [
+    {
+      "name": "slow-upload-deadline",
+      "status": "PASS",
+      "detail": {
+        "terminal": "missing after deadline",
+        "unknown": true,
+        "requested_deadline_ms": 250,
+        "replay": false
+      }
+    }
+  ],
+  "status": "FAIL",
+  "artifacts": {
+    "manifest": "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/docs/architecture/proposal/service-daemon-transport/implementation/evidence/optimization-release-artifacts-v9-20260920.json",
+    "image_id": "sha256:4781bcdf2f8a71db1c1db41469e806b927fce433efc5ab9740ad3e01b37466d3",
+    "profile": "release",
+    "runtime_sha256": "355f77518952a82f3b67520c31ad7eaae6aea0a40e75c7ce24c901e376d7f47f",
+    "binaries": {
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-service": "9bcfdb798b73cb9991bafd645d62b4a0bd0f4e4293256334ec0fab81beea265c",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/layerfs-daemon": "5d8d0bba1f26695b6732155570aa0ff17619b5b9079f5f6b2e7c4edf5329d8a2",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/prepare_store": "9ecb9fdde354f4c64cd2a27815db3beb71d787dd24e2adf359e420f2646d91e1",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/direct": "10be3c501c504f1d70196344e2550aaabcd1f9d93433eb2cc13aeb2e4fa167f2",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/fault_peer": "a441697383cd20816e393a5e47c99711d5f9f286281f1e64cc37c33813d7844b",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/release/examples/public_key": "3a91a01a947667bbc02267adf2d554890774379e7ab41d304b0ce68f94682994",
+      "/Users/yifanxu/.codex/worktrees/pair3-foundation/layerfs/core/target/aarch64-unknown-linux-musl/release/layerfs-daemon": "8d10c123979ee8a14aaa8ea07f87c24c95370a444b92b9bf3e3abec75e60221b"
+    }
+  },
+  "setup": {
+    "master_sha256": "6f67ca6f931de849de7c36dff3f913c9ff58f0b57825d4cbde54b55a61de7a09",
+    "executable_sha256": "9ecb9fdde354f4c64cd2a27815db3beb71d787dd24e2adf359e420f2646d91e1",
+    "reused": true,
+    "clone_method": "closed independent writable byte copy; not an OS cache claim"
+  },
+  "error": "TimeoutError('blocked stdout did not close at deadline')",
+  "diagnostics": [
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [
+        "Error: Unknown unknown=true cleanup=None"
+      ],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    },
+    {
+      "records": [],
+      "overflow": 0
+    }
+  ],
+  "cleanup": "PASS",
+  "source_head": "fc647e91aaf82cef9432f4c02e90aa246461b5cd",
+  "image": "layerfs-issue192-daemon-v9:latest"
+}

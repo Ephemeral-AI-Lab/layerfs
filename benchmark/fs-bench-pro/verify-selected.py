@@ -13,6 +13,11 @@ import uuid
 
 
 HERE = Path(__file__).resolve().parent
+# `shared/` is importable whether this file is run directly or imported by a test,
+# so the isolation namespace resolves the same way in both.
+sys.path.insert(0, str(HERE / "shared"))
+import isolation  # noqa: E402
+
 HARD_LIMIT_SECONDS = 59.0
 WORK_LIMIT_SECONDS = 45.0
 PUBLICATION_GUARD_SECONDS = 0.25
@@ -269,13 +274,15 @@ def run(runner, argv=None, clock=time.monotonic, publisher=publish_receipt):
     selected = None
     policy = None
     result = {"cleanup": {"status": "INCOMPLETE", "required": True}}
-    lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+    lock_path = isolation.worktree_lock_path()
     lock = lock_path.open("a")
     try:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as cause:
-            raise RuntimeError("another benchmark owns the measurement lock") from cause
+            raise RuntimeError(
+                "another run in this worktree owns the measurement lock"
+            ) from cause
         # Selection authentication stays bounded from entry. An ordinary or
         # sequence selection keeps its 45-second authentication allowance; a
         # v0.1.6 case that declares a complete-command deadline authenticates

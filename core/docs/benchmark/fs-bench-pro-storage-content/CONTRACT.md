@@ -113,7 +113,7 @@ The full text is in `memory_cpu_space_support.md` and
 | Cache state | declared per row, enforced equally, **never pooled across states** |
 | Workers | **1**; `LAYERFS_CONSTRUCTION_WORKERS=1` exported and asserted in the receipt |
 | Complete command | **a formula, not the raw process wall** (below); limit <= **15 s**, declared exceptions <= **25 s**; verification <= **60 s** |
-| Lock | measurement lock held per `perf`/`verify` invocation |
+| Lock | measurement lock held per `perf`/`verify` invocation, **per worktree** (owner direction, 2026-09-21: [isolation](../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)); builds take no lock and are checked against a foreign Cargo target instead |
 | Toolchain | `cargo +1.85.1`, `--locked`, release |
 | Clocks | one domain: `CLOCK_MONOTONIC_RAW` (id 4), Rust and Python |
 | Trace schema | `layerfs-trace-v1` |

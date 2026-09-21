@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--manifest-path",
+    "/Users/yifanxu/Ephemeral-AI-Lab/layerfs/core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 101,
+  "wall_ns": 2074437875,
+  "reason": "review lifetime preservation changed harness after v1 checks"
+}

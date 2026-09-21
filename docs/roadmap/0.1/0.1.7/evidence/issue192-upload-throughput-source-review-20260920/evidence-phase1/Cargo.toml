@@ -1,0 +1,11 @@
+[package]
+name = "phase1bench"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+nix = { version = "=0.31.3", features = ["fs", "poll"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
