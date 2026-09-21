@@ -5,6 +5,21 @@
 > Product input seal: `375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d`.
 > Prepared 2026-09-22 for a separate Codex implementation task.
 
+## Continuation recorded after this checkpoint
+
+Authenticated remote Mount and the shared cancelled-pipe correction are committed
+at`8639c6bda9e5911c3d434e659380d99b0bcf8d88`; see[32](32-control-mount.md) and[33](33-cancelled-pipe.md).
+The current source inventory is[31](31-source-map-and-loc.md), core43364/reference65417,
+combined108781 production LOC. This note does not relabel this handoff's original
+counts or evidence. The next native prerequisite is retained failed-Attach ownership,
+observation and explicit cleanup, followed by remote Attach.
+
+The owner now selects `npx @deepseek-ai/dsh web` with dependencies preinstalled
+outside the workload. The actual test uploads/writes that prepared tree through
+the mount and explicitly Commits it; network npm installation is excluded from
+the workload. Platform-native dependencies must match Linux execution. Earlier
+requirements to pin the project/lock/runtime now apply to that prepared artifact.
+
 ## Mission and starting state
 
 Continue the remaining Pair 1 work for #179 and its separately qualified matched

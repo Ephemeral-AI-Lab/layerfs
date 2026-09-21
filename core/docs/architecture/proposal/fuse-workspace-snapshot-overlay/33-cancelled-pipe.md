@@ -3,6 +3,7 @@
 > **Status: implemented shared prerequisite; native pipe regression verified, not a performance claim.**
 > Observed 2026-09-22 during round 32; implementation parent
 > `3e5d6a66a9f4e4df4a8a19087e63909a18046c6d`.
+> Exact implementation commit: `8639c6bda9e5911c3d434e659380d99b0bcf8d88`.
 
 The owner reported near-one-core CPU consumption from a layerfs-daemon process.
 Read-only host inspection identified PID 11323, a macOS release executable under

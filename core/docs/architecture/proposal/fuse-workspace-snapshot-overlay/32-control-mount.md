@@ -3,6 +3,7 @@
 > **Status: implemented and verified through actual authenticated daemon/Linux mounts; target v0.1.7, not released.**
 > Implementation parent: `3e5d6a66a9f4e4df4a8a19087e63909a18046c6d`.
 > Selected 2026-09-22; continuation worktree `795c/layerfs`.
+> Exact implementation commit: `8639c6bda9e5911c3d434e659380d99b0bcf8d88`.
 
 ## Selected operation and ownership
 

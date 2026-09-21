@@ -3,7 +3,7 @@
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
 > Implementation parent: `3e5d6a66a9f4e4df4a8a19087e63909a18046c6d`.
 > Frozen production input seal: `41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35`.
-> Counts include authenticated Mount and terminal pipe cancellation after that parent; the final commit pin is pending.
+> Exact committed production source: `8639c6bda9e5911c3d434e659380d99b0bcf8d88`.
 > These are actual source counts, not 04's historical planning allowances.
 
 `P` means production LOC: nonblank, non-comment implementation lines, including
@@ -17,10 +17,11 @@ folder locations are still shown in the continuation handoff.
 Reproduce with the unchanged counter (blob
 `b5b9617d08204977176302311e0b2c72a811b420`): run
 `python3 tools/production_loc.py --root <source-snapshot> --files` and `--json`
-against the frozen production source named by the seal above. After committing,
-archive that exact commit's `crates` and `core/crates` to reproduce the counts.
+against an archive of that exact commit's `crates` and `core/crates`.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
+[Commit confirmation](evidence/control-mount/commit-confirmed.json) binds that frozen
+inventory to the exact committed tree without relabeling the original run receipts.
 [Current per-file machine-readable inventory](evidence/control-mount/source-loc.json).
 [Original continuation inventory](evidence/continuation-handoff/source-loc.json)
 retains its original source pin and counts.
