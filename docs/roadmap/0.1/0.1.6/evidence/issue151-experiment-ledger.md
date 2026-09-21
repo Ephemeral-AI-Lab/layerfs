@@ -3211,3 +3211,57 @@ product source; the harness's wider suite beyond this diagnostic and the parity 
 
 Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this round
 adds a harness test and two harness manifest lines, both outside the counted scope.
+
+## L79 — #219 handoff: bank the pack capacity, then answer the scaling question (2026-09-21)
+
+Status: **Handoff.** Filed after rounds 17–19 (L76–L78) at the branch head. Commission:
+[`issue219-ns19-packlimit-and-scaling-handoff.md`](../../0.1.7/issue219-ns19-packlimit-and-scaling-handoff.md).
+**It makes no performance claim of its own**; every number is sourced to a receipt, a counter or a
+`file:line`.
+
+**Where the row is.** `ns19-S1-indexdrop-20260921T103500Z`, PASS 13/13, 14/14 pinned counters, sealed
+at `e3a46d74b`: `operation_work_ns` **1126.73 ms**, target 1000, **gap −126.73 ms**, serial floor
+**764.82 ms** (L74's six terms recomputed), headroom 235.18 ms. Boundary-matched the row is 1680.22 ms
+of work / 1686.48 ms of CPU against the fastest same-shape reference row at 1789.51 ms — **−6.11 % /
+−5.76 %, ahead.** The named blocks are commit 431.24, pack writes 121.48, row inserts 99.62, C1 build
+span 89.65 (~70–100 ms uncharted), profile full 70.12, wave 62.29, validate 50.07, collision 48.55,
+begin 1.64 — and they are **not a partition**, so no residual may be summed from them.
+
+**Three findings changed the plan.** (1) The commit term is a **page-write** term: `cache_write`
+tracks `page_count` to within three pages, the index's 265 pages are written ~10.9× each across 95
+transactions at 9,354 ns per page-write, and the row's 431,236,291 ns is 81,280 pack pages at 5,306 ns
+— 431,236,291 ÷ 5,306 = 81,280 exactly. `cache_spill` is 61,440 pages on the pure-pack arms, so
+**`commit_ns` alone undercounts the flush** and future work must use the whole transaction over
+`cache_write`. (2) **The declared pack capacity is flushed**: `packs-zeroblob` writes all 81,441 pages
+for a payload of **zero bytes**, because a `zeroblob`'s overflow chain still requires every page's
+next-page pointer; 7,582 of the row's 81,280 pack pages hold no content — **40.2 ms at the row's own
+price, 45.6 ms at the pack arms'**, 32–36 % of the gap. (3) The v0.1.6 premise is refuted, with four
+corrections on file: **two denominators are in circulation** (the harness publishes 300 MB,
+`main.rs:2710`/`:3016`; L69 and the RCA handoff used 400 MB — the same row is 323.3 or 431.0 MB/s);
+**"v0.1.6 did 700 MB/s" is unsupported** (it is the approved bar, the plan records **`baseline rows:
+none (8 candidate / 0 baseline)`**, the three fast rows are **v0.1.3-era** — `0.1.3/` names issue #38
+×5 and #49 ×8 — and the only v0.1.6-tied row is issue #152 at 272.6 MB/s, so v0.1.6's throughput for
+this case is `NOT_MEASURED`); **the fixture was identical across all six rows** (same profile, same
+digest `5a464369ea…`, same file mix) and only the object decomposition differed (54,46x against
+25,158); and **the bar's case and this campaign's row are different cases with an unwritten mapping**
+(`namespace-10000` / `fresh-output` / `layerstack_init_ns` against `pipeline-namespace-10000` /
+`prepared-dewarmed` / `operation_work_ns`, with a third `namespace-10000` in `c1.fs.build-scale`).
+
+**The three steps, in order.** (1) **`PACK_LIMIT` 256 KiB → 1 MiB** (`policy.rs:110`), predicted
+**~30.7 ms** with `packs_created` 1,270 → ~295 and `pack_bodies_bytes` 332,922,880 → ~309.3 MB;
+**priced by reading, not a constant flip** — `layout.rs:412,525` make a 1 MiB pack unreadable by a
+256 KiB build so it needs a **`SCHEMA_VERSION` bump**, and `encoding/full.rs:274,297` moves the
+ordinary-vs-singleton routing so the **pins will move and a re-pin is expected**; `PACK_LIMIT` is not
+persisted, so there is no policy migration; and **`GROUP_LIMIT` must not move in the same round**,
+because L78 showed raising it alone makes the tail worse. (2) **The C1 ladder** `namespace-100` →
+`namespace-100000` in `c1.fs.build-scale`, registered, pinned (13 pins at 100k) and **verified cheap**
+— the 10k rungs are PASS at **0.36 s and 0.35 s** against a 15 s limit, and `namespace-100000` is not
+in `DECLARED_EXCEPTIONS`; **no 100k receipt exists in this worktree**, so it is a first measurement at
+that rung. It targets the 89.65 ms C1 build span with its ~70–100 ms uncharted, and it must **not** be
+compared against the reference harness's 47 `namespace-100000` rows (279 ms to 105.9 s, ~380×,
+`TARGET_MISS` in both arms, `cache_contract: null`, `NOT_RUN`). (3) **Then decide** whether a
+`pipeline-namespace-100000` case is worth building — there is none today, and adding one is a harness
+round (new case, 600 MB fixture, new prepared artifact, new pins), not a measurement.
+
+Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this
+entry is documentation only.
