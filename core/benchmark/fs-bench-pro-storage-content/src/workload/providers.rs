@@ -315,23 +315,42 @@ impl AuthenticatedObjects for PairProvider<'_> {
 pub struct CountingConsumer<'a> {
     inner: &'a mut dyn FinalizedConsumer,
     accepted: u64,
+    nanos: u64,
 }
 
 impl<'a> CountingConsumer<'a> {
     /// Wraps a consumer.
     pub fn new(inner: &'a mut dyn FinalizedConsumer) -> Self {
-        Self { inner, accepted: 0 }
+        Self {
+            inner,
+            accepted: 0,
+            nanos: 0,
+        }
     }
 
     /// Objects forwarded so far.
     pub fn accepted(&self) -> u64 {
         self.accepted
     }
+
+    /// Wall time this consumer's own `accept` calls took, in nanoseconds.
+    ///
+    /// The consumer path and the construction that feeds it are one span at the
+    /// call site (`pipeline.span_build_ns`), and a span cannot say how much of
+    /// itself is the product's `accept` and how much is the caller's tree build.
+    /// Charging the calls here separates them without touching the product: this
+    /// is harness wall time around the product call, published beside the span.
+    pub fn nanos(&self) -> u64 {
+        self.nanos
+    }
 }
 
 impl FinalizedConsumer for CountingConsumer<'_> {
     fn accept(&mut self, object: FinalizedObject) -> ContentResult<()> {
-        self.inner.accept(object)?;
+        let started = std::time::Instant::now();
+        let result = self.inner.accept(object);
+        self.nanos += started.elapsed().as_nanos() as u64;
+        result?;
         self.accepted += 1;
         Ok(())
     }

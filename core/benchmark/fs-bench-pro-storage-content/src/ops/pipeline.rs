@@ -22,7 +22,8 @@
 
 use layerfs_content::filesystem::references::backing::OrderingBacking;
 use layerfs_content::filesystem::{
-    build_filesystem, scope_for_seed, update_filesystem, FilesystemInput, FilesystemObjects,
+    build_filesystem, build_filesystem_timed, scope_for_seed, update_filesystem,
+    update_filesystem_timed, FilesystemInput, FilesystemObjects, FilesystemPhases,
     FilesystemResources, FilesystemRootId,
 };
 use layerfs_content::{
@@ -44,6 +45,38 @@ use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::Expectation;
 use crate::workload::providers::{CountingConsumer, PairProvider, TreeStore};
+
+/// The build phases this row reads back, in the order the product records them.
+const BUILD_PHASES: [&str; 6] = [
+    "validate",
+    "directories",
+    "references",
+    "inodes",
+    "cleanup",
+    "root.encode",
+];
+
+/// Totals one phase name per entry, summed over every batch of one row.
+///
+/// The report is walked rather than the phases captured at the call site because
+/// the phases are recorded by the product, inside the product's own tree; a
+/// caller that timed them itself would be measuring a different thing from the
+/// one `build_filesystem_timed` charges.
+fn build_phase_totals(report: &layerfs_telemetry::timer::TimingReport) -> Vec<(&'static str, u64)> {
+    let mut totals = [0_u64; BUILD_PHASES.len()];
+    fn walk(node: &layerfs_telemetry::timer::TimingNode, totals: &mut [u64; BUILD_PHASES.len()]) {
+        for child in node.children() {
+            if let Some(index) = BUILD_PHASES.iter().position(|name| *name == child.name()) {
+                totals[index] += child.elapsed().as_nanos() as u64;
+            }
+            walk(child, totals);
+        }
+    }
+    if let Some(root) = report.root() {
+        walk(root, &mut totals);
+    }
+    BUILD_PHASES.iter().copied().zip(totals).collect()
+}
 
 /// The 4 KiB replacement the edit pipeline rows use, as the C1 edit families do.
 pub const REPLACEMENT_LEN: u64 = 4_096;
@@ -809,6 +842,10 @@ fn namespace_scale(
     let mut finish_span_ns = 0_u64;
     let mut finish_child_ns = 0_u64;
     let mut establishment_ns = 0_u64;
+    // The build span's two parts: the product's `accept` calls, and (by
+    // subtraction) the caller's tree build. `span_build_ns` is one span; a span
+    // cannot say which half is the product's.
+    let mut build_accept_ns = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         // **The row's formula excludes the connection.** The measured closure
@@ -851,14 +888,24 @@ fn namespace_scale(
                     resources: FilesystemResources::default(),
                 };
                 let reader = PairProvider::new(&prefixes[index], &empty);
-                let mut objects = FilesystemObjects::new(&reader, &mut counting);
-                let ordering: Option<&mut dyn OrderingBacking> =
-                    Some(&mut perf_backings[index] as &mut dyn OrderingBacking);
-                let built = if base.is_none() {
-                    build_filesystem(&mut objects, &input, ordering)?
-                } else {
-                    update_filesystem(&mut objects, &input, ordering)?
-                };
+                // The build's own phases. `FilesystemPhases` has had no call site
+                // outside its definition until here, so this is the first run that
+                // can say where the span goes: `validate`, `directories`,
+                // `references`, `inodes`, `cleanup` and `root.encode` are charged
+                // by the product inside this scope and published below.
+                let built = timing
+                    .child("build")
+                    .run(|build| -> Result<_, PipelineFailure> {
+                        let phases = FilesystemPhases::new(build);
+                        let mut objects = FilesystemObjects::new(&reader, &mut counting);
+                        let ordering: Option<&mut dyn OrderingBacking> =
+                            Some(&mut perf_backings[index] as &mut dyn OrderingBacking);
+                        if base.is_none() {
+                            Ok(build_filesystem_timed(&mut objects, &input, ordering, &phases)?)
+                        } else {
+                            Ok(update_filesystem_timed(&mut objects, &input, ordering, &phases)?)
+                        }
+                    })?;
                 last = Some(built);
                 batch_roots += 1;
             }
@@ -874,6 +921,7 @@ fn namespace_scale(
                 }
             };
             metadata_emitted = counting.accepted();
+            build_accept_ns = counting.nanos();
             built
         };
         let build_done = std::time::Instant::now();
@@ -1005,6 +1053,26 @@ fn namespace_scale(
         batches.len() as i128,
         "operations",
         "PreparedTree::batches under MAXIMUM_WALK_ENTRIES",
+    )?;
+    // The build span's own split, read back out of the product's timing tree by
+    // phase name. Each is a total over the row's batches, so the six together
+    // plus the residual (`unreachable_parents`, the reducer's construction and
+    // `register_values`, which no phase covers) are `pipeline.span_build_ns`.
+    for (name, nanos) in build_phase_totals(&report) {
+        context.trace.write_number(
+            Kind::Counter,
+            &format!("pipeline.build_{}_ns", name.replace('.', "_")),
+            nanos as i128,
+            "ns",
+            "FilesystemPhases inside the measured closure, outside the seven buckets",
+        )?;
+    }
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.build_accept_ns",
+        build_accept_ns as i128,
+        "ns",
+        "CountingConsumer wall time around the product's accept, the other half of span_build_ns",
     )?;
     context.trace.write_number(
         Kind::Counter,
