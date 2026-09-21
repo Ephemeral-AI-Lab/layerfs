@@ -620,9 +620,20 @@ fn namespace_scale(
 
     // Construct the content. Untimed: C2's rule is that every canonical object a
     // C2 row saves is supplied by the harness, and construction is C1's half.
+    //
+    // **The excluded work is charged anyway, and published.** Untimed is not
+    // unmeasured: the v0.1.6 `init_namespace` timer *includes* reading its fixture
+    // and building the objects it admits, while this row's timer excludes that
+    // construction and includes the C1 tree build - so the two published figures
+    // are not the same measurement, and only their sum (`preparation_wall_ns`) was
+    // available to a reader who wanted the difference. The two parts are charged
+    // here, each around existing code, and neither enters the row's formula; they
+    // are diagnostics beside it, like `establishment_ns` and `teardown_ns`.
     let policy = ConstructionPolicy::frozen_default();
     let capacities = policy.capacities();
     let mut content = TreeStore::new();
+    let mut construct_ns = 0_u64;
+    let mut construct_noise_ns = 0_u64;
     for file in &plan.files {
         if file.size == 0 {
             continue;
@@ -630,7 +641,10 @@ fn namespace_scale(
         let index = u64::from(file.directory) * super::namespace_content::FILES_PER_DIRECTORY
             + u64::from(file.serial)
             - (2 + u64::from(config.directories));
+        let noise_started = std::time::Instant::now();
         let bytes = fixture::noise(file.size, seed ^ index.rotate_left(13));
+        construct_noise_ns += noise_started.elapsed().as_nanos() as u64;
+        let construct_started = std::time::Instant::now();
         let (result, _) = Timing::disabled(
             "setup.construct",
             |scope: &TimingScope<'_, Active>| {
@@ -643,6 +657,7 @@ fn namespace_scale(
                 )
             },
         );
+        construct_ns += construct_started.elapsed().as_nanos() as u64;
         let constructed = match result {
             Ok(constructed) => constructed,
             Err(error) => {
@@ -1011,6 +1026,24 @@ fn namespace_scale(
         content_objects as i128,
         "objects",
         "constructed before the timer, accepted inside it",
+    )?;
+    // The untimed half, published in its two named parts. Outside the row's
+    // formula by construction; `construct_ns + construct_noise_ns +
+    // pipeline.operation_work_ns` is the figure that can be laid against a timer
+    // which includes its own construction (see this round's pre-registration).
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.construct_ns",
+        construct_ns as i128,
+        "ns",
+        "untimed: construct_bytes over every planned file, outside the formula",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.construct_noise_ns",
+        construct_noise_ns as i128,
+        "ns",
+        "untimed: fixture::noise byte generation, outside the formula",
     )?;
     context.trace.write_number(
         Kind::Counter,
