@@ -13,7 +13,7 @@ use crate::registry::{CacheState, Case, PipelineOp, Shape, StoreState};
 /// separately, which is why `--smoke` is twenty cases and not twenty-one.
 pub const GROUP: &str = "pipeline.*";
 
-/// Four rows.
+/// Five rows.
 pub fn cases() -> Vec<Case> {
     [
         (PipelineOp::EditsSmall, "pipeline-edits-small"),
@@ -26,6 +26,10 @@ pub fn cases() -> Vec<Case> {
             PipelineOp::FilesystemBuild,
             "pipeline-filesystem-build",
         ),
+        (
+            PipelineOp::NamespaceScale,
+            "pipeline-namespace-10000",
+        ),
     ]
     .iter()
     .map(|(op, id)| {
@@ -36,11 +40,16 @@ pub fn cases() -> Vec<Case> {
         // declaration is `prepared-dewarmed` / `opened-from-copy` and never
         // `created-in-sample`. The earlier declaration said otherwise and no
         // driver existed to contradict it.
-        CaseSpec::new(id, GROUP, Shape::Pipeline(*op))
+        let spec = CaseSpec::new(id, GROUP, Shape::Pipeline(*op))
             .cache(CacheState::PreparedDewarmed)
             .store(StoreState::OpenedFromCopy)
-            .smoke_if(*op == PipelineOp::EditsSmall)
-            .build()
+            .smoke_if(*op == PipelineOp::EditsSmall);
+        let spec = if *op == PipelineOp::NamespaceScale {
+            spec.entry_tier(2, 10_000, "binary")
+        } else {
+            spec
+        };
+        spec.build()
     })
     .collect()
 }

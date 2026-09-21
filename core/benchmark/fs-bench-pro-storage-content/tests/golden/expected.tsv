@@ -1329,6 +1329,28 @@ pipeline-filesystem-build	counter:pipeline.inserted	33
 pipeline-filesystem-build	counter:pipeline.objects_emitted	33
 pipeline-filesystem-build	counter:pipeline.reused	0
 pipeline-filesystem-build	digest:filesystem_root	02b5b52b67547c2ea2fe98ac53bbf52a3d5df58946672a9643789319c54eab03
+# Bootstrapped 2026-09-21 at b0260df3a: the new row pipeline-namespace-10000.
+# A row with no pins cannot be PASS, and pin_expected refuses a receipt that is not
+# PASS, so the first pins of a new row can only come from a bootstrap run - the same
+# route the header above records for the round-5 identity digests. These values were
+# read from benchmark-results/issue219/ns17-final-20260921T031259Z, whose child
+# reported PASS gates=11 with content 301,171,810 bytes against 300,000,000 declared.
+# They are evidence only once a later run reproduces them, which is checked next.
+pipeline-namespace-10000	counter:pipeline.batches	3
+pipeline-namespace-10000	counter:pipeline.bindings	10100
+pipeline-namespace-10000	counter:pipeline.chain_objects	382
+pipeline-namespace-10000	counter:pipeline.commits	17378
+pipeline-namespace-10000	counter:pipeline.content_bytes	301171810
+pipeline-namespace-10000	counter:pipeline.content_objects	24863
+pipeline-namespace-10000	counter:pipeline.declared_content_bytes	300000000
+pipeline-namespace-10000	counter:pipeline.declared_directories	100
+pipeline-namespace-10000	counter:pipeline.declared_files	10000
+pipeline-namespace-10000	counter:pipeline.inserted	25245
+pipeline-namespace-10000	counter:pipeline.largest_batch_bindings	4096
+pipeline-namespace-10000	counter:pipeline.metadata_objects	382
+pipeline-namespace-10000	counter:pipeline.objects_emitted	67
+pipeline-namespace-10000	counter:pipeline.reused	0
+pipeline-namespace-10000	digest:filesystem_root	1d6fba29aba105aefbb668c34b026f8b89d20773fc36d548b991034dc3857847
 pooled-lane-cold	counter:pool.commits	18
 pooled-lane-cold	counter:pool.declared_values	51200
 pooled-lane-cold	counter:pool.delta_leaves	0

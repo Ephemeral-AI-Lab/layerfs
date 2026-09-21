@@ -216,6 +216,7 @@ pipeline-edits-small	pipeline.*	admission	-	-	-	0	0	yes	prepared-dewarmed	opened
 pipeline-edits-chunked	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:editschunked	-
 pipeline-edits-large-to-small	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:editslargetosmall	-
 pipeline-filesystem-build	pipeline.*	admission	-	-	-	0	0	no	prepared-dewarmed	opened-from-copy	pipeline:filesystembuild	-
+pipeline-namespace-10000	pipeline.*	admission	2	binary	-	0	10000	no	prepared-dewarmed	opened-from-copy	pipeline:namespacescale	-
 component-primitives-payload	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:payload	-
 component-primitives-filesystem	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:filesystem	-
 component-primitives-edit	component.primitives	diagnostic	-	-	-	0	0	no	warm-in-process-fixture	-	primitives:edit	-

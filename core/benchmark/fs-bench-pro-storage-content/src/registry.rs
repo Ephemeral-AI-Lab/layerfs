@@ -28,7 +28,7 @@ pub const FROZEN_CARDINALITY: [usize; 21] = [
 ];
 
 /// Registered admission cases.
-pub const ADMISSION_CASES: usize = 217;
+pub const ADMISSION_CASES: usize = 218;
 
 /// Diagnostic cases excluded from the 217.
 pub const DIAGNOSTIC_CASES: usize = 3;

@@ -708,6 +708,10 @@ fn namespace_scale(
         Ok(backings) => backings,
         Err(error) => return Ok(c1::unmeasured(&error, gates)),
     };
+    let mut oracle_backings = match fs::batch_backings(context, "oracle", batches.len()) {
+        Ok(backings) => backings,
+        Err(error) => return Ok(c1::unmeasured(&error, gates)),
+    };
     let mut perf_backings = match fs::batch_backings(context, "perf", batches.len()) {
         Ok(backings) => backings,
         Err(error) => return Ok(c1::unmeasured(&error, gates)),
@@ -764,6 +768,7 @@ fn namespace_scale(
     let chain_objects = chain.len() as u64;
 
     let mut metadata_emitted = 0_u64;
+    let mut content_bytes = 0_u64;
     let mut batch_roots = 0_u64;
     let mut largest_batch = 0_u64;
     instruments::heap_begin();
@@ -818,6 +823,10 @@ fn namespace_scale(
             let object = content
                 .cloned_object(*id)
                 .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+            // `SaveOutcome` carries no byte field - its `chain` is delta-base
+            // acquisition work, not bytes - so the bytes the Store has to hold are
+            // counted on the way in, from the objects themselves.
+            content_bytes = content_bytes.saturating_add(object.canonical_len() as u64);
             operation.accept(object)?;
         }
         let outcome = operation.finish(timing.child("storage.finish"))?;
@@ -835,10 +844,59 @@ fn namespace_scale(
         }
     };
 
-    let (store, replay) = fs::replay_build(&prepared, scope, None)?;
+    // The oracle: a second, unmeasured, byte-identical build into an authenticating
+    // store. It **must be batched too**. `fs::replay_build` issues one
+    // `build_filesystem` over the whole prepared tree, which for 10,101 bindings is
+    // refused by the same `MAXIMUM_WALK_ENTRIES` ceiling - and it reports the refusal
+    // as `OpError::Product`, which is how this row's first four runs were diagnosed:
+    // the failure was never in the measured region, it was here. The batches and their
+    // prefix chains are reused, so the oracle replays exactly what the timer ran.
+    let mut store = TreeStore::new();
+    let mut replay: Option<layerfs_content::FilesystemResult> = None;
+    for (index, batch) in batches.iter().enumerate() {
+        let base = replay.as_ref().map(|result| result.root);
+        let input = FilesystemInput {
+            base,
+            scope,
+            root_serial: ROOT_SERIAL,
+            directories: &batch.directories,
+            inodes: &batch.inodes,
+            new_inodes: &batch.new_inodes,
+            resources: FilesystemResources::default(),
+        };
+        let reader = PairProvider::new(&prefixes[index], &empty);
+        let built = {
+            let mut objects = FilesystemObjects::new(&reader, &mut store);
+            let ordering: Option<&mut dyn OrderingBacking> =
+                Some(&mut oracle_backings[index] as &mut dyn OrderingBacking);
+            if base.is_none() {
+                build_filesystem(&mut objects, &input, ordering)
+            } else {
+                update_filesystem(&mut objects, &input, ordering)
+            }
+        };
+        match built {
+            Ok(built) => replay = Some(built),
+            Err(error) => {
+                return Ok(c1::unmeasured(
+                    &OpError::Product(format!("oracle batch {index}: {error:?}")),
+                    gates,
+                ))
+            }
+        }
+    }
+    let replay = match replay {
+        Some(replay) => replay,
+        None => {
+            return Ok(c1::unmeasured(
+                &OpError::Io("oracle built no batch".to_string()),
+                gates,
+            ))
+        }
+    };
     let listing = fs::listings_match(&store, replay.root, &prepared)?;
 
-    let inserted_bytes = outcome.chain.canonical_bytes;
+    let inserted_bytes = content_bytes;
     context.trace.write_number(
         Kind::Counter,
         "pipeline.declared_files",
@@ -928,7 +986,7 @@ fn namespace_scale(
         "pipeline.content_bytes",
         inserted_bytes as i128,
         "bytes",
-        "SaveOutcome canonical bytes inserted",
+        "canonical bytes of the content objects accepted by the save",
     )?;
     context.trace.write_number(
         Kind::Counter,
@@ -975,7 +1033,7 @@ fn namespace_scale(
             "{inserted_bytes} canonical bytes inserted against {} declared",
             plan.total_bytes
         ),
-        "the save acknowledged at least the declared content bytes",
+        "the content the row accepted is at least the bytes the case declares",
     ));
     gates.push(gates::require(
         GateClass::Mechanism,
