@@ -1,0 +1,31 @@
+{
+  "count": 5,
+  "files": [
+    {
+      "bytes": 361,
+      "path": "namespace-10000/phases-perf.json",
+      "sha256": "438586982415bcd33a1510cf0b3af51b9548e5e8a08d848bd026be919d4b05fd"
+    },
+    {
+      "bytes": 7859,
+      "path": "namespace-10000/receipt.json",
+      "sha256": "2cf43075617264d165c00341503d3388296e194a8b6e5ef9b23f16388f57898c"
+    },
+    {
+      "bytes": 61,
+      "path": "namespace-10000/timing.json",
+      "sha256": "fcf897c07ce35aa7019bc77bce2075081326b6b88e834591c5f386ea4b712524"
+    },
+    {
+      "bytes": 7542,
+      "path": "namespace-10000/trace.jsonl",
+      "sha256": "6b2ae4a58ecd823e51db9f3da7350a16c094ecabe1a9266ed2b54e07e24d0841"
+    },
+    {
+      "bytes": 2995,
+      "path": "run.json",
+      "sha256": "5f9cad7c130c5ba3964fff92b2105e552360e8806893f676a4f359d6a2098c53"
+    }
+  ],
+  "schema": "layerfs-core-manifest-v1"
+}

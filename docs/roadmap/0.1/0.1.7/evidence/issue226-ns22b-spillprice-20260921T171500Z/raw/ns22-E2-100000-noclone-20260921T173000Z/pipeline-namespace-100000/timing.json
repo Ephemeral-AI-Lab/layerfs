@@ -1,0 +1,309 @@
+{
+  "name": "pipeline",
+  "elapsed_ns": 4083231083,
+  "children": [
+    {"name": "store.open", "elapsed_ns": 1587416, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 792333, "children": []},
+    {
+      "name": "build",
+      "elapsed_ns": 46055209,
+      "children": [
+        {"name": "validate", "elapsed_ns": 772292, "children": []},
+        {"name": "directories", "elapsed_ns": 3280875, "children": []},
+        {"name": "references", "elapsed_ns": 7419750, "children": []},
+        {"name": "inodes", "elapsed_ns": 6223667, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1250, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1750, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 26835125,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1685375, "children": []},
+        {"name": "directories", "elapsed_ns": 761583, "children": []},
+        {"name": "references", "elapsed_ns": 3875, "children": []},
+        {"name": "inodes", "elapsed_ns": 1700916, "children": []},
+        {"name": "cleanup", "elapsed_ns": 833, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2875, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 28663209,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2184292, "children": []},
+        {"name": "directories", "elapsed_ns": 788500, "children": []},
+        {"name": "references", "elapsed_ns": 14875, "children": []},
+        {"name": "inodes", "elapsed_ns": 2246167, "children": []},
+        {"name": "cleanup", "elapsed_ns": 833, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1333, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 29082500,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2258625, "children": []},
+        {"name": "directories", "elapsed_ns": 738917, "children": []},
+        {"name": "references", "elapsed_ns": 6375, "children": []},
+        {"name": "inodes", "elapsed_ns": 2515709, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1292, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2458, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 68654208,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1715334, "children": []},
+        {"name": "directories", "elapsed_ns": 734250, "children": []},
+        {"name": "references", "elapsed_ns": 8334, "children": []},
+        {"name": "inodes", "elapsed_ns": 43611167, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1125, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2708, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 27595875,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1893083, "children": []},
+        {"name": "directories", "elapsed_ns": 899917, "children": []},
+        {"name": "references", "elapsed_ns": 4959, "children": []},
+        {"name": "inodes", "elapsed_ns": 2126292, "children": []},
+        {"name": "cleanup", "elapsed_ns": 625, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1250, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 29711833,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2132875, "children": []},
+        {"name": "directories", "elapsed_ns": 724041, "children": []},
+        {"name": "references", "elapsed_ns": 4750, "children": []},
+        {"name": "inodes", "elapsed_ns": 2147166, "children": []},
+        {"name": "cleanup", "elapsed_ns": 709, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2542, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 28446542,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2056875, "children": []},
+        {"name": "directories", "elapsed_ns": 769875, "children": []},
+        {"name": "references", "elapsed_ns": 11917, "children": []},
+        {"name": "inodes", "elapsed_ns": 2345792, "children": []},
+        {"name": "cleanup", "elapsed_ns": 833, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1042, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 78931334,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1888250, "children": []},
+        {"name": "directories", "elapsed_ns": 51487541, "children": []},
+        {"name": "references", "elapsed_ns": 7750, "children": []},
+        {"name": "inodes", "elapsed_ns": 1977083, "children": []},
+        {"name": "cleanup", "elapsed_ns": 625, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2541, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 27865625,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1862500, "children": []},
+        {"name": "directories", "elapsed_ns": 781167, "children": []},
+        {"name": "references", "elapsed_ns": 5667, "children": []},
+        {"name": "inodes", "elapsed_ns": 2093583, "children": []},
+        {"name": "cleanup", "elapsed_ns": 542, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2125, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 27919750,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1930042, "children": []},
+        {"name": "directories", "elapsed_ns": 740167, "children": []},
+        {"name": "references", "elapsed_ns": 8958, "children": []},
+        {"name": "inodes", "elapsed_ns": 2251417, "children": []},
+        {"name": "cleanup", "elapsed_ns": 708, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2500, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 27706625,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1886416, "children": []},
+        {"name": "directories", "elapsed_ns": 735583, "children": []},
+        {"name": "references", "elapsed_ns": 8125, "children": []},
+        {"name": "inodes", "elapsed_ns": 2226625, "children": []},
+        {"name": "cleanup", "elapsed_ns": 792, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2416, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 100682542,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1774667, "children": []},
+        {"name": "directories", "elapsed_ns": 69249583, "children": []},
+        {"name": "references", "elapsed_ns": 3792, "children": []},
+        {"name": "inodes", "elapsed_ns": 2026792, "children": []},
+        {"name": "cleanup", "elapsed_ns": 708, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2583, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 31356042,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2154083, "children": []},
+        {"name": "directories", "elapsed_ns": 749125, "children": []},
+        {"name": "references", "elapsed_ns": 6917, "children": []},
+        {"name": "inodes", "elapsed_ns": 2556333, "children": []},
+        {"name": "cleanup", "elapsed_ns": 958, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1625, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 29937250,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2212042, "children": []},
+        {"name": "directories", "elapsed_ns": 747875, "children": []},
+        {"name": "references", "elapsed_ns": 4250, "children": []},
+        {"name": "inodes", "elapsed_ns": 2319709, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1000, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1125, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 30092042,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2007875, "children": []},
+        {"name": "directories", "elapsed_ns": 758917, "children": []},
+        {"name": "references", "elapsed_ns": 6291, "children": []},
+        {"name": "inodes", "elapsed_ns": 1979416, "children": []},
+        {"name": "cleanup", "elapsed_ns": 541, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2250, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 105676875,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1916333, "children": []},
+        {"name": "directories", "elapsed_ns": 77890125, "children": []},
+        {"name": "references", "elapsed_ns": 11417, "children": []},
+        {"name": "inodes", "elapsed_ns": 2087583, "children": []},
+        {"name": "cleanup", "elapsed_ns": 875, "children": []},
+        {"name": "root.encode", "elapsed_ns": 3166, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 28393125,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2011917, "children": []},
+        {"name": "directories", "elapsed_ns": 749125, "children": []},
+        {"name": "references", "elapsed_ns": 10375, "children": []},
+        {"name": "inodes", "elapsed_ns": 2182958, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1125, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2458, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 29274042,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2128459, "children": []},
+        {"name": "directories", "elapsed_ns": 896917, "children": []},
+        {"name": "references", "elapsed_ns": 11375, "children": []},
+        {"name": "inodes", "elapsed_ns": 2520291, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1333, "children": []},
+        {"name": "root.encode", "elapsed_ns": 1500, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 121768250,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1911833, "children": []},
+        {"name": "directories", "elapsed_ns": 723542, "children": []},
+        {"name": "references", "elapsed_ns": 5417, "children": []},
+        {"name": "inodes", "elapsed_ns": 91873209, "children": []},
+        {"name": "cleanup", "elapsed_ns": 875, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2917, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 28408208,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2124584, "children": []},
+        {"name": "directories", "elapsed_ns": 766041, "children": []},
+        {"name": "references", "elapsed_ns": 4541, "children": []},
+        {"name": "inodes", "elapsed_ns": 2203416, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1125, "children": []},
+        {"name": "root.encode", "elapsed_ns": 3250, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 27746625,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1921458, "children": []},
+        {"name": "directories", "elapsed_ns": 746042, "children": []},
+        {"name": "references", "elapsed_ns": 6041, "children": []},
+        {"name": "inodes", "elapsed_ns": 2181541, "children": []},
+        {"name": "cleanup", "elapsed_ns": 1125, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2500, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 28584750,
+      "children": [
+        {"name": "validate", "elapsed_ns": 2258166, "children": []},
+        {"name": "directories", "elapsed_ns": 739750, "children": []},
+        {"name": "references", "elapsed_ns": 6792, "children": []},
+        {"name": "inodes", "elapsed_ns": 2253917, "children": []},
+        {"name": "cleanup", "elapsed_ns": 875, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2875, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 139879959,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1858208, "children": []},
+        {"name": "directories", "elapsed_ns": 772375, "children": []},
+        {"name": "references", "elapsed_ns": 6625, "children": []},
+        {"name": "inodes", "elapsed_ns": 114297458, "children": []},
+        {"name": "cleanup", "elapsed_ns": 875, "children": []},
+        {"name": "root.encode", "elapsed_ns": 2583, "children": []}
+      ]
+    },
+    {
+      "name": "build",
+      "elapsed_ns": 5476250,
+      "children": [
+        {"name": "validate", "elapsed_ns": 1201625, "children": []},
+        {"name": "directories", "elapsed_ns": 502584, "children": []},
+        {"name": "references", "elapsed_ns": 45625, "children": []},
+        {"name": "inodes", "elapsed_ns": 1706292, "children": []},
+        {"name": "cleanup", "elapsed_ns": 375, "children": []},
+        {"name": "root.encode", "elapsed_ns": 583, "children": []}
+      ]
+    },
+    {"name": "storage.finish", "elapsed_ns": 13985000, "children": []}
+  ]
+}
