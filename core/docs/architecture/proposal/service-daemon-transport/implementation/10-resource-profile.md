@@ -44,8 +44,17 @@ to telemetry's separate bounded pools.
 The memory admission profile is the following vector of byte and count ceilings.
 Counts for collection nodes and native connections are stated as counts; they are
 not converted into an invented universal physical byte size. Every per-operation
-dimension below has multiplicity at most W=2. This preserves hard aggregate
+dimension below has multiplicity at most W, the Store's configured writer budget
+(two by default, 1..=64). This preserves hard aggregate
 ownership limits without treating socket options as a persistent memory cap.
+
+**The figures below are the W=2 instance of that rule, not a ceiling on W.**
+[#216](https://github.com/Ephemeral-AI-Lab/layerfs/issues/216) makes the budget an
+operator setting, so a raised budget multiplies every per-save dimension stated
+here - one 16 MiB encoder workspace per save is the largest of them - and no
+resource qualification exists for a raised budget. The default stays 2, and a
+larger setting is an explicit operator decision with that memory consequence
+attached, not a free throughput change.
 
 | Owner | Bound per owner and aggregate multiplicity |
 | --- | --- |

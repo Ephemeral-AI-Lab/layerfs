@@ -1,7 +1,8 @@
 //! Public Store handle, the private save operation and the C1 handoff adapter.
 //!
 //! A Store is a path plus the policy it was opened with. `begin_save` reserves
-//! one of two private save slots; `accept` takes finalized canonical objects
+//! one private save under the Store's persisted writer budget
+//! (`max_concurrent_writes`, #216); `accept` takes finalized canonical objects
 //! under bounded batch limits; `finish` completes every remaining write and
 //! acknowledges the final transaction. Reads are independent bounded waves that
 //! capture publication scope and a pack range ceiling once.
@@ -275,8 +276,55 @@ impl Store {
     }
 
     /// Persisted policy of this Store.
+    ///
+    /// This is the immutable construction profile. The writer budget is a
+    /// separate persisted value: it is an admission setting, not a format
+    /// property, and it can change while the Store stays the same Store.
     pub fn policy(&self) -> StoragePolicy {
         self.policy
+    }
+
+    /// The Store's authoritative writer budget.
+    ///
+    /// It is read from the Store file, never from a process-local copy, so every
+    /// sandbox and process sharing this Store sees one number and a change is
+    /// visible to the next [`Store::begin_save`] without reopening anything.
+    pub fn max_concurrent_writes(&self) -> StorageResult<u8> {
+        let connection = connection::open(&self.path, false)?;
+        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        schema::max_concurrent_writes(&connection)
+    }
+
+    /// Sets the Store's writer budget for every later save.
+    ///
+    /// One persisted update, and the only supported way to change the setting.
+    /// Retained private ownership is never released, rescanned or rewritten: a
+    /// save that is already recorded keeps its slot and still counts against the
+    /// new budget, so lowering the setting cannot make unresolved ownership
+    /// reusable. A value outside `1..=MAX_CONCURRENT_WRITES_LIMIT` is refused
+    /// rather than clamped.
+    pub fn set_max_concurrent_writes(
+        &self,
+        writes: u8,
+        scope: TimingScope<'_>,
+    ) -> StorageResult<u8> {
+        scope.run(|_configure| {
+            let connection = connection::open(&self.path, false)?;
+            let guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            crate::sqlite::write::begin_immediate(&connection)?;
+            match schema::set_max_concurrent_writes(&connection, writes) {
+                Ok(applied) => {
+                    crate::sqlite::write::commit(&connection)?;
+                    drop(guard);
+                    Ok(applied)
+                }
+                Err(refusal) => {
+                    crate::sqlite::write::rollback(&connection)?;
+                    drop(guard);
+                    Err(refusal)
+                }
+            }
+        })
     }
 
     /// Declared capacities of this Store.
@@ -325,7 +373,8 @@ impl Store {
             .unwrap_or(0)
     }
 
-    /// Reserves private ownership for one save; database transactions arbitrate separately.
+    /// Reserves private ownership for one save under the Store's writer budget;
+    /// database transactions arbitrate separately.
     pub fn begin_save(&self, scope: TimingScope<'_>) -> StorageResult<SaveOperation> {
         scope.run(|_acquire| {
             let connection = connection::open(&self.path, false)?;

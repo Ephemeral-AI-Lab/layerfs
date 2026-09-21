@@ -24,6 +24,11 @@ at this baseline. Historical receipts are not promoted to C5 evidence.
 
 The baseline supplies C1 public content/filesystem APIs, C2 schema 7, two private
 saves per Store and two admitted service operations in total, including reads.
+([#216](https://github.com/Ephemeral-AI-Lab/layerfs/issues/216) later replaced
+that fixed pair with the configured per-Store writer budget - schema 8, two by
+default - and stopped charging reads against writer permits. The reviewed
+baseline above is unchanged by that; only the concurrency statements are
+superseded.)
 Q=0 and one construction producer per ordinary operation remain; namespace init
 retains its existing exception. C2 has six application
 tables: `store_policy`, `saves`, `object_packs`, `objects`,
@@ -401,8 +406,8 @@ in M0: it binds catalog, query/Branch, immutable anchor and next record. Invalid
 incarnation/anchor/context or tampered cursors fail; advancing the live Branch
 does not invalidate an otherwise valid cursor anchored to its old immutable head.
 There is no process-local cursor registry. Totals, tags and
-arithmetic are validated before allocation. Do not enlarge service W=2, frame,
-replay, worker, timeout or cache limits to pass an acceptance case.
+arithmetic are validated before allocation. Do not enlarge the configured writer
+budget, frame, replay, worker, timeout or cache limits to pass an acceptance case.
 
 Later Workspace uses read_branch -> local edits/reservations -> stage_changes or
 commit -> add_layer. It distinguishes a saved working root from committed Branch

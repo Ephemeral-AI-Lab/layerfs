@@ -39,8 +39,12 @@ Only a returned terminal success validates provisional read bytes.
 
 `layerfs-service::Service::handle` is the same direct and remote entry point. It
 records around authorization/admission, validates the request, binds authenticated
-public-key possession to configured Store/op grants, and acquires one
-of two active operation slots without waiting. Native configuration selects one Store (logical ID 1);
+public-key possession to configured Store/op grants, and then acquires one permit
+without waiting: a logical mutation takes one writer permit of the Store it
+targets, whose budget is that Store's persisted `max_concurrent_writes`, and a
+read-only operation takes one of the process's `MAX_READ_OPERATIONS` read permits
+and no writer permit at all. One operation takes exactly one permit, however many
+saves or statements it performs. Native configuration selects one Store (logical ID 1);
 the service facade admits at most four explicitly configured Store mappings.
 No request carries a native Store path or independent construction capacities.
 `VerifiedPeer` belongs to the portable bridge contract and only trusted native
@@ -84,11 +88,14 @@ Body/data frames contain 1..=16384 bytes; metadata is <=32768 bytes. No empty-bo
 frame, in-band cancellation, per-chunk ACK or object RPC is accepted. Local stdin
 uses the same plaintext frame schema; credentials never come from those frames.
 
-There are four persistent/handshaking/closing sessions and one synchronous
-accept/refusal socket slot: **five application connection resources in total**.
-The acceptor's extra slot is counted, not hidden behind the four-session limit.
-At most four 2 MiB service thread stacks exist, and at most two admitted handlers can
-construct, each with one producer. Client upload uses one explicit 2 MiB stack. Closing owners retain their
+The transport admits `session_capacity(budget) = budget + MAX_READ_OPERATIONS`
+persistent/handshaking/closing sessions, plus one synchronous accept/refusal
+socket slot. At the default budget of two that is four sessions and **five
+application connection resources in total**, as before; a raised writer budget
+raises the session space with it, so the transport is never a lower ceiling than
+the configured budget. The acceptor's extra slot is counted, not hidden behind
+the session limit. At most that many 2 MiB service thread stacks exist, and at
+most `budget` admitted handlers can construct, each with one producer. Client upload uses one explicit 2 MiB stack. Closing owners retain their
 slots until their threads finish or the executable exits. A session retains a
 socket shutdown clone with its worker. Shutdown stops admission, shuts down all
 live sockets, and collects completed workers for at most two seconds. If core work
@@ -97,9 +104,11 @@ workers are not labelled cleanup. Kernel socket state, backlog, stack mappings
 and RSS are separate observed domains.
 
 The [resource profile](proposal/service-daemon-transport/implementation/10-resource-profile.md)
-records the aggregate byte/count ownership vector. It admits four session owners
-and two complete operation owners, preserves 16 KiB body and 32 KiB metadata
-limits, and selects a 4 GiB construct/read-range limit. Edit replay remains 8 MiB.
+records the aggregate byte/count ownership vector. At the default budget it
+admits four session owners and two complete operation owners, preserves 16 KiB
+body and 32 KiB metadata limits, and selects a 4 GiB construct/read-range limit.
+Those counts are the default-budget instance of the configured one; see the
+[concurrency controls](../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md). Edit replay remains 8 MiB.
 Frame work is bounded by `ceil(declared_bytes / 1024) + 257`, including boundary
 slack and a terminal frame. File size grows total work and persisted bytes, not a
 whole-file transport buffer.

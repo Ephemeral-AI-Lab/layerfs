@@ -117,7 +117,7 @@ Fifteen papers. Chapter numbers are global to the set, so a reference such as
 | [`12-attributes.md`](12-attributes.md) | 17 | Attribute trees: key grammar, `LFS4MET` pages, the streaming builder, extent-only values, portable mode/mtime, patching and multi-key reads |
 | [`13-physical-writing.md`](13-physical-writing.md) | 18 | Codec profiles and static contexts, group framing, placement by exact fit, and assembly — with the locator-stability argument |
 | [`14-service-runtime.md`](14-service-runtime.md) | — | Issue #192 candidate service/bridge/daemon, authenticated framing, hosted telemetry and remaining qualification |
-| [`15-multi-writer-storage.md`](15-multi-writer-storage.md) | — | The landed C2 multi-writer model: two private saves per Store, publication watermark, arbitration and cleanup |
+| [`15-multi-writer-storage.md`](15-multi-writer-storage.md) | — | The landed C2 multi-writer model: the configured per-Store writer budget, publication watermark, arbitration and cleanup |
 | [`16-history.md`](16-history.md) | — | The C5 history crate: catalog schema 1, typed identities, exact stages, conditional transitions, admission/continuity envelope, service/bridge surface and explicit limits |
 
 **Proposals** live one level down, in [`proposal/`](proposal/), and are a different

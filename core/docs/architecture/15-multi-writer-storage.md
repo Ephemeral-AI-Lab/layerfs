@@ -1,21 +1,36 @@
-# Save ownership and publication in the schema 7 candidate
+# Save ownership and publication in the schema 8 candidate
 
 > **Status:** Current general guide.
 
-This describes the pending #192 implementation on `codex/pair3-foundation`, based
-on `0819f3f39833d477d9ed6d878a50691c3c046a83` and the
-[selected C2 checkpoint](proposal/service-daemon-transport/implementation/evidence/optimization-selected-checkpoint-20260920.json).
-It is not release or performance evidence. The
+This describes the landed #192 implementation merged at
+`152b9c3a2e8ec2536a1d63601b681e1f7ef34455`, and the #216 change that replaces its
+fixed two-slot writer model with the configured per-Store writer budget
+(`152b9c3a2` plus this change). The
+[selected C2 checkpoint](proposal/service-daemon-transport/implementation/evidence/optimization-selected-checkpoint-20260920.json)
+and the
 [decision record](proposal/service-daemon-transport/implementation/09-optimization-decisions.md)
-tracks design choices and the incomplete service/large-load qualification.
+track the design choices and the incomplete service/large-load qualification. This
+page is not release or performance evidence.
 
-The source changes the persisted candidate format to schema 7. It preserves the
-canonical profile, content hashes, codecs and pack framing. Older schemas are
+The persisted candidate format is schema 8. It preserves the canonical profile,
+content hashes, codecs and pack framing. Older schemas, including schema 7, are
 rejected without migration. The core lockfile is unchanged.
 
 ## Ownership and visibility
 
-One logical Store admits two private saves. A native registry shares a database
+One logical Store admits as many private saves as its persisted writer budget
+allows: `store_policy.max_concurrent_writes`, 1..=64, default 2. The budget is
+read inside the allocation transaction, so every sandbox and process using the
+file shares one number and the next writer is refused, without waiting, as soon
+as the live private save count reaches it. A retained owner counts like any
+other, so lowering the budget never makes unresolved ownership reusable.
+`begin_save` records the lowest free slot inside `1..=budget`; `saves.active_slot`
+itself spans the whole supported space, so rows written under a higher budget
+stay valid after it is lowered. See the
+[concurrency controls](../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md)
+for the operator-facing definition and its change behavior.
+
+A native registry shares a database
 arbitration mutex across handles to the same device/inode, including hard-link
 aliases; it retains at most 64 live file identities and weak references to their
 owners. Unsupported platforms fail explicitly. This is local process arbitration,
@@ -32,8 +47,8 @@ The six STRICT tables are:
 
 | Table | Ownership and lookup |
 | --- | --- |
-| `store_policy` | Persisted construction policy, publication sequence, published pack range ceiling, monotonic pack/ordinal allocators and bounded pooled-window cursor |
-| `saves` | Never-reused save ID, unique private slot 1/2 or a publication sequence, and the save's highest pack ID |
+| `store_policy` | Persisted construction policy, the authoritative writer budget, publication sequence, published pack range ceiling, monotonic pack/ordinal allocators and bounded pooled-window cursor |
+| `saves` | Never-reused save ID, a unique private slot inside the supported slot space or a publication sequence, and the save's highest pack ID |
 | `object_packs` | Pack ID, owning save ID and body; indexed by save/pack for cleanup |
 | `objects` | `(object_id, save_id)` primary key with role, canonical length and pack/group/record locator; indexed by save/object for cleanup |
 | `metadata_value_groups` | Unique ordinal spans and authenticated group locator; ownership derives from the pack |
@@ -45,10 +60,13 @@ acquisition and additionally admits its own private data. Every locator/dependen
 lookup and pack/value-group acquisition applies that scope. The stored pack ceiling
 is still a range check and a counter; a hole below it does not grant visibility.
 
-At most two valid locator rows can exist for one ObjectId. After the first
-publication, new saves compare/reuse that eligible object; only saves already
-active can still finish a private copy. Lookups page IDs, cap candidate rows, reject
-over-bound catalogs and select the oldest eligible locator. A stored identity
+One locator row per simultaneously private owner can exist for one ObjectId, so
+the read-side ownership bound is the supported slot space (64) rather than the
+current budget: data written under a higher budget stays valid after it is
+lowered. After the first publication, new saves compare/reuse that eligible
+object; only saves already active can still finish a private copy. Lookups page
+IDs, cap candidate rows, reject over-bound catalogs and select the oldest
+eligible locator. A stored identity
 outside the reader's scope is `StorageError::Unpublished`, distinct from absence.
 The service preserves the existing failed-provider/integrity outcome classes.
 
@@ -133,10 +151,14 @@ authority. Other saves can use the database between cleanup transactions.
 
 Unknown COMMIT/ROLLBACK outcomes quarantine ownership. The product neither retries
 nor deletes on a guess. Failed cleanup retains the slot. Ordinary reopen preserves
-those private rows and slots while published roots remain readable. One unresolved
-slot leaves one available slot; two unresolved slots refuse new saves. There is
-no automatic recovery, mutation replay or resumable upload.
+those private rows and slots while published roots remain readable. Each
+unresolved owner consumes one unit of the budget - whether its slot is inside the
+current budget or above it after a lowering - so a Store whose live owners reach
+the budget refuses new saves, and only an explicit external decision about a
+named save releases one. There is no automatic recovery, mutation replay or
+resumable upload.
 
 The bridge/service still require their separate concurrency, memory and actual
-Docker acceptance. A C2 functional PASS alone does not enable W=2 in the service
-or qualify O01–O11 as a group.
+Docker acceptance. A C2 functional PASS alone does not enable a writer budget
+above two in the service or qualify O01–O11 as a group, and no budget has a
+performance qualification.
