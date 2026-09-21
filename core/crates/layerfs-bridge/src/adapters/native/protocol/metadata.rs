@@ -201,12 +201,15 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             root_serial,
             directories,
             inodes,
+            new_directories,
+            directory_metadata,
         } => {
             e.put(base)?;
             e.put(scope)?;
             e.u64(*root_serial)?;
             put_directories(&mut e, directories)?;
             put_inodes(&mut e, inodes)?;
+            put_directory_metadata(&mut e, new_directories, directory_metadata)?;
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
@@ -315,6 +318,61 @@ fn take_inodes(d: &mut Decoder<'_>) -> Result<Vec<InodeChange>, Failure> {
     Ok(inodes)
 }
 
+/// An absent trailer preserves the original prepared-update bytes exactly.
+fn put_directory_metadata(
+    e: &mut Encoder,
+    new_directories: &[DirectoryMetadata],
+    directory_metadata: &[DirectoryMetadata],
+) -> Result<(), Failure> {
+    if new_directories.is_empty() && directory_metadata.is_empty() {
+        return Ok(());
+    }
+    e.u8(1)?;
+    for records in [new_directories, directory_metadata] {
+        e.count(records.len())?;
+        for directory in records {
+            e.u64(directory.serial)?;
+            e.u32(directory.mode)?;
+            e.u64(directory.mtime_seconds as u64)?;
+            e.u32(directory.mtime_nanoseconds)?;
+        }
+    }
+    Ok(())
+}
+fn take_directory_metadata(
+    d: &mut Decoder<'_>,
+    maximum: usize,
+) -> Result<(Vec<DirectoryMetadata>, Vec<DirectoryMetadata>), Failure> {
+    if d.bytes.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    if d.u8()? != 1 {
+        return Err(Code::Unsupported.into());
+    }
+    let new_directories = take_directory_records(d, maximum)?;
+    let directory_metadata = take_directory_records(d, maximum - new_directories.len())?;
+    if new_directories.is_empty() && directory_metadata.is_empty() {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok((new_directories, directory_metadata))
+}
+fn take_directory_records(
+    d: &mut Decoder<'_>,
+    maximum: usize,
+) -> Result<Vec<DirectoryMetadata>, Failure> {
+    let count = d.count(maximum, 24)?;
+    let mut directories = Vec::with_capacity(count);
+    for _ in 0..count {
+        directories.push(DirectoryMetadata {
+            serial: d.u64()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+        });
+    }
+    Ok(directories)
+}
+
 /// Reads one fixed-width identity of `N` bytes.
 fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
     d.take(N)?.try_into().map_err(|_| Code::InvalidInput.into())
@@ -367,11 +425,12 @@ fn put_prepared(e: &mut Encoder, changes: &PreparedChanges) -> Result<(), Failur
     e.put(&changes.scope)?;
     e.u64(changes.root_serial)?;
     put_directories(e, &changes.directories)?;
-    put_inodes(e, &changes.inodes)
+    put_inodes(e, &changes.inodes)?;
+    put_directory_metadata(e, &changes.new_directories, &changes.directory_metadata)
 }
 
 fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
-    Ok(PreparedChanges {
+    let mut changes = PreparedChanges {
         workspace: take_array::<32>(d)?,
         branch: take_array::<17>(d)?,
         expected_head: take_optional::<33>(d)?,
@@ -382,7 +441,12 @@ fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
         root_serial: d.u64()?,
         directories: take_directories(d)?,
         inodes: take_inodes(d)?,
-    })
+        new_directories: Vec::new(),
+        directory_metadata: Vec::new(),
+    };
+    (changes.new_directories, changes.directory_metadata) =
+        take_directory_metadata(d, 128 - changes.inodes.len())?;
+    Ok(changes)
 }
 
 /// Writes one pathless manifest.
@@ -774,12 +838,16 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             let root_serial = d.u64()?;
             let directories = take_directories(&mut d)?;
             let inodes = take_inodes(&mut d)?;
+            let (new_directories, directory_metadata) =
+                take_directory_metadata(&mut d, 128 - inodes.len())?;
             Operation::UpdatePreparedFilesystem {
                 base,
                 scope,
                 root_serial,
                 directories,
                 inodes,
+                new_directories,
+                directory_metadata,
             }
         }
         6 => Operation::HistoryQuery(take_query(&mut d)?),

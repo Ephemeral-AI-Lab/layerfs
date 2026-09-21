@@ -154,6 +154,8 @@ impl Workspace {
         let inodes = self.prepared_inodes(submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
+            directory_metadata: Vec::new(),
+            new_directories: Vec::new(),
             workspace: self.inner.incarnation,
             branch: context.branch.branch,
             expected_head: context.branch.head_commit,

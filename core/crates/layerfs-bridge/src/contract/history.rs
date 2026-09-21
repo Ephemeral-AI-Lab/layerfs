@@ -175,6 +175,10 @@ pub struct PreparedChanges {
     pub directories: Vec<super::DirectoryChange>,
     /// Typed final inode values.
     pub inodes: Vec<super::InodeChange>,
+    /// New directory declarations; their serials obey the scope allocator contract.
+    pub new_directories: Vec<super::DirectoryMetadata>,
+    /// Portable patches to existing directories, preserving their other attributes.
+    pub directory_metadata: Vec<super::DirectoryMetadata>,
 }
 
 /// One pathless manifest entry of a bounded namespace initialization.

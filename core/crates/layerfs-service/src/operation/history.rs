@@ -458,10 +458,12 @@ fn stage(
         root_serial: changes.root_serial,
         directories: &changes.directories,
         inodes: &changes.inodes,
+        new_directories: &changes.new_directories,
+        directory_metadata: &changes.directory_metadata,
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = filesystem::update(&provider, &prepared, &mut handoff, timer);
+        let result = filesystem::update(&provider, &prepared, &mut handoff, deadline, timer);
         let retained = handoff.take_failure();
         drop(handoff);
         match retained {
@@ -469,11 +471,15 @@ fn stage(
             None => result,
         }
     };
+    let built = built.and_then(|value| {
+        if Instant::now() >= deadline {
+            Err(Code::Deadline.into())
+        } else {
+            Ok(value)
+        }
+    });
     let (root, _) = match built {
         Ok(value) => {
-            if Instant::now() >= deadline {
-                return Err(Code::Deadline.into());
-            }
             save.finish(timer.child("history.finish"))
                 .map_err(storage)?;
             value

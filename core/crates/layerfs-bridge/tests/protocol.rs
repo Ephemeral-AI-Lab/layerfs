@@ -89,6 +89,8 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
             }],
         },
         Operation::UpdatePreparedFilesystem {
+            directory_metadata: Vec::new(),
+            new_directories: Vec::new(),
             base: [1; 32],
             scope: [2; 32],
             root_serial: 1,

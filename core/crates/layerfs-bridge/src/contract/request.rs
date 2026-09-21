@@ -80,6 +80,8 @@ pub enum Operation {
         root_serial: u64,
         directories: Vec<DirectoryChange>,
         inodes: Vec<InodeChange>,
+        new_directories: Vec<DirectoryMetadata>,
+        directory_metadata: Vec<DirectoryMetadata>,
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
@@ -152,6 +154,16 @@ pub struct Edit {
 pub struct DirectoryChange {
     pub parent: u64,
     pub changes: Vec<(Vec<u8>, Option<u64>)>,
+}
+/// Portable fields for a qualified new directory or an existing-directory patch.
+/// New serials obey the caller's scope-wide allocator contract; an unbound new
+/// declaration may be omitted from the result by the filesystem builder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DirectoryMetadata {
+    pub serial: u64,
+    pub mode: u32,
+    pub mtime_seconds: i64,
+    pub mtime_nanoseconds: u32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InodeChange {
@@ -431,6 +443,8 @@ impl Request {
                 root_serial,
                 directories,
                 inodes,
+                new_directories,
+                directory_metadata,
                 ..
             } => {
                 if *root_serial == 0 || *root_serial > i64::MAX as u64 {
@@ -439,6 +453,13 @@ impl Request {
                 if directories.len() > 128 || inodes.len() > 128 {
                     return Err(Code::Capacity.into());
                 }
+                check_directory_metadata(
+                    *root_serial,
+                    directories,
+                    inodes,
+                    new_directories,
+                    directory_metadata,
+                )?;
                 let mut count = 0usize;
                 for directory in directories {
                     count = count
@@ -551,7 +572,14 @@ fn check_prepared(changes: &PreparedChanges) -> Result<(), Failure> {
     if changes.root_serial == 0 || changes.root_serial > i64::MAX as u64 {
         return Err(Code::InvalidInput.into());
     }
-    check_prepared_lists(&changes.directories, &changes.inodes)
+    check_prepared_lists(&changes.directories, &changes.inodes)?;
+    check_directory_metadata(
+        changes.root_serial,
+        &changes.directories,
+        &changes.inodes,
+        &changes.new_directories,
+        &changes.directory_metadata,
+    )
 }
 
 fn check_prepared_lists(
@@ -586,6 +614,65 @@ fn check_prepared_lists(
         .any(|pair| pair[0].serial >= pair[1].serial)
     {
         return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+
+fn check_directory_metadata(
+    root_serial: u64,
+    directories: &[DirectoryChange],
+    inodes: &[InodeChange],
+    new_directories: &[DirectoryMetadata],
+    directory_metadata: &[DirectoryMetadata],
+) -> Result<(), Failure> {
+    if inodes
+        .len()
+        .checked_add(new_directories.len())
+        .and_then(|n| n.checked_add(directory_metadata.len()))
+        .ok_or(Code::Capacity)?
+        > 128
+    {
+        return Err(Code::Capacity.into());
+    }
+    for records in [new_directories, directory_metadata] {
+        if records
+            .windows(2)
+            .any(|pair| pair[0].serial >= pair[1].serial)
+        {
+            return Err(Code::InvalidInput.into());
+        }
+        for directory in records {
+            if directory.serial == 0
+                || directory.serial > i64::MAX as u64
+                || inodes.iter().any(|inode| inode.serial == directory.serial)
+            {
+                return Err(Code::InvalidInput.into());
+            }
+            super::metadata::check_portable_metadata(
+                2,
+                directory.mode,
+                directory.mtime_nanoseconds,
+            )?;
+        }
+    }
+    if (!new_directories.is_empty() || !directory_metadata.is_empty())
+        && inodes
+            .windows(2)
+            .any(|pair| pair[0].serial >= pair[1].serial)
+    {
+        return Err(Code::InvalidInput.into());
+    }
+    for directory in new_directories {
+        if directory.serial == root_serial
+            || directory_metadata
+                .binary_search_by_key(&directory.serial, |d| d.serial)
+                .is_ok()
+            || !directories
+                .iter()
+                .any(|changes| changes.parent == directory.serial)
+        {
+            return Err(Code::InvalidInput.into());
+        }
     }
     Ok(())
 }

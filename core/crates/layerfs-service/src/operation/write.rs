@@ -103,6 +103,8 @@ pub fn mutate(
             root_serial,
             directories,
             inodes,
+            new_directories,
+            directory_metadata,
         } => filesystem::update(
             &provider,
             &filesystem::PreparedUpdate {
@@ -111,8 +113,11 @@ pub fn mutate(
                 root_serial: *root_serial,
                 directories,
                 inodes,
+                new_directories,
+                directory_metadata,
             },
             &mut handoff,
+            deadline,
             scope,
         ),
         _ => Err(Code::Unsupported.into()),

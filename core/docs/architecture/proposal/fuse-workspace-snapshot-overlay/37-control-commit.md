@@ -2,6 +2,7 @@
 
 > **Status: implemented and verified in the declared functional scope; target v0.1.7, not released.**
 > Implementation parent: `74e6fbd2d23cb7519ea63c275f42283ce3c79d17`.
+> Implementation commit: `8e01d28a1c8b7708f5d319990c1440ae682f8b44`; [exact staged-tree confirmation](evidence/control-commit/commit-confirmed.json).
 
 This round exposes ordinary native Workspace Commit. The identity-only request
 uses profile 3/opcode 14 and independent daemon grant bit 32; valid masks are

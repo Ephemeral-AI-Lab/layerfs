@@ -104,11 +104,15 @@ pub(crate) fn build_namespace(
         Some(error) => Err(storage(error)),
         None => built,
     };
+    let built = built.and_then(|value| {
+        if Instant::now() >= deadline {
+            Err(Code::Deadline.into())
+        } else {
+            Ok(value)
+        }
+    });
     match built {
         Ok(result) => {
-            if Instant::now() >= deadline {
-                return Err(Code::Deadline.into());
-            }
             save.finish(timer.child("history.finish_tree_save"))
                 .map_err(storage)?;
             Ok(result.root.0)
@@ -155,29 +159,7 @@ fn prerequisites(
                     mtime_seconds: entry.mtime_seconds,
                     mtime_nanoseconds: entry.mtime_nanoseconds,
                 };
-                value.validate(kind).map_err(content)?;
-                let mode = emit_value(&mut objects, &value.mode_bytes(kind).map_err(content)?)
-                    .map_err(content)?;
-                let mtime = emit_value(&mut objects, &value.mtime_bytes().map_err(content)?)
-                    .map_err(content)?;
-                let metadata_root = build_attribute_tree(
-                    &mut objects,
-                    vec![
-                        Ok(AttributeEntry {
-                            key: AttributeKey::new("portable".into(), b"mode".to_vec())
-                                .map_err(content)?,
-                            value_root: mode,
-                        }),
-                        Ok(AttributeEntry {
-                            key: AttributeKey::new("portable".into(), b"mtime".to_vec())
-                                .map_err(content)?,
-                            value_root: mtime,
-                        }),
-                    ]
-                    .into_iter(),
-                )
-                .map_err(content)?
-                .0;
+                let metadata_root = build_metadata(&mut objects, kind, value)?;
                 let content_root = match entry.kind {
                     RecordKind::Symlink => emit_symlink(
                         &mut objects,
@@ -208,11 +190,15 @@ fn prerequisites(
             None => result,
         }
     };
+    let built = built.and_then(|value| {
+        if Instant::now() >= deadline {
+            Err(Code::Deadline.into())
+        } else {
+            Ok(value)
+        }
+    });
     match built {
         Ok(values) => {
-            if Instant::now() >= deadline {
-                return Err(Code::Deadline.into());
-            }
             save.finish(timer.child("history.finish_prerequisite_save"))
                 .map_err(storage)?;
             Ok(values)
@@ -228,6 +214,34 @@ fn prerequisites(
             Err(error)
         }
     }
+}
+
+/// Builds the typed portable fields through the caller's existing save owner.
+/// The constructors only emit; they never read these unpublished new objects.
+pub(crate) fn build_metadata(
+    objects: &mut FilesystemObjects<'_>,
+    kind: InodeKind,
+    value: PortableMetadata,
+) -> Result<ObjectId, Failure> {
+    value.validate(kind).map_err(content)?;
+    let mode = emit_value(objects, &value.mode_bytes(kind).map_err(content)?).map_err(content)?;
+    let mtime = emit_value(objects, &value.mtime_bytes().map_err(content)?).map_err(content)?;
+    build_attribute_tree(
+        objects,
+        vec![
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mode".to_vec()).map_err(content)?,
+                value_root: mode,
+            }),
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).map_err(content)?,
+                value_root: mtime,
+            }),
+        ]
+        .into_iter(),
+    )
+    .map(|(root, _)| root)
+    .map_err(content)
 }
 
 /// Groups the manifest's entries into sorted final directory bindings.

@@ -602,3 +602,15 @@ Control starts under lifecycle exclusion before writable mount publication. Sign
 cleanup retains control on dirty/refused closure, and only ends admission after
 successful close while still holding the same owner slot. This is process assembly,
 not a second Workspace or Commit algorithm; round37 records qualification.
+
+
+The prepared-directory extension after source commit
+`8e01d28a1c8b7708f5d319990c1440ae682f8b44` shares one typed directory metadata
+record across fresh declarations and existing-directory patches in both prepared
+filesystem routes. New declarations use the existing C1 directory builder under
+the same C2 save; existing patches preserve generic attributes through the common
+portable patcher. Their combined inode budget remains 128 and the complete metadata
+envelope remains 32768 bytes. Empty extensions preserve legacy bytes.
+[Round 38](proposal/fuse-workspace-snapshot-overlay/38-prepared-directories.md)
+records the exact encoding, ownership, verification state and remaining namespace
+work. This extends the earlier existing-identity-only prepared surface.

@@ -7,6 +7,11 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Shared directory prerequisite:** [prepared directory construction and metadata](38-prepared-directories.md)
+is implemented and functionally verified under the existing Service save path.
+Workspace namespace/FUSE creation and the complete prepared upload
+remain open.
+
 **Current continuation:** [authenticated Commit](37-control-commit.md) and its writable
 startup/dirty-shutdown prerequisites are verified for their declared scope. [Authenticated Attach](36-control-attach.md) is verified for its declared scope,
 building on [failed native Attach ownership](35-failed-attachment-ownership.md). [Authenticated Mount](32-control-mount.md)

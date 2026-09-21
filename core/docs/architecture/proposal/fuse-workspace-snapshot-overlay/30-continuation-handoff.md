@@ -9,8 +9,10 @@
 and [authenticated Attach36](36-control-attach.md) now have their source-pinned
 checks and actual Linux proofs. The earlier baseline/ordered steps below remain
 traceable planning context. [Workspace Commit37](37-control-commit.md) now verifies its writable startup and
-dirty-shutdown custody prerequisites. Namespace/new-inode shared preparation and
-the maintained Workspace namespace index are next prerequisites to mkdir/create
+dirty-shutdown custody prerequisites. [Shared prepared directories38](38-prepared-directories.md)
+now verifies new directories and existing-directory portable patches through the
+existing Service save owner. The maintained Workspace namespace index is the next
+prerequisite to mkdir/create
 and the full prepared upload. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 

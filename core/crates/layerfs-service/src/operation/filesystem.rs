@@ -1,13 +1,15 @@
-//! Existing-identity updates only; every supplied root is retained beforehand.
+//! Existing inode values, directory metadata patches and new directories under one save.
 //!
 //! The prepared-update surface is shared by the legacy content operation and by
 //! history staging. It is the same production body in both cases: one builder,
 //! one ownership rule, one place where a supplied root is checked against the
 //! base tree. History adds semantic-role validation before calling it.
-use super::{failure::content, read::id};
+use super::{
+    failure::content, history_bootstrap::build_metadata, metadata::patch_portable, read::id,
+};
 use layerfs_bridge::contract::*;
 use layerfs_content::{
-    filesystem::root::FilesystemRootId,
+    filesystem::{attributes::PortableMetadata, root::FilesystemRootId},
     object::inode_leaf::{InodeKind, InodeValue},
 };
 use layerfs_content::{
@@ -15,6 +17,7 @@ use layerfs_content::{
     FilesystemResources, FinalizedConsumer, InodeScope, InodeUpdate, PathName,
 };
 use layerfs_telemetry::timer::{Active, TimingScope};
+use std::time::Instant;
 /// One checked prepared update: an existing root plus its final changes.
 #[derive(Clone, Copy)]
 pub(crate) struct PreparedUpdate<'a> {
@@ -28,12 +31,17 @@ pub(crate) struct PreparedUpdate<'a> {
     pub(crate) directories: &'a [DirectoryChange],
     /// Typed final inode values.
     pub(crate) inodes: &'a [InodeChange],
+    /// Qualified fresh declarations; unbound directories may be omitted by C1.
+    pub(crate) new_directories: &'a [DirectoryMetadata],
+    /// Portable metadata patches to existing directories, including the root.
+    pub(crate) directory_metadata: &'a [DirectoryMetadata],
 }
 
 pub(crate) fn update(
     provider: &dyn AuthenticatedObjects,
     update: &PreparedUpdate<'_>,
     consumer: &mut dyn FinalizedConsumer,
+    deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<(Root, u64), Failure> {
     let PreparedUpdate {
@@ -42,6 +50,8 @@ pub(crate) fn update(
         root_serial,
         directories,
         inodes,
+        new_directories,
+        directory_metadata,
     } = *update;
     let mut fs = FilesystemRead::new(provider, FilesystemRootId(id(&base))).map_err(content)?;
     if fs.root().scope().object() != id(&allocation)
@@ -61,15 +71,23 @@ pub(crate) fn update(
     for inode in inodes {
         serials.push(inode.serial);
     }
+    serials.extend(directory_metadata.iter().map(|directory| directory.serial));
     if fs
         .lookup_inodes(&serials)
         .map_err(content)?
         .iter()
-        .any(Option::is_none)
+        .zip(&serials)
+        .any(|(found, serial)| {
+            found.is_none()
+                != new_directories
+                    .binary_search_by_key(serial, |d| d.serial)
+                    .is_ok()
+        })
     {
         return Err(Code::InvalidInput.into());
     }
-    let mut values = Vec::with_capacity(inodes.len());
+    let mut values =
+        Vec::with_capacity(inodes.len() + new_directories.len() + directory_metadata.len());
     for i in inodes {
         let kind = InodeKind::from_code(i.kind).map_err(content)?;
         // Directory content is changed through changed-name records, never wholesale
@@ -104,16 +122,74 @@ pub(crate) fn update(
             })
         })
         .collect::<Result<Vec<_>, Failure>>()?;
+    let mut objects = FilesystemObjects::new(provider, consumer);
+    for directory in directory_metadata {
+        if Instant::now() >= deadline {
+            return Err(Code::Deadline.into());
+        }
+        let old =
+            fs.lookup_inodes(&[directory.serial]).map_err(content)?[0].ok_or(Code::InvalidInput)?;
+        if old.kind != InodeKind::Directory {
+            return Err(Code::InvalidInput.into());
+        }
+        let metadata_root = patch_portable(
+            &mut objects,
+            old.metadata_root,
+            InodeKind::Directory,
+            PortableMetadata {
+                mode: directory.mode,
+                mtime_seconds: directory.mtime_seconds,
+                mtime_nanoseconds: directory.mtime_nanoseconds,
+            },
+        )
+        .map_err(content)?;
+        values.push(InodeUpdate {
+            serial: directory.serial,
+            value: InodeValue {
+                metadata_root,
+                ..old
+            },
+        });
+    }
+    let mut new_inodes = Vec::with_capacity(new_directories.len());
+    for directory in new_directories {
+        if Instant::now() >= deadline {
+            return Err(Code::Deadline.into());
+        }
+        let metadata_root = build_metadata(
+            &mut objects,
+            InodeKind::Directory,
+            PortableMetadata {
+                mode: directory.mode,
+                mtime_seconds: directory.mtime_seconds,
+                mtime_nanoseconds: directory.mtime_nanoseconds,
+            },
+        )?;
+        new_inodes.push(directory.serial);
+        values.push(InodeUpdate {
+            serial: directory.serial,
+            value: InodeValue {
+                kind: InodeKind::Directory,
+                namespace_ref_count: 0,
+                // Every declaration has a binding record, including empty ones.
+                // C1 replaces this placeholder with its newly built directory root.
+                content_root: metadata_root,
+                metadata_root,
+            },
+        });
+    }
+    if !new_directories.is_empty() || !directory_metadata.is_empty() {
+        values.sort_unstable_by_key(|value| value.serial);
+    }
     let input = FilesystemInput {
         base: Some(FilesystemRootId(id(&base))),
         scope: InodeScope::from_object(id(&allocation)),
         root_serial,
         directories: &directories,
         inodes: &values,
-        new_inodes: &[],
+        new_inodes: &new_inodes,
         resources: FilesystemResources::default(),
     };
-    let mut objects = FilesystemObjects::new(provider, consumer);
     let result = layerfs_content::filesystem::update::update_filesystem_timed(
         &mut objects,
         &input,

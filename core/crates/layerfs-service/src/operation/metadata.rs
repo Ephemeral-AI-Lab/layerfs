@@ -95,27 +95,12 @@ pub(crate) fn update(
             mtime_seconds: *mtime_seconds,
             mtime_nanoseconds: *mtime_nanoseconds,
         };
-        metadata.validate(kind)?;
-        // A base must already be an attribute tree with valid typed fields.
-        // The requested inode kind governs mode validation; no inode is attached here.
-        read_portable(&reader, id(base), kind, &mut AttributeReadWork::default())?;
-        let patches = [
-            AttributePatch::Set {
-                key: AttributeKey::new("portable".into(), b"mode".to_vec())?,
-                value: metadata.mode_bytes(kind)?.to_vec(),
-            },
-            AttributePatch::Set {
-                key: AttributeKey::new("portable".into(), b"mtime".to_vec())?,
-                value: metadata.mtime_bytes()?.to_vec(),
-            },
-        ];
         let mut output = Output {
             inner: consumer,
             deadline: &deadline,
         };
         let mut objects = FilesystemObjects::new(&reader, &mut output);
-        apply_patches(&reader, &mut objects, id(base), &patches)
-            .map(|(root, _)| (*root.as_bytes(), 0))
+        patch_portable(&mut objects, id(base), kind, metadata).map(|root| (*root.as_bytes(), 0))
     })();
     // C1 has no deadline variant. The operation-owned flag distinguishes this
     // expiry from provider I/O without inspecting diagnostics. The save owner
@@ -125,4 +110,28 @@ pub(crate) fn update(
     } else {
         result.map_err(content)
     }
+}
+
+/// Updates only portable mode/mtime, preserving all other attributes in the base.
+/// Emitted objects remain under the caller's existing save owner.
+pub(crate) fn patch_portable(
+    objects: &mut FilesystemObjects<'_>,
+    base: ObjectId,
+    kind: InodeKind,
+    metadata: PortableMetadata,
+) -> ContentResult<ObjectId> {
+    metadata.validate(kind)?;
+    let reader = objects.reader();
+    read_portable(reader, base, kind, &mut AttributeReadWork::default())?;
+    let patches = [
+        AttributePatch::Set {
+            key: AttributeKey::new("portable".into(), b"mode".to_vec())?,
+            value: metadata.mode_bytes(kind)?.to_vec(),
+        },
+        AttributePatch::Set {
+            key: AttributeKey::new("portable".into(), b"mtime".to_vec())?,
+            value: metadata.mtime_bytes()?.to_vec(),
+        },
+    ];
+    apply_patches(reader, objects, base, &patches).map(|(root, _)| root)
 }
