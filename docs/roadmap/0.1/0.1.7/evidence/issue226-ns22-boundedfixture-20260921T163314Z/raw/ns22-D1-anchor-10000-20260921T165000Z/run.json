@@ -1,0 +1,80 @@
+{
+  "cache_state": "declared per row; never pooled",
+  "declared_exceptions": [],
+  "golden_matches": true,
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "d6c1d363c9f8471fb0d96fb32d1e6522953ce489a195ec8ab7af3e8da250735e",
+    "harness_lock_sha256": "612640f777f5127f17a3aa550eb0d65b11652b4efcb2f99f66ece4513b80f1cc",
+    "harness_python_sha256": "27d2ed0be974524f84df0f107cba213441204c96e19ab46dfd2e3bfc90ef2a9d",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "3f786dc190aee428d8d7a94d195709164f035418a8b56a644b3f284f541d94e4",
+    "source_commit": "47cf17049a27ab3ff2ebb77a7cae449eed8821e5",
+    "source_dirty": false,
+    "source_dirty_files": [],
+    "started_utc": "2026-09-21T16:39:55Z"
+  },
+  "lane": "smoke",
+  "phases": {
+    "admission": {
+      "acquisition_wall_ns": 0,
+      "cleanup_wall_ns": 542,
+      "complete_command_ns": 105595667,
+      "handoff_ns": 0,
+      "operation_ns": 77814875,
+      "preparation_wall_ns": 15236000,
+      "verification_invocation_ns": 0,
+      "verification_wall_ns": 6723958
+    },
+    "by_status": {
+      "PASS": {
+        "acquisition_wall_ns": 0,
+        "cleanup_wall_ns": 542,
+        "complete_command_ns": 105595667,
+        "handoff_ns": 0,
+        "operation_ns": 77814875,
+        "preparation_wall_ns": 15236000,
+        "rows": 1,
+        "verification_invocation_ns": 0,
+        "verification_wall_ns": 6723958
+      }
+    },
+    "schema": "layerfs-lane-phases-v1",
+    "unreconciled_rows": []
+  },
+  "registry_self_check": {
+    "admission rows": "219",
+    "cardinality sum": "219",
+    "diagnostic rows": "3",
+    "exit_code": 0,
+    "frozen cardinality": "[4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 6]",
+    "history group": "3 (outside the 217)",
+    "pinned constants": "1999 row(s); O1 identity pinned for 214 of 219 admission case(s)",
+    "registered rows": "222",
+    "registry self-check": "PASS",
+    "smoke lane": "20",
+    "status": "PASS"
+  },
+  "reused_proof": null,
+  "reused_proof_identities": null,
+  "reused_proof_omission": null,
+  "rows": 1,
+  "run_dir": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/benchmark-results/issue219/ns22-D1-anchor-10000-20260921T165000Z",
+  "samples_per_case_per_arm": 1,
+  "schema": "layerfs-core-run-v1",
+  "selection": [
+    "namespace-10000"
+  ],
+  "selection_size": 1,
+  "tally": {
+    "PASS": 1
+  },
+  "verification_mode": "full",
+  "verification_sample_rule": "",
+  "wall_ns": 113083125
+}
