@@ -211,6 +211,10 @@ struct WriteOutcome {
     inserted: u64,
     refused: bool,
     failed: bool,
+    /// Nanoseconds from the work phase's start to this write's start.
+    started_ns: u64,
+    /// Nanoseconds from the work phase's start to this write's end.
+    ended_ns: u64,
 }
 
 /// The call body: one `ConstructFile` operation over prepared bytes.
@@ -437,8 +441,12 @@ fn main() -> Result<(), Failure> {
     let admitted_at_once;
     let decision_ns;
 
-    // Work phase: the timed operation set.
+    // Work phase: the timed operation set. The phase clock is what makes a
+    // within-run shape measurable at any budget: summing concurrent per-write
+    // durations would count the same wall time once per writer, so the receipt
+    // reports bytes completed in the first and second half of the phase instead.
     let work_started = Instant::now();
+    let phase = work_started;
     match options.mode {
         Mode::Queued => {
             let next = Arc::new(AtomicUsize::new(0));
@@ -459,8 +467,11 @@ fn main() -> Result<(), Failure> {
                         }
                         let in_flight = live.fetch_add(1, Ordering::AcqRel) + 1;
                         peak.fetch_max(in_flight, Ordering::AcqRel);
-                        let (root, outcome) =
+                        let started = Instant::now();
+                        let (root, mut outcome) =
                             construct(&service, index as u64 + 1, &payloads[index]);
+                        outcome.started_ns = started.duration_since(phase).as_nanos() as u64;
+                        outcome.ended_ns = started.elapsed().as_nanos() as u64 + outcome.started_ns;
                         live.fetch_sub(1, Ordering::AcqRel);
                         roots.lock().expect("roots")[index] = root;
                         outcomes.lock().expect("outcomes")[index] = outcome;
@@ -535,6 +546,38 @@ fn main() -> Result<(), Failure> {
     let complete_command_ns = preparation_ns + setup_ns + work_ns + verification_ns + cleanup_ns;
 
     let outcomes = outcomes.lock().expect("outcomes").clone();
+    // The shape inside one arm: bytes completed in the first and second half of
+    // the phase's wall time, so a rate that decays as the Store grows is visible
+    // instead of averaged away. Valid at any budget, because it uses each write's
+    // own completion offset rather than a sum of overlapping durations.
+    let mut completed: Vec<u64> = outcomes
+        .iter()
+        .filter(|outcome| outcome.inserted == 1)
+        .map(|outcome| outcome.ended_ns)
+        .collect();
+    completed.sort_unstable();
+    let midpoint = work_ns / 2;
+    let first_half_bytes = completed.iter().filter(|ended| **ended <= midpoint).count() as u64;
+    let second_half_bytes = completed.len() as u64 - first_half_bytes;
+    let half_rate = |writes: u64| -> f64 {
+        let bytes = writes * options.bytes as u64;
+        let seconds = (work_ns as f64 / 2.0) / 1e9;
+        if seconds == 0.0 {
+            0.0
+        } else {
+            (bytes as f64 / MIB) / seconds
+        }
+    };
+    let durations: Vec<u64> = outcomes
+        .iter()
+        .filter(|outcome| outcome.inserted == 1)
+        .map(|outcome| outcome.ended_ns.saturating_sub(outcome.started_ns))
+        .collect();
+    let slowest = durations
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, nanos)| **nanos)
+        .map(|(index, nanos)| (index, *nanos));
     let saved = roots
         .lock()
         .expect("roots")
@@ -568,6 +611,7 @@ fn main() -> Result<(), Failure> {
          cleanup            {:.3} s\n\
          complete command   {:.3} s\n\
          peak in flight     {} (budget {}); admitted at once {}\n\
+         write shape        first half of the phase {:.2} MiB/s ({} writes), second half {:.2} MiB/s ({} writes); slowest write #{} at {:.3} s\n\
          decisions          {:.3} s to decide every oversubscribed caller\n\
          outcomes           inserted={} refused={} failed={}\n\
          store file         {} bytes ({:.1} MiB, {:.2}x the payload)\n\
@@ -594,6 +638,12 @@ fn main() -> Result<(), Failure> {
         peak_in_flight.load(Ordering::Acquire).max(admitted_at_once),
         options.writers,
         admitted_at_once,
+        half_rate(first_half_bytes),
+        first_half_bytes,
+        half_rate(second_half_bytes),
+        second_half_bytes,
+        slowest.map_or(0, |(index, _)| index),
+        slowest.map_or(0.0, |(_, nanos)| nanos as f64 / 1e9),
         decision_ns as f64 / 1e9,
         inserted,
         refused,
@@ -612,7 +662,9 @@ fn main() -> Result<(), Failure> {
          \"cores\":{},\"preparation_ns\":{},\"setup_ns\":{},\"work_ns\":{},\"verification_ns\":{},\
          \"cleanup_ns\":{},\"complete_command_ns\":{},\"peak_in_flight\":{},\"inserted\":{},\
          \"refused\":{},\"admitted_at_once\":{},\"failed\":{},\"verified_roots\":{},\
-         \"saved_roots\":{},\"mismatched_roots\":{},\"store_bytes\":{},\"rss_before_kib\":{},\
+         \"saved_roots\":{},\"mismatched_roots\":{},\"store_bytes\":{},\"first_half_mib_per_s\":{:.2},\
+         \"second_half_mib_per_s\":{:.2},\"first_half_writes\":{},\"second_half_writes\":{},\
+         \"write_spans_ns\":[{}],\"rss_before_kib\":{},\
          \"rss_after_kib\":{}}}\n",
         options.writers,
         options.writes,
@@ -637,6 +689,15 @@ fn main() -> Result<(), Failure> {
         saved,
         mismatched,
         store_bytes,
+        half_rate(first_half_bytes),
+        half_rate(second_half_bytes),
+        first_half_bytes,
+        second_half_bytes,
+        outcomes
+            .iter()
+            .map(|outcome| format!("[{},{}]", outcome.started_ns, outcome.ended_ns))
+            .collect::<Vec<_>>()
+            .join(","),
         json_optional(rss_before),
         json_optional(rss_after),
     );
