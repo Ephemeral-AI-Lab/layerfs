@@ -90,6 +90,87 @@ pub(crate) struct WorkspaceLaunch {
     pub attach: layerfs_workspace::AttachOptions,
 }
 
+pub(crate) struct ControlConfig {
+    pub listen: std::net::SocketAddr,
+    pub peers: Vec<layerfs_bridge::adapters::native::connection::Peer>,
+    pub grants: Vec<StatusGrant>,
+}
+
+pub(crate) struct StatusGrant {
+    pub public: [u8; 32],
+    pub expires_unix: u64,
+    pub status: bool,
+}
+
+/// A separate daemon-targeted authority. Neither service grants nor a
+/// Workspace's identity grant access to this endpoint.
+pub(crate) fn control(
+    workspace_mode: bool,
+) -> Result<Option<ControlConfig>, layerfs_bridge::contract::Failure> {
+    use layerfs_bridge::{
+        adapters::native::{connection::Peer, pipe::key},
+        contract::Code,
+    };
+    let listen_present = std::env::var_os("LAYERFS_CONTROL_LISTEN").is_some();
+    let peers_present = std::env::var_os("LAYERFS_CONTROL_PEERS").is_some();
+    if !listen_present && !peers_present {
+        return Ok(None);
+    }
+    if !workspace_mode || !listen_present || !peers_present {
+        return Err(Code::InvalidInput.into());
+    }
+    let listen = env("LAYERFS_CONTROL_LISTEN")?
+        .parse()
+        .map_err(|_| Code::InvalidInput)?;
+    let mut peers = Vec::new();
+    let mut grants = Vec::new();
+    for entry in env("LAYERFS_CONTROL_PEERS")?.split(';') {
+        if peers.len() == 16 {
+            return Err(Code::Capacity.into());
+        }
+        let mut fields = entry.split(',');
+        let selector = fields
+            .next()
+            .ok_or(Code::InvalidInput)?
+            .parse::<u32>()
+            .map_err(|_| Code::InvalidInput)?;
+        let public = key(fields.next().ok_or(Code::InvalidInput)?)?;
+        let expires_unix = fields
+            .next()
+            .ok_or(Code::InvalidInput)?
+            .parse::<u64>()
+            .map_err(|_| Code::InvalidInput)?;
+        let operations = fields
+            .next()
+            .ok_or(Code::InvalidInput)?
+            .parse::<u8>()
+            .map_err(|_| Code::InvalidInput)?;
+        if fields.next().is_some()
+            || operations > 1
+            || peers
+                .iter()
+                .any(|peer: &Peer| peer.selector == selector || peer.public == public)
+        {
+            return Err(Code::InvalidInput.into());
+        }
+        peers.push(Peer {
+            selector,
+            public,
+            expires_unix,
+        });
+        grants.push(StatusGrant {
+            public,
+            expires_unix,
+            status: operations == 1,
+        });
+    }
+    Ok(Some(ControlConfig {
+        listen,
+        peers,
+        grants,
+    }))
+}
+
 /// Explicit local startup selection; this is not a daemon control protocol.
 /// Grammar: --mount-readonly ID INCARNATION STORE ROOT|branch:ID UID GID.
 /// The authority supplies IDs. The execution host supplies paths and budgets.

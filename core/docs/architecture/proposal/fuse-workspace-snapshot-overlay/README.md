@@ -44,6 +44,11 @@ decisions close before their dependent rounds. The ready-to-use
 [implementation handoff](07-implementation-handoff.md) carries the full
 sequence and persistent owner decisions into the next task.
 
+**R1-C update:** the first independent control operation, authenticated daemon
+[Status](09-daemon-status.md), is implemented and verified against the actual
+container-mounted Workspace. Remaining lifecycle/edit/Commit controls are still
+open; Status does not qualify those routes.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The

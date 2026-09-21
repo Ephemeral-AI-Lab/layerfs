@@ -1,9 +1,11 @@
 mod caller;
+mod control;
 mod history;
 mod outcome;
 mod request;
 mod source;
 pub use caller::VerifiedPeer;
+pub use control::*;
 pub use history::*;
 pub use outcome::*;
 pub use request::*;

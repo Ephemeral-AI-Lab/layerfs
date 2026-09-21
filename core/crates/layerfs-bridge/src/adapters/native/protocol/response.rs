@@ -3,10 +3,10 @@ use super::metadata::{put_optional, take_optional};
 use super::{Decoder, Encoder};
 use crate::contract::*;
 pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
-    let mut e = if matches!(r, Response::History(_)) {
-        Encoder::bounded(HISTORY_RESULT_BYTES)
-    } else {
-        Encoder::default()
+    let mut e = match r {
+        Response::History(_) => Encoder::bounded(HISTORY_RESULT_BYTES),
+        Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
+        _ => Encoder::default(),
     };
     match r {
         Response::Read { length } => {
@@ -108,6 +108,20 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(*mtime as u64)?;
             e.u32(*nanoseconds)?;
             e.u64(*size)?;
+        }
+        Response::WorkspaceStatus(status) => {
+            status.validate()?;
+            e.u8(10)?;
+            e.blob(&status.workspace)?;
+            e.put(&status.incarnation)?;
+            e.u8(u8::from(status.mounted)
+                | (u8::from(status.stopping) << 1)
+                | (u8::from(status.closed) << 2))?;
+            e.u64(status.active_operations)?;
+            e.u64(status.nodes)?;
+            e.u64(status.handles)?;
+            e.u64(status.cookies)?;
+            e.u64(status.consumer_accounted_bytes)?;
         }
     }
     Ok(e.finish())
@@ -482,6 +496,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&8) && b.len() > HISTORY_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&10) && b.len() > WORKSPACE_STATUS_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -536,6 +553,28 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             nanoseconds: d.u32()?,
             size: d.u64()?,
         },
+        10 => {
+            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
+            let incarnation = d.root()?;
+            let flags = d.u8()?;
+            if flags & !7 != 0 {
+                return Err(Code::InvalidInput.into());
+            }
+            let status = WorkspaceStatusWire {
+                workspace,
+                incarnation,
+                mounted: flags & 1 != 0,
+                stopping: flags & 2 != 0,
+                closed: flags & 4 != 0,
+                active_operations: d.u64()?,
+                nodes: d.u64()?,
+                handles: d.u64()?,
+                cookies: d.u64()?,
+                consumer_accounted_bytes: d.u64()?,
+            };
+            status.validate()?;
+            Response::WorkspaceStatus(Box::new(status))
+        }
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

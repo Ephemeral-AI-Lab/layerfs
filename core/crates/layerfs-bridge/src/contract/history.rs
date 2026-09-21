@@ -45,7 +45,7 @@ pub const MANIFEST_TARGET_BYTES: usize = 4096;
 /// The permission bit one opcode requires.
 ///
 /// The mapping is total and explicit rather than a shift of an unchecked
-/// opcode, so an unknown opcode has no bit at all instead of an arbitrary one.
+/// opcode, so unknown and daemon-control opcodes have no Store permission bit.
 /// A legacy grant mask of 31 therefore grants neither history opcode.
 pub const fn permission_bit(opcode: u8) -> Option<u8> {
     match opcode {

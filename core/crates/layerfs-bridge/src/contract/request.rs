@@ -3,7 +3,7 @@ use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
     MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
-    STACK_BYTES,
+    STACK_BYTES, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -79,6 +79,11 @@ pub enum Operation {
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
+    /// Read-only daemon control, independently authorized for one incarnation.
+    WorkspaceStatus {
+        workspace: Vec<u8>,
+        incarnation: Root,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Inspect {
@@ -128,6 +133,7 @@ impl Operation {
             Self::UpdatePreparedFilesystem { .. } => 5,
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
+            Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
         }
     }
     pub const fn label(&self) -> &'static str {
@@ -139,12 +145,16 @@ impl Operation {
             Self::UpdatePreparedFilesystem { .. } => "UpdatePreparedFilesystem",
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
+            Self::WorkspaceStatus { .. } => "WorkspaceStatus",
         }
     }
     /// True for an operation that changes no persistent state.
     pub const fn read_only(&self) -> bool {
         match self {
-            Self::ReadFile { .. } | Self::Inspect { .. } | Self::HistoryQuery(_) => true,
+            Self::ReadFile { .. }
+            | Self::Inspect { .. }
+            | Self::HistoryQuery(_)
+            | Self::WorkspaceStatus { .. } => true,
             Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
@@ -165,6 +175,7 @@ impl Operation {
             ) => true,
             Self::ReadFile { .. }
             | Self::Inspect { .. }
+            | Self::WorkspaceStatus { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -191,6 +202,7 @@ impl Operation {
             ) => true,
             Self::ReadFile { .. }
             | Self::Inspect { .. }
+            | Self::WorkspaceStatus { .. }
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
@@ -220,15 +232,12 @@ impl Operation {
 impl Request {
     pub fn validate(&self) -> Result<(), Failure> {
         let invalid = || Failure::from(Code::InvalidInput);
-        let history = matches!(
-            self.operation,
-            Operation::HistoryQuery(_) | Operation::HistoryCommand(_)
-        );
-        if history {
-            if self.profile != HISTORY_PROFILE {
-                return Err(Code::Unsupported.into());
-            }
-        } else if self.profile != 1 {
+        let profile = match &self.operation {
+            Operation::HistoryQuery(_) | Operation::HistoryCommand(_) => HISTORY_PROFILE,
+            Operation::WorkspaceStatus { .. } => WORKSPACE_STATUS_PROFILE,
+            _ => 1,
+        };
+        if self.profile != profile {
             return Err(Code::Unsupported.into());
         }
         if self.id == 0 || self.deadline_ms == 0 || self.deadline_ms > MAX_OPERATION_MS {
@@ -238,6 +247,19 @@ impl Request {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            } => {
+                super::control::check_workspace_identity(workspace, incarnation)?;
+                if self.store != 0
+                    || self.generation != 0
+                    || self.response_bytes != 0
+                    || self.deadline_ms > WORKSPACE_STATUS_MAX_MS
+                {
+                    return Err(invalid());
+                }
+            }
             Operation::ReadFile { start, end, .. } => {
                 if start > end || end - start > self.response_bytes {
                     return Err(invalid());

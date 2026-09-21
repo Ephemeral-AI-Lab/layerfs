@@ -39,10 +39,22 @@ impl ConnectionConfig {
 /// Run the configured process. No arguments retain the headless frame route.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let launch = crate::config::workspace(std::env::args().skip(1).collect())?;
+    let control_config = crate::config::control(launch.is_some())?;
     if launch.is_some() && !cfg!(target_os = "linux") {
         return Err(Failure::from(Code::Unsupported).into());
     }
     let connection = ConnectionConfig::from_env()?;
+    let control_private = connection.private;
+    // Bind before attachment so a conflicting endpoint never creates a mount.
+    // The endpoint starts accepting only after its target Workspace is mounted.
+    let control_listener = control_config
+        .as_ref()
+        .map(|config| {
+            let listener = layerfs_bridge::adapters::native::listen(config.listen)?;
+            let address = listener.local_addr()?;
+            Ok::<_, Failure>((listener, address))
+        })
+        .transpose()?;
     let telemetry = crate::config::telemetry(2);
     let Some(launch) = launch else {
         let mut client = Client::new(connect(
@@ -78,6 +90,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         telemetry.publish(result.1);
         result.0
     });
+    let incarnation = launch.attach.incarnation;
     let host = WorkspaceHost::new(launch.config, delivery)?;
     let workspace = host.attach(launch.attach, Instant::now() + Duration::from_secs(10))?;
     let mut mount = match layerfs_fuse::mount(&workspace, Instant::now() + Duration::from_secs(10))
@@ -92,13 +105,47 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             return Err(error.into());
         }
     };
+    let mut control = match control_config.zip(control_listener) {
+        Some((config, (listener, address))) => {
+            match crate::control::Control::start(
+                config,
+                listener,
+                control_private,
+                workspace.clone(),
+                incarnation,
+            ) {
+                Ok(control) => {
+                    pipe::diagnostic(&format!("workspace control ready {address}\n"));
+                    Some(control)
+                }
+                Err(error) => {
+                    if let Err(cleanup) = mount.unmount(Instant::now() + Duration::from_secs(10)) {
+                        pipe::diagnostic(&format!(
+                            "control startup mount cleanup retained: {cleanup}\n"
+                        ));
+                    } else if let Err(cleanup) = workspace.close_clean() {
+                        pipe::diagnostic(&format!(
+                            "control startup Workspace cleanup retained: {cleanup}\n"
+                        ));
+                    }
+                    return Err(error.into());
+                }
+            }
+        }
+        None => None,
+    };
     pipe::diagnostic(&format!(
         "workspace ready {}\n",
         workspace.mount_path().display()
     ));
-    signals.wait()?;
-    mount.unmount(Instant::now() + Duration::from_secs(10))?;
+    let signal = signals.wait();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    if let Some(control) = &mut control {
+        control.stop(deadline)?;
+    }
+    mount.unmount(deadline)?;
     workspace.close_clean()?;
     pipe::diagnostic("workspace closed\n");
+    signal?;
     Ok(())
 }

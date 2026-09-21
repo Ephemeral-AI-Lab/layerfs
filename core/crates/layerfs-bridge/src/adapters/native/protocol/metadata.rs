@@ -124,7 +124,11 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     if remaining_ms == 0 || remaining_ms > r.deadline_ms {
         return Err(Code::InvalidInput.into());
     }
-    let mut e = Encoder::default();
+    let mut e = if matches!(r.operation, Operation::WorkspaceStatus { .. }) {
+        Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES)
+    } else {
+        Encoder::default()
+    };
     e.u64(r.generation)?;
     e.u32(r.store)?;
     e.u16(r.profile)?;
@@ -197,6 +201,13 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
+        Operation::WorkspaceStatus {
+            workspace,
+            incarnation,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+        }
     }
     Ok(e.finish())
 }
@@ -645,7 +656,11 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     let profile = d.u16()?;
     let deadline_ms = d.u32()?;
     let response_bytes = d.u64()?;
-    let operation = match d.u8()? {
+    let opcode = d.u8()?;
+    if opcode == WORKSPACE_STATUS_OPCODE && b.len() > WORKSPACE_STATUS_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    let operation = match opcode {
         1 => Operation::ReadFile {
             root: d.root()?,
             start: d.u64()?,
@@ -709,6 +724,10 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         }
         6 => Operation::HistoryQuery(take_query(&mut d)?),
         7 => Operation::HistoryCommand(take_command(&mut d)?),
+        WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

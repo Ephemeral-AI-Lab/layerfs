@@ -57,3 +57,42 @@ fn mount_startup_rejects_invalid_inputs_before_connecting() {
         assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
     }
 }
+
+#[test]
+fn control_configuration_is_explicit_separate_and_bounded() {
+    let args = [
+        "--mount-readonly".to_string(),
+        "read".into(),
+        "71".repeat(32),
+        "1".into(),
+        "21".repeat(32),
+        "0".into(),
+        "0".into(),
+    ];
+    let peer = format!("1,{},9999999999,1", "11".repeat(32));
+    for (listen, peers, headless) in [
+        (Some("127.0.0.1:0"), None, false),
+        (None, Some(peer.clone()), false),
+        (Some("127.0.0.1:0"), Some(peer.clone()), true),
+        (Some("127.0.0.1:0"), Some(peer.replace(",1", ",2")), false),
+        (Some("127.0.0.1:0"), Some(format!("{peer};{peer}")), false),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"));
+        command
+            .env_clear()
+            .env("LAYERFS_WORKSPACE_ROOT", "/layerfs")
+            .env("LAYERFS_WORKSPACE_MAX_COUNT", "2");
+        if let Some(value) = listen {
+            command.env("LAYERFS_CONTROL_LISTEN", value);
+        }
+        if let Some(value) = peers {
+            command.env("LAYERFS_CONTROL_PEERS", value);
+        }
+        if !headless {
+            command.args(&args);
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
+    }
+}

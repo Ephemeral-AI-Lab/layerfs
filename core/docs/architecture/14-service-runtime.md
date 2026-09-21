@@ -31,6 +31,11 @@ attributes, export the existing cooperative input contract without native
 dependencies, and propagate the caller's deadline through connection setup.
 They do not establish mounted verification or measured performance.
 
+The R1-C Status extension is based on the R1 commit
+`598d8405f1168f5f8409807c4f3b6e95d1a110c9`. Its shared bridge/service changes
+define one authenticated daemon-targeted local observation. They do not add
+network attach, edit, mount management or Commit controls.
+
 ## Boundaries and public calls
 
 `layerfs-bridge::contract` owns the closed content/history operation union and typed results.
@@ -97,6 +102,25 @@ seconds remain exact, including values before the Unix epoch.
 List still returns names/serials rather than complete child attributes. A consumer
 requiring per-entry kinds issues bounded Attributes calls for its page under one
 remaining callback deadline. This establishes no batching or request-count gain.
+
+`WorkspaceStatus` is a separate daemon-control operation: profile 3, opcode 8,
+positive request ID, zero Store/generation/result-body fields and at most 5,000 ms.
+It supplies a 1–63-byte managed ID and nonzero 32-byte producer incarnation. Its
+metadata is at most 124 bytes and it accepts no input or ResultData body. The
+existing content/history service explicitly refuses it before Store lookup or
+read/write admission; opcode 8 has no Store permission bit, even in an all-bits
+grant. The daemon independently authorizes the authenticated peer and expiry for
+the exact Workspace/incarnation. Service grants never confer that authority.
+
+Response tag 10 encodes the echoed ID/incarnation, three state flags and five
+u64 observations: active operations, nodes, handles, cookies and aggregate
+`consumer_accounted_bytes`. Its maximum is 139 bytes including the tag. Reserved
+flag bits and inconsistent closed-state counts are rejected. Native matching
+requires the exact request ID/incarnation binding and no output body. This is
+current local state, never an earlier edit/Commit receipt or recovery protocol.
+The existing non-history three-byte failure representation applies; transport
+loss is Io with no unknown-mutation claim. Existing framing, authentication,
+server input completion and failure/session-closure algorithms are unchanged.
 
 ## Native protocol and ownership
 

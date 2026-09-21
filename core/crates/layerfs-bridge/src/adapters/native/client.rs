@@ -304,6 +304,18 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             && bytes == 0;
     }
     match (&r.operation, response) {
+        (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceStatus(status),
+        ) => {
+            status.workspace == *workspace
+                && status.incarnation == *incarnation
+                && status.validate().is_ok()
+                && bytes == 0
+        }
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }

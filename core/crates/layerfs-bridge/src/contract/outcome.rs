@@ -110,6 +110,7 @@ pub enum Response {
     /// One history reply. The closed wire union is boxed so a legacy reply does
     /// not pay for the widest history record it can never carry.
     History(Box<HistoryResult>),
+    WorkspaceStatus(Box<super::WorkspaceStatusWire>),
 }
 
 impl Response {

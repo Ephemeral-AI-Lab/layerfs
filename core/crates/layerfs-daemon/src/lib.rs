@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 //! Native process assembly for headless delivery and local Linux mounts.
 mod config;
+mod control;
 mod headless;
 mod run;
 

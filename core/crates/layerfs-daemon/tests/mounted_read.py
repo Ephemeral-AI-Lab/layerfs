@@ -111,6 +111,8 @@ def mount_process(args, env, source, name, store=1):
                '--add-host', 'host.docker.internal:host-gateway',
                '--mount', f'type=bind,src={args.linux_daemon},dst=/product/layerfs-daemon,readonly',
                '--mount', f'type=volume,src={name}-root,dst=/layerfs']
+    if 'LAYERFS_CONTROL_LISTEN' in env:
+        command += ['--publish', '127.0.0.1::23456']
     for key in env:
         if key.startswith('LAYERFS_'):
             command += ['-e', key]
@@ -131,6 +133,15 @@ def stop_mount(name):
              "os.kill(int(Path('/tmp/layerfs-daemon.pid').read_text()),signal.SIGTERM)"])
 
 
+def wait_service_connection(name, port):
+    probe = ("from pathlib import Path\nimport time\nend=time.monotonic()+3\n"
+             "while time.monotonic()<end:\n"
+             " rows=(Path('/proc/net/tcp').read_text()+Path('/proc/net/tcp6').read_text()).splitlines()\n"
+             f" if any(len(r.split())>3 and r.split()[3]=='01' and r.split()[2].endswith(':{port:04X}') for r in rows): break\n"
+             " time.sleep(.005)\nelse: raise AssertionError('no in-flight service connection')\n")
+    checked(['docker','exec',name,'python3','-c',probe])
+
+
 def delayed_unmount(service, name, port):
     """Causal external schedule: real opened FD, paused owned service, live TCP call."""
     code = ("import os,sys,errno,json\nf=os.open('/layerfs/workspace/read/unread.bin',os.O_RDONLY)\n"
@@ -145,12 +156,7 @@ def delayed_unmount(service, name, port):
         assert route.read_exact(reader.stdout.fileno(), 7, time.monotonic()+10) == b'opened\n'
         service.send_signal(signal.SIGSTOP)
         reader.stdin.write(b'go\n'); reader.stdin.flush()
-        probe = ("from pathlib import Path\nimport time\nend=time.monotonic()+3\n"
-                 "while time.monotonic()<end:\n"
-                 " rows=(Path('/proc/net/tcp').read_text()+Path('/proc/net/tcp6').read_text()).splitlines()\n"
-                 f" if any(len(r.split())>3 and r.split()[3]=='01' and r.split()[2].endswith(':{port:04X}') for r in rows): break\n"
-                 " time.sleep(.005)\nelse: raise AssertionError('no in-flight service connection')\n")
-        checked(['docker','exec',name,'python3','-c',probe])
+        wait_service_connection(name, port)
         stop_mount(name)
         stdout, stderr = reader.communicate(timeout=15)
         assert reader.returncode == 0, (stdout, stderr)
