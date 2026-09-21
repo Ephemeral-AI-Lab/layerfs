@@ -20,6 +20,7 @@
 //! the measured region genuinely goes C1 -> C2 for the base and C1 -> C2 for the
 //! result.
 
+use layerfs_content::filesystem::references::backing::OrderingBacking;
 use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, FilesystemInput, FilesystemObjects, FilesystemResources,
 };
@@ -690,6 +691,10 @@ fn namespace_scale(
         resources: FilesystemResources::default(),
     };
     let empty = TreeStore::new();
+    // A 10,000-binding tree outgrows the in-memory ordering map, so the cycle
+    // check needs a file backing; without it the product refuses the build with
+    // `cycle check work limit`. This is the same rule `fs.rs` applies.
+    let mut backing = fs::backing_for(&prepared, context);
     let mut metadata_emitted = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
@@ -700,7 +705,10 @@ fn namespace_scale(
             let mut counting = CountingConsumer::new(&mut handoff);
             let reader = PairProvider::new(&empty, &empty);
             let mut objects = FilesystemObjects::new(&reader, &mut counting);
-            let result = build_filesystem(&mut objects, &input, None)?;
+            let ordering: Option<&mut dyn OrderingBacking> = backing
+                .as_mut()
+                .map(|value| value as &mut dyn OrderingBacking);
+            let result = build_filesystem(&mut objects, &input, ordering)?;
             metadata_emitted = counting.accepted();
             result
         };

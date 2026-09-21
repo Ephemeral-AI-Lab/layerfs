@@ -9,6 +9,18 @@
 # byte counter crossed one fewer 4 MiB boundary and the save issued one fewer
 # COMMIT. Every other pinned key reproduced unchanged; the 50 counters the
 # harness publishes that this table never pinned are deliberately not added.
+# Re-baselined 2026-09-21 at b0260df3a: pipeline-filesystem-build
+# counter:pipeline.commits 1 -> 43. The product change is 7075f338d, "replace the
+# fixed two-save model with a configured per-Store writer budget (#216)", which is
+# an ancestor of this tree and not of the closure tree 66bce8378: schema 8 added
+# store_policy.max_concurrent_writes and widened saves.active_slot to 1..=64,
+# removing the slot-1/slot-2 special case, and cas/lifecycle.rs now commits every
+# step before releasing the arbitration lock, so SaveOutcome.commits is a step count
+# rather than a single acknowledgement. The row's other eight pinned keys reproduced
+# unchanged (pipeline.bindings 1010, declared_files 1000, declared_directories 10,
+# handoff_objects 33, inserted 33, objects_emitted 33, reused 0, and the
+# filesystem_root digest). Taken from a single-row run of this tree; the 217-row lane
+# has not been re-run since 795fb1a2f and no other row's pins are touched here.
 # Regenerate with shared/pin_expected.py; never hand-edit a value.
 append-tail-4k-100m	counter:consumer.objects	4
 append-tail-4k-100m	counter:edit.base_bytes	104857600
@@ -1309,7 +1321,7 @@ pipeline-edits-small	counter:pipeline.reused	0
 pipeline-edits-small	counter:pipeline.statements	2
 pipeline-edits-small	digest:file_root	8ff6b24c71a097af57f32f81ed81d4a8f2d0c7f7538619c2a4825960f219b267
 pipeline-filesystem-build	counter:pipeline.bindings	1010
-pipeline-filesystem-build	counter:pipeline.commits	1
+pipeline-filesystem-build	counter:pipeline.commits	43
 pipeline-filesystem-build	counter:pipeline.declared_directories	10
 pipeline-filesystem-build	counter:pipeline.declared_files	1000
 pipeline-filesystem-build	counter:pipeline.handoff_objects	33

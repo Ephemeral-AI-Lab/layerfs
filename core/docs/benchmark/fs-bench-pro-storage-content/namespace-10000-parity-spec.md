@@ -248,8 +248,8 @@ Three constraints on the pairing, all already established:
 | 2. Tree whose file inodes bind to constructed content roots | not started | — |
 | 3. `PipelineOp::NamespaceScale` driver (content → handoff → save) | **landed, compiles** | `src/ops/pipeline.rs` |
 | 4. `g1.o5-content-bytes` gate | **landed** (in the driver) | `src/ops/pipeline.rs` |
-| 5. Registry entry `pipeline-namespace-10000` | **written, then reverted — blocked on §8.3** | `src/families/pipeline.rs` |
-| 6. Golden pins regenerated from a passing run | **blocked on §8.3** | `tests/golden/` |
+| 5. Registry entry `pipeline-namespace-10000` | **written, run, reverted — blocked on §8e** | `src/families/pipeline.rs` |
+| 6. Golden pins regenerated from a passing run | **the `pipeline.commits` pin is regenerated and verified; the new row's own pin is blocked on §8e** | `tests/golden/` |
 
 ### Why step 5 is written but not landed, and it is not a formality
 
@@ -453,6 +453,74 @@ freeze a definition that is under review.
 This is recorded because it will recur: adding a row to this lane is not a
 harness-only change while any counter's meaning is in dispute. It needs the counter
 settled first, which is an owner ruling.
+
+## 8e. The blocker the first real run found: `MAXIMUM_WALK_ENTRIES`, not pins
+
+With §8.3's pin regenerated (§8f) the row was registered and run for the first time.
+It returned `NOT_RUN` with a **product** error, not a harness one:
+
+```text
+row.not-run   product error: InvalidRecord("cycle check work limit")
+```
+
+`crates/layerfs-content/src/filesystem/limits.rs`:
+
+```rust
+pub const MAXIMUM_WALK_ENTRIES: usize = 4_096;
+```
+
+and `validate.rs:55` aliases it as `MAXIMUM_CYCLE_CHECK_ENTRIES`, so the cycle check
+refuses a tree that states more than 4,096 bindings **in one operation**. A
+10,000-file / 100-directory tree states 10,101.
+
+**This is not a defect; it is the declared design.** The product's own `limits.rs`
+says a tree larger than the ceiling "is reached by several operations that each stay
+under the ceiling", and `c1.fs.build-scale`'s existing `namespace-10000` row already
+does exactly that — its receipt reports `fs_build.operations: 3` with
+`fs_build.batch_bindings_max: 4096`. `pipeline-filesystem-build` never meets the
+ceiling because it builds only 1,000 files.
+
+So the parity row **must build in batches**, and `PreparedTree::batches(budget)`
+(`fs_fixture.rs:500`) is the supported route. Its own doc states the two constraints
+that shape the driver: the first batch is a `build_filesystem` and states the root's
+bindings plus every directory's first binding, and the remaining batches are
+`update_filesystem` calls against the previous batch's root stating **new regular
+files only**, so no batch restates a binding the base already has.
+
+**What that costs the driver, and why it is the next real step.** `update_filesystem`
+needs `base: Some(previous_root)` and a reader that can serve the previous batch's
+objects. Inside a measured region those objects have just been handed to the
+`SaveHandoff`, so the driver needs a reader that holds them. `fs.rs` solves this by
+loading a **pre-computed chain** built before the timer (`run_batched_build_row` takes
+`&chain` and `measure_batch`'s reader is that chain, never the live Store). The parity
+row needs the same: a `TreeStore` holding every batch's objects, built untimed, used
+as the reader for all batches while the batches themselves run inside the timer and
+their output goes to the save.
+
+That is a larger driver than the single-build version landed in §8b, and it is the
+work item §8e defines. It is **not** blocked on any ruling.
+
+**Consequence for the spec's own framing.** v0.1.6 performs its 10,000-file
+initialization inside one `initialize_layerstack` call and splits it internally into
+73 admission transactions. v0.1.7 states at most 4,096 bindings per operation and
+therefore needs **3 operations** for the same tree. The two are not the same operation
+count and the parity row must declare its batch structure rather than hide it — the
+same way `g2.walk-ceiling` already does for `c1.fs.build-scale`.
+
+## 8f. The `pipeline.commits` pin is regenerated and verified
+
+Step 1 of the four: `tests/golden/expected.tsv` now pins
+`pipeline-filesystem-build counter:pipeline.commits 43`, with a provenance comment
+naming `7075f338d` and the mechanism, following the `pooled-lane-cold` precedent that
+is already in the same header block.
+
+Verified: `pipeline-filesystem-build` runs **PASS**, and its pin gate reports
+`8 of 8 pinned counters reproduced here; 0 published by the other phase`. The other
+eight pinned keys (`pipeline.bindings` 1010, `declared_files` 1000,
+`declared_directories` 10, `handoff_objects` 33, `inserted` 33, `objects_emitted` 33,
+`reused` 0, and the `filesystem_root` digest) all reproduced unchanged.
+
+The 217-row lane has **not** been re-run; no other row's pins were touched.
 
 ## 9. Not claimed
 

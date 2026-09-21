@@ -65,7 +65,7 @@ fn resources() -> FilesystemResources {
 }
 
 /// A scratch directory for the ordering backing, inside the case's output.
-fn backing_directory(context: &OpContext<'_>) -> PathBuf {
+pub(super) fn backing_directory(context: &OpContext<'_>) -> PathBuf {
     context.output.join("ordering")
 }
 
@@ -471,7 +471,7 @@ fn as_backing(backing: Option<&mut FileBacking>) -> Option<&mut dyn OrderingBack
 }
 
 /// Opens the ordering backing when the fixture outgrows the in-memory map.
-fn backing_for(prepared: &PreparedTree, context: &OpContext<'_>) -> Option<FileBacking> {
+pub(super) fn backing_for(prepared: &PreparedTree, context: &OpContext<'_>) -> Option<FileBacking> {
     if prepared.bindings() <= resources().maximum_pending_records {
         return None;
     }
