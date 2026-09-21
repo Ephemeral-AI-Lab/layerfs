@@ -19,6 +19,61 @@ pub const WORKSPACE_MOUNT_OPCODE: u8 = 12;
 pub const WORKSPACE_MOUNT_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_MOUNT_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_MOUNT_RESULT_BYTES: usize = 100;
+pub const WORKSPACE_ATTACH_OPCODE: u8 = 13;
+pub const WORKSPACE_ATTACH_MAX_MS: u32 = 5_000;
+pub const WORKSPACE_ATTACH_REQUEST_BYTES: usize = 124;
+pub const WORKSPACE_ATTACH_RESULT_BYTES: usize = 100;
+pub const WORKSPACE_ATTACHMENT_RESULT_BYTES: usize = 103;
+
+/// Attachment can retain any native or upstream failure classification.
+/// This does not widen the existing Mount/Unmount/CloseClean outcome profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceAttachOutcome {
+    Completed,
+    Retained(Code),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceAttachWire {
+    pub workspace: Vec<u8>,
+    pub incarnation: Root,
+    pub outcome: WorkspaceAttachOutcome,
+}
+impl WorkspaceAttachWire {
+    pub fn validate(&self) -> Result<(), Failure> {
+        check_workspace_identity(&self.workspace, &self.incarnation)
+    }
+}
+
+/// A current attachment observation, not a terminal for a previous Attach.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceAttachmentWire {
+    pub workspace: Vec<u8>,
+    pub incarnation: Root,
+    pub state: WorkspaceAttachmentState,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceAttachmentState {
+    Attaching,
+    Failed {
+        cause: Code,
+        cleanup: Option<Code>,
+        progress: WorkspaceAttachmentProgress,
+    },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspaceAttachmentProgress {
+    Running,
+    Retained {
+        mount_directory: bool,
+        metadata_arena: bool,
+        backing_directory: bool,
+    },
+}
+impl WorkspaceAttachmentWire {
+    pub fn validate(&self) -> Result<(), Failure> {
+        check_workspace_identity(&self.workspace, &self.incarnation)
+    }
+}
 
 /// Result of the requested daemon lifecycle operation. Completed means that
 /// operation finished; Retained means an entered native attempt preserved its

@@ -146,7 +146,7 @@ pub(crate) fn control(
             .parse::<u8>()
             .map_err(|_| Code::InvalidInput)?;
         if fields.next().is_some()
-            || operations & !15 != 0
+            || operations & !31 != 0
             || peers
                 .iter()
                 .any(|peer: &Peer| peer.selector == selector || peer.public == public)

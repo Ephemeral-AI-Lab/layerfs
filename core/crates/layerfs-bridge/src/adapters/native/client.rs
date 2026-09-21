@@ -359,6 +359,30 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
                 && bytes == 0
         }
         (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceAttachment(status),
+        ) => {
+            status.workspace == *workspace
+                && status.incarnation == *incarnation
+                && status.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceAttach {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceAttach(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
             Operation::WorkspaceUnmount {
                 workspace,
                 incarnation,

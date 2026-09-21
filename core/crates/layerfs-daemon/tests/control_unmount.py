@@ -58,39 +58,44 @@ def struct_header(budget, opcode):
     return struct.pack('>QIHIQB', 0, 0, 3, budget, 0, opcode)
 
 
-def receive(client, result_tag=12):
+def receive(client, result_tag=12, workspace=b'read', incarnation=b'\x71' * 32):
     kind, body = route.receive(client, timeout=6)
     if kind == 7:
         return {'kind': 'failure', 'code': body[0], 'unknown': body[1], 'cleanup': body[2]}
     assert kind == 6, (kind, body)
     value = route.Reader(body)
     assert value.u8() == result_tag, body
-    operation, completed = {12: ('unmount', 'Unmounted'), 13: ('close', 'Closed'), 14: ('mount', 'Mounted')}[result_tag]
+    operation, completed = {12: ('unmount', 'Unmounted'), 13: ('close', 'Closed'),
+                            14: ('mount', 'Mounted'), 15: ('attach', 'Attached')}[result_tag]
     result = {'kind': operation, 'workspace': value.blob().decode(), 'incarnation': value.take(32).hex()}
     tag = value.u8()
     assert tag in (0, 1), tag
     result['outcome'] = completed if tag == 0 else 'Retained'
     if tag == 1:
         result['code'] = value.u8()
-        assert result['code'] in (2, 10, 11, 13)
+        if result_tag != 15:
+            assert result['code'] in (2, 10, 11, 13)
     value.done()
-    assert result['workspace'] == 'read' and result['incarnation'] == '71' * 32
+    assert result['workspace'] == workspace.decode() and result['incarnation'] == incarnation.hex()
     return result
 
 
 def unmount(client, identity, **options):
     begin(client, identity, **options)
-    return receive(client)
+    return receive(client, workspace=options.get('workspace', b'read'),
+                   incarnation=options.get('incarnation', b'\x71' * 32))
 
 
 def close_clean(client, identity, **options):
     begin(client, identity, opcode=11, **options)
-    return receive(client, result_tag=13)
+    return receive(client, result_tag=13, workspace=options.get('workspace', b'read'),
+                   incarnation=options.get('incarnation', b'\x71' * 32))
 
 
 def remount(client, identity, **options):
     begin(client, identity, opcode=12, **options)
-    return receive(client, result_tag=14)
+    return receive(client, result_tag=14, workspace=options.get('workspace', b'read'),
+                   incarnation=options.get('incarnation', b'\x71' * 32))
 
 
 def close(client, name, expected=0):
@@ -155,6 +160,7 @@ def execute(args, report):
         LAYERFS_HISTORY_CREATE='0', LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
     service = subprocess.Popen([route.BIN / 'layerfs-service'], env=environment, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    report['service_pid'] = service.pid
     name = 'layerfs-unmount-' + uuid.uuid4().hex[:12]
     daemon = client = reader = None
     proxy = None
@@ -375,9 +381,10 @@ def execute(args, report):
             mount.stop_mount(name); assert daemon.wait(timeout=12) == 0
         errors = daemon.stderr.read(); (args.output/'daemon.stderr').write_bytes(ready_lines.encode()+errors)
         assert b'workspace closed' in errors, errors
-        mount.checked(['docker','exec',name,'test','!','-e','/layerfs/workspace/read'])
+        for workspace in report.get('shutdown_workspace_names', ['read']):
+            assert workspace and len(workspace) <= 63 and all(c.isascii() and (c.isalnum() or c in '-_') for c in workspace)
+            mount.checked(['docker','exec',name,'test','!','-e','/layerfs/workspace/' + workspace])
         report['checks'] = [{'id':label,'status':'PASS'} for label in CASES[args.case]]
-        report['cleanup'] = 'PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed'
     finally:
         if paused: service.send_signal(signal.SIGCONT)
         if client is not None and client.poll() is None:
@@ -398,6 +405,12 @@ def execute(args, report):
             service.stdin.close(); service.wait(timeout=10)
         (args.output/'service.stderr').write_bytes(service.stderr.read())
         if made_volume: mount.checked(['docker','volume','rm',name+'-root'])
+    assert service.returncode == 0
+    for filename, expected in seals.items():
+        assert sha(args.fixture.parent / 'service' / filename) == expected
+        assert sha(service_dir / filename) == expected
+    report['remote_files_unchanged'] = True
+    report['cleanup'] = 'PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed'
 
 
 def main():
@@ -415,12 +428,22 @@ def main():
     started=time.monotonic()
     def expired(_signal,_frame):raise TimeoutError('complete lifecycle functional selection exceeded60 seconds')
     signal.signal(signal.SIGALRM,expired);signal.alarm(60)
+    caller_dependencies = {}
+    for module in tuple(sys.modules.values()):
+        filename = getattr(module, '__file__', None)
+        if filename:
+            path = Path(filename).resolve()
+            if path.is_relative_to(route.ROOT):
+                caller_dependencies[str(path.relative_to(route.ROOT))] = sha(path)
     report={'status':'FAIL','mode':MODE,'case':args.case,'checks':[],
         'source':mount.checked(['git','rev-parse','HEAD'],text=True).stdout.strip(),
         'product_inputs_sha256':mount.product_inputs(),'hard_budget_seconds':60,'lifecycle_wire_max_ms':5000,
         'terminal_reserve_ms':100,'signal_attempt_seconds':10,'performance_claim':False,'cache_claim':None,
         'driver_sha256':sha(Path(__file__)),'entrypoint_sha256':sha(ENTRY_SOURCE),'status_driver_sha256':sha(Path(status.__file__)),
-        'mount_driver_sha256':sha(Path(mount.__file__)),'linux_binary_sha256':sha(args.linux_daemon),
+        'mount_driver_sha256':sha(Path(mount.__file__)),
+        'control_mount_driver_sha256':sha(Path(__file__).with_name('control_mount.py')),
+        'caller_dependencies_sha256': dict(sorted(caller_dependencies.items())),
+        'linux_binary_sha256':sha(args.linux_daemon),
         'host_binary_sha256':{name:sha(route.BIN/name) for name in ('layerfs-service','layerfs-daemon','examples/public_key')},
         'not_run':NOT_RUN}
     try:

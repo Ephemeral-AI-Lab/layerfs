@@ -5,6 +5,15 @@
 > Product input seal: `375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d`.
 > Prepared 2026-09-22 for a separate Codex implementation task.
 
+**Continuation update:** [Mount32](32-control-mount.md), [native failed-Attach35](35-failed-attachment-ownership.md)
+and [authenticated Attach36](36-control-attach.md) now have their source-pinned
+checks and actual Linux proofs. The earlier baseline/ordered steps below remain
+traceable planning context. The next complete public operation is authenticated
+Workspace Commit, with its writable startup profile and dirty-shutdown custody
+prerequisites; enabling writes must preserve a callable Commit control after a
+dirty cleanup refusal. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
+remains unchanged and will be uploaded in full before one explicit Commit.
+
 ## Continuation recorded after this checkpoint
 
 Authenticated remote Mount and the shared cancelled-pipe correction are committed

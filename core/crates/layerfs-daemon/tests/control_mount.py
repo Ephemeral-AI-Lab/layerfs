@@ -37,10 +37,10 @@ def observation(client, identity, mounted=False, stopping=False, closed=False):
     return result
 
 
-def mounted_read(name):
-    code = """import errno,hashlib,json,os,stat
+def mounted_read(name, workspace='read'):
+    code = """import errno,hashlib,json,os,stat,sys
 from pathlib import Path
-p=Path('/layerfs/workspace/read')
+p=Path('/layerfs/workspace')/sys.argv[1]
 rows=[line for line in Path('/proc/self/mountinfo').read_text().splitlines()
       if line.split()[4]==str(p)]
 assert len(rows)==1, rows
@@ -58,7 +58,7 @@ print(json.dumps({'inode':s.st_ino,'bytes':s.st_size,'mode':stat.S_IMODE(s.st_mo
                   'mtime_ns':s.st_mtime_ns,'sha256':hashlib.sha256(actual).hexdigest(),
                   'root_inode':p.stat().st_ino,'readonly':True}))
 """
-    return json.loads(driver.mount.checked(['docker', 'exec', name, 'python3', '-c', code], text=True).stdout)
+    return json.loads(driver.mount.checked(['docker', 'exec', name, 'python3', '-c', code, workspace], text=True).stdout)
 
 
 def refused(result, code):

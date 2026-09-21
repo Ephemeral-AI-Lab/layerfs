@@ -2,6 +2,7 @@
 
 > **Status: implemented and verified native prerequisite to remote Attach; not released.**
 > Implementation parent: `0d220870175abb6e3f162cb164dba7c49bc98f9d`.
+> Exact implementation commit: `3e92fe277a0379fd85f158b858085af3ecb2e2d5`.
 
 The existing Attach failure path could retain an unobservable registry entry with
 state=None and lose its local mount-leaf ownership flag. It also allocated a

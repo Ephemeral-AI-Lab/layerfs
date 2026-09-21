@@ -132,6 +132,7 @@ impl Service {
                 Operation::WorkspaceStatus { .. }
                     | Operation::WorkspaceUnmount { .. }
                     | Operation::WorkspaceCloseClean { .. }
+                    | Operation::WorkspaceAttach { .. }
                     | Operation::WorkspaceMount { .. }
             ) {
                 return Err(Code::Unsupported.into());

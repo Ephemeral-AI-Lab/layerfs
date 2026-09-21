@@ -30,8 +30,25 @@ def query(process, identity, workspace=b'read', incarnation=b'\x71' * 32):
     if kind == 7:
         return kind, {'code':body[0], 'unknown':body[1], 'cleanup':body[2]}
     reader = route.Reader(body)
-    assert reader.u8() == 10, body
+    tag = reader.u8()
+    assert tag in (10, 16), body
     result = {'workspace':reader.blob().decode(), 'incarnation':reader.take(32).hex()}
+    if tag == 16:
+        state = reader.u8()
+        assert state in (0, 1), state
+        result['attachment'] = 'Attaching' if state == 0 else 'Failed'
+        if state == 1:
+            result.update(cause=reader.u8(), cleanup=reader.u8())
+            progress = reader.u8()
+            assert progress in (0, 1), progress
+            result['progress'] = {'state': 'Running' if progress == 0 else 'Retained'}
+            if progress == 1:
+                flags = reader.u8()
+                assert flags & ~7 == 0, flags
+                result['progress'].update(mount_directory=bool(flags & 1),
+                                         metadata_arena=bool(flags & 2), backing_directory=bool(flags & 4))
+        reader.done()
+        return kind, result
     flags = reader.u8()
     assert flags & ~7 == 0
     result.update(mounted=bool(flags & 1), stopping=bool(flags & 2), closed=bool(flags & 4))

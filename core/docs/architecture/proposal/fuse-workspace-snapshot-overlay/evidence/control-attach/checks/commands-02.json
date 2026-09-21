@@ -1,0 +1,29 @@
+{
+  "working_directory": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+  "prior": "commands-01.json",
+  "rows": [
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-attach-test --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "log": "linux-test-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "tests": {
+        "passed": 665,
+        "failed": 0,
+        "ignored": 126
+      }
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-attach-build --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "linux-build-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-attach-clippy --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "linux-clippy-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    }
+  ]
+}

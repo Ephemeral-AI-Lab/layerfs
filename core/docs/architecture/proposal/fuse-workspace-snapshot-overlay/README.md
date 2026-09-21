@@ -7,8 +7,8 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
-**Current continuation:** [failed native Attach ownership](35-failed-attachment-ownership.md)
-closes the retained-owner prerequisite before remote Attach. [Authenticated Mount](32-control-mount.md)
+**Current continuation:** [authenticated Attach](36-control-attach.md) is verified for its declared scope,
+building on [failed native Attach ownership](35-failed-attachment-ownership.md). [Authenticated Mount](32-control-mount.md)
 and [cancelled pipe I/O](33-cancelled-pipe.md) retain their verified scopes. The owner-selected
 [preinstalled DSH workload](34-preinstalled-dsh-workload.md) is prepared and pinned;
 actual mounted upload/Commit/R6 remain open.

@@ -3,6 +3,7 @@
 mod config;
 mod control;
 mod headless;
+mod lifecycle;
 mod run;
 
 pub use run::run;

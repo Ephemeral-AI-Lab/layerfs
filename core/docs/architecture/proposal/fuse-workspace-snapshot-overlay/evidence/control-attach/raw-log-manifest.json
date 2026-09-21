@@ -1,0 +1,515 @@
+{
+  "method": "lossless gzip, mtime0; original raw artifacts untouched in owned target",
+  "files": [
+    {
+      "path": "checks/boundary-01.log.gz",
+      "uncompressed_bytes": 76,
+      "uncompressed_sha256": "93423c6669f8b141a301d73c8c873f4f0c420e18540b0810ff3351c9dbe461d3",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/boundary-01.log"
+    },
+    {
+      "path": "checks/boundary-self-tests-01.log.gz",
+      "uncompressed_bytes": 104,
+      "uncompressed_sha256": "a25b5619af971eae96a8c9d37ebc69133b4c28e990455e210be0507206df182c",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/boundary-self-tests-01.log"
+    },
+    {
+      "path": "checks/fmt-01.log.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/fmt-01.log"
+    },
+    {
+      "path": "checks/host-build-01.log.gz",
+      "uncompressed_bytes": 621,
+      "uncompressed_sha256": "02dcc75ddc039c5a978c566330e2ab722212e9beca4ba99656c12d426a0f0ce5",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-build-01.log"
+    },
+    {
+      "path": "checks/host-check-01.log.gz",
+      "uncompressed_bytes": 1070,
+      "uncompressed_sha256": "7b1ff2f6884efdcb5adbfd0a6dba0f1b9b5421066f761a44ec271bff457700b2",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-check-01.log"
+    },
+    {
+      "path": "checks/host-clippy-01.log.gz",
+      "uncompressed_bytes": 621,
+      "uncompressed_sha256": "78c5e6deff25f1cde15623299904499904eba991954fee4fac601d5988789f8c",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-clippy-01.log"
+    },
+    {
+      "path": "checks/host-test-01.log.gz",
+      "uncompressed_bytes": 1763,
+      "uncompressed_sha256": "34580ec23a0bae3b7a77766b441ea56de23cb1307e2fff3fa534669db880edaf",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-test-01.log"
+    },
+    {
+      "path": "checks/host-test-02.log.gz",
+      "uncompressed_bytes": 33513,
+      "uncompressed_sha256": "d9d5a277118a313860a3ed8e241448b093c67143b2de9866066f92efcf1a3d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-test-02.log"
+    },
+    {
+      "path": "checks/host-test-remaining-03.log.gz",
+      "uncompressed_bytes": 67193,
+      "uncompressed_sha256": "c629a3b51816c3bf087a662e84551979a0b3ac7ed83c649a8cf039bf22dbe590",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/host-test-remaining-03.log"
+    },
+    {
+      "path": "checks/layout-01.txt.gz",
+      "uncompressed_bytes": 277448,
+      "uncompressed_sha256": "d9bcc0d8ed084422cf057622e05918976639ae79b3899c63f2e84c3b409ac54c",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/layout-01.txt"
+    },
+    {
+      "path": "checks/linux-build-01.log.gz",
+      "uncompressed_bytes": 427,
+      "uncompressed_sha256": "47dec5573fb6c87b6fa578100d4fbb48c3bf77d3124fa7743b4787173ba0a1a5",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/linux-build-01.log"
+    },
+    {
+      "path": "checks/linux-clippy-01.log.gz",
+      "uncompressed_bytes": 427,
+      "uncompressed_sha256": "5bae02699efa491a3955e47dc04a69efb6f88364a88cd477f24d44c724d892ee",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/linux-clippy-01.log"
+    },
+    {
+      "path": "checks/linux-test-01.log.gz",
+      "uncompressed_bytes": 112772,
+      "uncompressed_sha256": "1ba13c31dbdb5684a6043b720526c73629c7f85043453de43addd4a4eeec8618",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/checks/linux-test-01.log"
+    },
+    {
+      "path": "runs/attach_authority-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_authority-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_authority-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_authority-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_authority-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_authority-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_authority-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_authority-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_collision-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_collision-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_collision-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_collision-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_collision-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_collision-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_collision-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_collision-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_expiry-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_expiry-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_expiry-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_expiry-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_expiry-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_expiry-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_expiry-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_expiry-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_failed-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_failed-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_failed-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_failed-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_failed-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_failed-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_failed-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_failed-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_loss-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_loss-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_loss-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_loss-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_loss-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_loss-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_loss-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_loss-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_open-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_open-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_open-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_open-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_open-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_open-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_open-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_open-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_refusals-01/failed-daemon.stderr.gz",
+      "uncompressed_bytes": 78,
+      "uncompressed_sha256": "3d98f44138b2bb1bbc4d48b5f2603b175016fab7b1d46d684f8b1b699cbbc18a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01/failed-daemon.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-01.command.stderr.gz",
+      "uncompressed_bytes": 1190,
+      "uncompressed_sha256": "32565faa5d9900b3b9aa5cc75707e040848a55c5eb0263c1096078bff5259c6b",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_refusals-02/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-02/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-02/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-02/service.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-02.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-02.command.stderr"
+    },
+    {
+      "path": "runs/attach_refusals-02.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-02.command.stdout"
+    },
+    {
+      "path": "runs/attach_signal-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_signal-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_signal-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_signal-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_signal-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_signal-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_signal-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_signal-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_startup_failure-01/failed-daemon.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-01/failed-daemon.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-01/service.stderr.gz",
+      "uncompressed_bytes": 36,
+      "uncompressed_sha256": "e43e133c08ec56ec9bcbc1136fd2675709eeb91976a58641cc85df99d95985ae",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-01.command.stderr.gz",
+      "uncompressed_bytes": 813,
+      "uncompressed_sha256": "7e65d919b25e0a1ef4a255fb39ef174400b7d3efd21e933c7f69b13ed0f5557e",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_startup_failure-02/daemon.stderr.gz",
+      "uncompressed_bytes": 83,
+      "uncompressed_sha256": "e03a10ff3f27ab1709dbe4369106ceb4a8220f6add94f832abbd9e40e61c7ea4",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-02/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-02/service.stderr.gz",
+      "uncompressed_bytes": 36,
+      "uncompressed_sha256": "f1e083c65ec6b8ce8ea11557d1323418c38dabd5bd44830955fbce2a62d0fc84",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-02/service.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-02.command.stderr.gz",
+      "uncompressed_bytes": 814,
+      "uncompressed_sha256": "a7294e38d8e400395ccc861be0b6a8082975bd8f6e0963e5c312b76e482f70c6",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-02.command.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-02.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-02.command.stdout"
+    },
+    {
+      "path": "runs/attach_startup_failure-03/daemon.stderr.gz",
+      "uncompressed_bytes": 272,
+      "uncompressed_sha256": "3fabca802b4aaaa1ef2a14e43d38b5e0a8ec43a48c3bcfa9347c1087692b2c15",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-03/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-03/service.stderr.gz",
+      "uncompressed_bytes": 36,
+      "uncompressed_sha256": "26296b002aafbf335a7428db937d98b9f020153e9e454157260e2b1259bb9976",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-03/service.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-03.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-03.command.stderr"
+    },
+    {
+      "path": "runs/attach_startup_failure-03.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-03.command.stdout"
+    },
+    {
+      "path": "runs/attach_stopping-01/daemon.stderr.gz",
+      "uncompressed_bytes": 139,
+      "uncompressed_sha256": "2e84e63d05eb3ccfc9765cec4e8ac964fcc66c5b93fb9fbc417348e22f470180",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_stopping-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_stopping-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_stopping-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_stopping-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_stopping-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_stopping-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_stopping-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_success-01/daemon.stderr.gz",
+      "uncompressed_bytes": 95,
+      "uncompressed_sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_success-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_success-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_success-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_success-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_success-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_success-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_success-01.command.stdout"
+    },
+    {
+      "path": "runs/attach_unresolved-01/daemon.stderr.gz",
+      "uncompressed_bytes": 130,
+      "uncompressed_sha256": "d91e1d4c1bb9f74cad437f93b328577de41a4a1e1d7c765e11ae4dfe946e74ee",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_unresolved-01/daemon.stderr"
+    },
+    {
+      "path": "runs/attach_unresolved-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_unresolved-01/service.stderr"
+    },
+    {
+      "path": "runs/attach_unresolved-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_unresolved-01.command.stderr"
+    },
+    {
+      "path": "runs/attach_unresolved-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_unresolved-01.command.stdout"
+    },
+    {
+      "path": "runs/close_cleanup_failure-01/daemon.stderr.gz",
+      "uncompressed_bytes": 139,
+      "uncompressed_sha256": "2e84e63d05eb3ccfc9765cec4e8ac964fcc66c5b93fb9fbc417348e22f470180",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/close_cleanup_failure-01/daemon.stderr"
+    },
+    {
+      "path": "runs/close_cleanup_failure-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/close_cleanup_failure-01/service.stderr"
+    },
+    {
+      "path": "runs/close_cleanup_failure-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/close_cleanup_failure-01.command.stderr"
+    },
+    {
+      "path": "runs/close_cleanup_failure-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/close_cleanup_failure-01.command.stdout"
+    },
+    {
+      "path": "runs/mount_session_failure-01/daemon.stderr.gz",
+      "uncompressed_bytes": 192,
+      "uncompressed_sha256": "86e709e31edcde39bb37b8c8ac62bc271a9b1001179c48dbbb2d244a633c3138",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/mount_session_failure-01/daemon.stderr"
+    },
+    {
+      "path": "runs/mount_session_failure-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/mount_session_failure-01/service.stderr"
+    },
+    {
+      "path": "runs/mount_session_failure-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/mount_session_failure-01.command.stderr"
+    },
+    {
+      "path": "runs/mount_session_failure-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/mount_session_failure-01.command.stdout"
+    },
+    {
+      "path": "runs/shutdown_retained-01/daemon.stderr.gz",
+      "uncompressed_bytes": 133,
+      "uncompressed_sha256": "490a59cdcd12ace0b45487e5481c6ae4c723ec0a91d7b2f2599cb7de48027ed8",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/shutdown_retained-01/daemon.stderr"
+    },
+    {
+      "path": "runs/shutdown_retained-01/service.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/shutdown_retained-01/service.stderr"
+    },
+    {
+      "path": "runs/shutdown_retained-01.command.stderr.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/shutdown_retained-01.command.stderr"
+    },
+    {
+      "path": "runs/shutdown_retained-01.command.stdout.gz",
+      "uncompressed_bytes": 0,
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/shutdown_retained-01.command.stdout"
+    }
+  ]
+}

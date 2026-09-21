@@ -117,6 +117,10 @@ pub enum Response {
     WorkspaceCloseClean(Box<super::WorkspaceLifecycleWire>),
     /// Inspect the outcome: a retained entered attempt is not a ready mount.
     WorkspaceMount(Box<super::WorkspaceLifecycleWire>),
+    /// Inspect the outcome: a retained entered attempt is not an attached Workspace.
+    WorkspaceAttach(Box<super::WorkspaceAttachWire>),
+    /// Status of an attachment that has not yielded a usable Workspace.
+    WorkspaceAttachment(Box<super::WorkspaceAttachmentWire>),
     MetadataSaved {
         base: Root,
         kind: u8,

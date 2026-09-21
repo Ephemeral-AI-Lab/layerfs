@@ -1,0 +1,15 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "check",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--workspace",
+    "--all-targets",
+    "--locked",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 13.359696915999848
+}

@@ -76,7 +76,7 @@ fn control_configuration_is_explicit_separate_and_bounded() {
         (Some("127.0.0.1:0"), Some(peer.clone()), true),
         (
             Some("127.0.0.1:0"),
-            Some(format!("1,{},9999999999,16", "11".repeat(32))),
+            Some(format!("1,{},9999999999,32", "11".repeat(32))),
             false,
         ),
         (Some("127.0.0.1:0"), Some(format!("{peer};{peer}")), false),

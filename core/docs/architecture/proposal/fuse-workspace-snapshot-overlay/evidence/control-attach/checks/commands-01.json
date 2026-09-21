@@ -1,0 +1,64 @@
+{
+  "working_directory": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+  "rows": [
+    {
+      "log": "host-check-01.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 check --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline",
+      "status": "PASS",
+      "note": "preliminary source before startup custody correction; not final qualification"
+    },
+    {
+      "log": "host-test-01.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "status": "FAIL",
+      "note": "compile failure in new startup constructor Option argument; corrected in final source"
+    },
+    {
+      "log": "host-test-02.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "status": "FAIL",
+      "note": "Bridge/content passed316; old daemon config invalid-mask16 assertion failed (16 is now authorized Attach bit); test corrected to32",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "host-test-remaining-03.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --exclude layerfs-bridge --exclude layerfs-content --locked --offline -- --test-threads=2",
+      "status": "PASS",
+      "note": "remaining351passed/3ignored; Bridge/content prior316PASSpreserved without rerun; union667uniquePASS/3ignored",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "host-build-01.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "status": "PASS",
+      "note": "",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "host-clippy-01.log",
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "status": "PASS",
+      "note": "",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "boundary-01.log",
+      "command": "python3 core/tools/check_product_boundary.py",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "boundary-self-tests-01.log",
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    },
+    {
+      "log": "fmt-01.log",
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "status": "PASS",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+    }
+  ],
+  "scope": "core checks; no aggregate preflight or performance claim; original unsuccessful logs preserved"
+}

@@ -27,6 +27,7 @@ pub(crate) fn dispatch(
         Operation::WorkspaceStatus { .. }
         | Operation::WorkspaceUnmount { .. }
         | Operation::WorkspaceCloseClean { .. }
+        | Operation::WorkspaceAttach { .. }
         | Operation::WorkspaceMount { .. } => Err(Code::Unsupported.into()),
         Operation::HistoryQuery(query) => {
             end_input(input)?;

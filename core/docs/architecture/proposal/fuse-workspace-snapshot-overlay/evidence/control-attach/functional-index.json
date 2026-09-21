@@ -1,0 +1,1045 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-21T20:19:46.153288+00:00",
+  "scope": "15 registered functional Attach/startup/regression selections; every original failed attempt retained. No performance, quiet-host, RSS/cgroup or release claim.",
+  "summary": {
+    "registered_selections": 15,
+    "attempts": 18,
+    "passing_selections": 15,
+    "failed_attempts_retained": 3,
+    "registered_not_run": [],
+    "passing_cases_repeated": false
+  },
+  "source": {
+    "parent": "3e92fe277a0379fd85f158b858085af3ecb2e2d5",
+    "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2"
+  },
+  "caller_snapshot_linkage": {
+    "path": "caller-snapshot-linkage.json",
+    "sha256": "a98b5b96e4b5a650fca6f09bba8adaf1025701226513e28e949263d22498460c",
+    "unique_snapshots": 14,
+    "verified_input_links": 44,
+    "unavailable_versions": 0,
+    "created_after_runs": true
+  },
+  "journals": [
+    {
+      "path": "runs/commands-01.jsonl",
+      "sha256": "fbe1d373c55fe62c035618c6d76df6524aa13d6a3fd674c0a7b195dac412797c"
+    },
+    {
+      "path": "runs/commands-02.jsonl",
+      "sha256": "ee7434cf89049ef98fbdca1e6e50774a25edda6e71af9223cb1a3ce30bab1a11"
+    },
+    {
+      "path": "runs/commands-03.jsonl",
+      "sha256": "8de91fca495fadc2b5f98c861c1e40b68f4354e446ea9073dcc1525509e6596c"
+    },
+    {
+      "path": "runs/commands-04.jsonl",
+      "sha256": "ec0c4f485e451f54dd27d7b70c212fe148f22a76d5a8fc25e9cba9235a5e5002"
+    }
+  ],
+  "failure_qualifications": {
+    "attach_refusals-01": "Malformed64-byte name was correctly rejected asCapacity before native delivery; external oracle expectedInvalidInput. Forced daemon cleanup recorded; originalFAIL not promoted.",
+    "attach_startup_failure-01": "Paused service exhausted existing5-second native handshake cap before original10-second Attach deadline; no retained owner was required. External schedule/oracle failed. First consumed diagnostic line was not flushed and is unavailable.",
+    "attach_startup_failure-02": "Successful handshake/HELLO and142-byte terminal were observed, but fully silent terminal withholding exhausted existing5-second progress cap; correct product early failure/cleanup. Exact original Service(Io) diagnostic retained."
+  },
+  "rows": [
+    {
+      "id": "attach_success-01",
+      "case": "attach_success",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_success-01",
+        "--case",
+        "attach_success"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 4.294964292000259,
+      "driver_command_wall_seconds": 4.193235749999985,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "Unmount-CloseClean-Attach-new-identity-Status-Mount-read-Unmount-CloseClean",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_success-01/result.json",
+      "receipt_sha256": "7ef5f2bf0d10a357c1c595e722a1fd11f1c54698882bf408a27e011ecdb4a3a0",
+      "logs_sha256": {
+        "runs/attach_success-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_success-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_success-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_success-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_signal-01",
+      "case": "attach_signal",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 3,
+      "finish_line": 4,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_signal-01",
+        "--case",
+        "attach_signal"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.872946458000115,
+      "driver_command_wall_seconds": 1.739712624999811,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "signal-shutdown-cleans-replacement-target-and-native-mount-owner",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_signal-01/result.json",
+      "receipt_sha256": "84036770f035275034048aef0fccecbda7e091ea572d5ec0e483c7ee085074ea",
+      "logs_sha256": {
+        "runs/attach_signal-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_signal-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_signal-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_signal-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_authority-01",
+      "case": "attach_authority",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 5,
+      "finish_line": 6,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_authority-01",
+        "--case",
+        "attach_authority"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 5.651957707999827,
+      "driver_command_wall_seconds": 5.527812457999971,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "Attach-grant-authentication-stale-target-and-service-authority-are-independent",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_authority-01/result.json",
+      "receipt_sha256": "a525f9c1950f439c1ff542051d67b71818a688f6c7711f89c9327791671a3eab",
+      "logs_sha256": {
+        "runs/attach_authority-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_authority-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_authority-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_authority-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_open-01",
+      "case": "attach_open",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 7,
+      "finish_line": 8,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_open-01",
+        "--case",
+        "attach_open"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.3037872919994697,
+      "driver_command_wall_seconds": 2.155351624999639,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "mounted-and-unmounted-open-owners-refuse-Attach-without-replacement",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_open-01/result.json",
+      "receipt_sha256": "614bd07ff1725bdd035964857e20de9c5ed946849a44db108024566a6de74816",
+      "logs_sha256": {
+        "runs/attach_open-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_open-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_open-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_open-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_stopping-01",
+      "case": "attach_stopping",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 9,
+      "finish_line": 10,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_stopping-01",
+        "--case",
+        "attach_stopping"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.7694042920002175,
+      "driver_command_wall_seconds": 1.6421952079999755,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "stopping-nonclosed-owner-refuses-Attach-until-explicit-cleanup",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_stopping-01/result.json",
+      "receipt_sha256": "dd9c8e3a95e207bc5c6839b37e1912a020bed1fe7c044de987b1708f931f0868",
+      "logs_sha256": {
+        "runs/attach_stopping-01/daemon.stderr": "2e84e63d05eb3ccfc9765cec4e8ac964fcc66c5b93fb9fbc417348e22f470180",
+        "runs/attach_stopping-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_stopping-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_stopping-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_unresolved-01",
+      "case": "attach_unresolved",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 11,
+      "finish_line": 12,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_unresolved-01",
+        "--case",
+        "attach_unresolved"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.169423375000406,
+      "driver_command_wall_seconds": 2.0329940000001443,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "retained-Unmount-owner-refuses-Attach-without-losing-custody",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_unresolved-01/result.json",
+      "receipt_sha256": "84e6ca6c3eca10c759b5d0a676d84569728240d5caecc34d0599ddcdff02acaa",
+      "logs_sha256": {
+        "runs/attach_unresolved-01/daemon.stderr": "d91e1d4c1bb9f74cad437f93b328577de41a4a1e1d7c765e11ae4dfe946e74ee",
+        "runs/attach_unresolved-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_unresolved-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_unresolved-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_loss-01",
+      "case": "attach_loss",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 13,
+      "finish_line": 14,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_loss-01",
+        "--case",
+        "attach_loss"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.918911833000493,
+      "driver_command_wall_seconds": 1.8183257499995307,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "lost-Attach-terminal-is-Unknown-with-one-attempt-and-observed-current-custody",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_loss-01/result.json",
+      "receipt_sha256": "72f826c031d6ec9e90374f56dad46593133921a4a4cccf73cb503e01250b5323",
+      "logs_sha256": {
+        "runs/attach_loss-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_loss-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_loss-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_loss-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_refusals-01",
+      "case": "attach_refusals",
+      "attempt": "01",
+      "status": "FAIL",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 15,
+      "finish_line": 16,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01",
+        "--case",
+        "attach_refusals"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 1,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.3879208750004182,
+      "driver_command_wall_seconds": 1.2703692080003748,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "FORCED",
+      "cleanup_reported": null,
+      "forced_cleanup_fields": {
+        "forced_daemon_cleanup": true
+      },
+      "checks": [],
+      "failure": "AssertionError('Error: Capacity unknown=false cleanup=None history=None\\n')",
+      "receipt": "runs/attach_refusals-01/result.json",
+      "receipt_sha256": "4ee5bd2f87b2d2b7cfd306f646d07903f9ab46b64d53a61fac1ca013d7bc29fb",
+      "logs_sha256": {
+        "runs/attach_refusals-01/failed-daemon.stderr": "3d98f44138b2bb1bbc4d48b5f2603b175016fab7b1d46d684f8b1b699cbbc18a",
+        "runs/attach_refusals-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_refusals-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_refusals-01.command.stderr": "32565faa5d9900b3b9aa5cc75707e040848a55c5eb0263c1096078bff5259c6b"
+      }
+    },
+    {
+      "id": "attach_refusals-02",
+      "case": "attach_refusals",
+      "attempt": "02",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-02",
+        "--case",
+        "attach_refusals"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.521239124999738,
+      "driver_command_wall_seconds": 2.395105832999434,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "invalid-selector-incomplete-input-and-expired-headroom-never-admit-Attach",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_refusals-02/result.json",
+      "receipt_sha256": "c3d2f6707e687906b1dcf75896d798565eb5131228d85d0d0798a364461867bf",
+      "logs_sha256": {
+        "runs/attach_refusals-02/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_refusals-02/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_refusals-02.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_refusals-02.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_expiry-01",
+      "case": "attach_expiry",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 3,
+      "finish_line": 4,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_expiry-01",
+        "--case",
+        "attach_expiry"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 10.921374583000215,
+      "driver_command_wall_seconds": 10.819770209000126,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "expired-established-peer-cannot-begin-Attach",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_expiry-01/result.json",
+      "receipt_sha256": "5403f8328622f6d46e1d649766feb203f2f7de47ae04aeaeac00baedfa87964f",
+      "logs_sha256": {
+        "runs/attach_expiry-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_expiry-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_expiry-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_expiry-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_collision-01",
+      "case": "attach_collision",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 5,
+      "finish_line": 6,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_collision-01",
+        "--case",
+        "attach_collision"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.190233334000368,
+      "driver_command_wall_seconds": 2.0924813339997854,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "unowned-mount-leaf-collision-preserves-closed-prior-target-and-foreign-leaf",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_collision-01/result.json",
+      "receipt_sha256": "632790a7ba0c6982c4497df1f9484c5c795d592574f75731e9f8d4fdd050609e",
+      "logs_sha256": {
+        "runs/attach_collision-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_collision-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_collision-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_collision-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_failed-01",
+      "case": "attach_failed",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 7,
+      "finish_line": 8,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_failed-01",
+        "--case",
+        "attach_failed"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 3.0409473749996323,
+      "driver_command_wall_seconds": 2.9029163750001317,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "failed-Attach-Status-and-explicit-CloseClean-dispose-retained-empty-owner",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_failed-01/result.json",
+      "receipt_sha256": "52a8a56f6d5ca723d93ad0a1e680e08e947abfba19596d2333532f5e51b901a3",
+      "logs_sha256": {
+        "runs/attach_failed-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_failed-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_failed-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_failed-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_startup_failure-01",
+      "case": "attach_startup_failure",
+      "attempt": "01",
+      "status": "FAIL",
+      "mode": "functional-daemon-attach-startup-failure",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 9,
+      "finish_line": 10,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach_startup.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-01",
+        "--case",
+        "attach_startup_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 1,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 5.974785458000042,
+      "driver_command_wall_seconds": 5.848147416999382,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "NOT_QUALIFIED",
+      "cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "checks": [],
+      "failure": "RuntimeError('missing readiness: ')",
+      "receipt": "runs/attach_startup_failure-01/result.json",
+      "receipt_sha256": "737a9e57b12675fe9e40b13f76e6446b59c95fa80e17f0db13656a93ff33708b",
+      "logs_sha256": {
+        "runs/attach_startup_failure-01/failed-daemon.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_startup_failure-01/service.stderr": "e43e133c08ec56ec9bcbc1136fd2675709eeb91976a58641cc85df99d95985ae",
+        "runs/attach_startup_failure-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_startup_failure-01.command.stderr": "7e65d919b25e0a1ef4a255fb39ef174400b7d3efd21e933c7f69b13ed0f5557e"
+      }
+    },
+    {
+      "id": "attach_startup_failure-02",
+      "case": "attach_startup_failure",
+      "attempt": "02",
+      "status": "FAIL",
+      "mode": "functional-daemon-attach-startup-failure",
+      "input_manifest": "inputs-03.json",
+      "input_manifest_sha256": "3247e966218e2f6322303ae2356568ec0b85a9a0c6d9b2affb2c87d71e337ee6",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-03.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach_startup.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-02",
+        "--case",
+        "attach_startup_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 1,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 6.262857957999586,
+      "driver_command_wall_seconds": 6.149282207999931,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "NOT_QUALIFIED",
+      "cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "checks": [],
+      "failure": "RuntimeError('missing readiness: ')",
+      "receipt": "runs/attach_startup_failure-02/result.json",
+      "receipt_sha256": "548395ad6a0edd21f7be2577b382a3bb20d68f7cc154dc093a1d5878e96e3a40",
+      "logs_sha256": {
+        "runs/attach_startup_failure-02/daemon.stderr": "e03a10ff3f27ab1709dbe4369106ceb4a8220f6add94f832abbd9e40e61c7ea4",
+        "runs/attach_startup_failure-02/service.stderr": "f1e083c65ec6b8ce8ea11557d1323418c38dabd5bd44830955fbce2a62d0fc84",
+        "runs/attach_startup_failure-02.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_startup_failure-02.command.stderr": "a7294e38d8e400395ccc861be0b6a8082975bd8f6e0963e5c312b76e482f70c6"
+      }
+    },
+    {
+      "id": "attach_startup_failure-03",
+      "case": "attach_startup_failure",
+      "attempt": "03",
+      "status": "PASS",
+      "mode": "functional-daemon-attach-startup-failure",
+      "input_manifest": "inputs-04.json",
+      "input_manifest_sha256": "aca1a263290640bf96456bc18965f58f4540bae61c59a08bc41ebc7352dd0e48",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-04.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach_startup.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_startup_failure-03",
+        "--case",
+        "attach_startup_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 11.324524750000819,
+      "driver_command_wall_seconds": 11.202889041999697,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: explicit signal cleaned retained failed Attach, daemon exited original error, owned runtime/volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "failed-CLI-Attach-retains-owner-without-ready-control-until-explicit-signal-preserving-original-error",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/attach_startup_failure-03/result.json",
+      "receipt_sha256": "764b8d96681d341dee5c16e13079f61427c6e299e332f12ab1826329e19f014d",
+      "logs_sha256": {
+        "runs/attach_startup_failure-03/daemon.stderr": "3fabca802b4aaaa1ef2a14e43d38b5e0a8ec43a48c3bcfa9347c1087692b2c15",
+        "runs/attach_startup_failure-03/service.stderr": "26296b002aafbf335a7428db937d98b9f020153e9e454157260e2b1259bb9976",
+        "runs/attach_startup_failure-03.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_startup_failure-03.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "mount_session_failure-01",
+      "case": "mount_session_failure",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-mount",
+      "input_manifest": "inputs-04.json",
+      "input_manifest_sha256": "aca1a263290640bf96456bc18965f58f4540bae61c59a08bc41ebc7352dd0e48",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-04.jsonl",
+      "start_line": 3,
+      "finish_line": 4,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/mount_session_failure-01",
+        "--case",
+        "mount_session_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.8676559579998866,
+      "driver_command_wall_seconds": 1.7456181659999856,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "entered-Session-failure-retains-owner-until-explicit-Unmount",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/mount_session_failure-01/result.json",
+      "receipt_sha256": "2340ccebc8b67f2cb7d2983a0ae6fe47d3341040df13148279e2f24eaf04cc65",
+      "logs_sha256": {
+        "runs/mount_session_failure-01/daemon.stderr": "86e709e31edcde39bb37b8c8ac62bc271a9b1001179c48dbbb2d244a633c3138",
+        "runs/mount_session_failure-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/mount_session_failure-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/mount_session_failure-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "close_cleanup_failure-01",
+      "case": "close_cleanup_failure",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-close-clean",
+      "input_manifest": "inputs-04.json",
+      "input_manifest_sha256": "aca1a263290640bf96456bc18965f58f4540bae61c59a08bc41ebc7352dd0e48",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-04.jsonl",
+      "start_line": 5,
+      "finish_line": 6,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/close_cleanup_failure-01",
+        "--case",
+        "close_cleanup_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.5067733750001935,
+      "driver_command_wall_seconds": 1.4152657499998895,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "failed-leaf-removal-retains-Workspace-until-explicit-checked-cleanup",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/close_cleanup_failure-01/result.json",
+      "receipt_sha256": "4cce85cd27703650c5259cc1bf7ec3b43fd13965f0d801938f9a074807023c42",
+      "logs_sha256": {
+        "runs/close_cleanup_failure-01/daemon.stderr": "2e84e63d05eb3ccfc9765cec4e8ac964fcc66c5b93fb9fbc417348e22f470180",
+        "runs/close_cleanup_failure-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/close_cleanup_failure-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/close_cleanup_failure-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "shutdown_retained-01",
+      "case": "shutdown_retained",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-unmount",
+      "input_manifest": "inputs-04.json",
+      "input_manifest_sha256": "aca1a263290640bf96456bc18965f58f4540bae61c59a08bc41ebc7352dd0e48",
+      "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+      "command_journal": "runs/commands-04.jsonl",
+      "start_line": 7,
+      "finish_line": 8,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/shutdown_retained-01",
+        "--case",
+        "shutdown_retained"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 11.533927333000065,
+      "driver_command_wall_seconds": 11.396309083000233,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "forced_cleanup_fields": {},
+      "checks": [
+        {
+          "id": "incomplete-signal-cleanup-retains-process-until-next-explicit-signal",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "receipt": "runs/shutdown_retained-01/result.json",
+      "receipt_sha256": "55c3fc892767492e38786db09ae17a53a9ce84e3144012dc040c45bf8966f47d",
+      "logs_sha256": {
+        "runs/shutdown_retained-01/daemon.stderr": "490a59cdcd12ace0b45487e5481c6ae4c723ec0a91d7b2f2599cb7de48027ed8",
+        "runs/shutdown_retained-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/shutdown_retained-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/shutdown_retained-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

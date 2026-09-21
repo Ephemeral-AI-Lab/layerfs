@@ -8,6 +8,8 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
         Response::WorkspaceUnmount(_) => Encoder::bounded(WORKSPACE_UNMOUNT_RESULT_BYTES),
         Response::WorkspaceMount(_) => Encoder::bounded(WORKSPACE_MOUNT_RESULT_BYTES),
+        Response::WorkspaceAttach(_) => Encoder::bounded(WORKSPACE_ATTACH_RESULT_BYTES),
+        Response::WorkspaceAttachment(_) => Encoder::bounded(WORKSPACE_ATTACHMENT_RESULT_BYTES),
         Response::WorkspaceCloseClean(_) => Encoder::bounded(WORKSPACE_CLOSE_CLEAN_RESULT_BYTES),
         Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
         _ => Encoder::default(),
@@ -145,6 +147,50 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
                 WorkspaceLifecycleOutcome::Retained(code) => {
                     e.u8(1)?;
                     e.u8(code as u8)?;
+                }
+            }
+        }
+        Response::WorkspaceAttach(result) => {
+            result.validate()?;
+            e.u8(15)?;
+            e.blob(&result.workspace)?;
+            e.put(&result.incarnation)?;
+            match result.outcome {
+                WorkspaceAttachOutcome::Completed => e.u8(0)?,
+                WorkspaceAttachOutcome::Retained(code) => {
+                    e.u8(1)?;
+                    e.u8(code as u8)?;
+                }
+            }
+        }
+        Response::WorkspaceAttachment(status) => {
+            status.validate()?;
+            e.u8(16)?;
+            e.blob(&status.workspace)?;
+            e.put(&status.incarnation)?;
+            match status.state {
+                WorkspaceAttachmentState::Attaching => e.u8(0)?,
+                WorkspaceAttachmentState::Failed {
+                    cause,
+                    cleanup,
+                    progress,
+                } => {
+                    e.u8(1)?;
+                    e.u8(cause as u8)?;
+                    e.u8(cleanup.map_or(0, |code| code as u8))?;
+                    match progress {
+                        WorkspaceAttachmentProgress::Running => e.u8(0)?,
+                        WorkspaceAttachmentProgress::Retained {
+                            mount_directory,
+                            metadata_arena,
+                            backing_directory,
+                        } => {
+                            e.u8(1)?;
+                            e.u8(u8::from(mount_directory)
+                                | (u8::from(metadata_arena) << 1)
+                                | (u8::from(backing_directory) << 2))?;
+                        }
+                    }
                 }
             }
         }
@@ -557,6 +603,12 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&14) && b.len() > WORKSPACE_MOUNT_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&15) && b.len() > WORKSPACE_ATTACH_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if b.first() == Some(&16) && b.len() > WORKSPACE_ATTACHMENT_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     let mut d = Decoder::new(b)?;
     let r = match d.u8()? {
         1 => Response::Read { length: d.u64()? },
@@ -664,6 +716,61 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             } else {
                 Response::WorkspaceMount(Box::new(result))
             }
+        }
+        15 => {
+            let result = WorkspaceAttachWire {
+                workspace: d.blob(WORKSPACE_ID_BYTES)?,
+                incarnation: d.root()?,
+                outcome: match d.u8()? {
+                    0 => WorkspaceAttachOutcome::Completed,
+                    1 => WorkspaceAttachOutcome::Retained(code(d.u8()?)?),
+                    _ => return Err(Code::InvalidInput.into()),
+                },
+            };
+            result.validate()?;
+            Response::WorkspaceAttach(Box::new(result))
+        }
+        16 => {
+            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
+            let incarnation = d.root()?;
+            let state = match d.u8()? {
+                0 => WorkspaceAttachmentState::Attaching,
+                1 => {
+                    let cause = code(d.u8()?)?;
+                    let cleanup = match d.u8()? {
+                        0 => None,
+                        value => Some(code(value)?),
+                    };
+                    let progress = match d.u8()? {
+                        0 => WorkspaceAttachmentProgress::Running,
+                        1 => {
+                            let flags = d.u8()?;
+                            if flags & !7 != 0 {
+                                return Err(Code::InvalidInput.into());
+                            }
+                            WorkspaceAttachmentProgress::Retained {
+                                mount_directory: flags & 1 != 0,
+                                metadata_arena: flags & 2 != 0,
+                                backing_directory: flags & 4 != 0,
+                            }
+                        }
+                        _ => return Err(Code::InvalidInput.into()),
+                    };
+                    WorkspaceAttachmentState::Failed {
+                        cause,
+                        cleanup,
+                        progress,
+                    }
+                }
+                _ => return Err(Code::InvalidInput.into()),
+            };
+            let status = WorkspaceAttachmentWire {
+                workspace,
+                incarnation,
+                state,
+            };
+            status.validate()?;
+            Response::WorkspaceAttachment(Box::new(status))
         }
         _ => return Err(Code::Unsupported.into()),
     };

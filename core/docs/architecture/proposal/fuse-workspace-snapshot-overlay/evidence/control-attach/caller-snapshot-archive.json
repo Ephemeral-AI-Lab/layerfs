@@ -1,0 +1,75 @@
+{
+  "method": "lossless gzip mtime0 of exact SHA256-verified source snapshots; decompressed bytes match linkage source identity",
+  "files": [
+    {
+      "path": "caller-snapshots/04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8/control_attach_startup.py.gz",
+      "sha256": "04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8",
+      "uncompressed_bytes": 11650
+    },
+    {
+      "path": "caller-snapshots/05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0/control_attach_startup.py.gz",
+      "sha256": "05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0",
+      "uncompressed_bytes": 7349
+    },
+    {
+      "path": "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py.gz",
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "uncompressed_bytes": 18137
+    },
+    {
+      "path": "caller-snapshots/2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186/control_attach_startup.py.gz",
+      "sha256": "2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186",
+      "uncompressed_bytes": 10499
+    },
+    {
+      "path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py.gz",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "uncompressed_bytes": 14073
+    },
+    {
+      "path": "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py.gz",
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "uncompressed_bytes": 19149
+    },
+    {
+      "path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py.gz",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "uncompressed_bytes": 22967
+    },
+    {
+      "path": "caller-snapshots/9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d/control_attach.py.gz",
+      "sha256": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+      "uncompressed_bytes": 19024
+    },
+    {
+      "path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py.gz",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "uncompressed_bytes": 12669
+    },
+    {
+      "path": "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py.gz",
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "uncompressed_bytes": 28062
+    },
+    {
+      "path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py.gz",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "uncompressed_bytes": 6543
+    },
+    {
+      "path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py.gz",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "uncompressed_bytes": 22854
+    },
+    {
+      "path": "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py.gz",
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "uncompressed_bytes": 14903
+    },
+    {
+      "path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py.gz",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "uncompressed_bytes": 1250
+    }
+  ]
+}

@@ -578,3 +578,15 @@ and syscalls have deadline observation points, not preemption. Native managed ro
 are exclusively host-owned; static replacement checks do not claim atomic defense
 against hostile concurrent root-level renames. Exact resource/count/verification
 scope is recorded in35. The prepared DSH workload is pinned in[34](proposal/fuse-workspace-snapshot-overlay/34-preinstalled-dsh-workload.md).
+
+From parent `3e92fe277a0379fd85f158b858085af3ecb2e2d5`,
+[authenticated Attach](proposal/fuse-workspace-snapshot-overlay/36-control-attach.md)
+adds identity-only opcode13/profile3 and grant16 (masks0..31). The startup RO profile
+remains immutable. Daemon control and signal shutdown share one current selector,
+Workspace capability and MountHandle; the native registry retains all failed
+resources. An attempted selector is installed before Attach and restored to the
+prior closed owner only on exact confirmed absence. Tags15/16 carry the distinct
+Attach result and failed-attachment Status; existing healthy/lifecycle results
+keep their validators. Failed Status observes native custody; CloseClean disposes
+it explicitly. Startup attachment failure retains the same pending-selector
+cleanup route. Round36 records source identity, bounds, checks and qualifications.
