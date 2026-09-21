@@ -1,0 +1,61 @@
+{
+  "method": "compiler DWARF, locked Rust1.85.1 Linux AArch64; object layout only",
+  "commands": [
+    [
+      "/usr/bin/dwarfdump",
+      "--name=Entry",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon"
+    ],
+    [
+      "/usr/bin/dwarfdump",
+      "--name=Entry",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon"
+    ],
+    [
+      "/usr/bin/dwarfdump",
+      "--name=AttachResources",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon"
+    ],
+    [
+      "/usr/bin/dwarfdump",
+      "--name=EntryState",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon"
+    ],
+    [
+      "/usr/bin/dwarfdump",
+      "--name=HistoryFailure",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon"
+    ],
+    [
+      "/usr/bin/dwarfdump",
+      "--name=StageWire",
+      "--show-parents",
+      "--parent-recurse-depth=3",
+      "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon"
+    ]
+  ],
+  "before_binary_sha256": "f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9",
+  "after_binary_sha256": "6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4",
+  "bytes": {
+    "before_entry": 80,
+    "after_entry": 304,
+    "resources": 48,
+    "state": 240,
+    "history_failure": 176,
+    "stage_wire": 344
+  },
+  "entry_delta": 224,
+  "per_entry_failure_box_reservation": 520,
+  "accounting": "Registry charges capacity*sizeof(Entry), including transient old+new capacity during growth; each live entry name charge adds sizeof(HistoryFailure)+sizeof(StageWire); no added worker/queue/window/FD capacities",
+  "not_claimed": "allocator overhead or total heap/RSS/cgroup/latency qualification"
+}

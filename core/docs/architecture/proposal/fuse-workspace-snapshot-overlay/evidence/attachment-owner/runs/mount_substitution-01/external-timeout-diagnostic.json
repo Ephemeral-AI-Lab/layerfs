@@ -1,0 +1,37 @@
+{
+  "status": "INCOMPLETE",
+  "case": "mount_substitution",
+  "source": "external supervisor timeout and subsequent read-only kernel diagnosis; original driver result.json was not written",
+  "external_command_wall_seconds": 60.007986832999904,
+  "hard_budget_seconds": 60,
+  "cause": "External seccomp test self-inspection deadlock: statx(fd4, empty path, AT_EMPTY_PATH) on /proc/25/task/32/status ran before listener handoff. Native Attach was not entered.",
+  "runtime_nano_cpus": 2000000000,
+  "container": "layerfs-edit-2955ea8aeecf4164",
+  "container_id": "f851ffae32850bdf16b0e47c30edc3f638dbf04b19ca94d6cc3a8b111ef97d43",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "retained_volume": "layerfs-edit-2955ea8aeecf4164-data",
+  "cleanup": {
+    "status": "STOPPED_RETAINED",
+    "command": [
+      "docker",
+      "stop",
+      "--time",
+      "1",
+      "layerfs-edit-2955ea8aeecf4164"
+    ],
+    "exit_code": 0,
+    "external_stop_seconds": 1.1647717499999999,
+    "owned_container_and_volume_retained": true
+  },
+  "missing_driver_outputs": [
+    "result.json",
+    "test.stdout",
+    "test.stderr"
+  ],
+  "not_run": [
+    "branch_capacity",
+    "mount_success",
+    "close_cleanup_failure"
+  ],
+  "performance_claim": false
+}

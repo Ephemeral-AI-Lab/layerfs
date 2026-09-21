@@ -1,0 +1,8 @@
+{
+  "name": "layerfs-dsh-prepared-workload",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.5-rc.2"
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "working_directory": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+  "rows": [
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "log": "host-test.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "tests": {
+        "passed": 664,
+        "failed": 0,
+        "ignored": 3
+      },
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "host-build.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "host-clippy.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-attachment-test --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "log": "linux-test.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "tests": {
+        "passed": 662,
+        "failed": 0,
+        "ignored": 126
+      },
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-attachment-build --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "linux-build.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-attachment-clippy --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "linux-clippy.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "log": "boundary.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "log": "boundary-self-tests.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "log_encoding": "gzip"
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "log": "fmt.log.gz",
+      "status": "PASS",
+      "exit_code": 0,
+      "log_encoding": "gzip"
+    }
+  ],
+  "preliminary_checks": [
+    {
+      "log": "host-lib-clippy-01.log.gz",
+      "status": "PASS",
+      "scope": "unfinished precursor source; not final qualification",
+      "log_encoding": "gzip"
+    },
+    {
+      "log": "host-focused-01.log.gz",
+      "status": "PASS",
+      "tests_passed": 12,
+      "scope": "focused predecessor to final shared-library checks; not relabeled as final source",
+      "log_encoding": "gzip"
+    }
+  ],
+  "guard_files": 242,
+  "guard_self_tests": 6,
+  "scope": "Locked Rust1.85.1 core workspace only; actual native selections separate; no CI/aggregate preflight/performance claim",
+  "docker_startup": "Native daemon initially stopped; opened Docker app. Tag image inspection was inconsistent with list; explicit desktop-linux exact image IDs inspected and used unchanged. No image re-pull or rebuild.",
+  "additional_checks": [
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-attachment-test-02 --mount type=bind,src=$PWD,dst=/work --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo test --manifest-path core/Cargo.toml --workspace --locked --offline --no-run",
+      "log": "linux-test-build-02.log.gz",
+      "status": "PASS",
+      "scope": "corrected external caller, no tests rerun"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-attachment-clippy-02 --mount type=bind,src=$PWD,dst=/work --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo clippy --manifest-path core/Cargo.toml --locked --offline -p layerfs-workspace --all-targets -- -D warnings",
+      "log": "linux-clippy-02.log.gz",
+      "status": "PASS"
+    }
+  ]
+}

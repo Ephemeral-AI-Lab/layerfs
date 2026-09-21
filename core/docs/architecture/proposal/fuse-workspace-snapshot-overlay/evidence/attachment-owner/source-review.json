@@ -1,0 +1,32 @@
+{
+  "parent": "0d220870175abb6e3f162cb164dba7c49bc98f9d",
+  "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+  "reviewed_scope": "native failed Attach ownership, caller flow, backing Directory/MetadataHost close, accounting and public observation/cleanup",
+  "invariants": [
+    "one existing registry, no second semantic state",
+    "BranchContext allocation before resources/arena",
+    "arena and directory custody retained after later failures",
+    "no backing/remote I/O under registry/Workspace state locks",
+    "exact identity and healthy/active cleanup refusals",
+    "original cause separate from latest cleanup outcome",
+    "known released resources are not recreated after late deadline"
+  ],
+  "qualified_limits": [
+    "admission is immediate try_lock; custody restitution uses short non-I/O blocking lock, without hard scheduling/preemption guarantee",
+    "managed directories exclusively owned; static replacement guarded, concurrent same-owner/root rename between stat/unlink unqualified",
+    "poison preserves custody but public inspection/cleanup refusesIo; no recovery claim",
+    "no remote Attach or new daemon control in this prerequisite",
+    "no RSS/cgroup/performance qualification"
+  ],
+  "resource_bytes": {
+    "registry_entry_before": 80,
+    "registry_entry_after": 304,
+    "entry_delta": 224,
+    "per_live_entry_optional_failure_boxes": 520,
+    "AttachResources": 48,
+    "EntryState": 240
+  },
+  "passing_native_and_mounted_selections": 8,
+  "retained_incomplete_attempts": 1,
+  "issue_closure": false
+}

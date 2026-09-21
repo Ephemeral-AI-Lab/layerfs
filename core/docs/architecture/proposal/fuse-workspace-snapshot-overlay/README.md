@@ -7,11 +7,11 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
-**Current continuation:** [authenticated Mount](32-control-mount.md) adds remote
-Mount of the existing exact CLI attachment, preserving read-only projection and
-retained failure ownership. [Cancelled pipe I/O](33-cancelled-pipe.md) records the
-shared cancellation prerequisite discovered during this round. Current verification
-scope and remaining work are in those records; no wider writable/R6 claim follows.
+**Current continuation:** [failed native Attach ownership](35-failed-attachment-ownership.md)
+closes the retained-owner prerequisite before remote Attach. [Authenticated Mount](32-control-mount.md)
+and [cancelled pipe I/O](33-cancelled-pipe.md) retain their verified scopes. The owner-selected
+[preinstalled DSH workload](34-preinstalled-dsh-workload.md) is prepared and pinned;
+actual mounted upload/Commit/R6 remain open.
 
 **Continuation task handoff:** [30](30-continuation-handoff.md) records the exact
 current checkpoint, remaining operation sequence and loose coupling boundaries.

@@ -1,30 +1,32 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `3e5d6a66a9f4e4df4a8a19087e63909a18046c6d`.
-> Frozen production input seal: `41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35`.
-> Exact committed production source: `8639c6bda9e5911c3d434e659380d99b0bcf8d88`.
+> Implementation parent: `0d220870175abb6e3f162cb164dba7c49bc98f9d`.
+> Frozen production input seal: `6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f`.
+> Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
 `P` means production LOC: nonblank, non-comment implementation lines, including
 imports, declarations and runtime SQL. `L` means all physical lines, including
 comments and blanks. They must not be confused: the 999-file/200-entry-file ceilings
 apply to L. `N` means the recursive number of production files in a folder.
-JSON includes all 241 core and 193 reference production files separately.
+JSON includes all 242 core and 193 reference production files separately.
 Tests, fixtures, examples, tools, docs and manifests are excluded from P; their
 folder locations are still shown in the continuation handoff.
 
 Reproduce with the unchanged counter (blob
 `b5b9617d08204977176302311e0b2c72a811b420`): run
 `python3 tools/production_loc.py --root <source-snapshot> --files` and `--json`
-against an archive of that exact commit's `crates` and `core/crates`.
+against the frozen source snapshot. Once committed, archive that exact commit's
+`crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Commit confirmation](evidence/control-mount/commit-confirmed.json) binds that frozen
-inventory to the exact committed tree without relabeling the original run receipts.
-[Current per-file machine-readable inventory](evidence/control-mount/source-loc.json).
-[Original continuation inventory](evidence/continuation-handoff/source-loc.json)
-retains its original source pin and counts.
+[Current per-file machine-readable inventory](evidence/attachment-owner/source-loc.json)
+records the pending implementation and its frozen product seal. The prior
+[control-Mount inventory](evidence/control-mount/source-loc.json) and its
+[commit confirmation](evidence/control-mount/commit-confirmed.json), plus the
+[original continuation inventory](evidence/continuation-handoff/source-loc.json),
+retain their original source pins and counts. No historical receipt is relabeled.
 
 ## Crate ownership and totals
 
@@ -32,7 +34,7 @@ retains its original source pin and counts.
 | --- | ---: | ---: | ---: | --- |
 | `layerfs-daemon` | 892 | 946 | 6 | Process, configuration, authenticated control and connection assembly |
 | `layerfs-fuse` | 1062 | 1155 | 4 | Linux kernel projection, replies, mount/session ownership |
-| `layerfs-workspace` | 9783 | 9954 | 37 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
+| `layerfs-workspace` | 10068 | 10253 | 38 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
 | `layerfs-bridge` | 4390 | 4871 | 22 | Logical operation contract, Source, authorization identity and native framing/delivery |
 | `layerfs-service` | 2033 | 2217 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
@@ -40,10 +42,40 @@ retains its original source pin and counts.
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **43364 P / 52473 L**, across 241 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **108781 P / 143939 L**. Root `crates/` is reference-only, including its
+Core total: **43649 P / 52772 L**, across 242 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **109066 P / 144238 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Workspace ownership after the failed-Attach prerequisite
+
+`runtime/attachment.rs` owns exact-incarnation observation and failed-Attach
+resource custody: the existing registry entry transitions between Attaching,
+Attached and Failed, and an explicit cleanup attempt moves its retained resources
+out of that entry while backing I/O runs. It preserves the original failure,
+records cleanup progress and validates the acquired mount-leaf identity before
+removal. `runtime/host.rs` retains host configuration, admission, remote delivery,
+and attachment assembly; `types.rs` exposes the bounded observation/result types.
+There is one registry and one live Workspace semantic owner, with no state mirror.
+
+Workspace remains behind the portable Bridge delivery contract. Daemon owns
+assembly; FUSE uses public Workspace semantics; Service owns C1/C2/C5 composition.
+The new file imports no daemon, FUSE, native client or service implementation.
+The runtime, backing, filesystem, overlay and commit groups remain private.
+
+The registry reserves its actual `Entry` allocation size. Each entry's name charge
+also covers the bounded optional HistoryFailure and StageWire allocations that an
+original failure may retain. This records source responsibility for accounting;
+it is not an RSS, cgroup or resource-performance qualification.
+
+| Workspace group | P | L | N | Responsibility |
+| --- | ---: | ---: | ---: | --- |
+| `runtime/` | 1532 | 1589 | 6 | Lifecycle, admission, failure custody and projection coherence |
+| `filesystem/` | 1663 | 1688 | 6 | Semantic lookup, directory traversal, open, read and write |
+| `overlay/` | 654 | 656 | 3 | Immutable edit pieces and captured/live roots |
+| `backing/` | 4414 | 4476 | 13 | Consumer-wide payload and metadata ownership, budgets and explicit reclaim |
+| `commit/` | 1304 | 1319 | 7 | Capture/lowering, service save and Commit reconciliation |
+| Root exports/types | 501 | 525 | 3 | Public semantic types and thin crate exports |
 
 ## Every current core production file
 
@@ -79,8 +111,8 @@ core/crates/layerfs-fuse/  [P=1062; L=1155; N=4]
 ### layerfs-workspace
 
 ```text
-core/crates/layerfs-workspace/  [P=9783; L=9954; N=37]
-`-- src/  [P=9783; L=9954; N=37]
+core/crates/layerfs-workspace/  [P=10068; L=10253; N=38]
+`-- src/  [P=10068; L=10253; N=38]
     |-- backing/  [P=4414; L=4476; N=13]
     |   |-- budget.rs  [P=54; L=56]
     |   |-- directory.rs  [P=206; L=208]
@@ -114,15 +146,16 @@ core/crates/layerfs-workspace/  [P=9783; L=9954; N=37]
     |   |-- mod.rs  [P=2; L=2]
     |   |-- pieces.rs  [P=304; L=305]
     |   `-- snapshot.rs  [P=348; L=349]
-    |-- runtime/  [P=1268; L=1313; N=5]
+    |-- runtime/  [P=1532; L=1589; N=6]
+    |   |-- attachment.rs  [P=256; L=266]
     |   |-- coherence.rs  [P=292; L=318]
-    |   |-- host.rs  [P=487; L=492]
+    |   |-- host.rs  [P=494; L=501]
     |   |-- lifecycle.rs  [P=161; L=168]
-    |   |-- mod.rs  [P=4; L=4]
+    |   |-- mod.rs  [P=5; L=5]
     |   `-- state.rs  [P=324; L=331]
     |-- commit_types.rs  [P=73; L=75]
     |-- lib.rs  [P=17; L=20]
-    `-- types.rs  [P=390; L=407]
+    `-- types.rs  [P=411; L=430]
 ```
 
 ### layerfs-bridge
@@ -394,8 +427,8 @@ core/crates/layerfs-telemetry/  [P=2257; L=2743; N=23]
 
 ## File ceilings and expansion rules
 
-Every production file must stay at most999 physical lines. Every lib.rs/mod.rs
-must stay at most200 physical lines and contain declarations/reexports/thin
+Every production file must stay at most 999 physical lines. Every lib.rs/mod.rs
+must stay at most 200 physical lines and contain declarations/reexports/thin
 forwarding only. The folder map is ownership guidance, not permission to create
 one interface/factory per file. Add a real responsibility when needed; do not
 scaffold absent namespace or platform groups. Keep current private implementation

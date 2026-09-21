@@ -56,6 +56,29 @@ pub struct AttachOptions {
     pub owner_uid: u32,
     pub owner_gid: u32,
 }
+/// Current custody of one exact managed name and incarnation; no replay receipt.
+#[derive(Clone)]
+pub enum Attachment {
+    Attaching,
+    Attached(crate::Workspace),
+    Failed(AttachmentFailure),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AttachmentFailure {
+    pub cause: WorkspaceError,
+    pub cleanup: Option<WorkspaceError>,
+    pub progress: AttachmentCleanupProgress,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AttachmentCleanupProgress {
+    /// One admitted cleanup owns the resources outside the registry lock.
+    Running,
+    Retained {
+        mount_directory: bool,
+        metadata_arena: bool,
+        backing_directory: bool,
+    },
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeKind {
     File,

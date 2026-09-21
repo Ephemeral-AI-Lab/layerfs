@@ -1,0 +1,20 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--pull=never",
+    "--platform",
+    "linux/arm64",
+    "--cpus",
+    "2",
+    "--network",
+    "none",
+    "node@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4",
+    "sh",
+    "-c",
+    "node --version; npm --version; uname -sm; getconf GNU_LIBC_VERSION; node -p \"JSON.stringify(process.versions)\""
+  ],
+  "captured_utc": "2026-09-21T18:30:49.693853+00:00",
+  "exit_code": 0
+}

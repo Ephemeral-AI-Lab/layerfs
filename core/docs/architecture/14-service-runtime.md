@@ -564,3 +564,17 @@ reported as Interrupted to standard read_exact/write_all loops. Cancellation mus
 be terminal at the Pipe boundary; ordinary operating-system EINTR remains distinct.
 This correction adds no queue, retry, worker or replay authority. Its source and
 regression evidence are recorded with the operation round that exposed it.
+
+
+From parent`0d220870175abb6e3f162cb164dba7c49bc98f9d`, the
+[failed-Attach prerequisite](proposal/fuse-workspace-snapshot-overlay/35-failed-attachment-ownership.md)
+keeps Attaching/Attached/Failed custody in the existing WorkspaceHost registry.
+Public exact-identity observation returns the existing Workspace or bounded failed
+resource progress; explicit cleanup retains cause/progress and removes only a fully
+released failed entry. BranchContext allocation precedes resource acquisition,
+and an acquired arena survives later failure. No daemon/Bridge control is added by
+this prerequisite. Runtime locks end before backing I/O; short final custody locking
+and syscalls have deadline observation points, not preemption. Native managed roots
+are exclusively host-owned; static replacement checks do not claim atomic defense
+against hostile concurrent root-level renames. Exact resource/count/verification
+scope is recorded in35. The prepared DSH workload is pinned in[34](proposal/fuse-workspace-snapshot-overlay/34-preinstalled-dsh-workload.md).

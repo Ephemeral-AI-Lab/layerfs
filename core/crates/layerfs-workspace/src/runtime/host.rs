@@ -1,8 +1,6 @@
+use super::attachment::{clock, lock_error, AttachResources, EntryState};
 use super::state::*;
-use crate::backing::{
-    directory::Directory,
-    payload::{bare_failure, PayloadHost},
-};
+use crate::backing::payload::{bare_failure, PayloadHost};
 use crate::{
     backing::budget::{Budget, Charge},
     filesystem::namespace::attributes,
@@ -24,6 +22,8 @@ use std::{
 };
 const WORKSPACE_STATE_BYTES: usize =
     8192 + size_of::<Option<Box<super::coherence::ProjectionState>>>();
+const ATTACH_FAILURE_BYTES: usize = size_of::<layerfs_bridge::contract::HistoryFailure>()
+    + size_of::<layerfs_bridge::contract::StageWire>();
 
 #[derive(Clone)]
 pub struct WorkspaceHost {
@@ -44,8 +44,7 @@ pub(crate) struct Host {
 pub(crate) struct Entry {
     pub id: Box<str>,
     pub incarnation: [u8; 32],
-    pub state: Option<Arc<Inner>>,
-    pub _directory: Option<Arc<Directory>>,
+    pub state: EntryState,
     pub _name_charge: Charge,
 }
 pub(crate) struct Registry {
@@ -122,6 +121,7 @@ impl WorkspaceHost {
             .checked_add(
                 size_of::<Entry>()
                     + 63
+                    + ATTACH_FAILURE_BYTES
                     + WORKSPACE_STATE_BYTES
                     + CALL_SCRATCH
                     + MAX_READ_BYTES
@@ -185,15 +185,22 @@ impl WorkspaceHost {
         if options.incarnation == [0; 32] {
             return Err(WorkspaceError::InvalidInput);
         }
+        let deadline = Workspace::callback_deadline(deadline);
+        clock(deadline)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            if fs::metadata(self.inner.config.root.join("workspace"))?.uid() != options.owner_uid
-                || fs::metadata(&self.inner.config.root)?.uid() != options.owner_uid
-            {
-                return Err(WorkspaceError::Unsupported);
+            for path in [
+                &self.inner.config.root.join("workspace"),
+                &self.inner.config.root,
+            ] {
+                clock(deadline)?;
+                if fs::metadata(path)?.uid() != options.owner_uid {
+                    return Err(WorkspaceError::Unsupported);
+                }
             }
             for ancestor in self.inner.config.root.ancestors() {
+                clock(deadline)?;
                 let metadata = fs::metadata(ancestor)?;
                 if (metadata.uid() != 0 && metadata.uid() != options.owner_uid)
                     || (metadata.mode() & 0o022 != 0 && metadata.mode() & 0o1000 == 0)
@@ -203,7 +210,8 @@ impl WorkspaceHost {
             }
         }
         let directory = {
-            let mut registry = self.inner.registry.lock().map_err(|_| WorkspaceError::Io)?;
+            let mut registry = self.inner.registry.try_lock().map_err(lock_error)?;
+            clock(deadline)?;
             if registry.entries.len() == self.inner.config.max_count {
                 return Err(WorkspaceError::Capacity);
             }
@@ -212,7 +220,12 @@ impl WorkspaceHost {
             }) {
                 return Err(WorkspaceError::Busy);
             }
-            let name_charge = self.inner.budget.reserve(options.id.len())?;
+            // Entry stores fixed failure state inline; these two bounded boxes
+            // cover the optional original service history failure it may retain.
+            let name_charge = self
+                .inner
+                .budget
+                .reserve(options.id.len() + ATTACH_FAILURE_BYTES)?;
             registry.reserve_one(&self.inner.budget, self.inner.config.max_count)?;
             let directory = self
                 .inner
@@ -232,23 +245,22 @@ impl WorkspaceHost {
             registry.entries.push(Entry {
                 id: options.id.as_str().into(),
                 incarnation: options.incarnation,
-                state: None,
-                _directory: directory.clone(),
+                state: EntryState::Attaching,
                 _name_charge: name_charge,
             });
             directory
         };
         let mut path = self.inner.config.root.join("workspace");
         path.push(&options.id);
-        let mut owned_directory = false;
-        let mut result = (|| {
+        let mut resources = AttachResources::default();
+        resources.directory = directory.clone();
+        let result = (|| {
             let _scratch = self.inner.budget.reserve(CALL_SCRATCH)?;
             self.inner
                 .remote
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .map_err(|_| WorkspaceError::Busy)?;
             let _remote = Remote(&self.inner.remote);
-            let deadline = Workspace::callback_deadline(deadline);
             let (base, expected_serial, branch_snapshot) = match &options.base {
                 Base::Root(root) => (*root, None, None),
                 Base::Branch(branch) => {
@@ -314,13 +326,17 @@ impl WorkspaceHost {
                 .try_reserve_exact(COOKIE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;
             nodes.push(Node::new(attr, content, metadata, &[], attr.serial));
+            let branch = branch_snapshot
+                .map(|snapshot| BranchContext::new(snapshot, &self.inner.budget).map(Arc::new))
+                .transpose()?;
             if let (Some(host), Some(directory)) = (&self.inner.payloads, &directory) {
+                clock(deadline)?;
                 host.initialize(directory)
                     .map_err(|error| bare_failure(BackingPhase::Acquire, error.kind()))?;
             }
-            create_owned_directory(&path)?;
-            owned_directory = true;
-            let arena = if options.access == WorkspaceAccess::LocalEdit {
+            resources.create_mount(&path, deadline)?;
+            clock(deadline)?;
+            resources.arena = if options.access == WorkspaceAccess::LocalEdit {
                 Some(
                     self.inner
                         .metadata
@@ -336,7 +352,7 @@ impl WorkspaceHost {
                 incarnation: options.incarnation,
                 store: options.store,
                 access: options.access,
-                arena,
+                arena: resources.arena.clone(),
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
@@ -344,12 +360,7 @@ impl WorkspaceHost {
                 _charge: charge,
                 state: Mutex::new(State {
                     base,
-                    branch: branch_snapshot
-                        .map(|snapshot| {
-                            super::state::BranchContext::new(snapshot, &self.inner.budget)
-                                .map(Arc::new)
-                        })
-                        .transpose()?,
+                    branch,
                     baseline: 1,
                     nodes,
                     overlay: None,
@@ -369,32 +380,30 @@ impl WorkspaceHost {
                     tables: Some(tables),
                 }),
             });
-            let mut registry = self.inner.registry.lock().map_err(|_| WorkspaceError::Io)?;
+            let mut registry = self.inner.registry.try_lock().map_err(lock_error)?;
+            clock(deadline)?;
             registry
                 .entries
                 .iter_mut()
-                .find(|entry| entry.id.as_ref() == options.id)
+                .find(|entry| {
+                    entry.id.as_ref() == options.id && entry.incarnation == options.incarnation
+                })
                 .ok_or(WorkspaceError::Io)?
-                .state = Some(inner.clone());
+                .state = EntryState::Attached(inner.clone());
             Ok(Workspace {
                 inner,
                 host: self.inner.clone(),
             })
         })();
-        if result.is_err() {
-            let mount_released = !owned_directory || fs::remove_dir(&path).is_ok();
-            let backing_released = directory
-                .as_ref()
-                .is_none_or(|directory| directory.close().is_ok());
-            if mount_released && backing_released {
-                if let Ok(mut registry) = self.inner.registry.lock() {
-                    registry
-                        .entries
-                        .retain(|entry| entry.id.as_ref() != options.id);
-                }
-            } else if let Err(WorkspaceError::Backing(failure)) = &mut result {
-                failure.cleanup_failed = true;
-            }
+        if let Err(cause) = &result {
+            self.fail_attach(
+                &options.id,
+                options.incarnation,
+                cause.clone(),
+                resources,
+                &path,
+                deadline,
+            );
         }
         result
     }
@@ -481,12 +490,12 @@ fn secure_directory(path: &Path, create: bool) -> Result<(), WorkspaceError> {
     }
     Ok(())
 }
-fn create_owned_directory(path: &Path) -> Result<(), WorkspaceError> {
+pub(super) fn create_owned_directory(path: &Path) -> std::io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
         builder.mode(0o700);
     }
-    builder.create(path).map_err(WorkspaceError::from)
+    builder.create(path)
 }

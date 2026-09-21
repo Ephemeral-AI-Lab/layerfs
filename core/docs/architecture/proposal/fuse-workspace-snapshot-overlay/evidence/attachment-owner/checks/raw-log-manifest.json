@@ -1,0 +1,102 @@
+{
+  "layout-history_failure.txt": {
+    "file": "layout-history_failure.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "955a7429bd34927f85731668fa312818f2988b6459da3f1ee90ad4fee5f107d1"
+  },
+  "entry-dwarf.txt": {
+    "file": "entry-dwarf.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "cff973bcef4e4a9616233c2bee0b8fdb2ebe582c4e0f9d921c0e02fdcaa71e36"
+  },
+  "host-focused-01.log": {
+    "file": "host-focused-01.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "f1897bde16f3b4f559c305225cd4097b096e6eb05367717d838645603f76104b"
+  },
+  "fmt.log": {
+    "file": "fmt.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "host-test.log": {
+    "file": "host-test.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "9db3d4ba322fd4cec5445033ee1883e757262af55413373d59d5148a3aefbfae"
+  },
+  "layout-stage_wire.txt": {
+    "file": "layout-stage_wire.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "0b93950e162e496f62b4ff4605e74126c98d500610184871bcfdc6585507ee79"
+  },
+  "host-clippy.log": {
+    "file": "host-clippy.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "30b3db7c584c3c875513fef8655a643e12e8a6d95ebcf49f94eb5a41663f329f"
+  },
+  "linux-clippy.log": {
+    "file": "linux-clippy.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "526d9eda32fed3b3cdc04595b53094e49d88bcb6c5651e549cfbe084bf3ab4be"
+  },
+  "linux-test.log": {
+    "file": "linux-test.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "97b3298e4c7d68c87fd1a9c9078b371d2c76c31c828f1b59571c45ced43041bd"
+  },
+  "boundary.log": {
+    "file": "boundary.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "6afdd25a7534beaed0256a5de7bf045d2f3c27e500eac1949fe72750f752929d"
+  },
+  "linux-test-build-02.log": {
+    "file": "linux-test-build-02.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "d4cd12b54b1c8bb22d8a1260663a9a781cb4cfe5d27739480c3fb77ae3205df6"
+  },
+  "layout-after_entry.txt": {
+    "file": "layout-after_entry.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "7cb54710d2c63849908dd3143ed226876b8acb78bfbeb172edb1d093ab780883"
+  },
+  "linux-clippy-02.log": {
+    "file": "linux-clippy-02.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "db5012fc64b3be0c09172c074d0f9ddfa643d5cfcaf9d0a83c7a0220e76a749d"
+  },
+  "layout-state.txt": {
+    "file": "layout-state.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "2d7c19a82fef2dab7629f7525291e02c1234e9e6e79450d3bf4c8f0850324c36"
+  },
+  "layout-before_entry.txt": {
+    "file": "layout-before_entry.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "b133d926c8bd08cfd8a151972332019a5432b8e67339f9d5c96660b3ebc4eb56"
+  },
+  "linux-build.log": {
+    "file": "linux-build.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "dd78468df2446dd1a25d63b2f18e8d7731c925e8bf43a2a7ba36cb48b93421e7"
+  },
+  "host-lib-clippy-01.log": {
+    "file": "host-lib-clippy-01.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "072c9b8729e39eb4fbcc30bad022d3998d787e222155b99b9dcba100b30f909a"
+  },
+  "layout-resources.txt": {
+    "file": "layout-resources.txt.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "16141df6c68709074b7b587887e0f75a1bd5a2458eff8482fa44c63d137220c1"
+  },
+  "host-build.log": {
+    "file": "host-build.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "f67363fe93302e2f7b0c3c1661fcfbad9e6b8fa62979aeb4b521535955d758f1"
+  },
+  "boundary-self-tests.log": {
+    "file": "boundary-self-tests.log.gz",
+    "encoding": "gzip",
+    "uncompressed_sha256": "a25b5619af971eae96a8c9d37ebc69133b4c28e990455e210be0507206df182c"
+  }
+}

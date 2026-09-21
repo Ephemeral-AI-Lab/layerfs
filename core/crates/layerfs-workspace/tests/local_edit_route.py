@@ -66,6 +66,18 @@ REQUIREMENTS = {
     'ledger_collider': ['B-15', 'B-20'],
 }
 
+TEST_SOURCE = Path(__file__).with_name('local_edit.rs')
+ENTRY_SOURCE = Path(__file__)
+TEST_PREFIX = 'local_range_edit_'
+TEST_MARKER = 'LOCAL_EDIT_CHECK'
+MODE = 'functional-local-range-edit'
+REQUIREMENT_SCOPE = 'local operation subset only; no full mounted/S/B row completion'
+NOT_RUN = ['mounted writes/coherence', 'snapshot G/live successor', 'Commit', 'npm', 'R6',
+           'full 64MiB Workspace readback (large_base declares edited and distant window checks)',
+           '128 dirty inode boundary: current fixture has fewer inodes and shared creation is bounded']
+OBSERVATION_MARKERS = ('LOCAL_EDIT_RESOURCE ', 'LOCAL_EDIT_NATIVE_FAILURE ', 'LOCAL_EDIT_CORRUPTION ',
+                       'LOCAL_EDIT_LARGE_BASE ', 'LOCAL_EDIT_NATIVE_SHAPE ')
+
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -111,11 +123,14 @@ def run(args, report, start):
         assert 'ready' in readiness, readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
         command(['docker', 'volume', 'create', volume]); made_volume = True
-        command(['docker', 'run', '-d', '--privileged', '--name', name,
+        command(['docker', 'run', '-d', '--cpus=2', '--privileged', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',
                  '--mount', f'type=bind,src={ROOT},dst=/work,readonly',
                  '--mount', f'type=volume,src={volume},dst=/local-edit',
                  args.image, 'sleep', 'infinity']); created = True
+        report['runtime_nano_cpus'] = int(command(
+            ['docker', 'inspect', '--format', '{{.HostConfig.NanoCpus}}', name]).stdout.strip())
+        assert report['runtime_nano_cpus'] == 2_000_000_000, report['runtime_nano_cpus']
         command(['docker', 'exec', name, 'chmod', '700', '/local-edit'])
         report['kernel'] = command(['docker', 'exec', name, 'uname', '-srmo']).stdout.strip()
         report['filesystem'] = command(['docker', 'exec', name, 'findmnt', '-n', '-o', 'FSTYPE', '-T', '/local-edit']).stdout.strip()
@@ -125,12 +140,12 @@ def run(args, report, start):
                       '-e', f'LAYERFS_EDIT_BRANCH={fixture["branch"]}',
                       '-e', 'LAYERFS_EDIT_TEST_ROOT=/local-edit', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', name,
                       '/work/' + str(args.test_binary.relative_to(ROOT)), '--ignored', '--nocapture',
-                      '--test-threads=1', f'linux::local_range_edit_{args.case}', '--exact']
+                      '--test-threads=1', f'linux::{TEST_PREFIX}{args.case}', '--exact']
         if args.case in ('metadata_failure', 'ledger_write_failure'):
             binary_at = invocation.index(name) + 1
             invocation[binary_at:binary_at] = ['sh', '-c', 'trap "" XFSZ; exec "$@"', 'sh']
         # Credentials are intentionally absent from the recorded invocation.
-        report['test_selection'] = f'linux::local_range_edit_{args.case}'
+        report['test_selection'] = f'linux::{TEST_PREFIX}{args.case}'
         child_env = os.environ.copy()
         child_env.update(LAYERFS_PRIVATE_KEY=client_key, LAYERFS_SERVER_KEY=server_public)
         work = isolation.concurrent_work()
@@ -140,10 +155,10 @@ def run(args, report, start):
         result = subprocess.run(invocation, env=child_env, text=True, capture_output=True, timeout=remaining())
         (args.output / 'test.stdout').write_text(result.stdout); (args.output / 'test.stderr').write_text(result.stderr)
         for row in report['checks']:
-            if f'LOCAL_EDIT_CHECK {row["id"]} PASS' in result.stdout:
+            if f'{TEST_MARKER} {row["id"]} PASS' in result.stdout:
                 row['status'] = 'PASS'
         report['test_exit'] = result.returncode
-        report['observations'] = [line for line in result.stdout.splitlines() if line.startswith(('LOCAL_EDIT_RESOURCE ', 'LOCAL_EDIT_NATIVE_FAILURE ', 'LOCAL_EDIT_CORRUPTION ', 'LOCAL_EDIT_LARGE_BASE ', 'LOCAL_EDIT_NATIVE_SHAPE '))]
+        report['observations'] = [line for line in result.stdout.splitlines() if line.startswith(OBSERVATION_MARKERS)]
         assert result.returncode == 0 and all(row['status'] == 'PASS' for row in report['checks']), result.stderr[-3000:]
         command(['docker', 'rm', '-f', name]); created = False
         command(['docker', 'volume', 'rm', volume]); made_volume = False
@@ -171,25 +186,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--fixture', type=Path, required=True)
     parser.add_argument('--test-binary', type=Path, required=True)
+    parser.add_argument('--binaries', type=Path, default=route.BIN)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', choices=CASES, required=True)
     parser.add_argument('--image', default='rust:1.85.1-bookworm')
     args = parser.parse_args()
     args.fixture = args.fixture.resolve(); args.test_binary = args.test_binary.resolve(); args.output = args.output.resolve()
+    route.BIN = args.binaries.resolve()
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {'status': 'FAIL', 'mode': 'functional-local-range-edit', 'case': args.case,
+    report = {'status': 'FAIL', 'mode': MODE, 'case': args.case,
               'checks': [{'id': key, 'status': 'NOT_RUN'} for key in CASES[args.case]],
-              'hard_budget_seconds': 60, 'performance_claim': False, 'cache_claim': None,
+              'hard_budget_seconds': 60, 'docker_cpus': 2, 'performance_claim': False, 'cache_claim': None,
               'packet_requirement_ids': REQUIREMENTS[args.case],
-              'requirement_scope': 'local operation subset only; no full mounted/S/B row completion',
-              'not_run': ['mounted writes/coherence', 'snapshot G/live successor', 'Commit', 'npm', 'R6',
-                          'full 64MiB Workspace readback (large_base declares edited and distant window checks)',
-                          '128 dirty inode boundary: current fixture has fewer inodes and shared creation is bounded']}
+              'requirement_scope': REQUIREMENT_SCOPE, 'not_run': NOT_RUN}
     started = time.monotonic()
     try:
         report.update(source=payload.command(['git', 'rev-parse', 'HEAD'], cwd=ROOT).stdout.strip(),
                       product_inputs_sha256=payload.product_inputs(), driver_sha256=sha(Path(__file__)),
-                      test_source_sha256=sha(Path(__file__).with_name('local_edit.rs')),
+                      test_source_sha256=sha(TEST_SOURCE), entrypoint_sha256=sha(ENTRY_SOURCE),
+                      helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
                       test_binary_sha256=sha(args.test_binary), service_binary_sha256=sha(route.BIN / 'layerfs-service'),
                       image=payload.command(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).stdout.strip())
         space = isolation.namespace()

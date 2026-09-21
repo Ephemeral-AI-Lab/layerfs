@@ -1,0 +1,168 @@
+{
+  "status": "PREPARED_AND_OFFLINE_STARTUP_VERIFIED",
+  "captured_utc": "2026-09-21T18:39:53.679076+00:00",
+  "workload": "Upload preinstalled complete @deepseek-ai/dsh application through actual mounted Workspace, then launch dsh web; simulate filesystem installation writes without npm network during workload",
+  "package": {
+    "name": "@deepseek-ai/dsh",
+    "version": "0.1.5-rc.2"
+  },
+  "runtime": {
+    "node": "24.21.0",
+    "npm": "11.19.0",
+    "os": "linux",
+    "arch": "arm64",
+    "libc": "glibc2.36",
+    "node_abi": 137,
+    "napi": 10,
+    "image_repository_digest": "node@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4",
+    "platform_manifest_digest": "sha256:91882e0e5959240d4413fc42c180022bbdd09c5491e00e75faa6c100d8d7751b"
+  },
+  "prepare": {
+    "started_utc": "2026-09-21T18:31:18.799099+00:00",
+    "finished_utc": "2026-09-21T18:33:55.052478+00:00",
+    "preparation_wall_seconds": 156.25223033397924,
+    "exit_code": 0,
+    "performance_claim": false
+  },
+  "fixture": {
+    "regular_files": 25433,
+    "regular_file_bytes": 223614913,
+    "directories_excluding_root": 3299,
+    "symlinks": 10,
+    "largest_file": {
+      "path": "node_modules/@img/sharp-libvips-linux-arm64/lib/libvips-cpp.so.8.18.6",
+      "mode": "0o644",
+      "mtime_ns": 1790015626607419495,
+      "type": "file",
+      "size": 18259144,
+      "sha256": "264d3092d69de80f5acdb71c930efec8db5bd9627f41659ed3416566b9ae34b4",
+      "elf": true
+    },
+    "largest_directory": {
+      "path": "node_modules/@earendil-works/pi-ai/dist/providers",
+      "mode": "0o755",
+      "mtime_ns": 1790015632585417811,
+      "type": "directory",
+      "entries": 342
+    },
+    "package_json_sha256": "7050b9c4d65067df83c4382d42ba5dd8eb27354ebafde40f040eda70c2189492",
+    "package_lock_sha256": "20f956d5695bd5227faf533c90be6af52219da6034304af30a93241f9831c9f8",
+    "file_manifest_sha256": "a6a447a5ef5fe01d8d28e3e1a382ae293c54f503adf60d22f1c950e19b5368cb"
+  },
+  "archive": {
+    "path": "prepared-app.tar",
+    "sha256": "694eb0421c021a162c6a87f0d19208f477c0b4c064f89c787c6f0058c3d4d0b7",
+    "bytes": 274698240,
+    "verified_entries": 28742,
+    "status": "PASS",
+    "matches_file_manifest": true,
+    "scope": "prepared input only; not workload/performance/cold-cache qualification"
+  },
+  "platform_packages": [
+    {
+      "name": "@vscode/ripgrep-linux-arm64",
+      "version": "1.18.0",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-linux-arm64-gnu",
+      "version": "0.1.6",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "libc": [
+        "glibc"
+      ]
+    },
+    {
+      "name": "node-pty",
+      "version": "1.2.0-beta.15"
+    },
+    {
+      "name": "@img/sharp-libvips-linux-arm64",
+      "version": "1.3.3",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "libc": [
+        "glibc"
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-arm64",
+      "version": "0.35.4",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ],
+      "libc": [
+        "glibc"
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-arm64",
+      "version": "3.3.1",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system-linux-arm64",
+      "version": "0.1.2",
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "arm64"
+      ]
+    }
+  ],
+  "verification": {
+    "local_cli_help": "PASS; npx --offline --no-install @deepseek-ai/dsh --help",
+    "offline_web": "PASS; Docker --network none; launch URL303 cookie exchange then authenticated HTTP200,27724 HTML bytes, __DSH_BOOT__ present, SIGTERM exit0",
+    "pristine_master": "PASS; read-only app bind and fresh external DSH_HOME; full file set/SHA256/modes/mtime/link-target pre/post comparison",
+    "credentials": "No provider/API credentials supplied; inference and external services NOT_RUN"
+  },
+  "retained_failures": [
+    {
+      "receipt": "runtime-check.json",
+      "reason": "bare platform manifest ID not runnable on this Docker image store; immutable repository digest succeeds in runtime-check-02.json"
+    },
+    {
+      "receipt": "offline-command.json",
+      "reason": "External Node-fetch verifier omitted browser cookie on303 redirect, giving401; explicit cookie exchange passes in offline-command-02.json; package unchanged"
+    }
+  ],
+  "runtime_state": "offline-home*, offline-web*.html/stdout and URL authentication tokens are private local verification state, excluded from app and prepared-app.tar. Do not commit/publish these logs or runtime state.",
+  "required_workload_semantics": [
+    "Actual mounted mkdir/create/write for all prepared file bytes; no prepared namespace injection",
+    "Preserve relative symlink targets and regular-file executable/mode bits; .bin/dsh -> ../@deepseek-ai/dsh/lib/bin.js",
+    "Linux symlink access modes are not meaningful; source shared-filesystem symlinks record0755, target canonical Linux symlinks may expose0777; compare type/target and retain this declaration",
+    "Keep every installed package/asset, including bundled unused-platform binaries; no hand-pruning",
+    "Fresh app runtime state via DSH_HOME; cwd is default DSH workspace root; no existing personal .dsh/.env/credentials",
+    "dsh web --no-open --host127.0.0.1 --port0; target local HTTP token/cookie exchange must mirror a browser",
+    "Node and all native libraries execute for Linux arm64/glibc; native .node/.so loading must succeed from actual mounted source",
+    "One explicit Commit must cover the full upload; do not hide smaller Commits beneath the workload",
+    "Archive/source fixture was read and hashed during preparation; no cold-cache or performance claim; any measured source read needs separately declared/enforced cache contract"
+  ],
+  "proposed_upload_command": "mkdir /actual/workspace/mount/app && tar --no-same-owner -xpf /inputs/prepared-app.tar -C /actual/workspace/mount/app",
+  "proposed_offline_launch": "cd /actual/workspace/mount/app && DSH_HOME=/actual/workspace/mount/dsh-state DSH_TELEMETRY_DISABLED=1 ./node_modules/.bin/dsh web --no-open --host 127.0.0.1 --port 0",
+  "scope": "Input preparation and functional compatibility only; actual mounted upload, LayerFS Commit, repeated Commit, and R6 NOT_RUN by this worker; no release/resource/performance qualification.",
+  "warnings": "npm11.19 warned npm_config_jobs is unknown and that five executed lifecycle scripts lack allowScripts entries; logs show scripts ran. MAKEFLAGS=-j2, CMAKE_BUILD_PARALLEL_LEVEL=2 and Docker --cpus2 bounded setup. No package code patched and no scripts or optional dependencies manually omitted."
+}

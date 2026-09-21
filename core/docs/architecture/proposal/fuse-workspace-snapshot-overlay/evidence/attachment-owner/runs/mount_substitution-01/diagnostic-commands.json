@@ -1,0 +1,34 @@
+[
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "--format",
+      "{{.Id}} {{.HostConfig.NanoCpus}} {{.Image}} {{range .Mounts}}{{.Name}} {{end}}",
+      "layerfs-edit-2955ea8aeecf4164"
+    ],
+    "exit_code": 1
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-edit-2955ea8aeecf4164",
+      "ps",
+      "-eLo",
+      "pid,tid,ppid,stat,wchan:28,comm"
+    ],
+    "exit_code": 0
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-edit-2955ea8aeecf4164",
+      "sh",
+      "-c",
+      "for p in /proc/[0-9]*/task/[0-9]*; do if [ \"$(cat \"$p/comm\" 2>/dev/null)\" = attachment-test ]; then echo \"$p\"; cat \"$p/syscall\" \"$p/stack\"; fi; done"
+    ],
+    "exit_code": 0
+  }
+]
