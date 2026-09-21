@@ -110,6 +110,7 @@ impl MutationOwner {
             delta: DeltaCounters::default(),
             pool_index,
             pool_reader: crate::encoding::pool::PoolReader::new(),
+            wave_rows: Vec::new(),
             pending_values: BTreeMap::new(),
             next_ordinal: None,
             pool_synced: false,

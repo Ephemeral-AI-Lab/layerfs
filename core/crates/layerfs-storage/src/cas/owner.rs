@@ -144,6 +144,22 @@ pub struct DiagProfile {
     /// The object-row `INSERT` of one seal, separate from the pack write that
     /// shares its bucket.
     pub insert_objects_ns: u64,
+    /// Closing the save's connection.
+    pub release_connection_ns: u64,
+    /// Releasing the compression workspace's zstd context.
+    pub release_compression_ns: u64,
+    /// Releasing the decompression workspace's zstd context.
+    pub release_decompression_ns: u64,
+    /// Releasing the pooled reader's pack and value caches.
+    pub release_pool_reader_ns: u64,
+    /// Releasing the delta reader's pack cache.
+    pub release_pack_cache_ns: u64,
+    /// Releasing this save's private clone of the content-signature index.
+    pub release_candidates_ns: u64,
+    /// Releasing this save's private clone of the pooled value index.
+    pub release_pool_index_ns: u64,
+    /// Releasing the retained open pack tails of every lane.
+    pub release_tails_ns: u64,
 }
 
 impl DiagProfile {
@@ -173,6 +189,14 @@ impl DiagProfile {
             finish_drop_ns,
             finish_call_ns,
             insert_objects_ns,
+            release_connection_ns,
+            release_compression_ns,
+            release_decompression_ns,
+            release_pool_reader_ns,
+            release_pack_cache_ns,
+            release_candidates_ns,
+            release_pool_index_ns,
+            release_tails_ns,
         );
     }
 }
@@ -460,6 +484,14 @@ pub struct MutationOwner {
     pub(super) pool_index: std::sync::Arc<std::sync::Mutex<crate::encoding::pool::PoolIndex>>,
     /// Bounded pooled-value reader used while synchronizing the index.
     pub(super) pool_reader: crate::encoding::pool::PoolReader,
+    /// Object rows this wave has written and not yet validated.
+    ///
+    /// A wave's seals all share one transaction, so the collision check they each
+    /// ran can run once for the whole wave instead: the rows it compares against
+    /// belong to *other* saves and cannot change while this transaction holds the
+    /// Store's write lock. Cleared at the start of every wave and drained by the
+    /// one validation the wave performs.
+    pub(super) wave_rows: Vec<crate::sqlite::write::ObjectRow>,
     /// Ordinals this save assigned that the retained window does not answer yet.
     ///
     /// Bounded and reset per leaf; see `PENDING_VALUES_LIMIT`.

@@ -1082,6 +1082,14 @@ fn namespace_scale(
         ("pipeline.diag_finish_drop_ns", outcome.profile.diag.finish_drop_ns),
         ("pipeline.diag_finish_call_ns", outcome.profile.diag.finish_call_ns),
         ("pipeline.diag_insert_objects_ns", outcome.profile.diag.insert_objects_ns),
+        ("pipeline.diag_release_connection_ns", outcome.profile.diag.release_connection_ns),
+        ("pipeline.diag_release_compression_ns", outcome.profile.diag.release_compression_ns),
+        ("pipeline.diag_release_decompression_ns", outcome.profile.diag.release_decompression_ns),
+        ("pipeline.diag_release_pool_reader_ns", outcome.profile.diag.release_pool_reader_ns),
+        ("pipeline.diag_release_pack_cache_ns", outcome.profile.diag.release_pack_cache_ns),
+        ("pipeline.diag_release_candidates_ns", outcome.profile.diag.release_candidates_ns),
+        ("pipeline.diag_release_pool_index_ns", outcome.profile.diag.release_pool_index_ns),
+        ("pipeline.diag_release_tails_ns", outcome.profile.diag.release_tails_ns),
     ] {
         context.trace.write_number(
             Kind::Counter,

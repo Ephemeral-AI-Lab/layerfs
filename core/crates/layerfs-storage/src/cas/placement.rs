@@ -183,9 +183,19 @@ impl MutationOwner {
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         SaveProfile::charge(&mut self.profile.diag.insert_objects_ns, started);
         let statements = statements?;
-        let started = Instant::now();
-        self.validate_candidates(&rows)?;
-        SaveProfile::charge(&mut self.profile.diag.validate_ns, started);
+        if self.wave_held {
+            // The wave validates every row it writes in one call at its end. The
+            // rows this check compares against belong to *other* saves and cannot
+            // change while this transaction holds the Store's write lock, so
+            // deferring to the end of the wave is the same check with one query
+            // set instead of one per seal - and a collision now rolls the whole
+            // wave back instead of leaving earlier seals committed.
+            self.wave_rows.extend_from_slice(&rows);
+        } else {
+            let started = Instant::now();
+            self.validate_candidates(&rows)?;
+            SaveProfile::charge(&mut self.profile.diag.validate_ns, started);
+        }
         self.counters.statements = self.counters.statements.saturating_add(statements);
         let started = Instant::now();
         for member in &pending.members {

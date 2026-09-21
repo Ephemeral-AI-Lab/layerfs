@@ -569,8 +569,48 @@ impl SaveOperation {
             Ok(mut outcome) => {
                 self.finished = true;
                 let drop_started = std::time::Instant::now();
-                self.owner = None;
+                // **DIAGNOSTIC.** The owner is taken apart field by field and each
+                // field is dropped in its own charged step, so the residual the
+                // named groups cannot explain is what the `..` holds. Dropping the
+                // fields in a different order from the struct's declaration cannot
+                // change what the allocator is asked to free: every field is moved
+                // out and dropped exactly once, and the owner was about to be
+                // destroyed anyway.
+                let mut release = crate::cas::owner::DiagProfile::default();
+                if let Some(owner) = self.owner.take() {
+                    let crate::cas::owner::MutationOwner {
+                        connection,
+                        compression,
+                        decompression,
+                        pool_reader,
+                        pack_cache,
+                        candidates,
+                        pool_index,
+                        groups,
+                        placement,
+                        ..
+                    } = owner;
+                    macro_rules! charged {
+                        ($slot:ident, $value:expr) => {{
+                            let started = std::time::Instant::now();
+                            drop($value);
+                            crate::cas::owner::SaveProfile::charge(&mut release.$slot, started);
+                        }};
+                    }
+                    charged!(release_connection_ns, connection);
+                    charged!(release_compression_ns, compression);
+                    charged!(release_decompression_ns, decompression);
+                    charged!(release_pool_reader_ns, pool_reader);
+                    charged!(release_pack_cache_ns, pack_cache);
+                    charged!(release_candidates_ns, candidates);
+                    charged!(release_pool_index_ns, pool_index);
+                    charged!(release_tails_ns, groups);
+                    charged!(release_tails_ns, placement);
+                    // Every other field drops here, at the end of this block: the
+                    // residual is `finish_drop_ns` minus the named steps.
+                }
                 let drop_ns = drop_started.elapsed().as_nanos() as u64;
+                outcome.profile.diag.accumulate(&release);
                 outcome.profile.diag.finish_drain_ns = drain_ns;
                 outcome.profile.diag.finish_drop_ns = drop_ns;
                 outcome.profile.diag.finish_call_ns = call_started.elapsed().as_nanos() as u64;

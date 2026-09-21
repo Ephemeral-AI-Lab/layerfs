@@ -33,6 +33,9 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
 
 /// One preparation wave, run under the transaction its caller opened.
 fn flush_wave(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> StorageResult<()> {
+    // Rows a wave records are validated by the wave, once. A stale list from a
+    // wave that failed before its validation must not leak into this one.
+    owner.wave_rows.clear();
     // The membership snapshot below is taken once, before any of this wave's own
     // writes, so a group sealed during the wave publishes rows the snapshot cannot
     // know about. Identities sealed earlier in this wave are therefore consulted
@@ -128,6 +131,12 @@ fn flush_wave(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> Stora
             }
         }
     }
+    // One collision check for every row this wave wrote, inside the transaction
+    // that wrote them.
+    let rows = std::mem::take(&mut owner.wave_rows);
+    let started = std::time::Instant::now();
+    owner.validate_candidates(&rows)?;
+    crate::cas::owner::SaveProfile::charge(&mut owner.profile.diag.validate_ns, started);
     owner.flush_candidates()?;
     crate::cas::owner::SaveProfile::charge(&mut owner.profile.diag.flush_batch_ns, whole);
     Ok(())
