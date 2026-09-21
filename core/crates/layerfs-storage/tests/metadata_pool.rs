@@ -82,13 +82,7 @@ fn compressed_leaf_groups(path: &std::path::Path, ids: &[ObjectId]) -> (u64, u64
             groups.insert((pack_id, group_number)),
             "distinct save groups"
         );
-        let pack: Vec<u8> = connection
-            .query_row(
-                "SELECT data FROM object_packs WHERE pack_id = ?1",
-                [pack_id],
-                |row| row.get(0),
-            )
-            .expect("pack");
+        let pack = support::read_pack_row(&connection, pack_id);
         let header = parse_header(&pack).expect("header");
         assert_eq!(header.lane, PackLane::Ordinary);
         let view = group_view(
@@ -337,13 +331,7 @@ fn pooled_physical_groups_evict_at_the_existing_decoded_byte_bound() {
                 |row| row.get(0),
             )
             .expect("locator");
-        let bytes: Vec<u8> = connection
-            .query_row(
-                "SELECT data FROM object_packs WHERE pack_id = ?1",
-                [pack_id],
-                |row| row.get(0),
-            )
-            .expect("pack");
+        let bytes = support::read_pack_row(&connection, pack_id);
         let header = parse_header(&bytes).expect("header");
         assert_eq!(header.lane, PackLane::Ordinary);
         assert_eq!(header.group_count, 1, "each save has one leaf group");
@@ -368,12 +356,7 @@ fn pooled_physical_groups_evict_at_the_existing_decoded_byte_bound() {
         assert_eq!(view.codec, GroupCodec::Zstandard);
         assert!((60_000..=65_536).contains(&view.decoded_length));
         total_decoded += view.decoded_length;
-        connection
-            .execute(
-                "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-                rusqlite::params![pack_id, padded],
-            )
-            .expect("replace physical framing");
+        support::write_pack_row(&connection, pack_id, &padded);
     }
     assert!(total_decoded > layerfs_storage::policy::DECODED_GROUP_CACHE_BYTES);
     drop(connection);
@@ -796,13 +779,7 @@ fn a_compressible_group_is_stored_as_a_zstandard_frame() {
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .expect("catalogue row");
-    let pack: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            [pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack row");
+    let pack = support::read_pack_row(&connection, pack_id);
     drop(connection);
     let header = layerfs_storage::pack::parse_header(&pack).expect("pack header");
     let view = layerfs_storage::pack::group_view(&pack, header, group_number as usize)
@@ -864,25 +841,10 @@ fn a_damaged_pooled_delta_leaf_is_refused() {
             |row| row.get(0),
         )
         .expect("object row");
-    let pack: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            [pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack row");
-    let mut damaged = pack.clone();
+    let mut damaged = support::read_pack_row(&connection, pack_id);
     let last = damaged.len() - 1;
     damaged[last] ^= 0xff;
-    assert_eq!(
-        connection
-            .execute(
-                "UPDATE object_packs SET data = ?1 WHERE pack_id = ?2",
-                rusqlite::params![damaged, pack_id],
-            )
-            .expect("pack update"),
-        1
-    );
+    support::write_pack_row(&connection, pack_id, &damaged);
     drop(connection);
     let reopened = open_store(&path);
     let error = read_objects(&reopened, &[dependent_id]).expect_err("a damaged record is refused");
@@ -1239,13 +1201,7 @@ fn a_pooled_reader_releases_pack_bodies_when_the_store_writes() {
         .expect("the warming group is served");
 
     // Damage the extents of the two groups the reader has not read yet.
-    let mut bytes: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            [warmer.pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack body");
+    let mut bytes = support::read_pack_row(&connection, warmer.pack_id);
     let header = layerfs_storage::pack::parse_header(&bytes).expect("pack header");
     for row in [&stale, &released] {
         let view = layerfs_storage::pack::group_view(&bytes, header, row.group_number)

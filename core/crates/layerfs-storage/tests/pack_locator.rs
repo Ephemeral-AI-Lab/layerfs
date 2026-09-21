@@ -210,21 +210,15 @@ fn a_corrupt_pack_body_is_rejected_on_read() {
     drop(store);
 
     let connection = rusqlite::Connection::open(&path).unwrap();
-    let (pack_id, mut data): (i64, Vec<u8>) = connection
-        .query_row(
-            "SELECT pack_id, data FROM object_packs LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
+    let pack_id: i64 = connection
+        .query_row("SELECT MIN(pack_id) FROM object_packs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
+    let mut data = support::read_pack_row(&connection, pack_id);
     let last = data.len() - 1;
     data[last] ^= 0xff;
-    connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![pack_id, data],
-        )
-        .unwrap();
+    support::write_pack_row(&connection, pack_id, &data);
     drop(connection);
 
     let reopened = open_store(&path);
@@ -276,20 +270,21 @@ fn a_whole_file_record_is_stored_in_its_own_compact_pack() {
     drop(store);
 
     let connection = rusqlite::Connection::open(&path).unwrap();
-    let (version, length): (Vec<u8>, i64) = connection
-        .query_row(
-            "SELECT data, length(data) FROM object_packs LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
+    let pack_id: i64 = connection
+        .query_row("SELECT MIN(pack_id) FROM object_packs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
+    let version = support::read_pack_row(&connection, pack_id);
     assert_eq!(&version[..8], b"LFPACK\0\0");
     assert_eq!(
         u32::from_le_bytes(version[8..12].try_into().unwrap()),
-        4,
+        layerfs_storage::pack::VERSION_WHOLE_FILE,
         "whole-file records use the compact framing"
     );
-    assert!(length < 256 * 1024);
+    // The declared length, not the row's capacity: the row is allocated at the
+    // lane's pack limit and the pack declares how much of it is a pack.
+    assert!(version.len() < 256 * 1024);
     drop(connection);
 
     let reopened = open_store(&path);
@@ -379,34 +374,36 @@ fn the_placement_fit_probe_agrees_with_the_canonical_assembled_length() {
 
 /// A pack never assembles past its lane's limit.
 ///
-/// The open pack's running total is the canonical assembled length: the header,
-/// one directory entry per group and every body. A total that starts at zero
-/// instead of at the header is short by `HEADER_LEN`, so the fit probe admits a
-/// group that takes the assembled pack up to `HEADER_LEN` bytes past
-/// `lane.pack_limit()` -- and assembly then refuses its own placement with
+/// The open pack's running total is the canonical assembled length: the control
+/// area, the lane's **whole reserved directory region** - allocated whether or
+/// not the pack fills it - and every body. A total that counts one directory
+/// entry per group instead of the reserved region, or that starts at zero instead
+/// of at the control area, admits a group that takes the assembled pack past
+/// `lane.pack_limit()`, and the write path then refuses its own placement with
 /// `CapacityExceeded { pack.assembled_length }`. A limit no write path can reach
 /// and no read path can return is the failure mode this pins.
 #[test]
 fn a_pack_never_assembles_past_its_lane_limit() {
     use layerfs_storage::pack::{
-        frame_group, EncodedGroup, GroupCodec, LanePlacement, PackLane, DIRECTORY_ENTRY_LEN,
-        FULL_TAG, HEADER_LEN,
+        body_area_offset, frame_group, EncodedGroup, GroupCodec, LanePlacement, PackLane, FULL_TAG,
     };
 
     let lane = PackLane::Ordinary;
-    let directory = DIRECTORY_ENTRY_LEN;
-    // Four groups must land the assembled pack exactly `HEADER_LEN` past the lane
-    // limit, which is the widest a missing header can overrun it by:
-    // `HEADER_LEN + 4 * (directory + body) == pack_limit + HEADER_LEN`.
-    let body_len = lane.pack_limit() / 4 - directory;
+    let region = body_area_offset(lane);
+    // Three bodies fill the pack up to one byte short and the fourth cannot join
+    // them: `region + 3 * body <= pack_limit < region + 4 * body`.
+    let body_len = (lane.pack_limit() - region) / 4 + 1;
     assert!(
         body_len <= lane.body_limit(),
         "the probe group body must be one the lane accepts"
     );
-    assert_eq!(
-        HEADER_LEN + 4 * (directory + body_len),
-        lane.pack_limit() + HEADER_LEN,
-        "the probe lands exactly at the widest a missing header can overrun the lane"
+    assert!(
+        region + 3 * body_len <= lane.pack_limit(),
+        "three bodies fit"
+    );
+    assert!(
+        region + 4 * body_len > lane.pack_limit(),
+        "the fourth body cannot fit"
     );
     // One record, framed: the group body is a 4-byte count and one 4-byte end
     // offset around the record, so the record is `body_len - 8` bytes -- one tag
@@ -441,10 +438,20 @@ fn a_pack_never_assembles_past_its_lane_limit() {
     assert!(!writes.is_empty());
     for write in &writes {
         assert!(
-            write.bytes.len() <= lane.pack_limit(),
+            write.used <= lane.pack_limit(),
             "an assembled pack of {} bytes exceeds the {} limit",
-            write.bytes.len(),
+            write.used,
             lane.pack_limit()
+        );
+        assert_eq!(
+            write.body_offset + write.bodies.len(),
+            write.used,
+            "the declared length is the body end"
+        );
+        assert_eq!(
+            write.capacity,
+            lane.pack_limit(),
+            "an appendable pack allocates its lane's whole limit"
         );
     }
     // The boundary is a real one: the groups fill the lane's pack limit, so the

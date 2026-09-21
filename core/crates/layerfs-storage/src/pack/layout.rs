@@ -1,11 +1,33 @@
 //! Pack grammars, framing lanes and exact fit arithmetic.
 //!
-//! A pack is a header, a directory and group bodies. Five framings are
-//! implemented: v1 ordinary groups, v2 native chunk records, v4 compact
-//! whole-file records, v6 pooled metadata groups and v7 singleton packs. A lane
-//! is a framing, not a worker or a second store, and existing locators stay
-//! stable when a pack's directory grows. Versions 3 and 5 belong to other
-//! profiles and are rejected explicitly; no reader trial-decodes them.
+//! A pack is a control area, a **reserved directory region** and group bodies.
+//! Five framings are implemented: v9 ordinary groups, v10 native chunk records,
+//! v11 compact whole-file records, v12 pooled metadata groups and v13 singleton
+//! packs. A lane is a framing, not a worker or a second store, and existing
+//! locators stay stable when a pack's directory grows.
+//!
+//! **The directory region is reserved at the lane's own width**, so a body never
+//! moves when a group is appended and an append can write only the bytes it adds.
+//! The region is `directory_entry_len(lane) * group_count_limit(lane)` bytes
+//! immediately after the control area; the entries actually in use are the first
+//! `group_count` of them and the remainder stays zero. Before v9 the directory
+//! grew into the pack's front, so every append shifted every body behind it and
+//! rewrote the whole BLOB: measured at 7.59x write amplification over 1,250 packs
+//! in `#219` (2,292,865,337 bytes handed to the pager for 302,023,232 persisted).
+//!
+//! The control area carries the pack's own assembled length (`USED_OFFSET`), so a
+//! pack row may be allocated with spare capacity and still declare exactly how
+//! many of its bytes are a pack. That is what lets the write path use incremental
+//! BLOB I/O: a small column elsewhere on the row would be cheaper to update, but
+//! any `UPDATE` of a row holding a 256 KiB BLOB rewrites the whole BLOB, which is
+//! the cost this format exists to remove.
+//!
+//! Versions 1, 2, 4, 6 and 7 are the **pre-v9 framings**: a directory that grows
+//! at the front and no declared length. They belong to the schema-8 Store, which
+//! is refused at open, and the reader refuses them here as well rather than
+//! guessing a layout: `parse_header` maps a version to a lane and refuses every
+//! version it does not implement, exactly as it refuses 3 and 5, which belong to
+//! other profiles. No reader trial-decodes.
 
 use layerfs_content::ObjectRole;
 
@@ -18,7 +40,15 @@ use crate::policy::{
 /// Pack magic shared by every implemented framing.
 pub const PACK_MAGIC: [u8; 8] = *b"LFPACK\0\0";
 /// Control-area width in bytes.
-pub const HEADER_LEN: usize = 16;
+///
+/// `[magic 8][version 4][group count 4][assembled length 4][reserved 4]`. The
+/// reserved word is written zero and validated zero, so a framing that later
+/// needs a fifth field can take it without moving the directory.
+pub const HEADER_LEN: usize = 24;
+/// Offset of the group count inside the control area.
+pub const GROUP_COUNT_OFFSET: usize = 12;
+/// Offset of the pack's assembled length inside the control area.
+pub const USED_OFFSET: usize = 16;
 /// Directory entry width of the ordinary and native framings.
 pub const DIRECTORY_ENTRY_LEN: usize = 16;
 /// Directory entry width of the compact whole-file framing.
@@ -27,15 +57,15 @@ pub const WHOLE_FILE_ENTRY_LEN: usize = 4;
 pub const WHOLE_FILE_COMPACT_DROP: usize = 8;
 
 /// Ordinary framing version: canonical objects in multi-record groups.
-pub const VERSION_ORDINARY: u32 = 1;
+pub const VERSION_ORDINARY: u32 = 9;
 /// Native framing version: one chunk record per group entry.
-pub const VERSION_NATIVE: u32 = 2;
+pub const VERSION_NATIVE: u32 = 10;
 /// Compact whole-file framing version.
-pub const VERSION_WHOLE_FILE: u32 = 4;
+pub const VERSION_WHOLE_FILE: u32 = 11;
 /// Pooled physical-metadata framing version.
-pub const VERSION_POOLED_METADATA: u32 = 6;
+pub const VERSION_POOLED_METADATA: u32 = 12;
 /// Singleton framing version: one oversized record in one pack.
-pub const VERSION_SINGLETON: u32 = 7;
+pub const VERSION_SINGLETON: u32 = 13;
 
 /// One physical framing lane.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -179,6 +209,36 @@ impl EncodedGroup {
     }
 }
 
+/// Bytes `lane` reserves for its group directory.
+///
+/// The region is fixed at the lane's own width and group bound, so a body's
+/// offset never depends on how many groups precede it. An append writes one entry
+/// into this region and its body after it; nothing else moves.
+pub const fn directory_capacity(lane: PackLane) -> usize {
+    directory_entry_len(lane) * lane.group_count_limit()
+}
+
+/// Offset of the first group body inside a pack of `lane`.
+pub const fn body_area_offset(lane: PackLane) -> usize {
+    HEADER_LEN + directory_capacity(lane)
+}
+
+/// Bytes a pack row allocates for a pack of `lane` that assembles to `used`.
+///
+/// Every lane but Singleton allocates its full pack limit, because the pack is
+/// expected to be appended to and a BLOB's size cannot be changed in place:
+/// growing it would be an `UPDATE`, which rewrites the whole row. A Singleton
+/// pack holds one record for its whole life (`append_fits` refuses a second
+/// group), so it allocates exactly what it uses and wastes nothing.
+pub const fn pack_capacity(lane: PackLane, used: usize) -> usize {
+    match lane {
+        PackLane::Singleton => used,
+        PackLane::Ordinary | PackLane::Native | PackLane::WholeFile | PackLane::PooledMetadata => {
+            lane.pack_limit()
+        }
+    }
+}
+
 /// Bytes one group's directory entry costs in `lane`.
 pub const fn directory_entry_len(lane: PackLane) -> usize {
     match lane {
@@ -210,10 +270,11 @@ pub fn append_fits(
     if group_count == 0 || group_count >= lane.group_count_limit() {
         return Ok(false);
     }
+    // The group's directory entry is already inside `assembled`: the region was
+    // reserved when the pack was placed. Only its body moves the total.
     let body = group.body_size(lane)?;
     let total = assembled
-        .checked_add(directory_entry_len(lane))
-        .and_then(|total| total.checked_add(body))
+        .checked_add(body)
         .ok_or(StorageError::Integrity("pack size"))?;
     Ok(total <= lane.pack_limit())
 }
@@ -223,20 +284,38 @@ pub fn assembled_length(lane: PackLane, groups: &[EncodedGroup]) -> StorageResul
     if groups.is_empty() || groups.len() > lane.group_count_limit() {
         return Err(StorageError::Integrity("pack group count"));
     }
-    let directory = directory_entry_len(lane);
-    let mut total = HEADER_LEN
-        .checked_add(
-            directory
-                .checked_mul(groups.len())
-                .ok_or(StorageError::Integrity("pack directory"))?,
-        )
-        .ok_or(StorageError::Integrity("pack directory"))?;
+    // The whole reserved region counts, not the entries in use: the region is
+    // allocated whether or not this pack fills it, and the fit decision has to
+    // measure the pack that will exist rather than the pack that would exist if
+    // the directory had been sized to the groups.
+    let mut total = body_area_offset(lane);
     for group in groups {
         total = total
             .checked_add(group.body_size(lane)?)
             .ok_or(StorageError::Integrity("pack size"))?;
     }
     Ok(total)
+}
+
+/// Reads the assembled length a pack's own control area declares.
+///
+/// A pack row may hold more bytes than the pack uses - that is what the reserved
+/// capacity is for - so the declared length is what a reader trusts, and the
+/// caller truncates to it before the pack is parsed. A declared length outside
+/// `[HEADER_LEN, bytes.len()]` is an integrity failure, never a short read.
+pub fn declared_length(bytes: &[u8]) -> StorageResult<usize> {
+    let field = bytes
+        .get(USED_OFFSET..USED_OFFSET + 4)
+        .ok_or(StorageError::Integrity("pack header"))?;
+    let used = u32::from_le_bytes(
+        field
+            .try_into()
+            .map_err(|_| StorageError::Integrity("pack length"))?,
+    ) as usize;
+    if used < HEADER_LEN || used > bytes.len() {
+        return Err(StorageError::Integrity("pack length"));
+    }
+    Ok(used)
 }
 
 /// Parsed pack control area.
@@ -246,6 +325,8 @@ pub struct PackHeader {
     pub lane: PackLane,
     /// Groups in the directory.
     pub group_count: usize,
+    /// Assembled length the control area declares, which equals `bytes.len()`.
+    pub used: usize,
 }
 
 /// Reads and validates the pack header before any body is touched.
@@ -274,20 +355,21 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         }
     };
     let group_count = u32::from_le_bytes(
-        header[12..16]
+        header[GROUP_COUNT_OFFSET..GROUP_COUNT_OFFSET + 4]
             .try_into()
             .map_err(|_| StorageError::Integrity("pack group count"))?,
     ) as usize;
     if !(1..=GROUP_COUNT_LIMIT).contains(&group_count) {
         return Err(StorageError::Integrity("pack group count"));
     }
-    let directory = match lane {
-        PackLane::WholeFile => WHOLE_FILE_ENTRY_LEN,
-        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
-            DIRECTORY_ENTRY_LEN
-        }
-    };
-    if bytes.len() < HEADER_LEN + directory * group_count {
+    if header[20..24] != [0, 0, 0, 0] {
+        return Err(StorageError::Integrity("pack reserved field"));
+    }
+    let used = declared_length(bytes)?;
+    if used != bytes.len() {
+        return Err(StorageError::Integrity("pack length"));
+    }
+    if used < body_area_offset(lane) + 1 {
         return Err(StorageError::Integrity("pack directory width"));
     }
     if bytes.len() > lane.pack_limit() {
@@ -299,7 +381,11 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if lane == PackLane::Native && version != VERSION_NATIVE {
         return Err(StorageError::Integrity("native framing version"));
     }
-    Ok(PackHeader { lane, group_count })
+    Ok(PackHeader {
+        lane,
+        group_count,
+        used,
+    })
 }
 
 /// Location of one group body inside a pack.
@@ -329,7 +415,7 @@ pub fn group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResu
 }
 
 fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResult<GroupView> {
-    let mut offset = HEADER_LEN + DIRECTORY_ENTRY_LEN * header.group_count;
+    let mut offset = body_area_offset(header.lane);
     let mut selected = None;
     for index in 0..header.group_count {
         let start = HEADER_LEN + DIRECTORY_ENTRY_LEN * index;
@@ -399,11 +485,10 @@ fn whole_file_group_view(
     header: PackHeader,
     group: usize,
 ) -> StorageResult<GroupView> {
-    let directory_end = HEADER_LEN + WHOLE_FILE_ENTRY_LEN * header.group_count;
     if bytes.len() > header.lane.pack_limit() {
         return Err(StorageError::Integrity("compact pack length"));
     }
-    let mut start = directory_end;
+    let mut start = body_area_offset(header.lane);
     let mut selected = None;
     for index in 0..header.group_count {
         let entry = bytes

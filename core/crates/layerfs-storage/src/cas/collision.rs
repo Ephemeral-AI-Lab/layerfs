@@ -19,7 +19,12 @@ impl MutationOwner {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
         for row in rows {
+            let started = std::time::Instant::now();
             let candidates = lookup::candidates(&self.connection, &[row.object_id], i64::MAX)?;
+            crate::cas::owner::SaveProfile::charge(
+                &mut self.profile.diag.collision_query_ns,
+                started,
+            );
             if !candidates.iter().any(|(_, save, _)| *save != self.save_id) {
                 continue;
             }

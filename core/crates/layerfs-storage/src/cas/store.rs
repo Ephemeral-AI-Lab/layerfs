@@ -37,6 +37,9 @@ pub struct SaveOutcome {
     pub inserted: u64,
     /// Packs created by this operation.
     pub packs_created: u64,
+    /// Bytes this operation handed to the engine for packs. See
+    /// [`OutcomeCounters::pack_bytes_written`].
+    pub pack_bytes_written: u64,
     /// Appends to packs this operation created.
     pub pack_appends: u64,
     /// Write transactions acknowledged with `COMMIT`.
@@ -109,6 +112,7 @@ impl From<OutcomeCounters> for SaveOutcome {
             reused: counters.reused,
             inserted: counters.inserted,
             packs_created: counters.packs_created,
+            pack_bytes_written: counters.pack_bytes_written,
             pack_appends: counters.pack_appends,
             commits: counters.commits,
             full_records: counters.full_records,
@@ -498,14 +502,22 @@ impl SaveOperation {
     /// clipped its own detail - the telemetry contract forbids exactly that ("Do
     /// not add a node per object, syscall or delta edge").
     pub fn accept(&mut self, object: FinalizedObject) -> StorageResult<()> {
+        let whole = std::time::Instant::now();
         if self.finished || self.terminal {
             return Err(StorageError::Aborted);
         }
-        match self.batch.push(object) {
+        let result = match self.batch.push(object) {
             Ok(Some(drained)) => self.flush(drained),
             Ok(None) => Ok(()),
             Err(error) => Err(self.terminate(error)),
+        };
+        if let Some(owner) = self.owner.as_mut() {
+            crate::cas::owner::SaveProfile::charge(
+                &mut owner.profile.diag.accept_plumbing_ns,
+                whole,
+            );
         }
+        result
     }
 
     /// Cache observables of this operation's own connection.

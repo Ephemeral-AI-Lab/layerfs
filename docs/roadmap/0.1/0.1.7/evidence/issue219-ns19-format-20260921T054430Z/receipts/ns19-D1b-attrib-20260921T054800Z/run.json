@@ -1,0 +1,98 @@
+{
+  "cache_state": "declared per row; never pooled",
+  "declared_exceptions": [],
+  "golden_matches": true,
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "443276fa8d801596e09de23ca4de8bcafff8fcfabbf200143373d5cbcc74cd21",
+    "harness_lock_sha256": "f9e14b4d55dfe3b946d6706c0d48aa126c22a206f7a51bf4ef9df70f17e1447e",
+    "harness_python_sha256": "27d2ed0be974524f84df0f107cba213441204c96e19ab46dfd2e3bfc90ef2a9d",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "c6446bd901b8126ca70fd32d751b33938d5026ce4fc64a956fa36c910e33bbc7",
+    "source_commit": "9c46930b846600e5f3c6ca4a4c4cbcf44ecdc356",
+    "source_dirty": true,
+    "source_dirty_files": [
+      "M core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+      " M core/crates/layerfs-storage/src/cas/collision.rs",
+      " M core/crates/layerfs-storage/src/cas/lifecycle.rs",
+      " M core/crates/layerfs-storage/src/cas/owner.rs",
+      " M core/crates/layerfs-storage/src/cas/placement.rs",
+      " M core/crates/layerfs-storage/src/cas/save.rs",
+      " M core/crates/layerfs-storage/src/cas/selection.rs",
+      " M core/crates/layerfs-storage/src/cas/store.rs",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-ns19-format-20260921T054430Z/",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-squadA-profile-20260921T044041Z/",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-squadB-sql-20260921T043911Z/",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-squadC-cadence-20260921T044258Z/",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-squadD-chunk-20260921T044229Z/",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-squadE-review-20260921T045622Z/",
+      "?? docs/roadmap/0.1/0.1.7/issue219-namespace-10000-optimization-handoff.md"
+    ],
+    "started_utc": "2026-09-21T05:47:19Z"
+  },
+  "lane": "smoke",
+  "phases": {
+    "admission": {
+      "acquisition_wall_ns": 6446917,
+      "cleanup_wall_ns": 625,
+      "complete_command_ns": 4783693583,
+      "handoff_ns": 31707434,
+      "operation_ns": 3524049917,
+      "preparation_wall_ns": 911450583,
+      "verification_invocation_ns": 0,
+      "verification_wall_ns": 334621750
+    },
+    "by_status": {
+      "PASS": {
+        "acquisition_wall_ns": 6446917,
+        "cleanup_wall_ns": 625,
+        "complete_command_ns": 4783693583,
+        "handoff_ns": 31707434,
+        "operation_ns": 3524049917,
+        "preparation_wall_ns": 911450583,
+        "rows": 1,
+        "verification_invocation_ns": 0,
+        "verification_wall_ns": 334621750
+      }
+    },
+    "schema": "layerfs-lane-phases-v1",
+    "unreconciled_rows": []
+  },
+  "registry_self_check": {
+    "MISMATCH frozen cardinality array": "expected [4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 4], actual [4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 5]",
+    "admission rows": "218",
+    "cardinality sum": "218",
+    "diagnostic rows": "3",
+    "exit_code": 1,
+    "frozen cardinality": "[4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 5]",
+    "history group": "3 (outside the 217)",
+    "pinned constants": "1984 row(s); O1 identity pinned for 213 of 218 admission case(s)",
+    "registered rows": "221",
+    "registry self-check": "FAIL",
+    "smoke lane": "20",
+    "status": "FAIL",
+    "stderr": ""
+  },
+  "reused_proof": null,
+  "reused_proof_identities": null,
+  "reused_proof_omission": null,
+  "rows": 1,
+  "run_dir": "benchmark-results/issue219/ns19-D1b-attrib-20260921T054800Z",
+  "samples_per_case_per_arm": 1,
+  "schema": "layerfs-core-run-v1",
+  "selection": [
+    "pipeline-namespace-10000"
+  ],
+  "selection_size": 1,
+  "tally": {
+    "PASS": 1
+  },
+  "verification_mode": "full",
+  "verification_sample_rule": "",
+  "wall_ns": 4984132166
+}

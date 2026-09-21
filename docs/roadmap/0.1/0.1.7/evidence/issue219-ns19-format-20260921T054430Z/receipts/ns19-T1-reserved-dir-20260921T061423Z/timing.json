@@ -1,0 +1,9 @@
+{
+  "name": "pipeline",
+  "elapsed_ns": 2735495166,
+  "children": [
+    {"name": "store.open", "elapsed_ns": 2615625, "children": []},
+    {"name": "storage.begin", "elapsed_ns": 1531375, "children": []},
+    {"name": "storage.finish", "elapsed_ns": 5305500, "children": []}
+  ]
+}

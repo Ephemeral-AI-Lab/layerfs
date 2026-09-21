@@ -79,7 +79,10 @@ fn fresh_store_writes_the_declared_schema_identity() {
         SCHEMA_IDENTITY,
         SchemaIdentity {
             application_id: 1_279_677_261,
-            user_version: 8,
+            // The declared identity, not a literal: the schema version moves with
+            // the pack framing, and this case is about the identity the Store
+            // writes matching the one the crate declares.
+            user_version: layerfs_storage::policy::SCHEMA_VERSION,
         }
     );
     drop(store);

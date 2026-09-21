@@ -8,17 +8,31 @@
 mod support;
 
 use layerfs_storage::pack::layout::{
-    parse_header, PackLane, PACK_MAGIC, VERSION_NATIVE, VERSION_ORDINARY, VERSION_POOLED_METADATA,
-    VERSION_SINGLETON, VERSION_WHOLE_FILE,
+    body_area_offset, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
+    VERSION_ORDINARY, VERSION_POOLED_METADATA, VERSION_SINGLETON, VERSION_WHOLE_FILE,
 };
 use layerfs_storage::StorageError;
 
-/// Builds a minimal pack header for `version` with `groups` directory entries.
-fn header(version: u32, groups: u32, length: usize) -> Vec<u8> {
+/// Builds a minimal, well-formed pack of `lane` under `version`.
+///
+/// The control area declares `groups` groups and the length the pack assembles
+/// to - the control area, the lane's whole reserved directory region and `body`
+/// bytes of body - and the directory entries are left zero. A synthetic pack has
+/// to carry a length its own control area agrees with, so the builder cannot
+/// produce a header alone: `parse_header` reads the declared length out of the
+/// bytes and refuses a pack whose bytes are not the ones it declares.
+fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
+    let length = body_area_offset(lane) + body;
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&PACK_MAGIC);
     bytes.extend_from_slice(&version.to_le_bytes());
     bytes.extend_from_slice(&groups.to_le_bytes());
+    bytes.extend_from_slice(
+        &u32::try_from(length)
+            .expect("synthetic pack length")
+            .to_le_bytes(),
+    );
+    bytes.extend_from_slice(&[0, 0, 0, 0]);
     bytes.resize(length, 0);
     bytes
 }
@@ -32,18 +46,18 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
         (VERSION_POOLED_METADATA, PackLane::PooledMetadata),
         (VERSION_SINGLETON, PackLane::Singleton),
     ] {
-        let entry = if lane == PackLane::WholeFile { 4 } else { 16 };
-        let bytes = header(version, 1, 16 + entry + 32);
+        let bytes = pack_of(lane, version, 1, 32);
         let parsed = parse_header(&bytes).unwrap_or_else(|error| panic!("{lane:?}: {error}"));
         assert_eq!(parsed.lane, lane);
         assert_eq!(parsed.group_count, 1);
+        assert_eq!(parsed.used, bytes.len(), "the declared length is the pack");
     }
 }
 
 #[test]
 fn unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode() {
     for version in [0_u32, 3, 5, 8, 99] {
-        let bytes = header(version, 1, 16 + 16 + 32);
+        let bytes = pack_of(PackLane::Ordinary, version, 1, 32);
         let error = parse_header(&bytes).unwrap_err();
         assert!(
             matches!(error, StorageError::UnsupportedPolicy { field } if field == "pack framing version"),
@@ -52,41 +66,72 @@ fn unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode() {
     }
     // A recognized version with a malformed control area is an integrity failure,
     // not a fallback to another framing.
-    let mut wrong_magic = header(VERSION_ORDINARY, 1, 80);
+    let mut wrong_magic = pack_of(PackLane::Ordinary, VERSION_ORDINARY, 1, 32);
     wrong_magic[0] = b'X';
     assert!(matches!(
         parse_header(&wrong_magic),
         Err(StorageError::Integrity(_))
     ));
-    let truncated = header(VERSION_ORDINARY, 4, 32);
+    // A pack that declares more bytes than it has is refused, never short-read.
+    let mut truncated = pack_of(PackLane::Ordinary, VERSION_ORDINARY, 1, 32);
+    truncated.pop();
     assert!(matches!(
         parse_header(&truncated),
-        Err(StorageError::Integrity(_))
+        Err(StorageError::Integrity("pack length"))
+    ));
+    // A nonzero reserved word is a framing this reader does not implement.
+    let mut reserved = pack_of(PackLane::Ordinary, VERSION_ORDINARY, 1, 32);
+    reserved[20] = 1;
+    assert!(matches!(
+        parse_header(&reserved),
+        Err(StorageError::Integrity("pack reserved field"))
+    ));
+    // A declared length that does not even cover the reserved directory region is
+    // refused rather than read as a directory.
+    let mut short = pack_of(PackLane::Ordinary, VERSION_ORDINARY, 1, 0);
+    let area = body_area_offset(PackLane::Ordinary);
+    short.truncate(area);
+    short[USED_OFFSET..USED_OFFSET + 4].copy_from_slice(&(area as u32).to_le_bytes());
+    assert!(matches!(
+        parse_header(&short),
+        Err(StorageError::Integrity("pack directory width"))
     ));
 }
 
 #[test]
 fn declared_pack_and_group_bounds_are_enforced_on_the_bytes() {
     // The ordinary lane is bounded by the 256-KiB pack limit.
-    let oversized = header(VERSION_ORDINARY, 1, 256 * 1024 + 1);
+    let ordinary = PackLane::Ordinary;
+    let oversized = pack_of(
+        ordinary,
+        VERSION_ORDINARY,
+        1,
+        ordinary.pack_limit() - body_area_offset(ordinary) + 1,
+    );
     assert!(matches!(
         parse_header(&oversized),
         Err(StorageError::Integrity("pack length"))
     ));
     // The singleton lane is bounded by its own, larger limit.
-    let singleton = header(VERSION_SINGLETON, 1, 16 * 1024 * 1024 + 4_096 + 1);
+    let singleton = PackLane::Singleton;
+    let oversized = pack_of(
+        singleton,
+        VERSION_SINGLETON,
+        1,
+        singleton.pack_limit() - body_area_offset(singleton) + 1,
+    );
     assert!(matches!(
-        parse_header(&singleton),
+        parse_header(&oversized),
         Err(StorageError::Integrity("pack length"))
     ));
     // A singleton pack holds exactly one group.
-    let two_groups = header(VERSION_SINGLETON, 2, 16 + 32 + 64);
+    let two_groups = pack_of(PackLane::Singleton, VERSION_SINGLETON, 2, 64);
     assert!(matches!(
         parse_header(&two_groups),
         Err(StorageError::Integrity("singleton pack group count"))
     ));
     // A zero group count is not a valid directory.
-    let empty = header(VERSION_NATIVE, 0, 64);
+    let empty = pack_of(PackLane::Native, VERSION_NATIVE, 0, 64);
     assert!(matches!(
         parse_header(&empty),
         Err(StorageError::Integrity("pack group count"))
@@ -135,12 +180,14 @@ fn a_recipe_frame_larger_than_its_profile_is_refused() {
 
 /// The two recorded lane/scope deviations, asserted so they cannot drift silently.
 ///
-/// `physical-encoding-and-packing.md` names v6 as the active pooled metadata lane.
-/// The shipped candidate writes pooled **value groups** in v6 and pooled **leaf**
-/// records in the v1 Ordinary lane, distinguished by the `objects.object_role`
-/// column, and it refuses v5 by design because its schema identity is deliberately
-/// not the reference's. Both are recorded in that document as open owner
-/// decisions; this case pins the shipped behaviour they describe.
+/// `physical-encoding-and-packing.md` names the pooled metadata lane by its
+/// framing version. The shipped candidate writes pooled **value groups** in that
+/// lane and pooled **leaf** records in the Ordinary lane, distinguished by the
+/// `objects.object_role` column, and it refuses v5 by design because its schema
+/// identity is deliberately not the reference's. Both are recorded in that
+/// document as open owner decisions; this case pins the shipped behaviour they
+/// describe, and it reads the version from the lane rather than from a literal so
+/// that a framing change moves one number in one place.
 #[test]
 fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
     use layerfs_content::inode_leaf::{
@@ -172,25 +219,29 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
     save_one(&store, leaf).expect("pooled save");
     drop(store);
 
-    // The persisted lanes: the value group is in the v6 pooled lane, the leaf
-    // record in the v1 ordinary lane, and the role column says which row is which.
+    // The persisted lanes: the value group is in the pooled lane, the leaf record
+    // in the ordinary lane, and the role column says which row is which.
     let connection = rusqlite::Connection::open(&path).expect("external connection");
-    let leaf_pack: Vec<u8> = connection
-        .query_row(
-            "SELECT p.data FROM objects o JOIN object_packs p ON p.pack_id = o.pack_id \
-             WHERE o.object_id = ?1",
-            [leaf_id.to_bytes().to_vec()],
-            |row| row.get(0),
-        )
-        .expect("leaf pack");
-    let group_pack: Vec<u8> = connection
-        .query_row(
-            "SELECT p.data FROM metadata_value_groups g JOIN object_packs p \
-             ON p.pack_id = g.pack_id ORDER BY g.first_ordinal LIMIT 1",
-            [],
-            |row| row.get(0),
-        )
-        .expect("group pack");
+    let leaf_pack = support::truncate_pack(
+        connection
+            .query_row(
+                "SELECT p.data FROM objects o JOIN object_packs p ON p.pack_id = o.pack_id \
+                 WHERE o.object_id = ?1",
+                [leaf_id.to_bytes().to_vec()],
+                |row| row.get(0),
+            )
+            .expect("leaf pack"),
+    );
+    let group_pack = support::truncate_pack(
+        connection
+            .query_row(
+                "SELECT p.data FROM metadata_value_groups g JOIN object_packs p \
+                 ON p.pack_id = g.pack_id ORDER BY g.first_ordinal LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .expect("group pack"),
+    );
     let leaf_role: i64 = connection
         .query_row(
             "SELECT object_role FROM objects WHERE object_id = ?1",
@@ -202,19 +253,23 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
     assert_eq!(
         parse_header(&leaf_pack).expect("leaf header").lane,
         PackLane::Ordinary,
-        "a pooled leaf record is stored in the v1 ordinary lane"
+        "a pooled leaf record is stored in the ordinary lane"
     );
     assert_eq!(
         VERSION_ORDINARY,
         PackLane::Ordinary.version(),
-        "v1 is the ordinary lane"
+        "the ordinary lane's framing version"
     );
     assert_eq!(
         parse_header(&group_pack).expect("group header").lane,
         PackLane::PooledMetadata,
-        "a pooled value group is stored in the v6 pooled lane"
+        "a pooled value group is stored in the pooled lane"
     );
-    assert_eq!(VERSION_POOLED_METADATA, 6, "the pooled lane is v6");
+    assert_eq!(
+        VERSION_POOLED_METADATA,
+        PackLane::PooledMetadata.version(),
+        "the pooled lane's framing version"
+    );
     assert_eq!(
         leaf_role,
         i64::from(ObjectRole::InodeLeaf.code()),
@@ -223,7 +278,7 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
 
     // v5 is refused by name, and the refusal is the unknown-version one rather than
     // a decode attempt.
-    let v5 = header(5, 1, 16 + 16 + 32);
+    let v5 = pack_of(PackLane::PooledMetadata, 5, 1, 32);
     let error = parse_header(&v5).unwrap_err();
     assert!(
         matches!(error, StorageError::UnsupportedPolicy { field } if field == "pack framing version"),
@@ -387,15 +442,9 @@ fn an_ordinary_group_seals_on_the_framed_length_it_writes() {
     let mut checked = 0;
     let mut bodies: std::collections::BTreeMap<i64, Vec<u8>> = std::collections::BTreeMap::new();
     for (pack_id, group_number, count) in &stores {
-        let data = bodies.entry(*pack_id).or_insert_with(|| {
-            connection
-                .query_row(
-                    "SELECT data FROM object_packs WHERE pack_id = ?1",
-                    rusqlite::params![pack_id],
-                    |row| row.get(0),
-                )
-                .expect("pack body")
-        });
+        let data = bodies
+            .entry(*pack_id)
+            .or_insert_with(|| support::read_pack_row(&connection, *pack_id));
         let header = parse_header(data).expect("pack header");
         let view = layerfs_storage::pack::group_view(data, header, *group_number as usize)
             .expect("group view");

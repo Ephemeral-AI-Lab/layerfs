@@ -1,16 +1,30 @@
-//! Batched bindings and the lazily started shared write transaction.
+//! Batched bindings, the lazily started shared write transaction and in-place
+//! pack writes.
 //!
 //! One transaction spans as many preparation batches and files as its declared
 //! row and byte bounds allow. `BEGIN IMMEDIATE` is attempted exactly once: a lost
 //! write lock is an immediate failure, never a wait. A failed `COMMIT` leaves the
 //! persistence outcome unproven and is reported as such.
+//!
+//! **A pack row is written through incremental BLOB I/O.** A pack's directory
+//! region is reserved by the format and its assembled length is declared in its
+//! own control area (`pack::layout`), so an append adds bytes without moving any
+//! byte already written. The alternative - binding the reassembled pack to
+//! `UPDATE object_packs SET data = ?2` - rewrites the row's whole BLOB for every
+//! append, and a small companion column would not help: any `UPDATE` of a row
+//! holding a 256 KiB BLOB rebuilds and rewrites that BLOB, measured at ~72 us per
+//! statement on a 256 KiB row against ~11 us for a four-byte in-place BLOB write
+//! (`#219`). The declaration therefore rides in the BLOB, and the row is only
+//! ever *read* after it is created.
 
 use rusqlite::types::Value;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension};
 
 use layerfs_content::ObjectId;
 
 use crate::error::{StorageError, StorageResult};
+use crate::pack::layout::HEADER_LEN;
+use crate::pack::SelectedWrite;
 use crate::sqlite::connection::ownership_error;
 
 /// Accumulated work inside the open transaction.
@@ -64,28 +78,93 @@ pub fn rollback(connection: &Connection) -> StorageResult<()> {
         })
 }
 
-/// Inserts a newly created pack row.
-pub fn insert_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
+/// Inserts a newly created pack row and writes its first content in place.
+///
+/// The row is created zero-filled at the pack's capacity and then written through
+/// the BLOB handle, so the allocation and the content are one statement plus one
+/// set of in-place writes: the pack is never built as a whole in memory, and the
+/// pages the write does not touch are never dirtied.
+pub fn insert_pack(
+    connection: &Connection,
+    pack_id: i64,
+    write: &SelectedWrite,
+) -> StorageResult<()> {
+    let capacity =
+        i64::try_from(write.capacity).map_err(|_| StorageError::Integrity("pack capacity"))?;
     let affected = connection.execute(
-        "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
-        rusqlite::params![pack_id, bytes],
+        "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, zeroblob(?2), (SELECT save_id FROM temp.layerfs_read_scope))",
+        rusqlite::params![pack_id, capacity],
     )?;
     if affected != 1 {
         return Err(StorageError::Integrity("pack insert cardinality"));
     }
-    Ok(())
+    write_in_place(connection, pack_id, write)
 }
 
-/// Rewrites an existing pack row with its appended groups.
-pub fn append_pack(connection: &Connection, pack_id: i64, bytes: &[u8]) -> StorageResult<()> {
-    let affected = connection.execute(
-        "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
-        rusqlite::params![pack_id, bytes],
-    )?;
-    if affected != 1 {
+/// Appends to an existing pack row without rewriting it.
+///
+/// The ownership predicate is the one the rewriting form carried in its `WHERE`
+/// clause - this save's scope, and a save that is not yet published - stated as a
+/// read that touches only the row's own small columns. It runs before any byte is
+/// written, so a pack this save does not own is refused rather than written into
+/// and rolled back, and it never modifies the row: an `UPDATE` of any column
+/// would rewrite the whole BLOB, which is exactly the cost this path removes.
+pub fn append_pack(
+    connection: &Connection,
+    pack_id: i64,
+    write: &SelectedWrite,
+) -> StorageResult<()> {
+    let owned: Option<i64> = connection
+        .query_row(
+            "SELECT pack_id FROM object_packs WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
+            rusqlite::params![pack_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if owned != Some(pack_id) {
         return Err(StorageError::Integrity("pack update cardinality"));
     }
-    Ok(())
+    write_in_place(connection, pack_id, write)
+}
+
+/// Writes one increment into an existing pack BLOB, in place.
+///
+/// Three writes at most - the bodies at the pack's previous assembled length, the
+/// new directory entries in the reserved region, and the control area last, so a
+/// pack is never momentarily described as longer than the bytes that are in it.
+/// Each write dirties only the pages it covers.
+fn write_in_place(
+    connection: &Connection,
+    pack_id: i64,
+    write: &SelectedWrite,
+) -> StorageResult<()> {
+    let mut blob = connection
+        .blob_open("main", "object_packs", "data", pack_id, false)
+        .map_err(|error| match error {
+            rusqlite::Error::SqliteFailure(_, _) => StorageError::Integrity("pack blob handle"),
+            other => StorageError::Engine(other),
+        })?;
+    let capacity = blob.len();
+    if capacity != write.capacity || capacity < HEADER_LEN {
+        return Err(StorageError::Integrity("pack capacity"));
+    }
+    for (offset, bytes) in [
+        (write.body_offset, write.bodies.as_slice()),
+        (write.directory_offset, write.directory.as_slice()),
+        (0, write.control.as_slice()),
+    ] {
+        if bytes.is_empty() {
+            continue;
+        }
+        let end = offset
+            .checked_add(bytes.len())
+            .ok_or(StorageError::Integrity("pack write extent"))?;
+        if end > capacity {
+            return Err(StorageError::Integrity("pack write extent"));
+        }
+        blob.write_at(bytes, offset).map_err(StorageError::Engine)?;
+    }
+    blob.close().map_err(StorageError::Engine)
 }
 
 /// Columns one object row binds.

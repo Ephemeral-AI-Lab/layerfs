@@ -1,9 +1,16 @@
--- Candidate schema 8: save-owned physical data, atomic per-save publication and
--- the configured per-Store writer budget.
--- Canonical profile 1 and pack/codec formats are unchanged. Older schemas are
--- rejected, never migrated. Duplicate locators and bytes are permitted.
+-- Candidate schema 9: save-owned physical data, atomic per-save publication, the
+-- configured per-Store writer budget and the reserved-directory pack framing.
+-- Canonical profile 1 is unchanged; the pack framing is not. A pack's directory
+-- now sits in a region reserved at the lane's own width and the pack declares its
+-- own assembled length in its control area, so an append writes only the bytes it
+-- adds. The table shapes below are unchanged from schema 8 - the pack's declared
+-- length rides inside its BLOB, because any UPDATE of a row holding a 256 KiB
+-- BLOB rewrites that BLOB - but the stored pack bytes are a different framing, so
+-- the version moves and a schema-8 Store is refused rather than read.
+-- Older schemas are rejected, never migrated. Duplicate locators and bytes are
+-- permitted.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),

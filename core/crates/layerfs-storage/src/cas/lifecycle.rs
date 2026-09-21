@@ -127,6 +127,7 @@ impl MutationOwner {
     }
 
     pub(super) fn begin_write(&mut self) -> StorageResult<()> {
+        let started = Instant::now();
         write::begin_immediate(&self.connection)?;
         self.transaction_open = true;
         self.transaction = TransactionState::default();
@@ -135,6 +136,7 @@ impl MutationOwner {
         // step that allocates no pack has nothing to write back.
         self.committed_pack_id = self.next_pack_id;
         self.counters.transactions += 1;
+        SaveProfile::charge(&mut self.profile.diag.begin_ns, started);
         Ok(())
     }
 
@@ -159,6 +161,7 @@ impl MutationOwner {
     /// Acknowledges one physical group; no transaction survives preparation.
     pub fn maybe_commit(&mut self) -> StorageResult<()> {
         if self.transaction_open {
+            let whole = Instant::now();
             let started = Instant::now();
             // Multi-writer: SQLite admits one writer per store file, and the other
             // writer must not have to wait for this one's whole upload. A write
@@ -173,6 +176,7 @@ impl MutationOwner {
             // pass instead of rolling back a transaction that does not exist.
             self.transaction_open = false;
             self.counters.commits += 1;
+            SaveProfile::charge(&mut self.profile.diag.commit_total_ns, whole);
         }
         Ok(())
     }
@@ -224,6 +228,7 @@ impl MutationOwner {
     }
 
     fn finish_inner(&mut self) -> StorageResult<OutcomeCounters> {
+        let whole = Instant::now();
         let mut availability = Availability::default();
         for lane in PackLane::ALL {
             self.seal_group(lane, &mut availability)?;
@@ -250,7 +255,9 @@ impl MutationOwner {
         // publishing it, and advances the pack allocation watermark so no other
         // writer can hand out a pack id this save already used. Either the save's
         // data, its index and its publication all become visible, or none does.
+        let started = Instant::now();
         ownership::publish(&self.connection, self.save_id)?;
+        SaveProfile::charge(&mut self.profile.diag.publish_ns, started);
         self.advance_pack_if_moved()?;
         let started = Instant::now();
         write::commit(&self.connection)?;
@@ -268,6 +275,7 @@ impl MutationOwner {
         {
             *shared = private.clone();
         }
+        SaveProfile::charge(&mut self.profile.diag.finish_total_ns, whole);
         Ok(self.counters)
     }
 

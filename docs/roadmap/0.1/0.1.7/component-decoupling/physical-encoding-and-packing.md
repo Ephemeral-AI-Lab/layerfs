@@ -353,6 +353,26 @@ are recorded here instead of being left implicit:
   row's wording moved. Recorded with the same owner reply in
   `stages-3-4-closeout-report.md` §6 and quoted in #170.
 
+**Candidate framing versions, 2026-09-21 (#219).** The table above describes the
+**reference** profile under `crates/`; the replacement product under `core/` is a
+different implementation and its own framing versions are these. The candidate's
+pack directory moved into a region **reserved at the lane's own width**, and a pack
+now **declares its own assembled length** in its control area, so a body's offset no
+longer depends on how many groups precede it and an append writes only the bytes it
+adds (incremental BLOB I/O; a companion `used` column cannot serve, because any
+`UPDATE` of a row holding a 256 KiB BLOB rewrites that BLOB - measured at 72.5 us
+against 11.1 us for a four-byte in-place write). The candidate therefore writes
+**v9** ordinary, **v10** native, **v11** compact whole-file, **v12** pooled
+metadata and **v13** singleton, and its `SCHEMA_VERSION` is **9**. The pre-v9
+candidate framings (1, 2, 4, 6, 7) are refused by the same
+`UnsupportedPolicy { field: "pack framing version" }` path that refuses v3 and v5,
+and a schema-8 Store is refused at open before any pack is read. The reference
+table above is unchanged and no reference framing moved. Measured on
+`pipeline-namespace-10000`: pack bytes written 2,292,865,337 -> 302,406,480
+(7.58x), `operation_ns` -21.22 %, row PASS with all 14 pinned counters and the
+filesystem root unchanged
+(`docs/roadmap/0.1/0.1.7/evidence/issue219-ns19-format-20260921T054430Z/`).
+
 Use [explicit format dispatch](../../../../../crates/layerfs-layerstack-store/src/objects/pack.rs#L111)
 and retain required [whole-owner compatibility](../../../../../crates/layerfs-layerstack-store/src/objects/whole.rs#L1).
 Unknown/contradictory input errors; no retry through another decoder. Active format

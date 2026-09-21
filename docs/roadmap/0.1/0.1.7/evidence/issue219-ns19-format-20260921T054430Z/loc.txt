@@ -1,0 +1,14 @@
+# python3 tools/production_loc.py --root <tree>
+#   before = a detached worktree at 9c46930b8, after = the working tree that was committed
+# scope: core/crates/*/src/**/*.rs plus <crate>/sql/*.sql; tests, examples,
+# benches, fixtures, harnesses, tools, docs and manifests excluded.
+
+BEFORE (9c46930b8)
+core        30963 production lines in  194 files
+reference   65417 production lines in  193 files
+combined    96380 production lines
+
+AFTER
+core        31247 production lines in  194 files
+reference   65417 production lines in  193 files
+combined    96664 production lines

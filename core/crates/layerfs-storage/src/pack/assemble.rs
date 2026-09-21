@@ -9,8 +9,9 @@
 use crate::encoding::codec::{CompressionWorkspace, GROUP_LIMIT};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::{
-    assembled_length, EncodedGroup, GroupCodec, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN,
-    PACK_MAGIC, WHOLE_FILE_COMPACT_DROP,
+    assembled_length, body_area_offset, directory_entry_len, EncodedGroup, GroupCodec, PackLane,
+    DIRECTORY_ENTRY_LEN, GROUP_COUNT_OFFSET, HEADER_LEN, PACK_MAGIC, USED_OFFSET,
+    WHOLE_FILE_COMPACT_DROP,
 };
 use crate::policy::RECORD_COUNT_LIMIT;
 
@@ -193,8 +194,9 @@ pub fn build_group(
 /// releases each constituent body as it is copied.
 pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8>> {
     let length = checked_pack_length(lane, groups)?;
+    let entries = directory_entries(lane, groups, body_area_offset(lane))?;
     let mut bytes = Vec::with_capacity(length);
-    write_header_and_directory(lane, groups, &mut bytes)?;
+    write_control_and_directory(lane, groups.len(), length, &entries, &mut bytes)?;
     for group in groups {
         append_body(lane, group, &mut bytes)?;
     }
@@ -214,8 +216,9 @@ pub fn assemble(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8
 /// - instead of the assembly plus the whole retained tail.
 pub fn assemble_consuming(lane: PackLane, groups: Vec<EncodedGroup>) -> StorageResult<Vec<u8>> {
     let length = checked_pack_length(lane, &groups)?;
+    let entries = directory_entries(lane, &groups, body_area_offset(lane))?;
     let mut bytes = Vec::with_capacity(length);
-    write_header_and_directory(lane, &groups, &mut bytes)?;
+    write_control_and_directory(lane, groups.len(), length, &entries, &mut bytes)?;
     // Bodies are appended in group order and each group is dropped at the end of
     // its own iteration, so the released bytes are the ones already copied.
     for group in groups {
@@ -223,6 +226,110 @@ pub fn assemble_consuming(lane: PackLane, groups: Vec<EncodedGroup>) -> StorageR
     }
     if bytes.len() != length {
         return Err(StorageError::Integrity("assembled pack length"));
+    }
+    Ok(bytes)
+}
+
+/// The control area of one pack: magic, version, group count and assembled
+/// length, with the reserved word written zero.
+pub fn control_area(
+    lane: PackLane,
+    group_count: usize,
+    used: usize,
+) -> StorageResult<[u8; HEADER_LEN]> {
+    let mut area = [0_u8; HEADER_LEN];
+    area[..8].copy_from_slice(&PACK_MAGIC);
+    area[8..12].copy_from_slice(&lane.version().to_le_bytes());
+    area[GROUP_COUNT_OFFSET..GROUP_COUNT_OFFSET + 4].copy_from_slice(
+        &u32::try_from(group_count)
+            .map_err(|_| StorageError::Integrity("pack group count"))?
+            .to_le_bytes(),
+    );
+    area[USED_OFFSET..USED_OFFSET + 4].copy_from_slice(
+        &u32::try_from(used)
+            .map_err(|_| StorageError::Integrity("pack length"))?
+            .to_le_bytes(),
+    );
+    Ok(area)
+}
+
+/// Directory entries for `groups`, in order, whose first body lands at
+/// `body_offset`.
+///
+/// An entry is absolute - it names where its body *is* - so no entry changes once
+/// it has been written and an append writes only the entries it adds. The body
+/// offsets are the only state this needs, which is why it takes no pack.
+pub fn directory_entries(
+    lane: PackLane,
+    groups: &[EncodedGroup],
+    body_offset: usize,
+) -> StorageResult<Vec<u8>> {
+    let entry = directory_entry_len(lane);
+    let mut bytes = Vec::with_capacity(entry * groups.len());
+    let mut offset = body_offset;
+    for group in groups {
+        match lane {
+            PackLane::WholeFile => {
+                bytes.extend_from_slice(
+                    &u32::try_from(offset)
+                        .map_err(|_| StorageError::Integrity("compact start"))?
+                        .to_le_bytes(),
+                );
+                offset = offset
+                    .checked_add(group.bytes.len() - WHOLE_FILE_COMPACT_DROP)
+                    .ok_or(StorageError::Integrity("pack size"))?;
+            }
+            PackLane::Ordinary
+            | PackLane::Native
+            | PackLane::PooledMetadata
+            | PackLane::Singleton => {
+                bytes.extend_from_slice(
+                    &u32::try_from(offset)
+                        .map_err(|_| StorageError::Integrity("group start"))?
+                        .to_le_bytes(),
+                );
+                bytes.extend_from_slice(
+                    &u32::try_from(group.bytes.len())
+                        .map_err(|_| StorageError::Integrity("group encoded length"))?
+                        .to_le_bytes(),
+                );
+                bytes.extend_from_slice(
+                    &u32::try_from(group.decoded_length)
+                        .map_err(|_| StorageError::Integrity("group decoded length"))?
+                        .to_le_bytes(),
+                );
+                bytes.extend_from_slice(&[
+                    match group.codec {
+                        GroupCodec::Raw => 0,
+                        GroupCodec::Zstandard => 1,
+                    },
+                    0,
+                    0,
+                    0,
+                ]);
+                offset = offset
+                    .checked_add(group.bytes.len())
+                    .ok_or(StorageError::Integrity("pack size"))?;
+            }
+        }
+    }
+    Ok(bytes)
+}
+
+/// Concatenated bodies of `groups`, exactly as a pack stores them.
+pub fn body_bytes(lane: PackLane, groups: &[EncodedGroup]) -> StorageResult<Vec<u8>> {
+    let mut length = 0_usize;
+    for group in groups {
+        length = length
+            .checked_add(group.body_size(lane)?)
+            .ok_or(StorageError::Integrity("pack size"))?;
+    }
+    let mut bytes = Vec::with_capacity(length);
+    for group in groups {
+        append_body(lane, group, &mut bytes)?;
+    }
+    if bytes.len() != length {
+        return Err(StorageError::Integrity("assembled body length"));
     }
     Ok(bytes)
 }
@@ -259,61 +366,31 @@ fn append_body(lane: PackLane, group: &EncodedGroup, bytes: &mut Vec<u8>) -> Sto
     Ok(())
 }
 
-/// Writes the pack header and the group directory.
-fn write_header_and_directory(
+/// Writes the control area and the reserved directory region into `bytes`.
+///
+/// The region is the lane's full width and its unused tail is zero, so a pack
+/// holding three groups and a pack holding two hundred put their bodies at the
+/// same offset. `entries` are this pack's first `group_count` entries.
+fn write_control_and_directory(
     lane: PackLane,
-    groups: &[EncodedGroup],
+    group_count: usize,
+    used: usize,
+    entries: &[u8],
     bytes: &mut Vec<u8>,
 ) -> StorageResult<()> {
-    bytes.extend_from_slice(&PACK_MAGIC);
-    bytes.extend_from_slice(&lane.version().to_le_bytes());
-    bytes.extend_from_slice(
-        &u32::try_from(groups.len())
-            .map_err(|_| StorageError::Integrity("pack group count"))?
-            .to_le_bytes(),
-    );
-    match lane {
-        PackLane::WholeFile => {
-            let mut offset = HEADER_LEN + 4 * groups.len();
-            for group in groups {
-                bytes.extend_from_slice(
-                    &u32::try_from(offset)
-                        .map_err(|_| StorageError::Integrity("compact start"))?
-                        .to_le_bytes(),
-                );
-                offset += group.bytes.len() - WHOLE_FILE_COMPACT_DROP;
-            }
-        }
-        PackLane::Ordinary | PackLane::Native | PackLane::PooledMetadata | PackLane::Singleton => {
-            let mut offset = HEADER_LEN + DIRECTORY_ENTRY_LEN * groups.len();
-            for group in groups {
-                bytes.extend_from_slice(
-                    &u32::try_from(offset)
-                        .map_err(|_| StorageError::Integrity("group start"))?
-                        .to_le_bytes(),
-                );
-                bytes.extend_from_slice(
-                    &u32::try_from(group.bytes.len())
-                        .map_err(|_| StorageError::Integrity("group encoded length"))?
-                        .to_le_bytes(),
-                );
-                bytes.extend_from_slice(
-                    &u32::try_from(group.decoded_length)
-                        .map_err(|_| StorageError::Integrity("group decoded length"))?
-                        .to_le_bytes(),
-                );
-                bytes.extend_from_slice(&[
-                    match group.codec {
-                        GroupCodec::Raw => 0,
-                        GroupCodec::Zstandard => 1,
-                    },
-                    0,
-                    0,
-                    0,
-                ]);
-                offset += group.bytes.len();
-            }
-        }
+    let area = control_area(lane, group_count, used)?;
+    let region = body_area_offset(lane);
+    if DIRECTORY_ENTRY_LEN > region - HEADER_LEN {
+        return Err(StorageError::Integrity("pack directory width"));
     }
+    bytes.extend_from_slice(&area);
+    bytes.resize(region, 0);
+    let directory = bytes
+        .get_mut(HEADER_LEN..region)
+        .ok_or(StorageError::Integrity("pack directory"))?;
+    if entries.len() > directory.len() {
+        return Err(StorageError::Integrity("pack directory width"));
+    }
+    directory[..entries.len()].copy_from_slice(entries);
     Ok(())
 }

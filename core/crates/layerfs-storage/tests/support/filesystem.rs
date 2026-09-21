@@ -423,21 +423,10 @@ pub fn corrupt_pack_containing(path: &Path, id: ObjectId) {
             |row| row.get(0),
         )
         .expect("the object has a locator");
-    let mut data: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            [pack],
-            |row| row.get(0),
-        )
-        .expect("the pack exists");
+    let mut data = super::read_pack_row(&connection, pack);
     let start = data.len() / 3;
     for index in (start..data.len()).step_by(23) {
         data[index] ^= 0xff;
     }
-    connection
-        .execute(
-            "UPDATE object_packs SET data = ?1 WHERE pack_id = ?2",
-            rusqlite::params![data, pack],
-        )
-        .expect("corrupt the pack");
+    super::write_pack_row(&connection, pack, &data);
 }

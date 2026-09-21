@@ -60,6 +60,17 @@ pub struct SaveProfile {
     /// Transaction cadence: `COMMIT`, `ROLLBACK`, and the `BEGIN IMMEDIATE` that
     /// restarts a bounded transaction.
     pub commit_ns: u64,
+    /// Diagnostic span totals of the regions the seven buckets do **not** charge.
+    ///
+    /// Every field is a **total** of a named region, so a region that contains one
+    /// or more of the seven buckets contains their charges too and the residue the
+    /// region leaves unnamed is the difference. It is a measurement of the
+    /// instrument, never an eighth bucket: nothing here is added into
+    /// [`total_ns`](Self::total_ns), no decision reads it, and a build without it
+    /// runs the same work. It exists because the campaign's own remainder (31 % of
+    /// the accept span) was unattributable by name, and a remainder cannot be
+    /// optimized or defended while nothing says what is in it.
+    pub diag: DiagProfile,
     /// Occurrences of the exact-reuse verification whose identity had already been
     /// verified once earlier in this same operation (B1's population).
     ///
@@ -74,6 +85,76 @@ pub struct SaveProfile {
     /// ordinary save is unaffected; `SaveOutcome`'s equality already excludes this
     /// whole struct, so enabling it cannot make a determinism comparison fail.
     pub reuse_repeat: u64,
+}
+
+/// Diagnostic span totals of the accept path's uncharged regions.
+///
+/// One field per named region, each a **sum of nanoseconds over the operation**,
+/// charged with the same `Instant` pair discipline as the seven buckets. Regions
+/// nest: `seal_total_ns` contains `group_ns`, `place_ns`, `write_pack_total_ns`,
+/// `sql_ns` (the object insert), `validate_ns`, `rows_ns`, `members_ns` and
+/// `commit_total_ns`. Reading a residue therefore means subtracting the children
+/// from the parent, and the analysis that does so publishes both numbers.
+///
+/// These are diagnostics. They are published beside the profile and never folded
+/// into it; `SaveOutcome`'s equality ignores them exactly as it ignores `profile`.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DiagProfile {
+    /// Whole `maybe_commit` call on every step.
+    pub commit_total_ns: u64,
+    /// `BEGIN IMMEDIATE` and the pack-watermark read of every step.
+    pub begin_ns: u64,
+    /// Whole `seal_group` call.
+    pub seal_total_ns: u64,
+    /// Whole `offer` call, selection included.
+    pub offer_total_ns: u64,
+    /// Whole `write_pack` call.
+    pub write_pack_total_ns: u64,
+    /// Whole `validate_candidates` call.
+    pub validate_ns: u64,
+    /// The per-row candidate queries inside `validate_candidates`.
+    pub collision_query_ns: u64,
+    /// `ObjectRow` vector construction for one seal.
+    pub rows_ns: u64,
+    /// The member/counter loop that follows one seal's insert.
+    pub members_ns: u64,
+    /// Whole `SaveOperation::accept` call, seen from the Store handle.
+    pub accept_plumbing_ns: u64,
+    /// Whole `flush_batch` call.
+    pub flush_batch_ns: u64,
+    /// The wave's locator query and presence seed inside `flush_batch`.
+    pub wave_ns: u64,
+    /// Whole `finish_inner` call.
+    pub finish_total_ns: u64,
+    /// The publication statement inside `finish_inner`.
+    pub publish_ns: u64,
+}
+
+impl DiagProfile {
+    /// Adds another diagnostic profile's totals into this one.
+    pub fn accumulate(&mut self, other: &Self) {
+        macro_rules! add {
+            ($($field:ident),+ $(,)?) => {
+                $( self.$field = self.$field.saturating_add(other.$field); )+
+            };
+        }
+        add!(
+            commit_total_ns,
+            begin_ns,
+            seal_total_ns,
+            offer_total_ns,
+            write_pack_total_ns,
+            validate_ns,
+            collision_query_ns,
+            rows_ns,
+            members_ns,
+            accept_plumbing_ns,
+            flush_batch_ns,
+            wave_ns,
+            finish_total_ns,
+            publish_ns,
+        );
+    }
 }
 
 /// The disjoint parts of [`SaveProfile::resolve`].
@@ -134,6 +215,7 @@ impl SaveProfile {
 
     /// Adds another profile's buckets into this one.
     pub fn accumulate(&mut self, other: &Self) {
+        self.diag.accumulate(&other.diag);
         self.resolve.accumulate(&other.resolve);
         self.reuse_repeat = self.reuse_repeat.saturating_add(other.reuse_repeat);
         self.full_ns = self.full_ns.saturating_add(other.full_ns);
@@ -228,6 +310,16 @@ pub struct OutcomeCounters {
     pub packs_created: u64,
     /// Appends to a pack this save created.
     pub pack_appends: u64,
+    /// Bytes this operation actually handed to the engine for packs.
+    ///
+    /// The increment of every pack write: bodies, the directory entries the write
+    /// added and one control area each. It is the figure the pack-append rewrite
+    /// moves and it cannot be inferred from the finished store - a rewrite leaves
+    /// the same bytes behind that a single write would - so it is charged where
+    /// the bytes are submitted. Before the reserved-directory framing it counted
+    /// the assembled length of the whole pack on every append, which is what
+    /// `#219` measured at 2,292,865,337 bytes for 302,023,232 persisted.
+    pub pack_bytes_written: u64,
     /// Write transactions started.
     pub transactions: u64,
     /// Write transactions acknowledged with `COMMIT`.

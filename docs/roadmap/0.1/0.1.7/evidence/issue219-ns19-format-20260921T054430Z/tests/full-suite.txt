@@ -1,0 +1,70 @@
+# cargo +1.85.1 test --locked --manifest-path core/Cargo.toml -p layerfs-storage
+# run on the committed tree, 2026-09-21T06:24:28Z
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_storage-bf81ef3347d12670)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cas_reuse.rs (core/target/debug/deps/cas_reuse-6b2da67a7ec111a5)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/cas_roundtrip.rs (core/target/debug/deps/cas_roundtrip-8ca92f3559728616)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/catalogue_statement_reuse.rs (core/target/debug/deps/catalogue_statement_reuse-d4e28a336f3abe5e)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/codec_frames.rs (core/target/debug/deps/codec_frames-93985f1f60ef3993)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/connection_profile.rs (core/target/debug/deps/connection_profile-eb7ae9cd9aa89463)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/content_index.rs (core/target/debug/deps/content_index-81833b205c633185)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/core_pipeline.rs (core/target/debug/deps/core_pipeline-3ce4a4f6875b1d7e)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/delta_chains.rs (core/target/debug/deps/delta_chains-da56eae50067a7a4)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/delta_payload.rs (core/target/debug/deps/delta_payload-35ef8079fbceeef9)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/edit_pipeline.rs (core/target/debug/deps/edit_pipeline-65fd596921d53c72)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/filesystem_failure.rs (core/target/debug/deps/filesystem_failure-8e9fa7a21469e36e)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/filesystem_pipeline.rs (core/target/debug/deps/filesystem_pipeline-9d64d35aac25825b)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/group_decodes.rs (core/target/debug/deps/group_decodes-a0815993e6d62805)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/memory_bounds.rs (core/target/debug/deps/memory_bounds-c012dcadcc90c042)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/metadata_chain.rs (core/target/debug/deps/metadata_chain-f86813b82f38ad07)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/metadata_fingerprint_collision.rs (core/target/debug/deps/metadata_fingerprint_collision-a0a8245095cdbe35)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/metadata_pool.rs (core/target/debug/deps/metadata_pool-11015fd03562ea0e)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+     Running tests/metadata_pool_index.rs (core/target/debug/deps/metadata_pool_index-bdc7f3dacbaa4f63)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/metadata_window.rs (core/target/debug/deps/metadata_window-fd9fb8dbc2bc7b89)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+     Running tests/multi_writer.rs (core/target/debug/deps/multi_writer-c42a920b9aeb7996)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/pack_locator.rs (core/target/debug/deps/pack_locator-1230b58042395a77)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/pack_watermark.rs (core/target/debug/deps/pack_watermark-2b3566a55604600d)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/persistence_failure.rs (core/target/debug/deps/persistence_failure-d3ec52068bbd2d79)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/physical_formats.rs (core/target/debug/deps/physical_formats-ebab3d16e45e9eca)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/policy_capacity.rs (core/target/debug/deps/policy_capacity-208eb301c14b5be5)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/provider_errors.rs (core/target/debug/deps/provider_errors-e38302b88ac6e122)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/statement_batching.rs (core/target/debug/deps/statement_batching-8f4a39c266c91177)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/storage_limits.rs (core/target/debug/deps/storage_limits-44547b6ed74b8beb)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/timing.rs (core/target/debug/deps/timing-d4952e582c8e88ad)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/visibility.rs (core/target/debug/deps/visibility-3d9e58b278ce9a6c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/write_admission.rs (core/target/debug/deps/write_admission-27c49634ecbf0bc2)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+# summary
+33

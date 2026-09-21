@@ -319,6 +319,51 @@ pub fn repeat(len: usize, byte: u8) -> Vec<u8> {
     vec![byte; len]
 }
 
+/// Truncates a pack row's bytes to the length the pack itself declares.
+///
+/// A pack row is allocated at its lane's pack limit so that an append can write
+/// into the spare bytes in place, so `SELECT data` returns the row's whole
+/// capacity. The pack's own control area names how many of those bytes are the
+/// pack; this returns exactly those, which is what every reader above
+/// `lookup::pack_bytes` sees. A test that inspected the raw row without this
+/// would be reading a pack padded with zeros.
+pub fn truncate_pack(data: Vec<u8>) -> Vec<u8> {
+    let used = layerfs_storage::pack::declared_length(&data).expect("declared pack length");
+    let mut pack = data;
+    pack.truncate(used);
+    pack
+}
+
+/// Writes a tampered pack back into its row, keeping the row's own capacity.
+///
+/// The row's length *is* the pack's capacity and a later append writes into the
+/// spare bytes, so a tamper that shortened the row would break the write path
+/// instead of the read path the case is about. The pack is padded back to the
+/// length the row already had.
+pub fn write_pack_row(connection: &rusqlite::Connection, pack_id: i64, pack: &[u8]) {
+    let capacity: i64 = connection
+        .query_row(
+            "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
+            rusqlite::params![pack_id],
+            |row| row.get(0),
+        )
+        .expect("pack row length");
+    let capacity = usize::try_from(capacity).expect("pack capacity");
+    assert!(
+        pack.len() <= capacity,
+        "a tampered pack never exceeds its row"
+    );
+    let mut bytes = pack.to_vec();
+    bytes.resize(capacity, 0);
+    let affected = connection
+        .execute(
+            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
+            rusqlite::params![pack_id, bytes],
+        )
+        .expect("pack rewrite");
+    assert_eq!(affected, 1);
+}
+
 /// Deterministic structured input.
 pub fn patterned(len: usize) -> Vec<u8> {
     (0..len)
@@ -329,23 +374,27 @@ pub fn patterned(len: usize) -> Vec<u8> {
 /// Flips one byte of the first stored pack body, simulating damaged storage.
 pub fn corrupt_first_pack(path: &Path) {
     let connection = rusqlite::Connection::open(path).expect("external connection");
+    let pack_id: i64 = connection
+        .query_row("SELECT MIN(pack_id) FROM object_packs", [], |row| {
+            row.get(0)
+        })
+        .expect("pack row");
+    let mut damaged = read_pack_row(&connection, pack_id);
+    let index = damaged.len() - 1;
+    damaged[index] ^= 0xff;
+    write_pack_row(&connection, pack_id, &damaged);
+}
+
+/// Reads one pack row as the pack it declares. See [`truncate_pack`].
+pub fn read_pack_row(connection: &rusqlite::Connection, pack_id: i64) -> Vec<u8> {
     let data: Vec<u8> = connection
         .query_row(
-            "SELECT data FROM object_packs ORDER BY pack_id LIMIT 1",
-            [],
+            "SELECT data FROM object_packs WHERE pack_id = ?1",
+            rusqlite::params![pack_id],
             |row| row.get(0),
         )
         .expect("pack row");
-    let mut damaged = data.clone();
-    let index = damaged.len() - 1;
-    damaged[index] ^= 0xff;
-    let affected = connection
-        .execute(
-            "UPDATE object_packs SET data = ?1 WHERE pack_id = (SELECT MIN(pack_id) FROM object_packs)",
-            rusqlite::params![damaged],
-        )
-        .expect("pack update");
-    assert_eq!(affected, 1);
+    truncate_pack(data)
 }
 
 /// Damages the digest of the first stored value-group catalogue row.
@@ -381,13 +430,7 @@ pub fn forge_stored_base(path: &std::path::Path, object: ObjectId, base: ObjectI
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .expect("locator");
-    let pack: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            rusqlite::params![pack_id],
-            |row| row.get(0),
-        )
-        .expect("pack");
+    let pack = read_pack_row(&connection, pack_id);
     let header = parse_header(&pack).expect("pack header");
     let mut decode = layerfs_storage::encoding::DecompressionWorkspace::new().expect("decode");
     let mut groups: Vec<Vec<Vec<u8>>> = Vec::new();

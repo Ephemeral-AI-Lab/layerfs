@@ -31,6 +31,7 @@ impl MutationOwner {
         advisory: &[ObjectId],
         availability: &mut Availability,
     ) -> StorageResult<()> {
+        let whole = std::time::Instant::now();
         if self.terminal {
             return Err(StorageError::Aborted);
         }
@@ -100,6 +101,7 @@ impl MutationOwner {
         ) {
             self.seal_group(lane, availability)?;
         }
+        crate::cas::owner::SaveProfile::charge(&mut self.profile.diag.offer_total_ns, whole);
         Ok(())
     }
 

@@ -39,8 +39,16 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// a Store created at a higher setting keeps valid rows when the setting is
 /// lowered. A version-7 Store is rejected rather than migrated, exactly as every
 /// earlier version is, and no row is rewritten to fit the new column.
+/// Version 9 changes the **pack framing** (#219): the group directory moves into
+/// a region reserved at the lane's own width, so a body never moves when a group
+/// is appended, and the pack declares its own assembled length in its control
+/// area, so a pack row may be allocated with spare capacity and written in place
+/// through incremental BLOB I/O. Framing versions 1, 2, 4, 6 and 7 are the
+/// pre-v9 layout and are refused by the reader; a version-8 Store is refused at
+/// open by the check below, before any pack is read, exactly as every earlier
+/// version is. No row is rewritten and no pack is migrated.
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 8;
+pub const SCHEMA_VERSION: i64 = 9;
 
 /// Largest writer budget one Store may be configured with.
 ///

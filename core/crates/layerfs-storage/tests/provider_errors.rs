@@ -24,21 +24,9 @@ fn tamper_pack_of(path: &std::path::Path, object: ObjectId) {
             |row| row.get(0),
         )
         .expect("the object's locator");
-    let mut data: Vec<u8> = connection
-        .query_row(
-            "SELECT data FROM object_packs WHERE pack_id = ?1",
-            rusqlite::params![pack_id],
-            |row| row.get(0),
-        )
-        .expect("the pack holding the object");
+    let mut data = support::read_pack_row(&connection, pack_id);
     data[0] ^= 0x01;
-    let affected = connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![pack_id, data],
-        )
-        .expect("external tamper");
-    assert_eq!(affected, 1);
+    support::write_pack_row(&connection, pack_id, &data);
 }
 
 /// The highest published pack and the highest pack present.

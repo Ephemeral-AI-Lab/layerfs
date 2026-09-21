@@ -12,7 +12,7 @@ use crate::cas::owner::{MutationOwner, SaveProfile};
 
 use crate::cas::dependencies::Availability;
 use crate::error::{StorageError, StorageResult};
-use crate::pack::layout::PackLane;
+use crate::pack::layout::{PackLane, HEADER_LEN};
 use crate::pack::{build_group, SelectedWrite};
 use crate::sqlite::write::{self, ObjectRow};
 use std::time::Instant;
@@ -117,6 +117,7 @@ impl MutationOwner {
         if self.groups[index].records.is_empty() {
             return Ok(());
         }
+        let whole = Instant::now();
         let mut pending = std::mem::take(&mut self.groups[index]);
         let started = Instant::now();
         let framed = build_group(lane, &pending.records, Some(&mut self.compression));
@@ -162,6 +163,7 @@ impl MutationOwner {
         // The group's rows are inserted together: one statement per chunk the
         // engine's own limits allow, not one statement per row (P2-2). The same
         // rows, in the same order, with the same counters charged.
+        let started = Instant::now();
         let rows: Vec<ObjectRow> = pending
             .members
             .iter()
@@ -175,12 +177,16 @@ impl MutationOwner {
                 record_number,
             })
             .collect();
+        SaveProfile::charge(&mut self.profile.diag.rows_ns, started);
         let started = Instant::now();
         let statements = write::insert_objects(&self.connection, &rows);
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         let statements = statements?;
+        let started = Instant::now();
         self.validate_candidates(&rows)?;
+        SaveProfile::charge(&mut self.profile.diag.validate_ns, started);
         self.counters.statements = self.counters.statements.saturating_add(statements);
+        let started = Instant::now();
         for member in &pending.members {
             if member.base_object_id.is_some() {
                 self.counters.prefix_records += 1;
@@ -195,16 +201,22 @@ impl MutationOwner {
             self.transaction.rows += 1;
             self.transaction.bytes += member.canonical_length as u64;
         }
+        SaveProfile::charge(&mut self.profile.diag.members_ns, started);
         pending.clear();
-        self.maybe_commit()
+        self.maybe_commit()?;
+        SaveProfile::charge(&mut self.profile.diag.seal_total_ns, whole);
+        Ok(())
     }
 
     pub(super) fn write_pack(&mut self, write: &SelectedWrite) -> StorageResult<()> {
-        // Writing a pack moves every body in it (the directory grows), so every
-        // cache that holds those bytes is invalidated whenever this save writes: a
-        // body cached before the write no longer describes the pack. The pooled
-        // reader's decoded values survive - an ordinal's value is written once and
-        // never moves - but its pack cache does not.
+        let whole = Instant::now();
+        // A write adds a directory entry and a body to one pack, so a cache that
+        // holds that pack's bytes is describing a directory with fewer entries
+        // than the pack now has: a read of a group the write added would ask the
+        // old directory for it and be refused with `Integrity("group ordinal")`.
+        // The pooled reader's decoded values survive - an ordinal's value is
+        // written once and never moves, and neither does a body - but its pack
+        // cache does not.
         self.pool_reader.release_packs();
         // The delta reader's pack cache holds whole pack bytes and is keyed by pack
         // id, so an append leaves a stale directory behind. Reading a group ordinal
@@ -217,12 +229,15 @@ impl MutationOwner {
         self.pack_cache.remove(&write.pack_id);
         let started = Instant::now();
         let written = if write.created {
-            write::insert_pack(&self.connection, write.pack_id, &write.bytes)
+            write::insert_pack(&self.connection, write.pack_id, write)
         } else {
-            write::append_pack(&self.connection, write.pack_id, &write.bytes)
+            write::append_pack(&self.connection, write.pack_id, write)
         };
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         written?;
+        let submitted = (write.bodies.len() + write.directory.len() + HEADER_LEN) as u64;
+        self.counters.pack_bytes_written =
+            self.counters.pack_bytes_written.saturating_add(submitted);
         if write.created {
             self.counters.packs_created += 1;
         } else {
@@ -240,7 +255,11 @@ impl MutationOwner {
             )?;
         }
         self.transaction.rows += 1;
-        self.transaction.bytes += write.bytes.len() as u64;
+        // The bytes this write actually hands to the engine: its bodies, its
+        // directory entries and the control area. It used to be the assembled
+        // length of the whole pack, which is not a byte any transaction submitted.
+        self.transaction.bytes += (write.bodies.len() + write.directory.len() + HEADER_LEN) as u64;
+        SaveProfile::charge(&mut self.profile.diag.write_pack_total_ns, whole);
         Ok(())
     }
 }

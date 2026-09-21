@@ -28,8 +28,10 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     // know about. Identities sealed earlier in this wave are therefore consulted
     // beside it: an identity whose row this wave already wrote must not reach
     // `offer` again, or the `objects` primary key refuses the second row.
+    let whole = std::time::Instant::now();
     owner.sealed_rows.clear();
     let ids: Vec<ObjectId> = objects.iter().map(|object| object.id()).collect();
+    let wave_started = std::time::Instant::now();
     let locations = {
         let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
         lookup::locations(owner.connection(), &ids, i64::MAX)?
@@ -54,6 +56,7 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
         )?
     };
     owner.note_presence_queries(queries);
+    crate::cas::owner::SaveProfile::charge(&mut owner.profile.diag.wave_ns, wave_started);
     // A wave may carry the same identity several times. The first occurrence
     // decides the row; every later occurrence still receives the required exact
     // comparison against the bytes that were actually prepared for this identity.
@@ -109,5 +112,7 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
             }
         }
     }
-    owner.flush_candidates()
+    owner.flush_candidates()?;
+    crate::cas::owner::SaveProfile::charge(&mut owner.profile.diag.flush_batch_ns, whole);
+    Ok(())
 }

@@ -11,22 +11,15 @@ use support::{
 
 fn tamper_pack(path: &std::path::Path) {
     let connection = rusqlite::Connection::open(path).expect("external connection");
-    let (pack_id, mut data): (i64, Vec<u8>) = connection
-        .query_row(
-            "SELECT pack_id, data FROM object_packs LIMIT 1",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
+    let pack_id: i64 = connection
+        .query_row("SELECT MIN(pack_id) FROM object_packs", [], |row| {
+            row.get(0)
+        })
         .expect("a stored pack");
+    let mut data = support::read_pack_row(&connection, pack_id);
     let last = data.len() - 1;
     data[last] ^= 0x01;
-    let affected = connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![pack_id, data],
-        )
-        .expect("external tamper");
-    assert_eq!(affected, 1);
+    support::write_pack_row(&connection, pack_id, &data);
 }
 
 #[test]

@@ -771,10 +771,32 @@ fn namespace_scale(
     let mut content_bytes = 0_u64;
     let mut batch_roots = 0_u64;
     let mut largest_batch = 0_u64;
+    // The denominator `SaveProfile` is reported against. `SaveProfile` is an
+    // aggregate over the accept path and its own documentation defines the
+    // remainder as `total_ns` against the accept span
+    // (`layerfs-storage/src/cas/owner.rs`, `SaveProfile::total_ns`), so the span
+    // has to be measured rather than inferred. It runs from the moment the
+    // operation is owned to the moment the seal returns: every one of the seven
+    // buckets is charged inside that interval and nothing outside it is. Read
+    // beside `pipeline.profile_total_ns`; the difference is the remainder the
+    // instrument does not name. A harness `Instant` pair, not a product timing
+    // node - the shipped `timing.json` carries no span for this region.
+    let mut accept_span_ns = 0_u64;
+    // The accept span, split by its own driver into the three regions that share
+    // it: the C1 construction of the metadata stream (the caller builds the whole
+    // 10,101-binding filesystem inside the timed closure), the content stream's
+    // own accept loop, and the save's seal. The product's seven buckets are charged
+    // inside the second and third of these and charged to nothing in the first, so
+    // without this split a remainder measured against the span cannot tell product
+    // work from the driver's own work. Diagnostics only, not pinned.
+    let mut build_span_ns = 0_u64;
+    let mut content_span_ns = 0_u64;
+    let mut finish_span_ns = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, timing.child("store.open"))?;
         let mut operation = store.begin_save(timing.child("storage.begin"))?;
+        let accept_started = std::time::Instant::now();
         let result = {
             let mut handoff = SaveHandoff::new(&mut operation);
             let mut counting = CountingConsumer::new(&mut handoff);
@@ -817,6 +839,7 @@ fn namespace_scale(
             metadata_emitted = counting.accepted();
             built
         };
+        let build_done = std::time::Instant::now();
         // The content stream, on the same operation. `SaveHandoff` is dropped above
         // so the operation is free; the identities are the constructed ones.
         for id in content.insertion_order() {
@@ -829,7 +852,13 @@ fn namespace_scale(
             content_bytes = content_bytes.saturating_add(object.canonical_len() as u64);
             operation.accept(object)?;
         }
+        let content_done = std::time::Instant::now();
         let outcome = operation.finish(timing.child("storage.finish"))?;
+        let finish_done = std::time::Instant::now();
+        accept_span_ns = accept_started.elapsed().as_nanos() as u64;
+        build_span_ns = build_done.duration_since(accept_started).as_nanos() as u64;
+        content_span_ns = content_done.duration_since(build_done).as_nanos() as u64;
+        finish_span_ns = finish_done.duration_since(content_done).as_nanos() as u64;
         Ok::<_, PipelineFailure>((result, outcome))
     });
     let heap = instruments::heap_end();
@@ -995,6 +1024,102 @@ fn namespace_scale(
         "objects",
         "ObjectWork.objects_emitted",
     )?;
+    // The save's own nanosecond accept-path split for this row, and the span it is
+    // reported against. Seven disjoint buckets charged inside the accept path;
+    // their sum is charged work, and the difference from `pipeline.accept_span_ns`
+    // is the remainder the instrument does not name. Published under `pipeline.`
+    // with the names `history`'s `delta.profile_*` group already carries, so the
+    // two rows read side by side. Diagnostics only: none of these is pinned in
+    // `tests/golden/expected.tsv`, because a wall-clock observation cannot be a
+    // frozen constant.
+    for (key, value) in [
+        ("pipeline.profile_resolve_ns", outcome.profile.resolve_ns()),
+        ("pipeline.profile_resolve_eligible_ns", outcome.profile.resolve.eligible_ns),
+        ("pipeline.profile_resolve_acquire_ns", outcome.profile.resolve.acquire_ns),
+        ("pipeline.profile_resolve_cost_ns", outcome.profile.resolve.cost_ns),
+        ("pipeline.profile_resolve_reuse_ns", outcome.profile.resolve.reuse_ns),
+        ("pipeline.profile_resolve_pooled_ns", outcome.profile.resolve.pooled_ns),
+        ("pipeline.profile_full_ns", outcome.profile.full_ns),
+        ("pipeline.profile_delta_ns", outcome.profile.delta_ns),
+        ("pipeline.profile_group_ns", outcome.profile.group_ns),
+        ("pipeline.profile_place_ns", outcome.profile.place_ns),
+        ("pipeline.profile_sql_ns", outcome.profile.sql_ns),
+        ("pipeline.profile_commit_ns", outcome.profile.commit_ns),
+        ("pipeline.profile_total_ns", outcome.profile.total_ns()),
+        ("pipeline.accept_span_ns", accept_span_ns),
+        ("pipeline.span_build_ns", build_span_ns),
+        ("pipeline.span_content_ns", content_span_ns),
+        ("pipeline.span_finish_ns", finish_span_ns),
+        // DIAGNOSTIC totals of the regions the seven buckets do not charge. Each is
+        // a **total** of a named region, so a region that contains a bucket contains
+        // its charge too; the residue is the difference. They are published beside
+        // the profile and never folded into it, and `SaveOutcome`'s equality ignores
+        // them exactly as it ignores the profile. Nothing here is pinned.
+        ("pipeline.diag_commit_total_ns", outcome.profile.diag.commit_total_ns),
+        ("pipeline.diag_begin_ns", outcome.profile.diag.begin_ns),
+        ("pipeline.diag_seal_total_ns", outcome.profile.diag.seal_total_ns),
+        ("pipeline.diag_offer_total_ns", outcome.profile.diag.offer_total_ns),
+        ("pipeline.diag_write_pack_total_ns", outcome.profile.diag.write_pack_total_ns),
+        ("pipeline.diag_validate_ns", outcome.profile.diag.validate_ns),
+        ("pipeline.diag_collision_query_ns", outcome.profile.diag.collision_query_ns),
+        ("pipeline.diag_rows_ns", outcome.profile.diag.rows_ns),
+        ("pipeline.diag_members_ns", outcome.profile.diag.members_ns),
+        ("pipeline.diag_accept_plumbing_ns", outcome.profile.diag.accept_plumbing_ns),
+        ("pipeline.diag_flush_batch_ns", outcome.profile.diag.flush_batch_ns),
+        ("pipeline.diag_wave_ns", outcome.profile.diag.wave_ns),
+        ("pipeline.diag_finish_total_ns", outcome.profile.diag.finish_total_ns),
+        ("pipeline.diag_publish_ns", outcome.profile.diag.publish_ns),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            key,
+            value as i128,
+            "ns",
+            "the save's own nanosecond accept-path split, an aggregate over the operation, never a span per object",
+        )?;
+    }
+    // A count, not a duration: it is the population the B1 reuse probe measures, so
+    // it is published in its own unit rather than folded into the `ns` group. Zero
+    // unless `LAYERFS_STORAGE_REUSE_PROBE=1`.
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.profile_reuse_repeat",
+        outcome.profile.reuse_repeat as i128,
+        "objects",
+        "repeats of an exact-reuse verification this operation had already performed",
+    )?;
+    // The save's own statement and pack counters. `SaveOutcome` carries every one
+    // of them on every row (`cas/store.rs:55-90`); this driver published none of
+    // them, which is why the pack-append call count had to be derived from the
+    // source and a microbenchmark rather than read from the row. `pack_appends`
+    // against `packs_created` is the write amplification the pack-append rewrite
+    // causes: `append_pack` binds the whole new body because the pack directory
+    // moves (`sqlite/write.rs:79-89`, `cas/placement.rs:203-205`).
+    for (key, value, unit) in [
+        ("pipeline.statements", outcome.statements, "statements"),
+        ("pipeline.presence_queries", outcome.presence_queries, "queries"),
+        ("pipeline.packs_created", outcome.packs_created, "packs"),
+        // The bytes this operation actually handed to the engine for packs, in the
+        // unit the pack-append rewrite is measured in. Before the reserved-directory
+        // framing every append submitted the whole reassembled pack; the campaign
+        // measured that at 2,292,865,337 bytes for 302,023,232 persisted.
+        (
+            "pipeline.pack_bytes_written",
+            outcome.pack_bytes_written,
+            "bytes",
+        ),
+        ("pipeline.pack_appends", outcome.pack_appends, "appends"),
+        ("pipeline.full_records", outcome.full_records, "objects"),
+        ("pipeline.prefix_records", outcome.prefix_records, "objects"),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            key,
+            i128::from(value),
+            unit,
+            "SaveOutcome's own statement and pack counters, published by this driver",
+        )?;
+    }
     context.trace.write_number(
         Kind::Counter,
         "timing_json_bytes",

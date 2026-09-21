@@ -16,7 +16,7 @@ use crate::encoding::delta::record;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::FULL_TAG;
 use crate::pack::layout::{
-    PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, WHOLE_FILE_COMPACT_DROP, WHOLE_FILE_ENTRY_LEN,
+    directory_capacity, PackLane, DIRECTORY_ENTRY_LEN, HEADER_LEN, WHOLE_FILE_COMPACT_DROP,
 };
 use crate::policy::{StorageCapacities, CANONICAL_LIMIT};
 
@@ -192,7 +192,12 @@ fn plan_lane(
         .len()
         .checked_sub(WHOLE_FILE_COMPACT_DROP)
         .ok_or(StorageError::Integrity("compact record width"))?;
-    let contribution = HEADER_LEN + WHOLE_FILE_ENTRY_LEN + body;
+    // A whole-file record lands in the compact lane only if a pack can hold it
+    // whole: the control area, the lane's **whole** reserved directory region -
+    // which the format allocates whether or not the pack fills it - and the body.
+    // Sizing this against one directory entry instead would admit a record that
+    // placement then refuses with `CapacityExceeded { pack.assembled_length }`.
+    let contribution = HEADER_LEN + directory_capacity(PackLane::WholeFile) + body;
     if contribution <= capacities.pack_limit {
         return Ok((PackLane::WholeFile, compact));
     }

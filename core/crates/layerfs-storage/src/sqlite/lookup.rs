@@ -154,9 +154,21 @@ pub fn present(
         .collect())
 }
 
-/// Reads one pack BLOB by primary key.
+/// Reads one pack by primary key, truncated to the length it declares.
+///
+/// A pack row may hold more bytes than its pack uses: the row is allocated at the
+/// lane's pack limit so that an append can write in place, and the pack's own
+/// control area declares how many of those bytes are the pack (`pack::layout`,
+/// `declared_length`). Truncating here - at the single place a pack is read - is
+/// what lets every reader above this line keep working on exactly the bytes the
+/// pack occupies, with the capacity padding invisible to all of them.
+///
+/// The `length(data)` guard is unchanged and still refuses a row whose *capacity*
+/// is outside the declared bounds; the declared length is validated separately
+/// against the bytes actually present, so a pack that declares a length past its
+/// own row is an integrity failure rather than a short read.
 pub fn pack_bytes(connection: &Connection, pack_id: i64) -> StorageResult<Vec<u8>> {
-    connection
+    let mut data: Vec<u8> = connection
         .query_row(
             "SELECT p.data FROM object_packs p JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE p.pack_id = ?1 AND length(p.data) BETWEEN 32 AND ?2 AND (p.save_id = r.save_id OR s.publication <= r.publication)",
             rusqlite::params![pack_id, crate::policy::SINGLETON_PACK_LIMIT as i64],
@@ -165,7 +177,10 @@ pub fn pack_bytes(connection: &Connection, pack_id: i64) -> StorageResult<Vec<u8
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => StorageError::Integrity("pack row is missing"),
             other => StorageError::Engine(other),
-        })
+        })?;
+    let used = crate::pack::layout::declared_length(&data)?;
+    data.truncate(used);
+    Ok(data)
 }
 
 /// Highest pack identifier currently stored, or zero when the Store is empty.
