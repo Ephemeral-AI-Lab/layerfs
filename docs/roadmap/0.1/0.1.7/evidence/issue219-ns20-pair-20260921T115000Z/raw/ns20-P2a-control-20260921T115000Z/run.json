@@ -1,0 +1,82 @@
+{
+  "cache_state": "declared per row; never pooled",
+  "declared_exceptions": [],
+  "golden_matches": true,
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "f387eeb387f8b64c5ebc9822ae8dc0b80933fdd503db7fa9d4c5e5290cdf6498",
+    "harness_lock_sha256": "612640f777f5127f17a3aa550eb0d65b11652b4efcb2f99f66ece4513b80f1cc",
+    "harness_python_sha256": "27d2ed0be974524f84df0f107cba213441204c96e19ab46dfd2e3bfc90ef2a9d",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "c6446bd901b8126ca70fd32d751b33938d5026ce4fc64a956fa36c910e33bbc7",
+    "source_commit": "b7a0ab0a267c8d9d52da1db77780f699f2b13585",
+    "source_dirty": false,
+    "source_dirty_files": [],
+    "started_utc": "2026-09-21T11:27:38Z"
+  },
+  "lane": "smoke",
+  "phases": {
+    "admission": {
+      "acquisition_wall_ns": 16417125,
+      "cleanup_wall_ns": 417,
+      "complete_command_ns": 1658319583,
+      "handoff_ns": 29360628,
+      "operation_ns": 1049102250,
+      "preparation_wall_ns": 509974958,
+      "verification_invocation_ns": 0,
+      "verification_wall_ns": 87430167
+    },
+    "by_status": {
+      "PASS": {
+        "acquisition_wall_ns": 16417125,
+        "cleanup_wall_ns": 417,
+        "complete_command_ns": 1658319583,
+        "handoff_ns": 29360628,
+        "operation_ns": 1049102250,
+        "preparation_wall_ns": 509974958,
+        "rows": 1,
+        "verification_invocation_ns": 0,
+        "verification_wall_ns": 87430167
+      }
+    },
+    "schema": "layerfs-lane-phases-v1",
+    "unreconciled_rows": []
+  },
+  "registry_self_check": {
+    "MISMATCH frozen cardinality array": "expected [4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 4], actual [4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 5]",
+    "admission rows": "218",
+    "cardinality sum": "218",
+    "diagnostic rows": "3",
+    "exit_code": 1,
+    "frozen cardinality": "[4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 5]",
+    "history group": "3 (outside the 217)",
+    "pinned constants": "1984 row(s); O1 identity pinned for 213 of 218 admission case(s)",
+    "registered rows": "221",
+    "registry self-check": "FAIL",
+    "smoke lane": "20",
+    "status": "FAIL",
+    "stderr": ""
+  },
+  "reused_proof": null,
+  "reused_proof_identities": null,
+  "reused_proof_omission": null,
+  "rows": 1,
+  "run_dir": "benchmark-results/issue219/ns20-P2a-control-20260921T115000Z",
+  "samples_per_case_per_arm": 1,
+  "schema": "layerfs-core-run-v1",
+  "selection": [
+    "pipeline-namespace-10000"
+  ],
+  "selection_size": 1,
+  "tally": {
+    "PASS": 1
+  },
+  "verification_mode": "full",
+  "verification_sample_rule": "",
+  "wall_ns": 1797172291
+}

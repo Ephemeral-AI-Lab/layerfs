@@ -3265,3 +3265,172 @@ round (new case, 600 MB fixture, new prepared artifact, new pins), not a measure
 
 Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this
 entry is documentation only.
+
+## L80 — #219 round 20, step 1: the 1 MiB pack limit is confirmed on the page accounting and refuted on a matched pair (2026-09-21)
+
+Status: **treatment, measured, reverted.** One product constant changed and reverted; the rows, the
+pre-registrations and the reports stay as evidence. Arm and report:
+[`issue219-ns20-packlimit-20260921T111500Z`](../../0.1.7/evidence/issue219-ns20-packlimit-20260921T111500Z/report.md);
+the pair that decides it:
+[`issue219-ns20-pair-20260921T115000Z`](../../0.1.7/evidence/issue219-ns20-pair-20260921T115000Z/report.md).
+
+**The change.** `policy.rs`'s `PACK_LIMIT` 256 KiB → 1 MiB, with `SCHEMA_VERSION` 10 → 11 (and the
+schema identity's second declaration in `sql/schema.sql`), because a 1 MiB pack is not readable by a
+256 KiB build and the version is what makes that a refusal at open. `GROUP_LIMIT`, `GROUP_TARGET`, the
+five framing versions and every stored byte unchanged. Commit `944d43864`, reverted by `8efc798de`;
+the product tree is byte-identical to `944d43864^`.
+
+**The registered page accounting fired exactly.** Matched pair, same session, back to back, two binaries
+differing only by that commit, one sample per arm, both `PASS` 13/13, `--verify full`:
+`packs_created` 1,270 → **295** (registered point 295, band 280–320);
+`space.pack_bodies_bytes` 332,922,880 → **309,329,920** = `295 × 1,048,576` exactly (registered
+−23 MB ± 4 MB); `space.after.page_count` 81,987 → **76,162** (registered −5,781, measured −5,825);
+`pack_appends` 6,603 → **7,578** (registered ~7,578); `diag_commit_total_ns` 410,536,288 →
+**360,876,709** = **−49,659,579** against a registered −30.7 ms. `pack_bytes_written`, `commits` (95),
+`statements` (7,666) and all 14 pinned values are identical. The pair is matched: `construct_ns` +1.67 %,
+`construct_noise_ns` +1.77 %, `span_build_ns` +0.31 %, `preparation_ns` −0.43 %, all inside the
+registered 5 %.
+
+**It is refuted by the boundary, not by the accounting.** `operation_work_ns` is
+`accept_span_ns − finish_drop_ns` (`src/ops/pipeline.rs:1260-1263`), and `finish_drop_ns` is the save's
+owner being dropped, **99.99 % of it `diag_release_connection_ns`, the connection close**. On the pair:
+
+| | arm A control `b7a0ab0a2` | arm B treatment | difference |
+| --- | ---: | ---: | ---: |
+| `operation_work_ns` — the declared figure | 943,318,416 | 936,571,167 | **−6,747,249 (−0.72 %)** |
+| `accept_span_ns` — the inclusive closure | 1,046,366,750 | 1,125,224,833 | **+78,858,083 (+7.54 %)** |
+| `finish_drop_ns` | 103,048,334 | 188,653,666 | **+85,605,332** |
+| flush-shaped total (commits + close) | 513,584,622 | 549,530,375 | **+35,945,753** |
+
+`establishment + figure + teardown` equals the runner's own `phases.operation_ns` in both arms, so the
+arithmetic is exact. The flush-shaped total is worse in **both** sessions' pairs (513,584,622 →
+549,530,375 here; 512,768,957 → 597,330,374 there), and the two **controls** agree to 0.16 % across
+five hours of session drift — so this is not a term that merely moved. `diag_write_pack_total_ns` rose
+27,018,349 here and fell 3,976,500 there: **NOT_MEASURED**, no mechanism claimed.
+
+**The arm's own row is not evidence, and it is filed anyway.**
+`ns20-P1-packlimit-20260921T112200Z` `PASS` 13/13 at `c296194a1` reads `operation_work_ns` **929,513,251**
+— under the 1 s bar — and that reading is wrong: `finish_drop_ns` rose **+148,935,417** while
+`accept_span_ns` fell only **48,282,749**, so **75.5 % of its −197,218,166 headline is work that crossed
+the row's own declared boundary**. Its control is also not matched: pack-free work moved −27.0 %
+(`construct_ns` 440,144,955 → 321,098,127), −25.7 % (`construct_noise_ns`) and −23.7 %
+(`span_build_ns`), none of which can see a Store.
+
+**Two things handed on.** (1) **Why a connection close with fewer pages to write costs 85.6 ms more** is
+`NOT_MEASURED`; the round-19 instrument (`tests/commit_page_price.rs`) already reads `CACHE_WRITE`,
+`CACHE_SPILL`, `page_count` and `freelist_count` and does not read them **across a close**. (2) The row
+excludes the connection close, and this is the first arm to exploit that; either the close comes inside
+the boundary or such a change keeps reading as a win.
+
+**A finding larger than the arm: session spread exceeds every lever in this campaign.** Arm A is the
+round-19 control row's product source, re-measured today: **943,318,416 ns against 1,126,731,417 ns**,
+**183,412,999 ns apart with identical product source, harness driver and case**, on work no lever can
+touch (`construct_ns` −26.8 %, `span_build_ns` −24.7 %). Every lever priced in L67–L79 is 20–90 ms. No
+row in this campaign is comparable to a row from another session at that scale, and no receipt publishes
+the pack-free work that would let a reader check.
+
+Checks as run: core workspace `--no-fail-fast` **630 passed / 0 failed** both with the change and after
+the revert; `clippy --all-targets` clean; `fmt --all --check` clean;
+`core/tools/check_product_boundary.py` **PASS** (194 production files); arm and pair rows `--verify full`,
+one sample each, `PASS` 13/13, complete commands 1.658–1.766 s inside the 15 s limit with no declared
+exception. **Not run:** the reference `crates/` workspace, any `PACK_LIMIT` other than 1 MiB, and any
+instrument on the connection close.
+
+Production LOC: **31683 → 31683 (delta 0)** for both the arm and the revert. Method
+`tools/production_loc.py --root <tree>`, first parent against the committed tree.
+
+## L81 — #219 round 20, step 2: the C1 build ladder is flat from 10,000 to 100,000, and its 10k receipts are 4.68× stale (2026-09-21)
+
+Status: **instrument.** No product line changed, no arm registered, no gate claimed. Report and
+pre-registration:
+[`issue219-ns20-ladder-20260921T113500Z`](../../0.1.7/evidence/issue219-ns20-ladder-20260921T113500Z/).
+Four rungs of `c1.fs.build-scale`, four invocations, one sample each, `--verify full`, all `PASS`, at
+source `88accb7d0`, one binary for the whole round.
+
+| rung | bindings | `fs_build.operations` | `phases.operation_ns` | complete command | ns per binding |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 100 | 101 | — (single build) | 127,292 | 4,680,958 | 1,260 |
+| 1,000 | 1,010 | — (single build) | 947,250 | 8,224,709 | 938 |
+| 10,000 | 10,100 | **3** | 68,514,625 | 94,736,583 | 6,784 |
+| 100,000 | 101,000 | **25** | 665,695,208 | 918,281,125 | **6,591** |
+
+**The answer the commission asked for: cost per binding is flat from 10,000 to 100,000, −2.8 %**
+(6,784 → 6,591 ns), with 25 operations against 3 and 9.72× the operation time for 10× the entries.
+The registered operation counts (1, 1, 3, 25) fired; `namespace-100000`, which is **not** in
+`runner.py`'s `DECLARED_EXCEPTIONS`, fits 15 s at **0.918 s**. The registered point prediction
+(3.2 s, band 2.4–4.0 s) **missed low** because it was anchored on the 10k rungs' old receipts.
+
+**The one bend is structural and it is not at 10k.** Per binding: 1,260 → 938 → **6,784** → 6,591. The
+7.2× step sits between 1,000 and 10,000, exactly where the tree stops fitting `WALK_CEILING` (4,096):
+1,010 bindings fit one operation, 10,100 do not, so the row becomes batched — a chain to read
+(`fs_build.base_records_read: 6,066`), 68 read waves, per-batch ordering backings on disk.
+
+**A correction to the handoff.** It prices this ladder as "verified, not assumed: the 10k rungs are PASS
+at **0.36 s and 0.35 s**". Both receipts are real and both were taken at **`dbab10ae2`**:
+
+| 10k rung | source | `phases.operation_ns` | ns per binding |
+| --- | --- | ---: | ---: |
+| `ns17-fsbuild-10000-300mb-20260921T031259Z` | `dbab10ae2` | 320,582,291 | 31,741 |
+| `ns17-namespace-10000-full-20260921T031259Z` | `dbab10ae2` | 313,133,084 | 31,003 |
+| `ns20-L1-10000-20260921T113500Z` | `88accb7d0` | **68,514,625** | **6,784** |
+
+**4.68× cheaper than the first receipt and 4.57× than the second, with every `fs_build.*` counter
+byte-identical** across all three — same operations, bindings, pages, waves and gates. The attribution
+is narrow and by reading: the harness's `c1.fs.build-scale` driver differs across those five hours only
+by three `fn` → `pub(super) fn` visibility changes (the other harness changes in the window are the
+`pipeline.*` driver, a registry count and a timing field on `CountingConsumer`), and on the product side
+**exactly one file** in `layerfs-content` changed — `filesystem/validate.rs`, by
+`fff509f3d` and `35aaf6f0b`, round 13's memoised absence (L71). The handoff's 0.36 s ceiling estimate is
+stale by 4.7× and belongs with correction 2's family: a receipt is evidence about the tree that produced
+it.
+
+Checks as run: four rungs `PASS` (9/9, 9/9, 10/10, 10/10), `--verify full`, one sample each, complete
+commands 0.005–0.918 s inside the 15 s limit; `namespace-100000`'s input-tree master acquired once,
+untimed, before its timed child. **Not run:** the family's `-text-v1` rungs, any rung between these
+four, any second sample at any rung.
+
+Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`.
+
+## L82 — #219 round 20, step 3: no `pipeline-namespace-100000`, and the case mapping written down at last (2026-09-21)
+
+Status: **decision.** Changes no product line, runs nothing, claims no performance figure.
+[`issue219-ns20-scaling-decision.md`](../../0.1.7/issue219-ns20-scaling-decision.md).
+
+**A correction to the handoff first.** Its correction 4 says S0 was "a written decision on pairing
+feasibility" and that "S1–S3 were never executed". **Both halves are wrong and the record is on disk**:
+S0 is a 205-line deliverable with an inventory of all eight `namespace-10000` rows, mechanics 2a/2b
+confirmed by reading the code, and **§3 "the pairing decision"** — which measured that v0.1.6 and `HEAD`
+compile the **same** reference product (216 production files, zero content differences,
+`git diff --stat v0.1.6..HEAD -- 'crates/*/src/**'` empty), so a v0.1.6 arm would be a second
+measurement of the same code. S1 (the bar's first part, **NOT MET** on a clean sealed build), S2
+(attribution) and S5 (independent re-derivation) all exist. **S3 was decided, not skipped.**
+
+**The mapping that genuinely was missing is now written down.** Three registered rows answer to
+`namespace-10000` in two harnesses: the bar's `namespace-10000` (`benchmark/fs-bench-pro/`, route
+`namespace`, timer `layerstack_init_ns`, `fresh-output`, `cache_contract: null`); this campaign's
+`pipeline-namespace-10000` (core harness, `pipeline.operation_work_ns`, `prepared-dewarmed`,
+`opened-from-copy`); and the core harness's own `namespace-10000` in `c1.fs.build-scale`
+(`warm-in-process-fixture`, **no Store at all**). Consequences: **the bar is not evaluated by this
+campaign's row**; the campaign's row is an analogue, not a reproduction, because its timer excludes the
+construction the bar's includes and includes a Store the bar's case does not write; and the only
+defensible comparison is the boundary-matched **work** comparison, labelled as a shape comparison
+rather than a pairing.
+
+**Decision: do not build `pipeline-namespace-100000` now.** The commission's condition is met — the
+ladder is flat, so the C1 half (`span_build_ns` 68.38 ms of a 1,126.73 ms row) is not a scaling risk.
+The half it would still buy is the save at 1.67× the bytes, which is linearity of a structurally
+proportional path (`pack_bodies` = `packs × PACK_LIMIT`, `page_count` = reserve ÷ 4,096) and is not
+where the gap is. **And L80's own finding decides it**: a bigger row would produce one more number that
+cannot be compared with any number taken in another session, at 183 ms of session spread against
+20–90 ms levers. The decision reverses on a session control, on a measured non-proportionality in the
+save path, or on an owner ruling.
+
+**A second correction to the handoff's price.** It costs the row as "a new case declaration, a 600 MB
+fixture (500 MB + the 100 MB anchor), a new prepared artifact and new pins". **"A new prepared
+artifact" is wrong for this family**: the registry row is `prepared = -`, `Preparation::InProcess`
+(`registry.tsv:219`, `pipeline.rs:731-736`), so the fixture is built inside the invocation and no master
+is acquired. The 600 MB is an inference too: this family declares a **total**
+(`NAMESPACE_SCALE_BYTES = 300_000_000`, `pipeline.rs:86`) with the anchor inside it
+(`namespace_content.rs:48-51`, `:195`).
+
+Production LOC: **31683 → 31683 (delta 0)**. Method `tools/production_loc.py --root <tree>`.

@@ -1,0 +1,218 @@
+{
+  "acquisition": {
+    "acquisition_wall_ns": 907279708,
+    "artifact": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/benchmark-results/fs-bench-pro-storage-content/prepared/namespace-100000",
+    "case_id": "namespace-100000",
+    "compatibility": "2c60cb15d0b0942a5b7a4fd8282bb31b38919451247bf62e78f59bf847ef3d7d",
+    "data_bytes": 29964525,
+    "exit_code": 0,
+    "files": 8,
+    "manifest_sha256": "258492673667fdcec8181e56bd7be4814b9b3df3e8da16ab781c0d1e5ae5cc37",
+    "producer_commit": "88accb7d0514ee7bfc9d20e7d9937c9965de27d2",
+    "producer_harness_sha256": "97b8a5a7e71fd255044ce150d8e4dd825894ab258ff8a911e4f06119d1110a10",
+    "recipe_version": "fs-bench-fixture-recipe-v3",
+    "state": "acquired",
+    "stderr": "",
+    "stdout": "namespace-100000 PASS gates=0 trace_bytes=3038",
+    "superseded": null,
+    "superseded_reason": null,
+    "validation": "sha256-per-file"
+  },
+  "admission": "admission",
+  "budget": {
+    "budgeted_ns": 1161583124,
+    "declared_exception": false,
+    "declared_ns": 911583124,
+    "lifecycle_allowance_ns": 250000000,
+    "limit_ns": 15000000000,
+    "reason": "1.162 s within the complete-command limit (0.912 s of declared phases + 0.250 s of lifecycle allowance; wall 0.918 s)",
+    "status": "PASS",
+    "wall_ns": 918281125
+  },
+  "case_id": "namespace-100000",
+  "child": {
+    "exit_code": 0,
+    "stderr": "",
+    "stdout": "namespace-100000 PASS gates=8 trace_bytes=7565"
+  },
+  "counters": {
+    "fs_build.base_records_read": 97906,
+    "fs_build.batch_bindings_max": 4096,
+    "fs_build.bindings_added": 101000,
+    "fs_build.directory_pages": 1002,
+    "fs_build.directory_updates": 2003,
+    "fs_build.inode_pages": 4124,
+    "fs_build.listing_directories": 1001,
+    "fs_build.objects_emitted": 4221,
+    "fs_build.objects_read": 5126,
+    "fs_build.operations": 25,
+    "fs_build.read_waves": 1096,
+    "fs_build.validation_entries": 4096
+  },
+  "declared_bytes": 0,
+  "declared_entries": 100000,
+  "family": "c1.fs.build-scale",
+  "gates": [
+    {
+      "class": "G7",
+      "id": "g7.tree-complete",
+      "limit": "report.is_incomplete() == false",
+      "measured": "complete tree: 1 nodes, depth 1",
+      "status": "PASS"
+    },
+    {
+      "class": "G4",
+      "id": "g4.swaps",
+      "limit": "== 0",
+      "measured": "0",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o1-replay-root",
+      "limit": "measured root 6644aaf2120a3f6cdae7f6788edb7c5dae3baed26be2dc6933b3d16293f7c4d3",
+      "measured": "replay root 6644aaf2120a3f6cdae7f6788edb7c5dae3baed26be2dc6933b3d16293f7c4d3",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o4-inode-table",
+      "limit": "70b8115876631363002243ea04e77a4bd7f62bf4f01cab308aac7db562d90a9c",
+      "measured": "70b8115876631363002243ea04e77a4bd7f62bf4f01cab308aac7db562d90a9c",
+      "status": "PASS"
+    },
+    {
+      "class": "G4",
+      "id": "g4.heap-window",
+      "limit": "the measured phase must allocate at least once",
+      "measured": "447277 allocations",
+      "status": "PASS"
+    },
+    {
+      "class": "G2",
+      "id": "g2.walk-ceiling",
+      "limit": "every operation states at most 4096 bindings",
+      "measured": "25 operations, largest 4096 bindings",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o4-chain-roots",
+      "limit": "25 roots from the unmeasured fixture chain",
+      "measured": "25 batch roots reproduced",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o4-listing",
+      "limit": "every directory's bindings equal the fixture manifest",
+      "measured": "1001 directories equal the manifest",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o3-pinned-counters",
+      "limit": "every O3 structural count equals its pinned constant",
+      "measured": "12 of 12 pinned counters reproduced here; 0 published by the other phase",
+      "status": "PASS"
+    },
+    {
+      "class": "G1",
+      "id": "g1.o1-pinned-identity",
+      "limit": "6644aaf2120a3f6cdae7f6788edb7c5dae3baed26be2dc6933b3d16293f7c4d3",
+      "measured": "filesystem_root 6644aaf2120a3f6cdae7f6788edb7c5dae3baed26be2dc6933b3d16293f7c4d3",
+      "status": "PASS"
+    }
+  ],
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "97b8a5a7e71fd255044ce150d8e4dd825894ab258ff8a911e4f06119d1110a10",
+    "harness_lock_sha256": "612640f777f5127f17a3aa550eb0d65b11652b4efcb2f99f66ece4513b80f1cc",
+    "harness_python_sha256": "27d2ed0be974524f84df0f107cba213441204c96e19ab46dfd2e3bfc90ef2a9d",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "c6446bd901b8126ca70fd32d751b33938d5026ce4fc64a956fa36c910e33bbc7",
+    "source_commit": "88accb7d0514ee7bfc9d20e7d9937c9965de27d2",
+    "source_dirty": false,
+    "source_dirty_files": [],
+    "started_utc": "2026-09-21T11:24:54Z"
+  },
+  "notes": [
+    "recipe_profile: binary-v1",
+    "recipe_entries: 100000",
+    "recipe_directories: 1000",
+    "bindings: 101000",
+    "multi_operation: 25 batches of at most 4096 bindings; the first is a build and the rest are updates that state new files only",
+    "cache_state: warm-in-process-fixture; the input and every batch's base are built before the timed region",
+    "measured_consumer: discarding; each batch's base is a fixture input",
+    "oracle_phase: separate-unmeasured-replay"
+  ],
+  "phases": {
+    "acquisition_wall_ns": 0,
+    "cleanup_wall_ns": 333,
+    "complete_command_ns": 918281125,
+    "cpu_system_ns": 382812000,
+    "cpu_user_ns": 270762000,
+    "handoff_ns": 0,
+    "invocations": [
+      {
+        "acquisition_ns": 0,
+        "cleanup_ns": 333,
+        "cpu_system_ns": 382812000,
+        "cpu_user_ns": 270762000,
+        "declared_ns": 911583124,
+        "handoff_ns": 0,
+        "invocation": "perf",
+        "invocation_ns": 911752041,
+        "operation_ns": 665695208,
+        "preparation_ns": 142232958,
+        "process_peak_rss_bytes": 118865920,
+        "reason": "declared 911583124 ns inside a 918281125 ns wall; 6698001 ns unaccounted, within 268365622 ns",
+        "reconciles": true,
+        "slack_ns": 6698001,
+        "timing_json_bytes": 62,
+        "tolerance_ns": 268365622,
+        "unaccounted_ns": 168917,
+        "verification_ns": 103654625,
+        "wall_ns": 918281125
+      }
+    ],
+    "operation_ns": 665695208,
+    "operation_root_elapsed_ns": 665695208,
+    "operation_root_incomplete": false,
+    "operation_root_name": "fs_build",
+    "preparation_wall_ns": 142232958,
+    "process_peak_rss_bytes": 118865920,
+    "reconciliation": {
+      "problems": [],
+      "reason": "every declared phase reconciles with its wall",
+      "status": "PASS",
+      "tolerance_absolute_ns": 250000000,
+      "tolerance_fraction": "1/50 of the wall"
+    },
+    "reused_invocations": [],
+    "verification_invocation_ns": 0,
+    "verification_wall_ns": 103654625
+  },
+  "profile": "",
+  "receipt_path": "benchmark-results/issue219/ns20-L1-100000-20260921T113500Z/namespace-100000/receipt.json",
+  "resources": {
+    "artifact.data_bytes": 29964525,
+    "cpu.system_ns": 382812000,
+    "cpu.user_ns": 270762000,
+    "heap.peak_incremental_bytes": 1536086,
+    "rss.process_peak_bytes": 118865920
+  },
+  "schema": "layerfs-core-receipt-v1",
+  "shape": "FsBuild { text: false }",
+  "status": "PASS",
+  "tier_label": "binary",
+  "trace_defects": [],
+  "verification": {},
+  "verification_mode": "full",
+  "wall_ns": 918281125
+}
