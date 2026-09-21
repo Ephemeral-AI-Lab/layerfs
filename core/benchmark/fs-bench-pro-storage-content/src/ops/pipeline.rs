@@ -856,6 +856,7 @@ fn namespace_scale(
         objects_read: u64,
         base_records_read: u64,
         validation: layerfs_content::filesystem::validate::ValidationWork,
+        sites: layerfs_content::filesystem::validate::ValidationReadSites,
     }
     let mut build_work = BuildWork::default();
     instruments::heap_begin();
@@ -925,6 +926,13 @@ fn namespace_scale(
                 build_work.validation.directory_pages_read +=
                     built.counters.validation.directory_pages_read;
                 build_work.validation.entries_examined += built.counters.validation.entries_examined;
+                let sites = built.counters.validation.inode_pages_by_site;
+                build_work.sites.allocation += sites.allocation;
+                build_work.sites.prefetch += sites.prefetch;
+                build_work.sites.bindings += sites.bindings;
+                build_work.sites.aliases += sites.aliases;
+                build_work.sites.cycles += sites.cycles;
+                build_work.sites.reachability += sites.reachability;
                 build_work.objects_read += built.counters.objects.objects_read;
                 build_work.base_records_read += built.counters.base_records_read;
                 last = Some(built);
@@ -1105,6 +1113,18 @@ fn namespace_scale(
             build_work.validation.directory_pages_read,
         ),
         ("pipeline.validation_entries_examined", build_work.validation.entries_examined),
+        (
+            "pipeline.validation_pages_allocation",
+            build_work.sites.allocation,
+        ),
+        ("pipeline.validation_pages_prefetch", build_work.sites.prefetch),
+        ("pipeline.validation_pages_bindings", build_work.sites.bindings),
+        ("pipeline.validation_pages_aliases", build_work.sites.aliases),
+        ("pipeline.validation_pages_cycles", build_work.sites.cycles),
+        (
+            "pipeline.validation_pages_reachability",
+            build_work.sites.reachability,
+        ),
         ("pipeline.build_objects_read", build_work.objects_read),
         ("pipeline.build_base_records_read", build_work.base_records_read),
     ] {

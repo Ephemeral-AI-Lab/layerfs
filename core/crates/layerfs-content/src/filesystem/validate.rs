@@ -40,6 +40,50 @@ pub struct ValidationWork {
     pub directory_pages_read: u64,
     /// Directory entries the checks examined.
     pub entries_examined: u64,
+    /// Inode pages read, split by the call site that asked for them.
+    ///
+    /// `inode_pages_read` is one total, and a total cannot say which of the
+    /// checks read the table: the grouped prefetch charges one wave per *level*
+    /// (`inode/read.rs`), a single-serial descent charges one wave *and* one page
+    /// per level, and four different regions can make either call. Each is
+    /// charged here as the growth of `inode_pages_read` across its own region, so
+    /// the six sites sum to the total exactly. `FilesystemTopology::load` reads
+    /// the base root once per operation and charges no counter at all, so it has
+    /// no site here rather than a site of zero.
+    pub inode_pages_by_site: ValidationReadSites,
+}
+
+/// Where one validation's inode pages were read.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ValidationReadSites {
+    /// The allocator precondition, one grouped demand per 64 new serials.
+    pub allocation: u64,
+    /// The batch's grouped prefetch of parents and bound children.
+    pub prefetch: u64,
+    /// The per-binding loop's own record lookups.
+    pub bindings: u64,
+    /// The parent-alias pass and its per-parent listings.
+    pub aliases: u64,
+    /// The effective-tree cycle walk over rebound directories.
+    pub cycles: u64,
+    /// The build-reachability walk a base-less operation takes instead.
+    pub reachability: u64,
+}
+
+/// Charges the inode pages read since `before` to one site.
+///
+/// The site counters are read from the same total the operation already
+/// maintains, so an instrument added here cannot invent a read: the six sites sum
+/// to `inode_pages_read` or the difference is a read outside every region, which
+/// is itself visible in the row.
+fn charge_site(
+    work: &mut ValidationWork,
+    before: u64,
+    site: fn(&mut ValidationReadSites) -> &mut u64,
+) {
+    let delta = work.inode_pages_read.saturating_sub(before);
+    let slot = site(&mut work.inode_pages_by_site);
+    *slot = slot.saturating_add(delta);
 }
 
 /// Entries the effective-tree cycle check may inspect before it refuses.
@@ -133,7 +177,9 @@ pub fn check<'a>(
     let mut by_parent: BTreeMap<u64, Vec<Vec<u8>>> = BTreeMap::new();
     // The allocator precondition is checked before anything else: a serial the
     // caller calls new must not already exist in the base it addresses.
+    let allocation_before = work.inode_pages_read;
     check_new_identities(reader, input, topology, work)?;
+    charge_site(work, allocation_before, |sites| &mut sites.allocation);
     // Every serial this loop will demand is known before it runs: the parents it
     // must classify and every child it binds. One grouped demand answers them all,
     // and the loop below then reads the memo — the same verdicts in the same
@@ -153,8 +199,11 @@ pub fn check<'a>(
                 }
             }
         }
+        let prefetch_before = work.inode_pages_read;
         state.prefetch(reader, table, demanded, work)?;
+        charge_site(work, prefetch_before, |sites| &mut sites.prefetch);
     }
+    let bindings_before = work.inode_pages_read;
     for update in input.directories {
         if update.parent == input.root_serial && input.base.is_none() {
             // The root directory of a new filesystem is built by this operation.
@@ -225,6 +274,8 @@ pub fn check<'a>(
             }
         }
     }
+    charge_site(work, bindings_before, |sites| &mut sites.bindings);
+    let aliases_before = work.inode_pages_read;
     check_parent_aliases(
         reader,
         input,
@@ -234,6 +285,7 @@ pub fn check<'a>(
         work,
         &mut state,
     )?;
+    charge_site(work, aliases_before, |sites| &mut sites.aliases);
     for update in input.directories {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
@@ -603,8 +655,12 @@ fn check_effective_cycles(
     state: &mut ValidationState,
 ) -> ContentResult<()> {
     if checked.input.base.is_none() {
-        return check_build_reachability(reader, checked, unreachable, work);
+        let before = work.inode_pages_read;
+        let result = check_build_reachability(reader, checked, unreachable, work);
+        charge_site(work, before, |sites| &mut sites.reachability);
+        return result;
     }
+    let cycles_before = work.inode_pages_read;
     let table = checked.topology.table;
     for update in checked.input.directories {
         for (_, binding) in &update.changes {
@@ -666,6 +722,7 @@ fn check_effective_cycles(
             }
         }
     }
+    charge_site(work, cycles_before, |sites| &mut sites.cycles);
     Ok(())
 }
 
