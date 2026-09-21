@@ -103,6 +103,15 @@ and the honest statements are:
 `core/crates/**` and `core/*/sql/**` are byte-identical to `5be4b7ae0`. `runner.py self-check`
 **passes** on this tree, registry rung included.
 
+**One reconciliation, because the receipts cannot be edited.** Their `source_commit` is
+`47cf17049a27ab3ff2ebb77a7cae449eed8821e5`, and that hash is no longer in the branch's history: the
+commit that filed the receipts was replayed during this round's review so that the round's history has
+one commit per coherent change instead of a commit that added one run set and a second that removed it.
+The receipt's own `source_dirty` is **false** and the tree it names is **identical** to this report's
+tree — `c3e28f63ef3ee15f21753c4ebb7c2287b34baffc`, the tree of every commit from `cbbae1ee8` onward —
+so the identity a reader needs (the measured tree) is unchanged and the hash a reader sees in the
+receipt is the hash that tree had when it was measured. Nothing in `raw/` was retuned.
+
 ### 4.2 The fixture's cost, measured two ways
 
 **From the row's own counters** (`ns22-D2`, unpinned, published for this question):
