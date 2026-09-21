@@ -114,7 +114,10 @@ Two things are handed on, both named rather than modelled:
 ## Environment honesty
 
 One sample per case per arm, no retuning, no receipt overwritten, `--verify full` on every row, every
-row `PASS` 13/13. Both the arm and both pair arms ran under the per-worktree measurement lock, and no
+row `PASS` 13/13. Every receipt on this tree also records `registry_self_check: FAIL`, which is a
+**pre-existing** harness defect and not this round's: the round-19 row carries the identical mismatch,
+and its cause is `FROZEN_CARDINALITY`'s pipeline entry still reading `4` while the family registers
+five rows. It is filed with its one-line fix in ledger L80 and deliberately not changed here. Both the arm and both pair arms ran under the per-worktree measurement lock, and no
 other measurement ran in this worktree during them. **Not run:** any `PACK_LIMIT` other than 1 MiB, any
 second sample of the arm beyond the matched pair's, and any instrument on the connection close.
 

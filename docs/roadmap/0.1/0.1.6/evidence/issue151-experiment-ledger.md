@@ -3336,6 +3336,18 @@ one sample each, `PASS` 13/13, complete commands 1.658–1.766 s inside the 15 s
 exception. **Not run:** the reference `crates/` workspace, any `PACK_LIMIT` other than 1 MiB, and any
 instrument on the connection close.
 
+**A pre-existing harness defect, filed rather than fixed.** `runner.py self-check` reports
+`registry FAIL` on this tree, and every receipt of this campaign records
+`registry_self_check: {status: FAIL, exit_code: 1}` beside its rows — the round-19 S1 row at
+`e3a46d74b` carries the identical mismatch, so it predates this round. The cause is one un-updated
+entry: `src/registry.rs`'s `FROZEN_CARDINALITY` ends `4, // pipeline: 4` while the pipeline family now
+registers **five** rows, the fifth being `pipeline-namespace-10000` itself; `ADMISSION_CASES` beside it
+was moved 217 → 218 in the same window and the array was not. It is one line and
+`pipeline: 4` → `pipeline: 5`, and it is deliberately **not** changed here: a harness change
+invalidates the pair it is filed with, and this round's rows are evidence for a product constant, not
+for a harness edit. Its effect on these rows is that the self-check's FAIL is on the row rather than
+hidden, and no gate in this round reads it.
+
 Production LOC: **31683 → 31683 (delta 0)** for both the arm and the revert. Method
 `tools/production_loc.py --root <tree>`, first parent against the committed tree.
 
