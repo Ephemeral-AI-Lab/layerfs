@@ -625,3 +625,59 @@ python3 runner.py perf --case pipeline-filesystem-build    --no-build --verify f
 Receipts this session: `benchmark-results/issue219/ns17-fsbuild-10000-300mb-20260921T031259Z/`,
 `benchmark-results/issue219/ns17-pipeline-fsbuild-20260921T031259Z/`.
 Golden pin under test: `tests/golden/expected.tsv:1311-1315`.
+
+## 8f. Round 21: the 100,000-entry rung, and the cardinality defect closed
+
+> Appended 2026-09-21 (#219 round 21). Ahead of it, this spec's own §8b-§8e
+> history: the row was *written, run, reverted* because registering it breaks four
+> tests and the fourth could not be satisfied. That is now resolved, and the
+> resolution is not the one §8e anticipated.
+
+`pipeline-namespace-100000` is registered, pinned and measured. The full report is
+[`../../../docs/roadmap/0.1/0.1.7/evidence/issue219-ns21-100k-20260921T155500Z/report.md`](../../../docs/roadmap/0.1/0.1.7/evidence/issue219-ns21-100k-20260921T155500Z/report.md);
+this section records only what is a **spec-level** consequence.
+
+### The declaration is the reference's, and it is a second scenario rather than a scale factor
+
+§4's row ported the reference's `namespace-10000` scenario. Round 21 ports
+`namespace-100000`, which is a **different mix at a different total**, not that scenario
+times ten: 100,000 files over **1,000** directories, **500,000,000** decimal bytes,
+**two** 100,000,000-byte anchors, and bands `1,000 / 78,998 / 15,000 / 5,000 / 2`. Empty,
+small and medium scale ×10; the anchor count goes 1 → 2; tiny is the balancing band and is
+**eight more** than ×10. `ops::namespace_content` now carries both declarations as data
+(`Declaration::TEN_THOUSAND`, `Declaration::LARGE`) and `plan` refuses a declaration whose
+index space wraps, which is the defect the 1,000 directories exist to avoid.
+
+### The four tests, and which amendment satisfied each
+
+| test | §8e's estimate | round 21 |
+| --- | --- | --- |
+| `registry_negative::the_frozen_cardinality_array_is_what_the_registry_holds` | amend the constant | **amended** — `pipeline.*` `4` → `6` |
+| `registry_negative::the_lane_sizes_and_admission_split_are_the_frozen_ones` | same | **amended** — `ADMISSION_CASES` `218` → `219`, `REGISTERED_ROWS` `221` → `222` |
+| `registry_negative::the_registry_is_clean_under_its_own_self_check` | same | **clean** — `registry::self_check` passes |
+| `pinned_expectations::every_admission_case_pins_at_least_one_counter` | **no** | **satisfied** — the row carries the same fifteen labels the 10,000-entry row pins |
+
+§8e was right that the fourth was the real blocker and wrong about why it was
+unsatisfiable. It is not; it is *circular*, and the circle is broken exactly where §8e
+says a pin's only legitimate source is — a run whose row passed. The child's own
+`--phase perf` invocation **is** such a run, and it is the route the 10,000-entry row's
+own bootstrap comment already records (`ns17-final-20260921T031259Z`). What the
+`runner.py` route cannot do is produce it: a row with no pins has two gates that are
+`INCOMPLETE` by construction, `trace.py` takes the **worst** gate as the row status, so
+the derived receipt is `INCOMPLETE` and `pin_expected.py` refuses it. **The bootstrap
+frame is therefore a PASS trace without a receipt** — recorded, not glossed, in the
+round's report §8.
+
+### The constant was two rows behind, not one
+
+`FROZEN_CARDINALITY`'s `pipeline.*` entry read `4` while the group held **five** rows, and
+`ADMISSION_CASES` read `218` against a registry of 221. So `registry::self_check`
+reported `frozen cardinality array` and `runner.py self-check` **failed on the tree this
+round started from** — the defect filed in L80. Round 21's edit moved the constant by two
+because the count had to move anyway: the row that was missing, and the new one.
+
+### What round 21 does not do to this spec
+
+§8.1's construction boundary, §8.2's contract amendment, §8.3's commit count and §8.4's
+parity question are **not** re-opened. `pipeline-filesystem-build`'s pin is untouched.
+`CONTRACT.md` §3 is amended with a dated note rather than re-dated, per its own header.

@@ -66,7 +66,7 @@ fn the_frozen_cardinality_array_is_what_the_registry_holds() {
     assert_eq!(
         FROZEN_CARDINALITY.iter().sum::<usize>(),
         ADMISSION_CASES,
-        "the frozen array must sum to the 217 admission cases"
+        "the frozen array must sum to the admission cases"
     );
     assert_eq!(FROZEN_CARDINALITY.len(), families::GROUP_IDS.len());
     assert_eq!(FROZEN_CARDINALITY.len(), families::ALL.len());
@@ -76,10 +76,16 @@ fn the_frozen_cardinality_array_is_what_the_registry_holds() {
 
 #[test]
 fn the_lane_sizes_and_admission_split_are_the_frozen_ones() {
+    // The lane sizes are the registry's, and these three literals are the place a
+    // row cannot be added without the count being written down. They were `220` /
+    // `217` / the array's `4` for `pipeline.*` while the tree held five pipeline
+    // rows and 221 registered rows, which is why `runner.py self-check` failed on
+    // the tree this round started from; `pipeline-namespace-100000` is the sixth
+    // pipeline row and the 219th admission row.
     assert_eq!(cases().len(), REGISTERED_ROWS);
-    assert_eq!(REGISTERED_ROWS, 220);
+    assert_eq!(REGISTERED_ROWS, 222);
     assert_eq!(admission_cases().len(), ADMISSION_CASES);
-    assert_eq!(ADMISSION_CASES, 217);
+    assert_eq!(ADMISSION_CASES, 219);
     assert_eq!(registry::smoke_cases().len(), SMOKE_CASES);
     assert_eq!(SMOKE_CASES, 20);
 

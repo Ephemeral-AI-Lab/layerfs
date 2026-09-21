@@ -81,9 +81,33 @@ fn build_phase_totals(report: &layerfs_telemetry::timer::TimingReport) -> Vec<(&
 /// The 4 KiB replacement the edit pipeline rows use, as the C1 edit families do.
 pub const REPLACEMENT_LEN: u64 = 4_096;
 
-/// Logical bytes the `namespace-10000` parity row declares, matching the v0.1.6
+/// Logical bytes the `namespace-10000` parity row declares, matching the reference
 /// case: 300,000,000 of file content plus a 100,000,000-byte anchor.
 pub const NAMESPACE_SCALE_BYTES: u64 = 300_000_000;
+
+/// What one namespace-scale row declares.
+///
+/// The declaration is a **port, not an invention**, and the two rows port two
+/// different reference scenarios: `namespace-10000` (10,000 files / 100
+/// directories / 300,000,000 B / one 100,000,000-byte anchor) and
+/// `namespace-100000` (100,000 files / 1,000 directories / **500,000,000** decimal
+/// bytes / **two** 100,000,000-byte anchors / the scaled band mix). Neither is a
+/// total to choose: both are `Declaration` constants read out of the reference
+/// harness's own `NAMESPACE_SCENARIOS` table.
+///
+/// The two rows' declarations are therefore *different shapes at different
+/// totals*, and the comparison between them is a comparison of two declared
+/// scaling points rather than of one shape at two sizes. That is what the
+/// reference declares and it is what this harness ports; a row that reused the
+/// 10,000-entry declaration at `entries = 100,000` would measure 97,899 tiny files
+/// and one anchor, which is a legitimate fixture and **not** the reference's case.
+pub fn declaration(op: PipelineOp) -> super::namespace_content::Declaration {
+    use super::namespace_content::Declaration;
+    match op {
+        PipelineOp::NamespaceScaleLarge => Declaration::LARGE,
+        _ => Declaration::TEN_THOUSAND,
+    }
+}
 
 /// The representation cutoff the `large-to-small` row crosses.
 ///
@@ -150,8 +174,8 @@ pub fn configuration(op: PipelineOp) -> Configuration {
             files: 1_000,
             directories: 10,
         },
-        // The v0.1.6 `namespace-10000` shape: 10,000 files over 100 directories,
-        // 300,000,000 logical bytes with a 100,000,000-byte anchor.
+        // The reference `namespace-10000` shape: 10,000 files over 100
+        // directories, 300,000,000 logical bytes with a 100,000,000-byte anchor.
         PipelineOp::NamespaceScale => Configuration {
             base_bytes: 0,
             start: 0,
@@ -159,6 +183,22 @@ pub fn configuration(op: PipelineOp) -> Configuration {
             replacement: 0,
             files: 10_000,
             directories: 100,
+        },
+        // The reference `namespace-100000` shape: 100,000 files over **1,000**
+        // directories, 500,000,000 decimal bytes with **two** 100,000,000-byte
+        // anchors. The directory count is not decoration: the plan's index space is
+        // `directory * FILES_PER_DIRECTORY + ordinal` with `ordinal = position /
+        // directories`, so 100,000 files over 100 directories reuse index 100 from
+        // position 10,000 on and give 100,000 files 10,000 distinct serials. 1,000
+        // directories is the declaration that keeps the space injective, and it is
+        // also the reference's own `data_directories` for this scenario.
+        PipelineOp::NamespaceScaleLarge => Configuration {
+            base_bytes: 0,
+            start: 0,
+            end: 0,
+            replacement: 0,
+            files: 100_000,
+            directories: 1_000,
         },
     }
 }
@@ -172,7 +212,9 @@ pub fn run(
     context.create_output()?;
     match op {
         PipelineOp::FilesystemBuild => filesystem(case, op, context),
-        PipelineOp::NamespaceScale => namespace_scale(case, op, context),
+        PipelineOp::NamespaceScale | PipelineOp::NamespaceScaleLarge => {
+            namespace_scale(case, op, context)
+        }
         _ => edit(case, op, context),
     }
 }
@@ -607,20 +649,27 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     })
 }
 
-/// One `namespace-10000` parity row: the namespace **and** its declared content
-/// saved in one measured region.
+/// One `namespace-*` parity row: the namespace **and** its declared content saved
+/// in one measured region.
 ///
-/// This is the shape the v0.1.6 `init_namespace` case measures and that no other
-/// v0.1.7 row performs. `c1.fs.build-scale` builds the same 10,000-entry tree but
-/// emits no content at all, and `pipeline-filesystem-build` saves a filesystem
-/// whose inodes are empty. Neither moves bytes into a Store.
+/// This is the shape the reference `init_namespace` case measures and that no other
+/// v0.1.7 row performs. `c1.fs.build-scale` builds the same tree but emits no
+/// content at all, and `pipeline-filesystem-build` saves a filesystem whose inodes
+/// are empty. Neither moves bytes into a Store.
+///
+/// **Two rows drive this one function**, `pipeline-namespace-10000` and
+/// `pipeline-namespace-100000`, and they differ only in the declaration they read
+/// from [`declaration`]: the entry count, the directory count, the band mix, the
+/// anchor count and the total. The driver takes its batched route automatically at
+/// either size - `PreparedTree::batches` splits the tree under
+/// `MAXIMUM_WALK_ENTRIES`, which a 10,101-binding tree already exceeds.
 ///
 /// **Why the content is a second stream.** `build_filesystem` emits metadata only:
 /// its internal `contents` map holds *directory* roots, and a file's `content_root`
 /// is copied out of the input `InodeValue` without ever being demanded from the
-/// reader. So a filesystem build cannot put 300 MB into a Store, and the row has to
-/// construct that content itself and accept it on the same `SaveOperation`. The
-/// construction happens before the timer; the save does not.
+/// reader. So a filesystem build cannot put the declared content into a Store, and
+/// the row has to construct that content itself and accept it on the same
+/// `SaveOperation`. The construction happens before the timer; the save does not.
 fn namespace_scale(
     case: &Case,
     op: PipelineOp,
@@ -639,14 +688,26 @@ fn namespace_scale(
         return Ok(c1::unmeasured(&OpError::Io(defect), Vec::new()));
     }
 
-    // The byte plan: the same 10,000-file / 100-directory / 300 MB shape the
-    // v0.1.6 fixture declares.
-    let plan = match super::namespace_content::plan(
-        config.files,
-        config.directories,
-        seed,
-        NAMESPACE_SCALE_BYTES,
-    ) {
+    // The byte plan: the reference scenario's own declaration, ported rather than
+    // re-derived from the entry count. `declaration` returns the whole tuple -
+    // entries, directories, total and band mix - so the tree recipe above and the
+    // content plan here cannot disagree about the shape they are building.
+    let declared = declaration(op);
+    // Two routes now describe one shape - `configuration` for the tree, this
+    // declaration for the content - and a row whose two halves disagree would
+    // measure a fixture no page declares. It is a harness defect rather than a
+    // measurement, so it is refused before the timer with both numbers named.
+    if declared.entries != config.files || declared.directories != config.directories {
+        return Ok(c1::unmeasured(
+            &OpError::Io(format!(
+                "row declaration disagrees with its configuration: {} files over {} \
+                 directories against {} over {}",
+                declared.entries, declared.directories, config.files, config.directories
+            )),
+            Vec::new(),
+        ));
+    }
+    let plan = match super::namespace_content::plan(&declared, seed) {
         Ok(plan) => plan,
         Err(defect) => return Ok(c1::unmeasured(&OpError::Io(defect), Vec::new())),
     };
@@ -671,9 +732,13 @@ fn namespace_scale(
         if file.size == 0 {
             continue;
         }
+        // The index the plan gave this file, re-derived rather than carried: the
+        // tree's file serials are `2 + directories + index`, so this inverts exactly
+        // the mapping `namespace_content::plan` applied forward. It must use the
+        // declaration's directory count, because the serials the recipe built did.
         let index = u64::from(file.directory) * super::namespace_content::FILES_PER_DIRECTORY
             + u64::from(file.serial)
-            - (2 + u64::from(config.directories));
+            - (2 + u64::from(declared.directories));
         let noise_started = std::time::Instant::now();
         let bytes = fixture::noise(file.size, seed ^ index.rotate_left(13));
         construct_noise_ns += noise_started.elapsed().as_nanos() as u64;
@@ -1074,7 +1139,7 @@ fn namespace_scale(
         "pipeline.declared_content_bytes",
         plan.total_bytes as i128,
         "bytes",
-        "namespace_content::plan, the declared 300,000,000-byte shape",
+        "namespace_content::plan over ops::pipeline::declaration, the ported reference scenario total",
     )?;
     context.trace.write_number(
         Kind::Counter,

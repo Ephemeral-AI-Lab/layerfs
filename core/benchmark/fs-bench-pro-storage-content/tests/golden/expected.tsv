@@ -2062,3 +2062,36 @@ zero-extend-500m	counter:edit.payload_bytes	4117
 zero-extend-500m	counter:edit.payloads_created	1
 zero-extend-500m	counter:edit.peak_deferred_bytes	18120
 zero-extend-500m	digest:file_root	1707bccb1d3b54b08aced4ff18d22e5ab77ab3f41bda56f479e5e854ca1bf3c8
+
+# Bootstrapped 2026-09-21 at 070305949 + the round-21 harness: the new row
+# pipeline-namespace-100000. Its ported declaration is the reference harness's own
+# `namespace-100000` scenario - 100,000 files over 1,000 directories, 500,000,000
+# decimal bytes, two 100,000,000-byte anchors and the scaled band mix - so the
+# counts below are that scenario's arithmetic and not this harness's invention:
+# 101,000 bindings = 100,000 + 1,000 + 1, 25 batches = ceil(101,000 / 4,096),
+# 4,221 metadata objects over 101,000 bindings against 382 over 10,100 at the
+# 10,000-entry point, and 2 anchors of exactly 100,000,000 bytes. Read from
+# benchmark-results/issue219/ns21-B2-100000-bootstrap-20260921T155500Z, a direct
+# `--phase perf` invocation of the harness binary - the route the 10000 row's own
+# bootstrap above records - because a row with no pins cannot be PASS through
+# runner.py: its two pinned gates are INCOMPLETE by construction, so its derived
+# receipt is INCOMPLETE and pin_expected.py refuses it. The covering run is
+# ns21-B4-100000-pinned-20260921T155500Z, which reproduced all fifteen.
+# The pinned set is deliberately the same fifteen labels the 10,000-entry row
+# pins. pipeline.packs_created and pipeline.pack_appends are published and NOT
+# pinned on either row; see the round's pre-registration section 5.
+pipeline-namespace-100000	counter:pipeline.batches	25
+pipeline-namespace-100000	counter:pipeline.bindings	101000
+pipeline-namespace-100000	counter:pipeline.chain_objects	4221
+pipeline-namespace-100000	counter:pipeline.commits	388
+pipeline-namespace-100000	counter:pipeline.content_bytes	502914928
+pipeline-namespace-100000	counter:pipeline.content_objects	109414
+pipeline-namespace-100000	counter:pipeline.declared_content_bytes	500000000
+pipeline-namespace-100000	counter:pipeline.declared_directories	1000
+pipeline-namespace-100000	counter:pipeline.declared_files	100000
+pipeline-namespace-100000	counter:pipeline.inserted	113635
+pipeline-namespace-100000	counter:pipeline.largest_batch_bindings	4096
+pipeline-namespace-100000	counter:pipeline.metadata_objects	4221
+pipeline-namespace-100000	counter:pipeline.objects_emitted	89
+pipeline-namespace-100000	counter:pipeline.reused	0
+pipeline-namespace-100000	digest:filesystem_root	2412681d335571082c4dfbc1df2117bc015b7f6132fca17cb0d11bbeaaefd954

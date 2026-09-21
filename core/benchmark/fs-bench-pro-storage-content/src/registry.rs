@@ -1,4 +1,4 @@
-//! The frozen case registry: 220 rows = 217 admission + 3 diagnostic.
+//! The frozen case registry: 222 rows = 219 admission + 3 diagnostic.
 //!
 //! `CONTRACT.md` section 3 freezes twenty families, a sub-lane and a pipeline
 //! group, with the cardinality array `[4,4,12,12,32,7,20,12,4,12,8,5,10,20,21,
@@ -6,6 +6,17 @@
 //! registered, run and receipted but are **excluded from admission and from every
 //! count in that section**: under `claim_kind = structural-complexity` their
 //! receipt is diagnostic and cannot gate. Folding them into 217 is wrong.
+//!
+//! **The counts above are the contract's and the array below is not.** The
+//! pipeline group has carried **six** rows since `pipeline-namespace-100000` was
+//! registered, and the constant was already one row behind before that: with five
+//! rows the array read `4` and `ADMISSION_CASES` read `218`, so `self_check()`
+//! reported `frozen cardinality array` and `runner.py self-check` failed on the
+//! tree the 100,000-entry row was commissioned on. Two rows were added in one edit:
+//! the one that was missing from the constant, and the new one. `CONTRACT.md` §3 is
+//! never re-dated, so it still states 4 and 217; the amendment is recorded in
+//! `core/docs/benchmark/fs-bench-pro-storage-content/namespace-10000-parity-spec.md`
+//! §8f and the registry is the declaration of record.
 //!
 //! Cardinality parsing rule (frozen in `CONTRACT.md` section 3): a bracketed
 //! profile list in a case ID is **one** case rendered with a profile chosen by
@@ -24,11 +35,11 @@ use crate::families;
 pub const FROZEN_CARDINALITY: [usize; 21] = [
     4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, // C1: 127
     5, 10, 20, 21, 14, 6, 4, 4, 2, // C2: 86
-    4, // pipeline: 4
+    6, // pipeline: 6
 ];
 
 /// Registered admission cases.
-pub const ADMISSION_CASES: usize = 218;
+pub const ADMISSION_CASES: usize = 219;
 
 /// Diagnostic cases excluded from the 217.
 pub const DIAGNOSTIC_CASES: usize = 3;
@@ -370,6 +381,16 @@ pub enum PipelineOp {
     /// before the timer and accepted by the same save operation, because
     /// `build_filesystem` emits metadata only.
     NamespaceScale,
+    /// The same operation at the reference harness's `namespace-100000` scenario:
+    /// 100,000 files over 1,000 directories, 500,000,000 decimal bytes, two
+    /// 100,000,000-byte anchors and the scaled band mix that declaration states
+    /// (`ops::namespace_content::Declaration::LARGE`).
+    ///
+    /// A second variant rather than a parameter because the declaration is the
+    /// difference: the two rows carry different band mixes, different anchor counts
+    /// and different totals, and `ops::pipeline::configuration` is where a row's
+    /// declaration is written down.
+    NamespaceScaleLarge,
 }
 
 /// The three diagnostic matched-pair shapes.

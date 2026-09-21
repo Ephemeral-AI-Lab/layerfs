@@ -158,9 +158,20 @@ or visibility change — `Store::path()` is public already, which is why no
 
 ## Registry
 
-220 rows = **217 admission + 3 diagnostic**. `component.primitives` is registered,
+222 rows = **219 admission + 3 diagnostic**. `component.primitives` is registered,
 runs and is receipted, and is excluded from admission and from every count: under
 `structural-complexity` its receipt is diagnostic and cannot gate.
+
+> **Amended 2026-09-21 (#219 round 21).** This paragraph read *"220 rows = 217
+> admission + 3 diagnostic"* and was **already stale when round 21 started**: the
+> pipeline group held five rows while `FROZEN_CARDINALITY`'s `pipeline.*` entry still
+> read `4` and `ADMISSION_CASES` still read `218`, so `registry::self_check` reported
+> `frozen cardinality array` and `runner.py self-check` failed. Round 21 registered
+> `pipeline-namespace-100000` and moved the constant to `6`, which fixed the
+> pre-existing defect in the same edit because the count had to move anyway. The
+> arithmetic: 219 admission + 3 diagnostic = 222, and `FROZEN_CARDINALITY` sums to
+> 219. `CONTRACT.md` §3 is never re-dated and still states 4 and 217; the registry,
+> its golden table and `registry::self_check` are the declaration of record.
 
 `--smoke` is one tier per family: twenty cases. `--smoke` is twenty and not
 twenty-one because `c2.delta.boundaries` is a registered sub-lane of a family, not

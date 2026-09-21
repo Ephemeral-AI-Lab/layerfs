@@ -1,8 +1,13 @@
 //! `pipeline.*`: the integrated C1 to C2 handoff.
 //!
-//! Four rows, frozen by `CONTRACT.md` section 3. Integration only means something
-//! where the handoff *is* the question, so it is not applied to `c2.read.*`,
-//! `c2.pool.*` or `c2.footprint`. Decision D1 records `pipeline.filesystem` and
+//! Six rows. `CONTRACT.md` section 3 freezes four and was one row behind the tree
+//! before this round: the fifth row, `pipeline-namespace-10000`, was registered in
+//! #219 and the frozen cardinality was never amended, so `registry::self_check`
+//! reported `frozen cardinality array` and `runner.py self-check` failed. The sixth
+//! row is `pipeline-namespace-100000`, and the constant now counts six.
+//!
+//! Integration only means something where the handoff *is* the question, so it is
+//! not applied to `c2.read.*`, `c2.pool.*` or `c2.footprint`. Decision D1 records `pipeline.filesystem` and
 //! `pipeline.c2` as `NOT_RUN` for the comparative option; these rows are the
 //! absolute, single-arm integrated cases and carry no comparative claim.
 
@@ -13,7 +18,7 @@ use crate::registry::{CacheState, Case, PipelineOp, Shape, StoreState};
 /// separately, which is why `--smoke` is twenty cases and not twenty-one.
 pub const GROUP: &str = "pipeline.*";
 
-/// Five rows.
+/// Six rows.
 pub fn cases() -> Vec<Case> {
     [
         (PipelineOp::EditsSmall, "pipeline-edits-small"),
@@ -30,6 +35,10 @@ pub fn cases() -> Vec<Case> {
             PipelineOp::NamespaceScale,
             "pipeline-namespace-10000",
         ),
+        (
+            PipelineOp::NamespaceScaleLarge,
+            "pipeline-namespace-100000",
+        ),
     ]
     .iter()
     .map(|(op, id)| {
@@ -44,10 +53,13 @@ pub fn cases() -> Vec<Case> {
             .cache(CacheState::PreparedDewarmed)
             .store(StoreState::OpenedFromCopy)
             .smoke_if(*op == PipelineOp::EditsSmall);
-        let spec = if *op == PipelineOp::NamespaceScale {
-            spec.entry_tier(2, 10_000, "binary")
-        } else {
-            spec
+        // The tier is the reference ladder's position for the shape, and it matches
+        // `c1.fs.build-scale`'s own rung at the same entry count: tier 2 at 10,000
+        // and tier 3 at 100,000, both `binary`.
+        let spec = match *op {
+            PipelineOp::NamespaceScale => spec.entry_tier(2, 10_000, "binary"),
+            PipelineOp::NamespaceScaleLarge => spec.entry_tier(3, 100_000, "binary"),
+            _ => spec,
         };
         spec.build()
     })

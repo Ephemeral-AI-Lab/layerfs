@@ -1,0 +1,44 @@
+{"schema":"layerfs-trace-v1","seq":0,"kind":"run","key":"case_id","value":"namespace-10000","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":1,"kind":"run","key":"family","value":"c1.fs.build-scale","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":2,"kind":"run","key":"admission","value":"admission","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":3,"kind":"run","key":"tier","value":"2","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":4,"kind":"run","key":"tier_label","value":"binary","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":5,"kind":"run","key":"profile","value":"","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":6,"kind":"run","key":"declared_bytes","value":"0","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":7,"kind":"run","key":"declared_entries","value":"10000","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":8,"kind":"run","key":"cache_state","value":"WarmInProcessFixture","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":9,"kind":"run","key":"store_state","value":"None","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":10,"kind":"run","key":"shape","value":"FsBuild { text: false }","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":11,"kind":"run","key":"phase","value":"Perf","unit":"","basis":"registry row"}
+{"schema":"layerfs-trace-v1","seq":12,"kind":"oracle","key":"identity.filesystem_root","value":"0e77f24e86692ba8d3f4bbdd1b1f289b41aafc828485e26c0b3483823a90b2c1","unit":"sha256","basis":"measured result identity; pinned by tests/golden/expected.tsv"}
+{"schema":"layerfs-trace-v1","seq":13,"kind":"counter","key":"fs_build.objects_read","value":310,"numeric":true,"unit":"objects","basis":"FilesystemObjects::work, measured phase"}
+{"schema":"layerfs-trace-v1","seq":14,"kind":"counter","key":"fs_build.read_waves","value":68,"numeric":true,"unit":"waves","basis":"FilesystemObjects::work, measured phase"}
+{"schema":"layerfs-trace-v1","seq":15,"kind":"counter","key":"fs_build.objects_emitted","value":382,"numeric":true,"unit":"objects","basis":"FilesystemObjects::work, measured phase"}
+{"schema":"layerfs-trace-v1","seq":16,"kind":"counter","key":"fs_build.bindings_added","value":10100,"numeric":true,"unit":"bindings","basis":"FilesystemUpdateCounters, measured phase"}
+{"schema":"layerfs-trace-v1","seq":17,"kind":"counter","key":"fs_build.directory_updates","value":163,"numeric":true,"unit":"directories","basis":"FilesystemUpdateCounters, measured phase"}
+{"schema":"layerfs-trace-v1","seq":18,"kind":"counter","key":"fs_build.base_records_read","value":6066,"numeric":true,"unit":"records","basis":"FilesystemUpdateCounters, measured phase"}
+{"schema":"layerfs-trace-v1","seq":19,"kind":"counter","key":"fs_build.validation_entries","value":4096,"numeric":true,"unit":"entries","basis":"ValidationWork, measured phase"}
+{"schema":"layerfs-trace-v1","seq":20,"kind":"counter","key":"fs_build.directory_pages","value":62,"numeric":true,"unit":"pages","basis":"SortedWork, measured phase"}
+{"schema":"layerfs-trace-v1","seq":21,"kind":"counter","key":"fs_build.inode_pages","value":248,"numeric":true,"unit":"pages","basis":"SortedWork, measured phase"}
+{"schema":"layerfs-trace-v1","seq":22,"kind":"resource","key":"heap.peak_incremental_bytes","value":1486850,"numeric":true,"unit":"bytes","basis":"counting GlobalAlloc, measured phase"}
+{"schema":"layerfs-trace-v1","seq":23,"kind":"counter","key":"fs_build.operations","value":3,"numeric":true,"unit":"operations","basis":"declared multi-operation structure of the tier"}
+{"schema":"layerfs-trace-v1","seq":24,"kind":"counter","key":"fs_build.batch_bindings_max","value":4096,"numeric":true,"unit":"bindings","basis":"largest batch, against the walk ceiling"}
+{"schema":"layerfs-trace-v1","seq":25,"kind":"counter","key":"fs_build.listing_directories","value":101,"numeric":true,"unit":"directories","basis":"O4 listing compared against the fixture manifest"}
+{"schema":"layerfs-trace-v1","seq":26,"kind":"gate","key":"g7.tree-complete","value":"PASS|complete tree: 1 nodes, depth 1|report.is_incomplete() == false","unit":"","basis":"G7"}
+{"schema":"layerfs-trace-v1","seq":27,"kind":"gate","key":"g4.swaps","value":"PASS|0|== 0","unit":"","basis":"G4"}
+{"schema":"layerfs-trace-v1","seq":28,"kind":"gate","key":"g1.o1-replay-root","value":"PASS|replay root 0e77f24e86692ba8d3f4bbdd1b1f289b41aafc828485e26c0b3483823a90b2c1|measured root 0e77f24e86692ba8d3f4bbdd1b1f289b41aafc828485e26c0b3483823a90b2c1","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":29,"kind":"gate","key":"g1.o4-inode-table","value":"PASS|a15d26e13e9fc68e38b848b8bc3348d2e4190dbe49616a265e840b2090974475|a15d26e13e9fc68e38b848b8bc3348d2e4190dbe49616a265e840b2090974475","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":30,"kind":"gate","key":"g4.heap-window","value":"PASS|36403 allocations|the measured phase must allocate at least once","unit":"","basis":"G4"}
+{"schema":"layerfs-trace-v1","seq":31,"kind":"gate","key":"g2.walk-ceiling","value":"PASS|3 operations, largest 4096 bindings|every operation states at most 4096 bindings","unit":"","basis":"G2"}
+{"schema":"layerfs-trace-v1","seq":32,"kind":"gate","key":"g1.o4-chain-roots","value":"PASS|3 batch roots reproduced|3 roots from the unmeasured fixture chain","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":33,"kind":"gate","key":"g1.o4-listing","value":"PASS|101 directories equal the manifest|every directory's bindings equal the fixture manifest","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":34,"kind":"gate","key":"g1.o3-pinned-counters","value":"PASS|12 of 12 pinned counters reproduced here; 0 published by the other phase|every O3 structural count equals its pinned constant","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":35,"kind":"gate","key":"g1.o1-pinned-identity","value":"PASS|filesystem_root 0e77f24e86692ba8d3f4bbdd1b1f289b41aafc828485e26c0b3483823a90b2c1|0e77f24e86692ba8d3f4bbdd1b1f289b41aafc828485e26c0b3483823a90b2c1","unit":"","basis":"G1"}
+{"schema":"layerfs-trace-v1","seq":36,"kind":"receipt","key":"note","value":"recipe_profile: binary-v1","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":37,"kind":"receipt","key":"note","value":"recipe_entries: 10000","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":38,"kind":"receipt","key":"note","value":"recipe_directories: 100","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":39,"kind":"receipt","key":"note","value":"bindings: 10100","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":40,"kind":"receipt","key":"note","value":"multi_operation: 3 batches of at most 4096 bindings; the first is a build and the rest are updates that state new files only","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":41,"kind":"receipt","key":"note","value":"cache_state: warm-in-process-fixture; the input and every batch's base are built before the timed region","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":42,"kind":"receipt","key":"note","value":"measured_consumer: discarding; each batch's base is a fixture input","unit":"","basis":"driver declaration"}
+{"schema":"layerfs-trace-v1","seq":43,"kind":"receipt","key":"note","value":"oracle_phase: separate-unmeasured-replay","unit":"","basis":"driver declaration"}

@@ -85,6 +85,19 @@ are globally unique and are `c1.*` / `c2.*` / `pipeline.*`.
 Declared cardinality array, checked by `registry::self_check()`:
 `[4,4,12,12,32,7,20,12,4,12,8,5,10,20,21,14,6,4,4,2,4]`.
 
+> **Amendment, 2026-09-21 (#219 round 21).** This file is never re-dated, so the table
+> above and the array above it stand as written. The **registry** has moved: the
+> pipeline group holds **six** rows and the live array is
+> `[4,4,12,12,32,7,20,12,4,12,8,5,10,20,21,14,6,4,4,2,6]`, summing to **219** admission
+> cases, for **222 rows = 219 admission + 3 diagnostic**. Two rows moved the constant in
+> one edit: `pipeline-namespace-10000`, registered in #219 without the constant being
+> amended (so `registry::self_check` reported `frozen cardinality array` and
+> `runner.py self-check` failed on every tree between that registration and this one),
+> and `pipeline-namespace-100000`. `registry::self_check` passes. See
+> [`namespace-10000-parity-spec.md`](namespace-10000-parity-spec.md) §8f and, for the
+> new row's measured evidence,
+> [`../../../docs/roadmap/0.1/0.1.7/evidence/issue219-ns21-100k-20260921T155500Z/report.md`](../../../docs/roadmap/0.1/0.1.7/evidence/issue219-ns21-100k-20260921T155500Z/report.md).
+
 **`component.primitives` is registered but is not one of the 217.** It is 3 further
 diagnostic cases (the only library-matched reference pair in the tree, from
 `component_primitives.rs`). They run, they are receipted, and they are **excluded

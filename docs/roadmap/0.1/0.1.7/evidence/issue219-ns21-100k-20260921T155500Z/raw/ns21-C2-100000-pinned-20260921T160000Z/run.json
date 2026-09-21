@@ -1,0 +1,89 @@
+{
+  "cache_state": "declared per row; never pooled",
+  "declared_exceptions": [],
+  "golden_matches": true,
+  "identity": {
+    "construction_workers": "1",
+    "harness_binary": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "harness_binary_sha256": "288e3c9b248632f6861672ecc1cb4abdccf039d8be6302f48e605d1e7fabcde8",
+    "harness_lock_sha256": "612640f777f5127f17a3aa550eb0d65b11652b4efcb2f99f66ece4513b80f1cc",
+    "harness_python_sha256": "27d2ed0be974524f84df0f107cba213441204c96e19ab46dfd2e3bfc90ef2a9d",
+    "harness_root": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-219-ns10000/core/benchmark/fs-bench-pro-storage-content",
+    "host": "Yifans-MacBook-Pro-10.local",
+    "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+    "python": "3.14.3",
+    "registry_tsv_sha256": "3f786dc190aee428d8d7a94d195709164f035418a8b56a644b3f284f541d94e4",
+    "source_commit": "070305949a8120d848bf91b9deb2d7bbd2f2561b",
+    "source_dirty": true,
+    "source_dirty_files": [
+      "M core/benchmark/fs-bench-pro-storage-content/src/families/pipeline.rs",
+      " M core/benchmark/fs-bench-pro-storage-content/src/ops/namespace_content.rs",
+      " M core/benchmark/fs-bench-pro-storage-content/src/ops/pipeline.rs",
+      " M core/benchmark/fs-bench-pro-storage-content/src/registry.rs",
+      " M core/benchmark/fs-bench-pro-storage-content/tests/golden/expected.tsv",
+      " M core/benchmark/fs-bench-pro-storage-content/tests/golden/registry.tsv",
+      " M core/benchmark/fs-bench-pro-storage-content/tests/registry_negative.rs",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue219-ns21-100k-20260921T155500Z/"
+    ],
+    "started_utc": "2026-09-21T15:51:17Z"
+  },
+  "lane": "smoke",
+  "phases": {
+    "admission": {
+      "acquisition_wall_ns": 5699416,
+      "cleanup_wall_ns": 667,
+      "complete_command_ns": 6571717125,
+      "handoff_ns": 79262729,
+      "operation_ns": 4165692417,
+      "preparation_wall_ns": 1508697458,
+      "verification_invocation_ns": 0,
+      "verification_wall_ns": 869072916
+    },
+    "by_status": {
+      "PASS": {
+        "acquisition_wall_ns": 5699416,
+        "cleanup_wall_ns": 667,
+        "complete_command_ns": 6571717125,
+        "handoff_ns": 79262729,
+        "operation_ns": 4165692417,
+        "preparation_wall_ns": 1508697458,
+        "rows": 1,
+        "verification_invocation_ns": 0,
+        "verification_wall_ns": 869072916
+      }
+    },
+    "schema": "layerfs-lane-phases-v1",
+    "unreconciled_rows": []
+  },
+  "registry_self_check": {
+    "admission rows": "219",
+    "cardinality sum": "219",
+    "diagnostic rows": "3",
+    "exit_code": 0,
+    "frozen cardinality": "[4, 4, 12, 12, 32, 7, 20, 12, 4, 12, 8, 5, 10, 20, 21, 14, 6, 4, 4, 2, 6]",
+    "history group": "3 (outside the 217)",
+    "pinned constants": "1999 row(s); O1 identity pinned for 214 of 219 admission case(s)",
+    "registered rows": "222",
+    "registry self-check": "PASS",
+    "smoke lane": "20",
+    "status": "PASS"
+  },
+  "reused_proof": null,
+  "reused_proof_identities": null,
+  "reused_proof_omission": null,
+  "rows": 1,
+  "run_dir": "benchmark-results/issue219/ns21-C2-100000-pinned-20260921T160000Z",
+  "samples_per_case_per_arm": 1,
+  "schema": "layerfs-core-run-v1",
+  "selection": [
+    "pipeline-namespace-100000"
+  ],
+  "selection_size": 1,
+  "tally": {
+    "PASS": 1
+  },
+  "verification_mode": "full",
+  "verification_sample_rule": "",
+  "wall_ns": 6835261792
+}

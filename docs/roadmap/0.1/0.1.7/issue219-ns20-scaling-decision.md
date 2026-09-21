@@ -31,8 +31,22 @@ than after. And no measured non-proportionality in the save path has been found 
 the owner's judgement that a second point is worth having, which is a legitimate reason and is recorded
 here as the reason rather than as a measurement.
 
+**Condition 1 was met on 2026-09-21 by round 21.** The row was built, pinned and measured, and the
+`c1.fs.build-scale` `namespace-10000` anchor was run **locked, in the same session and the same lock
+window**, landing at **68,951,625 ns against the reference 68,514,625 — +0.64 %**, inside the ±20 %
+bound the round registered before its first locked run. Condition 1's own wording is *"a pack-free
+anchor row measured in the same session as every admission row, published beside it"*; this round
+satisfies it **for its own session** and for nothing else — the anchor must be re-run beside any future
+row that wants to be compared with these. Condition 2 (a measured non-proportionality in the save path)
+was **not** sought and is **not** claimed; the round did find one in the row's C1 half, which is the
+driver's handoff rather than the save, and it is filed as the next round's subject.
+[`evidence/issue219-ns21-100k-20260921T155500Z/report.md`](evidence/issue219-ns21-100k-20260921T155500Z/report.md)
+§4, §5a and §6.1 carry the numbers and the boundary of each claim.
+
 Everything else on this page stands: the case mapping (§2) is what the new row is and is not evidence
 for, and the handoff's price for the row corrects two errors in the page that commissioned this round.
+§3's decision is superseded by §0's ruling and is left as written, because a decision page records what
+was decided and when rather than what happened afterwards.
 
 ## 1. First, a correction to the handoff: S0 was written, and it *is* the pairing page
 
