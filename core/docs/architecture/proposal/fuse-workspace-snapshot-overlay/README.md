@@ -7,16 +7,23 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
-**Current write prerequisite:** [routine healthy-owner reclamation](21-routine-reclamation.md)
+**Write prerequisite:** [routine healthy-owner reclamation](21-routine-reclamation.md)
 adds synchronous consumer-wide retirement before input, mutation and submission
 admission. Failed/partial owners remain charged until explicit cleanup. The next
-public operation is handle-based write; actual writable FUSE and R6 remain open.
+operation that follows is [native handle write](22-handle-write.md); actual
+writable FUSE and R6 remain open.
 
 **Shared read prerequisite:** the pending write frontier exposed
 [logical-fragment/native-frame coupling](23-native-stream-fragmentation.md).
 The focused correction coalesces small local input/output fragments without
 raising wire limits. Its original failure and diagnostic remain source-pinned;
 the handle-write operation is verified separately afterward.
+
+**Native write update:** [handle write, append and Zero gaps](22-handle-write.md)
+share the bounded mutation and Commit pipeline. Twelve actual native cases pass,
+including the complete 256-edit frontier after the separate transport correction
+and live writes during actual service save. Mounted SDK coherence and kernel
+write/append/truncate callbacks are the next required projection work.
 
 This is the current detailed Pair 1 document packet. It consolidates the earlier
 Workspace/FUSE discussions, platform ruling, file plan, POSIX decisions and

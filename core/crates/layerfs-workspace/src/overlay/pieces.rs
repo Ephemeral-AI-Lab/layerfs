@@ -177,7 +177,7 @@ pub fn splice(
     old: &[Piece],
     start: u64,
     end: u64,
-    replacement: Piece,
+    replacement: &[Piece],
     base_length: u64,
 ) -> Result<(Vec<Piece>, u16, u64), WorkspaceError> {
     let mut new = crate::backing::metadata_index::vector(1024)?;
@@ -222,7 +222,9 @@ pub fn splice(
         part.length = part.length.min(start - p.start);
         push(part)?;
     }
-    push(replacement)?;
+    for piece in replacement {
+        push(*piece)?;
+    }
     for p in old {
         let stop = p.start.checked_add(p.length).ok_or(WorkspaceError::Io)?;
         if stop <= end {

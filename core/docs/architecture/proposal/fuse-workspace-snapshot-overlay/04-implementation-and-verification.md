@@ -1289,3 +1289,12 @@ they fit the unchanged wire-frame budget. The strict 514-byte saved-root read an
 authenticated socket tests qualify this correction; the original write-frontier
 failure remains FAIL and the write round resumes afterward. No R4 mounted or R6
 acceptance is inferred from the shared transport correction.
+
+
+[22 — Native handle write](22-handle-write.md), implemented after prerequisite
+`1343b00accf2277085410c2fd84144b2432f6222`, adds write_file through READY writable
+Local handles with borrowed input, atomic native append EOF, preserved tails and
+Zero gaps in one splice. Twelve native cases pass, including all 256 edits and
+actual C2-save progress. Original frontier/readback failure remains recorded.
+This supplies the semantic write operation needed by R4; mounted reply coherence,
+kernel append fd-position handling and writable callbacks remain distinct work.

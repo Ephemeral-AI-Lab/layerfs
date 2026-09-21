@@ -443,3 +443,15 @@ existing 16 KiB array. Large-frame batching, wire bounds, receiver anti-abuse
 checks and service algorithms remain unchanged. Output's selected fixed layout
 grows 40 to 1,096 bytes; upload adds an eight-byte cursor. The source-pinned failure,
 read-only discriminator and exact verification scope are recorded in 23.
+
+From parent `1343b00accf2277085410c2fd84144b2432f6222`,
+[native handle write](proposal/fuse-workspace-snapshot-overlay/22-handle-write.md)
+adds write_file over borrowed OwnedPayload. The shared mutation body validates
+READY writable Local handles, selects live EOF for native append, and uses one
+two-piece splice for positional Zero gaps and Local bytes while preserving tails.
+Handle release is checked again before publication; zero input is a validated
+no-op. Existing capture/lowering/reconciliation and limits remain, with a
+conservative 596,616-byte working allowance below 640 KiB. The FUSE adapter stays
+read-only; kernel append positioning and reply/invalidation coherence are separate
+required projection work. The original frontier failure and shared transport
+prerequisite retain their source identities in 23.

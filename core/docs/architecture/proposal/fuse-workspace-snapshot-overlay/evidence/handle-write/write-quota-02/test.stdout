@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::write_quota ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 1, revision: 0, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 1987042 } BackingStatus { quota_bytes: 1048576, allocated_bytes: 8192, reserved_bytes: 0, payloads: 1, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 0, reusable_pages: 0, reserved_slots: 0, roots: 0, external_roots: 0, allocated_bytes: 0, reserved_bytes: 0, working_bytes: 736, accounting_complete: true, admission_stopped: false }
+WRITE_CHECK candidate-quota-refusal-keeps-visible-file-and-borrowed-payload PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.02s
+
