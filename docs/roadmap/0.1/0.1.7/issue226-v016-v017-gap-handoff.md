@@ -202,9 +202,19 @@ quoting a lifetime cgroup counter as a phase number.
 
 `ns21-C2`/`ns21-E1`. Declared figures `operation_work_ns` 3,673,602,750 / 3,549,393,833,
 `accept_span_ns` 4,162,787,625 / 4,033,601,291, complete command 6.57 s, `PASS` 13/13, fifteen pins.
-The memory question was asked of it afterwards and the answer was §11 of that report:
-**1,013,219,328 B of the 1,050,738,688 peak was held before the timer**, decomposed as ~728,465,408 the
-content store, **164,347,158 the 25 per-batch prefix snapshots**, ~55,394,304 the prepared tree and plan.
+The memory question was asked of it afterwards and the answer is §11 of that report. From the sampled run
+`ns21-E1`: `resources.rss.process_peak_bytes` **1,050,738,688**,
+`pipeline.rss_phase_baseline_bytes` **1,013,219,328**, increment **37,519,360** — so **96 % of the peak was
+held before the timer**. The report's own decomposition of that baseline is:
+
+| component | bytes | share of baseline |
+| --- | ---: | ---: |
+| the content store — 503 MB of canonical objects held in RAM | ~728,465,408 | 72 % |
+| the 25 per-batch prefix snapshots | **164,347,158** | 16 % |
+| the prepared tree and the plan | ~55,394,304 | 5 % |
+| everything else, including the measured region | ~65 MB | 6 % |
+
+The four rows are the report's own and the last is its named residual, so they are not a byte-exact sum.
 Report: `evidence/issue219-ns21-100k-20260921T155500Z/report.md`.
 
 ### 6b. The prefix snapshots — 164,347,158 B removed
