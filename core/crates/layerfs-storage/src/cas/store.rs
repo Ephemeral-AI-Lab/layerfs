@@ -552,17 +552,28 @@ impl SaveOperation {
 
     /// Drains the remaining batch and acknowledges storage completion.
     pub fn finish(mut self, scope: TimingScope<'_>) -> StorageResult<SaveOutcome> {
+        // Three diagnostic totals, because the round-1 row leaves 255 of this
+        // call's 257.5 ms in none of its named parts. See `DiagProfile`.
+        let call_started = std::time::Instant::now();
+        let mut drain_ns = 0_u64;
         let result = scope.run(|_finish| {
+            let drain_started = std::time::Instant::now();
             let remaining = self.batch.drain();
             self.flush(remaining)?;
+            drain_ns = drain_started.elapsed().as_nanos() as u64;
             let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
             let counters = owner.finish()?;
             Ok(SaveOutcome::from(counters))
         });
         match result {
-            Ok(outcome) => {
+            Ok(mut outcome) => {
                 self.finished = true;
+                let drop_started = std::time::Instant::now();
                 self.owner = None;
+                let drop_ns = drop_started.elapsed().as_nanos() as u64;
+                outcome.profile.diag.finish_drain_ns = drain_ns;
+                outcome.profile.diag.finish_drop_ns = drop_ns;
+                outcome.profile.diag.finish_call_ns = call_started.elapsed().as_nanos() as u64;
                 Ok(outcome)
             }
             Err(error) => Err(self.terminate(error)),

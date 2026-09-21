@@ -792,6 +792,7 @@ fn namespace_scale(
     let mut build_span_ns = 0_u64;
     let mut content_span_ns = 0_u64;
     let mut finish_span_ns = 0_u64;
+    let mut finish_child_ns = 0_u64;
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         let store = Store::open(&sample, timing.child("store.open"))?;
@@ -853,12 +854,19 @@ fn namespace_scale(
             operation.accept(object)?;
         }
         let content_done = std::time::Instant::now();
-        let outcome = operation.finish(timing.child("storage.finish"))?;
+        // The node itself is created inside the finish span, so it is charged
+        // separately: `span_finish_ns` minus this and minus the save's own
+        // `finish_call_ns` is what the span leaves unnamed.
+        let child_started = std::time::Instant::now();
+        let finish_scope = timing.child("storage.finish");
+        let child_ns = child_started.elapsed().as_nanos() as u64;
+        let outcome = operation.finish(finish_scope)?;
         let finish_done = std::time::Instant::now();
         accept_span_ns = accept_started.elapsed().as_nanos() as u64;
         build_span_ns = build_done.duration_since(accept_started).as_nanos() as u64;
         content_span_ns = content_done.duration_since(build_done).as_nanos() as u64;
         finish_span_ns = finish_done.duration_since(content_done).as_nanos() as u64;
+        finish_child_ns = child_ns;
         Ok::<_, PipelineFailure>((result, outcome))
     });
     let heap = instruments::heap_end();
@@ -1050,6 +1058,7 @@ fn namespace_scale(
         ("pipeline.span_build_ns", build_span_ns),
         ("pipeline.span_content_ns", content_span_ns),
         ("pipeline.span_finish_ns", finish_span_ns),
+        ("pipeline.span_finish_child_ns", finish_child_ns),
         // DIAGNOSTIC totals of the regions the seven buckets do not charge. Each is
         // a **total** of a named region, so a region that contains a bucket contains
         // its charge too; the residue is the difference. They are published beside
@@ -1069,6 +1078,10 @@ fn namespace_scale(
         ("pipeline.diag_wave_ns", outcome.profile.diag.wave_ns),
         ("pipeline.diag_finish_total_ns", outcome.profile.diag.finish_total_ns),
         ("pipeline.diag_publish_ns", outcome.profile.diag.publish_ns),
+        ("pipeline.diag_finish_drain_ns", outcome.profile.diag.finish_drain_ns),
+        ("pipeline.diag_finish_drop_ns", outcome.profile.diag.finish_drop_ns),
+        ("pipeline.diag_finish_call_ns", outcome.profile.diag.finish_call_ns),
+        ("pipeline.diag_insert_objects_ns", outcome.profile.diag.insert_objects_ns),
     ] {
         context.trace.write_number(
             Kind::Counter,

@@ -181,6 +181,7 @@ impl MutationOwner {
         let started = Instant::now();
         let statements = write::insert_objects(&self.connection, &rows);
         SaveProfile::charge(&mut self.profile.sql_ns, started);
+        SaveProfile::charge(&mut self.profile.diag.insert_objects_ns, started);
         let statements = statements?;
         let started = Instant::now();
         self.validate_candidates(&rows)?;

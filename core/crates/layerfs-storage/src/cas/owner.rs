@@ -128,6 +128,22 @@ pub struct DiagProfile {
     pub finish_total_ns: u64,
     /// The publication statement inside `finish_inner`.
     pub publish_ns: u64,
+    /// The final `flush(remaining)` drain inside `SaveOperation::finish`.
+    ///
+    /// `span_finish_ns` is 257.5 ms on the round-1 row while `finish_inner` is
+    /// 1.2 ms, and the drain was bounded from above at 0.8 ms by subtraction. The
+    /// three parts of that span therefore had to be charged rather than inferred:
+    /// this one, [`finish_drop_ns`](Self::finish_drop_ns) and
+    /// [`finish_call_ns`](Self::finish_call_ns).
+    pub finish_drain_ns: u64,
+    /// Dropping the save's owner: connection, codec workspaces, retained pack
+    /// tails, and the save's private candidate and pool index clones.
+    pub finish_drop_ns: u64,
+    /// The whole `SaveOperation::finish` call, from entry to return.
+    pub finish_call_ns: u64,
+    /// The object-row `INSERT` of one seal, separate from the pack write that
+    /// shares its bucket.
+    pub insert_objects_ns: u64,
 }
 
 impl DiagProfile {
@@ -153,6 +169,10 @@ impl DiagProfile {
             wave_ns,
             finish_total_ns,
             publish_ns,
+            finish_drain_ns,
+            finish_drop_ns,
+            finish_call_ns,
+            insert_objects_ns,
         );
     }
 }
