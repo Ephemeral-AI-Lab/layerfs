@@ -26,7 +26,8 @@ attribute parity test covers actual root serial 9, pre-epoch timestamps, file,
 directory and symlink sizes, missing paths/objects, grants and profile refusal.
 Initial checks retained a Source/Read trait ambiguity and an obsolete unknown
 response-tag test; both were corrected and the rerun passed. Whole-core and
-Linux mounted checks belong to the following R1 implementation round.
+Linux mounted checks for the following R1 round are now recorded in
+[08](08-readable-implementation.md), with exact scope and retained failures.
 
 Packet [index](README.md); behavior owners:
 [Workspace/FUSE](01-workspace-fuse-contract.md),

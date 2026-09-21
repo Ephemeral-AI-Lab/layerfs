@@ -1,0 +1,122 @@
+{
+  "status": "PASS",
+  "mode": "functional-mounted-proof",
+  "performance_claim": false,
+  "checks": [
+    {
+      "id": "R-03",
+      "route": "wrong-root-role",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: InvalidInput, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "missing-root",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: MissingObject, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "unauthorized-store",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-11",
+      "route": "unauthorized-inspect",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-01",
+      "route": "explicit-root",
+      "status": "PASS",
+      "also_covers": [
+        "R-04",
+        "R-05",
+        "R-06",
+        "R-07",
+        "R-08",
+        "R-09",
+        "R-10"
+      ],
+      "result": {
+        "status": "PASS",
+        "bytes": 577551,
+        "names": 108,
+        "kernel_largefile_flag": 131072,
+        "directory_seek": true,
+        "ordinary_user_root_refusal": true,
+        "executable_bytes": 68384
+      }
+    },
+    {
+      "id": "R-12",
+      "route": "delayed-unmount",
+      "status": "PASS",
+      "result": {
+        "read_errno": 19
+      },
+      "boundary": "opened FD, SIGSTOP service, established callback TCP, SIGTERM daemon, drained and closed"
+    },
+    {
+      "id": "R-02",
+      "route": "branch",
+      "status": "PASS",
+      "also_covers": [
+        "R-04",
+        "R-05",
+        "R-06",
+        "R-07",
+        "R-08",
+        "R-09",
+        "R-10"
+      ],
+      "result": {
+        "status": "PASS",
+        "bytes": 577551,
+        "names": 108,
+        "kernel_largefile_flag": 131072,
+        "directory_seek": true,
+        "ordinary_user_root_refusal": true,
+        "executable_bytes": 68384
+      }
+    },
+    {
+      "id": "R1-peer-loss",
+      "route": "service-loss",
+      "status": "PASS"
+    },
+    {
+      "id": "R1-clean-close",
+      "route": "unmount-and-clean-close",
+      "status": "PASS"
+    }
+  ],
+  "source": "646fcd5e5027ca8bea361c4a44ffc491ed8e7b05",
+  "dirty_diff_sha256": "7dd556606700b99b72ad1a9e878221186232ebeccefac7b3dbe25dad836ff962",
+  "product_inputs_sha256": "79a0a0324210e59e771b7046bd28fd8f081069d0cec314dbca05d7edb9c0040b",
+  "driver_sha256": "52cc0f5b83770833faa190a6b86b10311848f8f778d8a7acb5b7d3d75b1d26ee",
+  "oracle_sha256": "b6c60c1cbb9b44b707ef0c48944f618cd1c15c9a28b36aef1661a1784fa965cc",
+  "helper_sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "limits": {
+    "callback_seconds": 10,
+    "working_bytes": 8388608,
+    "max_workspaces": 2
+  },
+  "not_run": [
+    "R1-C authenticated daemon control",
+    "W/snapshot/Commit/npm",
+    "R6 matched performance",
+    "hard RSS/cgroup bound"
+  ],
+  "root": "ff064b7094183de6f63feb6d8c1737cf7f0ab06ede7c2438b1dbc716a4d353c9",
+  "branch": "1161616161616161616161616161616161",
+  "root_serial": 2,
+  "executable_sha256": "dfd1b0241759344063bd5052622d90910c53084234a26f19527d150da3e43d4b",
+  "linux_binary_sha256": "3f82792312b535d1fcc4a7c9479a60438e40123edf530c063a450e3f3f8b532a",
+  "host_binary_sha256": "8b1e5090e6d11e2ceb907c8ec6474452ef219763c0d7cf283fa0b184a9e47357",
+  "command_wall_seconds": 32.135557166009676,
+  "hard_budget_seconds": 60
+}

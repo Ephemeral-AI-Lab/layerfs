@@ -1,9 +1,6 @@
 #![forbid(unsafe_code)]
-mod config;
-mod headless;
-mod run;
 fn main() -> std::process::ExitCode {
-    match run::run() {
+    match layerfs_daemon::run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             layerfs_bridge::adapters::native::pipe::diagnostic(&format!("Error: {error}\n"));

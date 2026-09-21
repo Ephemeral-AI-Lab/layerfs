@@ -1,0 +1,10 @@
+[package]
+name = "layerfs-workspace"
+description = "Bounded execution-side Workspace semantics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../layerfs-bridge", default-features = false }

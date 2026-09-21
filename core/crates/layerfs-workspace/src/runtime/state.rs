@@ -1,0 +1,272 @@
+use super::host::Host;
+use crate::{backing::budget::Charge, *};
+use layerfs_bridge::contract::{Operation, Response, Root};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
+    time::{Duration, Instant},
+};
+
+pub(crate) const NODE_LIMIT: usize = 256;
+pub(crate) const HANDLE_LIMIT: usize = 128;
+pub(crate) const COOKIE_LIMIT: usize = 1024;
+pub(crate) const PATH_BYTES: usize = 4096;
+pub(crate) const CALL_SCRATCH: usize = 128 * 1024;
+
+#[derive(Clone)]
+pub struct Workspace {
+    pub(crate) inner: Arc<Inner>,
+    pub(crate) host: Arc<Host>,
+}
+pub(crate) struct Inner {
+    pub id: String,
+    pub incarnation: Root,
+    pub store: u32,
+    pub base: Root,
+    pub root: NodeAttributes,
+    pub mount_path: PathBuf,
+    pub stopping: AtomicBool,
+    pub state: Mutex<State>,
+    pub _charge: Charge,
+}
+pub(crate) struct State {
+    pub nodes: Vec<Node>,
+    pub handles: Vec<Handle>,
+    pub cookies: Vec<Cookie>,
+    pub next_handle: u64,
+    pub next_cookie: u64,
+    pub mounted: bool,
+    pub closed: bool,
+    pub active: usize,
+    pub tables: Option<Charge>,
+}
+pub(crate) struct Node {
+    pub attr: NodeAttributes,
+    pub content: Root,
+    pub path: [u8; PATH_BYTES],
+    pub path_len: usize,
+    pub parent: u64,
+    pub lookups: u64,
+    pub projection_lookups: u64,
+    pub handles: usize,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct Handle {
+    pub id: u64,
+    pub serial: u64,
+    pub directory: bool,
+    pub scope: ReferenceScope,
+}
+pub(crate) struct Cookie {
+    pub id: u64,
+    pub handle: u64,
+    pub after: [u8; 255],
+    pub len: usize,
+    pub dots: u8,
+}
+pub(crate) struct OperationGuard {
+    pub workspace: Workspace,
+    pub remote: bool,
+    pub _charge: Charge,
+}
+
+impl Node {
+    pub fn new(attr: NodeAttributes, content: Root, path: &[u8], parent: u64) -> Self {
+        let mut stored = [0; PATH_BYTES];
+        stored[..path.len()].copy_from_slice(path);
+        Self {
+            attr,
+            content,
+            path: stored,
+            path_len: path.len(),
+            parent,
+            lookups: 0,
+            projection_lookups: 0,
+            handles: 0,
+        }
+    }
+    pub fn path(&self) -> &[u8] {
+        &self.path[..self.path_len]
+    }
+    pub fn references(&mut self, scope: ReferenceScope) -> &mut u64 {
+        match scope {
+            ReferenceScope::Local => &mut self.lookups,
+            ReferenceScope::Projection => &mut self.projection_lookups,
+        }
+    }
+}
+impl State {
+    // ponytail: scans are bounded by 256 nodes; use an index if that profile grows.
+    pub fn node(&self, serial: u64) -> Result<&Node, WorkspaceError> {
+        self.nodes
+            .iter()
+            .find(|node| node.attr.serial == serial)
+            .ok_or(WorkspaceError::NotFound)
+    }
+    pub fn node_mut(&mut self, serial: u64) -> Result<&mut Node, WorkspaceError> {
+        self.nodes
+            .iter_mut()
+            .find(|node| node.attr.serial == serial)
+            .ok_or(WorkspaceError::NotFound)
+    }
+    pub fn handle(&self, id: HandleId, directory: bool) -> Result<Handle, WorkspaceError> {
+        self.handles
+            .iter()
+            .find(|handle| handle.id == id && handle.directory == directory)
+            .copied()
+            .ok_or(WorkspaceError::BadHandle)
+    }
+    pub fn collect(&mut self, root: u64) {
+        self.nodes.retain(|node| {
+            node.attr.serial == root
+                || node.lookups > 0
+                || node.projection_lookups > 0
+                || node.handles > 0
+        });
+    }
+}
+impl Workspace {
+    pub fn id(&self) -> &str {
+        &self.inner.id
+    }
+    pub fn root(&self) -> NodeAttributes {
+        self.inner.root
+    }
+    pub fn mount_path(&self) -> &Path {
+        &self.inner.mount_path
+    }
+    pub(crate) fn state(&self) -> Result<MutexGuard<'_, State>, WorkspaceError> {
+        self.inner.state.lock().map_err(|_| WorkspaceError::Io)
+    }
+    pub(crate) fn available(&self, state: &State) -> Result<(), WorkspaceError> {
+        if state.closed {
+            return Err(WorkspaceError::Closed);
+        }
+        if self.inner.stopping.load(Ordering::Acquire) {
+            return Err(WorkspaceError::Busy);
+        }
+        Ok(())
+    }
+    pub(crate) fn begin(
+        &self,
+        remote: bool,
+        deadline: Instant,
+    ) -> Result<OperationGuard, WorkspaceError> {
+        if deadline <= Instant::now() {
+            return Err(WorkspaceError::Deadline);
+        }
+        let charge = self
+            .host
+            .budget
+            .reserve(if remote { CALL_SCRATCH } else { 0 })?;
+        let mut state = self.state()?;
+        self.available(&state)?;
+        if remote
+            && self
+                .host
+                .remote
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+        {
+            return Err(WorkspaceError::Busy);
+        }
+        state.active += 1;
+        Ok(OperationGuard {
+            workspace: self.clone(),
+            remote,
+            _charge: charge,
+        })
+    }
+    pub(crate) fn call(
+        &self,
+        operation: Operation,
+        bytes: u64,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> Result<Response, WorkspaceError> {
+        self.host
+            .call(self.inner.store, operation, bytes, output, deadline)
+    }
+    pub(crate) fn callback_deadline(deadline: Instant) -> Instant {
+        deadline.min(Instant::now() + Duration::from_secs(10))
+    }
+    pub fn handle_attributes(&self, handle: HandleId) -> Result<NodeAttributes, WorkspaceError> {
+        let state = self.state()?;
+        if state.closed {
+            return Err(WorkspaceError::Closed);
+        }
+        let handle = state
+            .handles
+            .iter()
+            .find(|entry| entry.id == handle)
+            .ok_or(WorkspaceError::BadHandle)?;
+        Ok(state.node(handle.serial)?.attr)
+    }
+    pub(crate) fn open_handle(
+        &self,
+        serial: u64,
+        directory: bool,
+        scope: ReferenceScope,
+    ) -> Result<HandleId, WorkspaceError> {
+        let mut state = self.state()?;
+        self.available(&state)?;
+        if scope == ReferenceScope::Projection && !state.mounted {
+            return Err(WorkspaceError::Busy);
+        }
+        let node = state.node(serial)?;
+        if directory && node.attr.kind != NodeKind::Directory {
+            return Err(WorkspaceError::NotDirectory);
+        }
+        if !directory && node.attr.kind == NodeKind::Directory {
+            return Err(WorkspaceError::IsDirectory);
+        }
+        if !directory && node.attr.kind != NodeKind::File {
+            return Err(WorkspaceError::WrongKind);
+        }
+        crate::filesystem::namespace::check_access(node.attr, self.inner.root.uid, 4)?;
+        if state.handles.len() == HANDLE_LIMIT {
+            return Err(WorkspaceError::Capacity);
+        }
+        let id = state.next_handle;
+        state.next_handle = id.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        state.node_mut(serial)?.handles += 1;
+        state.handles.push(Handle {
+            id,
+            serial,
+            directory,
+            scope,
+        });
+        Ok(id)
+    }
+    pub(crate) fn release_handle(
+        &self,
+        id: HandleId,
+        directory: bool,
+    ) -> Result<(), WorkspaceError> {
+        let mut state = self.state()?;
+        let index = state
+            .handles
+            .iter()
+            .position(|handle| handle.id == id && handle.directory == directory)
+            .ok_or(WorkspaceError::BadHandle)?;
+        let handle = state.handles.swap_remove(index);
+        state.node_mut(handle.serial)?.handles -= 1;
+        state.cookies.retain(|cookie| cookie.handle != id);
+        state.collect(self.inner.root.serial);
+        Ok(())
+    }
+}
+impl Drop for OperationGuard {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.workspace.inner.state.lock() {
+            state.active -= 1;
+        }
+        if self.remote {
+            self.workspace.host.remote.store(false, Ordering::Release);
+        }
+    }
+}

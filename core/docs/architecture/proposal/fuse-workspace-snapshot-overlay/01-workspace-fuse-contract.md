@@ -2,8 +2,9 @@
 
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Updated 2026-09-21. This document specifies intended behavior and admission
-> requirements. It does not claim an implemented core mount, POSIX conformance,
-> measured latency, qualified concurrency, or crash durability.
+> requirements. The implemented R1 read-only slice and its actual mounted proof
+> are recorded in [08](08-readable-implementation.md). Full POSIX conformance,
+> writable/concurrency qualification, measured latency and crash durability remain unclaimed.
 
 [Packet index](README.md) · [Overlay and snapshot](02-overlay-snapshot.md) ·
 [Commit integration](03-commit-integration.md) ·

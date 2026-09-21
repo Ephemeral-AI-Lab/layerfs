@@ -3,8 +3,9 @@
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Implementation planning baseline finalized 2026-09-21. The design is informed by reviewed main
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`; the v0.1.6 comparison uses release
-> `44cf748486863ab7c21ca47e731bd88e2b9a7b4a`. No core FUSE implementation,
-> mounted qualification, latency result or durability guarantee is claimed.
+> `44cf748486863ab7c21ca47e731bd88e2b9a7b4a`. The R1 read-only Linux implementation and functional mounted proof are recorded
+> in [08](08-readable-implementation.md). No writable, performance or durability
+> qualification is claimed.
 
 This is the current detailed Pair 1 document packet. It consolidates the earlier
 Workspace/FUSE discussions, platform ruling, file plan, POSIX decisions and
@@ -34,8 +35,9 @@ its implementation into `runtime`, `filesystem`, `overlay`, `backing` and
 owns the paths, public boundaries and revised size allowances. This supersedes
 the earlier layout with both implementations inside daemon modules.
 
-**Next implementation step:** close R0-R, implement and verify the readable
-Linux mount in R1, then add the separate R1-C daemon-control route before
+**Implementation update:** R0-R shared reads and the declared R1 Linux read-only
+mount are implemented; [08](08-readable-implementation.md) records exact proof,
+limits and retained failures. Next add the separate R1-C daemon-control route before
 host-SDK/container-Workspace claims. Required shared read metadata is a
 prerequisite to its advertised callbacks. Writable backing and shared-input
 decisions close before their dependent rounds. The ready-to-use

@@ -1,0 +1,81 @@
+{
+  "status": "FAIL",
+  "mode": "functional-mounted-proof",
+  "performance_claim": false,
+  "checks": [
+    {
+      "id": "R-03",
+      "route": "wrong-root-role",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: InvalidInput, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "missing-root",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: MissingObject, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "unauthorized-store",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-11",
+      "route": "unauthorized-inspect",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-01",
+      "route": "explicit-root",
+      "status": "PASS",
+      "also_covers": [
+        "R-04",
+        "R-05",
+        "R-06",
+        "R-07",
+        "R-08",
+        "R-09",
+        "R-10"
+      ],
+      "result": {
+        "status": "PASS",
+        "bytes": 577551,
+        "names": 108,
+        "kernel_largefile_flag": 131072,
+        "directory_seek": true,
+        "ordinary_user_root_refusal": true,
+        "executable_bytes": 68384
+      }
+    }
+  ],
+  "source": "646fcd5e5027ca8bea361c4a44ffc491ed8e7b05",
+  "dirty_diff_sha256": "7dd556606700b99b72ad1a9e878221186232ebeccefac7b3dbe25dad836ff962",
+  "product_inputs_sha256": "77af98b21218ee24367478614a02deefe3d7872eb96c0db2dc755cb53583159f",
+  "driver_sha256": "a7db9f206eb29c7f4d7a0256e2b6af782d4bbc52c8878325adf878de1809a868",
+  "oracle_sha256": "b6c60c1cbb9b44b707ef0c48944f618cd1c15c9a28b36aef1661a1784fa965cc",
+  "helper_sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "limits": {
+    "callback_seconds": 10,
+    "working_bytes": 8388608,
+    "max_workspaces": 2
+  },
+  "not_run": [
+    "R1-C authenticated daemon control",
+    "W/snapshot/Commit/npm",
+    "R6 matched performance",
+    "hard RSS/cgroup bound"
+  ],
+  "root": "ff064b7094183de6f63feb6d8c1737cf7f0ab06ede7c2438b1dbc716a4d353c9",
+  "branch": "1161616161616161616161616161616161",
+  "root_serial": 2,
+  "executable_sha256": "dfd1b0241759344063bd5052622d90910c53084234a26f19527d150da3e43d4b",
+  "linux_binary_sha256": "60999474d641920bbc0cf70c89859f32cd2e86930ecd6edc891113b7b86b49a4",
+  "host_binary_sha256": "8b1e5090e6d11e2ceb907c8ec6474452ef219763c0d7cf283fa0b184a9e47357",
+  "failure": "AssertionError((b'', b'Traceback (most recent call last):\\n  File \"<string>\", line 6, in <module>\\nOSError: [Errno 19] No such device\\n\\nDuring handling of the above exception, another exception occurred:\\n\\nTraceback (most recent call last):\\n  File \"<string>\", line 8, in <module>\\nAssertionError: [Errno 19] No such device\\n'))",
+  "command_wall_seconds": 19.978787999993074,
+  "hard_budget_seconds": 60
+}

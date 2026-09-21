@@ -1,0 +1,14 @@
+[package]
+name = "layerfs-fuse"
+description = "Linux FUSE projection of the Workspace semantic API"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-workspace = { path = "../layerfs-workspace" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser = { version = "=0.18.0", default-features = false }
+libc = "=0.2.189"

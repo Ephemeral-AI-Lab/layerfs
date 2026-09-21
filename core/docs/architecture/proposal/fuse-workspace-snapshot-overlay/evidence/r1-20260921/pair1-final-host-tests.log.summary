@@ -1,0 +1,70 @@
+   Compiling libc v0.2.189
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-fuse)
+   Compiling clang-sys v1.9.1
+   Compiling bindgen v0.72.1
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9.87s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-8bf877f593b99348)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/debug/deps/layerfs_daemon-cb6924b52e9d1a6f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/configuration.rs (core/target/debug/deps/configuration-b493654e471a39e0)
+
+running 1 test
+test mount_startup_rejects_invalid_inputs_before_connecting ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_fuse-957565c844f94ddf)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-24cf862c751e64ad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/readable.rs (core/target/debug/deps/readable-5db84887889a439b)
+
+running 7 tests
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests layerfs_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_fuse
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

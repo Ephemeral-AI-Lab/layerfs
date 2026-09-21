@@ -1,4 +1,5 @@
 target/
+/core/target-linux/
 /eval/runs/
 /eval/datasets/
 .DS_Store
