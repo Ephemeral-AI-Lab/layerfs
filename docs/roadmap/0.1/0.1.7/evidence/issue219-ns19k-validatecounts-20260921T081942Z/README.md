@@ -90,3 +90,50 @@ suites, which this round cannot affect, and any other harness case or lane.
 
 Production LOC: **31377 -> 31377 (delta 0)**; the measurement harness is not product source. Method
 `python3 tools/production_loc.py --root <tree>`, first parent `a2f049084` against the committed tree.
+
+## 5. Correction (same round, before the next one): `objects_read` is a charge, not a read
+
+**Sections 1–3 read `validation_objects_read` as the number of authenticated reads `validate`
+performs. It is not, and the error is mine: `ValidationWork::objects_read` is incremented in two
+places and only one of them reads anything.**
+
+- `validate.rs:495-505` — a **memo hit** charges `objects_read += 1` and `inode_demands += 1` and
+  returns the memoised value *without touching the reader*. The comment says so: *"A memoized record
+  was found by an earlier demand, so its charge is the same one `charge_inode` makes for a found
+  serial: one demand."*
+- `validate.rs:526-532` — `charge_inode` adds `inode.demands` to `objects_read` **and** to
+  `inode_demands`, which is why the two figures are equal in the row: their equality is definitional
+  and is **not** evidence that every demand cost a read.
+
+**The physical counters are `inode_pages_read` 27,662 and `read_waves` 27,657**, and on those the
+finding is *sharper* than the one this README first reported:
+
+| quantity | value | what it is |
+| --- | ---: | --- |
+| logical demands | 17,777 | charges, memo hits included (`objects_read` = `inode_demands`) |
+| **authenticated page reads** | **27,662** | `inode_pages_read`, physical |
+| **read waves** | **27,657** | `read_waves`, physical |
+| price per **wave** | **8.03 µs** | 222.15 ms / 27,657 — the number to use, not 12.50 µs |
+| pages per wave | **1.0002** | 27,662 / 27,657 |
+| demands per binding | 1.76 | logical |
+| page reads per binding | 2.74 | physical |
+
+**Pages per wave is the measurement that matters.** `lookup_many` — the grouped API the prefetch
+uses — charges `read_waves` **once per level**, not once per page (`inode/read.rs:86-125`, `work.read_waves
++= 1` outside the per-page loop), so a grouped prefetch of thousands of serials reads thousands of
+pages in one or two waves and cannot produce a 1:1 ratio. `lookup` (singular, `inode/read.rs:41-83`)
+charges one wave *and* one page per level descended. **A ratio of 1.0002 therefore says that
+essentially every wave in this row is a single-serial descent, not a grouped one**: ~27,650 separate
+descents of the inode table for ~17,777 logical demands, inside `validate`.
+
+That reverses the direction of the round's conclusion. The phase is not "1.76 reads per binding at
+12.5 µs"; it is **~27,650 ungrouped single-serial descents, each ~8 µs**, in a crate that already
+ships a grouped API for exactly this (`lookup_many`, which the prefetch uses and the lazy path calls
+with `&[serial]`). The pre-registered refutation clause 1 fired either way, and it fired in the
+direction that makes the next round cheap: the cure, if there is one, is in the *caller's* demand
+shape rather than in the read path's price.
+
+**What is unchanged:** `validate` is 221.70/222.15 ms across two rows, the six-phase split stands,
+every pin and work counter reproduce, and the row is PASS 13/13. `entries_examined` 4,096 and
+`directory_pages_read` 0 stand as reported; what they mean for the cycle walk is now open rather than
+settled, and the next round carries them.
