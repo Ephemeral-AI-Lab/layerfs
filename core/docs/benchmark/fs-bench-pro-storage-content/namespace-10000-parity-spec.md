@@ -246,10 +246,38 @@ Three constraints on the pairing, all already established:
 | --- | --- | --- |
 | 1. Byte plan for the 10,000-file / 300 MB fixture | **landed, 5 unit tests pass** | `core/benchmark/fs-bench-pro-storage-content/src/ops/namespace_content.rs` |
 | 2. Tree whose file inodes bind to constructed content roots | not started | — |
-| 3. `PipelineOp::NamespaceScale` driver (content → handoff → save) | not started | `src/ops/pipeline.rs` |
-| 4. `g1.o5-content-bytes` gate | not started | `src/gates.rs` |
-| 5. Registry entry `pipeline-namespace-10000` | not started | `src/families/pipeline.rs` |
-| 6. Golden pins regenerated from a passing run | not started — blocked on §8.3 | `tests/golden/` |
+| 3. `PipelineOp::NamespaceScale` driver (content → handoff → save) | **landed, compiles** | `src/ops/pipeline.rs` |
+| 4. `g1.o5-content-bytes` gate | **landed** (in the driver) | `src/ops/pipeline.rs` |
+| 5. Registry entry `pipeline-namespace-10000` | **written, then reverted — blocked on §8.3** | `src/families/pipeline.rs` |
+| 6. Golden pins regenerated from a passing run | **blocked on §8.3** | `tests/golden/` |
+
+### Why step 5 is written but not landed, and it is not a formality
+
+The registry entry itself is a four-line change and was implemented. Registering it
+breaks **four** tests, and none of them can be satisfied today:
+
+| test | failure | can it be fixed now? |
+| --- | --- | --- |
+| `registry_negative::the_frozen_cardinality_array_is_what_the_registry_holds` | `ADMISSION_CASES` is `217`; the row makes 218 | yes, by amending the frozen constant |
+| `registry_negative::the_lane_sizes_and_admission_split_are_the_frozen_ones` | same | yes, same amendment |
+| `registry_negative::the_registry_is_clean_under_its_own_self_check` | the registry's own `admission != ADMISSION_CASES` check | yes, same amendment |
+| `pinned_expectations::every_admission_case_pins_at_least_one_counter` | the new row pins nothing | **no** |
+
+That last one is the blocker, and it is circular by construction: a pin may only be
+regenerated from a **passing** run (`shared/pin_expected.py counters --run`), the new
+row cannot be run to a passing state until it has pins, and its `pipeline.commits` pin
+cannot be defined until §8.3 is ruled on — because `pipeline-filesystem-build` is
+*already* FAILing on exactly that counter (`1 -> 43`, §3).
+
+So §8.3 is not a formality before step 6; it is the gate on step 5 as well. The
+sequence is forced: rule on `pipeline.commits` → regenerate that pin from a passing
+`pipeline-filesystem-build` run → run the new row → pin it → amend `ADMISSION_CASES`
+to 218 and regenerate `tests/golden/registry.tsv` from the binary's own
+`--emit-registry-tsv`. Only then is the row registrable.
+
+`tests/golden/registry.tsv` was regenerated during this attempt and **reverted**, so the
+frozen table is untouched. The driver and its gate are landed and compile; the row is
+simply not reachable until the ruling.
 
 **Step 1 detail, and one declared deviation.** The plan reproduces the v0.1.6
 fixture's five declared class counts (100 empty, 7,899 tiny, 1,500 small, 500

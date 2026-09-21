@@ -365,6 +365,11 @@ pub enum PipelineOp {
     EditsLargeToSmall,
     /// Build a filesystem and save every emitted object.
     FilesystemBuild,
+    /// Build the `namespace-10000` namespace **and** save its declared content:
+    /// the work the v0.1.6 `init_namespace` case measures. Content is constructed
+    /// before the timer and accepted by the same save operation, because
+    /// `build_filesystem` emits metadata only.
+    NamespaceScale,
 }
 
 /// The three diagnostic matched-pair shapes.

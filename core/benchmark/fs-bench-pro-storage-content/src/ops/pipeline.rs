@@ -24,7 +24,8 @@ use layerfs_content::filesystem::{
     build_filesystem, scope_for_seed, FilesystemInput, FilesystemObjects, FilesystemResources,
 };
 use layerfs_content::{
-    apply_edits, ConstructionPolicy, Edit, EditRequest, EditStream, ObjectId, Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditStream, ObjectId,
+    Replacements,
 };
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
@@ -44,6 +45,10 @@ use crate::workload::providers::{CountingConsumer, PairProvider, TreeStore};
 
 /// The 4 KiB replacement the edit pipeline rows use, as the C1 edit families do.
 pub const REPLACEMENT_LEN: u64 = 4_096;
+
+/// Logical bytes the `namespace-10000` parity row declares, matching the v0.1.6
+/// case: 300,000,000 of file content plus a 100,000,000-byte anchor.
+pub const NAMESPACE_SCALE_BYTES: u64 = 300_000_000;
 
 /// The representation cutoff the `large-to-small` row crosses.
 ///
@@ -110,6 +115,16 @@ pub fn configuration(op: PipelineOp) -> Configuration {
             files: 1_000,
             directories: 10,
         },
+        // The v0.1.6 `namespace-10000` shape: 10,000 files over 100 directories,
+        // 300,000,000 logical bytes with a 100,000,000-byte anchor.
+        PipelineOp::NamespaceScale => Configuration {
+            base_bytes: 0,
+            start: 0,
+            end: 0,
+            replacement: 0,
+            files: 10_000,
+            directories: 100,
+        },
     }
 }
 
@@ -122,6 +137,7 @@ pub fn run(
     context.create_output()?;
     match op {
         PipelineOp::FilesystemBuild => filesystem(case, op, context),
+        PipelineOp::NamespaceScale => namespace_scale(case, op, context),
         _ => edit(case, op, context),
     }
 }
@@ -553,5 +569,326 @@ fn filesystem(case: &Case, op: PipelineOp, context: &mut OpContext<'_>) -> Resul
     .map(|outcome| {
         let _ = case;
         outcome
+    })
+}
+
+/// One `namespace-10000` parity row: the namespace **and** its declared content
+/// saved in one measured region.
+///
+/// This is the shape the v0.1.6 `init_namespace` case measures and that no other
+/// v0.1.7 row performs. `c1.fs.build-scale` builds the same 10,000-entry tree but
+/// emits no content at all, and `pipeline-filesystem-build` saves a filesystem
+/// whose inodes are empty. Neither moves bytes into a Store.
+///
+/// **Why the content is a second stream.** `build_filesystem` emits metadata only:
+/// its internal `contents` map holds *directory* roots, and a file's `content_root`
+/// is copied out of the input `InodeValue` without ever being demanded from the
+/// reader. So a filesystem build cannot put 300 MB into a Store, and the row has to
+/// construct that content itself and accept it on the same `SaveOperation`. The
+/// construction happens before the timer; the save does not.
+fn namespace_scale(
+    case: &Case,
+    op: PipelineOp,
+    context: &mut OpContext<'_>,
+) -> Result<OpOutcome, OpError> {
+    let config = configuration(op);
+    let seed = seed_of(case.id);
+    let prepared: PreparedTree = Recipe {
+        profile: "binary-v1",
+        entries: config.files,
+        directories: config.directories,
+        seed,
+    }
+    .prepare();
+    if let Err(defect) = prepared.check() {
+        return Ok(c1::unmeasured(&OpError::Io(defect), Vec::new()));
+    }
+
+    // The byte plan: the same 10,000-file / 100-directory / 300 MB shape the
+    // v0.1.6 fixture declares.
+    let plan = match super::namespace_content::plan(
+        config.files,
+        config.directories,
+        seed,
+        NAMESPACE_SCALE_BYTES,
+    ) {
+        Ok(plan) => plan,
+        Err(defect) => return Ok(c1::unmeasured(&OpError::Io(defect), Vec::new())),
+    };
+
+    // Construct the content. Untimed: C2's rule is that every canonical object a
+    // C2 row saves is supplied by the harness, and construction is C1's half.
+    let policy = ConstructionPolicy::frozen_default();
+    let capacities = policy.capacities();
+    let mut content = TreeStore::new();
+    for file in &plan.files {
+        if file.size == 0 {
+            continue;
+        }
+        let index = u64::from(file.directory) * super::namespace_content::FILES_PER_DIRECTORY
+            + u64::from(file.serial)
+            - (2 + u64::from(config.directories));
+        let bytes = fixture::noise(file.size, seed ^ index.rotate_left(13));
+        let (result, _) = Timing::disabled(
+            "setup.construct",
+            |scope: &TimingScope<'_, Active>| {
+                construct_bytes(
+                    policy,
+                    &capacities,
+                    &bytes,
+                    &mut content,
+                    scope.child("content"),
+                )
+            },
+        );
+        let constructed = match result {
+            Ok(constructed) => constructed,
+            Err(error) => {
+                return Ok(c1::unmeasured(
+                    &OpError::Product(format!("{error:?}")),
+                    Vec::new(),
+                ))
+            }
+        };
+        if constructed.logical_len != file.size {
+            return Ok(c1::unmeasured(
+                &OpError::Io(format!(
+                    "constructed {} bytes for a {} byte file",
+                    constructed.logical_len, file.size
+                )),
+                Vec::new(),
+            ));
+        }
+    }
+    let content_objects = content.len() as u64;
+
+    let scope = scope_for_seed({
+        let mut bytes = [0_u8; 32];
+        bytes[..8].copy_from_slice(&seed.to_le_bytes());
+        bytes[8..16].copy_from_slice(&seed.rotate_left(17).to_le_bytes());
+        bytes[16..24].copy_from_slice(&seed.rotate_left(31).to_le_bytes());
+        bytes[24..32].copy_from_slice(&seed.rotate_left(47).to_le_bytes());
+        bytes
+    });
+
+    let base = context.output.join("base.sqlite");
+    let sample = context.output.join("sample.sqlite");
+    c2::create_and_save_untimed(&base, &TreeStore::new())?;
+    let de_warm = c2::prepare_sample(&base, &sample)?;
+    let mut gates = vec![
+        gates::residency_gate(Some(de_warm.resident_after)),
+        gates::attribution_gate(gates::Attribution::Exclusive),
+    ];
+
+    let input = FilesystemInput {
+        base: None,
+        scope,
+        root_serial: ROOT_SERIAL,
+        directories: &prepared.directories,
+        inodes: &prepared.inodes,
+        new_inodes: &prepared.new_inodes,
+        resources: FilesystemResources::default(),
+    };
+    let empty = TreeStore::new();
+    let mut metadata_emitted = 0_u64;
+    instruments::heap_begin();
+    let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
+        let store = Store::open(&sample, timing.child("store.open"))?;
+        let mut operation = store.begin_save(timing.child("storage.begin"))?;
+        let result = {
+            let mut handoff = SaveHandoff::new(&mut operation);
+            let mut counting = CountingConsumer::new(&mut handoff);
+            let reader = PairProvider::new(&empty, &empty);
+            let mut objects = FilesystemObjects::new(&reader, &mut counting);
+            let result = build_filesystem(&mut objects, &input, None)?;
+            metadata_emitted = counting.accepted();
+            result
+        };
+        // The content stream, on the same operation. `SaveHandoff` is dropped above
+        // so the operation is free; the identities are the constructed ones.
+        for id in content.insertion_order() {
+            let object = content
+                .cloned_object(*id)
+                .ok_or(layerfs_storage::StorageError::ObjectMissing(*id))?;
+            operation.accept(object)?;
+        }
+        let outcome = operation.finish(timing.child("storage.finish"))?;
+        Ok::<_, PipelineFailure>((result, outcome))
+    });
+    let heap = instruments::heap_end();
+    let timing_bytes = crate::support::phases::timing_json_bytes();
+    let (result, outcome) = match measured {
+        Ok(value) => value,
+        Err(error) => {
+            return Ok(c1::unmeasured(
+                &OpError::Product(format!("{error}")),
+                gates,
+            ))
+        }
+    };
+
+    let (store, replay) = fs::replay_build(&prepared, scope, None)?;
+    let listing = fs::listings_match(&store, replay.root, &prepared)?;
+
+    let inserted_bytes = outcome.chain.canonical_bytes;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.declared_files",
+        config.files as i128,
+        "files",
+        "fixture recipe",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.declared_directories",
+        config.directories as i128,
+        "directories",
+        "fixture recipe",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.bindings",
+        prepared.bindings() as i128,
+        "bindings",
+        "fixture manifest",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.declared_content_bytes",
+        plan.total_bytes as i128,
+        "bytes",
+        "namespace_content::plan, the declared 300,000,000-byte shape",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.content_objects",
+        content_objects as i128,
+        "objects",
+        "constructed before the timer, accepted inside it",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.metadata_objects",
+        metadata_emitted as i128,
+        "objects",
+        "CountingConsumer on the SaveHandoff path, measured phase",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.inserted",
+        i128::from(outcome.inserted),
+        "objects",
+        "SaveOutcome.inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.reused",
+        i128::from(outcome.reused),
+        "objects",
+        "SaveOutcome.reused",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.commits",
+        i128::from(outcome.commits),
+        "transactions",
+        "SaveOutcome.commits",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.content_bytes",
+        inserted_bytes as i128,
+        "bytes",
+        "SaveOutcome canonical bytes inserted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "pipeline.objects_emitted",
+        result.counters.objects.objects_emitted as i128,
+        "objects",
+        "ObjectWork.objects_emitted",
+    )?;
+    context.trace.write_number(
+        Kind::Counter,
+        "timing_json_bytes",
+        timing_bytes as i128,
+        "bytes",
+        "product timing.json, byte-verbatim",
+    )?;
+    context.trace.write_number(
+        Kind::Resource,
+        "heap.peak_incremental_bytes",
+        heap.peak_incremental_bytes as i128,
+        "bytes",
+        "counting GlobalAlloc, measured phase",
+    )?;
+
+    gates.push(c1::completeness_gate(&report, "g7.tree-complete"));
+    crate::workload::expected::publish(
+        context.trace,
+        "filesystem_root",
+        &result.root.0.to_string(),
+    )?;
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o1-replay-root",
+        replay.root.0 == result.root.0,
+        &format!("replay root {}", replay.root.0),
+        &format!("measured root {}", result.root.0),
+    ));
+    // The gate this row exists for: every existing pipeline gate is structural, so
+    // a row that saved empty inodes would pass all of them.
+    gates.push(gates::require(
+        GateClass::Correctness,
+        "g1.o5-content-bytes",
+        inserted_bytes >= plan.total_bytes,
+        &format!(
+            "{inserted_bytes} canonical bytes inserted against {} declared",
+            plan.total_bytes
+        ),
+        "the save acknowledged at least the declared content bytes",
+    ));
+    gates.push(gates::require(
+        GateClass::Mechanism,
+        "g2.handoff",
+        metadata_emitted > 0 && u64::from(outcome.inserted) + u64::from(outcome.reused) > 0,
+        &format!(
+            "{metadata_emitted} metadata objects crossed the handoff; {content_objects} content \
+             objects were accepted; save acknowledged {} inserted + {} reused",
+            outcome.inserted, outcome.reused
+        ),
+        "both streams reached the save operation and the save acknowledged them",
+    ));
+    match listing {
+        Ok(directories) => gates.push(gates::require(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            true,
+            &format!("{directories} directories equal the manifest"),
+            "every directory's bindings equal the fixture manifest",
+        )),
+        Err(disagreement) => gates.push(Gate::fail(
+            GateClass::Correctness,
+            "g1.o4-listing",
+            disagreement.as_str(),
+            "every directory's bindings equal the fixture manifest",
+        )),
+    }
+    gates.extend(c2::sidecar_gates(&sample));
+    gates.push(gates::swap_gate(instruments::swaps()));
+
+    Ok(OpOutcome {
+        gates,
+        notes: vec![
+            format!("pipeline_op: {op:?}"),
+            format!("declared_files: {}", config.files),
+            format!("declared_directories: {}", config.directories),
+            format!("declared_content_bytes: {}", plan.total_bytes),
+            "measured_region: Store::open + build_filesystem + content accept + save + acknowledgement"
+                .to_string(),
+            "content: constructed before the timer, accepted inside it (C2's supplied-object rule)"
+                .to_string(),
+            "handoff: layerfs_storage::SaveHandoff, the product's own C1-to-save adapter".to_string(),
+        ],
     })
 }
