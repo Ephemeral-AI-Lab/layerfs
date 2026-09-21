@@ -3592,3 +3592,57 @@ harness's own complexity**, because §5's recommendation costs it: **A adds a bo
 declaration, a new gate, a new published term and a scratch lifecycle; C2 adds no mechanism; B removes
 one; C1 removes none because it bounds nothing.** No option lowers both the peak and the complexity, and
 a row that declines to pay for A keeps 885 MB with the attribution this campaign already published.
+## L85 — #226 round 22b: the timed copy removed, and option A built, measured and refuted (2026-09-21)
+
+Status: **one harness improvement landed; one owner-ruled option implemented, measured and withdrawn.**
+No product line changed. Reports:
+[`issue226-ns22b-spillprice-20260921T171500Z/report.md`](../../0.1.7/evidence/issue226-ns22b-spillprice-20260921T171500Z/report.md);
+design page: [`issue226-bounded-fixture-design.md`](../../0.1.7/issue226-bounded-fixture-design.md) §5a, §5b.
+
+**Landed — the content stream's copy is gone (option B).** `cloned_object` deep-copied every canonical
+object inside the timer; `Store::accept` takes the object by value, so the copy bought nothing.
+`TreeStore::drain` moves them instead, and `g6.content-complete` requires the offered count to equal the
+constructed count. Three locked runs, all fifteen pins on both rows restored, digest
+`2412681d…fd954` intact:
+
+| | before (`ns22-D2`) | after (`ns22-E2`) |
+| --- | ---: | ---: |
+| `pipeline.accept_span_ns` | 4,168,435,666 | **4,070,293,292 (−2.35 %)** |
+| `pipeline.operation_work_ns` | 3,640,415,749 | 3,662,759,417 (**+0.61 %**) |
+| `pipeline.teardown_ns` | 528,019,917 | 407,533,875 |
+
+**The registered prediction was refuted and the reason is the round's own finding turned on itself.**
+Prediction: the declared figure falls 1.5–4 %. It rose 0.61 %, because `operation_work_ns` is
+`accept_span_ns − teardown_ns` and the excluded term moved 120,486,042 ns in the same run — 5.4× further
+than the 98,142,374 ns of work the change removed. The independent microbenchmark of the driver's own two
+calls predicted 79,174,500 ns (2.23 %); the row's own span moved 98,142,374 ns (2.35 %). **Two
+instruments, two processes, 0.12 points apart: the mechanism is confirmed even though the declared
+figure hid it.** Memory bought: none, registered in advance, because the copy is one object at a time.
+
+**Refuted — option A.** Built as ruled (one pack with an entry table, a streaming 1 MiB windowed reader,
+no `mmap`, de-warmed before the timer, `PASS` with the pinned digest intact) and measured end to end:
+**peak 882,180,096 → 752,877,568 (−14.7 %), declared figure 3,662,759,417 → 4,072,154,667 (+11.2 %),
+`span_content_ns` +497,541,459 ns.** Two measured causes:
+
+1. **A fixture built in this process stays in this process.** A probe that holds the row's 503 MB and
+   drops it releases **111,869,952 of 502,912,427 bytes** to the OS; macOS does not return freed
+   allocator pages. The memory premise — that spilling and dropping lowers what the process holds — is
+   false for a fixture constructed in-process.
+2. **The reader cannot avoid the hash.** `FinalizedObject` has one constructor and it computes the
+   identity (`object/output.rs:98`), so every served object is hashed in the reader *in addition to* the
+   packer's hash (`encoding/pool/value_group.rs:47`). Measured floor for hashing the fixture in its own
+   object sizes: **508,737,250 ns = 14.3 %** of the declared figure; memcpy of the same bytes is
+   70,630,417 ns = 2.0 %.
+
+Against the page's own threshold — a bounded fixture at a price the row can carry — A is a loss on both
+axes it was meant to serve, and it is reverted with the measurement kept. **For A to be reconsidered it
+needs streaming construction (the content never assembled in a `TreeStore`) and a product way to offer
+bytes already authenticated, which step 5 of the handoff forbids this round.**
+
+**Also closed by measurement:** `write_to_dir`'s one-file-per-object shape costs **432 %** of the row's
+declared figure to read back and must not be used for a spill; `mmap` costs 28.4 % against 12.6 % for
+positioned reads and 9.8 % for streaming, because a cold mapping pays a page fault per object.
+
+Production LOC: **97100 → 97100 (delta 0)** across every commit of this step; scope
+`core/crates/*/src + sql` and `crates/*/src + sql`, method `tools/production_loc.py --root .`
+(core 31683 in 194 files, reference 65417 in 193 files).
