@@ -1,0 +1,45 @@
+# Term-by-term movement, arm against control. Both receipts are PASS 13/13, verify full,
+# source_dirty false; the control at 3bb2d209d, the arm at e3a46d74b.
+# The row's formula, quoted from src/ops/pipeline.rs:1259-1262:
+#   pipeline.operation_work_ns = accept_span_ns - diag_finish_drop_ns   (teardown)
+
+counter                                     control              arm            delta
+pipeline.operation_work_ns            1,218,880,166    1,126,731,417      -92,148,749
+pipeline.accept_span_ns               1,393,706,416    1,208,264,083     -185,442,333
+pipeline.teardown_ns                    174,826,250       81,532,666      -93,293,584
+pipeline.diag_finish_drop_ns            174,826,250       81,532,666      -93,293,584
+pipeline.diag_insert_objects_ns         143,438,848       99,619,592      -43,819,256
+pipeline.diag_commit_total_ns           458,259,288      431,236,291      -27,022,997
+pipeline.profile_commit_ns              458,264,373      431,241,582      -27,022,791
+pipeline.diag_write_pack_total_ns       125,584,783      121,477,103       -4,107,680
+pipeline.diag_wave_ns                    65,376,701       62,289,960       -3,086,741
+pipeline.diag_begin_ns                    1,792,498        1,640,545         -151,953
+pipeline.diag_validate_ns                48,450,628       50,070,583       +1,619,955
+pipeline.profile_sql_ns                 263,907,677      216,211,028      -47,696,649
+pipeline.profile_total_ns               831,422,951      754,443,301      -76,979,650
+pipeline.span_build_ns                   90,102,583       89,652,833         -449,750
+pipeline.construct_ns                   449,315,829      440,144,955       -9,170,874
+pipeline.construct_noise_ns             113,830,615      113,345,687         -484,928
+pipeline.commits                                 95               95               +0
+pipeline.inserted                            25,245           25,245               +0
+pipeline.statements                           7,666            7,666               +0
+pipeline.pack_bytes_written             301,865,004      301,865,004               +0
+pipeline.packs_created                        1,270            1,270               +0
+
+phases (the closure the runner times):
+cpu_user_ns                             694,879,000      639,618,000      -55,261,000
+cpu_system_ns                           533,453,000      493,367,000      -40,086,000
+operation_ns                          1,396,256,541    1,210,556,500     -185,700,041
+preparation_wall_ns                     690,835,584      680,399,000      -10,436,584
+complete_command_ns                   2,221,392,625    2,017,207,209     -204,185,416
+cpu_user+cpu_system                   1,228,332,000    1,132,985,000      -95,347,000
+
+Store file (the page mechanism, at the product level):
+  space.after.apparent_bytes                336,920,576    335,818,752     -1,101,824
+  space.after.allocated_bytes               340,557,824    337,092,608     -3,465,216
+  space.after.page_count                         82,256         81,987           -269
+  space.after.freelist_count                          0              0             +0
+  space.pack_bodies_bytes                   332,922,880    332,922,880             +0
+  space.nonpack_bytes                         3,997,696      2,895,872     -1,101,824
+  space.canonical_bytes_total               302,231,057    302,231,057             +0
+  space.canonical_objects_total                  25,245         25,245             +0

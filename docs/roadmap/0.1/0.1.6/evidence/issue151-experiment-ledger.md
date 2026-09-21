@@ -3078,3 +3078,68 @@ either, this round having added one test file and one manifest line.
 
 Production LOC: **31684 → 31684 (delta 0)**. Method `tools/production_loc.py --root <tree>`; this
 round touched docs and the harness only, which the counter excludes by scope.
+
+## L77 — #219 round 18: dropping the locator's second B-tree — `operation_work_ns` 1218.88 → 1126.73 ms, and a refuted clause that corrects round 17 (2026-09-21)
+
+Status: **PASS, 13/13 gates, 14/14 pinned counters**, one sample, `--verify full`, sealed tree
+(`source_dirty: false`). Arm `ns19-S1-indexdrop-20260921T103500Z`, control `ns19-Q2-repin-20260921T115200Z`,
+product commit `e3a46d74b`. Report and pre-registration:
+[`issue219-ns19s-indexdrop-20260921T103500Z`](../../0.1.7/evidence/issue219-ns19s-indexdrop-20260921T103500Z/),
+with the arm's whole receipt and every term that moved under `raw/`. **Owner ruling honoured: the page
+size is 4 KiB and no pragma was read or set**; `sqlite/connection.rs` is untouched.
+
+**The one difference, and the result.** `CREATE INDEX objects_save ON objects(save_id, object_id)` is
+removed, with `REQUIRED_INDEXES` 3 → 2 (`sqlite/schema.rs:95`) and `SCHEMA_VERSION` 9 → 10
+(`policy.rs:51`, because `sql/schema.sql`'s own rule is "Older schemas are rejected, never migrated").
+**`operation_work_ns` 1,218,880,166 → 1,126,731,417 = −92,148,749 ns (−7.56 %).** The row's formula is
+`accept_span_ns − diag_finish_drop_ns` (`ops/pipeline.rs:1259-1262`) and **both halves roughly halved**:
+`accept_span_ns` −185,442,333 and `teardown_ns` −93,293,584, so the change also bought 93.29 ms
+*outside* the row's own figure. CPU 1,228,332,000 → 1,132,985,000 (−95,347,000); wall `operation_ns`
+−185,700,041; complete command 2.221 → 2.017 s. **No pinned counter moved** — `commits` 95, `inserted`
+25,245, `statements` 7,666, `pack_bytes_written` 301,865,004, `packs_created` 1,270, every content
+count, and `digest:filesystem_root` `1d6fba29…` identical, with `g1.o3-pinned-counters` and
+`g1.o1-pinned-identity` PASS. Unlike L73 and L74, **no re-pin was needed**.
+
+**Registered against measured.** `diag_insert_objects_ns` predicted 93.4–116.9 ms, measured **99.62 ms**
+— held. `operation_work_ns` predicted 1168.9–1192.3 ms, measured **1126.73 ms** — **refuted, 1.84×
+better than the band allowed**. **Refutation clause 3 fired**: `diag_commit_total_ns` predicted to move
+≤ 2 ms and moved **−27,022,997 ns**. Clause 3's own diagnosis was right, and it corrects round 17:
+**the replica timed the insert loop only.** Under `journal_mode = MEMORY` with `synchronous = OFF`
+(`connection.rs:33-47`) an insert *dirties* pages and the COMMIT *flushes* them — squad C recorded
+exactly this (`issue219-squadC-cadence-20260921T044258Z/README.md` §2: "`commit_ns` is therefore a
+**page-flush** region") — so round 17 counted the dirtied pages and left the flush uncounted. The
+corrected attribution is insert **−43.82**, commit **−27.02**, those two terms **−70.84**, the whole row
+**−92.15**. Inside the formula the named charges sum to −76.57 ms and the seven profile buckets to
+−76.98; against −92.15 that leaves **−15.17 ms unattributed**, reported as unattributed. **Clause 3's
+remedy is that the change is "not kept on this prediction" — it is not: the prediction is withdrawn and
+corrected, and the change is kept on the arm's own receipt** (sealed clean tree, 13/13 gates, every pin
+and the root digest unchanged, a movement 1.84× the withdrawn bound).
+
+**The page mechanism is confirmed exactly at the product level.** Round 17's replica predicted **265
+index pages**; the product's Store lost **269 pages and 1,101,824 bytes** — `269 × 4096 = 1,101,824` —
+and the whole fall is in `nonpack_bytes` (3,997,696 → 2,895,872) while `pack_bodies_bytes` 332,922,880
+and `canonical_bytes_total` 302,231,057 are **unchanged**. No pack byte and no canonical byte moved:
+this is the index's own B-tree leaving the file. The replica's 265 and the product's 269 are the same
+mechanism on two instruments.
+
+**Where the row now stands.** `operation_work_ns` **1126.73 ms**, so the gap to the 1 s target is
+**−126.73 ms** (was −218.88) and the serial floor is 842.90. **Boundary-matched** (round 17's boundary)
+the row is **1680.22 ms of work / 1686.48 ms of CPU** against the reference's fastest same-shape row at
+1789.51 ms — **−6.11 % work / −5.76 % CPU**, i.e. now *ahead* of the fastest v0.1.6 row it can be
+compared with on the only boundary the two can share. Remaining levers stand as round 17 ranked them:
+the C1 build span's uncharted ~70–100 ms, the native lane's 2.03 records per group, and the insert
+statement shape — now the second largest remaining charge at 99.62 ms — still carrying L73's varying
+statement text. `abandon`'s query is now a full scan of `objects`; its cost is **NOT_MEASURED** and only
+its correctness is claimed, covered by `persistence_failure.rs:313` and `content_index.rs:119`.
+
+Checks as run: core workspace `--no-fail-fast` **630 passed / 0 failed**; `-p layerfs-storage` alone
+**224 passed / 0 failed**; `clippy --all-targets` clean; `fmt --all --check` clean;
+`core/tools/check_product_boundary.py` **PASS** (194 production files); harness release build from the
+repository root then `runner.py perf --case pipeline-namespace-10000 --verify full --no-build` — **1
+case, PASS**, 2.2 s, one sample, fresh `--out`, 2.017 s inside the 15 s limit. **Not run:** the reference
+`crates/` workspace, any other harness case or lane, any further sample of this arm, and the harness's
+own wider suite beyond this case.
+
+Production LOC: **31684 → 31683 (delta −1)** — the removed `CREATE INDEX` line; the three comment blocks
+added or corrected contribute nothing. Method `tools/production_loc.py --root <tree>`, first parent
+against the committed tree.
