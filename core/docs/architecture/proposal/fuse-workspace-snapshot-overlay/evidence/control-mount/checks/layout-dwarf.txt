@@ -1,0 +1,73 @@
+/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon:	file format elf64-littleaarch64
+
+0x00016b85: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0001f183: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00041633: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00047a12: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0005e029: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0006b087: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000892a6: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x00098ff8: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000b22a5: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000bf018: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x000cdf4e: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)
+
+0x0010e5af: DW_TAG_structure_type
+              DW_AT_name	("ArcInner<std::sync::poison::mutex::Mutex<core::option::Option<layerfs_fuse::mount::MountHandle>>>")
+              DW_AT_byte_size	(0x80)
+              DW_AT_accessibility	(DW_ACCESS_private)
+              DW_AT_alignment	(8)

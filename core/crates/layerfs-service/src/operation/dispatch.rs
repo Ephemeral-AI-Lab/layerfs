@@ -26,7 +26,8 @@ pub(crate) fn dispatch(
     match &r.operation {
         Operation::WorkspaceStatus { .. }
         | Operation::WorkspaceUnmount { .. }
-        | Operation::WorkspaceCloseClean { .. } => Err(Code::Unsupported.into()),
+        | Operation::WorkspaceCloseClean { .. }
+        | Operation::WorkspaceMount { .. } => Err(Code::Unsupported.into()),
         Operation::HistoryQuery(query) => {
             end_input(input)?;
             history::query(catalog.ok_or(Code::Unsupported)?, query, store)

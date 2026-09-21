@@ -1,0 +1,9 @@
+{
+  "scope": "core/crates/layerfs-bridge/src/adapters/native/pipe.rs",
+  "method": "tools/production_loc.py counted_lines and physical_lines; exact HEAD blob vs working file",
+  "before": 112,
+  "after": 112,
+  "physical_before": 131,
+  "physical_after": 132,
+  "delta": 0
+}

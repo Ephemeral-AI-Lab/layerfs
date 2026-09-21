@@ -1,0 +1,12 @@
+{
+  "original_receipt": "runs/mount-mount_success-01/result.json",
+  "original_status": "FAIL",
+  "original_wall_seconds": 4.246197125001345,
+  "remote_mount_entered": false,
+  "cleanup": "forced client and daemon cleanup; owned container and volume subsequently confirmed absent",
+  "confirmed_diagnostic_failure": "CalledProcessError captured text output, but exception recorder invoked str.decode; original assertion stderr was not preserved",
+  "oracle_mismatch": "new oracle accepted only fuse.layerfs; existing native mount_failure oracle accepts fuse, startup oracle accepts fuse/fuse.layerfs with exact layerfs source",
+  "exact_original_assertion": "UNCONFIRMED: stderr unavailable; do not retrospectively claim which assertion failed",
+  "action": "correct harness only, preserve original evidence, fresh corrected mount_success-02 with inputs02; no product change, build, timeout or workload change",
+  "product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35"
+}

@@ -106,7 +106,7 @@ def seed_namespace(daemon, executable):
 
 
 def mount_process(args, env, source, name, store=1):
-    command = ['docker', 'run', '-d', '--rm', '--name', name, '--device', '/dev/fuse',
+    command = ['docker', 'run', '-d', '--rm', '--name', name, '--cpus', '2', '--device', '/dev/fuse',
                '--cap-add', 'SYS_ADMIN', '--security-opt', 'apparmor=unconfined',
                '--add-host', 'host.docker.internal:host-gateway',
                '--mount', f'type=bind,src={args.linux_daemon},dst=/product/layerfs-daemon,readonly',

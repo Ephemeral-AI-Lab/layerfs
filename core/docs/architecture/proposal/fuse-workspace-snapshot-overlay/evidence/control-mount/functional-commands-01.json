@@ -1,0 +1,510 @@
+{
+  "product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35",
+  "functional_only": true,
+  "selections": [
+    {
+      "script": "control_mount.py",
+      "case": "mount_success",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_success",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_success-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_success-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_authority",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_authority",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_authority-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_authority-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_mounted",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_mounted",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_mounted-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_mounted-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_closed",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_closed",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_closed-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_closed-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_stopping",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_stopping",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_stopping-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_stopping-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_unresolved",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_unresolved",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_unresolved-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_unresolved-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_session_failure",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_session_failure",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_session_failure-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_session_failure-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_loss",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_loss",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_loss-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_loss-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_partial_input",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_partial_input",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_partial_input-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_partial_input-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_deadline",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_deadline",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_deadline-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_deadline-01"
+    },
+    {
+      "script": "control_mount.py",
+      "case": "mount_expiry",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "mount_expiry",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_expiry-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/mount-mount_expiry-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "success",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "success",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-success-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-success-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "authority",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "authority",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-authority-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-authority-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "expiry",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "expiry",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-expiry-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-expiry-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "timeout",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "timeout",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-timeout-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-timeout-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "loss",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "loss",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-loss-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-loss-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "partial_input",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "partial_input",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-partial_input-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-partial_input-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "signal",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "signal",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-signal-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-signal-01"
+    },
+    {
+      "script": "control_unmount.py",
+      "case": "shutdown_retained",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "shutdown_retained",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-shutdown_retained-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-unmount-shutdown_retained-01"
+    },
+    {
+      "script": "control_close.py",
+      "case": "close_success",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "close_success",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_success-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_success-01"
+    },
+    {
+      "script": "control_close.py",
+      "case": "close_mounted",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "close_mounted",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_mounted-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_mounted-01"
+    },
+    {
+      "script": "control_close.py",
+      "case": "close_authority",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "close_authority",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_authority-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_authority-01"
+    },
+    {
+      "script": "control_close.py",
+      "case": "close_cleanup_failure",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "close_cleanup_failure",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_cleanup_failure-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_cleanup_failure-01"
+    },
+    {
+      "script": "control_close.py",
+      "case": "close_loss",
+      "command": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_close.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+        "--case",
+        "close_loss",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_loss-01",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+      ],
+      "output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/runs/regression-close-close_loss-01"
+    }
+  ]
+}

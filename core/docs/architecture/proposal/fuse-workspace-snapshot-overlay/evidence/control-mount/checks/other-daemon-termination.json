@@ -1,0 +1,8 @@
+{
+  "pid": 11323,
+  "verified_executable": "/Users/yifanxu/Ephemeral-AI-Lab/layerfs-216-concurrency/core/target/release/layerfs-daemon",
+  "authorization": "explicit user confirmation to terminate PID11323",
+  "signal": "SIGTERM",
+  "exit_observed": true,
+  "other_processes_signalled": []
+}

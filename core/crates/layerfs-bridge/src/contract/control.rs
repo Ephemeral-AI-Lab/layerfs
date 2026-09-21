@@ -15,6 +15,10 @@ pub const WORKSPACE_CLOSE_CLEAN_OPCODE: u8 = 11;
 pub const WORKSPACE_CLOSE_CLEAN_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_CLOSE_CLEAN_RESULT_BYTES: usize = 100;
+pub const WORKSPACE_MOUNT_OPCODE: u8 = 12;
+pub const WORKSPACE_MOUNT_MAX_MS: u32 = 5_000;
+pub const WORKSPACE_MOUNT_REQUEST_BYTES: usize = 124;
+pub const WORKSPACE_MOUNT_RESULT_BYTES: usize = 100;
 
 /// Result of the requested daemon lifecycle operation. Completed means that
 /// operation finished; Retained means an entered native attempt preserved its

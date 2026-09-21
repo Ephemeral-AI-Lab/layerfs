@@ -2337,6 +2337,10 @@ fn daemon_control_is_refused_by_service_even_with_every_store_grant() {
             workspace: b"mounted".to_vec(),
             incarnation: [4; 32],
         },
+        Operation::WorkspaceMount {
+            workspace: b"mounted".to_vec(),
+            incarnation: [4; 32],
+        },
     ] {
         let request = Request {
             id: 1,

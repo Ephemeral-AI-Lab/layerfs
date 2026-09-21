@@ -371,6 +371,13 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
                 incarnation,
             },
             Response::WorkspaceCloseClean(result),
+        )
+        | (
+            Operation::WorkspaceMount {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceMount(result),
         ) => {
             result.workspace == *workspace
                 && result.incarnation == *incarnation

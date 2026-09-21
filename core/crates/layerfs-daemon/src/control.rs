@@ -29,7 +29,7 @@ struct Session {
 struct Target {
     workspace: Workspace,
     incarnation: [u8; 32],
-    mount: Arc<Mutex<MountHandle>>,
+    mount: Arc<Mutex<Option<MountHandle>>>,
     stopping: Arc<AtomicBool>,
 }
 
@@ -45,7 +45,7 @@ impl Control {
         private: [u8; 32],
         workspace: Workspace,
         incarnation: [u8; 32],
-        mount: Arc<Mutex<MountHandle>>,
+        mount: Arc<Mutex<Option<MountHandle>>>,
     ) -> Result<Self, Failure> {
         listener.set_nonblocking(true)?;
         let stopping = Arc::new(AtomicBool::new(false));
@@ -186,6 +186,10 @@ fn dispatch(
             workspace,
             incarnation,
         } => (workspace, incarnation, 4),
+        Operation::WorkspaceMount {
+            workspace,
+            incarnation,
+        } => (workspace, incarnation, 8),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -224,7 +228,10 @@ fn dispatch(
             TryLockError::WouldBlock => Code::Busy,
             TryLockError::Poisoned(_) => Code::Io,
         })?;
-        let closed = operation == 4 && target.workspace.status().map_err(|_| Code::Io)?.closed;
+        let local = target.workspace.status().map_err(|_| Code::Io)?;
+        if operation == 8 && (mount.is_some() || local.mounted || local.stopping || local.closed) {
+            return Err(Code::Busy.into());
+        }
         authorized(grants, peer, operation)?;
         if Instant::now() >= native_deadline {
             return Err(Code::Deadline.into());
@@ -233,8 +240,28 @@ fn dispatch(
             return Err(Code::Busy.into());
         }
         let outcome = if operation == 2 {
-            mount.unmount(native_deadline)
-        } else if closed {
+            match mount.as_mut() {
+                Some(owner) => owner.unmount(native_deadline).map(|()| *mount = None),
+                None => Ok(()),
+            }
+        } else if operation == 8 {
+            match layerfs_fuse::mount(&target.workspace, native_deadline) {
+                Ok(owner) => {
+                    *mount = Some(owner);
+                    Ok(())
+                }
+                Err(failure) => {
+                    let failure = *failure;
+                    if failure.retained.is_none() {
+                        return Err(mount_failure_code(&failure.cause).into());
+                    }
+                    // Custody precedes the entered-attempt result, including
+                    // when its terminal is subsequently lost in transport.
+                    *mount = failure.retained;
+                    Err(failure.cause)
+                }
+            }
+        } else if local.closed {
             Ok(())
         } else {
             match target.workspace.close_clean_until(native_deadline) {
@@ -244,23 +271,11 @@ fn dispatch(
         };
         drop(mount);
         if let Err(error) = outcome {
-            result.outcome = WorkspaceLifecycleOutcome::Retained(match &error {
-                MountError::Deadline | MountError::Workspace(WorkspaceError::Deadline) => {
-                    Code::Deadline
-                }
-                MountError::Workspace(WorkspaceError::Backing(failure))
-                    if failure.kind == io::ErrorKind::TimedOut =>
-                {
-                    Code::Deadline
-                }
-                MountError::Unsupported | MountError::Workspace(WorkspaceError::Unsupported) => {
-                    Code::Unsupported
-                }
-                MountError::Workspace(WorkspaceError::Busy) => Code::Busy,
-                _ => Code::Io,
-            });
+            result.outcome = WorkspaceLifecycleOutcome::Retained(mount_failure_code(&error));
             let operation = if operation == 2 {
                 "unmount"
+            } else if operation == 8 {
+                "mount"
             } else {
                 "close clean"
             };
@@ -270,6 +285,8 @@ fn dispatch(
         }
         return Ok(if operation == 2 {
             Response::WorkspaceUnmount(result)
+        } else if operation == 8 {
+            Response::WorkspaceMount(result)
         } else {
             Response::WorkspaceCloseClean(result)
         });
@@ -289,4 +306,20 @@ fn dispatch(
     };
     result.validate()?;
     Ok(Response::WorkspaceStatus(Box::new(result)))
+}
+
+fn mount_failure_code(error: &MountError) -> Code {
+    match error {
+        MountError::Deadline | MountError::Workspace(WorkspaceError::Deadline) => Code::Deadline,
+        MountError::Workspace(WorkspaceError::Backing(failure))
+            if failure.kind == io::ErrorKind::TimedOut =>
+        {
+            Code::Deadline
+        }
+        MountError::Unsupported | MountError::Workspace(WorkspaceError::Unsupported) => {
+            Code::Unsupported
+        }
+        MountError::Workspace(WorkspaceError::Busy | WorkspaceError::Closed) => Code::Busy,
+        _ => Code::Io,
+    }
 }

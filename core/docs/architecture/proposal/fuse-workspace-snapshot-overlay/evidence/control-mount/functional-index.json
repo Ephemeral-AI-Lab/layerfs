@@ -1,0 +1,217 @@
+{
+  "product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35",
+  "rows": [
+    {
+      "selection": "mount-mount_authority-01",
+      "status": "PASS",
+      "command_wall_seconds": 2.943304957996588,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_authority-01/result.json",
+      "sha256": "9aacc519e544284a8b62577600a42b0643bad0f66b297e2d89186492c58433f4"
+    },
+    {
+      "selection": "mount-mount_closed-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.1860469169914722,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_closed-01/result.json",
+      "sha256": "5e5f34b6c688eb5f0ef909815b762f914b707b87eaeea9090265c7ba94418097"
+    },
+    {
+      "selection": "mount-mount_deadline-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.1726411250128876,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_deadline-01/result.json",
+      "sha256": "9093f6586c5c546ef2acd4fca14631d1e2ae7d3d1349c53e8511f7de88a1ceb2"
+    },
+    {
+      "selection": "mount-mount_expiry-01",
+      "status": "PASS",
+      "command_wall_seconds": 10.304438625025796,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_expiry-01/result.json",
+      "sha256": "12aaa032484113bb83de877e26ea037b679a351b59f5c61ee436b7ae4dd42310"
+    },
+    {
+      "selection": "mount-mount_loss-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.5194872089778073,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_loss-01/result.json",
+      "sha256": "5c3d8c9bc704cc0edcffc6785fa8d766fb0248400b8726f1fbd0e9608d1cd301"
+    },
+    {
+      "selection": "mount-mount_mounted-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.8638727920188103,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_mounted-01/result.json",
+      "sha256": "7a80113dc550e0ac932e66b3a35c19526927f485bcc063fe6d1bb5974993d7e1"
+    },
+    {
+      "selection": "mount-mount_partial_input-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.163643875013804,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_partial_input-01/result.json",
+      "sha256": "09d83cb71f8db3ac7eba98879471c8778bfbb564c20e8c9d5b04a5e933a86951"
+    },
+    {
+      "selection": "mount-mount_session_failure-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.5305728329985868,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_session_failure-01/result.json",
+      "sha256": "8541667a25d336a2d24f1ebf693c63b48524f83f55b424d56014dade437bbd5f"
+    },
+    {
+      "selection": "mount-mount_stopping-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.2329060829943046,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_stopping-01/result.json",
+      "sha256": "768aae9700e9d146889043ce52eb70fb04fcbca714ec4cb878aed78b0c8a12e5"
+    },
+    {
+      "selection": "mount-mount_success-01",
+      "status": "FAIL",
+      "command_wall_seconds": 4.246197125001345,
+      "cleanup": "forced cleanup after failure; not normal cleanup PASS",
+      "receipt": "runs/mount-mount_success-01/result.json",
+      "sha256": "b69e0365fdfd9fd74951e5fc42cdc4e0c1bf97e94fc87ee39456e5c93121a0a0"
+    },
+    {
+      "selection": "mount-mount_success-02",
+      "status": "PASS",
+      "command_wall_seconds": 1.7610192080028355,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_success-02/result.json",
+      "sha256": "058e3825197e8801319a9b85fde4737d7fdddf23d0ff7ef9dac9d729935a1cc8"
+    },
+    {
+      "selection": "mount-mount_unresolved-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.9601582089962903,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount-mount_unresolved-01/result.json",
+      "sha256": "cd78115e8391dc48f3cd10a366e535bbbcff0f01ea4bf8a31c75a2756c5cd2b4"
+    },
+    {
+      "selection": "regression-close-close_authority-01",
+      "status": "PASS",
+      "command_wall_seconds": 2.1716062079940457,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-close-close_authority-01/result.json",
+      "sha256": "ab76a44d97446ca5ea5ecd9b2cc63034ca429c3782b289c9f0c587cdb034ca8b"
+    },
+    {
+      "selection": "regression-close-close_cleanup_failure-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.1483132079883944,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-close-close_cleanup_failure-01/result.json",
+      "sha256": "7b915bea2c6bd6e278fcc3472eae5a57176d6924767cd6154f10f2c664ab442a"
+    },
+    {
+      "selection": "regression-close-close_loss-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.2242302919912618,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-close-close_loss-01/result.json",
+      "sha256": "5a49d529b9ce7e51c9871a57e0edc3699314d7fdd882557119b33b33e5815555"
+    },
+    {
+      "selection": "regression-close-close_mounted-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.127008916984778,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-close-close_mounted-01/result.json",
+      "sha256": "8168b7b6546ba24b96ae8d3bbf07031be49470cefddba5b3848e0d48a2854c0f"
+    },
+    {
+      "selection": "regression-close-close_success-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.0722668749804143,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-close-close_success-01/result.json",
+      "sha256": "4280ebb5fef408442577e689fa2da7ca4071da89f88b36f76b87c4d6523c9137"
+    },
+    {
+      "selection": "regression-unmount-authority-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.976415665994864,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-authority-01/result.json",
+      "sha256": "5b7ec22e071526c4f02f5c70f7dbfc3d6b40b281a74b633e61e05f60cacf1ce8"
+    },
+    {
+      "selection": "regression-unmount-expiry-01",
+      "status": "PASS",
+      "command_wall_seconds": 10.697853166988352,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-expiry-01/result.json",
+      "sha256": "a1ac8a657dc3143152eafee8d2eb66af2523222394d06c736affd2735687ac11"
+    },
+    {
+      "selection": "regression-unmount-loss-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.1616902090026997,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-loss-01/result.json",
+      "sha256": "283fd4bf06043843c4e8d156e3d4a26762e6f9e172903a123226e62ac77d3f63"
+    },
+    {
+      "selection": "regression-unmount-partial_input-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.4592620420153253,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-partial_input-01/result.json",
+      "sha256": "88de275a5a58472c1bda57ea4b58581c7931da06bb384da5e76fd3280dc29590"
+    },
+    {
+      "selection": "regression-unmount-shutdown_retained-01",
+      "status": "PASS",
+      "command_wall_seconds": 11.188673707976704,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-shutdown_retained-01/result.json",
+      "sha256": "bab292a469cdc2a05eae2e75db4635234ffd79aed0addc4337285e6b009be0e1"
+    },
+    {
+      "selection": "regression-unmount-signal-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.086820666998392,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-signal-01/result.json",
+      "sha256": "15fce19d2584921410d3ab050b8356fa1b045679628bde2d06e3fd3fb62d186c"
+    },
+    {
+      "selection": "regression-unmount-success-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.0974406249879394,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-success-01/result.json",
+      "sha256": "e51d4eacce19bb67894a9f3dfa08c54d6a277ac420f07931192cc2ceb6cbab7e"
+    },
+    {
+      "selection": "regression-unmount-timeout-01",
+      "status": "PASS",
+      "command_wall_seconds": 1.5253659169829916,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/regression-unmount-timeout-01/result.json",
+      "sha256": "2ab18c333dc9af235cbe9a60dbb7c17ed8e75475033e0225adcb649a8b3a5fa7"
+    }
+  ],
+  "passing_selections": 24,
+  "retained_failed_attempts": 1,
+  "hard_budget_seconds": 60,
+  "performance_claim": false,
+  "registered_selections_remaining_not_run": 0,
+  "unqualified_subsets": [
+    "remote Mount Binding/Worker/post-INIT deadline and deterministic signal overlap",
+    "remote Attach",
+    "writable daemon controls/full R4",
+    "namespace/larger-input/preinstalled dsh upload/R6",
+    "RSS/cgroup/performance"
+  ]
+}

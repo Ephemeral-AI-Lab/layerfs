@@ -1,0 +1,40 @@
+{
+  "implementation_parent": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35",
+  "review": "Independent read-only review of complete daemon/control/run/native mount/client/server/Workspace lifecycle plus changed Bridge/Service code; no actionable defect found in Mount ownership/authorization/correlation. Separate observed pre-existing Pipe cancellation defect fixed and regression verified.",
+  "boundaries": [
+    "daemon owns assembly and one optional mount owner",
+    "FUSE and Workspace algorithms unchanged",
+    "Workspace portable Bridge dependency remains native-disabled",
+    "Bridge exact operation/identity response validation and mutation uncertainty",
+    "Service rejects controls before Store admission"
+  ],
+  "ownership": [
+    "try_lock immediate lifecycle admission",
+    "Only checked successful Unmount removes owner",
+    "Mount denies existing owner and mounted/stopping/closed Workspace",
+    "Native failure owner installed before entered Retained result",
+    "No implicit Attach/Unmount, automatic retry or renewed deadline"
+  ],
+  "resources": {
+    "lifecycle_arc_allocation_bytes": 128,
+    "prior_allocation_bytes": 128,
+    "max_additional_mount_owners": 0,
+    "added_worker_capacity": 0,
+    "added_queue_capacity": 0,
+    "wire_result_bound_bytes": 100,
+    "terminal_headroom_ms": 100,
+    "rss_cgroup": "NOT_RUN",
+    "performance": "NOT_RUN"
+  },
+  "open_prerequisites": [
+    "failed native Attach registry ownership/observation/disposition",
+    "remote Attach",
+    "writable startup/edit/Commit and dirty-shutdown order",
+    "full R4 and retained RWF/cached-size limitations",
+    "namespace/new inode/larger shared bounds",
+    "prepared dsh dependency directory upload workload and repeated explicit Commit",
+    "matched R6/#207"
+  ],
+  "issue_closure": false
+}

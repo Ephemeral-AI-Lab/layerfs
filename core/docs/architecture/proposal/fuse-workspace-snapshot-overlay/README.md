@@ -7,6 +7,12 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Current continuation:** [authenticated Mount](32-control-mount.md) adds remote
+Mount of the existing exact CLI attachment, preserving read-only projection and
+retained failure ownership. [Cancelled pipe I/O](33-cancelled-pipe.md) records the
+shared cancellation prerequisite discovered during this round. Current verification
+scope and remaining work are in those records; no wider writable/R6 claim follows.
+
 **Continuation task handoff:** [30](30-continuation-handoff.md) records the exact
 current checkpoint, remaining operation sequence and loose coupling boundaries.
 [31](31-source-map-and-loc.md) gives actual per-file/folder/crate production LOC

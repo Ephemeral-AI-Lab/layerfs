@@ -543,3 +543,24 @@ Daemon startup keeps the original mount deadline, closes its unserved listener o
 mount failure, and retains incomplete cleanup until a new explicit signal. Checked
 cleanup preserves the original startup error exit. This does not add remote Mount,
 Attach or writable management; exact route evidence and limits belong to29.
+
+Authenticated Mount continues from documentation checkpoint
+`3e5d6a66a9f4e4df4a8a19087e63909a18046c6d` in
+[round32](proposal/fuse-workspace-snapshot-overlay/32-control-mount.md).
+It adds WorkspaceMount opcode12/profile3/tag14 and independent daemon grant bit8;
+valid masks are0..15. Exact target/incarnation, empty authenticated input and
+124/100-byte request/result bounds reuse the lifecycle contract. The existing
+native client requires the specific Mount response; service rejects it before
+Store admission. Daemon shares one Arc<Mutex<Option<MountHandle>>> with main:
+only checked successful Unmount clears it, and Mount refuses occupied, mounted,
+closed or stopping state. It installs a returned partial owner before Retained;
+ownerless admission refusal remains Failure. Original-deadline100ms headroom,
+Unknown/no replay and the read-only projection remain. Round32 records exact
+source identity, checks and limits; remote Attach/writable control remain separate.
+
+The shared [pipe-cancellation prerequisite](proposal/fuse-workspace-snapshot-overlay/33-cancelled-pipe.md)
+records an observed upload-worker busy loop caused by permanent cancellation being
+reported as Interrupted to standard read_exact/write_all loops. Cancellation must
+be terminal at the Pipe boundary; ordinary operating-system EINTR remains distinct.
+This correction adds no queue, retry, worker or replay authority. Its source and
+regression evidence are recorded with the operation round that exposed it.

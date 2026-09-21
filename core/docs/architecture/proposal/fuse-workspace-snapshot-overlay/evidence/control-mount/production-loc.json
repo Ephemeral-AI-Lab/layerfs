@@ -1,0 +1,83 @@
+{
+  "first_parent": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "counted_staged_tree": "934aa2ebd69a57294611e2dea90e3c1264152e5c",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive exact first parent and staged tree (crates core/crates), then unchanged tools/production_loc.py --root <archive> --json; excludes tests including inline tests, fixtures, examples, docs, tools, manifests, blanks/comments/generated code",
+  "before": {
+    "combined": 108693,
+    "root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/loc/before",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-bridge": 4340,
+          "layerfs-content": 12549,
+          "layerfs-daemon": 856,
+          "layerfs-fuse": 1062,
+          "layerfs-history": 2722,
+          "layerfs-service": 2031,
+          "layerfs-storage": 7676,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 9783
+        },
+        "files": 241,
+        "lines": 43276
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 108781,
+    "root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/loc/after",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-bridge": 4390,
+          "layerfs-content": 12549,
+          "layerfs-daemon": 892,
+          "layerfs-fuse": 1062,
+          "layerfs-history": 2722,
+          "layerfs-service": 2033,
+          "layerfs-storage": 7676,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 9783
+        },
+        "files": 241,
+        "lines": 43364
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "combined_delta": 88,
+  "core_delta": 88,
+  "reference_delta": 0
+}

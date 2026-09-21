@@ -102,11 +102,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let owner = failure
                 .retained
                 .take()
-                .map(|owner| Arc::new(Mutex::new(owner)));
+                .map(|owner| Arc::new(Mutex::new(Some(owner))));
             return cleanup_failed_startup(&workspace, owner, failure, &signals, mount_deadline);
         }
     };
-    let mount = Arc::new(Mutex::new(mount));
+    let mount = Arc::new(Mutex::new(Some(mount)));
     let mut control = match control_config.zip(control_listener) {
         Some((config, (listener, address))) => {
             match crate::control::Control::start(
@@ -155,7 +155,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 TryLockError::WouldBlock => Failure::from(Code::Busy),
                 TryLockError::Poisoned(_) => Failure::from(Code::Io),
             })?;
-            owner.unmount(deadline)?;
+            if let Some(handle) = owner.as_mut() {
+                handle.unmount(deadline)?;
+                *owner = None;
+            }
             drop(owner);
             if !workspace.status()?.closed {
                 workspace.close_clean_until(deadline)?;
@@ -176,7 +179,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 // original attempt keeps its deadline; only an explicit signal admits new cleanup.
 fn cleanup_failed_startup(
     workspace: &layerfs_workspace::Workspace,
-    mount: Option<Arc<Mutex<layerfs_fuse::MountHandle>>>,
+    mount: Option<Arc<Mutex<Option<layerfs_fuse::MountHandle>>>>,
     failure: Box<dyn std::error::Error>,
     signals: &nix::sys::signal::SigSet,
     mut deadline: Instant,
@@ -188,7 +191,10 @@ fn cleanup_failed_startup(
                     TryLockError::WouldBlock => Failure::from(Code::Busy),
                     TryLockError::Poisoned(_) => Failure::from(Code::Io),
                 })?;
-                owner.unmount(deadline)?;
+                if let Some(handle) = owner.as_mut() {
+                    handle.unmount(deadline)?;
+                    *owner = None;
+                }
             }
             if !workspace.status()?.closed {
                 workspace.close_clean_until(deadline)?;

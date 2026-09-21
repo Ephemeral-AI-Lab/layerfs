@@ -33,7 +33,8 @@ impl<T: AsFd> Pipe<'_, T> {
         let deadline = self.deadline.min(progress);
         loop {
             if self.cancel.load(Ordering::Acquire) {
-                return Err(io::ErrorKind::Interrupted.into());
+                // Cancellation is terminal; read_exact/write_all retry Interrupted.
+                return Err(io::ErrorKind::ConnectionAborted.into());
             }
             let remaining = deadline
                 .checked_duration_since(Instant::now())

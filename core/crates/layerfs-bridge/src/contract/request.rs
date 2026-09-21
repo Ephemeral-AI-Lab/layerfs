@@ -4,8 +4,9 @@ use super::{
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
     MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
     STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_CLOSE_CLEAN_MAX_MS,
-    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE,
-    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
+    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE,
+    WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE,
+    WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -96,6 +97,11 @@ pub enum Operation {
         workspace: Vec<u8>,
         incarnation: Root,
     },
+    /// Mounts the exact attached daemon Workspace with its configured profile.
+    WorkspaceMount {
+        workspace: Vec<u8>,
+        incarnation: Root,
+    },
     /// Saves an updated attribute tree; does not attach it to an inode or Branch.
     UpdatePortableMetadata {
         base: Root,
@@ -156,6 +162,7 @@ impl Operation {
             Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
             Self::WorkspaceUnmount { .. } => WORKSPACE_UNMOUNT_OPCODE,
             Self::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_OPCODE,
+            Self::WorkspaceMount { .. } => WORKSPACE_MOUNT_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
         }
     }
@@ -171,6 +178,7 @@ impl Operation {
             Self::WorkspaceStatus { .. } => "WorkspaceStatus",
             Self::WorkspaceUnmount { .. } => "WorkspaceUnmount",
             Self::WorkspaceCloseClean { .. } => "WorkspaceCloseClean",
+            Self::WorkspaceMount { .. } => "WorkspaceMount",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
         }
     }
@@ -187,6 +195,7 @@ impl Operation {
             | Self::UpdatePortableMetadata { .. }
             | Self::WorkspaceUnmount { .. }
             | Self::WorkspaceCloseClean { .. }
+            | Self::WorkspaceMount { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -208,6 +217,7 @@ impl Operation {
             | Self::WorkspaceStatus { .. }
             | Self::WorkspaceUnmount { .. }
             | Self::WorkspaceCloseClean { .. }
+            | Self::WorkspaceMount { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -237,6 +247,7 @@ impl Operation {
             | Self::WorkspaceStatus { .. }
             | Self::WorkspaceUnmount { .. }
             | Self::WorkspaceCloseClean { .. }
+            | Self::WorkspaceMount { .. }
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
@@ -272,7 +283,8 @@ impl Request {
             Operation::HistoryQuery(_) | Operation::HistoryCommand(_) => HISTORY_PROFILE,
             Operation::WorkspaceStatus { .. }
             | Operation::WorkspaceUnmount { .. }
-            | Operation::WorkspaceCloseClean { .. } => WORKSPACE_STATUS_PROFILE,
+            | Operation::WorkspaceCloseClean { .. }
+            | Operation::WorkspaceMount { .. } => WORKSPACE_STATUS_PROFILE,
             _ => 1,
         };
         if self.profile != profile {
@@ -307,11 +319,16 @@ impl Request {
             | Operation::WorkspaceCloseClean {
                 workspace,
                 incarnation,
+            }
+            | Operation::WorkspaceMount {
+                workspace,
+                incarnation,
             } => {
                 super::control::check_workspace_identity(workspace, incarnation)?;
                 let maximum = match self.operation {
                     Operation::WorkspaceUnmount { .. } => WORKSPACE_UNMOUNT_MAX_MS,
                     Operation::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_MAX_MS,
+                    Operation::WorkspaceMount { .. } => WORKSPACE_MOUNT_MAX_MS,
                     _ => WORKSPACE_STATUS_MAX_MS,
                 };
                 if self.store != 0

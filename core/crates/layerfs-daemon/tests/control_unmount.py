@@ -38,6 +38,7 @@ MODE = 'functional-authenticated-unmount'
 ENTRY_SOURCE = Path(__file__)
 CONTROL_PEERS = [(1,'good',3),(2,'status',1),(3,'unmount',2),(4,'none',0),(5,'expiry',3)]
 NOT_RUN = ['writable daemon startup and SDK edit/Commit controls','Attach/CloseClean controls','namespace/npm/R6','hard RSS/cgroup qualification']
+EXTRA_CASE = None
 
 
 def sha(path):
@@ -64,10 +65,11 @@ def receive(client, result_tag=12):
     assert kind == 6, (kind, body)
     value = route.Reader(body)
     assert value.u8() == result_tag, body
-    result = {'kind': 'unmount' if result_tag == 12 else 'close', 'workspace': value.blob().decode(), 'incarnation': value.take(32).hex()}
+    operation, completed = {12: ('unmount', 'Unmounted'), 13: ('close', 'Closed'), 14: ('mount', 'Mounted')}[result_tag]
+    result = {'kind': operation, 'workspace': value.blob().decode(), 'incarnation': value.take(32).hex()}
     tag = value.u8()
     assert tag in (0, 1), tag
-    result['outcome'] = ('Unmounted' if result_tag == 12 else 'Closed') if tag == 0 else 'Retained'
+    result['outcome'] = completed if tag == 0 else 'Retained'
     if tag == 1:
         result['code'] = value.u8()
         assert result['code'] in (2, 10, 11, 13)
@@ -84,6 +86,11 @@ def unmount(client, identity, **options):
 def close_clean(client, identity, **options):
     begin(client, identity, opcode=11, **options)
     return receive(client, result_tag=13)
+
+
+def remount(client, identity, **options):
+    begin(client, identity, opcode=12, **options)
+    return receive(client, result_tag=14)
 
 
 def close(client, name, expected=0):
@@ -166,6 +173,9 @@ def execute(args, report):
             LAYERFS_WORKSPACE_ROOT='/layerfs', LAYERFS_WORKSPACE_MAX_COUNT='2',
             LAYERFS_CONTROL_LISTEN='0.0.0.0:23456', LAYERFS_CONTROL_PEERS=peers, LAYERFS_CONSTRUCTION_WORKERS='1')
         daemon = mount.mount_process(args, environment, fixture['root'], name); made_container = True
+        report['runtime_nano_cpus'] = int(mount.checked(
+            ['docker', 'inspect', '--format', '{{.HostConfig.NanoCpus}}', name], text=True).stdout.strip())
+        assert report['runtime_nano_cpus'] == 2_000_000_000, report['runtime_nano_cpus']
         first, second = mount.line_until(daemon), mount.line_until(daemon)
         ready_lines = first + second
         assert 'workspace control ready' in first and 'workspace ready' in second, ready_lines
@@ -351,6 +361,12 @@ def execute(args, report):
             assert kind == 6 and after['closed'] and not after['mounted'], after
             report['unknown'] = result; report['opaque_proxy'] = proxy[3]; report['after'] = after
             report['no_replay'] = 'Only one CloseClean submitted; later Status is a current observation, not a missing receipt'
+        elif EXTRA_CASE is not None:
+            # The operation-specific caller owns and closes this session and any
+            # replacements; fixture/process/receipt ownership stays here.
+            operation_client, client = client, None
+            EXTRA_CASE(args.case, report, operation_client, controller, name, control_port, port,
+                       keys['daemon'], public['service'], expiry)
         else:
             raise AssertionError(args.case)
         if client is not None:
@@ -422,6 +438,9 @@ def main():
         report['status']='PASS'
     except BaseException as error:
         report['failure']=repr(error)
+        if isinstance(error, subprocess.CalledProcessError):
+            report['failure_stdout'] = error.stdout.decode(errors='replace') if isinstance(error.stdout, bytes) else error.stdout
+            report['failure_stderr'] = error.stderr.decode(errors='replace') if isinstance(error.stderr, bytes) else error.stderr
         raise
     finally:
         signal.alarm(0);report['command_wall_seconds']=time.monotonic()-started

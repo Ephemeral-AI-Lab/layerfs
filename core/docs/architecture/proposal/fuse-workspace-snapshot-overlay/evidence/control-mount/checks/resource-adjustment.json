@@ -1,0 +1,17 @@
+{
+  "trigger": "user reported Docker CPU spike",
+  "observed_container": "layerfs-795c-mount-test",
+  "docker_cpu_percent": 42.49,
+  "docker_memory_mib": 420.6,
+  "pids": 9,
+  "running_compile_jobs_at_observation": 0,
+  "attempted_live_cpu_limit": 2,
+  "live_limit_result": "container had normally exited before docker update; no change applied",
+  "subsequent_build_policy": {
+    "docker_cpus": 2,
+    "cargo_jobs": 2,
+    "heavy_checks_serial": true
+  },
+  "other_worktree_processes": "observed; unchanged",
+  "performance_claim": false
+}

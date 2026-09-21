@@ -1,0 +1,25 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-bridge",
+    "--test",
+    "pipe_cancel",
+    "--",
+    "--test-threads=1",
+    "--nocapture"
+  ],
+  "source": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "product_pipe_sha256": "def08b0beb8cec14d96af2550d121f890e5a17912c7b2840fad46bc592fd7bbe",
+  "test_sha256": "9f4b35a56096744feb94d607ac2ccd09f408a21b4cc5441ce529ee9091e12d7f",
+  "cargo_build_jobs": 2,
+  "performance_claim": false,
+  "exit_code": 101,
+  "command_wall_seconds": 11.590325541008497,
+  "status": "EXPECTED_FAIL"
+}
