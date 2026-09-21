@@ -2799,3 +2799,72 @@ case or lane, and any second sample of this arm.
 Production LOC: **31426 → 31558 (delta +132)**. Method `tools/production_loc.py --root <tree>`, first
 parent `70366dd81` against the committed tree `4d8e6e2ab`; the harness driver change and the new test
 file are outside the counted scope and contribute 0.
+
+## L73 — #219 round 15: the whole-file lane's groups carry many records — `operation_work_ns` 1380.7 → 1283.2 ms (2026-09-21)
+
+Status: **Shipped** in `a1faf957e` (the change) and `6a1b2d9f2` (the golden re-pin), on top of L72.
+Report: [round 15](../../0.1.7/evidence/issue219-ns19p-grouped-20260921T093500Z/), pre-registration and
+the group census beside it. Row `ns19-P2-repin-20260921T102900Z`, **PASS, 13/13 gates, 14/14 pinned
+counters**, root digest unchanged.
+
+**The lever was the granularity of the serial floor, and the census is what priced it.**
+`pipeline.statements` is exactly the number of object groups — 16,590 for 25,245 objects — and 9,444 of
+those were whole-file records that each bought their own `INSERT` and their own `write_pack`, because
+`cas::selection` sealed that lane on every offer and `assemble::build_group` refused a group of more
+than one. The lane now frames its groups with the native lane's own grammar — one record count, one
+four-byte end offset per record — so the compact record form is unchanged and the lane's starts-only
+directory and 1,024-byte reserved region are unchanged. `raw/group-census.txt` projected 519 groups;
+the row returned 519. Measured: **`statements` 16,590 → 7,666 (−8,924)**, **`pack_appends` 15,532 →
+6,603**, **`diag_write_pack_total_ns` 204.88 → 123.24 ms (−81.64)**.
+
+**Invariant 2 was hit and then walked around, and the walk is the round's design content.** The first
+attempt sealed by target alone and lost `delta_payload.rs`'s intra-save candidacy — the first object
+was still waiting in an open group, so `select`'s `eligible` asked storage for a row that did not exist
+and the edge the winner cache proposed was dropped. Only a placed row can be a base. The group is
+therefore placed *before* selection is asked for a representation for an object that could name one of
+its members (advisory list first, then the winner cache), and the payload signature that question needs
+is computed once and handed down rather than twice
+(`cas/selection.rs::pending_base_for`, `SelectInput::signature`).
+
+**`operation_work_ns` 1380.70 → 1283.16 ms (−97.54, −7.07 %)**, CPU 1397.14 → **1297.49 (−99.66)**,
+against a pre-registered 1250–1330 — **inside the band**, and the serial floor (commit + pack writes +
+row inserts + wave + collision + begin) moves **917.20 → 882.35 ms**. Cumulative against the clean tree
+(A0 ≤ 3487.3 ms): **−63.2 %**; −190.7 ms against the handoff's 1473.8 ms.
+
+**Four predictions missed and two refutation clauses fired, all reported.** `diag_insert_objects_ns`
+**rose** 133.33 → 146.36 ms against a registered 75–90: the rows moved from single-row statements into
+18-row ones and the per-row cost of the rows that moved went **5.28 → 5.80 µs**, so a wider statement is
+more expensive per row than the single-row statements it replaced (clause 2 fired on this, though the
+clause's stated rationale — that neither per-call term moves — is half wrong, because `write_pack` moved
+by 81.64 ms exactly as the treatment predicted). `pack_bytes_written` moved **−210,016** against a
+declared **+37,776 ± 5,000** (clause 5 fired): the registration priced the end offsets the grouping adds
+and not the control area and directory entry each of the 8,929 seals it removes stops writing, and the
+arithmetic closes to −207,920. `statements` came in at 7,666 against 7,800–7,950 because the registration
+added ~207 pooled-lane inserts this counter never counted. And `commits` moved 284 → 285 (clause 4), which
+is the round's declared-consequence run: `ns19-P1-grouped-20260921T102651Z`, **FAIL, one gate**, every
+other pinned counter reproduced, the count read from that receipt, re-pinned **once** in `6a1b2d9f2`,
+rebuilt, and covered by one run. The mechanism is read off the source: a wave's seals share the wave's
+transaction, so only a group still open when the last wave ends pays its own COMMIT, and the whole-file
+lane used to be empty at that point by construction.
+
+**The row-level instruments disagreed by 24 ms and the counts did not.** P1 and P2 agree to the byte on
+`statements`, `pack_appends`, `packs_created`, `pack_bytes_written`, `stored_records` and `commits`; they
+differ on the formula (1258.81 against 1283.16) because P2's `teardown_ns` is 117.43 ms against 40.50 and
+its `span_build_ns` 121.78 against 92.09. The teardown is the operating system's price for dirtied pages,
+measured by this lane at 6.7 → 469.9 ms on identical source, and it is excluded from the formula while
+still moving the accept span it is subtracted from. The covering run is the row of record.
+
+**What is left.** `operation_work_ns` is 1283.16 ms. The write path is no longer granular — 7,873 seals
+for 25,245 objects — so the floor is now commit **497.54** + row inserts **146.36** + pack writes
+**123.24** + wave 62.67 + collision 48.72 + begin 3.81 = **882.35 ms**, and the largest term by far is
+the transaction the pager pays for 302 MB. The `insert_objects` sign is a **new, unclaimed finding**: a
+wider statement costs more per row, which means the statement shape — not the group shape — is now the
+lever in that term.
+
+Checks as run: whole core workspace `--no-fail-fast` **630 passed / 0 failed**; `-p layerfs-storage`
+alone **224 passed / 0 failed**; `clippy --all-targets` clean; `fmt --all --check` clean;
+`check_product_boundary.py` PASS. Not run: the harness's own suite for this round (it is not touched
+beyond the golden pin), the reference `crates/` workspace, any other harness case or lane.
+
+Production LOC: **31558 → 31616 (delta +58)** for the change and **31616 → 31616 (delta 0)** for the
+re-pin. Method `tools/production_loc.py --root <tree>`, first parent against each committed tree.
