@@ -1,0 +1,14 @@
+{
+ "binary": "core-build-armv8-flags",
+ "probe_sha256_prefix": "df29a13a7c7d18fc",
+ "direction": "download",
+ "streams": 1,
+ "payload_gib": 1.0,
+ "transfer_s": 1.2736,
+ "gb_per_s": 0.8431,
+ "gib_per_s": 0.7852,
+ "mib_per_s": 804.04,
+ "transfer_wall_s": 1.2736,
+ "verified_bytes": 0,
+ "chunks": 65536
+}
