@@ -2868,3 +2868,71 @@ beyond the golden pin), the reference `crates/` workspace, any other harness cas
 
 Production LOC: **31558 → 31616 (delta +58)** for the change and **31616 → 31616 (delta 0)** for the
 re-pin. Method `tools/production_loc.py --root <tree>`, first parent against each committed tree.
+
+## L74 — #219 round 16: the ordinal reservation is a block, and the commit term is priced at 0.21 ms (2026-09-21)
+
+Status: **Shipped** in `622eae391` (the change) and `3bb2d209d` (the golden re-pin), on top of L73.
+Report: [round 16](../../0.1.7/evidence/issue219-ns19q-ordinalblock-20260921T111500Z/),
+pre-registration and the ordinal census beside it. Row `ns19-Q2-repin-20260921T115200Z`, **PASS, 13/13
+gates, 14/14 pinned counters**, root digest unchanged.
+
+**The largest term in the row was 38.8 % of it and nobody had asked what its transactions were.**
+`diag_commit_total_ns` 497.54 ms over **285 COMMITs** — and 285 is not the wave count: a wave is bounded
+by 4 MiB of canonical bytes, which is 73 of them. The remainder was one statement. `cas/pool_lane.rs`
+acknowledged the pooled metadata lane's ordinal reservation **per leaf**, by design clearing `wave_held`
+for one call so the reservation is durable before any value uses it; the control row's own Store says
+how many leaves that was (10,163 ordinals over 207 catalogue groups, ~49 fresh values per leaf). **74 %
+of this row's COMMITs were that one line.**
+
+**The treatment keeps the durability rule and changes its granularity.** A save's first four
+reservations stay exact and the rest take a block of `fresh values x 16`. Measured:
+**`commits` 285 → 95**, **`diag_begin_ns` 3.81 → 1.79 ms**, **`diag_commit_total_ns` 497.54 → 458.26**,
+**`operation_work_ns` 1283.16 → 1218.88 ms (−64.28, −5.01 %)**, CPU 1297.49 → **1228.33**. Cumulative
+against the clean tree (A0 ≤ 3487.3 ms): **−65.0 %**; −254.9 ms against the handoff's 1473.8 ms. The
+serial floor moves **882.35 → 842.90 ms**.
+
+**And it prices a COMMIT: 0.21 ms.** Removing 190 of them bought 39.28 ms, which is the first direct
+measurement of the marginal transaction on this store and it agrees with round 8's ≤ 0.32 ms upper
+bound (which bundled a wave's begin, locator query, presence seed and collision check with its commit).
+The consequence is the round's real finding: the 458.26 ms that remains is 302 MB at **659 MB/s**, and
+at 0.21 ms per transaction the whole remaining transaction overhead is about **20 ms**. **The commit
+term is byte-bound and closed as a lever** — this is the answer to the question L73 left open, and it
+is worth more than the 64 ms it came with. No pragma was touched to get it; `src/sqlite/` is untouched
+and the profile is cited only as the reason a COMMIT costs page writes.
+
+**Three corrections to the rule were made before any row ran, each from a measurement in the product's
+suites, and each is in the pre-registration rather than only in the report.** A *fixed* 1,024-ordinal
+block handed out 134,645 ordinals for 131,200 values on `metadata_window.rs`'s fixture (924 wasted per
+block) — the block became a multiple of the demand just observed. The retained window had to start
+counting **values** rather than reservations, because counting the block pulled that fixture's crossing
+group three leaves early, which is the pool index releasing candidates it still holds; the window
+arithmetic moved out of `reserve_ordinals` into `ownership::note_window`, charged once per leaf. And a
+partly-consumed final block left a 600-ordinal hole, so the tail is released at publication by a
+compare-and-swap on the save's own reservation (`ownership::release_ordinals`) — a wasted tail if
+another writer reserved in between, never an ordinal handed out twice. One more measurement is on
+record as the reason the first four reservations stay exact: with contiguous ordinals a one-value
+leaf's COPY/INSERT program is **50 bytes against a 57-byte FULL**, and with the next block's first
+ordinal it is **57 against 57** — a tie, and a tie stores FULL.
+
+**Two clauses fired and the misses are reported.** `pack_bytes_written` moved **+622** where the
+registration said the controls must be identical: the pooled leaf records live in the ordinary lane and
+their groups compress, so a body whose ordinal bytes changed compresses 3 bytes differently per leaf.
+`commits` moved 284 → 285 → **95** across three rounds, each time through the declared-consequence
+procedure — red receipt `ns19-Q1-ordinalblock-20260921T114500Z`, **FAIL, one gate**, every other pin
+reproduced, count read from it, re-pinned **once**, rebuilt, covered by one run. The bucket missed its
+band high (458.26 against a registered 350–430) and `operation_work_ns` missed by 4 ms at the top of its
+band; clause 2 (≥ 480 ms) did not fire, which is what makes the 0.21 ms figure a measurement rather
+than a failure.
+
+**What is left.** `operation_work_ns` is 1218.88 ms and the floor is 842.90: commit **458.26** (byte-bound
+now), row inserts **143.44**, pack writes **125.58**, wave 65.38, collision 48.45, begin 1.79. The insert
+term is the one with a measured sign problem (L73: a wider statement costs more per row), and the pack
+write term is 7,873 seals for 25,245 objects whose native lane still groups 2.03 records each.
+
+Checks as run: whole core workspace `--no-fail-fast` **630 passed / 0 failed**; `-p layerfs-storage`
+alone **224 passed / 0 failed**; `clippy --all-targets` clean; `fmt --all --check` clean;
+`check_product_boundary.py` PASS. Not run: the harness's own suite beyond the golden pin, the reference
+`crates/` workspace, any other harness case or lane.
+
+Production LOC: **31616 → 31684 (delta +68)** for the change and **31684 → 31684 (delta 0)** for the
+re-pin. Method `tools/production_loc.py --root <tree>`, first parent against each committed tree.
