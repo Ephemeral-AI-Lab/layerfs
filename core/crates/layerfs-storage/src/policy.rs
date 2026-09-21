@@ -47,8 +47,15 @@ pub const APPLICATION_ID: i64 = 1_279_677_261;
 /// pre-v9 layout and are refused by the reader; a version-8 Store is refused at
 /// open by the check below, before any pack is read, exactly as every earlier
 /// version is. No row is rewritten and no pack is migrated.
+/// Version 10 removes the `objects_save` secondary index on `objects` (#219): a
+/// locator insert maintained two B-trees per row where the reference shape
+/// maintains one, and the index's only consumer is one bounded cleanup page query
+/// on the definite-failure path (`sqlite/cleanup.rs::abandon`). No column, no
+/// constraint and no stored byte changes, so no row is rewritten and no pack is
+/// migrated; a version-9 Store is refused at open by the check below, exactly as
+/// every earlier version is.
 /// Older Stores are rejected rather than migrated.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// Largest writer budget one Store may be configured with.
 ///

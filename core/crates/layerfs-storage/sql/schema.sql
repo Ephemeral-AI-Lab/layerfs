@@ -1,16 +1,23 @@
--- Candidate schema 9: save-owned physical data, atomic per-save publication, the
+-- Candidate schema 10: save-owned physical data, atomic per-save publication, the
 -- configured per-Store writer budget and the reserved-directory pack framing.
--- Canonical profile 1 is unchanged; the pack framing is not. A pack's directory
--- now sits in a region reserved at the lane's own width and the pack declares its
--- own assembled length in its control area, so an append writes only the bytes it
--- adds. The table shapes below are unchanged from schema 8 - the pack's declared
--- length rides inside its BLOB, because any UPDATE of a row holding a 256 KiB
--- BLOB rewrites that BLOB - but the stored pack bytes are a different framing, so
--- the version moves and a schema-8 Store is refused rather than read.
+-- Canonical profile 1 and the pack framing are unchanged from schema 9: a pack's
+-- directory still sits in a region reserved at the lane's own width, the pack
+-- still declares its own assembled length in its control area, and an append still
+-- writes only the bytes it adds.
+-- Schema 10 removes the `objects_save` secondary index. A locator insert
+-- maintained two B-trees per row where the reference shape maintains one, and the
+-- index's only consumer is a single bounded cleanup page query on the
+-- definite-failure path (sqlite/cleanup.rs::abandon) - the same ground on which
+-- owner ruling C removed `objects_locations`. The `(object_id, save_id)` primary
+-- key still answers that query, and the hot read path (sqlite/lookup.rs) is driven
+-- by `object_id` and has always used the primary key. No column, no constraint and
+-- no stored byte changes, so the table shapes below are identical to schema 9 and
+-- no row is rewritten: the version moves because a schema-9 Store carries an index
+-- this build no longer requires, and it is refused rather than read.
 -- Older schemas are rejected, never migrated. Duplicate locators and bytes are
 -- permitted.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 9;
+PRAGMA user_version = 10;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -74,7 +81,6 @@ CREATE TABLE objects (
     record_number INTEGER NOT NULL CHECK (record_number >= 0 AND record_number < 8191),
     PRIMARY KEY (object_id, save_id)
 ) STRICT, WITHOUT ROWID;
-CREATE INDEX objects_save ON objects(save_id, object_id);
 
 -- Disposable hints remain a bounded ring. An overwritten hint may reduce later
 -- compression opportunities; it can never make private content eligible.

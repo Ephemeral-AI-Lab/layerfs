@@ -85,14 +85,18 @@ const REQUIRED_TABLES: [(&str, &[&str]); 6] = [
 
 /// Required secondary indexes or unique constraints, by SQLite object name.
 ///
-/// **Empty by owner ruling C (R2, T1 #188).** The Store carried two secondary
-/// indexes and neither earned its bytes: `objects_bases` had no query consumer at
-/// all, and `objects_locations` served one bounded cleanup page query. A Store
-/// that still has them validates — the requirement is a floor, not an equality —
-/// so this change does **not** invalidate an existing Store and `SCHEMA_VERSION`
-/// stays at 4. What is required is checked by [`REQUIRED_TABLES`], which is where
-/// a reader's actual dependency lives.
-const REQUIRED_INDEXES: [&str; 3] = ["packs_save", "objects_save", "signatures_save"];
+/// The requirement is a floor, not an equality: a Store that carries an index this
+/// build no longer requires still validates, and what a *reader* actually depends
+/// on is checked by [`REQUIRED_TABLES`], which is where a reader's dependency
+/// lives. Owner ruling C (R2, T1 #188) removed the two secondary indexes this
+/// Store then carried, on the ground that neither earned its bytes:
+/// `objects_bases` had no query consumer at all, and `objects_locations` served
+/// one bounded cleanup page query. **Schema 10 applies that same ground to
+/// `objects_save`** (#219): its only consumer is the identical bounded cleanup page
+/// query, on the definite-failure path, and the `(object_id, save_id)` primary key
+/// still answers it. A schema-9 Store is refused by [`SCHEMA_VERSION`], not by this
+/// list, so dropping the name here is what keeps the two declarations agreeing.
+const REQUIRED_INDEXES: [&str; 2] = ["packs_save", "signatures_save"];
 
 /// Creates a fresh Store with `policy` and returns the stored policy.
 pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<StoragePolicy> {
