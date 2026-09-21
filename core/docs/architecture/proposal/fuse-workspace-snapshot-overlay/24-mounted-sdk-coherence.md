@@ -265,3 +265,8 @@ noncomment production Rust/runtime SQL, excluding inline/external tests, fixture
 examples, docs, tooling, manifests and generated output.
 [Machine-readable comparison](evidence/mounted-sdk-coherence/production-loc.json).
 Final receipt/doc additions do not alter the counted production tree.
+
+Committed implementation: `d770f5d10bf160b57a90b212102e7960148dba18`.
+[Exact changed product/test/manifest paths](evidence/mounted-sdk-coherence/committed-files.json)
+are obtained from its first-parent Git comparison; the historical source seal,
+raw receipts and production LOC comparison above retain their original identities.

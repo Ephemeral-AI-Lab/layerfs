@@ -1,0 +1,17 @@
+{
+  "parent": "4d5443c1239722c2ed57f0428ad2c32bdbb3d941",
+  "staged_tree": "b025631d99c69daa09e9e2f1ec0316c01736b6ce",
+  "changed_product_test_manifest_files": [
+    "core/crates/layerfs-fuse/src/adapter.rs",
+    "core/crates/layerfs-fuse/src/mount.rs",
+    "core/crates/layerfs-fuse/tests/kernel_resize.rs",
+    "core/crates/layerfs-fuse/tests/kernel_resize_route.py",
+    "core/crates/layerfs-fuse/tests/kernel_write.rs",
+    "core/crates/layerfs-fuse/tests/kernel_write_route.py",
+    "core/crates/layerfs-workspace/src/filesystem/write.rs",
+    "core/crates/layerfs-workspace/src/lib.rs",
+    "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+    "core/crates/layerfs-workspace/src/runtime/lifecycle.rs",
+    "core/crates/layerfs-workspace/tests/stage_route.py"
+  ]
+}

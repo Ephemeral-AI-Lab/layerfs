@@ -18,10 +18,20 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 type Original = (NodeAttributes, Root, Root, u64);
+struct Publication {
+    receipt: MutationReceipt,
+    attributes: NodeAttributes,
+    delivery: Option<ProjectionInvalidation>,
+    published_handle: Option<HandleId>,
+}
 #[derive(Clone, Copy)]
 enum FileMutation<'a> {
     Range(&'a RangeEdit),
-    SetLen(u64),
+    SetLen {
+        length: u64,
+        handle: Option<HandleId>,
+        origin: MutationOrigin,
+    },
     Write {
         handle: HandleId,
         offset: u64,
@@ -32,8 +42,8 @@ enum FileMutation<'a> {
 impl FileMutation<'_> {
     fn origin(self) -> MutationOrigin {
         match self {
-            Self::Write { origin, .. } => origin,
-            _ => MutationOrigin::Local,
+            Self::Write { origin, .. } | Self::SetLen { origin, .. } => origin,
+            Self::Range(_) => MutationOrigin::Local,
         }
     }
 }
@@ -64,7 +74,9 @@ impl Workspace {
         }
         let scope = match origin {
             MutationOrigin::Local => ReferenceScope::Local,
-            MutationOrigin::Projection { .. } => ReferenceScope::Projection,
+            MutationOrigin::ProjectionWrite { .. } | MutationOrigin::ProjectionSize => {
+                ReferenceScope::Projection
+            }
         };
         if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);
@@ -82,10 +94,16 @@ impl Workspace {
         mutation: FileMutation<'_>,
         serial: u64,
     ) -> Result<bool, WorkspaceError> {
-        if let FileMutation::Write { handle, origin, .. } = mutation {
-            if origin.projected() {
-                self.check_projected_write(state, false)?;
-            }
+        let origin = mutation.origin();
+        if origin.projected() {
+            self.check_projected_mutation(state, false)?;
+        }
+        let handle = match mutation {
+            FileMutation::Write { handle, .. } => Some(handle),
+            FileMutation::SetLen { handle, .. } => handle,
+            FileMutation::Range(_) => None,
+        };
+        if let Some(handle) = handle {
             let handle = self.write_handle(state, handle, origin)?;
             if handle.serial != serial {
                 return Err(WorkspaceError::BadHandle);
@@ -102,7 +120,9 @@ impl Workspace {
     ) -> Result<(), WorkspaceError> {
         match mutation.origin() {
             MutationOrigin::Local => self.check_projection_mutation(state),
-            MutationOrigin::Projection { .. } => self.check_projected_write(state, publication),
+            MutationOrigin::ProjectionWrite { .. } | MutationOrigin::ProjectionSize => {
+                self.check_projected_mutation(state, publication)
+            }
         }
     }
     /// Atomically overwrites through a writable local handle, filling any gap
@@ -139,7 +159,7 @@ impl Workspace {
             self.available(&state)?;
             let selected = self.write_handle(&state, handle, origin)?;
             if origin.projected() {
-                self.check_projected_write(&state, false)?;
+                self.check_projected_mutation(&state, false)?;
             }
             let append = origin.append(selected.options.append);
             if !append
@@ -174,6 +194,7 @@ impl Workspace {
             self.mutation_handle(&state, mutation, serial)?;
         }
         self.mutate_file(original?, mutation, deadline, None)
+            .map(|published| published.receipt)
     }
     pub(crate) fn overlay_inode(
         &self,
@@ -335,6 +356,33 @@ impl Workspace {
         length: u64,
         deadline: Instant,
     ) -> Result<MutationReceipt, WorkspaceError> {
+        self.resize_file(serial, length, None, deadline, MutationOrigin::Local)
+            .map(|published| published.receipt)
+    }
+    pub(crate) fn set_len_projected(
+        &self,
+        serial: u64,
+        length: u64,
+        handle: Option<HandleId>,
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        self.resize_file(
+            serial,
+            length,
+            handle,
+            deadline,
+            MutationOrigin::ProjectionSize,
+        )
+        .map(|published| published.attributes)
+    }
+    fn resize_file(
+        &self,
+        serial: u64,
+        length: u64,
+        handle: Option<HandleId>,
+        deadline: Instant,
+        origin: MutationOrigin,
+    ) -> Result<Publication, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
@@ -343,8 +391,23 @@ impl Workspace {
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
         }
-        let original = self.serial_original(serial, deadline)?;
-        self.mutate_file(original, FileMutation::SetLen(length), deadline, None)
+        let mutation = FileMutation::SetLen {
+            length,
+            handle,
+            origin,
+        };
+        if origin.projected() {
+            let state = self.state()?;
+            self.available(&state)?;
+            self.mutation_handle(&state, mutation, serial)?;
+        }
+        let original = self.serial_original(serial, deadline);
+        if origin.projected() {
+            let state = self.state()?;
+            self.available(&state)?;
+            self.mutation_handle(&state, mutation, serial)?;
+        }
+        self.mutate_file(original?, mutation, deadline, None)
     }
     pub fn edit_file_range(
         &self,
@@ -366,6 +429,7 @@ impl Workspace {
         }
         let original = self.edit_original(path, deadline)?;
         self.mutate_file(original, FileMutation::Range(edit), deadline, None)
+            .map(|published| published.receipt)
     }
     pub(super) fn truncate_open(
         &self,
@@ -373,7 +437,16 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
         let original = self.serial_original(reserved.serial, deadline)?;
-        self.mutate_file(original, FileMutation::SetLen(0), deadline, Some(reserved))?;
+        self.mutate_file(
+            original,
+            FileMutation::SetLen {
+                length: 0,
+                handle: None,
+                origin: MutationOrigin::Local,
+            },
+            deadline,
+            Some(reserved),
+        )?;
         Ok(())
     }
     fn mutate_file(
@@ -382,13 +455,17 @@ impl Workspace {
         mutation: FileMutation<'_>,
         deadline: Instant,
         open: Option<&mut super::open::OpenReservation>,
-    ) -> Result<MutationReceipt, WorkspaceError> {
-        let (receipt, delivery, published_handle) =
-            self.publish_file_mutation(original, mutation, deadline, open)?;
-        if let Some(delivery) = delivery {
-            self.complete_projection_mutation(delivery, receipt, published_handle, deadline)?;
+    ) -> Result<Publication, WorkspaceError> {
+        let mut published = self.publish_file_mutation(original, mutation, deadline, open)?;
+        if let Some(delivery) = published.delivery.take() {
+            self.complete_projection_mutation(
+                delivery,
+                published.receipt,
+                published.published_handle,
+                deadline,
+            )?;
         }
-        Ok(receipt)
+        Ok(published)
     }
     fn publish_file_mutation(
         &self,
@@ -396,14 +473,7 @@ impl Workspace {
         mutation: FileMutation<'_>,
         deadline: Instant,
         open: Option<&mut super::open::OpenReservation>,
-    ) -> Result<
-        (
-            MutationReceipt,
-            Option<ProjectionInvalidation>,
-            Option<HandleId>,
-        ),
-        WorkspaceError,
-    > {
+    ) -> Result<Publication, WorkspaceError> {
         let (original, content, metadata, baseline) = original;
         let host = self
             .host
@@ -481,7 +551,7 @@ impl Workspace {
         let payload = match mutation {
             FileMutation::Range(edit) => Some(&edit.replacement),
             FileMutation::Write { replacement, .. } => Some(replacement),
-            FileMutation::SetLen(_) => None,
+            FileMutation::SetLen { .. } => None,
         };
         let (start, end, accepted_bytes) = match mutation {
             FileMutation::Range(edit) => {
@@ -490,7 +560,7 @@ impl Workspace {
                 }
                 (edit.start, edit.end, edit.replacement.len())
             }
-            FileMutation::SetLen(length) => {
+            FileMutation::SetLen { length, .. } => {
                 replacement[0].length = length.saturating_sub(inode.length);
                 (length.min(inode.length), inode.length, 0)
             }
@@ -521,17 +591,18 @@ impl Workspace {
             self.available(&state)?;
             self.mutation_handle(&state, mutation, original.serial)?;
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-            return Ok((
-                MutationReceipt {
+            return Ok(Publication {
+                receipt: MutationReceipt {
                     incarnation: self.inner.incarnation,
                     generation: state.generation,
                     inode: original.serial,
                     revision: state.revision,
                     accepted_bytes: 0,
                 },
-                None,
-                None,
-            ));
+                attributes: inode.attributes(original),
+                delivery: None,
+                published_handle: None,
+            });
         }
         if let Some(payload) = payload {
             let held = payload
@@ -692,10 +763,17 @@ impl Workspace {
             accepted_bytes,
         };
         let published_handle = open.as_ref().map(|reserved| reserved.id);
-        let delivery = state
-            .projection
-            .as_ref()
-            .and_then(|projection| projection.delivery.clone());
+        let attributes = inode.attributes(original);
+        // SETATTR's kernel owner invalidates after its attribute reply and
+        // NOWRITE boundary. A synchronous notification here could wait on itself.
+        let delivery = if mutation.origin() == MutationOrigin::ProjectionSize {
+            None
+        } else {
+            state
+                .projection
+                .as_ref()
+                .and_then(|projection| projection.delivery.clone())
+        };
         if needs_completion {
             state.completion = candidate.take_completion(generation)?;
             if state.completion.is_none() {
@@ -712,7 +790,7 @@ impl Workspace {
                 node.attr = inode.attributes(node.original);
             }
         }
-        if let Some(projection) = &mut state.projection {
+        if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,
                 published_handle,
@@ -723,6 +801,11 @@ impl Workspace {
         }
         // Returning ends temporary piece vectors, state/window guards and finally
         // the writer's working reservation before the outer notification call.
-        Ok((receipt, delivery, published_handle))
+        Ok(Publication {
+            receipt,
+            attributes,
+            delivery,
+            published_handle,
+        })
     }
 }

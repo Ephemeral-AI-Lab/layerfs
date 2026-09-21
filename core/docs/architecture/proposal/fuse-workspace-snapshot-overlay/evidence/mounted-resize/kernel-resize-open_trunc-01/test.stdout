@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::kernel_resize_open_trunc ... RESIZE_RESOURCE WorkspaceStatus { submission: None, generation: 3, revision: 8, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 1994138 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 12288, reserved_bytes: 0, payloads: 0, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 2, reusable_pages: 2, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 12288, reserved_bytes: 0, working_bytes: 8104, accounting_complete: true, admission_stopped: false }
+KERNEL_RESIZE_CHECK existing-file-O_TRUNC-and-shell-redirection-publish-empty-at-open PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.18s
+

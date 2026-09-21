@@ -1,0 +1,271 @@
+{
+  "parent": "4d5443c1239722c2ed57f0428ad2c32bdbb3d941",
+  "product_inputs_sha256": "4eb85c4a14ff66c575314b43ca46073e1e8bf94739205fffbb39b9fab9425031",
+  "pass_count": 37,
+  "failure_count": 0,
+  "receipts": [
+    {
+      "receipt": "kernel-resize-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.7768271249951795,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-failed_open-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7881037500046659,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7876307079859544,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7083327919826843,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-open_trunc-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9516110419936012,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-origin-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8545699170208536,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-refused-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8121570410148706,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-completion-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8126189580070786,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0949977920099627,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-exec-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8474352080083918,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7005642500007525,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-notify_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8672578749828972,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-read_race-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8386002919869497,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-truncate_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.818473040999379,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-coherence-visibility-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9768190000031609,
+      "scope": "Actual RO kernel projection with SDK mutations; completion/deadline are native binding API subsets without kernel timing claims"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-append-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8626610419887584,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-backing_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7332045410003047,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8048853749933187,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-exec-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9060483750072308,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-ingress-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.879128957982175,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-mappings-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8587155419809278,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.10522295901319,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-origin-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8183409170014784,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-positional-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.1972962910076603,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7662138329760637,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-kernel_write-read_race-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8349828339996748,
+      "scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.757851791975554,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 7.058380874979775,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7638146659883205,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8436271670216229,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7295427080243826,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-overwritten_zero-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8900159589829855,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7846716249769088,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9526879590121098,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-regression-resize-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9191264580003917,
+      "scope": "Existing-inode local resize SDK subsets, not writable mounted callbacks or npm/R6"
+    },
+    {
+      "receipt": "kernel-resize-same_length-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8760910420096479,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    },
+    {
+      "receipt": "kernel-resize-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 4.501556915987749,
+      "scope": "Actual Linux size-only SETATTR and existing-file truncating OPEN; origin is a native projection API subset"
+    }
+  ],
+  "not_run": [
+    {
+      "id": "RWF-APPEND",
+      "status": "NOT_RUN",
+      "qualification": "UNQUALIFIED",
+      "reason": "Existing FUSE flag observability limit unchanged."
+    },
+    {
+      "id": "SDK-SIZE-CACHED-READ",
+      "status": "NOT_RUN",
+      "qualification": "UNQUALIFIED",
+      "reason": "Concurrent SDK-size cached-i_size mapping/splice limit unchanged."
+    },
+    {
+      "id": "PRIVATE-FAULT-REFILL-RACE",
+      "status": "NOT_RUN",
+      "qualification": "SOURCE_ARGUMENT_ONLY",
+      "reason": "No new deterministic private-fault refill held across kernel WRITE publication."
+    },
+    {
+      "id": "DAEMON-STATUS-REGRESSION",
+      "status": "NOT_RUN",
+      "reason": "Unchanged daemon read/control sources; prior actual daemon/Status proof remains pinned to4d5443c predecessor. Current round recompiles daemon and runs relevant FUSE/Workspace routes, without promoting prior receipt to current source."
+    },
+    {
+      "id": "R1C-REMAINING-CONTROLS",
+      "status": "NOT_RUN",
+      "reason": "Authenticated read/lifecycle and later writable management remain separate operations."
+    },
+    {
+      "id": "R5-NPM",
+      "status": "NOT_RUN",
+      "reason": "Namespace/new-inode/larger-input and declared target prerequisites."
+    },
+    {
+      "id": "R6",
+      "status": "NOT_RUN",
+      "reason": "No performance/RSS/cgroup campaign or matched qualification."
+    }
+  ],
+  "performance_claim": false
+}

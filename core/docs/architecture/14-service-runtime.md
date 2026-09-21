@@ -487,3 +487,17 @@ and the actual boxed-state layout, without another worker/window/FD/queue.
 Kernel SETATTR/truncate and daemon writable controls remain open. The operation
 record retains exact RWF append observability and concurrent SDK-size cached-read
 limits; no universal writable or performance qualification is asserted.
+
+The following size operation is implemented against parent
+`4d5443c1239722c2ed57f0428ad2c32bdbb3d941` in
+[size SETATTR and truncating OPEN](proposal/fuse-workspace-snapshot-overlay/26-mounted-resize.md).
+ProjectionMutationPermit replaces the proposal's write-only token name and owns
+one WRITE or size attempt. Its size method shares native SetLen/Zero publication,
+validates an optional writable Projection handle and returns exact published
+NodeAttributes. The explicit size origin skips userspace invalidation while the
+kernel caller owns NOWRITE; kernel post-reply completion installs size and
+invalidates pages. TTL stays zero, SDK publication remains excluded through reply
+attempt, and unsupported non-size fields are refused. ATOMIC_O_TRUNC remains off,
+so the existing OPEN refusal checks precede the separate truncate request.
+Actual verification/accounting status is recorded in26; daemon writable controls
+and the previous cached-size/RWF limitations remain separate.

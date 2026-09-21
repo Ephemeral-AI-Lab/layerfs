@@ -73,8 +73,9 @@ pub fn mount(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, Mo
 }
 
 /// Mounts existing-file writes on a LocalEdit Workspace. Every regular open uses
-/// direct I/O; shared writable mappings, writeback, sync and size SETATTR are
-/// unsupported. Kernel syscalls have deadline observation points, not preemption.
+/// direct I/O; shared writable mappings, writeback and sync are unsupported.
+/// Size-only SETATTR supplies truncate/extend after kernel OPEN. Kernel syscalls
+/// have deadline observation points, not preemption.
 pub fn mount_writable(workspace: &Workspace, deadline: Instant) -> Result<MountHandle, MountError> {
     mount_profile(workspace, deadline, true)
 }

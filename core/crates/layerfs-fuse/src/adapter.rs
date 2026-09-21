@@ -123,6 +123,7 @@ impl Filesystem for Adapter {
             .map_err(|_| io::ErrorKind::Unsupported)?;
         // fuser defaults add only ASYNC_READ, BIG_WRITES and supported MAX_PAGES.
         // No writeback, readdirplus, stateless-open or symlink-cache capability.
+        // No ATOMIC_O_TRUNC: kernel OPEN precedes separate size SETATTR.
         Ok(())
     }
 
@@ -417,23 +418,69 @@ impl Filesystem for Adapter {
     fn setattr(
         &self,
         req: &Request,
-        _: INodeNo,
-        _: Option<u32>,
-        _: Option<u32>,
-        _: Option<u32>,
-        _: Option<u64>,
-        _: Option<TimeOrNow>,
-        _: Option<TimeOrNow>,
-        _: Option<SystemTime>,
-        _: Option<FileHandle>,
-        _: Option<SystemTime>,
-        _: Option<SystemTime>,
-        _: Option<SystemTime>,
-        _: Option<BsdFileFlags>,
+        ino: INodeNo,
+        mode: Option<u32>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<TimeOrNow>,
+        mtime: Option<TimeOrNow>,
+        ctime: Option<SystemTime>,
+        fh: Option<FileHandle>,
+        crtime: Option<SystemTime>,
+        chgtime: Option<SystemTime>,
+        bkuptime: Option<SystemTime>,
+        flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
-        reply.error(self.readonly(req));
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            if size.is_none()
+                || mode.is_some()
+                || uid.is_some()
+                || gid.is_some()
+                || atime.is_some()
+                || mtime.is_some()
+                || ctime.is_some()
+                || crtime.is_some()
+                || chgtime.is_some()
+                || bkuptime.is_some()
+                || flags.is_some()
+            {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            if let Some(handle) = fh {
+                self.handle(ino, handle)?;
+            }
+            let serial = serial(ino, self.root());
+            // Check unchanged kernel representation fields before publication.
+            attributes(self.workspace.getattr(serial).map_err(errno)?, self.root())?;
+            let value = permit
+                .set_len(
+                    serial,
+                    size.ok_or(Errno::EOPNOTSUPP)?,
+                    fh.map(|handle| handle.0),
+                    deadline,
+                )
+                .map_err(errno)?;
+            attributes(value, self.root())
+        });
+        // Size SETATTR's kernel caller owns cache invalidation after releasing
+        // NOWRITE. No userspace notifier or invented post-kernel fence runs here.
+        match result {
+            Ok(value) => reply.attr(&TTL, &value),
+            Err(error) => reply.error(error),
+        }
     }
+
     fn write(
         &self,
         req: &Request,
@@ -465,7 +512,7 @@ impl Filesystem for Adapter {
             let options = flags(requested, false, true)?;
             self.handle(ino, fh)?;
             self.workspace
-                .begin_projection_write(deadline)
+                .begin_projection_mutation(deadline)
                 .map(|permit| (permit, options.append))
                 .map_err(errno)
         });

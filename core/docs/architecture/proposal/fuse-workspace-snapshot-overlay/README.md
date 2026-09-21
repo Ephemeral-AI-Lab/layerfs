@@ -7,6 +7,12 @@
 > in [08](08-readable-implementation.md). No writable, performance or durability
 > qualification is claimed.
 
+**Next size operation:** [size SETATTR and truncating OPEN](26-mounted-resize.md)
+is implemented with eight new actual mounted proofs and one native API subset.
+It preserves the separate Linux post-reply completion order and failed-open handle
+cleanup. Authenticated lifecycle/writable controls and retained round25 limits
+remain open.
+
 **Mounted WRITE round:** [existing-file kernel writes](25-mounted-write.md) add
 an explicit direct-I/O writable projection and a bounded origin/reply permit,
 using the existing private backing and incremental Commit path. Size SETATTR,

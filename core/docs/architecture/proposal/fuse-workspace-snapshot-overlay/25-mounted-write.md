@@ -198,18 +198,18 @@ then detaches and explicitly commits. It is not claimed as a new real notifier
 errno proof; the existing real seccomp-notifier failure routes separately pass.
 
 The runtime layout observation is observer=16, writer=40, binding_charge=280 bytes.
-The existing fixed working allowance is unchanged. Locked Rust1.85.1 host whole
-core tests pass653, zero failures/three ignored. Linux FUSE+Workspace ordinary
-tests pass10, zero failures/103 native tests ignored by default; the11 new tests
-and20 specifically affected regressions above were run through their real
+The existing fixed working allowance is unchanged. Locked Rust 1.85.1 host whole
+core tests pass 653, zero failures/three ignored. Linux FUSE+Workspace ordinary
+tests pass 10, zero failures/103 native tests ignored by default; the 11 new tests
+and 20 specifically affected regressions above were run through their real
 registered routes. Other older native selections were not rerun this round.
 Whole-core host/Linux Clippy with all targets/-D warnings, examples/binaries,
-fmt, the241-file boundary guard and six guard self-tests pass. The corrected
+fmt, the 241-file boundary guard and six guard self-tests pass. The corrected
 pre-run ingress-allocation oracle was rebuilt and Clippy-checked separately;
 no product algorithm or limit changed and no failed native result was replaced.
 
 The existing route-seal method yields c6fd9f87…; an earlier inventory additionally
-computed compact-JSON(path,SHA256) manifest seal77acc23f…. Both methods and their
+computed compact-JSON(path,SHA256) manifest seal 77acc23f…. Both methods and their
 exact correspondence are retained, not conflated. The initial source archive
 contains identical production files and the earlier pre-run ingress oracle;
 [kernel-write-harness-01](evidence/mounted-write/kernel-write-harness-01/kernel_write.rs)
@@ -233,7 +233,7 @@ python3 core/crates/layerfs-fuse/tests/kernel_write_route.py \
   --case positional --output <fresh-owned-output>
 ```
 
-Construction workers remain1. Target directories remain in this worktree,
+Construction workers remain 1. Target directories remain in this worktree,
 registry mount is read-only, ARM build config remains hash
 3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9.
 No CI/preflight, third-party modification, benchmark campaign or issue closure
@@ -255,3 +255,8 @@ production Rust/runtime SQL, excluding inline/external tests, fixtures, examples
 docs, tooling, manifests and generated output.
 [Machine-readable comparison](evidence/mounted-write/production-loc.json).
 Final receipt/doc additions do not change the counted production tree.
+
+Committed implementation: `4d5443c1239722c2ed57f0428ad2c32bdbb3d941`.
+[Exact changed product/test/manifest paths](evidence/mounted-write/committed-files.json)
+are obtained from its first-parent Git comparison; the historical source seal,
+raw receipts and production LOC comparison above retain their original identities.

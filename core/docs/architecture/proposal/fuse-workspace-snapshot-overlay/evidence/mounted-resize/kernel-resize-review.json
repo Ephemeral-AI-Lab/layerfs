@@ -1,0 +1,25 @@
+{
+  "basis": "Linux v6.12 / installed fuser0.18 source review; not a runtime result",
+  "source_sha256": {
+    "fs/namei.c": "e001108362e1a2d3f02383591d80bc72979d202786a26eb02d26eeb97009ea25",
+    "fs/open.c": "587769343f2fc32552fb8593138c72f47110de8b7933f921a0bf9b627282b59a",
+    "fs/fuse/file.c": "e86d3dd66cf86c46a4ffbeeac0192a6d085144e3a5da7bde50902393503e3f8c",
+    "fs/fuse/dir.c": "dd63ee54675b1fc7035c3ddacd45cc454f6c82ead4d6aedb83bce642417b3334",
+    "fuser/src/request.rs": "2c9fda879168afe9c80b4aa877fcbba82892c978a289e8e81769021e056ed3cf",
+    "fuser/src/ll/request.rs": "dcb18f50bea9d71d51d7b10ba150febc9b357e4a67a7d4854c9e5f1f16d7b3c7"
+  },
+  "conclusions": [
+    "No ATOMIC_O_TRUNC: OPEN before SETATTR, O_TRUNC stripped but unsupported sync/direct flags retained",
+    "Ordinary mode<=0777/writeback-off truncate/ftruncate/open-truncate have size and optional fh, no supplied times",
+    "Size-only origin returns exact publication attributes TTL0, skips notifier, kernel owns NOWRITE/post-reply invalidation",
+    "Failed SETATTR after OPEN requires kernel RELEASE of still-owned handle",
+    "Existing concurrent SDK-size/RWF limitations retained"
+  ],
+  "reviewed_product_sha256": {
+    "core/crates/layerfs-fuse/src/adapter.rs": "d637fdb478e248261b52ab6bd145eff74014355208cf9e81351d5704fe4d13e9",
+    "core/crates/layerfs-workspace/src/filesystem/write.rs": "dc03892268ccb5aeed22b1771752e9157aa17b7c06385674328ac88b7562b654",
+    "core/crates/layerfs-workspace/src/runtime/coherence.rs": "12a900adb9bc8e3190acf87627e1b3dad572777e2a2d71e28dd31c770d91ae78",
+    "core/crates/layerfs-workspace/src/runtime/lifecycle.rs": "98ae99c061a2a6a2dd8924a109f225fc604c21c0ad25c1a7a6c1dff4f2623d30"
+  },
+  "source_review_findings": []
+}

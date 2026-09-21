@@ -1323,3 +1323,15 @@ own operation. Ordinary mounted syscall results are recorded separately from
 native permit/error subsets and from the unqualified RWF append and concurrent
 SDK-size cached-mapping/splice cases. No full R4/R6 or daemon management claim
 follows from this operation.
+
+### R4 size SETATTR prerequisite/operation
+
+[26 — Mounted resize](26-mounted-resize.md), implementation parent
+`4d5443c1239722c2ed57f0428ad2c32bdbb3d941`, closes size-only callback inputs,
+optional writable Projection handle validation, exact published attributes and
+kernel-owned post-reply invalidation. ATOMIC_O_TRUNC stays disabled: successful
+OPEN precedes SETATTR and failed truncation drains its handle through RELEASE.
+The single-attempt token becomes ProjectionMutationPermit for WRITE and size;
+no SDK invalidator runs inside the size callback while NOWRITE is held. Eight new mounted cases and one native-origin case pass with28 affected
+regressions, as recorded in26. Wider daemon management and retained kernel-profile
+qualification limits remain open.
