@@ -284,3 +284,12 @@ are separate checks. Independent algorithm substitution remains #172.
 The acceptance record must distinguish deterministic tests, real macOS/Linux
 processes, OS faults, optional local/both output and unrun platform/resource cases.
 Functional evidence does not qualify overhead, cold storage, bandwidth or #193.
+
+Native early-refusal teardown correction, 2026-09-21, based on
+`4d6f5cd0fa4d21afe51fb1dda01db0d4a0095c88`: after sending a decoded request's
+handler failure, the server half-closes output and discards remaining input
+through the existing bounded adapter before closing both directions. The
+original length/frame/progress/absolute deadline remains in force. This avoids
+resetting a terminal frame while upload bytes are unread. The handler is not
+reentered and the original failure is preserved; malformed BEGIN metadata keeps
+its immediate best-effort refusal. See the [observed failure and correction](proposal/fuse-workspace-snapshot-overlay/12-early-refusal.md).

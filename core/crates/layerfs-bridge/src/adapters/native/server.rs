@@ -78,6 +78,11 @@ pub fn serve(
                     id: request.id,
                     bytes: encode_request_failure(&request, &error)?,
                 });
+                // Preserve the terminal frame before closing a socket with unread
+                // upload bytes. Input enforces the same frame/length/deadline bounds;
+                // the client cancels its upload after receiving this failure.
+                connection.send.end_upload();
+                let _ = std::io::copy(&mut input, &mut std::io::sink());
                 connection.receive.close();
                 return Err(error);
             }

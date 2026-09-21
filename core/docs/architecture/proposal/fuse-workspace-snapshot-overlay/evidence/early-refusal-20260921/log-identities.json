@@ -1,0 +1,12 @@
+{
+  "pair1-r2-core-tests.log": {
+    "raw_path": "core/target/pair1-r2-core-tests.log",
+    "raw_sha256": "adb6cda023d84c72d78fab5fd801262186e11bf2ba8c1ea2b5473c785cdfa114",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-early-refusal-test.log": {
+    "raw_path": "core/target/pair1-early-refusal-test.log",
+    "raw_sha256": "14499848bd9170c5aebbb8d52c24c480660d48fd5d3a97c897f3edc2adc09c85",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  }
+}
