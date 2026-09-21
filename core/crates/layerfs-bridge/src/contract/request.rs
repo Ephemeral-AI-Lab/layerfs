@@ -86,6 +86,10 @@ pub enum Inspect {
     Stat {
         path: Vec<u8>,
     },
+    /// Complete portable attributes and exact logical size for one inode.
+    Attributes {
+        path: Vec<u8>,
+    },
     List {
         path: Vec<u8>,
         after: Vec<u8>,
@@ -269,7 +273,9 @@ impl Request {
             }
             Operation::Inspect { query, .. } => match query {
                 Inspect::File => {}
-                Inspect::Stat { path } | Inspect::Readlink { path } => check_path(path)?,
+                Inspect::Stat { path }
+                | Inspect::Attributes { path }
+                | Inspect::Readlink { path } => check_path(path)?,
                 Inspect::List {
                     path,
                     after,

@@ -5,7 +5,7 @@ struct Fragment<'a>(&'a [u8]);
 impl Read for Fragment<'_> {
     fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
         let n = b.len().min(1);
-        self.0.read(&mut b[..n])
+        std::io::Read::read(&mut self.0, &mut b[..n])
     }
 }
 #[test]

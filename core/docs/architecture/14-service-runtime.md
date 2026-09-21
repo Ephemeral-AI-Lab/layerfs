@@ -25,14 +25,24 @@ The [C2 checkpoint](proposal/service-daemon-transport/implementation/evidence/op
 qualifies the storage prerequisite on macOS; the wider native/Docker profile still
 requires its own current-source evidence.
 
+Pair 1 readable prerequisite, 2026-09-21: the additions below are based on
+`0749180db34d1cdc57f905806a17e3f3f48ec2bc`. They add complete logical read
+attributes, export the existing cooperative input contract without native
+dependencies, and propagate the caller's deadline through connection setup.
+They do not establish mounted verification or measured performance.
+
 ## Boundaries and public calls
 
-`layerfs-bridge::contract` owns five concrete operation variants and typed results.
+`layerfs-bridge::contract` owns the closed content/history operation union and typed results.
 Building bridge without its default `native` feature gives the portable contract
 without Snow/nix or socket code. The native adapter authenticates and delivers
 frames; it has no C1/C2, SQL or service dependency. `Client::call` consumes a
 cooperative deadline-aware `Source` and bounded output. The real stdin source uses
-poll and the same frame/input-state codec as the network endpoint. One scoped
+poll and the same frame/input-state codec as the network endpoint. `Source` is
+exported by the portable contract; `adapters::native::client::Source` remains a
+compatible reexport. `Client::call` and `call_until` accept a dynamic Source,
+so an embedding can bind logical delivery without importing socket ownership.
+One scoped
 upload thread permits concurrent early-response handling. It closes the upload
 half on malformed input, allowing an authoritative service failure to arrive.
 Only a returned terminal success validates provisional read bytes.
@@ -70,6 +80,23 @@ List with an explicit C1 continuation name, and Readlink. Paths use C1's canonic
 relative UTF-8 grammar; the empty path is root. `/f` is invalid; `f` is valid.
 Provider failures already collapsed by `StoreProvider` remain Provider failures;
 no error-string parsing reconstructs unavailable native categories.
+
+`Inspect::Attributes` supplies the complete Stat fields plus `size: u64` in one
+logical response. The service obtains a regular file's exact length from C1's
+FileView, a symlink's length from its checked stored target, and explicitly
+projects directory size as zero. It uses the existing Inspect grant/read permit
+and no input body. Subtag 4 and result tag 9 append to the existing wire unions;
+older tags retain their exact encoding. The bridge validates supported kinds,
+positive representable serials, namespace reference counts, mode masks,
+nanoseconds and kind-specific size bounds. Native request matching additionally
+checks that root attributes have directory kind/reference count zero and
+descendants have positive references. Roots remain opaque 32-byte identities;
+the service's C1 reader authenticates their bytes and logical role. Signed mtime
+seconds remain exact, including values before the Unix epoch.
+
+List still returns names/serials rather than complete child attributes. A consumer
+requiring per-entry kinds issues bounded Attributes calls for its page under one
+remaining callback deadline. This establishes no batching or request-count gain.
 
 ## Native protocol and ownership
 
@@ -129,6 +156,16 @@ The daemon observes stdin/stdout deadlines with poll and closes unsynchronized
 sessions rather than draining attacker-declared input. Native macOS accepted
 sockets are explicitly switched to blocking mode because the nonblocking listener
 otherwise passes O_NONBLOCK to accepted sockets.
+
+`connect_until` shares a caller-local deadline across one TCP connect attempt,
+authentication and Client HELLO; each connection phase still has at most five
+seconds. The existing `connect` retains its separate five-second connect and
+authentication/HELLO caps. A consumer using `connect_until` also passes the same
+deadline to `Client::call_until`, so setup cannot grant a fresh operation budget.
+Connection errors retain their existing typed mapping; socket timeouts can still
+be reported as Io. Every failed Client operation closes that session, including
+confirmed logical absence; consumers must not reuse a failed client or replay
+the failed operation implicitly.
 
 ## Single-crate telemetry
 

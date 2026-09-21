@@ -2,29 +2,13 @@
 use super::{connection::Connection, protocol::*};
 use crate::contract::*;
 use std::{
-    io::{self, Write},
+    io::Write,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
 
-/// A stable, cooperative input capability. Implementations must stop on the
-/// absolute deadline/cancellation; the native pipe source enforces this with poll.
-pub trait Source: Send {
-    fn read(
-        &mut self,
-        buffer: &mut [u8],
-        deadline: Instant,
-        cancel: &AtomicBool,
-    ) -> io::Result<usize>;
-}
-impl Source for &[u8] {
-    fn read(&mut self, b: &mut [u8], _: Instant, cancel: &AtomicBool) -> io::Result<usize> {
-        if cancel.load(Ordering::Acquire) {
-            return Err(io::ErrorKind::Interrupted.into());
-        }
-        io::Read::read(self, b)
-    }
-}
+pub use crate::contract::Source;
+
 pub struct Client {
     connection: Connection,
     previous: u64,
@@ -51,7 +35,7 @@ impl Client {
     pub fn call(
         &mut self,
         r: &Request,
-        source: &mut impl Source,
+        source: &mut (impl Source + ?Sized),
         output: &mut dyn Write,
     ) -> Result<Response, Failure> {
         let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
@@ -63,7 +47,7 @@ impl Client {
     pub fn call_until(
         &mut self,
         r: &Request,
-        source: &mut impl Source,
+        source: &mut (impl Source + ?Sized),
         output: &mut dyn Write,
         deadline: Instant,
     ) -> Result<Response, Failure> {
@@ -357,6 +341,13 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             },
             Response::Stat { nanoseconds, .. },
         ) => *nanoseconds < 1_000_000_000 && bytes == 0,
+        (
+            Operation::Inspect {
+                query: Inspect::Attributes { path },
+                ..
+            },
+            Response::Attributes { .. },
+        ) => response.validate_attributes(Some(path.is_empty())).is_ok() && bytes == 0,
         (
             Operation::Inspect {
                 query: Inspect::List { entries, .. },

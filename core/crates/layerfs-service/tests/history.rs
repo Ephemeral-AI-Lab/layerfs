@@ -2065,3 +2065,246 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
         original
     );
 }
+
+#[test]
+fn complete_read_attributes_match_over_authenticated_transport() {
+    use layerfs_bridge::adapters::native::{
+        client::Client,
+        connection::{accept, connect_until, Peer},
+        listen,
+        server::serve,
+    };
+    use std::time::{Duration, Instant};
+    let fixture = fixture("read-attributes", ALL);
+    let payload = vec![37; 131_073];
+    let file = construct(&fixture.service, &fixture.peer, 1, &payload);
+    let empty = construct(&fixture.service, &fixture.peer, 2, &[]);
+    let seed = [81; 32];
+    call(
+        &fixture.service,
+        &fixture.peer,
+        3,
+        Operation::HistoryCommand(HistoryCommand::ReserveInodes {
+            scope: *scope_for_seed(seed).object().as_bytes(),
+            count: 8,
+        }),
+    )
+    .unwrap();
+    let mut entries = manifest(file);
+    entries[0].mtime_seconds = -2;
+    entries[0].mtime_nanoseconds = 750_000_000;
+    entries.push(ManifestEntry {
+        parent: 0,
+        name: b"empty".to_vec(),
+        kind: 1,
+        mode: 0o600,
+        mtime_seconds: 0,
+        mtime_nanoseconds: 0,
+        content: Some(empty),
+        target: Vec::new(),
+    });
+    entries.push(ManifestEntry {
+        parent: 0,
+        name: b"link".to_vec(),
+        kind: 3,
+        mode: 0o777,
+        mtime_seconds: 4,
+        mtime_nanoseconds: 5,
+        content: None,
+        target: b"a".to_vec(),
+    });
+    entries.push(ManifestEntry {
+        parent: 0,
+        name: b"dir".to_vec(),
+        kind: 2,
+        mode: 0o1777,
+        mtime_seconds: 6,
+        mtime_nanoseconds: 7,
+        content: None,
+        target: Vec::new(),
+    });
+    let created = match result(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            4,
+            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+                stack: [82; 16],
+                name: b"attrs".to_vec(),
+                scope_seed: seed,
+                manifest: entries,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::StackCreated(created) => created,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(created.root_serial, 9);
+    let query = |root, path: &[u8]| Operation::Inspect {
+        root,
+        query: Inspect::Attributes {
+            path: path.to_vec(),
+        },
+    };
+    let mut expected = Vec::new();
+    for (index, (path, kind, size)) in [
+        (&b""[..], 2, 0),
+        (&b"a"[..], 1, 131_073),
+        (&b"empty"[..], 1, 0),
+        (&b"link"[..], 3, 1),
+        (&b"dir"[..], 2, 0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = call(
+            &fixture.service,
+            &fixture.peer,
+            10 + index as u64,
+            query(created.root, path),
+        )
+        .unwrap();
+        response.validate_attributes(Some(path.is_empty())).unwrap();
+        assert!(
+            matches!(response, Response::Attributes { kind: actual_kind, size: actual_size, .. }
+            if actual_kind == kind && actual_size == size)
+        );
+        if path.is_empty() {
+            assert!(matches!(
+                response,
+                Response::Attributes {
+                    serial: 9,
+                    references: 0,
+                    mtime: -2,
+                    nanoseconds: 750_000_000,
+                    ..
+                }
+            ));
+        }
+        let old = stat(
+            &fixture.service,
+            &fixture.peer,
+            20 + index as u64,
+            created.root,
+            path,
+        );
+        let Response::Stat {
+            serial,
+            kind,
+            references,
+            content,
+            metadata,
+            mode,
+            mtime,
+            nanoseconds,
+        } = old
+        else {
+            panic!("expected legacy stat")
+        };
+        assert_eq!(
+            response,
+            Response::Attributes {
+                serial,
+                kind,
+                references,
+                content,
+                metadata,
+                mode,
+                mtime,
+                nanoseconds,
+                size,
+            }
+        );
+        expected.push((path.to_vec(), response));
+    }
+    assert_eq!(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            30,
+            query(created.root, b"absent")
+        )
+        .unwrap_err()
+        .code,
+        Code::PathNotFound
+    );
+    assert_eq!(
+        call(&fixture.service, &fixture.peer, 31, query([0x92; 32], b""))
+            .unwrap_err()
+            .code,
+        Code::MissingObject
+    );
+    assert!(call(&fixture.service, &fixture.peer, 32, query(file, b"")).is_err());
+    assert_eq!(
+        call(
+            &fixture.service,
+            &VerifiedPeer::from_private(&[8; 32]).unwrap(),
+            33,
+            query(created.root, b"")
+        )
+        .unwrap_err()
+        .code,
+        Code::Denied
+    );
+    assert_eq!(
+        call_at(
+            &fixture.service,
+            &fixture.peer,
+            34,
+            HISTORY_PROFILE,
+            query(created.root, b""),
+            &[]
+        )
+        .unwrap_err()
+        .code,
+        Code::Unsupported
+    );
+
+    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+    let address = listener.local_addr().unwrap();
+    let public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
+    std::thread::scope(|threads| {
+        let server = threads.spawn(|| {
+            let (socket, _) = listener.accept().unwrap();
+            let connection = accept(
+                socket,
+                &[9; 32],
+                &[Peer {
+                    selector: 1,
+                    public: *fixture.peer.public_key(),
+                    expires_unix: u64::MAX,
+                }],
+            )
+            .unwrap();
+            let _ = serve(connection, |peer, request, input, output, deadline| {
+                fixture
+                    .service
+                    .handle_until(peer, request, input, output, deadline)
+                    .0
+            });
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut client =
+            Client::new(connect_until(address, 1, &[7; 32], &public, deadline).unwrap()).unwrap();
+        for (index, (path, expected)) in expected.into_iter().enumerate() {
+            let request = Request {
+                id: index as u64 + 1,
+                generation: 1,
+                store: 1,
+                profile: 1,
+                deadline_ms: 10_000,
+                response_bytes: 0,
+                operation: query(created.root, &path),
+            };
+            let mut source = b"".as_slice();
+            let input: &mut dyn Source = &mut source;
+            let actual = client
+                .call_until(&request, input, &mut std::io::sink(), deadline)
+                .unwrap();
+            assert_eq!(actual, expected);
+        }
+        drop(client);
+        server.join().unwrap();
+    });
+}

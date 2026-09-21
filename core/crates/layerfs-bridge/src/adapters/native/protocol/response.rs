@@ -86,6 +86,29 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u8(8)?;
             put_history(&mut e, result)?;
         }
+        Response::Attributes {
+            serial,
+            kind,
+            references,
+            content,
+            metadata,
+            mode,
+            mtime,
+            nanoseconds,
+            size,
+        } => {
+            r.validate_attributes(None)?;
+            e.u8(9)?;
+            e.u64(*serial)?;
+            e.u8(*kind)?;
+            e.u64(*references)?;
+            e.put(content)?;
+            e.put(metadata)?;
+            e.u32(*mode)?;
+            e.u64(*mtime as u64)?;
+            e.u32(*nanoseconds)?;
+            e.u64(*size)?;
+        }
     }
     Ok(e.finish())
 }
@@ -502,11 +525,25 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             reused: d.u64()?,
         },
         8 => Response::History(Box::new(take_history(&mut d)?)),
+        9 => Response::Attributes {
+            serial: d.u64()?,
+            kind: d.u8()?,
+            references: d.u64()?,
+            content: d.root()?,
+            metadata: d.root()?,
+            mode: d.u32()?,
+            mtime: d.u64()? as i64,
+            nanoseconds: d.u32()?,
+            size: d.u64()?,
+        },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
     if let Response::History(result) = &r {
         check_result(result)?;
+    }
+    if matches!(r, Response::Attributes { .. }) {
+        r.validate_attributes(None)?;
     }
     Ok(r)
 }

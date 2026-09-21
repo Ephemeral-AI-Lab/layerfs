@@ -89,6 +89,19 @@ pub enum Response {
         mtime: i64,
         nanoseconds: u32,
     },
+    /// Checked inode facts at the requested immutable filesystem root.
+    /// Directory size is explicitly zero; other sizes are logical byte lengths.
+    Attributes {
+        serial: u64,
+        kind: u8,
+        references: u64,
+        content: Root,
+        metadata: Root,
+        mode: u32,
+        mtime: i64,
+        nanoseconds: u32,
+        size: u64,
+    },
     List {
         entries: Vec<(Vec<u8>, u64)>,
         continuation: Option<Vec<u8>>,
@@ -97,4 +110,43 @@ pub enum Response {
     /// One history reply. The closed wire union is boxed so a legacy reply does
     /// not pay for the widest history record it can never carry.
     History(Box<HistoryResult>),
+}
+
+impl Response {
+    /// Checks the complete-attribute shape, including root versus descendant
+    /// identity when a request path is available. Other result shapes are refused.
+    pub fn validate_attributes(&self, is_root: Option<bool>) -> Result<(), Failure> {
+        let Self::Attributes {
+            serial,
+            kind,
+            references,
+            mode,
+            nanoseconds,
+            size,
+            ..
+        } = self
+        else {
+            return Err(Code::InvalidInput.into());
+        };
+        let valid_kind = match kind {
+            1 => *references >= 1 && *size <= super::MAX_FILE && mode & !0o777 == 0,
+            2 => *references <= 1 && *size == 0 && mode & !0o1777 == 0,
+            3 => *references == 1 && *size <= 4096 && *mode == 0o777,
+            _ => false,
+        };
+        let valid_position = match is_root {
+            Some(true) => *kind == 2 && *references == 0,
+            Some(false) => *references >= 1,
+            None => true,
+        };
+        if *serial == 0
+            || *serial > i64::MAX as u64
+            || *nanoseconds >= 1_000_000_000
+            || !valid_kind
+            || !valid_position
+        {
+            return Err(Code::InvalidInput.into());
+        }
+        Ok(())
+    }
 }

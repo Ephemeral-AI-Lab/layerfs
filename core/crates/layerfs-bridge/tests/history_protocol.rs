@@ -599,8 +599,12 @@ fn every_reply_round_trips() {
 #[test]
 fn a_reply_tag_outside_the_closed_union_is_refused() {
     assert_eq!(
-        decode_response(&[0x09]).unwrap_err().code,
+        decode_response(&[0xFF]).unwrap_err().code,
         Code::Unsupported
+    );
+    assert_eq!(
+        decode_response(&[0x09]).unwrap_err().code,
+        Code::InvalidInput
     );
     assert_eq!(
         decode_response(&[0x08, 0x7F]).unwrap_err().code,

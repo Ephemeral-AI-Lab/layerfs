@@ -1,10 +1,56 @@
 #![cfg(feature = "native")]
 //! Real authenticated socket lifecycle, independent of OS buffer-size policy.
 use layerfs_bridge::adapters::native::{
-    connection::{accept, connect, Peer, VerifiedPeer},
+    connection::{accept, connect, connect_until, Peer, VerifiedPeer},
     listen,
     protocol::{Frame, Kind},
 };
+
+#[test]
+fn caller_deadline_covers_connect_and_hello() {
+    use layerfs_bridge::{adapters::native::client::Client, contract::Code};
+    use std::{
+        sync::mpsc,
+        time::{Duration, Instant},
+    };
+    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let address = listener.local_addr().unwrap();
+    let public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
+    let failure = connect_until(address, 1, &[7; 32], &public, Instant::now())
+        .err()
+        .unwrap();
+    assert_eq!(failure.code, Code::Deadline);
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    listener.set_nonblocking(false).unwrap();
+    let (done, released) = mpsc::channel();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            let (socket, _) = listener.accept().unwrap();
+            let mut connection = accept(
+                socket,
+                &[9; 32],
+                &[Peer {
+                    selector: 1,
+                    public: *VerifiedPeer::from_private(&[7; 32]).unwrap().public_key(),
+                    expires_unix: u64::MAX,
+                }],
+            )
+            .unwrap();
+            assert_eq!(connection.receive.read().unwrap().kind, Kind::Hello);
+            // No sleep: the peer withholds HELLO until the caller's deadline fires.
+            released.recv_timeout(Duration::from_secs(2)).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_millis(200);
+        let connection = connect_until(address, 1, &[7; 32], &public, deadline).unwrap();
+        assert!(Client::new(connection).is_err());
+        assert!(Instant::now() >= deadline);
+        done.send(()).unwrap();
+    });
+}
 #[test]
 fn repeated_native_connections_authenticate_with_ordinary_tcp() {
     use nix::poll::{poll, PollFd, PollFlags};

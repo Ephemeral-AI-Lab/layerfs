@@ -162,6 +162,10 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                     e.u8(3)?;
                     e.blob(path)?;
                 }
+                Inspect::Attributes { path } => {
+                    e.u8(4)?;
+                    e.blob(path)?;
+                }
             }
         }
         Operation::EditFile {
@@ -661,6 +665,9 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                     bytes: d.u32()?,
                 },
                 3 => Inspect::Readlink {
+                    path: d.blob(4096)?,
+                },
+                4 => Inspect::Attributes {
                     path: d.blob(4096)?,
                 },
                 _ => return Err(Code::Unsupported.into()),

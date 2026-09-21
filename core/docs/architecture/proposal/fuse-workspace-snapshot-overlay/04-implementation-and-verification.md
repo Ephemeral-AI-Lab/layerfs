@@ -6,6 +6,28 @@
 > not executed results. This document creates no production files, benchmark
 > campaign, concurrency change or release claim.
 
+**Implementation update, 2026-09-21:** the shared R0-R readable prerequisite is
+implemented against synchronized main `0749180db34d1cdc57f905806a17e3f3f48ec2bc`.
+`Inspect::Attributes` adds complete checked metadata and logical size without
+changing existing Stat/List tags or bounds. The existing Source capability is
+exported from the portable bridge contract, and `connect_until` carries one
+deadline through connection/authentication/HELLO. The
+[shared runtime description](../../14-service-runtime.md) records its exact
+surface. This is a prerequisite result, not a mounted R1 result.
+
+Validation for that prerequisite: Rust 1.85.1 locked bridge/service tests and
+warning-denying Clippy with all targets passed; the product boundary guard and
+its six self-tests passed. The exact commands were
+`cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-bridge -p layerfs-service`
+and `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked -p layerfs-bridge -p layerfs-service --all-targets -- -D warnings`,
+from the implementation worktree root with its own `core/target`, no overriding
+Rust flags and `LAYERFS_CONSTRUCTION_WORKERS=1`. The new direct/authenticated
+attribute parity test covers actual root serial 9, pre-epoch timestamps, file,
+directory and symlink sizes, missing paths/objects, grants and profile refusal.
+Initial checks retained a Source/Read trait ambiguity and an obsolete unknown
+response-tag test; both were corrected and the rerun passed. Whole-core and
+Linux mounted checks belong to the following R1 implementation round.
+
 Packet [index](README.md); behavior owners:
 [Workspace/FUSE](01-workspace-fuse-contract.md),
 [overlay/snapshot](02-overlay-snapshot.md),
