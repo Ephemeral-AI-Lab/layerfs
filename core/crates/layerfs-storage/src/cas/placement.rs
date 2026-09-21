@@ -130,7 +130,7 @@ impl MutationOwner {
             }
         };
         let arbitration = std::sync::Arc::clone(&self.arbitration);
-        let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         if !self.transaction_open {
             self.begin_write()?;
         }

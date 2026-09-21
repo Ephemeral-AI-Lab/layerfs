@@ -410,6 +410,20 @@ pub struct MutationOwner {
     pub(super) sealed_rows: Vec<ObjectId>,
     pub(super) transaction: TransactionState,
     pub(super) transaction_open: bool,
+    /// True while this owner holds the Store's arbitration for a whole wave.
+    ///
+    /// A wave keeps **one** write transaction open across every seal it performs,
+    /// and SQLite admits one writer per Store file, so the whole wave has to hold
+    /// the arbitration: a second writer that slipped in between two of its seals
+    /// would take the write lock and fail on `BEGIN IMMEDIATE` - `busy_timeout` is
+    /// 0 by design, so a locked Store is a definite failure and never a wait -
+    /// instead of waiting for a step it can measure.
+    ///
+    /// The arbitration is a plain `Mutex`, so it is taken once and every nested
+    /// acquisition inside the wave is a no-op. The flag is a field of the owner
+    /// rather than a thread-local, so two Stores on one thread cannot confuse each
+    /// other's state.
+    pub(super) wave_held: bool,
     pub(super) compression: CompressionWorkspace,
     pub(super) decompression: DecompressionWorkspace,
     pub(super) terminal: bool,
@@ -469,6 +483,34 @@ impl MutationOwner {
         self.counters.reused += 1;
     }
 
+    /// Runs one preparation wave under a single write transaction.
+    ///
+    /// **The step is the wave.** The multi-writer rule is that a write transaction
+    /// never outlives the step that opened it under the arbitration lock, so every
+    /// step commits before that lock is released; batching stays inside a step.
+    /// This makes the step one preparation wave - the bounded unit the caller
+    /// already offers - instead of one seal, and the transaction is acknowledged
+    /// here, before the lock is released. The other writer waits for a wave rather
+    /// than for a seal; both are bounded, and the wave's measured width (3.7 ms on
+    /// this row) is inside the p99 the pair probe already tolerated.
+    pub(super) fn with_wave<T>(
+        &mut self,
+        body: impl FnOnce(&mut Self) -> StorageResult<T>,
+    ) -> StorageResult<T> {
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+        self.wave_held = true;
+        let result = body(self);
+        self.wave_held = false;
+        match result {
+            Ok(value) => {
+                self.maybe_commit()?;
+                Ok(value)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Reads objects inside this owner's transaction, with no ceiling.
     ///
     /// The pooled reader is this operation's own (`self.pool_reader`), the same one
@@ -476,7 +518,8 @@ impl MutationOwner {
     /// demands is not copied again. Its pack cache is released on every pack write
     /// (`write_pack`), which is what makes that lifetime sound while the save runs.
     pub fn read_batch(&mut self, ids: &[ObjectId]) -> StorageResult<Vec<Vec<u8>>> {
-        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let mut groups = crate::encoding::GroupCache::new();
         let (values, _) = crate::cas::read::read_objects(
             &self.connection,
@@ -499,7 +542,8 @@ impl MutationOwner {
     /// pooled reader's pack cache is released on every pack write, so no body it
     /// retains can predate a write to the pack it came from.
     pub fn resolve_location(&mut self, location: lookup::ObjectLocation) -> StorageResult<Vec<u8>> {
-        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let value = {
             let mut groups = crate::encoding::GroupCache::new();
             let mut resolver = crate::encoding::delta::read::Resolver::new(

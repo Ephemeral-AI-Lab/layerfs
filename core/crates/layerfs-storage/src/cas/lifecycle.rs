@@ -87,6 +87,7 @@ impl MutationOwner {
             sealed_rows: Vec::new(),
             transaction: TransactionState::default(),
             transaction_open: false,
+            wave_held: false,
             compression,
             decompression,
             terminal: false,
@@ -160,7 +161,10 @@ impl MutationOwner {
 
     /// Acknowledges one physical group; no transaction survives preparation.
     pub fn maybe_commit(&mut self) -> StorageResult<()> {
-        if self.transaction_open {
+        // A wave acknowledges its own transaction once, at its end: a seal inside
+        // a wave must not close the transaction the wave opened, or the step
+        // becomes a seal again.
+        if self.transaction_open && !self.wave_held {
             let whole = Instant::now();
             let started = Instant::now();
             // Multi-writer: SQLite admits one writer per store file, and the other
@@ -182,8 +186,8 @@ impl MutationOwner {
     }
 
     pub(super) fn flush_candidates(&mut self) -> StorageResult<()> {
-        let arbitration = Arc::clone(&self.arbitration);
-        let _guard = ownership::lock(&arbitration)?;
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         // The save's own transaction is normally still open here: bounded commits
         // re-acquire it. Opening a second one would nest, so only a caller that
         // arrives with nothing open starts a transaction, and only that caller may

@@ -1339,7 +1339,16 @@ pipeline-filesystem-build	digest:filesystem_root	02b5b52b67547c2ea2fe98ac53bbf52
 pipeline-namespace-10000	counter:pipeline.batches	3
 pipeline-namespace-10000	counter:pipeline.bindings	10100
 pipeline-namespace-10000	counter:pipeline.chain_objects	382
-pipeline-namespace-10000	counter:pipeline.commits	17378
+# Re-pinned 2026-09-21 (#219): the save's write transaction spans one preparation
+# wave instead of one seal, so the row acknowledges 800 commits where it used to
+# acknowledge 17378. The change is pre-registered and measured in
+# docs/roadmap/0.1/0.1.7/evidence/issue219-ns19b-remainder-20260921T063653Z/
+# (pre-registration-T3.md, declared before the run that produced the number).
+# Every other pin of this row is unchanged: the work counters - inserted 25245,
+# statements 16595, packs_created, pack_appends, presence_queries 398,
+# full_records 25241, prefix_records 4, content_bytes - and the filesystem root
+# all reproduce exactly, which is what says the work did not change.
+pipeline-namespace-10000	counter:pipeline.commits	800
 pipeline-namespace-10000	counter:pipeline.content_bytes	301171810
 pipeline-namespace-10000	counter:pipeline.content_objects	24863
 pipeline-namespace-10000	counter:pipeline.declared_content_bytes	300000000

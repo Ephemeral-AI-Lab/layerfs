@@ -36,7 +36,8 @@ impl MutationOwner {
             return Err(StorageError::Aborted);
         }
         let queries = {
-            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            let arbitration = std::sync::Arc::clone(&self.arbitration);
+            let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
             availability.validate(&self.connection, object, i64::MAX, |id| {
                 self.pending_member(id)
             })?
@@ -123,6 +124,7 @@ impl MutationOwner {
         let mut input = SelectInput {
             connection: &self.connection,
             arbitration: &self.arbitration,
+            wave_held: self.wave_held,
             capacities: &self.capacities,
             candidates: &mut candidates,
             depths: &mut self.depths,

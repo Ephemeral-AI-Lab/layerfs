@@ -23,6 +23,16 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     if objects.is_empty() {
         return Ok(());
     }
+    // **The step is the wave.** Every seal this wave performs shares one write
+    // transaction and one hold of the Store's arbitration, and the transaction is
+    // acknowledged before that hold is released - the multi-writer rule is that a
+    // write transaction never outlives the step that opened it, and the step is
+    // now the bounded unit the caller offers rather than one seal inside it.
+    owner.with_wave(|owner| flush_wave(owner, objects))
+}
+
+/// One preparation wave, run under the transaction its caller opened.
+fn flush_wave(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> StorageResult<()> {
     // The membership snapshot below is taken once, before any of this wave's own
     // writes, so a group sealed during the wave publishes rows the snapshot cannot
     // know about. Identities sealed earlier in this wave are therefore consulted
@@ -33,7 +43,8 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     let ids: Vec<ObjectId> = objects.iter().map(|object| object.id()).collect();
     let wave_started = std::time::Instant::now();
     let locations = {
-        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&owner.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, owner.wave_held)?;
         lookup::locations(owner.connection(), &ids, i64::MAX)?
     };
     let mut by_id: BTreeMap<ObjectId, lookup::ObjectLocation> = BTreeMap::new();
@@ -46,7 +57,8 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
     // identifiers - so the check costs one query set per wave instead of one per
     // object that happens to name something outside it.
     let queries = {
-        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&owner.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, owner.wave_held)?;
         availability.seed(
             owner.connection(),
             objects
@@ -99,7 +111,11 @@ pub fn flush_batch(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> 
                 };
                 if sealed {
                     let location = {
-                        let _guard = crate::sqlite::ownership::lock(&owner.arbitration)?;
+                        let arbitration = std::sync::Arc::clone(&owner.arbitration);
+                        let _guard = crate::sqlite::ownership::lock_unless_held(
+                            &arbitration,
+                            owner.wave_held,
+                        )?;
                         lookup::location(owner.connection(), object.id(), i64::MAX)?
                             .ok_or(StorageError::Integrity("sealed identity has no row"))?
                     };

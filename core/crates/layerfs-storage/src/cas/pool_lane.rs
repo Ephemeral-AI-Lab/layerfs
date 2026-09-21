@@ -83,7 +83,8 @@ impl MutationOwner {
         let known: BTreeMap<[u8; INODE_VALUE_BYTES], u32> = if unknown.is_empty() {
             BTreeMap::new()
         } else {
-            let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+            let arbitration = std::sync::Arc::clone(&self.arbitration);
+            let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
             let mut index = self
                 .pool_index
                 .lock()
@@ -109,7 +110,7 @@ impl MutationOwner {
             .count();
         if fresh_count != 0 {
             let arbitration = std::sync::Arc::clone(&self.arbitration);
-            let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+            let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
             // Bounded commits re-acquire the save's transaction, so it is normally
             // already open; only start one when this caller arrives without it.
             if !self.transaction_open {
@@ -119,7 +120,14 @@ impl MutationOwner {
                 &self.connection,
                 fresh_count,
             )?));
-            self.maybe_commit()?;
+            // **The reservation is its own step.** An aborted save's ordinal
+            // reservations are never reused - a value the catalogue handed out is
+            // not handed out again, whatever happened to the save that asked for it
+            // - so this statement is acknowledged here rather than with the wave
+            // that happens to contain it. A wave's transaction is closed at this
+            // point and reopened by the next write, which is exactly the boundary
+            // every seal used to draw.
+            self.commit_reservation()?;
         }
         let mut ordinals = Vec::with_capacity(leaf.rows.len());
         let mut fresh: Vec<[u8; INODE_VALUE_BYTES]> = Vec::new();
@@ -222,7 +230,8 @@ impl MutationOwner {
         if self.pool_synced {
             return Ok(());
         }
-        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let mut index = self
             .pool_index
             .lock()
@@ -239,6 +248,19 @@ impl MutationOwner {
         )?;
         self.pool_synced = true;
         Ok(())
+    }
+
+    /// Acknowledges the ordinal reservation's own transaction.
+    ///
+    /// The wave flag is cleared for this one call because the reservation is not
+    /// part of the wave's transaction: `maybe_commit` is the product's only commit
+    /// site, and this is a step, not a nested write.
+    fn commit_reservation(&mut self) -> StorageResult<()> {
+        let held = self.wave_held;
+        self.wave_held = false;
+        let result = self.maybe_commit();
+        self.wave_held = held;
+        result
     }
 
     /// Next ordinal this save may assign, read from the catalogue once.
@@ -286,7 +308,7 @@ impl MutationOwner {
         let encoded: Vec<crate::pack::layout::EncodedGroup> =
             built.iter().map(|(_, group)| group.group.clone()).collect();
         let arbitration = std::sync::Arc::clone(&self.arbitration);
-        let _guard = crate::sqlite::ownership::lock(&arbitration)?;
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         if !self.transaction_open {
             self.begin_write()?;
         }
@@ -368,7 +390,8 @@ impl MutationOwner {
         target_canonical: u64,
         target_encoded: u64,
     ) -> StorageResult<Option<(ObjectId, Vec<u8>)>> {
-        let _guard = crate::sqlite::ownership::lock(&self.arbitration)?;
+        let arbitration = std::sync::Arc::clone(&self.arbitration);
+        let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         let depth_cap = self.capacities.metadata_delta_max_depth;
         if depth_cap == 0 {
             return Ok(None);

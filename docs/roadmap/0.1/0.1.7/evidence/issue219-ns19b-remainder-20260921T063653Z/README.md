@@ -1,5 +1,9 @@
 # #219 round 2 — two refuted treatments and the row's own noise floor
 
+> **Continued in [`../issue219-ns19c-cadence-20260921T065326Z/`](../issue219-ns19c-cadence-20260921T065326Z/):**
+> the T3 pre-registration filed here was run, and it landed — `operation_ns` 2714.3 -> 2065.0 ms
+> (−23.92 %). This file is round 2's own report and is not rewritten.
+
 Pre-registration: `pre-registration.md` (written before the first run of this round). Control:
 **T1c** (`a5c54df16`, `operation_ns` 2776.3 ms). Raw receipts: `receipts/`.
 

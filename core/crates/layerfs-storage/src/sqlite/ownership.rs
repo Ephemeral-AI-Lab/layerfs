@@ -64,6 +64,23 @@ pub(crate) fn lock(owner: &Mutex<()>) -> StorageResult<MutexGuard<'_, ()>> {
         .map_err(|_| StorageError::Integrity("Store arbitration"))
 }
 
+/// Acquires `owner` unless the caller's wave already holds it.
+///
+/// The arbitration is a plain `Mutex`, so a wave that keeps one write transaction
+/// open across many seals takes it once and every nested acquisition inside the
+/// wave is a no-op. `held` is the owner's own wave flag; the guard borrows the
+/// caller's `Arc` clone rather than the owner, which is what lets the owner stay
+/// mutably borrowed for the whole wave.
+pub(crate) fn lock_unless_held(
+    owner: &Mutex<()>,
+    held: bool,
+) -> StorageResult<Option<MutexGuard<'_, ()>>> {
+    if held {
+        return Ok(None);
+    }
+    Ok(Some(lock(owner)?))
+}
+
 pub(crate) fn initialize_scope(connection: &Connection) -> StorageResult<()> {
     connection.execute_batch(
         "CREATE TEMP TABLE layerfs_read_scope (save_id INTEGER NOT NULL, publication INTEGER NOT NULL);
