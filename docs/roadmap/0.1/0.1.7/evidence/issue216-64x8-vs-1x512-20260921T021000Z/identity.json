@@ -1,0 +1,20 @@
+{
+ "commit": "27be35877ef0b143717497795b09529807c32049",
+ "tree": "e4879572713872aaf22245349510127463fe793c",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "binaries": {
+  "layerfs-service": "e218bf98db1335ffbc8588c84c56e30c03a552565690bda0a621cb6e61ee5da1",
+  "layerfs-daemon": "45d5545f35cadac614c2cf9ed7d0d23e3de2a37587632c94a3185d0612459fab",
+  "examples/prepare_store": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "examples/public_key": "350ea3068c05f54cc466f3d6d336f2c721d295538c63e0742f525abe23d4480c"
+ },
+ "profile": "release",
+ "payload_sha256": "af242f0567a27ad29d7dac2170b0bd96f73facb33ec3754c4feb6c71b469d864",
+ "payload_reproduction": "random.seed(0x219); random.randbytes(512*1024*1024) in CPython 3.14, hashed above; distinct 8 MiB or 512 MiB slices per operation",
+ "concurrency": 1,
+ "frame_bytes": 16384,
+ "topology": "host-to-host loopback; one layerfs-service and one layerfs-daemon process per operation on this host, not the frozen --cpus=1 container topology",
+ "cache_state": "fresh Store copy from the closed prepared master per arm, fresh service per arm, payload pre-generated before the timed section; no invalidation for one arm only; no cold-cache claim",
+ "interference": "host load average ~6-7 of 14 logical cores, desktop processes busy; all six arms ran under it",
+ "harness_costs": "5.45 ms per daemon process spawn (measured separately: 64 spawns of the same binary against a refused endpoint) is included in the wall times and reported separately from the product estimate"
+}

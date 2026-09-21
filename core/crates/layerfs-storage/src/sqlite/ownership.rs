@@ -1,4 +1,11 @@
 //! Native file arbitration and save-scoped publication. No lock spans an upload.
+//!
+//! Private save ownership is the Store's configured writer budget (#216), not a
+//! fixed slot pair: `store_policy.max_concurrent_writes` is read inside the
+//! allocation transaction, so the one authoritative number is shared by every
+//! sandbox and process using the file. The slot a save records is drawn from the
+//! whole supported slot space, which keeps the rows a higher earlier setting
+//! produced valid after the budget is lowered.
 use std::{
     path::Path,
     sync::{Arc, Mutex, MutexGuard, OnceLock, Weak},
@@ -7,10 +14,8 @@ use std::{
 use rusqlite::Connection;
 
 use crate::error::{StorageError, StorageResult};
-use crate::sqlite::write;
+use crate::sqlite::{schema, write};
 
-/// Simultaneously private saves, including quarantined/failed-cleanup ownership.
-pub const SAVE_SLOTS: usize = 2;
 const STORE_SLOTS: usize = 64;
 type Registry = Vec<((u64, u64), Weak<Mutex<()>>)>;
 static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
@@ -86,17 +91,41 @@ pub(crate) fn publication(connection: &Connection) -> StorageResult<i64> {
     )?)
 }
 
+/// Reserves one private save under the Store's persisted writer budget.
+///
+/// The budget is read inside this transaction, so two processes cannot admit
+/// more writers than the Store allows between them. A retained owner - a save
+/// whose cleanup or outcome is unresolved - is counted like any other live
+/// owner and keeps its slot whatever the budget is now, which is why a lowered
+/// setting can never make ownership reusable. The slot is the lowest free one
+/// inside `1..=budget`; the upper bound is the budget and the shipped CHECK still
+/// constrains the whole supported space.
 pub(crate) fn acquire(connection: &Connection) -> StorageResult<(i64, i64)> {
     write::begin_immediate(connection)?;
-    let slot: Option<i64> = connection.query_row(
-        "SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM saves WHERE active_slot = 1) THEN 1
-         WHEN NOT EXISTS (SELECT 1 FROM saves WHERE active_slot = 2) THEN 2 END",
+    let budget = i64::from(schema::max_concurrent_writes(connection)?);
+    let live: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM saves WHERE active_slot IS NOT NULL",
         [],
         |row| row.get(0),
     )?;
-    let Some(slot) = slot else {
+    if live >= budget {
         write::rollback(connection)?;
         return Err(StorageError::OwnershipUnavailable);
+    }
+    let slot: Option<i64> = connection.query_row(
+        "WITH RECURSIVE candidate(slot) AS ( \
+           SELECT 1 UNION ALL SELECT slot + 1 FROM candidate WHERE slot < ?1 \
+         ) \
+         SELECT MIN(slot) FROM candidate \
+         WHERE NOT EXISTS (SELECT 1 FROM saves WHERE active_slot = candidate.slot)",
+        [budget],
+        |row| row.get(0),
+    )?;
+    // `live < budget` distinct slots exist in a space of `budget` values, so a
+    // free slot inside it always remains; a NULL here means the invariant broke.
+    let Some(slot) = slot else {
+        write::rollback(connection)?;
+        return Err(StorageError::Integrity("save slot allocation"));
     };
     let visible = publication(connection)?;
     connection.execute("INSERT INTO saves (active_slot) VALUES (?1)", [slot])?;

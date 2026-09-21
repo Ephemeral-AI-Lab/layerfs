@@ -96,7 +96,7 @@ pub(crate) fn candidates(
             ))?;
             let count = counts.entry(location.object_id).or_insert(0usize);
             *count += 1;
-            if *count > super::ownership::SAVE_SLOTS {
+            if *count > crate::policy::SAVE_SLOT_SPACE {
                 return Err(StorageError::Integrity("object locator ownership bound"));
             }
             found.push((

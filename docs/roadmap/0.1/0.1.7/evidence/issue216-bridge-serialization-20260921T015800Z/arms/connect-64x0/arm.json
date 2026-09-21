@@ -1,0 +1,408 @@
+{
+ "arm": "connect-64x0",
+ "operations": 64,
+ "bytes": 0,
+ "wall_s": 0.7832,
+ "mib_per_s": 0.0,
+ "per_operation_ms": 12.237,
+ "latency_first_half_s": 0.3848,
+ "latency_second_half_s": 0.3875,
+ "daemon_cpu_s": 0.0,
+ "service_cpu_s": 0.11,
+ "service_real_s": 0.79,
+ "effective_cores": 0.14,
+ "roots": [
+  {
+   "index": 0,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.014004
+  },
+  {
+   "index": 1,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011336
+  },
+  {
+   "index": 2,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011101
+  },
+  {
+   "index": 3,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011403
+  },
+  {
+   "index": 4,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011128
+  },
+  {
+   "index": 5,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.01163
+  },
+  {
+   "index": 6,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.010127
+  },
+  {
+   "index": 7,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011064
+  },
+  {
+   "index": 8,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012776
+  },
+  {
+   "index": 9,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012327
+  },
+  {
+   "index": 10,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.015089
+  },
+  {
+   "index": 11,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.013454
+  },
+  {
+   "index": 12,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011925
+  },
+  {
+   "index": 13,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012347
+  },
+  {
+   "index": 14,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012125
+  },
+  {
+   "index": 15,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.01292
+  },
+  {
+   "index": 16,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012188
+  },
+  {
+   "index": 17,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012096
+  },
+  {
+   "index": 18,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012077
+  },
+  {
+   "index": 19,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012533
+  },
+  {
+   "index": 20,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.010643
+  },
+  {
+   "index": 21,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012468
+  },
+  {
+   "index": 22,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011433
+  },
+  {
+   "index": 23,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.013147
+  },
+  {
+   "index": 24,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011532
+  },
+  {
+   "index": 25,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011578
+  },
+  {
+   "index": 26,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011334
+  },
+  {
+   "index": 27,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011928
+  },
+  {
+   "index": 28,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012735
+  },
+  {
+   "index": 29,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011955
+  },
+  {
+   "index": 30,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.01097
+  },
+  {
+   "index": 31,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.01146
+  },
+  {
+   "index": 32,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012169
+  },
+  {
+   "index": 33,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012182
+  },
+  {
+   "index": 34,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012853
+  },
+  {
+   "index": 35,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012631
+  },
+  {
+   "index": 36,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.010862
+  },
+  {
+   "index": 37,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011664
+  },
+  {
+   "index": 38,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012558
+  },
+  {
+   "index": 39,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012712
+  },
+  {
+   "index": 40,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011815
+  },
+  {
+   "index": 41,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012648
+  },
+  {
+   "index": 42,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011966
+  },
+  {
+   "index": 43,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012455
+  },
+  {
+   "index": 44,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011321
+  },
+  {
+   "index": 45,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011639
+  },
+  {
+   "index": 46,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012148
+  },
+  {
+   "index": 47,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012515
+  },
+  {
+   "index": 48,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011584
+  },
+  {
+   "index": 49,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012272
+  },
+  {
+   "index": 50,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011661
+  },
+  {
+   "index": 51,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011577
+  },
+  {
+   "index": 52,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011928
+  },
+  {
+   "index": 53,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012392
+  },
+  {
+   "index": 54,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012749
+  },
+  {
+   "index": 55,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012018
+  },
+  {
+   "index": 56,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012772
+  },
+  {
+   "index": 57,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012137
+  },
+  {
+   "index": 58,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.010741
+  },
+  {
+   "index": 59,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012267
+  },
+  {
+   "index": 60,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012257
+  },
+  {
+   "index": 61,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012476
+  },
+  {
+   "index": 62,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.012586
+  },
+  {
+   "index": 63,
+   "bytes": 0,
+   "root": "56ebfbabce799e6402758d692dc07ff29ccd2b89ca3720743b7fd359c6801e3f",
+   "latency_s": 0.011971
+  }
+ ],
+ "errors": [],
+ "fixture_setup": {
+  "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+  "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "reused": true,
+  "clone_method": "closed independent writable byte copy; not an OS cache claim"
+ },
+ "load_before": "9:18  up 1 day,  7:20, 2 users, load averages: 5.81 6.14 6.17"
+}

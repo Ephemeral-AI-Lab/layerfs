@@ -1,0 +1,15 @@
+{
+ "commit": "8ef52fb2f63255fbffd259df5b2d79eb8dd13a83",
+ "tree": "79b56de5bc6113654e83b62861056a0c7d168694",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "binaries": {
+  "measure_admission": "adc499457a900c78851afd966d1e935464e1ca3b57a8df8c9ebcd0d861fcdd40",
+  "measure_ingest": "6b90ea423f49ddc009f3de22ee2df849478b00caac4da11ff52428069fb732c4"
+ },
+ "host": "Darwin 25.4.0 arm64",
+ "logical_cores": 14,
+ "profile": "release",
+ "cache_state": "declared identical per arm: payloads built in-process before the timed phase, fresh Store per arm, no invalidation for one arm only, no cold-cache claim",
+ "interference": "host load average 5.8-6.9 (1 min) on 14 logical cores throughout, desktop processes busy; all arms share it",
+ "rss_method": "peak of a 20 ms ps -o rss= sampler on the arm's own pid, cross-checked against /usr/bin/time -l maximum resident set size"
+}

@@ -1,8 +1,9 @@
--- Candidate schema 7: save-owned physical data and atomic per-save publication.
+-- Candidate schema 8: save-owned physical data, atomic per-save publication and
+-- the configured per-Store writer budget.
 -- Canonical profile 1 and pack/codec formats are unchanged. Older schemas are
 -- rejected, never migrated. Duplicate locators and bytes are permitted.
 PRAGMA application_id = 1279677261;
-PRAGMA user_version = 7;
+PRAGMA user_version = 8;
 
 CREATE TABLE store_policy (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -15,6 +16,10 @@ CREATE TABLE store_policy (
         CHECK (chunk_delta_max_depth BETWEEN 0 AND 50),
     metadata_delta_max_depth INTEGER NOT NULL
         CHECK (metadata_delta_max_depth BETWEEN 0 AND 50),
+    -- Authoritative writer budget of this Store (#216). One number, shared by
+    -- every sandbox and process that opens the file; it is the admission limit,
+    -- while `saves.active_slot` below spans the wider supported slot space.
+    max_concurrent_writes INTEGER NOT NULL CHECK (max_concurrent_writes BETWEEN 1 AND 64),
     publication_sequence INTEGER NOT NULL DEFAULT 0 CHECK (publication_sequence >= 0),
     retained_pack_ceiling INTEGER NOT NULL DEFAULT 0 CHECK (retained_pack_ceiling >= 0),
     next_pack_id INTEGER NOT NULL DEFAULT 1 CHECK (next_pack_id > 0),
@@ -25,7 +30,10 @@ CREATE TABLE store_policy (
 
 CREATE TABLE saves (
     save_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    active_slot INTEGER UNIQUE CHECK (active_slot BETWEEN 1 AND 2),
+    -- 64 is the supported slot space (MAX_CONCURRENT_WRITES_LIMIT), not the
+    -- current budget: rows written under a higher setting stay valid after it is
+    -- lowered. Admission is bounded by store_policy.max_concurrent_writes.
+    active_slot INTEGER UNIQUE CHECK (active_slot BETWEEN 1 AND 64),
     publication INTEGER UNIQUE CHECK (publication > 0),
     pack_ceiling INTEGER NOT NULL DEFAULT 0 CHECK (pack_ceiling >= 0),
     CHECK ((active_slot IS NULL) != (publication IS NULL))

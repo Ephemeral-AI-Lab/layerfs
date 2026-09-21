@@ -13,8 +13,11 @@ Parent: [`core/docs/architecture/`](../README.md). Source pin `ce2d738ff`.
 **Current handoff, 2026-09-21:** use the
 [pair-2 implementation specification](commit-history/implementation.md).
 The discussion below is retained as the earlier design exploration, not current
-implementation instructions. C2 now has schema 7 and two private saves per Store;
-save-owned locators/publication replace the old prefix-only assumptions. C1/C2
+implementation instructions. C2 now has schema 8 and the configured per-Store
+writer budget of [#216](https://github.com/Ephemeral-AI-Lab/layerfs/issues/216)
+(two by default), so the earlier fixed two-save statements in this page and in
+the documents it points at are superseded; save-owned locators/publication
+replace the old prefix-only assumptions. C1/C2
 stay service-local. Stage precedes Commit/Branch CAS; add-layer separately CASes
 LayerStack head. The new specification owns metadata placement, exact stages,
 allocation continuity, no-retry behavior and the independent service-first scope.

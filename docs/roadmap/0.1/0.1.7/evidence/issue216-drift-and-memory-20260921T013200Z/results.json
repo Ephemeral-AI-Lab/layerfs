@@ -1,0 +1,183 @@
+{
+ "commit": "8ef52fb2f63255fbffd259df5b2d79eb8dd13a83",
+ "tree": "79b56de5bc6113654e83b62861056a0c7d168694",
+ "arms": {
+  "drift-w1-a": {
+   "writers": 1,
+   "writes": 64,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 268435456,
+   "work_s": 2.185,
+   "mib_per_s": 117.15,
+   "effective_cores": 0.983,
+   "user_s": 1.76,
+   "sys_s": 1.08,
+   "sampled_peak_rss_bytes": 405504000,
+   "time_max_rss_bytes": 410419200,
+   "product_marginal_bytes_per_extra_writer": null,
+   "load_before": "9:07  up 1 day,  7:09, 2 users, load averages: 6.27 5.67 5.75"
+  },
+  "drift-w1-b": {
+   "writers": 1,
+   "writes": 64,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 268435456,
+   "work_s": 2.43,
+   "mib_per_s": 105.36,
+   "effective_cores": 0.933,
+   "user_s": 1.76,
+   "sys_s": 1.15,
+   "sampled_peak_rss_bytes": 404078592,
+   "time_max_rss_bytes": 408371200,
+   "product_marginal_bytes_per_extra_writer": null,
+   "load_before": "9:07  up 1 day,  7:09, 2 users, load averages: 6.16 5.66 5.75"
+  },
+  "mem-128-w1": {
+   "writers": 1,
+   "writes": 128,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 536870912,
+   "work_s": 4.683,
+   "mib_per_s": 109.33,
+   "effective_cores": 0.952,
+   "user_s": 3.54,
+   "sys_s": 2.23,
+   "sampled_peak_rss_bytes": 778108928,
+   "time_max_rss_bytes": 779010048,
+   "product_marginal_bytes_per_extra_writer": null,
+   "load_before": "9:07  up 1 day,  7:09, 2 users, load averages: 5.99 5.63 5.74"
+  },
+  "mem-128-w8": {
+   "writers": 8,
+   "writes": 128,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 536870912,
+   "work_s": 4.37,
+   "mib_per_s": 117.15,
+   "effective_cores": 1.229,
+   "user_s": 4.4,
+   "sys_s": 2.75,
+   "sampled_peak_rss_bytes": 912654336,
+   "time_max_rss_bytes": 912670720,
+   "product_marginal_bytes_per_extra_writer": null,
+   "load_before": "9:07  up 1 day,  7:09, 2 users, load averages: 6.31 5.71 5.76"
+  },
+  "shape-96-w1": {
+   "writers": 1,
+   "writes": 96,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 402653184,
+   "effective_cores": 0.681,
+   "sampled_peak_rss_bytes": 591446016,
+   "note": "the write-shape line this build printed is not a rate at budget 8 (it summed overlapping per-write durations); the tool was corrected and this arm is reported, not used"
+  },
+  "shape-96-w8": {
+   "writers": 8,
+   "writes": 96,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 402653184,
+   "effective_cores": 1.231,
+   "sampled_peak_rss_bytes": 726302720,
+   "note": "the write-shape line this build printed is not a rate at budget 8 (it summed overlapping per-write durations); the tool was corrected and this arm is reported, not used"
+  },
+  "ingest-512mib": {
+   "writers": 8,
+   "writes": 96,
+   "bytes_per_write": 4194304,
+   "payload_bytes": 402653184,
+   "effective_cores": 0.909,
+   "sampled_peak_rss_bytes": 1217626112,
+   "note": "the write-shape line this build printed is not a rate at budget 8 (it summed overlapping per-write durations); the tool was corrected and this arm is reported, not used"
+  },
+  "shape2-192-w1": {
+   "writers": 1,
+   "writes": 192,
+   "bytes_per_write": 2097152,
+   "payload_bytes": 402653184,
+   "work_ns": 3499813917,
+   "mib_per_s": 109.72,
+   "first_half_mib_per_s": 108.58,
+   "second_half_mib_per_s": 110.86,
+   "first_half_writes": 95,
+   "second_half_writes": 97,
+   "effective_cores": 0.976,
+   "sampled_peak_rss_bytes": 462766080,
+   "store_bytes": 409780224,
+   "verified_roots": 192,
+   "load_before": "9:11  up 1 day,  7:13, 2 users, load averages: 5.60 6.64 6.27"
+  },
+  "shape2-192-w8": {
+   "writers": 8,
+   "writes": 192,
+   "bytes_per_write": 2097152,
+   "payload_bytes": 402653184,
+   "work_ns": 3321439833,
+   "mib_per_s": 115.61,
+   "first_half_mib_per_s": 120.43,
+   "second_half_mib_per_s": 110.8,
+   "first_half_writes": 100,
+   "second_half_writes": 92,
+   "effective_cores": 1.236,
+   "sampled_peak_rss_bytes": 595247104,
+   "store_bytes": 410075136,
+   "verified_roots": 192,
+   "load_before": "9:11  up 1 day,  7:13, 2 users, load averages: 5.60 6.64 6.27"
+  }
+ },
+ "marginal_writer_memory": [
+  {
+   "case": "short 64 MiB",
+   "payload_bytes": 67108864,
+   "rss_budget1_bytes": 128253952,
+   "rss_budget8_bytes": 258686976,
+   "delta_bytes": 130433024,
+   "bytes_per_extra_writer": 18633289
+  },
+  {
+   "case": "long 256 MiB",
+   "payload_bytes": 268435456,
+   "rss_budget1_bytes": 404979712,
+   "rss_budget8_bytes": 534921216,
+   "delta_bytes": 129941504,
+   "bytes_per_extra_writer": 18563072
+  },
+  {
+   "case": "drift 512 MiB",
+   "payload_bytes": 536870912,
+   "rss_budget1_bytes": 778043392,
+   "rss_budget8_bytes": 912261120,
+   "delta_bytes": 134217728,
+   "bytes_per_extra_writer": 19173961
+  },
+  {
+   "case": "shape2 384 MiB",
+   "payload_bytes": 402653184,
+   "rss_budget1_bytes": 462422016,
+   "rss_budget8_bytes": 595591168,
+   "delta_bytes": 133169152,
+   "bytes_per_extra_writer": 19024164
+  }
+ ],
+ "identity": {
+  "commit": "8ef52fb2f63255fbffd259df5b2d79eb8dd13a83",
+  "tree": "79b56de5bc6113654e83b62861056a0c7d168694",
+  "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+  "binaries": {
+   "measure_admission": "adc499457a900c78851afd966d1e935464e1ca3b57a8df8c9ebcd0d861fcdd40",
+   "measure_ingest": "6b90ea423f49ddc009f3de22ee2df849478b00caac4da11ff52428069fb732c4"
+  },
+  "host": "Darwin 25.4.0 arm64",
+  "logical_cores": 14,
+  "profile": "release",
+  "cache_state": "declared identical per arm: payloads built in-process before the timed phase, fresh Store per arm, no invalidation for one arm only, no cold-cache claim",
+  "interference": "host load average 5.8-6.9 (1 min) on 14 logical cores throughout, desktop processes busy; all arms share it",
+  "rss_method": "peak of a 20 ms ps -o rss= sampler on the arm's own pid, cross-checked against /usr/bin/time -l maximum resident set size"
+ },
+ "discarded": [
+  {
+   "arm_group": "shape-96-w8 (issue216-shape-20260921T012400Z)",
+   "reason": "the receipt's write-shape line computed MiB/s from a sum of overlapping per-write durations, which counts the same wall time once per writer; the line is meaningless at budget 8. The tool now computes bytes completed in each half of the phase's wall time. The arm is retained and reported, and no rate is taken from that line.",
+   "used_for_rates": false
+  }
+ ]
+}

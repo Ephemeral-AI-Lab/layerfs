@@ -8,26 +8,34 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+// The ARMv8 AEAD profile is required on aarch64 for every build that produces a
+// binary, and it is a build input, not a runtime choice: `aes`/`polyval` gate their ARMv8 backends on the `aes_armv8` and
+// `polyval_armv8` cfgs, which only a global flag can set. A build without them is
+// refused here rather than quietly negotiating the 2-4x slower ChaCha20-Poly1305
+// suite, which is what used to happen when the flags were dropped - for example by
+// invoking cargo from a directory where `config.toml` was not discovered. The
+// repository-root `.cargo/config.toml` supplies them for every aarch64 build made
+// from inside the repository; a build made from outside must pass them explicitly.
+#[cfg(all(target_arch = "aarch64", not(all(aes_armv8, polyval_armv8)), not(doc)))]
+compile_error!(
+    "aarch64 builds require the ARMv8 AEAD profile: --cfg aes_armv8 --cfg polyval_armv8 \
+     -C target-feature=+aes,+sha2. The repository-root .cargo/config.toml supplies it; \
+     build from inside the repository, or pass those flags explicitly (an explicit \
+     RUSTFLAGS overrides the config table, so repeat all four). aarch64 has no other \
+     supported suite: ChaCha20-Poly1305 is not offered there."
+);
+
 /// The authenticated suite this build negotiates.
 ///
-/// AES-GCM is preferred wherever its backend is accelerated: x86_64 detects
-/// AES-NI/CLMUL at runtime, and aarch64 needs the `aes_armv8`/`polyval_armv8` cfgs
-/// (see the build recipe in the crate manifest). Without those cfgs an aarch64
-/// build would run AES-GCM at 0.111 GB/s against 1.17 GB/s accelerated, so it keeps
-/// ChaCha20-Poly1305 (0.52 GB/s, `poly1305` has no aarch64 backend at this pin)
-/// instead. No build can select the soft AES path, and two builds that chose
-/// different suites reject each other's handshake explicitly rather than degrading.
-#[cfg(any(
-    target_arch = "x86_64",
-    target_arch = "x86",
-    all(target_arch = "aarch64", aes_armv8, polyval_armv8)
-))]
+/// One suite per architecture, chosen by the build profile and never by a runtime
+/// preference: AES-GCM where its backend is accelerated (x86_64 detects
+/// AES-NI/CLMUL at runtime, aarch64 requires the ARMv8 profile above), and
+/// ChaCha20-Poly1305 on every other target. No build can select the soft AES path,
+/// and two builds that chose different suites reject each other's handshake
+/// explicitly rather than degrading.
+#[cfg(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64"))]
 pub const NOISE: &str = "Noise_KK_25519_AESGCM_SHA256";
-#[cfg(not(any(
-    target_arch = "x86_64",
-    target_arch = "x86",
-    all(target_arch = "aarch64", aes_armv8, polyval_armv8)
-)))]
+#[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
 pub const NOISE: &str = "Noise_KK_25519_ChaChaPoly_BLAKE2s";
 const CIPHER_MAX: usize = METADATA_BYTES + HEADER + 16;
 /// Full-size data records are coalesced into one vectored write up to this many
@@ -304,21 +312,20 @@ fn verify_cpu_backend() -> Result<(), Failure> {
             return Err(Code::Unsupported.into());
         }
     }
-    #[cfg(all(target_arch = "aarch64", aes_armv8, polyval_armv8))]
+    #[cfg(target_arch = "aarch64")]
     {
-        // `aes` implies PMULL on the ARMv8 crypto extension.
+        // `aes` implies PMULL on the ARMv8 crypto extension. The profile is a
+        // build input (see the compile-time refusal above), so this is the one
+        // place a machine without the extension is still refused: a binary built
+        // for ARMv8 must not run the soft AES path on a CPU that lacks it.
         if !std::arch::is_aarch64_feature_detected!("aes") {
             return Err(Code::Unsupported.into());
         }
     }
-    #[cfg(not(any(
-        target_arch = "x86_64",
-        target_arch = "x86",
-        all(target_arch = "aarch64", aes_armv8, polyval_armv8)
-    )))]
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
     {
-        // The fallback suite needs NEON on aarch64; every supported aarch64
-        // target declares it, so there is nothing to detect.
+        // The fallback suite needs NEON on other aarch64-like targets; every
+        // supported one declares it, so there is nothing to detect.
     }
     Ok(())
 }

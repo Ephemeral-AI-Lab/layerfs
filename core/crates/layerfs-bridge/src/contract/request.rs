@@ -10,13 +10,31 @@ pub const METADATA_BYTES: usize = 32768;
 pub const MAX_FILE: u64 = 4 * 1024 * 1024 * 1024;
 pub const MAX_OPERATION_MS: u32 = 600_000;
 pub const IO_PROGRESS_MS: u64 = 5_000;
-/// Complete operation reservations; no queue or extra construction producer.
-pub const MAX_OPERATIONS: usize = 2;
+/// Concurrent reads one service process admits without a writer permit.
+///
+/// A read holds one bounded decode workspace and one connection for its wave, and
+/// that is the resource this bound protects - it is not a second writer budget
+/// and it is not an operator setting. Writers are admitted per Store by the
+/// Store's own configured budget (`max_concurrent_writes`, #216), so a busy
+/// writer set no longer refuses reads.
+pub const MAX_READ_OPERATIONS: usize = 2;
 pub const MAX_REPLAY: u64 = 8 * 1024 * 1024;
-/// Persistent/handshaking/closing sessions; the acceptor owns one extra refusal slot.
-pub const MAX_SESSIONS: usize = 4;
+
+/// Persistent/handshaking/closing sessions a transport admits for one Store.
+///
+/// The transport must not become an accidental lower ceiling for the configured
+/// writer budget: one session can carry one operation, so the session space is
+/// the Store's whole write budget plus the service's read bound. The acceptor
+/// owns one extra refusal slot beyond this.
+pub const fn session_capacity(max_concurrent_writes: u8) -> usize {
+    max_concurrent_writes as usize + MAX_READ_OPERATIONS
+}
+
 /// Total application connection slots, including the synchronous accept/refusal owner.
-pub const MAX_CONNECTIONS: usize = MAX_SESSIONS + 1;
+pub const fn connection_capacity(max_concurrent_writes: u8) -> usize {
+    session_capacity(max_concurrent_writes) + 1
+}
+
 /// Includes boundary slack and one terminal; finite even for tiny-frame abuse.
 pub const fn frame_budget(bytes: u64) -> u64 {
     bytes.div_ceil(1024).saturating_add(257)

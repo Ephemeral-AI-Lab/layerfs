@@ -1,0 +1,14 @@
+saves_total|16
+saves_private|0
+saves_published|16
+object_packs|304
+objects|3531
+metadata_value_groups|0
+content_signatures|0
+publication_sequence|16
+retained_pack_ceiling|304
+next_pack_id|305
+max_concurrent_writes|4
+page_count|16696
+freelist_count|21
+page_size|4096

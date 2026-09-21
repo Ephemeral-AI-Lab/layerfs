@@ -13,7 +13,10 @@
 use rusqlite::Connection;
 
 use crate::error::{StorageError, StorageResult};
-use crate::policy::{SchemaIdentity, StoragePolicy, SCHEMA_IDENTITY};
+use crate::policy::{
+    SchemaIdentity, StoragePolicy, DEFAULT_MAX_CONCURRENT_WRITES, MAX_CONCURRENT_WRITES_LIMIT,
+    SCHEMA_IDENTITY,
+};
 use crate::sqlite::connection::{pragma_i64, Pragma};
 
 /// Shipped schema text of this crate.
@@ -38,6 +41,7 @@ const REQUIRED_TABLES: [(&str, &[&str]); 6] = [
             "whole_file_delta_max_depth",
             "chunk_delta_max_depth",
             "metadata_delta_max_depth",
+            "max_concurrent_writes",
             "publication_sequence",
             "retained_pack_ceiling",
             "next_pack_id",
@@ -100,8 +104,9 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
     connection.execute(
         "INSERT INTO store_policy \
          (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
-          chunk_delta_max_depth, metadata_delta_max_depth, publication_sequence) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+          chunk_delta_max_depth, metadata_delta_max_depth, max_concurrent_writes, \
+          publication_sequence) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         rusqlite::params![
             POLICY_ROW,
             policy.format_profile(),
@@ -109,6 +114,7 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
             policy.whole_file_delta_max_depth(),
             policy.chunk_delta_max_depth(),
             policy.metadata_delta_max_depth(),
+            i64::from(DEFAULT_MAX_CONCURRENT_WRITES),
             NO_PACKS_PUBLISHED,
         ],
     )?;
@@ -155,6 +161,9 @@ pub fn validate(
         ));
     }
     let stored = load_policy(connection)?;
+    // The writer budget is read before any save is admitted, so an out-of-range
+    // persisted value is refused here rather than at the first `begin_save`.
+    max_concurrent_writes(connection)?;
     if let Some(expected) = expected {
         if expected.validated()? != stored {
             return Err(StorageError::UnsupportedPolicy {
@@ -279,6 +288,48 @@ fn load_policy(connection: &Connection) -> StorageResult<StoragePolicy> {
     StoragePolicy::new(profile, threshold, whole, chunk)
         .with_metadata_depth(metadata)
         .validated()
+}
+
+/// Persisted writer budget of this Store.
+///
+/// It is the authoritative admission limit for private saves (#216): the value
+/// lives in the Store file rather than in a process, so every sandbox and every
+/// process that opens the Store shares one budget, and a change is visible to a
+/// new save without restarting anything. It never rewrites a `saves` row.
+pub fn max_concurrent_writes(connection: &Connection) -> StorageResult<u8> {
+    let stored: i64 = connection.query_row(
+        "SELECT max_concurrent_writes FROM store_policy WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    u8::try_from(stored)
+        .ok()
+        .filter(|value| (1..=MAX_CONCURRENT_WRITES_LIMIT).contains(value))
+        .ok_or(StorageError::UnsupportedPolicy {
+            field: "max_concurrent_writes",
+        })
+}
+
+/// Replaces the persisted writer budget; retained save rows are never touched.
+///
+/// Lowering the budget is an admission change, not a claim about ownership: a
+/// private save that is already recorded keeps its slot whatever the new value
+/// is, and continues to count against the budget, so a lower setting cannot make
+/// unresolved ownership reusable. The caller supplies the transaction.
+pub fn set_max_concurrent_writes(connection: &Connection, writes: u8) -> StorageResult<u8> {
+    if writes == 0 || writes > MAX_CONCURRENT_WRITES_LIMIT {
+        return Err(StorageError::UnsupportedPolicy {
+            field: "max_concurrent_writes",
+        });
+    }
+    if connection.execute(
+        "UPDATE store_policy SET max_concurrent_writes = ?1 WHERE id = 1",
+        [i64::from(writes)],
+    )? != 1
+    {
+        return Err(StorageError::Integrity("writer budget row"));
+    }
+    Ok(writes)
 }
 
 /// Highest published pack id; ownership filters still decide visibility below it.

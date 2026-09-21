@@ -1,0 +1,19 @@
+arm                writers=4 writes=16 bytes_per_write=1048576 mode=Oversubscribed
+commit             2f900ada5392017252d9cfc280f9d4036ca619bd
+host               macos aarch64 (14 logical cores)
+cache declaration  payloads built in-process before the timed phase; fresh
+                   Store inside this arm's output; no invalidation for one
+                   arm only; no cold-cache claim; one sample per arm
+preparation        0.005 s (untimed)
+setup              0.003 s (store create + budget set + service assembly)
+work               0.042 s   382.59 MiB/s   382.59 writes/s
+verification       0.010 s   4/4 saved roots read back byte-identical, 0 mismatched
+cleanup            0.000 s
+complete command   0.060 s
+peak in flight     4 (budget 4); admitted at once 4
+write shape        first half of the phase 191.30 MiB/s (4 writes), second half 0.00 MiB/s (0 writes); slowest write #3 at 0.000 s
+decisions          0.003 s to decide every oversubscribed caller
+outcomes           inserted=4 refused=12 failed=0
+store file         4419584 bytes (4.2 MiB, 0.26x the payload)
+rss                before=Some(18240) KiB after=Some(114384) KiB
+

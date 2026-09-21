@@ -64,6 +64,14 @@ pub fn run() -> Result<(), Failure> {
     let store = Timing::disabled("open", |s| Store::open(path, s.child("open")))
         .0
         .map_err(crate::operation::failure::storage)?;
+    // One session can carry one operation, so the transport admits this Store's
+    // whole write budget plus the service read bound. A smaller cap would be an
+    // accidental ceiling under the configured writer setting.
+    let sessions_capacity = session_capacity(
+        store
+            .max_concurrent_writes()
+            .map_err(crate::operation::failure::storage)?,
+    );
     let listener = layerfs_bridge::adapters::native::listen(
         env("LAYERFS_LISTEN")?
             .parse()
@@ -86,7 +94,7 @@ pub fn run() -> Result<(), Failure> {
     )?);
     let peers = Arc::new(peers);
     let stdin = io::stdin();
-    let mut sessions: Vec<Session> = Vec::with_capacity(MAX_SESSIONS);
+    let mut sessions: Vec<Session> = Vec::with_capacity(sessions_capacity);
     let result = (|| {
         loop {
             let mut i = 0;
@@ -120,7 +128,7 @@ pub fn run() -> Result<(), Failure> {
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(_) => return Err(Code::Io.into()),
             };
-            if sessions.len() == MAX_SESSIONS {
+            if sessions.len() == sessions_capacity {
                 drop(stream);
                 continue;
             }

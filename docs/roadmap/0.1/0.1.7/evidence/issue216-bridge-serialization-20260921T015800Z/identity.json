@@ -1,0 +1,15 @@
+{
+ "commit": "c974db86345672d2dd786713ed52e80f608089b7",
+ "tree": "4f01d55bad8d7c7b0d6d09b484380716c02fdd39",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "binaries": {
+  "layerfs-service": "e218bf98db1335ffbc8588c84c56e30c03a552565690bda0a621cb6e61ee5da1",
+  "layerfs-daemon": "45d5545f35cadac614c2cf9ed7d0d23e3de2a37587632c94a3185d0612459fab",
+  "examples/prepare_store": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "examples/public_key": "350ea3068c05f54cc466f3d6d336f2c721d295538c63e0742f525abe23d4480c"
+ },
+ "profile": "release",
+ "payload": "pre-generated random bytes before the timed section, sliced so every operation carries distinct content; sha256 in each sequence's commands.json",
+ "cache_state": "fresh Store copy from the closed prepared master per arm, service and daemons started per arm; no invalidation applied to one arm only; no cold-cache claim",
+ "interference": "host load average ~6-7 of 14 logical cores throughout; desktop processes busy"
+}

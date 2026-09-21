@@ -1,0 +1,28 @@
+{
+ "arm": "single-1x512mib-2",
+ "label": "single-1x512mib",
+ "order": 2,
+ "operations": 1,
+ "concurrency": 1,
+ "bytes": 536870912,
+ "product_wall_s": 6.623,
+ "mib_per_s": 77.31,
+ "per_operation_ms": 6623.045,
+ "latencies_s": [
+  6.622903
+ ],
+ "first_latency_s": 6.622903,
+ "last_latency_s": 6.622903,
+ "daemon_cpu_s": 2.55,
+ "service_cpu_s": 6.28,
+ "effective_cores": 1.333,
+ "roots_sha256": "cac43b707b70e7badf30c19a32e8369a4f44dec36302fb0b85efaad6d49fa19e",
+ "store_bytes": 546156544,
+ "load_before": "9:24  up 1 day,  7:27, 2 users, load averages: 5.79 6.13 6.18",
+ "fixture_setup": {
+  "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+  "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "reused": true,
+  "clone_method": "closed independent writable byte copy; not an OS cache claim"
+ }
+}

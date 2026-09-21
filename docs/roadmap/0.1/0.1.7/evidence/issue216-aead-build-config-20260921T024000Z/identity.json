@@ -1,0 +1,35 @@
+{
+ "commit": "0febfba73fade4a73f254ca11f290f9ce1d2d7f6",
+ "tree": "5e1a4c2cd5e96a96011a05ef43906daabea55b05",
+ "product_lock_sha256": "6a3d5b4cccf24ffcadfc31a2f36b934a238767ec7eab614637d07e20d922a910",
+ "builds": {
+  "slow-no-armv8-flags": {
+   "cwd": "repository root",
+   "command": "cargo +1.85.1 build --release --locked --manifest-path core/Cargo.toml -p layerfs-daemon --example transport_probe",
+   "target_dir": "/tmp/t-root3",
+   "probe_sha256": "e12a3707562aeffcc2414e41dfa9bbe3923c7d834f87f4a7ebfafb222481d58a",
+   "applied_target_features": "none"
+  },
+  "fast-armv8-flags": {
+   "cwd": "core/",
+   "command": "cargo +1.85.1 build --release --locked -p layerfs-daemon --example transport_probe",
+   "target_dir": "/tmp/t-core3",
+   "probe_sha256": "df29a13a7c7d18fc640e77702bb4bdfb8ef55228c3ce3d40b4bb4473df84988a",
+   "applied_target_features": "+aes,+sha2 with --cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon"
+  },
+  "fast-route-binaries": {
+   "cwd": "core/",
+   "target_dir": "/tmp/t-fast",
+   "binaries": {
+    "layerfs-service": "4019f90af248261ac2d16a18705ec4113b12597c0ace10aa7ec16a04fe1e1015",
+    "layerfs-daemon": "e4ae3f2abffa019fb9681c1b044cd9bec102c6bcbfd8679a76476ab69eaf9151",
+    "examples/prepare_store": "8a94e65e1e471e979c5888607b8dcf985eb256b96500098d500b6d49e41fae54",
+    "examples/public_key": "9101ccfe51958b28859746a913c34d822a24e94ec936724b22a7e0f250128634"
+   }
+  }
+ },
+ "profile": "release",
+ "host": "Darwin arm64, 14 logical cores",
+ "cache_state": "payload generated inside the transfer by the probe itself (the frozen cache contract); fresh Store copy per route arm; no invalidation for one arm only; no cold-cache claim",
+ "interference": "host load average ~6-7 of 14 logical cores throughout; both A/B arms ran in the same session under it"
+}

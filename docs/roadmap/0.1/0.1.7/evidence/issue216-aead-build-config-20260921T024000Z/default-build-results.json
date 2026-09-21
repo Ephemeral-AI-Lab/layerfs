@@ -1,0 +1,26 @@
+{
+ "note": "built with the prescribed root invocation and no explicit flags; the repository-root .cargo/config.toml supplies the profile",
+ "results": [
+  {
+   "direction": "upload",
+   "streams": 1,
+   "gb_per_s": 0.8207,
+   "mib_per_s": 782.64,
+   "transfer_s": 1.3084
+  },
+  {
+   "direction": "upload",
+   "streams": 2,
+   "gb_per_s": 1.6662,
+   "mib_per_s": 1588.98,
+   "transfer_s": 1.2889
+  },
+  {
+   "direction": "download",
+   "streams": 1,
+   "gb_per_s": 0.8195,
+   "mib_per_s": 781.52,
+   "transfer_s": 1.3103
+  }
+ ]
+}
