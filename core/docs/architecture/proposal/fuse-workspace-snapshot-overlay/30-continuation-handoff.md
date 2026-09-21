@@ -8,10 +8,10 @@
 **Continuation update:** [Mount32](32-control-mount.md), [native failed-Attach35](35-failed-attachment-ownership.md)
 and [authenticated Attach36](36-control-attach.md) now have their source-pinned
 checks and actual Linux proofs. The earlier baseline/ordered steps below remain
-traceable planning context. The next complete public operation is authenticated
-Workspace Commit, with its writable startup profile and dirty-shutdown custody
-prerequisites; enabling writes must preserve a callable Commit control after a
-dirty cleanup refusal. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
+traceable planning context. [Workspace Commit37](37-control-commit.md) now verifies its writable startup and
+dirty-shutdown custody prerequisites. Namespace/new-inode shared preparation and
+the maintained Workspace namespace index are next prerequisites to mkdir/create
+and the full prepared upload. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 
 ## Continuation recorded after this checkpoint

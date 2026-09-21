@@ -146,7 +146,7 @@ pub(crate) fn control(
             .parse::<u8>()
             .map_err(|_| Code::InvalidInput)?;
         if fields.next().is_some()
-            || operations & !31 != 0
+            || operations & !63 != 0
             || peers
                 .iter()
                 .any(|peer: &Peer| peer.selector == selector || peer.public == public)
@@ -173,6 +173,7 @@ pub(crate) fn control(
 
 /// Explicit local startup selection; this is not a daemon control protocol.
 /// Grammar: --mount-readonly ID INCARNATION STORE ROOT|branch:ID UID GID.
+/// Writable: --mount-writable ID INCARNATION STORE branch:ID UID GID.
 /// The authority supplies IDs. The execution host supplies paths and budgets.
 pub(crate) fn workspace(
     args: Vec<String>,
@@ -181,13 +182,19 @@ pub(crate) fn workspace(
         adapters::native::pipe::key,
         contract::{Code, Failure},
     };
-    use layerfs_workspace::{AttachOptions, Base, WorkspaceConfig, DEFAULT_MEMORY_BUDGET_BYTES};
+    use layerfs_workspace::{
+        AttachOptions, Base, WorkspaceAccess, WorkspaceConfig, DEFAULT_MEMORY_BUDGET_BYTES,
+    };
     if args.is_empty() {
         return Ok(None);
     }
-    if args.len() != 7 || args[0] != "--mount-readonly" || args.iter().any(|s| s.len() > 256) {
+    if args.len() != 7
+        || !matches!(args[0].as_str(), "--mount-readonly" | "--mount-writable")
+        || args.iter().any(|s| s.len() > 256)
+    {
         return Err(Code::InvalidInput.into());
     }
+    let writable = args[0] == "--mount-writable";
     let number = |text: &str| {
         text.parse::<u32>()
             .map_err(|_| Failure::from(Code::InvalidInput))
@@ -209,9 +216,9 @@ pub(crate) fn workspace(
     };
     // R allocates no writable backing. Reject malformed explicitly supplied W
     // configuration rather than interpreting zero or invalid input as unlimited.
-    if let Some(value) = std::env::var_os("LAYERFS_WORKSPACE_DISK_BUDGET_BYTES") {
-        positive(value.to_str().ok_or(Code::InvalidInput)?)?;
-    }
+    let disk = std::env::var_os("LAYERFS_WORKSPACE_DISK_BUDGET_BYTES")
+        .map(|value| positive(value.to_str().ok_or(Code::InvalidInput)?))
+        .transpose()?;
     let base = if let Some(hex) = args[4].strip_prefix("branch:") {
         if hex.len() != 34 || !hex.is_ascii() {
             return Err(Code::InvalidInput.into());
@@ -228,15 +235,26 @@ pub(crate) fn workspace(
     } else {
         Base::Root(key(&args[4])?)
     };
+    if writable && (disk.is_none() || !matches!(base, Base::Branch(_))) {
+        return Err(Code::InvalidInput.into());
+    }
     Ok(Some(WorkspaceLaunch {
         config: WorkspaceConfig {
             root,
             max_count: positive(&env("LAYERFS_WORKSPACE_MAX_COUNT")?)?,
             memory_budget_bytes: memory,
-            disk_budget_bytes: None,
+            disk_budget_bytes: if writable {
+                disk.map(|bytes| bytes as u64)
+            } else {
+                None
+            },
         },
         attach: AttachOptions {
-            access: layerfs_workspace::WorkspaceAccess::ReadOnly,
+            access: if writable {
+                WorkspaceAccess::LocalEdit
+            } else {
+                WorkspaceAccess::ReadOnly
+            },
             id: args[1].clone(),
             incarnation: key(&args[2])?,
             store: number(&args[3])?,

@@ -19,6 +19,7 @@ import time
 
 import history_route as route
 import mounted_read as mount
+import control_commit_wire as commit_wire
 
 
 def query(process, identity, workspace=b'read', incarnation=b'\x71' * 32):
@@ -31,7 +32,7 @@ def query(process, identity, workspace=b'read', incarnation=b'\x71' * 32):
         return kind, {'code':body[0], 'unknown':body[1], 'cleanup':body[2]}
     reader = route.Reader(body)
     tag = reader.u8()
-    assert tag in (10, 16), body
+    assert tag in (10, 16, 18), body
     result = {'workspace':reader.blob().decode(), 'incarnation':reader.take(32).hex()}
     if tag == 16:
         state = reader.u8()
@@ -54,6 +55,8 @@ def query(process, identity, workspace=b'read', incarnation=b'\x71' * 32):
     result.update(mounted=bool(flags & 1), stopping=bool(flags & 2), closed=bool(flags & 4))
     for field in ('active_operations','nodes','handles','cookies','consumer_accounted_bytes'):
         result[field] = reader.u64()
+    if tag == 18:
+        result.update(commit_wire.writable_fields(reader))
     reader.done()
     return kind, result
 

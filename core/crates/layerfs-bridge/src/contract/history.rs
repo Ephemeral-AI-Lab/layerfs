@@ -9,7 +9,7 @@
 //! suboperation is refused before any mutation, and a reply is matched against
 //! the request that produced it rather than being interpreted on its own.
 
-use super::Root;
+use super::{Code, Failure, Root};
 
 /// Operation profile of every history request and reply.
 pub const HISTORY_PROFILE: u16 = 2;
@@ -522,4 +522,46 @@ pub struct StackCreatedWire {
     pub stack: StackWire,
     pub root: Root,
     pub root_serial: u64,
+}
+
+pub(crate) fn tag(bytes: &[u8], expected: u8) -> Result<(), Failure> {
+    if bytes.first() != Some(&expected) {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+pub(crate) fn serial(value: u64) -> Result<(), Failure> {
+    if value == 0 || value > i64::MAX as u64 {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+
+pub(crate) fn check_commit(record: &CommitWire) -> Result<(), Failure> {
+    tag(&record.commit, 0x12)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.base_layer, 0x32)?;
+    if let Some(parent) = record.parent {
+        tag(&parent, 0x12)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn check_stage(record: &StageWire) -> Result<(), Failure> {
+    if record.workspace == [0; 32]
+        || record.generation > i64::MAX as u64
+        || record.construction_base_root != record.expected_root
+        || record.intended_commit_base != record.expected_base
+    {
+        return Err(Code::InvalidInput.into());
+    }
+    serial(record.token)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.branch, 0x11)?;
+    tag(&record.expected_base, 0x32)?;
+    tag(&record.intended_commit_base, 0x32)?;
+    if let Some(head) = record.expected_head {
+        tag(&head, 0x12)?;
+    }
+    Ok(())
 }

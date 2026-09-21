@@ -1,5 +1,6 @@
 //! Closed terminal result encoding.
 use super::metadata::{put_optional, take_optional};
+use super::{control::*, workspace_commit::*};
 use super::{Decoder, Encoder};
 use crate::contract::*;
 pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
@@ -10,6 +11,10 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::WorkspaceMount(_) => Encoder::bounded(WORKSPACE_MOUNT_RESULT_BYTES),
         Response::WorkspaceAttach(_) => Encoder::bounded(WORKSPACE_ATTACH_RESULT_BYTES),
         Response::WorkspaceAttachment(_) => Encoder::bounded(WORKSPACE_ATTACHMENT_RESULT_BYTES),
+        Response::WorkspaceCommit(_) => Encoder::bounded(WORKSPACE_COMMIT_RESULT_BYTES),
+        Response::WorkspaceWritableStatus(_) => {
+            Encoder::bounded(WORKSPACE_WRITABLE_STATUS_RESULT_BYTES)
+        }
         Response::WorkspaceCloseClean(_) => Encoder::bounded(WORKSPACE_CLOSE_CLEAN_RESULT_BYTES),
         Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
         _ => Encoder::default(),
@@ -116,23 +121,12 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(*size)?;
         }
         Response::WorkspaceStatus(status) => {
-            status.validate()?;
             e.u8(10)?;
-            e.blob(&status.workspace)?;
-            e.put(&status.incarnation)?;
-            e.u8(u8::from(status.mounted)
-                | (u8::from(status.stopping) << 1)
-                | (u8::from(status.closed) << 2))?;
-            e.u64(status.active_operations)?;
-            e.u64(status.nodes)?;
-            e.u64(status.handles)?;
-            e.u64(status.cookies)?;
-            e.u64(status.consumer_accounted_bytes)?;
+            put_status(&mut e, status)?;
         }
         Response::WorkspaceUnmount(result)
         | Response::WorkspaceCloseClean(result)
         | Response::WorkspaceMount(result) => {
-            result.validate()?;
             e.u8(if matches!(r, Response::WorkspaceUnmount(_)) {
                 12
             } else if matches!(r, Response::WorkspaceCloseClean(_)) {
@@ -140,59 +134,23 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             } else {
                 14
             })?;
-            e.blob(&result.workspace)?;
-            e.put(&result.incarnation)?;
-            match result.outcome {
-                WorkspaceLifecycleOutcome::Completed => e.u8(0)?,
-                WorkspaceLifecycleOutcome::Retained(code) => {
-                    e.u8(1)?;
-                    e.u8(code as u8)?;
-                }
-            }
+            put_lifecycle(&mut e, result)?;
         }
         Response::WorkspaceAttach(result) => {
-            result.validate()?;
             e.u8(15)?;
-            e.blob(&result.workspace)?;
-            e.put(&result.incarnation)?;
-            match result.outcome {
-                WorkspaceAttachOutcome::Completed => e.u8(0)?,
-                WorkspaceAttachOutcome::Retained(code) => {
-                    e.u8(1)?;
-                    e.u8(code as u8)?;
-                }
-            }
+            put_attach(&mut e, result)?;
         }
         Response::WorkspaceAttachment(status) => {
-            status.validate()?;
             e.u8(16)?;
-            e.blob(&status.workspace)?;
-            e.put(&status.incarnation)?;
-            match status.state {
-                WorkspaceAttachmentState::Attaching => e.u8(0)?,
-                WorkspaceAttachmentState::Failed {
-                    cause,
-                    cleanup,
-                    progress,
-                } => {
-                    e.u8(1)?;
-                    e.u8(cause as u8)?;
-                    e.u8(cleanup.map_or(0, |code| code as u8))?;
-                    match progress {
-                        WorkspaceAttachmentProgress::Running => e.u8(0)?,
-                        WorkspaceAttachmentProgress::Retained {
-                            mount_directory,
-                            metadata_arena,
-                            backing_directory,
-                        } => {
-                            e.u8(1)?;
-                            e.u8(u8::from(mount_directory)
-                                | (u8::from(metadata_arena) << 1)
-                                | (u8::from(backing_directory) << 2))?;
-                        }
-                    }
-                }
-            }
+            put_attachment(&mut e, status)?;
+        }
+        Response::WorkspaceCommit(result) => {
+            e.u8(17)?;
+            put_workspace_commit(&mut e, result)?;
+        }
+        Response::WorkspaceWritableStatus(status) => {
+            e.u8(18)?;
+            put_writable_status(&mut e, status)?;
         }
         Response::MetadataSaved {
             base,
@@ -377,17 +335,7 @@ fn put_history(e: &mut Encoder, result: &HistoryResult) -> Result<(), Failure> {
         }
         HistoryResult::Committed(outcome) => {
             e.u8(13)?;
-            match outcome {
-                CommitOutcomeWire::Committed(record) => {
-                    e.u8(0)?;
-                    put_commit(e, record)?;
-                }
-                CommitOutcomeWire::UpToDate { head, root } => {
-                    e.u8(1)?;
-                    put_optional(e, head.as_ref())?;
-                    e.put(root)?;
-                }
-            }
+            put_commit_outcome(e, outcome)?;
         }
         HistoryResult::Published(outcome) => {
             e.u8(14)?;
@@ -548,17 +496,7 @@ fn take_history(d: &mut Decoder<'_>) -> Result<HistoryResult, Failure> {
             root: d.root()?,
             root_serial: d.u64()?,
         }),
-        13 => HistoryResult::Committed(match d.u8()? {
-            0 => CommitOutcomeWire::Committed(take_commit(d)?),
-            1 => {
-                let head = take_optional::<33>(d)?;
-                CommitOutcomeWire::UpToDate {
-                    head,
-                    root: d.root()?,
-                }
-            }
-            _ => return Err(Code::Unsupported.into()),
-        }),
+        13 => HistoryResult::Committed(take_commit_outcome(d)?),
         14 => HistoryResult::Published(match d.u8()? {
             0 => LayerOutcomeWire::Added(take_layer(d)?),
             1 => LayerOutcomeWire::UpToDate {
@@ -607,6 +545,12 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
         return Err(Code::Capacity.into());
     }
     if b.first() == Some(&16) && b.len() > WORKSPACE_ATTACHMENT_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if b.first() == Some(&17) && b.len() > WORKSPACE_COMMIT_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if b.first() == Some(&18) && b.len() > WORKSPACE_WRITABLE_STATUS_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
     let mut d = Decoder::new(b)?;
@@ -663,28 +607,7 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             nanoseconds: d.u32()?,
             size: d.u64()?,
         },
-        10 => {
-            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
-            let incarnation = d.root()?;
-            let flags = d.u8()?;
-            if flags & !7 != 0 {
-                return Err(Code::InvalidInput.into());
-            }
-            let status = WorkspaceStatusWire {
-                workspace,
-                incarnation,
-                mounted: flags & 1 != 0,
-                stopping: flags & 2 != 0,
-                closed: flags & 4 != 0,
-                active_operations: d.u64()?,
-                nodes: d.u64()?,
-                handles: d.u64()?,
-                cookies: d.u64()?,
-                consumer_accounted_bytes: d.u64()?,
-            };
-            status.validate()?;
-            Response::WorkspaceStatus(Box::new(status))
-        }
+        10 => Response::WorkspaceStatus(Box::new(take_status(&mut d)?)),
         11 => Response::MetadataSaved {
             base: d.root()?,
             kind: d.u8()?,
@@ -695,83 +618,13 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             inserted: d.u64()?,
             reused: d.u64()?,
         },
-        tag @ 12..=14 => {
-            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
-            let incarnation = d.root()?;
-            let outcome = match d.u8()? {
-                0 => WorkspaceLifecycleOutcome::Completed,
-                1 => WorkspaceLifecycleOutcome::Retained(code(d.u8()?)?),
-                _ => return Err(Code::InvalidInput.into()),
-            };
-            let result = WorkspaceLifecycleWire {
-                workspace,
-                incarnation,
-                outcome,
-            };
-            result.validate()?;
-            if tag == 12 {
-                Response::WorkspaceUnmount(Box::new(result))
-            } else if tag == 13 {
-                Response::WorkspaceCloseClean(Box::new(result))
-            } else {
-                Response::WorkspaceMount(Box::new(result))
-            }
-        }
-        15 => {
-            let result = WorkspaceAttachWire {
-                workspace: d.blob(WORKSPACE_ID_BYTES)?,
-                incarnation: d.root()?,
-                outcome: match d.u8()? {
-                    0 => WorkspaceAttachOutcome::Completed,
-                    1 => WorkspaceAttachOutcome::Retained(code(d.u8()?)?),
-                    _ => return Err(Code::InvalidInput.into()),
-                },
-            };
-            result.validate()?;
-            Response::WorkspaceAttach(Box::new(result))
-        }
-        16 => {
-            let workspace = d.blob(WORKSPACE_ID_BYTES)?;
-            let incarnation = d.root()?;
-            let state = match d.u8()? {
-                0 => WorkspaceAttachmentState::Attaching,
-                1 => {
-                    let cause = code(d.u8()?)?;
-                    let cleanup = match d.u8()? {
-                        0 => None,
-                        value => Some(code(value)?),
-                    };
-                    let progress = match d.u8()? {
-                        0 => WorkspaceAttachmentProgress::Running,
-                        1 => {
-                            let flags = d.u8()?;
-                            if flags & !7 != 0 {
-                                return Err(Code::InvalidInput.into());
-                            }
-                            WorkspaceAttachmentProgress::Retained {
-                                mount_directory: flags & 1 != 0,
-                                metadata_arena: flags & 2 != 0,
-                                backing_directory: flags & 4 != 0,
-                            }
-                        }
-                        _ => return Err(Code::InvalidInput.into()),
-                    };
-                    WorkspaceAttachmentState::Failed {
-                        cause,
-                        cleanup,
-                        progress,
-                    }
-                }
-                _ => return Err(Code::InvalidInput.into()),
-            };
-            let status = WorkspaceAttachmentWire {
-                workspace,
-                incarnation,
-                state,
-            };
-            status.validate()?;
-            Response::WorkspaceAttachment(Box::new(status))
-        }
+        12 => Response::WorkspaceUnmount(Box::new(take_lifecycle(&mut d)?)),
+        13 => Response::WorkspaceCloseClean(Box::new(take_lifecycle(&mut d)?)),
+        14 => Response::WorkspaceMount(Box::new(take_lifecycle(&mut d)?)),
+        15 => Response::WorkspaceAttach(Box::new(take_attach(&mut d)?)),
+        16 => Response::WorkspaceAttachment(Box::new(take_attachment(&mut d)?)),
+        17 => Response::WorkspaceCommit(Box::new(take_workspace_commit(&mut d)?)),
+        18 => Response::WorkspaceWritableStatus(Box::new(take_writable_status(&mut d)?)),
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
@@ -807,7 +660,7 @@ pub fn decode_failure(b: &[u8]) -> Result<Failure, Failure> {
         cleanup: if b[2] == 0 { None } else { Some(code(b[2])?) },
     })
 }
-fn code(n: u8) -> Result<Code, Failure> {
+pub(super) fn code(n: u8) -> Result<Code, Failure> {
     Ok(match n {
         1 => Code::InvalidInput,
         2 => Code::Unsupported,
@@ -830,18 +683,6 @@ fn code(n: u8) -> Result<Code, Failure> {
     })
 }
 
-fn tag(bytes: &[u8], expected: u8) -> Result<(), Failure> {
-    if bytes.first() != Some(&expected) {
-        return Err(Code::InvalidInput.into());
-    }
-    Ok(())
-}
-fn serial(value: u64) -> Result<(), Failure> {
-    if value == 0 || value > i64::MAX as u64 {
-        return Err(Code::InvalidInput.into());
-    }
-    Ok(())
-}
 fn check_stack(record: &StackWire) -> Result<(), Failure> {
     tag(&record.stack, 0x31)?;
     check_name(&record.name)?;
@@ -857,15 +698,6 @@ fn check_branch(record: &BranchWire) -> Result<(), Failure> {
     }
     Ok(())
 }
-fn check_commit(record: &CommitWire) -> Result<(), Failure> {
-    tag(&record.commit, 0x12)?;
-    tag(&record.stack, 0x31)?;
-    tag(&record.base_layer, 0x32)?;
-    if let Some(parent) = record.parent {
-        tag(&parent, 0x12)?;
-    }
-    Ok(())
-}
 fn check_layer(record: &LayerWire) -> Result<(), Failure> {
     tag(&record.layer, 0x32)?;
     tag(&record.stack, 0x31)?;
@@ -877,24 +709,6 @@ fn check_layer(record: &LayerWire) -> Result<(), Failure> {
             tag(&commit, 0x12)?;
         }
         _ => return Err(Code::InvalidInput.into()),
-    }
-    Ok(())
-}
-fn check_stage(record: &StageWire) -> Result<(), Failure> {
-    if record.workspace == [0; 32]
-        || record.generation > i64::MAX as u64
-        || record.construction_base_root != record.expected_root
-        || record.intended_commit_base != record.expected_base
-    {
-        return Err(Code::InvalidInput.into());
-    }
-    serial(record.token)?;
-    tag(&record.stack, 0x31)?;
-    tag(&record.branch, 0x11)?;
-    tag(&record.expected_base, 0x32)?;
-    tag(&record.intended_commit_base, 0x32)?;
-    if let Some(head) = record.expected_head {
-        tag(&head, 0x12)?;
     }
     Ok(())
 }
@@ -922,13 +736,41 @@ fn check_result(result: &HistoryResult) -> Result<(), Failure> {
                 return Err(Code::InvalidInput.into());
             }
         }
-        HistoryResult::Committed(CommitOutcomeWire::UpToDate {
-            head: Some(head), ..
-        }) => tag(head, 0x12)?,
+        HistoryResult::Committed(outcome) => check_commit_outcome(outcome)?,
         HistoryResult::Published(
             LayerOutcomeWire::UpToDate { layer } | LayerOutcomeWire::NoChanges { head: layer },
         ) => tag(layer, 0x32)?,
         _ => {}
     }
     Ok(())
+}
+
+pub(super) fn put_commit_outcome(
+    e: &mut Encoder,
+    outcome: &CommitOutcomeWire,
+) -> Result<(), Failure> {
+    check_commit_outcome(outcome)?;
+    match outcome {
+        CommitOutcomeWire::Committed(record) => {
+            e.u8(0)?;
+            put_commit(e, record)
+        }
+        CommitOutcomeWire::UpToDate { head, root } => {
+            e.u8(1)?;
+            put_optional(e, head.as_ref())?;
+            e.put(root)
+        }
+    }
+}
+pub(super) fn take_commit_outcome(d: &mut Decoder<'_>) -> Result<CommitOutcomeWire, Failure> {
+    let outcome = match d.u8()? {
+        0 => CommitOutcomeWire::Committed(take_commit(d)?),
+        1 => CommitOutcomeWire::UpToDate {
+            head: take_optional::<33>(d)?,
+            root: d.root()?,
+        },
+        _ => return Err(Code::Unsupported.into()),
+    };
+    check_commit_outcome(&outcome)?;
+    Ok(outcome)
 }

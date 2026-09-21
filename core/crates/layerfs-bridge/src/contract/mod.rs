@@ -12,3 +12,5 @@ pub use metadata::*;
 pub use outcome::*;
 pub use request::*;
 pub use source::Source;
+mod workspace_commit;
+pub use workspace_commit::*;

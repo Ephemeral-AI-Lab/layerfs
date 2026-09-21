@@ -143,7 +143,7 @@ def supervise(command):
         def log():
             assert stderr_path.stat().st_size <= 1_048_576, 'unbounded daemon diagnostics'
             value = stderr_path.read_text(errors='replace')
-            assert 'workspace ready ' not in value and 'workspace control ready ' not in value, value
+            assert 'workspace ready ' not in value, value
             return value
 
         def mounted():
@@ -251,8 +251,21 @@ def supervise(command):
                 fields = line.split()
                 if fields[3] == '0A' and int(fields[1].rsplit(':', 1)[1], 16) == 23456:
                     listeners.append(line)
-        assert not listeners, 'failed startup kept its prebound control listener'
-        report['control_listener_after_failure'] = 'absent'
+        assert listeners and before.count('workspace control ready ') == 1, before
+        report['control_listener_after_failure'] = 'present'
+        # Control starts before native mount construction. Check its acceptor
+        # without claiming an authenticated operation from this raw TCP probe.
+        with socket.create_connection(('127.0.0.1', 23456), timeout=3):
+            until = time.monotonic() + 3
+            while time.monotonic() < until:
+                tasks = Path(f'/proc/{pid}/task')
+                count = sum(path.read_text().strip().startswith('layerfs-control')
+                            for path in tasks.glob('*/comm'))
+                if count == 2: break
+                value = notification(.02)
+                if value is not None: resume(value)
+            else: raise AssertionError('control acceptor did not own the pending handshake')
+        report['control_availability'] = 'TCP accepted and control session observed; no authenticated-operation claim'
         report['startup_error'] = originals[0]
         # Observe retained ownership across an interval with no cleanup signal.
         until = time.monotonic() + .2
@@ -338,7 +351,7 @@ def execute(args, report, route, mount):
             LAYERFS_TELEMETRY='off', LAYERFS_CONSTRUCTION_WORKERS='1')
         environment = os.environ.copy()
         environment.update(daemon_values)
-        command = ['docker', 'run', '-d', '--rm', '--name', name, '--device', '/dev/fuse',
+        command = ['docker', 'run', '-d', '--rm', '--name', name, '--cpus', '2', '--device', '/dev/fuse',
             '--cap-add', 'SYS_ADMIN', '--cap-add', 'SYS_PTRACE',
             '--security-opt', 'apparmor=unconfined', '--security-opt', 'seccomp=unconfined',
             '--add-host', 'host.docker.internal:host-gateway',
@@ -349,6 +362,9 @@ def execute(args, report, route, mount):
             command += ['-e', key]
         command += [report['runtime_image_id'], 'sleep', 'infinity']
         mount.checked(command, env=environment); made_container = True
+        report['runtime_nano_cpus'] = int(mount.checked(
+            ['docker', 'inspect', '--format', '{{.HostConfig.NanoCpus}}', name], text=True).stdout.strip())
+        assert report['runtime_nano_cpus'] == 2_000_000_000
         supervisor = subprocess.Popen(['docker', 'exec', name, 'python3', '-u', '/proof.py',
             '--supervise', '/product/layerfs-daemon', '--mount-readonly', 'read', '71' * 32,
             '1', fixture['root'], '0', '0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -365,7 +381,8 @@ def execute(args, report, route, mount):
         assert supervisor.returncode == 0 and observed['status'] == 'PASS', observed
         report['checks'] = [{'id': name, 'status': 'PASS'} for name in (
             'real-FUSE-INIT-writev-held-past-original-startup-deadline',
-            'late-constructor-retains-exact-owner-without-ready-or-control-listener',
+            'late-constructor-retains-exact-owner-without-Workspace-ready',
+            'control-listener-and-acceptor-remain-available-after-startup-mount-failure',
             'same-deadline-cleanup-refuses-without-detaching',
             'one-explicit-signal-cleans-and-preserves-original-startup-failure-exit')]
         report['cleanup'] = observed['cleanup']
@@ -413,10 +430,18 @@ def main():
         raise TimeoutError('complete daemon startup functional selection exceeded 60 seconds')
 
     signal.signal(signal.SIGALRM, expired); signal.alarm(60)
+    caller_dependencies = {}
+    for module in tuple(sys.modules.values()):
+        filename = getattr(module, '__file__', None)
+        if filename:
+            path = Path(filename).resolve()
+            if path.is_relative_to(route.ROOT):
+                caller_dependencies[str(path.relative_to(route.ROOT))] = sha(path)
     report = {'status': 'FAIL', 'mode': 'functional-daemon-retained-startup', 'case': 'held_init',
         'source': mount.checked(['git', 'rev-parse', 'HEAD'], text=True).stdout.strip(),
         'product_inputs_sha256': mount.product_inputs(), 'driver_sha256': sha(Path(__file__)),
         'mount_driver_sha256': sha(Path(mount.__file__)), 'route_driver_sha256': sha(Path(route.__file__)),
+        'caller_dependencies_sha256': dict(sorted(caller_dependencies.items())),
         'linux_binary_sha256': sha(args.linux_daemon),
         'host_binary_sha256': {name: sha(route.BIN / name) for name in ('layerfs-service', 'examples/public_key')},
         'hard_budget_seconds': 60, 'performance_claim': False, 'cache_claim': None,

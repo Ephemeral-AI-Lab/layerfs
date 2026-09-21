@@ -1,0 +1,934 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-21T21:06:20.215603+00:00",
+  "scope": "Authenticated WorkspaceCommit and affected lifecycle functional proofs; no performance/quiet-host/RSS/cgroup/release qualification",
+  "summary": {
+    "registered_selections": 13,
+    "attempts": 14,
+    "assertion_passing_selections": 13,
+    "native_cleanup_qualified_selections": 12,
+    "expected_retained_failure_external_teardown_selections": 1,
+    "failed_attempts_retained": 1,
+    "registered_not_run": [],
+    "passing_cases_repeated": false
+  },
+  "source": {
+    "parent": "74e6fbd2d23cb7519ea63c275f42283ce3c79d17",
+    "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+  },
+  "selection_plan": {
+    "path": "selection-plan-01.json",
+    "sha256": "5cb4a1e431d0b24e9384c4ff969b6040d2432842f4e5da9c94abe4f8740a9045"
+  },
+  "caller_custody": "Every variant archived exact executed repository helpers before its first sample; observer Csource/binary/compiler receipt also archived. Prior variants unchanged.",
+  "journals": [
+    {
+      "path": "runs/commands-01.jsonl",
+      "sha256": "b754f80d1ff807cc9fd30625076cc4f31ed16f08e4eaf8442d79cbb4cf211cdf"
+    },
+    {
+      "path": "runs/commands-02.jsonl",
+      "sha256": "14b2e8245d48f356364b8ddd9dfcf6e582f024635c665207b0162ba8f4907880"
+    }
+  ],
+  "failure_qualifications": {
+    "commit_live_successor-01": "Actual C2 RESERVED lock was observed and reconfirmed after owned-service SIGSTOP. Signal returned Busy as required. A new path/FD open then returned EBUSY before any LIVE write; that route remains unqualified/full-R4 scope. Failed attempt and forced cleanup retained. Corrected selection preopens data+alias FDs and proves only held-FD pwrite/pread/fstat during save with unchanged4MiB/10s/60s/product inputs."
+  },
+  "remaining_qualifications": [
+    "New path/FD open during occupied remote save admission returned EBUSY in retained attempt01; no broader live-open qualification",
+    "Outer control result loss proves caller Unknown only, not an upstream native Unknown Commit failure",
+    "Known service denial retains native failed submission and requires external teardown; no clean-close/reuse qualification",
+    "Namespace/new-inode operations, prepared npm workload, R6 and hard RSS/cgroup bounds are not qualified"
+  ],
+  "rows": [
+    {
+      "id": "commit_repeated-01",
+      "case": "commit_repeated",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "87e66ca4c922b03d0baf9b391339156687590694f364223be69e8a47e22e315f",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-01.json",
+        "sha256": "6f4b71fc5d53c15e9c521f3dc2ca51e3f5bef1a281b6a2e98f1fde83f45e511d"
+      },
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_repeated-01",
+        "--case",
+        "commit_repeated"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 16.367851500000143,
+      "driver_command_wall_seconds": 16.217928041999585,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "mounted-existing-file-A-B-A-explicit-Commits-install-exact-C5-heads-and-revisions",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/commit_repeated-01/result.json",
+      "receipt_sha256": "938d0c83d22c8dc81e26d356aa4e087080e155123d4438a68624fc51b3d06453",
+      "logs_sha256": {
+        "runs/commit_repeated-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/commit_repeated-01/service.stderr": "c4de046dcc0e86798d17f2769a02eccc1ece73fc7b3471bc2aef19a395cc973a",
+        "runs/commit_repeated-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_repeated-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_dirty_signal-01",
+      "case": "commit_dirty_signal",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "87e66ca4c922b03d0baf9b391339156687590694f364223be69e8a47e22e315f",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-01.json",
+        "sha256": "6f4b71fc5d53c15e9c521f3dc2ca51e3f5bef1a281b6a2e98f1fde83f45e511d"
+      },
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 3,
+      "finish_line": 4,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_dirty_signal-01",
+        "--case",
+        "commit_dirty_signal"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.8556641669993041,
+      "driver_command_wall_seconds": 1.7447272500003237,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "dirty-signal-detaches-with-control-live-until-explicit-Commit-remount-and-close",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/commit_dirty_signal-01/result.json",
+      "receipt_sha256": "f0e45a2dc52c92a24b13ebaa9c43db83a4cd28448e996ae400d02aedea751c5c",
+      "logs_sha256": {
+        "runs/commit_dirty_signal-01/daemon.stderr": "1bea099ab0984cb89f21d5d716e325e91be45722403ac51b7779c0daefa42e64",
+        "runs/commit_dirty_signal-01/service.stderr": "65468226b81e0ed4f9aad1b8c277d867d6e35e3e9b96d460729dba533f968e78",
+        "runs/commit_dirty_signal-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_dirty_signal-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_control_loss-01",
+      "case": "commit_control_loss",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "87e66ca4c922b03d0baf9b391339156687590694f364223be69e8a47e22e315f",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-01.json",
+        "sha256": "6f4b71fc5d53c15e9c521f3dc2ca51e3f5bef1a281b6a2e98f1fde83f45e511d"
+      },
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 5,
+      "finish_line": 6,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_control_loss-01",
+        "--case",
+        "commit_control_loss"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.200573834000352,
+      "driver_command_wall_seconds": 2.0868970000001354,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "one-Commit-lost-control-terminal-is-Unknown-with-independent-current-observations-no-replay",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": "Outer control terminal loss only; no reconstructed Commit receipt and no native Unknown claim; exactly one Commit submitted",
+      "receipt": "runs/commit_control_loss-01/result.json",
+      "receipt_sha256": "27e7cd2deda889117ebb606f3e9cccecded01442ca2dc3d79fdfacbe648b0738",
+      "logs_sha256": {
+        "runs/commit_control_loss-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/commit_control_loss-01/service.stderr": "348c6df78179d0014d2da271ab40b100c038dd3e663bbef0ca9aae314dbc6ed5",
+        "runs/commit_control_loss-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_control_loss-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_live_successor-01",
+      "case": "commit_live_successor",
+      "attempt": "01",
+      "status": "FAIL",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-01.json",
+      "input_manifest_sha256": "87e66ca4c922b03d0baf9b391339156687590694f364223be69e8a47e22e315f",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-01.json",
+        "sha256": "6f4b71fc5d53c15e9c521f3dc2ca51e3f5bef1a281b6a2e98f1fde83f45e511d"
+      },
+      "command_journal": "runs/commands-01.jsonl",
+      "start_line": 7,
+      "finish_line": 8,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_live_successor-01",
+        "--case",
+        "commit_live_successor",
+        "--lock-observer",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 1,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 5.0575198329997875,
+      "driver_command_wall_seconds": 4.935268709000411,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "FORCED",
+      "cleanup_reported": null,
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {
+        "forced_client_cleanup": true,
+        "forced_daemon_cleanup": true
+      },
+      "cleanup_failures": [],
+      "checks": [],
+      "failure": "CalledProcessError(1, ['docker', 'exec', 'layerfs-control-commit-21d04c3d8ad4', 'python3', '-c', \"import hashlib,json,os,sys\\nfrom pathlib import Path\\np=Path('/layerfs/workspace/read'); op=sys.argv[1]; value=int(sys.argv[2]); size=int(sys.argv[3])\\nfd=os.open(p/'data.bin',os.O_RDWR)\\ntry:\\n    if size: os.ftruncate(fd,size)\\n    if op=='byte': data=bytes([value])\\n    elif op=='live': data=b'LIVE'\\n    elif op=='large': data=b''.join(hashlib.sha256(b'layerfs-control-commit-v1'+i.to_bytes(8,'big')).digest() for i in range(131072))\\n    else: raise AssertionError(op)\\n    assert os.pwrite(fd,data,0)==len(data)\\n    assert os.pread(fd,min(len(data),131072),0)==data[:131072]\\nfinally: os.close(fd)\\nassert (p/'alias').stat().st_ino==(p/'data.bin').stat().st_ino\\nprint(json.dumps({'bytes_written':len(data),'input_sha256':hashlib.sha256(data).hexdigest(),\\n                  'size':(p/'data.bin').stat().st_size,'inode':(p/'data.bin').stat().st_ino}))\\n\", 'live', '0', '0'])",
+      "qualification": null,
+      "receipt": "runs/commit_live_successor-01/result.json",
+      "receipt_sha256": "917e7527eb0cc7656007813d99e2d8862e620515dda7310a7249884839abd2b7",
+      "logs_sha256": {
+        "runs/commit_live_successor-01/daemon.stderr": "7b34c35b0ca9b5ef7d54be327a0f5cd5612360c4da5f6cdc8f75bec33663ff41",
+        "runs/commit_live_successor-01/service.stderr": "fc1850127268fc73effee97b4efb80039821eb42d91aebd3906b344ef80e1217",
+        "runs/commit_live_successor-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_live_successor-01.command.stderr": "c34a2ed83830a2701ce3d198f454afe5e8ea30e53b84f426be71e029c5700f9f"
+      }
+    },
+    {
+      "id": "commit_live_successor-02",
+      "case": "commit_live_successor",
+      "attempt": "02",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 1,
+      "finish_line": 2,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_live_successor-02",
+        "--case",
+        "commit_live_successor",
+        "--lock-observer",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 5.691651084000114,
+      "driver_command_wall_seconds": 5.5531353339993075,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "actual-C2-RESERVED-lock-save-allows-mounted-live-successor-and-retains-control-during-signal",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": "Only pre-opened descriptors are proved during occupied remote admission; new path/FD open returned EBUSY in retained attempt01 and remains unqualified",
+      "receipt": "runs/commit_live_successor-02/result.json",
+      "receipt_sha256": "dd0888c6dbd420ec2e5f15dd86072c3ecdb8d0836d8f77a7cc8175c33da2a3ac",
+      "logs_sha256": {
+        "runs/commit_live_successor-02/daemon.stderr": "46521185c1550ccb80a3cd561d1ba181d7b30263a774374772545e1b1efb2c8e",
+        "runs/commit_live_successor-02/service.stderr": "a1be3c615aaff702156a6cd10845b5f3ce149e9fa33d98d044870c20a130fc40",
+        "runs/commit_live_successor-02.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_live_successor-02.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_authority-01",
+      "case": "commit_authority",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 3,
+      "finish_line": 4,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_authority-01",
+        "--case",
+        "commit_authority"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 10.944387625000672,
+      "driver_command_wall_seconds": 10.810749542000849,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "Commit-grant-target-service-authority-and-expiry-are-independent",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/commit_authority-01/result.json",
+      "receipt_sha256": "85246aac0fcc8903937e8e580c30dd06075b2a4c44c9ffe85d36f888769f9d2e",
+      "logs_sha256": {
+        "runs/commit_authority-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/commit_authority-01/service.stderr": "9dbeaf5e4a70fa5e754388d8463f27670002e5ead9b4393a7673f248594ad1a8",
+        "runs/commit_authority-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_authority-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_refusals-01",
+      "case": "commit_refusals",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 5,
+      "finish_line": 6,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_refusals-01",
+        "--case",
+        "commit_refusals"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.9866063749996101,
+      "driver_command_wall_seconds": 1.8284533750011178,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: native clean close and owned runtime/volume removal",
+      "native_cleanup_reported": "PASS: current writable/readonly owner unmounted and cleanly closed",
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "readonly-Commit-partial-input-and-budget-refusals-preserve-source",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/commit_refusals-01/result.json",
+      "receipt_sha256": "c4e1480ed51d6f79c8380bda1807cba6818cbd422200d98f7f3cb620669e4267",
+      "logs_sha256": {
+        "runs/commit_refusals-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/commit_refusals-01/service.stderr": "0c92f6d1c7698fe5de68df5a02d8e712d8d0a70b495a20d43a88096cd1bdee43",
+        "runs/commit_refusals-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_refusals-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "commit_denied-01",
+      "case": "commit_denied",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-workspace-commit",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 7,
+      "finish_line": 8,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_commit.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_denied-01",
+        "--case",
+        "commit_denied"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 1.3886408750004193,
+      "driver_command_wall_seconds": 1.2499677920004615,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "EXTERNAL_ONLY",
+      "cleanup_reported": "EXTERNAL_ONLY: declared retained failure; owned runtime forcibly removed, no native clean-close claim",
+      "native_cleanup_reported": "REFUSED: retained failed submission; no clean-close/reuse qualification",
+      "forced_cleanup_fields": {
+        "forced_daemon_cleanup": true
+      },
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "known-service-Commit-denial-retains-full-typed-failure-with-explicit-native-cleanup-refusal",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": "Known service failure with retained submission; native clean close refused, external teardown only",
+      "receipt": "runs/commit_denied-01/result.json",
+      "receipt_sha256": "43abe3ba9f76b07b2f40a3155dbbdc13fbfe9e8af5c29293be2c1c33a8133e17",
+      "logs_sha256": {
+        "runs/commit_denied-01/daemon.stderr": "2261b8fdea1d418715d0b3cb88e10bbd74f3044902ac748f62a762c459a4a2f5",
+        "runs/commit_denied-01/service.stderr": "a1d8c2cab2e34dc7eb18e8784116aba062cff877967a80a85e1a45aaf1853781",
+        "runs/commit_denied-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/commit_denied-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "held_init-01",
+      "case": "held_init",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-daemon-retained-startup",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 9,
+      "finish_line": 10,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/mount_startup.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/held_init-01"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 11.486666458999025,
+      "driver_command_wall_seconds": 11.368204834001517,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: one explicit signal detached and closed; original startup error exited 1",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "real-FUSE-INIT-writev-held-past-original-startup-deadline",
+          "status": "PASS"
+        },
+        {
+          "id": "late-constructor-retains-exact-owner-without-Workspace-ready",
+          "status": "PASS"
+        },
+        {
+          "id": "control-listener-and-acceptor-remain-available-after-startup-mount-failure",
+          "status": "PASS"
+        },
+        {
+          "id": "same-deadline-cleanup-refuses-without-detaching",
+          "status": "PASS"
+        },
+        {
+          "id": "one-explicit-signal-cleans-and-preserves-original-startup-failure-exit",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/held_init-01/result.json",
+      "receipt_sha256": "8a146b1df0b0da45256e666f7eba6601475584ae26009cb4e620fa233fa5e0c2",
+      "logs_sha256": {
+        "runs/held_init-01/daemon.stderr": "31ff43547bc77595d0d989dd19ca9159f7ed14d02284e161e1f3caa7911d66ef",
+        "runs/held_init-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/held_init-01/supervisor.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/held_init-01/daemon.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/held_init-01/supervisor.stdout": "7f4c945d2dbe0bd9938602d38601979dcb8e84508bc9e23af4b3d341ef6b8ec6",
+        "runs/held_init-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/held_init-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "signal-01",
+      "case": "signal",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-unmount",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 11,
+      "finish_line": 12,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/signal-01",
+        "--case",
+        "signal"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 6.429963459000646,
+      "driver_command_wall_seconds": 6.302546875000189,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "concurrent-control-and-signal-shutdown-drain-the-same-mount-owner",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/signal-01/result.json",
+      "receipt_sha256": "7b89c16f8e2bec560830cab56322d0ef150702559e411a8c35070719bc744942",
+      "logs_sha256": {
+        "runs/signal-01/daemon.stderr": "eef3e54a26749f57c980ea86f338d508f330028b53ef7cbc4c3c46e6a17bf41e",
+        "runs/signal-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/signal-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/signal-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "shutdown_retained-01",
+      "case": "shutdown_retained",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-unmount",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 13,
+      "finish_line": 14,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/shutdown_retained-01",
+        "--case",
+        "shutdown_retained"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 11.694744459000503,
+      "driver_command_wall_seconds": 11.561328292000326,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "incomplete-signal-cleanup-retains-process-until-next-explicit-signal",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/shutdown_retained-01/result.json",
+      "receipt_sha256": "ad9b2b43f0d984b841653222cad0f5006347cde69f1a898bf5a25d26a0e695b2",
+      "logs_sha256": {
+        "runs/shutdown_retained-01/daemon.stderr": "490a59cdcd12ace0b45487e5481c6ae4c723ec0a91d7b2f2599cb7de48027ed8",
+        "runs/shutdown_retained-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/shutdown_retained-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/shutdown_retained-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_signal-01",
+      "case": "attach_signal",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-attach",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 15,
+      "finish_line": 16,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/attach_signal-01",
+        "--case",
+        "attach_signal"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.027879875000508,
+      "driver_command_wall_seconds": 1.936510042000009,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "signal-shutdown-cleans-replacement-target-and-native-mount-owner",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/attach_signal-01/result.json",
+      "receipt_sha256": "1675ed9c666223caa0c8750b5ba8edda791e04cb113faba7377e4702c0ce8b3d",
+      "logs_sha256": {
+        "runs/attach_signal-01/daemon.stderr": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a",
+        "runs/attach_signal-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_signal-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_signal-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "mount_session_failure-01",
+      "case": "mount_session_failure",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-authenticated-mount",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 17,
+      "finish_line": 18,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/mount_session_failure-01",
+        "--case",
+        "mount_session_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 2.087430499999755,
+      "driver_command_wall_seconds": 1.949983082999097,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "entered-Session-failure-retains-owner-until-explicit-Unmount",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/mount_session_failure-01/result.json",
+      "receipt_sha256": "7d104e8bbe900ae0891a4c3a08e837427a2e2932fba393ffe9fb65d2177504b6",
+      "logs_sha256": {
+        "runs/mount_session_failure-01/daemon.stderr": "86e709e31edcde39bb37b8c8ac62bc271a9b1001179c48dbbb2d244a633c3138",
+        "runs/mount_session_failure-01/service.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/mount_session_failure-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/mount_session_failure-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "id": "attach_startup_failure-01",
+      "case": "attach_startup_failure",
+      "attempt": "01",
+      "status": "PASS",
+      "mode": "functional-daemon-attach-startup-failure",
+      "input_manifest": "inputs-02.json",
+      "input_manifest_sha256": "609cb062adaf051310c645ea440ad29e7f62ae2a6fb88045cd3260e129f1417b",
+      "caller_snapshot_linkage": {
+        "path": "caller-snapshot-linkage-02.json",
+        "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+      },
+      "command_journal": "runs/commands-02.jsonl",
+      "start_line": 19,
+      "finish_line": 20,
+      "argv": [
+        "python3",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_attach_startup.py",
+        "--fixture",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+        "--binaries",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+        "--linux-daemon",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+        "--image",
+        "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/attach_startup_failure-01",
+        "--case",
+        "attach_startup_failure"
+      ],
+      "cwd": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+      "environment": {
+        "LAYERFS_CONSTRUCTION_WORKERS": "1"
+      },
+      "exit_code": 0,
+      "hard_budget_seconds": 60,
+      "external_command_wall_seconds": 11.308157957999356,
+      "driver_command_wall_seconds": 11.174222083000132,
+      "runtime_nano_cpus": 2000000000,
+      "cleanup_status": "PASS",
+      "cleanup_reported": "PASS: explicit signal cleaned retained failed Attach, daemon exited original error, owned runtime/volume removed",
+      "native_cleanup_reported": null,
+      "forced_cleanup_fields": {},
+      "cleanup_failures": [],
+      "checks": [
+        {
+          "id": "failed-CLI-Attach-retains-owner-without-ready-control-until-explicit-signal-preserving-original-error",
+          "status": "PASS"
+        }
+      ],
+      "failure": null,
+      "qualification": null,
+      "receipt": "runs/attach_startup_failure-01/result.json",
+      "receipt_sha256": "9ac39f27d8e5044d9e615f00a71e0382677afafdf19b5c4abccbc9eab957eed5",
+      "logs_sha256": {
+        "runs/attach_startup_failure-01/daemon.stderr": "3fabca802b4aaaa1ef2a14e43d38b5e0a8ec43a48c3bcfa9347c1087692b2c15",
+        "runs/attach_startup_failure-01/service.stderr": "103a4648c437f1ae9c9944b30acceab24c3329009dac6893ac95c775bb76e46e",
+        "runs/attach_startup_failure-01.command.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runs/attach_startup_failure-01.command.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

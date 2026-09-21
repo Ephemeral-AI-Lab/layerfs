@@ -4,9 +4,10 @@ use super::{
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
     MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
     STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_ATTACH_MAX_MS, WORKSPACE_ATTACH_OPCODE,
-    WORKSPACE_CLOSE_CLEAN_MAX_MS, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_MOUNT_MAX_MS,
-    WORKSPACE_MOUNT_OPCODE, WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE,
-    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
+    WORKSPACE_CLOSE_CLEAN_MAX_MS, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_MAX_MS,
+    WORKSPACE_COMMIT_OPCODE, WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE,
+    WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE,
+    WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -107,6 +108,11 @@ pub enum Operation {
         workspace: Vec<u8>,
         incarnation: Root,
     },
+    /// Commits the selected writable Workspace through its configured service.
+    WorkspaceCommit {
+        workspace: Vec<u8>,
+        incarnation: Root,
+    },
     /// Saves an updated attribute tree; does not attach it to an inode or Branch.
     UpdatePortableMetadata {
         base: Root,
@@ -169,6 +175,7 @@ impl Operation {
             Self::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_OPCODE,
             Self::WorkspaceMount { .. } => WORKSPACE_MOUNT_OPCODE,
             Self::WorkspaceAttach { .. } => WORKSPACE_ATTACH_OPCODE,
+            Self::WorkspaceCommit { .. } => WORKSPACE_COMMIT_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
         }
     }
@@ -186,6 +193,7 @@ impl Operation {
             Self::WorkspaceCloseClean { .. } => "WorkspaceCloseClean",
             Self::WorkspaceMount { .. } => "WorkspaceMount",
             Self::WorkspaceAttach { .. } => "WorkspaceAttach",
+            Self::WorkspaceCommit { .. } => "WorkspaceCommit",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
         }
     }
@@ -204,6 +212,7 @@ impl Operation {
             | Self::WorkspaceCloseClean { .. }
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
+            | Self::WorkspaceCommit { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -227,6 +236,7 @@ impl Operation {
             | Self::WorkspaceCloseClean { .. }
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
+            | Self::WorkspaceCommit { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -258,6 +268,7 @@ impl Operation {
             | Self::WorkspaceCloseClean { .. }
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
+            | Self::WorkspaceCommit { .. }
             | Self::ConstructFile { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
@@ -295,7 +306,8 @@ impl Request {
             | Operation::WorkspaceUnmount { .. }
             | Operation::WorkspaceCloseClean { .. }
             | Operation::WorkspaceMount { .. }
-            | Operation::WorkspaceAttach { .. } => WORKSPACE_STATUS_PROFILE,
+            | Operation::WorkspaceAttach { .. }
+            | Operation::WorkspaceCommit { .. } => WORKSPACE_STATUS_PROFILE,
             _ => 1,
         };
         if self.profile != profile {
@@ -338,6 +350,10 @@ impl Request {
             | Operation::WorkspaceAttach {
                 workspace,
                 incarnation,
+            }
+            | Operation::WorkspaceCommit {
+                workspace,
+                incarnation,
             } => {
                 super::control::check_workspace_identity(workspace, incarnation)?;
                 let maximum = match self.operation {
@@ -345,6 +361,7 @@ impl Request {
                     Operation::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_MAX_MS,
                     Operation::WorkspaceMount { .. } => WORKSPACE_MOUNT_MAX_MS,
                     Operation::WorkspaceAttach { .. } => WORKSPACE_ATTACH_MAX_MS,
+                    Operation::WorkspaceCommit { .. } => WORKSPACE_COMMIT_MAX_MS,
                     _ => WORKSPACE_STATUS_MAX_MS,
                 };
                 if self.store != 0

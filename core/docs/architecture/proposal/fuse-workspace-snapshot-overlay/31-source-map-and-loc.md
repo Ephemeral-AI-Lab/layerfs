@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `3e92fe277a0379fd85f158b858085af3ecb2e2d5`.
-> Frozen production input seal: `67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2`.
+> Implementation parent: `74e6fbd2d23cb7519ea63c275f42283ce3c79d17`.
+> Frozen production input seal: `25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -10,7 +10,7 @@
 imports, declarations and runtime SQL. `L` means all physical lines, including
 comments and blanks. They must not be confused: the 999-file/200-entry-file ceilings
 apply to L. `N` means the recursive number of production files in a folder.
-JSON includes all 243 core and 193 reference production files separately,
+JSON includes all 247 core and 193 reference production files separately,
 plus each scope/crate and every recursive production-folder total.
 Tests, fixtures, examples, tools, docs and manifests are excluded from P; their
 folder locations are still shown in the continuation handoff.
@@ -22,9 +22,10 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/control-attach/source-loc.json)
+[Current per-file machine-readable inventory](evidence/control-commit/source-loc.json)
 records the pending implementation, frozen product seal and unchanged reference
-tree. The prior [native attachment inventory](evidence/attachment-owner/source-loc.json),
+tree. The prior [control-Attach inventory](evidence/control-attach/source-loc.json),
+[native attachment inventory](evidence/attachment-owner/source-loc.json),
 [control-Mount inventory](evidence/control-mount/source-loc.json) and its
 [commit confirmation](evidence/control-mount/commit-confirmed.json), plus the
 [original continuation inventory](evidence/continuation-handoff/source-loc.json),
@@ -34,20 +35,45 @@ retain their original source pins and counts. No historical receipt is relabeled
 
 | Core crate | P | L | Production files | Responsibility |
 | --- | ---: | ---: | ---: | --- |
-| `layerfs-daemon` | 1104 | 1178 | 7 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
+| `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
 | `layerfs-fuse` | 1062 | 1155 | 4 | Linux kernel projection, replies, mount/session ownership |
 | `layerfs-workspace` | 10068 | 10253 | 38 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
-| `layerfs-bridge` | 4600 | 5089 | 22 | Logical operation contract, Source, authorization identity and native framing/delivery |
-| `layerfs-service` | 2035 | 2219 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
+| `layerfs-bridge` | 5133 | 5641 | 25 | Logical operation contract, Source, authorization identity and native framing/delivery |
+| `layerfs-service` | 2037 | 2221 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
 | `layerfs-storage` | 7676 | 10653 | 47 | C2 Store, physical persistence and writer admission |
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **44073 P / 53224 L**, across 243 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **109490 P / 144690 L**. Root `crates/` is reference-only, including its
+Core total: **44868 P / 54058 L**, across 247 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **110285 P / 145524 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Commit control and codec ownership
+
+`control_commit.rs` translates native Commit reports/failures and writable
+submission observations into Bridge DTOs. It preserves known versus observed
+outcomes, the native failure disposition and original service failure context;
+it does not implement saving or reconciliation. `control.rs` admits the new
+identity-only operation under its independent grant. `config.rs` selects the
+explicit writable CLI profile, while `lifecycle.rs` chooses the existing native
+mount adapter from that immutable profile.
+
+`run.rs` establishes the control owner before initial writable callbacks are
+published. Signal shutdown shares the lifecycle exclusion with control and keeps
+Commit/Status available if clean closure refuses a dirty or retained owner.
+Workspace and FUSE product algorithms remain unchanged in this round.
+
+Bridge `contract/workspace_commit.rs` defines the typed Commit/writable Status
+records and validates their identities and known/observed relationships.
+`protocol/workspace_commit.rs` encodes those bounded records with the existing C5
+Commit outcome and contextual failure grammars. Existing control payload routines
+moved from `protocol/response.rs` to `protocol/control.rs`; C5 Commit/stage
+validators moved into `contract/history.rs` for shared use. Those movements are
+relocation, not deletion or algorithmic simplification. The new control contract,
+codec and native-result conversion account for new implementation alongside that
+relocation. Service continues to reject daemon control before Store admission.
 
 ## Daemon ownership after remote Attach
 
@@ -61,7 +87,7 @@ The daemon does not copy that registry or infer disposal from a failed observati
 
 `control.rs` owns independent grant checks, exact selection, complete-input and
 deadline admission, and dispatch to the shared owner. `run.rs` assembles the native
-process and keeps this owner during failed startup and signal cleanup. The new
+process and keeps this owner during failed startup and signal cleanup. The
 Bridge Attach outcome and failed-attachment Status union carry bounded typed
 observations with exact client correlation; Service refuses daemon controls before
 Store admission. Workspace and FUSE source are unchanged in this operation round.
@@ -107,15 +133,16 @@ module is implied by this inventory.
 ### layerfs-daemon
 
 ```text
-core/crates/layerfs-daemon/  [P=1104; L=1178; N=7]
-`-- src/  [P=1104; L=1178; N=7]
-    |-- config.rs  [P=234; L=248]
-    |-- control.rs  [P=299; L=318]
+core/crates/layerfs-daemon/  [P=1364; L=1458; N=8]
+`-- src/  [P=1364; L=1458; N=8]
+    |-- config.rs  [P=251; L=266]
+    |-- control.rs  [P=311; L=332]
+    |-- control_commit.rs  [P=174; L=187]
     |-- headless.rs  [P=133; L=134]
-    |-- lib.rs  [P=7; L=9]
-    |-- lifecycle.rs  [P=222; L=242]
+    |-- lib.rs  [P=8; L=10]
+    |-- lifecycle.rs  [P=243; L=266]
     |-- main.rs  [P=10; L=10]
-    `-- run.rs  [P=199; L=217]
+    `-- run.rs  [P=234; L=253]
 ```
 
 ### layerfs-fuse
@@ -182,41 +209,44 @@ core/crates/layerfs-workspace/  [P=10068; L=10253; N=38]
 ### layerfs-bridge
 
 ```text
-core/crates/layerfs-bridge/  [P=4600; L=5089; N=22]
-`-- src/  [P=4600; L=5089; N=22]
-    |-- adapters/  [P=3244; L=3408; N=13]
-    |   |-- native/  [P=3243; L=3407; N=12]
-    |   |   |-- protocol/  [P=2011; L=2077; N=6]
+core/crates/layerfs-bridge/  [P=5133; L=5641; N=25]
+`-- src/  [P=5133; L=5641; N=25]
+    |-- adapters/  [P=3511; L=3682; N=15]
+    |   |-- native/  [P=3510; L=3681; N=14]
+    |   |   |-- protocol/  [P=2254; L=2327; N=8]
+    |   |   |   |-- control.rs  [P=166; L=168]
     |   |   |   |-- frame.rs  [P=89; L=96]
-    |   |   |   |-- history_failure.rs  [P=157; L=161]
-    |   |   |   |-- metadata.rs  [P=783; L=820]
-    |   |   |   |-- mod.rs  [P=10; L=10]
-    |   |   |   |-- response.rs  [P=917; L=934]
-    |   |   |   `-- state.rs  [P=55; L=56]
-    |   |   |-- client.rs  [P=457; L=473]
+    |   |   |   |-- history_failure.rs  [P=163; L=169]
+    |   |   |   |-- metadata.rs  [P=795; L=832]
+    |   |   |   |-- mod.rs  [P=12; L=12]
+    |   |   |   |-- response.rs  [P=758; L=776]
+    |   |   |   |-- state.rs  [P=55; L=56]
+    |   |   |   `-- workspace_commit.rs  [P=216; L=218]
+    |   |   |-- client.rs  [P=481; L=497]
     |   |   |-- connection.rs  [P=416; L=471]
     |   |   |-- mod.rs  [P=7; L=7]
     |   |   |-- payload.rs  [P=146; L=148]
     |   |   |-- pipe.rs  [P=112; L=132]
     |   |   `-- server.rs  [P=94; L=99]
     |   `-- mod.rs  [P=1; L=1]
-    |-- contract/  [P=1352; L=1676; N=8]
+    |-- contract/  [P=1618; L=1954; N=9]
     |   |-- caller.rs  [P=13; L=19]
     |   |-- control.rs  [P=135; L=151]
-    |   |-- history.rs  [P=297; L=525]
+    |   |-- history.rs  [P=336; L=567]
     |   |-- metadata.rs  [P=20; L=23]
-    |   |-- mod.rs  [P=14; L=14]
-    |   |-- outcome.rs  [P=162; L=181]
-    |   |-- request.rs  [P=682; L=729]
-    |   `-- source.rs  [P=29; L=34]
+    |   |-- mod.rs  [P=16; L=16]
+    |   |-- outcome.rs  [P=164; L=185]
+    |   |-- request.rs  [P=698; L=746]
+    |   |-- source.rs  [P=29; L=34]
+    |   `-- workspace_commit.rs  [P=207; L=213]
     `-- lib.rs  [P=4; L=5]
 ```
 
 ### layerfs-service
 
 ```text
-core/crates/layerfs-service/  [P=2035; L=2219; N=17]
-`-- src/  [P=2035; L=2219; N=17]
+core/crates/layerfs-service/  [P=2037; L=2221; N=17]
+`-- src/  [P=2037; L=2221; N=17]
     |-- input/  [P=33; L=35; N=2]
     |   |-- mod.rs  [P=2; L=2]
     |   `-- sequential.rs  [P=31; L=33]
@@ -224,8 +254,8 @@ core/crates/layerfs-service/  [P=2035; L=2219; N=17]
     |   |-- config.rs  [P=124; L=142]
     |   |-- mod.rs  [P=3; L=3]
     |   `-- startup.rs  [P=175; L=183]
-    |-- operation/  [P=1536; L=1655; N=9]
-    |   |-- dispatch.rs  [P=57; L=66]
+    |-- operation/  [P=1537; L=1656; N=9]
+    |   |-- dispatch.rs  [P=58; L=67]
     |   |-- failure.rs  [P=45; L=46]
     |   |-- filesystem.rs  [P=110; L=125]
     |   |-- history.rs  [P=612; L=654]
@@ -236,7 +266,7 @@ core/crates/layerfs-service/  [P=2035; L=2219; N=17]
     |   `-- write.rs  [P=180; L=182]
     |-- lib.rs  [P=6; L=7]
     |-- main.rs  [P=9; L=9]
-    `-- owner.rs  [P=149; L=185]
+    `-- owner.rs  [P=150; L=186]
 ```
 
 ### layerfs-content

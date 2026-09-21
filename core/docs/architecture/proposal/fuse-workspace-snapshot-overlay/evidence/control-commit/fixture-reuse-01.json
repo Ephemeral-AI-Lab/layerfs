@@ -1,0 +1,22 @@
+{
+  "source": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01",
+  "target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01",
+  "status": "COPIED_HASH_MATCH",
+  "files": {
+    "result.json": {
+      "sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+      "bytes": 1630
+    },
+    "service/store.sqlite": {
+      "sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+      "bytes": 274432
+    }
+  },
+  "copy_method": "independent-byte-copy via shutil.copyfile; no reflink/hardlink request",
+  "copy_wall_seconds": 0.0018554579992269282,
+  "receipt_preserved_verbatim": true,
+  "cache_claim": null,
+  "performance_claim": false,
+  "reuse": "closed canonical content master only; create new live C5 history producer separately per writable functional selection",
+  "read_only_source_validation": "No Store WAL/SHM/journal sidecars; no writable open; original and copied bytes hash identically"
+}

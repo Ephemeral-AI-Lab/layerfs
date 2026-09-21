@@ -1,0 +1,32 @@
+{
+  "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+  "scope": "independent source and externalcaller review",
+  "addressed_product_findings": [
+    "Bare error fallback marks unknown unless generation/submission observation remains unchanged; unreadable status cannot prove refusal",
+    "Writable startup requires a currently unexpired explicit Commit grant before nativeentry",
+    "Controlowner established underfreshlifecycle exclusion before writable mount publication; retainedstartup keepsendpoint oncleanuprefusal",
+    "Startup localWorkspace clone dropped beforelong-livedfailureloops"
+  ],
+  "addressed_caller_findings": [
+    "Writable configuration negatives supply otherwisevalidconnection/env so missingvariablescannot falsePASS",
+    "Independent cleanup attempts preservebodyerrors andrecordeveryretainedruntimeowner evenwhenonecleanupfails"
+  ],
+  "reviewed_invariants": [
+    "oneNativeWorkspacesemanticowner andsharedcurrentlifecycle",
+    "known/observedC5outcomes keptdistinct withfullsharedFailure",
+    "Statusoneobservation notmissingreceipt",
+    "stagewireobservations confer no capability",
+    "sharedC5grammars andstrictoperation/identityterminalcorrelation",
+    "dirty/active/retainedsignalcleanup keepscontrol; successfulclose stopsadmissionunderlock",
+    "freshliveC5 authority overindependentclosedcontentbytes, noROhistoryreopen",
+    "actualC2RESERVEDownerconfirmedbeforeandafterownedPIDstop",
+    "outercontrolterminal-lossdistinctfromnativeUnknown",
+    "normalcleanupdistinctfromdeclaredserviceDenial externalteardown"
+  ],
+  "unqualified": [
+    "deterministicnativefailure-bookkeepingpoison injection",
+    "nativeupstreamUnknown/known-ownreconciliation control",
+    "fullR4/namespace/larger-input/fullDSH/R6",
+    "wholeheap/RSS/cgroup/performance/durability"
+  ]
+}

@@ -383,6 +383,30 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
                 && bytes == 0
         }
         (
+            Operation::WorkspaceCommit {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceCommit(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceWritableStatus(result),
+        ) => {
+            result.status.workspace == *workspace
+                && result.status.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
             Operation::WorkspaceUnmount {
                 workspace,
                 incarnation,

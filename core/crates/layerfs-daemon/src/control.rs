@@ -61,10 +61,15 @@ impl Control {
         })
     }
 
-    /// Admission ends before socket shutdown. A timeout retains the thread owner;
-    /// callers must not claim that control shutdown or later mount cleanup passed.
-    pub fn stop(&mut self, deadline: Instant) -> Result<(), Failure> {
+    /// Called under lifecycle ownership after checked closure, before that slot
+    /// can admit a replacement. A failed cleanup leaves control available.
+    pub fn stop_admission(&self) {
         self.stopping.store(true, Ordering::Release);
+    }
+
+    /// Join after ending admission. A timeout retains the control thread owner.
+    pub fn stop(&mut self, deadline: Instant) -> Result<(), Failure> {
+        self.stop_admission();
         if let Some(worker) = &self.worker {
             while !worker.is_finished() {
                 let remaining = deadline
@@ -190,6 +195,10 @@ fn dispatch(
             workspace,
             incarnation,
         } => (workspace, incarnation, 16),
+        Operation::WorkspaceCommit {
+            workspace,
+            incarnation,
+        } => (workspace, incarnation, 32),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -267,13 +276,18 @@ fn dispatch(
             native_deadline,
         );
     }
+    if operation == 32 {
+        let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
+        let workspace = selected.workspace.as_ref().ok_or(Code::Busy)?;
+        return crate::control_commit::commit(selected, workspace, native_deadline);
+    }
     let outcome = if operation == 2 {
         match slot.mount.as_mut() {
             Some(owner) => owner.unmount(native_deadline).map(|()| slot.mount = None),
             None => Ok(()),
         }
     } else if operation == 8 {
-        match layerfs_fuse::mount(workspace.as_ref().ok_or(Code::Busy)?, native_deadline) {
+        match crate::lifecycle::mount(workspace.as_ref().ok_or(Code::Busy)?, native_deadline) {
             Ok(owner) => {
                 slot.mount = Some(owner);
                 Ok(())

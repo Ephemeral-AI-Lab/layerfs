@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cc",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-dynamiclib",
+    "-fPIC",
+    "core/crates/layerfs-workspace/tests/store_lock.c",
+    "-o",
+    "core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 0.2683009580005091,
+  "source_sha256": "b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945",
+  "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+  "scope": "external read-only F_GETLK observer, no lock acquisition or product hook",
+  "binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib",
+  "binary_sha256": "8bf0db14877e566cd08dbe4c031f2ed6923e6e64c0df81d1930aa0e2d01f1776"
+}

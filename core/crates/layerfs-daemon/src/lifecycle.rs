@@ -4,9 +4,10 @@ use layerfs_bridge::contract::{
     WorkspaceAttachmentProgress, WorkspaceAttachmentState, WorkspaceAttachmentWire,
     WorkspaceStatusWire,
 };
-use layerfs_fuse::{MountError, MountHandle};
+use layerfs_fuse::{MountError, MountFailure, MountHandle};
 use layerfs_workspace::{
-    AttachOptions, Attachment, AttachmentCleanupProgress, Workspace, WorkspaceError, WorkspaceHost,
+    AttachOptions, Attachment, AttachmentCleanupProgress, Workspace, WorkspaceAccess,
+    WorkspaceError, WorkspaceHost,
 };
 use std::{io, sync::Mutex, time::Instant};
 
@@ -165,7 +166,11 @@ impl Lifecycle {
         Ok(())
     }
 
-    pub fn shutdown(&self, deadline: Instant) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn shutdown(
+        &self,
+        deadline: Instant,
+        control: Option<&crate::control::Control>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut slot = self.slot.try_lock().map_err(|error| match error {
             std::sync::TryLockError::WouldBlock => Failure::from(Code::Busy),
             std::sync::TryLockError::Poisoned(_) => Failure::from(Code::Io),
@@ -175,6 +180,11 @@ impl Lifecycle {
             slot.mount = None;
         }
         self.close(&mut slot, deadline)?;
+        // Closure and control admission share this exclusion boundary. A dirty
+        // or retained owner must keep its Commit/Status endpoint available.
+        if let Some(control) = control {
+            control.stop_admission();
+        }
         Ok(())
     }
 }
@@ -204,7 +214,11 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         consumer_accounted_bytes: local.accounted_bytes as u64,
     };
     result.validate()?;
-    Ok(Response::WorkspaceStatus(Box::new(result)))
+    if workspace.access_mode() == WorkspaceAccess::LocalEdit {
+        crate::control_commit::status(result, local)
+    } else {
+        Ok(Response::WorkspaceStatus(Box::new(result)))
+    }
 }
 
 pub(crate) fn failure_code(error: &WorkspaceError) -> Code {
@@ -238,5 +252,15 @@ pub(crate) fn mount_failure_code(error: &MountError) -> Code {
         }
         MountError::Workspace(WorkspaceError::Busy | WorkspaceError::Closed) => Code::Busy,
         _ => Code::Io,
+    }
+}
+
+pub(crate) fn mount(
+    workspace: &Workspace,
+    deadline: Instant,
+) -> Result<MountHandle, Box<MountFailure>> {
+    match workspace.access_mode() {
+        WorkspaceAccess::ReadOnly => layerfs_fuse::mount(workspace, deadline),
+        WorkspaceAccess::LocalEdit => layerfs_fuse::mount_writable(workspace, deadline),
     }
 }

@@ -1,0 +1,126 @@
+{
+  "status": "REGISTERED_NOT_RUN",
+  "operation_round": "WorkspaceCommit",
+  "new_selections": 7,
+  "affected_regressions": 6,
+  "total_selections": 13,
+  "hard_complete_command_seconds": 60,
+  "docker_cpus": 2,
+  "construction_workers": 1,
+  "ordinary_Commit_budget_ms": 10000,
+  "performance_claim": false,
+  "not_run_qualification": "Registration only; no selections executed",
+  "selections": [
+    {
+      "case": "commit_repeated",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_repeated",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_dirty_signal",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_dirty_signal",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_control_loss",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_control_loss",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_live_successor",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_live_successor",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": true,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_authority",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_authority",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_refusals",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_refusals",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "normal checked cleanup"
+    },
+    {
+      "case": "commit_denied",
+      "driver": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "case_argument": "commit_denied",
+      "fixture": "core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+      "history": "fresh live C5 bootstrap from independently copied closed content Store",
+      "lock_observer_required": false,
+      "expected_native_cleanup": "retained failure / external teardown only"
+    },
+    {
+      "case": "held_init",
+      "driver": "core/crates/layerfs-daemon/tests/mount_startup.py",
+      "case_argument": null,
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    },
+    {
+      "case": "signal",
+      "driver": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "case_argument": "signal",
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    },
+    {
+      "case": "shutdown_retained",
+      "driver": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "case_argument": "shutdown_retained",
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    },
+    {
+      "case": "attach_signal",
+      "driver": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "case_argument": "attach_signal",
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    },
+    {
+      "case": "mount_session_failure",
+      "driver": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "case_argument": "mount_session_failure",
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    },
+    {
+      "case": "attach_startup_failure",
+      "driver": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "case_argument": "attach_startup_failure",
+      "fixture": "core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "history": "closed RO history independently copied; no write authority",
+      "expected_native_cleanup": "normal checked cleanup / original failure exit when specified"
+    }
+  ]
+}

@@ -105,7 +105,8 @@ def seed_namespace(daemon, executable):
 
 
 
-def mount_process(args, env, source, name, store=1):
+def mount_process(args, env, source, name, store=1, mode='--mount-readonly'):
+    assert mode in ('--mount-readonly', '--mount-writable')
     command = ['docker', 'run', '-d', '--rm', '--name', name, '--cpus', '2', '--device', '/dev/fuse',
                '--cap-add', 'SYS_ADMIN', '--security-opt', 'apparmor=unconfined',
                '--add-host', 'host.docker.internal:host-gateway',
@@ -122,7 +123,7 @@ def mount_process(args, env, source, name, store=1):
     checked(command, env=env)
     launch = ['docker','exec','-i',name,'sh','-c',
               'echo $$ > /tmp/layerfs-daemon.pid; exec "$@"','sh',
-              '/product/layerfs-daemon','--mount-readonly','read',
+              '/product/layerfs-daemon',mode,'read',
               '71' * 32,str(store),source,'0','0']
     return subprocess.Popen(launch, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

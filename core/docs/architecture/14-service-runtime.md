@@ -590,3 +590,15 @@ Attach result and failed-attachment Status; existing healthy/lifecycle results
 keep their validators. Failed Status observes native custody; CloseClean disposes
 it explicitly. Startup attachment failure retains the same pending-selector
 cleanup route. Round36 records source identity, bounds, checks and qualifications.
+
+From parent `74e6fbd2d23cb7519ea63c275f42283ce3c79d17`,
+[authenticated Workspace Commit](proposal/fuse-workspace-snapshot-overlay/37-control-commit.md)
+adds opcode 14/profile 3 and independent grant 32 (masks 0..63). It invokes the
+existing native capture/preparation/composite Commit/reconciliation operation.
+Tag 17 preserves typed results and known/observed failure distinctions; tag 18
+adds bounded writable Status while existing RO/failed-attachment forms remain.
+Writable CLI entry requires Branch, explicit disk quota and current Commit grant.
+Control starts under lifecycle exclusion before writable mount publication. Signal
+cleanup retains control on dirty/refused closure, and only ends admission after
+successful close while still holding the same owner slot. This is process assembly,
+not a second Workspace or Commit algorithm; round37 records qualification.

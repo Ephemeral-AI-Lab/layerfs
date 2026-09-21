@@ -121,6 +121,10 @@ pub enum Response {
     WorkspaceAttach(Box<super::WorkspaceAttachWire>),
     /// Status of an attachment that has not yielded a usable Workspace.
     WorkspaceAttachment(Box<super::WorkspaceAttachmentWire>),
+    /// Exact Commit terminal, including retained failures and known remote outcomes.
+    WorkspaceCommit(Box<super::WorkspaceCommitWire>),
+    /// Current writable observation; never a missing Commit receipt.
+    WorkspaceWritableStatus(Box<super::WorkspaceWritableStatusWire>),
     MetadataSaved {
         base: Root,
         kind: u8,

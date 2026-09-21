@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/usr/bin/dwarfdump",
+    "--name=Response",
+    "--show-parents",
+    "--parent-recurse-depth=3",
+    "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon"
+  ],
+  "exit_code": 0,
+  "binary_sha256": "832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c"
+}

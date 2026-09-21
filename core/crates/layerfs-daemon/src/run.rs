@@ -11,7 +11,7 @@ use layerfs_workspace::{OperationDelivery, WorkspaceHost};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 struct ConnectionConfig {
@@ -40,13 +40,27 @@ impl ConnectionConfig {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let launch = crate::config::workspace(std::env::args().skip(1).collect())?;
     let control_config = crate::config::control(launch.is_some())?;
+    if launch
+        .as_ref()
+        .is_some_and(|launch| launch.attach.access == layerfs_workspace::WorkspaceAccess::LocalEdit)
+    {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        if !control_config.as_ref().is_some_and(|config| {
+            config
+                .grants
+                .iter()
+                .any(|grant| grant.operations & 32 != 0 && grant.expires_unix > now)
+        }) {
+            return Err(Failure::from(Code::InvalidInput).into());
+        }
+    }
     if launch.is_some() && !cfg!(target_os = "linux") {
         return Err(Failure::from(Code::Unsupported).into());
     }
     let connection = ConnectionConfig::from_env()?;
     let control_private = connection.private;
     // Bind before attachment so a conflicting endpoint never creates a mount.
-    // The endpoint starts accepting only after its target Workspace is mounted.
+    // Initial mount construction holds lifecycle exclusion before requests enter.
     let control_listener = control_config
         .as_ref()
         .map(|config| {
@@ -90,6 +104,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         telemetry.publish(result.1);
         result.0
     });
+    let mut control = None;
     let profile = launch.attach.clone();
     let host = WorkspaceHost::new(launch.config, delivery)?;
     let attach_deadline = Instant::now() + Duration::from_secs(10);
@@ -108,54 +123,69 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             pipe::diagnostic(&format!("workspace attach startup retained: {failure}\n"));
             let lifecycle = crate::lifecycle::Lifecycle::new(host, profile, None, None);
-            return cleanup_failed_startup(&lifecycle, failure.into(), &signals, attach_deadline);
-        }
-    };
-    let mount_deadline = Instant::now() + Duration::from_secs(10);
-    let mount = match layerfs_fuse::mount(&workspace, mount_deadline) {
-        Ok(mount) => mount,
-        Err(mut failure) => {
-            drop(control_listener);
-            pipe::diagnostic(&format!("workspace mount startup failed: {failure}\n"));
-            let lifecycle = crate::lifecycle::Lifecycle::new(
-                host,
-                profile,
-                Some(workspace),
-                failure.retained.take(),
+            return cleanup_failed_startup(
+                &lifecycle,
+                &mut control,
+                failure.into(),
+                &signals,
+                attach_deadline,
             );
-            return cleanup_failed_startup(&lifecycle, failure, &signals, mount_deadline);
         }
     };
     let lifecycle = Arc::new(crate::lifecycle::Lifecycle::new(
         host,
         profile,
         Some(workspace.clone()),
-        Some(mount),
+        None,
     ));
-    let mut control = match control_config.zip(control_listener) {
-        Some((config, (listener, address))) => {
-            match crate::control::Control::start(
-                config,
-                listener,
-                control_private,
-                Arc::clone(&lifecycle),
-            ) {
-                Ok(control) => {
-                    pipe::diagnostic(&format!("workspace control ready {address}\n"));
-                    Some(control)
-                }
-                Err(error) => {
-                    return cleanup_failed_startup(
-                        &lifecycle,
-                        error.into(),
-                        &signals,
-                        mount_deadline,
-                    );
-                }
+    let mount_deadline = Instant::now() + Duration::from_secs(10);
+    // Establish control before publishing writable callbacks. The fresh slot
+    // excludes control mutations throughout initial mount construction.
+    let mut slot = lifecycle
+        .slot
+        .try_lock()
+        .map_err(|_| Failure::from(Code::Io))?;
+    if let Some((config, (listener, address))) = control_config.zip(control_listener) {
+        match crate::control::Control::start(
+            config,
+            listener,
+            control_private,
+            Arc::clone(&lifecycle),
+        ) {
+            Ok(started) => {
+                control = Some(started);
+                pipe::diagnostic(&format!("workspace control ready {address}\n"));
+            }
+            Err(error) => {
+                drop(slot);
+                drop(workspace);
+                return cleanup_failed_startup(
+                    &lifecycle,
+                    &mut control,
+                    error.into(),
+                    &signals,
+                    mount_deadline,
+                );
             }
         }
-        None => None,
-    };
+    }
+    match crate::lifecycle::mount(&workspace, mount_deadline) {
+        Ok(mount) => slot.mount = Some(mount),
+        Err(mut failure) => {
+            slot.mount = failure.retained.take();
+            drop(slot);
+            drop(workspace);
+            pipe::diagnostic(&format!("workspace mount startup failed: {failure}\n"));
+            return cleanup_failed_startup(
+                &lifecycle,
+                &mut control,
+                failure,
+                &signals,
+                mount_deadline,
+            );
+        }
+    }
+    drop(slot);
     pipe::diagnostic(&format!(
         "workspace ready {}\n",
         workspace.mount_path().display()
@@ -170,11 +200,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // attempt retains the process and owners until another signal arrives.
         let deadline = Instant::now() + Duration::from_secs(10);
         let cleanup = (|| -> Result<(), Box<dyn std::error::Error>> {
+            lifecycle.shutdown(deadline, control.as_ref())?;
             if let Some(control) = &mut control {
                 control.stop(deadline)?;
             }
-            // Control must have joined before cleanup of the current owner.
-            lifecycle.shutdown(deadline)?;
             Ok(())
         })();
         match cleanup {
@@ -191,12 +220,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 // original attempt keeps its deadline; only an explicit signal admits new cleanup.
 fn cleanup_failed_startup(
     lifecycle: &crate::lifecycle::Lifecycle,
+    control: &mut Option<crate::control::Control>,
     failure: Box<dyn std::error::Error>,
     signals: &nix::sys::signal::SigSet,
     mut deadline: Instant,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        let cleanup = lifecycle.shutdown(deadline);
+        let cleanup = (|| -> Result<(), Box<dyn std::error::Error>> {
+            lifecycle.shutdown(deadline, control.as_ref())?;
+            if let Some(control) = control {
+                control.stop(deadline)?;
+            }
+            Ok(())
+        })();
         match cleanup {
             Ok(()) => {
                 pipe::diagnostic("workspace failed startup cleaned\n");

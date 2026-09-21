@@ -1,0 +1,100 @@
+{
+  "working_directory": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+  "rows": [
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 check --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline",
+      "log": "host-check-01.log",
+      "status": "PASS",
+      "scope": "preliminary before dropping failed-startup localWorkspace clones; not final qualification"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "log": "host-test-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+      "tests": {
+        "passed": 672,
+        "failed": 0,
+        "ignored": 3
+      }
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "host-build-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "host-clippy-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR=\"$PWD/core/target\" CARGO_BUILD_JOBS=2 LAYERFS_CONSTRUCTION_WORKERS=1 cargo +1.85.1 test --manifest-path core/Cargo.toml -p layerfs-daemon --test configuration --locked --offline -- --test-threads=2",
+      "log": "host-configuration-02.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+      "tests": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "reason": "test-only stronger otherwise-valid connection configuration after independent review; no passing functional selection repeated"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-commit-test --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo test --manifest-path core/Cargo.toml --workspace --locked --offline -- --test-threads=2",
+      "log": "linux-test-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+      "tests": {
+        "passed": 670,
+        "failed": 0,
+        "ignored": 126
+      }
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-commit-build --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo build --manifest-path core/Cargo.toml --workspace --bins --examples --locked --offline",
+      "log": "linux-build-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-commit-clippy --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings",
+      "log": "linux-clippy-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "docker --context desktop-linux run --rm --cpus 2 --name layerfs-795c-control-commit-configuration --mount \"type=bind,src=$PWD,dst=/work\" --mount type=bind,src=/Users/yifanxu/.cargo/registry,dst=/usr/local/cargo/registry,readonly -w /work -e CARGO_TARGET_DIR=/work/core/target-linux -e CARGO_BUILD_JOBS=2 -e LAYERFS_CONSTRUCTION_WORKERS=1 sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408 cargo test --manifest-path core/Cargo.toml -p layerfs-daemon --test configuration --locked --offline -- --test-threads=2",
+      "log": "linux-configuration-02.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+      "tests": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "reason": "test-only stronger otherwise-valid connection configuration after independent review; no passing functional selection repeated"
+    },
+    {
+      "command": "python3 core/tools/check_product_boundary.py",
+      "log": "boundary-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "python3 -m unittest discover -s core/tools -p 'test_*.py'",
+      "log": "boundary-self-tests-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    },
+    {
+      "command": "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+      "log": "fmt-01.log",
+      "status": "PASS",
+      "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb"
+    }
+  ],
+  "scope": "locked core-only checks; no CI/aggregatepreflight; functional cases separate"
+}

@@ -76,7 +76,7 @@ fn control_configuration_is_explicit_separate_and_bounded() {
         (Some("127.0.0.1:0"), Some(peer.clone()), true),
         (
             Some("127.0.0.1:0"),
-            Some(format!("1,{},9999999999,32", "11".repeat(32))),
+            Some(format!("1,{},9999999999,64", "11".repeat(32))),
             false,
         ),
         (Some("127.0.0.1:0"), Some(format!("{peer};{peer}")), false),
@@ -98,5 +98,82 @@ fn control_configuration_is_explicit_separate_and_bounded() {
         let output = command.output().unwrap();
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
+    }
+}
+
+#[test]
+fn writable_profile_requires_branch_disk_budget_and_commit_control_endpoint() {
+    let branch = format!("branch:11{}", "61".repeat(16));
+    for (base, disk, control) in [
+        (branch.clone(), None, true),
+        (branch.clone(), Some("0"), true),
+        (branch.clone(), Some("invalid"), true),
+        ("21".repeat(32), Some("67108864"), true),
+        (branch, Some("67108864"), false),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"));
+        command
+            .env_clear()
+            .env("LAYERFS_WORKSPACE_ROOT", "/layerfs")
+            .env("LAYERFS_WORKSPACE_MAX_COUNT", "2")
+            .env("LAYERFS_WORKSPACE_MEMORY_BUDGET_BYTES", "8388608")
+            .env("LAYERFS_ENDPOINT", "127.0.0.1:1")
+            .env("LAYERFS_SELECTOR", "1")
+            .env("LAYERFS_PRIVATE_KEY", "11".repeat(32))
+            .env("LAYERFS_SERVER_KEY", "22".repeat(32))
+            .args([
+                "--mount-writable",
+                "read",
+                &"71".repeat(32),
+                "1",
+                &base,
+                "0",
+                "0",
+            ]);
+        if let Some(disk) = disk {
+            command.env("LAYERFS_WORKSPACE_DISK_BUDGET_BYTES", disk);
+        }
+        if control {
+            command.env("LAYERFS_CONTROL_LISTEN", "127.0.0.1:0").env(
+                "LAYERFS_CONTROL_PEERS",
+                format!("1,{},9999999999,32", "11".repeat(32)),
+            );
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
+        assert!(output.stdout.is_empty());
+    }
+    for peers in [
+        String::new(),
+        format!("1,{},9999999999,31", "11".repeat(32)),
+        format!("1,{},1,32", "11".repeat(32)),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_layerfs-daemon"))
+            .env_clear()
+            .env("LAYERFS_WORKSPACE_ROOT", "/layerfs")
+            .env("LAYERFS_WORKSPACE_MAX_COUNT", "2")
+            .env("LAYERFS_WORKSPACE_DISK_BUDGET_BYTES", "67108864")
+            .env("LAYERFS_WORKSPACE_MEMORY_BUDGET_BYTES", "8388608")
+            .env("LAYERFS_ENDPOINT", "127.0.0.1:1")
+            .env("LAYERFS_SELECTOR", "1")
+            .env("LAYERFS_PRIVATE_KEY", "11".repeat(32))
+            .env("LAYERFS_SERVER_KEY", "22".repeat(32))
+            .env("LAYERFS_CONTROL_LISTEN", "127.0.0.1:0")
+            .env("LAYERFS_CONTROL_PEERS", peers)
+            .args([
+                "--mount-writable",
+                "read",
+                &"71".repeat(32),
+                "1",
+                &format!("branch:11{}", "61".repeat(16)),
+                "0",
+                "0",
+            ])
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
+        assert!(output.stdout.is_empty());
     }
 }

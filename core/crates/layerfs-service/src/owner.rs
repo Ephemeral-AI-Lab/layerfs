@@ -132,6 +132,7 @@ impl Service {
                 Operation::WorkspaceStatus { .. }
                     | Operation::WorkspaceUnmount { .. }
                     | Operation::WorkspaceCloseClean { .. }
+                    | Operation::WorkspaceCommit { .. }
                     | Operation::WorkspaceAttach { .. }
                     | Operation::WorkspaceMount { .. }
             ) {

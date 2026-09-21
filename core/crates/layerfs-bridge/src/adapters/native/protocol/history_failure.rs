@@ -11,6 +11,10 @@ pub fn encode_request_failure(request: &Request, failure: &Failure) -> Result<Ve
         }
         return Ok(encode_failure(failure.clone()).to_vec());
     }
+    encode_contextual_failure(failure)
+}
+
+pub(super) fn encode_contextual_failure(failure: &Failure) -> Result<Vec<u8>, Failure> {
     let mut e = Encoder::bounded(HISTORY_FAILURE_BYTES);
     e.put(&encode_failure(failure.clone()))?;
     e.u8(1)?;
@@ -65,7 +69,7 @@ pub fn encode_request_failure(request: &Request, failure: &Failure) -> Result<Ve
         }
     }
     let bytes = e.finish();
-    decode_request_failure(request, &bytes)?;
+    decode_contextual_failure(&bytes)?;
     Ok(bytes)
 }
 
@@ -73,6 +77,10 @@ pub fn decode_request_failure(request: &Request, bytes: &[u8]) -> Result<Failure
     if request.profile != HISTORY_PROFILE {
         return decode_failure(bytes);
     }
+    decode_contextual_failure(bytes)
+}
+
+pub(super) fn decode_contextual_failure(bytes: &[u8]) -> Result<Failure, Failure> {
     if !(6..=HISTORY_FAILURE_BYTES).contains(&bytes.len()) {
         return Err(Code::InvalidInput.into());
     }

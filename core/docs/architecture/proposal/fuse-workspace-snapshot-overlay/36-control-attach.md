@@ -2,6 +2,7 @@
 
 > **Status: implemented and verified in the declared actual daemon/Linux scope; target v0.1.7, not released.**
 > Implementation parent: `3e92fe277a0379fd85f158b858085af3ecb2e2d5`.
+> Exact implementation commit: `74e6fbd2d23cb7519ea63c275f42283ce3c79d17`.
 
 The daemon accepts one new managed name and nonzero incarnation through
 WorkspaceAttach, profile 3/opcode 13, independent grant bit 16. Valid grant masks
@@ -230,3 +231,6 @@ in an isolated caller checkout when reproducing a historical attempt.
 
 [Complete attempt index](evidence/control-attach/functional-index.json) includes every
 command, driver/external wall, caller variant, cleanup result and retained failure.
+
+[Commit confirmation](evidence/control-attach/commit-confirmed.json) verifies that
+the committed tree equals the exact staged tree counted before committing.

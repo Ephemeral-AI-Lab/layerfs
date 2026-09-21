@@ -274,12 +274,13 @@ def execute(args, report):
             reader = held_file(name); begin(client, 2, budget=5000)
             report['admission_boundary'] = kernel_stopped(name)
             mount.stop_mount(name)
-            result = receive(client); assert result['kind'] == 'failure' and result['unknown'], result
-            client.stdin.close(); assert client.wait(timeout=6) == 1; client = None
-            report['socket_boundary'] = 'Client receives Unknown while actual projection FD is still held'
+            result = receive(client)
+            assert result['outcome'] == 'Retained' and result['code'] == 11, result
+            assert current(client, 3, stopping=True)['handles'] == 1
+            report['socket_boundary'] = 'Signal cannot stop control during active Unmount; retained response and fresh Status complete while projection FD stays held'
             release(reader); reader = None
-            assert daemon.wait(timeout=12) == 0
-            report['interrupted_client'] = result
+            assert unmount(client, 4)['outcome'] == 'Unmounted'
+            report['continued_client'] = result
         elif args.case == 'shutdown_retained':
             reader = held_file(name); close(client, name); client = None
             mount.stop_mount(name)
@@ -288,6 +289,9 @@ def execute(args, report):
             ready_lines += retained
             assert daemon.poll() is None
             report['retained_shutdown'] = retained.strip()
+            client = controller()
+            report['retained_control_status'] = current(client, 1, stopping=True)
+            close(client, name); client = None
             release(reader); reader = None
             mount.stop_mount(name); assert daemon.wait(timeout=12) == 0
         elif args.case == 'close_success':
@@ -418,6 +422,7 @@ def main():
     parser.add_argument('--fixture',type=Path,required=True)
     parser.add_argument('--binaries',type=Path,required=True)
     parser.add_argument('--linux-daemon',type=Path,required=True)
+    parser.add_argument('--lock-observer',type=Path)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--case',choices=CASES,required=True)
     parser.add_argument('--image',default='rust:1.85.1-bookworm')
