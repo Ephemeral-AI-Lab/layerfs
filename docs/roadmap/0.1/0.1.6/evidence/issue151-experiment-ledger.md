@@ -2727,8 +2727,75 @@ Status: **Shipped** in `fff509f3d` (the per-site instrument), `35aaf6f0b` (the t
 
 **Cumulative against this worktree's clean tree** (A0: ≤ 3487.3 ms of work, 3388.9 ms CPU): work **≤ −57.7 %**, CPU **−55.9 %**; −19.1 % against D4b's landed 1821.0 ms and −11.0 % against round 8's 1656.2. **Boundary-matched** (the construction and noise of L69 added back) the row is **2034.6 ms**, inside the band of the reference's same-shape rows (1789.5 / 2116.7 / 2195.3 ms of CPU) — the 1.4–24 % deficit L69 recorded is closed to their fast end.
 
-**What is left, and it is now the store rather than C1.** `span_build_ns` is 90.61 ms of a 1473.83 ms row; the remaining work is store-side: `commit` ~416, `encode` ~241, `pack writes` ~201, row inserts ~124, the offer path's uncharged remainder, and `span_content_ns` 1360.31. The two treatments scoped in L69's successor — **stored frames for incompressible payloads** (~−240 ms, `profile_full_ns` 240.85 ms is zstd over 302 MB whose output is input + 7 bytes) and **whole-file lane grouping** (~−200 ms, 16,802 pack writes for 25,245 objects at 1.5 objects per write) — are unstarted, and 1 s still needs one of them.
+**What is left, and it is now the store rather than C1.** `span_build_ns` is 90.61 ms of a 1473.83 ms row; the remaining work is store-side: `commit` ~416, `encode` ~241, `pack writes` ~201, row inserts ~124, the offer path's uncharged remainder, and `span_content_ns` 1360.31. The two treatments scoped in L69's successor — **stored frames for incompressible payloads** (~−240 ms, `profile_full_ns` 240.85 ms is zstd over 302 MB whose output is input + 7 bytes — **the width is wrong: round 14 measured it at +13..+16, median +14, over all 23,910 frames, and corrected the handoff at `issue219-ns19-from-1.47s-to-1s-handoff.md:112`, `:167`; see L72**) and **whole-file lane grouping** (~−200 ms, 16,802 pack writes for 25,245 objects at 1.5 objects per write) — are unstarted, and 1 s still needs one of them.
 
 Checks as run: `cargo test -p layerfs-content` **262 passed / 0 failed**; the whole core workspace `--no-fail-fast` **621 passed / 0 failed**; `clippy --all-targets` clean; `fmt --check` clean; `check_product_boundary.py` PASS. Not run: the harness's own suite for the product commit (it does not cover product source), the reference `crates/` workspace, any other harness case or lane.
 
 Production LOC: **31377 → 31409 (delta +32)** for the instrument and **31409 → 31426 (delta +17)** for the treatment; the harness change is not product source. Method `tools/production_loc.py --root <tree>`, first parent against each committed tree. One process note: the treatment's first commit message stated a production total of 31420 (+11) that had been written before the count was read; the count is 31426 (+17) and the message was amended before the commit was pushed.
+
+## L72 — #219 round 14: a payload the codec cannot shrink is stored verbatim — 165 ms out of the encode bucket, 93 ms off the row (2026-09-21)
+
+Status: **Shipped** in `4d8e6e2ab`, on top of L71. Report:
+[round 14](../../0.1.7/evidence/issue219-ns19o-stored-20260921T085700Z/), pre-registration and the two
+count-driven diagnostics beside it. Row `ns19-O1-stored-20260921T091015Z`, **PASS, 13/13 gates, 14/14
+pinned counters**, root digest unchanged.
+
+**The mechanism is what the handoff said it was, and it is now measured twice.** `profile_full_ns` was
+240.85 ms of zstd over 300,000,000 payload bytes whose frames cost **13–16 bytes more than the payloads
+they described** (`raw/frame-widths.txt`, every one of the 23,910 records, read out of the control
+row's own pack rows). `STORED_TAG = 2` joins the two frame tags, and a payload is stored verbatim when a
+bounded 1024-byte prefix shrinks by less than 1/32, or when the frame that came back is no smaller than
+the payload. Measured: **`profile_full_ns` 240.85 → 75.65 ms (−165.20)**, **`stored_records` 23,910** —
+exactly the count `raw/probe-coverage.txt` predicted before the run by classifying every payload of
+both lanes — and `pack_bytes_written` −332,082 B = 13.89 B per record, three fewer packs and exactly
+786,432 = 3 × 256 KiB less pack body space.
+
+**And the row claim is refuted.** `operation_work_ns` 1473.83 → **1380.70 ms (−93.13, −6.3 %)**, CPU
+1495.48 → **1397.14 (−98.34)**, against a pre-registered 1255–1280 ms. Refutation clause 2 said in
+advance that a movement under 100 ms would be reported as a refutation of the row claim, and 1380.70 ms
+is above 1373; it is recorded as fired. The other five clauses did not fire — the count hit exactly,
+the row is PASS with 14/14 pins and the digest unchanged, `cas_reuse` and `delta_payload` are green, and
+the store got smaller rather than larger.
+
+**Both width terms were priced, and both were still wrong, in the same direction.** The probe's fixed
+cost is **1,935 ns per call** (44,040,823 ns over 15,977 probes, minus 822 ns of sample at the 1.2456
+GB/s this row measures), against the 0.3–0.8 µs registered — about **18 ms of the 165 ms win handed
+back to the instrument that measured it**. And the frame overhead is 13–16 bytes, not the 7 the
+handoff carried, which the pre-registration inherited. That second one is corrected at source: the
+handoff's §3 table line and §5A paragraph now say +13 to +16 with the measuring file named
+(`issue219-ns19-from-1.47s-to-1s-handoff.md:112`, `:167`), the wrong figure is kept visible in both
+places, and the correction is filed in this same round.
+
+**The 72 ms between the bucket and the row is reported, not attributed.** `diag_commit_total_ns` rose
+416.39 → 455.52, `teardown_ns` 74.65 → 91.73, `profile_sql_ns` 318.86 → 331.94, `diag_seal_total_ns`
+360.07 → 376.75, `diag_wave_ns` 63.87 → 69.31 and `diag_write_pack_total_ns` 200.52 → 204.88 — every
+one of them a term the treatment made **strictly smaller** in bytes, calls or packs. The window's own
+untimed witness, the same harness code inside neither timer, is **2.34 % slower on `construct_ns` and
+4.97 % on `construct_noise_ns`**. This round declines to attribute any of it, exactly as round 13
+declined to attribute its own `diag_commit_total_ns` rise; at the witness's own rate roughly 20–35 ms of
+the 65 ms would be drift and 30–45 ms is left unexplained and unclaimed.
+
+**Two existing cases moved with the format and are reported rather than adjusted.**
+`delta_chains.rs`'s corrupt-intermediate case builds its chain from compressible content now, because
+its exact claim is a damaged *frame* refused by the frame's own checksum and `noise` is no longer a
+frame on that path; the stored form's half — a damaged stored payload refused by the dependency
+identity and never served — is a new case in `stored_payloads.rs`. `pack_locator.rs` asserts the
+compact lane and `lane.version()` rather than the literal version that names it.
+
+**What is left, in the row's own units.** `operation_work_ns` is 1380.70 ms. The encode bucket is now
+75.65, of which 44.04 is the probe's own 15,977 calls — a decision that rule 2 alone would make for
+free on this fixture, since every frame was already wider than its payload — so the next lever is not
+there. The serial floor is: `diag_commit_total_ns` 455.52 + `diag_write_pack_total_ns` 204.88 +
+`diag_insert_objects_ns` 133.33 + `diag_wave_ns` 69.31 + `diag_validate_ns` 50.11 + `diag_begin_ns`
+4.05 = **917.20 ms one writer at a time**, with the whole-file lane still sealing one record per group
+and one write per record for 9,444 of the 16,797 writes.
+
+Checks as run: the whole core workspace `--no-fail-fast` **629 passed / 0 failed**; `-p layerfs-storage`
+alone **223 passed / 0 failed** across 33 binaries; `clippy --all-targets` clean; `fmt --all --check`
+clean; `check_product_boundary.py` PASS; the harness's own suite **120 passed / 3 failed**, the three
+pre-existing `registry_negative` cases. Not run: the reference `crates/` workspace, any other harness
+case or lane, and any second sample of this arm.
+
+Production LOC: **31426 → 31558 (delta +132)**. Method `tools/production_loc.py --root <tree>`, first
+parent `70366dd81` against the committed tree `4d8e6e2ab`; the harness driver change and the new test
+file are outside the counted scope and contribute 0.

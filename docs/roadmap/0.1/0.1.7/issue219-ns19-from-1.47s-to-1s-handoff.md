@@ -109,7 +109,7 @@ Every figure below is a counter in the row's receipt. The totals nest; the leave
 | block | ms | note |
 | --- | ---: | --- |
 | `diag_commit_total_ns` | 416.39 | 302 MB through the pager, ~5 µs per 4 KiB page — **this design's floor** |
-| `profile_full_ns` | **240.85** | zstd over 302 MB whose output is **input + 7 bytes** |
+| `profile_full_ns` | **240.85** | zstd over 302 MB whose output is **input + 13 to 16 bytes** (corrected in round 14; this line said **+ 7**) |
 | `diag_write_pack_total_ns` | 200.52 | 16,802 calls for 25,245 objects — **1.5 objects per write** |
 | `diag_insert_objects_ns` | 124.07 | 16,595 statements, 1.5 rows each |
 | `offer` uncharged remainder | 100.41 | per-object selection, availability and group accounting |
@@ -162,8 +162,12 @@ architectural change, lands *just at* 1 s with no margin. Today, with one constr
 
 ### A. Stop compressing what does not compress — **~ −241 ms**, the largest single number left
 
-`profile_full_ns` is **240.85 ms** of zstd over 302 MB, and on this fixture the output is **input + 7
-bytes**: 100 % of the cost for 0 % of the benefit. **The level is not the lever and is already
+`profile_full_ns` is **240.85 ms** of zstd over 302 MB, and on this fixture the output is **input + 13
+to 16 bytes**: 100 % of the cost for 0 % of the benefit. *(Corrected in round 14, which measured the
+width of every one of the 23,910 payload frames out of the control row's own pack rows: median +14,
+range +13..+16 — `docs/roadmap/0.1/0.1.7/evidence/issue219-ns19o-stored-20260921T085700Z/raw/frame-widths.txt`.
+This section said **+ 7 bytes** and the round-14 pre-registration inherited it, which is why that
+registration priced `pack_bytes_written` at −167 KB against a measured −332 KB.)* **The level is not the lever and is already
 refuted** — `zstd -1` and `zstd -3` take 0.28 s and 0.27 s and produce byte-identical output on 302 MB
 of incompressible data. The only way to remove this cost is **not to compress**: a raw/stored frame
 tag in the payload grammar, chosen by a **bounded sample** (compress a few KiB; if the ratio is ~1,
