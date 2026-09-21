@@ -1,0 +1,16 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-telemetry)
+   Compiling blake3 v1.8.5
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-content)
+error: very complex type used. Consider factoring parts into `type` definitions
+  --> crates/layerfs-content/src/filesystem/attributes/read.rs:53:20
+   |
+53 |     let mut level: Vec<(ObjectId, Option<(u8, AttributeKey)>, Vec<usize>)> =
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#type_complexity
+   = note: `-D clippy::type-complexity` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: could not compile `layerfs-content` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-content` (lib test) due to 1 previous error

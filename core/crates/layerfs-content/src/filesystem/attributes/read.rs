@@ -17,6 +17,8 @@ use crate::filesystem::limits::{MAXIMUM_ATTRIBUTE_VALUE_BYTES, MAXIMUM_PAGE_BYTE
 use crate::object::inode_leaf::InodeKind;
 use crate::object::{AuthenticatedObjects, ObjectId};
 
+type LookupDemand = (ObjectId, Option<(u8, AttributeKey)>, Vec<usize>);
+
 /// Work one attribute read performed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct AttributeReadWork {
@@ -50,8 +52,7 @@ pub fn lookup_many(
     if keys.is_empty() {
         return Ok(answers);
     }
-    let mut level: Vec<(ObjectId, bool, Option<AttributeKey>, Vec<usize>)> =
-        vec![(root, true, None, (0..keys.len()).collect())];
+    let mut level: Vec<LookupDemand> = vec![(root, None, (0..keys.len()).collect())];
     let mut depth = 0_u8;
     while !level.is_empty() {
         if depth > crate::filesystem::limits::MAXIMUM_TREE_LEVEL {
@@ -67,9 +68,9 @@ pub fn lookup_many(
         }
         work.read_waves = work.read_waves.saturating_add(1);
         let mut next = Vec::new();
-        for ((_, root_page, maximum, indices), canonical) in level.into_iter().zip(pages) {
+        for ((_, expected, indices), canonical) in level.into_iter().zip(pages) {
             work.pages_read = work.pages_read.saturating_add(1);
-            let page = decode_checked(&canonical, root_page, maximum.as_ref())?;
+            let page = decode_checked(&canonical, expected.as_ref())?;
             match page {
                 AttributePage::Leaf { entries, .. } => {
                     for index in indices {
@@ -80,7 +81,9 @@ pub fn lookup_many(
                         }
                     }
                 }
-                AttributePage::Branch { children, .. } => {
+                AttributePage::Branch {
+                    level, children, ..
+                } => {
                     let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
                     for index in indices {
                         let position = children.partition_point(|(key, _)| key < &keys[index]);
@@ -90,7 +93,7 @@ pub fn lookup_many(
                     }
                     for (position, group) in groups {
                         let (maximum, child) = children[position].clone();
-                        next.push((child, false, Some(maximum), group));
+                        next.push((child, Some((level - 1, maximum)), group));
                     }
                 }
             }
@@ -166,10 +169,9 @@ pub fn read_value_bounded(
     read_opaque(reader, root, key, MAXIMUM_ATTRIBUTE_VALUE_BYTES, work)
 }
 
-fn decode_checked(
+pub(super) fn decode_checked(
     canonical: &[u8],
-    root: bool,
-    maximum: Option<&AttributeKey>,
+    expected: Option<&(u8, AttributeKey)>,
 ) -> ContentResult<AttributePage> {
     if canonical.len() > MAXIMUM_PAGE_BYTES {
         return Err(ContentError::ObjectLimitExceeded {
@@ -178,11 +180,14 @@ fn decode_checked(
         });
     }
     let page = decode_attribute_page(canonical)?;
-    if !root && !page.filled()? {
+    if expected.is_some_and(|(level, _)| page.level() != *level) {
+        return Err(ContentError::InvalidRecord("attribute child level"));
+    }
+    if expected.is_some() && !page.filled()? {
         return Err(ContentError::NonCanonicalPagePartition);
     }
     if let (Some(maximum), Some(last)) = (
-        maximum,
+        expected.map(|(_, maximum)| maximum),
         match &page {
             AttributePage::Leaf { entries, .. } => entries.last().map(|entry| &entry.key),
             AttributePage::Branch { children, .. } => children.last().map(|(key, _)| key),

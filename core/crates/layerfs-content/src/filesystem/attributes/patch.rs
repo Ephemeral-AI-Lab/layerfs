@@ -9,10 +9,10 @@
 
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::attributes::build::AttributeTreeBuilder;
-use crate::filesystem::attributes::codec::{decode_attribute_page, AttributeEntry, AttributePage};
+use crate::filesystem::attributes::codec::{AttributeEntry, AttributePage};
 use crate::filesystem::attributes::keys::AttributeKey;
+use crate::filesystem::attributes::read::decode_checked;
 use crate::filesystem::attributes::value::emit_value;
-use crate::filesystem::limits::MAXIMUM_PAGE_BYTES;
 use crate::filesystem::objects::FilesystemObjects;
 use crate::object::{AuthenticatedObjects, ObjectId};
 
@@ -156,7 +156,7 @@ pub fn visit_keys_counted(
 
 /// In-order leaf cursor over one attribute tree, bounded by one leaf at a time.
 struct PageCursor {
-    pending: Vec<(ObjectId, bool, Option<AttributeKey>)>,
+    pending: Vec<(ObjectId, Option<(u8, AttributeKey)>)>,
     leaf: std::vec::IntoIter<AttributeEntry>,
 }
 
@@ -167,7 +167,7 @@ impl PageCursor {
         work: &mut AttributePatchWork,
     ) -> ContentResult<Self> {
         let mut cursor = Self {
-            pending: vec![(root, true, None)],
+            pending: vec![(root, None)],
             leaf: Vec::new().into_iter(),
         };
         cursor.advance(reader, work)?;
@@ -193,38 +193,22 @@ impl PageCursor {
         work: &mut AttributePatchWork,
     ) -> ContentResult<()> {
         while self.leaf.len() == 0 {
-            let Some((id, root, maximum)) = self.pending.pop() else {
+            let Some((id, expected)) = self.pending.pop() else {
                 return Ok(());
             };
             let canonical = reader.read_canonical(id)?;
-            if canonical.len() > MAXIMUM_PAGE_BYTES {
-                return Err(ContentError::ObjectLimitExceeded {
-                    limit: MAXIMUM_PAGE_BYTES,
-                    actual: canonical.len(),
-                });
-            }
             work.base_pages = work.base_pages.saturating_add(1);
-            let page = decode_attribute_page(&canonical)?;
-            if !root && !page.filled()? {
-                return Err(ContentError::NonCanonicalPagePartition);
-            }
-            if let Some(maximum) = &maximum {
-                let last = match &page {
-                    AttributePage::Leaf { entries, .. } => entries.last().map(|entry| &entry.key),
-                    AttributePage::Branch { children, .. } => children.last().map(|(key, _)| key),
-                };
-                if last != Some(maximum) {
-                    return Err(ContentError::InvalidRecord("attribute child summary"));
-                }
-            }
+            let page = decode_checked(&canonical, expected.as_ref())?;
             match page {
                 AttributePage::Leaf { entries, .. } => {
                     work.base_entries = work.base_entries.saturating_add(entries.len() as u64);
                     self.leaf = entries.into_iter();
                 }
-                AttributePage::Branch { children, .. } => {
+                AttributePage::Branch {
+                    level, children, ..
+                } => {
                     for (key, child) in children.into_iter().rev() {
-                        self.pending.push((child, false, Some(key)));
+                        self.pending.push((child, Some((level - 1, key))));
                     }
                 }
             }

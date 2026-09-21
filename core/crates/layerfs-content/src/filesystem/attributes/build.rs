@@ -184,8 +184,10 @@ impl AttributeTreeBuilder {
                     .ok_or(ContentError::MappingDepthExceeded)?;
                 continue;
             }
+            // push_summary places level-N children in levels[N + 1], so this
+            // pending group's index is already the branch level to emit.
             let branch_level =
-                u8::try_from(index + 1).map_err(|_| ContentError::MappingDepthExceeded)?;
+                u8::try_from(index).map_err(|_| ContentError::MappingDepthExceeded)?;
             if branch_level > MAXIMUM_TREE_LEVEL {
                 return Err(ContentError::MappingDepthExceeded);
             }

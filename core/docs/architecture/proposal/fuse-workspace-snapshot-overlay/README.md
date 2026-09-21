@@ -49,6 +49,8 @@ sequence and persistent owner decisions into the next task.
 container-mounted Workspace. Remaining lifecycle/edit/Commit controls are still
 open; Status does not qualify those routes.
 
+**R2 prerequisite:** [the attribute hierarchy correction](10-attribute-hierarchy.md) fixes shared wide-tree construction and validates bounded descent before the portable metadata operation. Existing historical roots and receipts keep their original identities.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The
