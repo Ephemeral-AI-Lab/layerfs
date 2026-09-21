@@ -18,8 +18,11 @@
 and condition 3 was *"an owner ruling that the pipeline family needs a second namespace-scale point for
 a reason outside this campaign's gap"* — that ruling is given: the row is commissioned. The commission
 is [`issue219-ns20-pipeline-100k-handoff.md`](issue219-ns20-pipeline-100k-handoff.md), which carries the
-surfaces the row costs, the two hard constraints that make the obvious declaration wrong, and the one
-modelling decision that still needs a ruling of its own (the declared total).
+surfaces the row costs, the two hard constraints that make the obvious declaration wrong, and the
+declaration itself: the reference harness registers **100,000 files / 500,000,000 B / 1,000
+directories / 2 anchors** with a scaled band mix, so the row is not a total to invent but a port to
+make — and the core harness's port currently produces a **different fixture at the same total**
+(97,899 tiny files, one 100 MB anchor).
 
 **Conditions 1 and 2 are not met and are not waived.** There is still no session control, so a
 100,000-entry row's number cannot yet be compared with the 10,000-entry row it extends; the handoff's

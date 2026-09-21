@@ -3479,12 +3479,18 @@ of which would have cost the next agent a wasted round:
    `distributable = total_bytes − anchor_bytes − positive`, and at 100,000 entries `positive = 99,899`
    with `anchor_bytes = 100,000,000`. Anything smaller is refused with `"namespace byte budget"`.
 
-**And one decision the commission deliberately does not make.** `plan` states its own rule
-(`namespace_content.rs:153-155`): beyond the declared bands, *"a larger `entries` degrades into a
-bigger tiny band rather than a different shape"*. At 100,000 entries **90,000 files are surplus and
-every one lands in the tiny band**, so a 300,000,000 total measures *entry* scaling at constant bytes
-while ~600,000,000 measures both axes. That is a declaration about what the row is evidence for and it
-needs its own ruling before the run.
+**And the decision the commission deliberately does not make — now correctly specified.** An earlier
+draft of the commission framed the row's bytes as a total to invent, with the core port's fallback rule
+(`namespace_content.rs:153-155`, *"a larger `entries` degrades into a bigger tiny band"*) doing the
+scaling. **That was wrong and is corrected in the commission's §4**: the reference harness registers its
+own 100,000-entry scenario (`benchmark/fs-bench-pro/families/init_namespace/mod.rs:85-97`) —
+**100,000 files / 1,000 directories / 500,000,000 B / 2 anchors of 100,000,000 each**, with
+`empty 1,000 / tiny 78,998 / small 15,000 / medium 5,000 / anchor 2`, where `src/main.rs:1580-1583`
+proves `anchor_bytes` is per anchor file. So the row is **a declaration to port, not a total to
+choose**: taught that declaration it is a faithful analogue of `namespace-100000-files-500mb`, and left
+alone the core port at 100,000 entries produces a *different fixture at the same total* — 97,899 tiny
+files and one 100 MB anchor. Both are legitimate rows and they are not the same shape; which one is
+wanted needs recording before the run.
 
 **Two errors in the page that commissioned round 20 are corrected in the commission**: it prices the
 row as needing "a new prepared artifact", which this family does not use (`prepared = -`,

@@ -88,42 +88,70 @@ the declaration the ladder already uses.
 
 `namespace_content.rs:222-225`: `distributable = total_bytes − anchor_bytes − positive`, where
 `positive` counts every non-empty, non-anchor slot and `anchor_bytes = min(ANCHOR_BYTES, total_bytes)`
-with `ANCHOR_BYTES = 100,000,000`. At 100,000 entries the declared classes contribute 100 empty files
-and 1 anchor, so **`positive = 99,899`** and
+with `ANCHOR_BYTES = 100,000,000`. **The floor depends on which declaration §4 ports**, and both are
+computed the same way:
 
-```text
-total_bytes >= 100,000,000 + 99,899 = 100,099,899
-```
+| declaration | empty | anchors | `positive` | anchor bytes | floor |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| the core port as it stands | 100 | 1 | 99,899 | 100,000,000 | **100,099,899** |
+| the reference's 100,000 scenario (§4) | 1,000 | 2 | 98,998 | 200,000,000 | **200,098,998** |
 
-A smaller total is refused with `"namespace byte budget"`. Any declaration above that floor is
-accepted and the bytes are distributed by the declared weights.
-
----
-
-## 4. The one modelling decision that needs an owner ruling
-
-`plan` distributes entries over the declared bands and, for anything beyond them, says so itself
-(`namespace_content.rs:153-155`):
-
-> *"Bands: the declared counts, then any surplus as more tiny files, so a larger `entries` degrades
-> into a bigger tiny band rather than a different shape."*
-
-The declared classes are `EMPTY 100`, `TINY 7,899` (1..8 B), `SMALL 1,500` (32..256 B),
-`MEDIUM 500` (1,024..8,192 B) and `ANCHOR 1` — 10,000 in total. So at 100,000 entries **90,000 files
-are surplus and every one of them lands in the tiny band**, whatever total is declared. Two coherent
-declarations follow, and they measure different things:
-
-| | declared total | what the row then measures |
-| --- | ---: | --- |
-| **A — same content, ten times the entries** | 300,000,000 | entry scaling: 10× the inodes, 10× the rows, the **same** bytes, with ~90 % of files tiny (≈300 B each after distribution) |
-| **B — ten times the entries *and* the bytes** | ~600,000,000 | both axes; closer to the reference harness's `300 MB + 100 MB anchor` shape, and the one this handoff's own arithmetic below assumes |
-
-**This document does not choose.** It is a declaration about what the row is evidence for, and round
-20 was told in writing that a handoff "does not pre-authorise a case change". **Get the ruling before
-the run and record it in the pre-registration**, because it changes the pins, the predicted bytes and
-what any comparison to the 10k row means.
+A smaller total is refused with `"namespace byte budget"`. The reference's own `500,000,000` is well
+above either floor.
 
 ---
+
+## 4. The declaration already exists — port it, do not invent a total
+
+**This section replaces an earlier draft of itself, which was wrong.** It framed the row's bytes as a
+choice between totals with the core port's fallback rule (*"a larger `entries` degrades into a bigger
+tiny band"*, `namespace_content.rs:153-155`) doing the scaling. The reference harness declares its own
+100,000-entry scenario, and it is **not** the 10,000-entry band declaration ten times over:
+
+`benchmark/fs-bench-pro/families/init_namespace/mod.rs:85-97`:
+
+| field | value |
+| --- | ---: |
+| `regular_files` | 100,000 |
+| `data_directories` | **1,000** |
+| `logical_bytes` | **500,000,000** |
+| `anchor_files` | **2** |
+| `anchor_bytes` | 100,000,000 **each** |
+| `empty_files` | 1,000 |
+| `tiny_files` | 78,998 |
+| `small_files` | 15,000 |
+| `medium_files` | 5,000 |
+
+Three things follow, and each is a code surface rather than a constant to copy:
+
+1. **`anchor_bytes` is per anchor file.** `src/main.rs:1580-1583` computes the scenario's total as
+   `scenario.anchor_files.checked_mul(scenario.anchor_bytes)`, so `namespace-100000` carries
+   **200,000,000 B of anchors** and 300,000,000 distributed over the rest. The core port subtracts a
+   single `anchor_bytes` for a single slot (`namespace_content.rs:222`, and one
+   `bands.push((4, 0))`), so it needs the count and the multiplication — and `anchor_slot` currently
+   finds *the* anchor, singular.
+2. **The bands are a scaled declaration, not a fallback.** `1,000 + 78,998 + 15,000 + 5,000 + 2 =
+   100,000`. Empty, small and medium each scale exactly ×10 (100→1,000, 1,500→15,000, 500→5,000), the
+   anchor goes **1 → 2** rather than ×10, and **tiny is the balancing band**:
+   `100,000 − 1,000 − 15,000 − 5,000 − 2 = 78,998`, which is eight *more* than `7,899 × 10`. The core
+   port's `DECLARED_CLASSES` is the 10,000-entry one (`namespace_content.rs:38-51`) and everything
+   beyond it lands in tiny.
+3. **"500 MB" here is 500,000,000 B — decimal — and it is not the C1 ladder's number.** The ladder's
+   100,000-entry rung declares `524,288,000` (500 MiB, `c1_fs_build.rs:20`). Both are 100,000 files over
+   1,000 directories; they differ in bytes, and the bar's case is the decimal one.
+
+**So the row is "100,000 files / 500 MB" if and only if the port is taught the declaration above.**
+Left alone, the core port at `entries = 100_000` produces a *different fixture at the same total*:
+100 empty + 7,899 tiny + 1,500 small + 500 medium + 1 anchor + **90,000 surplus tiny** — 97,899 tiny
+files and one 100 MB anchor. That is a legitimate fixture and a legitimate row; it is **not** the bar's
+case, and comparing the two would be comparing two different shapes.
+
+**The round's first decision, registered here:** port the declaration above, so the row is a faithful
+analogue of `namespace-100000-files-500mb`; or keep the port's fallback and say plainly that the row
+measures entry scaling at a different band mix. The first is what makes the row evidence about the
+bar's case; the second is what makes it evidence about this pipeline row's own scaling. **This page does
+not choose**, and the choice needs recording either way — but it no longer pretends the reference's
+declaration does not exist.
 
 ## 5. The session anchor — do this before the first timed run
 
