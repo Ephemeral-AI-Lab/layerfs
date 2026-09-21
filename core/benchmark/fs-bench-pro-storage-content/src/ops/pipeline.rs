@@ -846,6 +846,18 @@ fn namespace_scale(
     // subtraction) the caller's tree build. `span_build_ns` is one span; a span
     // cannot say which half is the product's.
     let mut build_accept_ns = 0_u64;
+    // The build's own work counters, accumulated over its batches. Round 10 put
+    // 221.70 ms in `validate` and nothing in the tree says which loop spends it;
+    // the product already maintains these and this row is the first to publish
+    // them, so the phase's price can be read per entry read and per entry walked
+    // instead of guessed at.
+    #[derive(Default)]
+    struct BuildWork {
+        objects_read: u64,
+        base_records_read: u64,
+        validation: layerfs_content::filesystem::validate::ValidationWork,
+    }
+    let mut build_work = BuildWork::default();
     instruments::heap_begin();
     let (measured, report) = super::measure("pipeline", |timing: &TimingScope<'_, Active>| {
         // **The row's formula excludes the connection.** The measured closure
@@ -906,6 +918,15 @@ fn namespace_scale(
                             Ok(update_filesystem_timed(&mut objects, &input, ordering, &phases)?)
                         }
                     })?;
+                build_work.validation.objects_read += built.counters.validation.objects_read;
+                build_work.validation.read_waves += built.counters.validation.read_waves;
+                build_work.validation.inode_demands += built.counters.validation.inode_demands;
+                build_work.validation.inode_pages_read += built.counters.validation.inode_pages_read;
+                build_work.validation.directory_pages_read +=
+                    built.counters.validation.directory_pages_read;
+                build_work.validation.entries_examined += built.counters.validation.entries_examined;
+                build_work.objects_read += built.counters.objects.objects_read;
+                build_work.base_records_read += built.counters.base_records_read;
                 last = Some(built);
                 batch_roots += 1;
             }
@@ -1074,6 +1095,27 @@ fn namespace_scale(
         "ns",
         "CountingConsumer wall time around the product's accept, the other half of span_build_ns",
     )?;
+    for (name, value) in [
+        ("pipeline.validation_objects_read", build_work.validation.objects_read),
+        ("pipeline.validation_read_waves", build_work.validation.read_waves),
+        ("pipeline.validation_inode_demands", build_work.validation.inode_demands),
+        ("pipeline.validation_inode_pages_read", build_work.validation.inode_pages_read),
+        (
+            "pipeline.validation_directory_pages_read",
+            build_work.validation.directory_pages_read,
+        ),
+        ("pipeline.validation_entries_examined", build_work.validation.entries_examined),
+        ("pipeline.build_objects_read", build_work.objects_read),
+        ("pipeline.build_base_records_read", build_work.base_records_read),
+    ] {
+        context.trace.write_number(
+            Kind::Counter,
+            name,
+            value as i128,
+            "operations",
+            "FilesystemUpdateCounters, accumulated over the row's batches",
+        )?;
+    }
     context.trace.write_number(
         Kind::Counter,
         "pipeline.largest_batch_bindings",
