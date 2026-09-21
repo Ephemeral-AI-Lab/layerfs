@@ -334,3 +334,11 @@ original length/frame/progress/absolute deadline remains in force. This avoids
 resetting a terminal frame while upload bytes are unread. The handler is not
 reentered and the original failure is preserved; malformed BEGIN metadata keeps
 its immediate best-effort refusal. See the [observed failure and correction](proposal/fuse-workspace-snapshot-overlay/12-early-refusal.md).
+
+The R3a Workspace input primitive, based on `d555c8bef`, is described in
+[the owned-payload implementation](proposal/fuse-workspace-snapshot-overlay/14-owned-payload.md).
+It uses the existing portable Source contract and introduces no service operation
+or daemon input control. Read-only daemon startup keeps disk backing disabled;
+its shutdown and failed-control cleanup now pass the existing absolute deadline
+through `close_clean_until`. FUSE preserves typed local backing error causes in
+its errno mapping, without adding a writable callback.

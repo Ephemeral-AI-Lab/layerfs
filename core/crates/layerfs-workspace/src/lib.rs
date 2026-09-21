@@ -5,6 +5,8 @@ mod backing;
 mod filesystem;
 mod runtime;
 mod types;
+pub use backing::payload::OwnedPayload;
+pub use backing::reader::PayloadReader;
 pub use layerfs_bridge::contract::Code as ServiceCode;
 pub use runtime::host::WorkspaceHost;
 pub use runtime::lifecycle::MountLease;

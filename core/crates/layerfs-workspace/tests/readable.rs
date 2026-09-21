@@ -135,6 +135,7 @@ impl Fixture {
                 root: path.clone(),
                 max_count,
                 memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+                disk_budget_bytes: None,
             },
             deliver,
         )
@@ -408,6 +409,7 @@ fn full_cookie_table_still_replays_existing_positions() {
             root: fixture.path.clone(),
             max_count: 1,
             memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+            disk_budget_bytes: None,
         },
         deliver,
     )

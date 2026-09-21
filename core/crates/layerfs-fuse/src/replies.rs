@@ -18,6 +18,14 @@ pub(crate) fn errno(error: WorkspaceError) -> Errno {
         WorkspaceError::Denied => Errno::EACCES,
         WorkspaceError::Unsupported => Errno::EOPNOTSUPP,
         WorkspaceError::Deadline => Errno::ETIMEDOUT,
+        WorkspaceError::Backing(failure) => match failure.kind {
+            std::io::ErrorKind::StorageFull => Errno::ENOSPC,
+            std::io::ErrorKind::TimedOut => Errno::ETIMEDOUT,
+            std::io::ErrorKind::PermissionDenied => Errno::EACCES,
+            std::io::ErrorKind::Unsupported => Errno::EOPNOTSUPP,
+            std::io::ErrorKind::Interrupted => Errno::EINTR,
+            _ => Errno::EIO,
+        },
         WorkspaceError::Service(failure) => match failure.code {
             ServiceCode::InvalidInput => Errno::EINVAL,
             ServiceCode::Unsupported => Errno::EOPNOTSUPP,

@@ -29,6 +29,7 @@ pub(crate) struct Inner {
     pub base: Root,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
+    pub directory: Option<Arc<crate::backing::directory::Directory>>,
     pub stopping: AtomicBool,
     pub state: Mutex<State>,
     pub _charge: Charge,

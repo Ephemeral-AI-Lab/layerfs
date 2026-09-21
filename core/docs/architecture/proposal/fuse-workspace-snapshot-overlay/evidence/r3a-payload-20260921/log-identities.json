@@ -1,0 +1,57 @@
+{
+  "pair1-r3a-host-tests.log": {
+    "raw_path": "core/target/pair1-r3a-host-tests.log",
+    "raw_sha256": "99da5084010a1f42cf52f6cdcf0772ad72ab6aba0cf5bd24a4c3facc96ef33b6",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-core-tests.log": {
+    "raw_path": "core/target/pair1-r3a-core-tests.log",
+    "raw_sha256": "033f19cc036b2d231614b4054b7b7c2d84a1884358889cd290e338975405499d",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-linux-checks.log": {
+    "raw_path": "core/target/pair1-r3a-linux-checks.log",
+    "raw_sha256": "8118ffd35b76480f04583b3b754803c0ba2f5fba9a58b606763edbf59dd77911",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-core-clippy.log": {
+    "raw_path": "core/target/pair1-r3a-core-clippy.log",
+    "raw_sha256": "94f0fed989393b28d1c36db88b22d87b7c131c4f303b3fdb5c195a872d6992ce",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-core-clippy-recheck.log": {
+    "raw_path": "core/target/pair1-r3a-core-clippy-recheck.log",
+    "raw_sha256": "ba5e075de2f1be06d76b54b7288d613c0a9cc3c39986c0f9f5de45f350335197",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-final-linux-checks.log": {
+    "raw_path": "core/target/pair1-r3a-final-linux-checks.log",
+    "raw_sha256": "c9eec7a14b8852c9d6e295aee2197bcf818b65509f6f08e8de2e01b48e349652",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-oracle-build.log": {
+    "raw_path": "core/target/pair1-r3a-oracle-build.log",
+    "raw_sha256": "d0d82bd465b368f95776c06b598916c4192bf71fefa17034cc5353ca1d03a193",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-path-capacity-tests.log": {
+    "raw_path": "core/target/pair1-r3a-path-capacity-tests.log",
+    "raw_sha256": "e641157d9bbed0b8a5c8afc06f5daa3be8ec3af8d0a04a960f5cb4bdb64df8c2",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-path-linux-checks.log": {
+    "raw_path": "core/target/pair1-r3a-path-linux-checks.log",
+    "raw_sha256": "d72dbfe5759a4def34d627ee7a0001512b3fdfe6c24136e8b3e861b68f3ad61e",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-path-host-clippy.log": {
+    "raw_path": "core/target/pair1-r3a-path-host-clippy.log",
+    "raw_sha256": "6b45c767b325e3a14f292745513a4b02e8639e02c7ecb040e3cdedceedb518a1",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  },
+  "pair1-r3a-path-host-build.log": {
+    "raw_path": "core/target/pair1-r3a-path-host-build.log",
+    "raw_sha256": "99e11a37a566e7c3915d3af17f262a8fc0686681e5253f3d65f68e880ae3b4fc",
+    "summary_omits": "LFT1 incidental telemetry records only"
+  }
+}

@@ -1,4 +1,8 @@
 use super::state::*;
+use crate::backing::{
+    directory::Directory,
+    payload::{bare_failure, PayloadHost},
+};
 use crate::{
     backing::budget::{Budget, Charge},
     filesystem::namespace::attributes,
@@ -30,12 +34,14 @@ pub(crate) struct Host {
     pub deliver: OperationDelivery,
     pub request_id: AtomicU64,
     pub registry: Mutex<Registry>,
+    pub payloads: Option<Arc<PayloadHost>>,
     pub _charge: Charge,
 }
 pub(crate) struct Entry {
     pub id: Box<str>,
     pub incarnation: [u8; 32],
     pub state: Option<Arc<Inner>>,
+    pub _directory: Option<Arc<Directory>>,
     pub _name_charge: Charge,
 }
 pub(crate) struct Registry {
@@ -88,7 +94,7 @@ impl Drop for Remote<'_> {
 
 impl WorkspaceHost {
     pub fn new(
-        config: WorkspaceConfig,
+        mut config: WorkspaceConfig,
         deliver: OperationDelivery,
     ) -> Result<Self, WorkspaceError> {
         if !cfg!(unix) {
@@ -105,8 +111,10 @@ impl WorkspaceHost {
         {
             return Err(WorkspaceError::InvalidInput);
         }
+        // The caller can supply a small path with a much larger spare allocation.
+        config.root = config.root.into_boxed_path().into_path_buf();
         let budget = Budget::new(config.memory_budget_bytes);
-        let minimum = 8192usize
+        let minimum = 16384usize
             .checked_add(
                 size_of::<Entry>()
                     + 63
@@ -118,10 +126,21 @@ impl WorkspaceHost {
                     + COOKIE_LIMIT * size_of::<Cookie>(),
             )
             .ok_or(WorkspaceError::Capacity)?;
+        let minimum = minimum
+            .checked_add(if config.disk_budget_bytes.is_some() {
+                5 * crate::backing::segments::WINDOW_BYTES + 6 * 8192
+            } else {
+                0
+            })
+            .ok_or(WorkspaceError::Capacity)?;
         if minimum > config.memory_budget_bytes {
             return Err(WorkspaceError::Capacity);
         }
-        let charge = budget.reserve(8192)?;
+        let charge = budget.reserve(16384)?;
+        let payloads = config
+            .disk_budget_bytes
+            .map(|quota| PayloadHost::new(config.root.join("private-backing"), quota, &budget))
+            .transpose()?;
         let registry = Registry {
             entries: Vec::new(),
             capacity_charge: budget.reserve(0)?,
@@ -136,6 +155,7 @@ impl WorkspaceHost {
                 deliver,
                 request_id: AtomicU64::new(1),
                 registry: Mutex::new(registry),
+                payloads,
                 _charge: charge,
             }),
         })
@@ -167,7 +187,7 @@ impl WorkspaceHost {
                 }
             }
         }
-        {
+        let directory = {
             let mut registry = self.inner.registry.lock().map_err(|_| WorkspaceError::Io)?;
             if registry.entries.len() == self.inner.config.max_count {
                 return Err(WorkspaceError::Capacity);
@@ -179,16 +199,34 @@ impl WorkspaceHost {
             }
             let name_charge = self.inner.budget.reserve(options.id.len())?;
             registry.reserve_one(&self.inner.budget, self.inner.config.max_count)?;
+            let directory = self
+                .inner
+                .payloads
+                .as_ref()
+                .map(|host| {
+                    host.directory(
+                        self.inner
+                            .config
+                            .root
+                            .join("private-backing")
+                            .join(&options.id),
+                        options.incarnation,
+                    )
+                })
+                .transpose()?;
             registry.entries.push(Entry {
                 id: options.id.as_str().into(),
                 incarnation: options.incarnation,
                 state: None,
+                _directory: directory.clone(),
                 _name_charge: name_charge,
             });
-        }
-        let path = self.inner.config.root.join("workspace").join(&options.id);
+            directory
+        };
+        let mut path = self.inner.config.root.join("workspace");
+        path.push(&options.id);
         let mut owned_directory = false;
-        let result = (|| {
+        let mut result = (|| {
             let _scratch = self.inner.budget.reserve(CALL_SCRATCH)?;
             self.inner
                 .remote
@@ -253,6 +291,10 @@ impl WorkspaceHost {
                 .try_reserve_exact(COOKIE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;
             nodes.push(Node::new(attr, content, &[], attr.serial));
+            if let (Some(host), Some(directory)) = (&self.inner.payloads, &directory) {
+                host.initialize(directory)
+                    .map_err(|error| bare_failure(BackingPhase::Acquire, error.kind()))?;
+            }
             create_owned_directory(&path)?;
             owned_directory = true;
             let inner = Arc::new(Inner {
@@ -261,7 +303,8 @@ impl WorkspaceHost {
                 store: options.store,
                 base,
                 root: attr,
-                mount_path: path.clone(),
+                mount_path: path.clone().into_boxed_path().into_path_buf(),
+                directory: directory.clone(),
                 stopping: AtomicBool::new(false),
                 _charge: charge,
                 state: Mutex::new(State {
@@ -288,11 +331,19 @@ impl WorkspaceHost {
                 host: self.inner.clone(),
             })
         })();
-        if result.is_err() && (!owned_directory || fs::remove_dir(&path).is_ok()) {
-            if let Ok(mut registry) = self.inner.registry.lock() {
-                registry
-                    .entries
-                    .retain(|entry| entry.id.as_ref() != options.id);
+        if result.is_err() {
+            let mount_released = !owned_directory || fs::remove_dir(&path).is_ok();
+            let backing_released = directory
+                .as_ref()
+                .is_none_or(|directory| directory.close().is_ok());
+            if mount_released && backing_released {
+                if let Ok(mut registry) = self.inner.registry.lock() {
+                    registry
+                        .entries
+                        .retain(|entry| entry.id.as_ref() != options.id);
+                }
+            } else if let Err(WorkspaceError::Backing(failure)) = &mut result {
+                failure.cleanup_failed = true;
             }
         }
         result

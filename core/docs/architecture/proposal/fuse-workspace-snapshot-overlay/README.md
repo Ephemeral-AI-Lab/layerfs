@@ -55,14 +55,16 @@ open; Status does not qualify those routes.
 
 **R2 update:** [portable metadata save](13-portable-metadata.md) is implemented and verified through the real authenticated daemon/service route. It preserves content and generic attributes; mounted mutation, snapshots and Commit still depend on R3/R4. The full-core check also prompted the focused [early-refusal correction](12-early-refusal.md).
 
+**R3a update:** [immutable owned payload input](14-owned-payload.md) now uses bounded private direct I/O and explicit retention/reclamation. Its real Linux functional proof includes short writes and ENOSPC. The next operation is R3b local RangeEdit with a maintained disk index; visible edits and Commit are not implemented by the input primitive.
+
 **Current writable target:** the owner includes `npm install` with large and
 tiny files and wants to keep memory low. Pending data uses explicit local disk
 backing with bounded RAM buffers, resident indexes and snapshot state. The
 earlier RAM-only candidate is superseded for this target. The
 [workload and backing contract](01-workspace-fuse-contract.md#134-npm-install-and-low-memory-backing)
-records the metadata-scaling/shared-operation prerequisites. This audit updates
-the design and verification requirements; no backing implementation, budget
-increase or supported-install claim is made.
+records the metadata-scaling/shared-operation prerequisites. The payload-input implementation is recorded in 14. Disk metadata/indexes,
+visible mutations, snapshot/Commit and the full installation remain separate;
+no RAM-budget increase or supported-install claim is made.
 
 [Linux and Docker placement examples](01-workspace-fuse-contract.md#321-one-configurable-root-linux-example)
 show one configurable root with `workspace/` and `private-backing/` children,

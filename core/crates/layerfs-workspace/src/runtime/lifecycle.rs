@@ -1,6 +1,10 @@
 use super::state::Workspace;
 use crate::{ReferenceScope, WorkspaceError, WorkspaceStatus};
-use std::{fs, sync::atomic::Ordering};
+use std::{
+    fs,
+    sync::atomic::Ordering,
+    time::{Duration, Instant},
+};
 
 /// One projection binding. Dropping it never claims that kernel detach succeeded.
 pub struct MountLease {
@@ -39,6 +43,10 @@ impl Workspace {
         })
     }
     pub fn close_clean(&self) -> Result<(), WorkspaceError> {
+        self.close_clean_until(Instant::now() + Duration::from_secs(10))
+    }
+    pub fn close_clean_until(&self, deadline: Instant) -> Result<(), WorkspaceError> {
+        crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         {
             let state = self.state()?;
             if state.closed {
@@ -54,9 +62,27 @@ impl Workspace {
             {
                 return Err(WorkspaceError::Busy);
             }
+            if let Some(host) = &self.host.payloads {
+                if host.has_external_pins(self.inner.incarnation)? {
+                    return Err(WorkspaceError::Busy);
+                }
+            }
             self.inner.stopping.store(true, Ordering::Release);
         }
+        if let Some(host) = &self.host.payloads {
+            host.reclaim(self.inner.incarnation, deadline)?;
+            if host.remaining(self.inner.incarnation)? > 0 {
+                return Err(WorkspaceError::Busy);
+            }
+        }
+        if let Some(directory) = &self.inner.directory {
+            crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+            directory.close().map_err(|error| {
+                crate::backing::payload::bare_failure(crate::BackingPhase::Cleanup, error.kind())
+            })?;
+        }
         // A failed leaf removal keeps registry/count/table ownership for inspection.
+        crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         fs::remove_dir(&self.inner.mount_path)?;
         let mut state = self.state()?;
         state.closed = true;

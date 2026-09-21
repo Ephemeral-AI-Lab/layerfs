@@ -1,0 +1,9 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.54s
+  Executable tests/payload.rs (core/target-linux/debug/deps/payload-13cfd80947f077b5)
+info: downloading component 'clippy'
+info: installing component 'clippy'
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling nix v0.31.3
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.83s

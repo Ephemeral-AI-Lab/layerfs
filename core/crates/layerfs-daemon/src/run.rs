@@ -119,11 +119,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Some(control)
                 }
                 Err(error) => {
-                    if let Err(cleanup) = mount.unmount(Instant::now() + Duration::from_secs(10)) {
+                    let deadline = Instant::now() + Duration::from_secs(10);
+                    if let Err(cleanup) = mount.unmount(deadline) {
                         pipe::diagnostic(&format!(
                             "control startup mount cleanup retained: {cleanup}\n"
                         ));
-                    } else if let Err(cleanup) = workspace.close_clean() {
+                    } else if let Err(cleanup) = workspace.close_clean_until(deadline) {
                         pipe::diagnostic(&format!(
                             "control startup Workspace cleanup retained: {cleanup}\n"
                         ));
@@ -144,7 +145,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         control.stop(deadline)?;
     }
     mount.unmount(deadline)?;
-    workspace.close_clean()?;
+    workspace.close_clean_until(deadline)?;
     pipe::diagnostic("workspace closed\n");
     signal?;
     Ok(())

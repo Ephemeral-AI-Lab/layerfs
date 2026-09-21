@@ -1,0 +1,82 @@
+{
+  "status": "PASS",
+  "mode": "functional-owned-payload",
+  "checks": [
+    {
+      "id": "unaligned-segment-ranges",
+      "status": "PASS"
+    },
+    {
+      "id": "reader-pins-and-admission",
+      "status": "PASS"
+    },
+    {
+      "id": "empty-deadline-and-quota",
+      "status": "PASS"
+    },
+    {
+      "id": "failed-input-retention",
+      "status": "PASS"
+    },
+    {
+      "id": "corruption-and-explicit-cleanup",
+      "status": "PASS"
+    },
+    {
+      "id": "local-progress-and-window-headroom",
+      "status": "PASS"
+    },
+    {
+      "id": "large-stream-and-residency",
+      "status": "PASS"
+    },
+    {
+      "id": "clean-close",
+      "status": "PASS"
+    },
+    {
+      "id": "exact-block-quota-reuse",
+      "status": "PASS"
+    },
+    {
+      "id": "unowned-collider-retention",
+      "status": "PASS"
+    },
+    {
+      "id": "stale-path-and-filesystem-refusal",
+      "status": "PASS"
+    },
+    {
+      "id": "native-enospc-retention",
+      "status": "PASS"
+    }
+  ],
+  "performance_claim": false,
+  "cache_claim": "only observed private-inode residency",
+  "not_run": [
+    "mounted writes",
+    "metadata index",
+    "snapshot G/live successor",
+    "Commit/lowering",
+    "npm",
+    "R6",
+    "RSS/cgroup hard bound"
+  ],
+  "source": "d555c8bef2cd00f60f26720cb4b95a226917df17",
+  "product_inputs_sha256": "8fdf22d88dc44d144c10eff94a5203e615af08b78e816809cc569174e2d5ea78",
+  "test_binary_sha256": "4d9f13742d99a100070b4da7fc5c49c72ae0583485d14615fab49389e892ad89",
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "driver_sha256": "cf58e1a111a2a5193710f4478d4eab3cde54f9353310b28f7473c5029832e979",
+  "oracle_sha256": "a52ae8c7a082abc9668585adfcab0d9b23281a18212fb23b5c300f652a2d51a1",
+  "setup": "ext4   /payload\next4   /enospc\n4096 9622\n",
+  "invocation": "docker exec -e LAYERFS_PAYLOAD_TEST_ROOT=/payload -e LAYERFS_PAYLOAD_ENOSPC_ROOT=/enospc -e LAYERFS_PAYLOAD_RESIDENCY_ORACLE=/work/core/crates/layerfs-workspace/tests/payload_residency.py -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-payload-a3ff94eec04b4f3f /work/core/target-linux/debug/deps/payload-13cfd80947f077b5 --ignored --nocapture --test-threads=1",
+  "test_exit": 0,
+  "observations": [
+    "PAYLOAD_RESIDENCY {\"files\": 64, \"pages\": 16448, \"resident_pages\": 0, \"allocated_bytes\": 67371008, \"page_size\": 4096, \"scope\": \"private payload inodes; not cgroup/RSS/global filesystem metadata\"}",
+    "PAYLOAD_RESOURCE input_bytes=67108864 accounted_peak=1936757 open_fds_peak=7 baseline_fds=6",
+    "PAYLOAD_ENOSPC BackingFailure { phase: Allocate, payload: 1, declared_bytes: 67108864, completed_bytes: 40894464, created_segments: 40, allocated_bytes: 41906176, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: StorageFull }"
+  ],
+  "cleanup": "PASS",
+  "command_wall_seconds": 1.146659208010533,
+  "hard_budget_seconds": 60
+}

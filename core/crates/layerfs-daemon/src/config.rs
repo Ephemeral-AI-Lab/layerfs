@@ -233,6 +233,7 @@ pub(crate) fn workspace(
             root,
             max_count: positive(&env("LAYERFS_WORKSPACE_MAX_COUNT")?)?,
             memory_budget_bytes: memory,
+            disk_budget_bytes: None,
         },
         attach: AttachOptions {
             id: args[1].clone(),

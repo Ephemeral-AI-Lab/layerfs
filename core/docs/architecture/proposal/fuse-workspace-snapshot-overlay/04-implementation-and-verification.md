@@ -1203,6 +1203,7 @@ corrections retain their own identities and failures. [R2](13-portable-metadata.
 now supplies one typed portable metadata save through the shared service. Its
 actual native route and refreshed mounted Status pass at the exact recorded
 product seal. This closes the metadata-save prerequisite, not mounted writes.
-R0-W/R3a next acquire immutable bounded disk inputs; R3b must then provide the
+[R0-W/R3a](14-owned-payload.md) now acquire immutable bounded disk inputs with
+checked Linux failure ownership. R3b must provide the
 maintained disk metadata/piece index before any local file mutation is published.
 Remaining control lifecycle/edit/Commit, R3b–R5b and R6 rows stay open.

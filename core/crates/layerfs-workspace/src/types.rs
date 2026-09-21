@@ -22,6 +22,7 @@ pub struct WorkspaceConfig {
     pub root: PathBuf,
     pub max_count: usize,
     pub memory_budget_bytes: usize,
+    pub disk_budget_bytes: Option<u64>,
 }
 #[derive(Clone, Debug)]
 pub enum Base {
@@ -72,6 +73,62 @@ pub enum WorkspaceError {
     Deadline,
     Io,
     Service(Failure),
+    Backing(BackingFailure),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BackingPhase {
+    Acquire,
+    Create,
+    Allocate,
+    Write,
+    Input,
+    Read,
+    Verify,
+    Cleanup,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BackingFailure {
+    pub phase: BackingPhase,
+    pub payload: u64,
+    pub declared_bytes: u64,
+    pub completed_bytes: u64,
+    pub created_segments: u32,
+    pub allocated_bytes: u64,
+    pub reserved_bytes: u64,
+    pub cleanup_failed: bool,
+    pub accounting_complete: bool,
+    pub kind: std::io::ErrorKind,
+}
+impl std::fmt::Display for BackingFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for BackingFailure {}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BackingStatus {
+    pub quota_bytes: u64,
+    pub allocated_bytes: u64,
+    pub reserved_bytes: u64,
+    pub payloads: usize,
+    pub retained_payloads: usize,
+    pub failed_payloads: usize,
+    pub readers: usize,
+    pub acquiring: bool,
+    pub cleaning: bool,
+    pub admission_stopped: bool,
+    pub accounting_complete: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CleanupReport {
+    pub payloads_released: usize,
+    pub segments_released: u32,
+    pub bytes_released: u64,
+    pub remaining_payloads: usize,
 }
 impl From<Failure> for WorkspaceError {
     fn from(value: Failure) -> Self {

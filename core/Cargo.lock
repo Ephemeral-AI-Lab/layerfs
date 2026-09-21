@@ -562,6 +562,7 @@ name = "layerfs-workspace"
 version = "0.1.6"
 dependencies = [
  "layerfs-bridge",
+ "nix",
 ]
 
 [[package]]
