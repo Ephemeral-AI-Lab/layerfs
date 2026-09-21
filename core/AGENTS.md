@@ -210,6 +210,20 @@ pre-push gate: `tools/preflight.sh` is permanently retired (repository `AGENTS.m
 §4, ledger L32), so this workspace is verified with the core manifest and nothing
 else is substituted for it. Report the exact commands and every gap.
 
+### Build flags are part of the check
+
+An aarch64 build of this workspace must carry the ARMv8 AEAD profile
+(`--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon
+-C target-feature=+aes,+sha2`). The repository-root `.cargo/config.toml` supplies it
+for every build whose working directory is inside the repository, including the
+`--manifest-path core/Cargo.toml` commands above and the
+`aarch64-unknown-linux-musl` daemon image. `layerfs-bridge` fails to compile for
+aarch64 without it, so a silent ChaCha20-Poly1305 build is not possible; a build
+made from outside the repository must pass the flags itself. Verify with
+`cargo build -v | grep target-feature` on the `layerfs_bridge` line, or by the
+receipt's recorded `rustflags`. Losing this profile costs 3.7x on the transport
+(214 vs 802 MiB/s on one stream) and has already happened once.
+
 Report exact checks and gaps. Do not present an empty source scan as a built or
 tested implementation. Production behavior and required tests must both be present
 before an implementation task is complete.
