@@ -1,0 +1,58 @@
+{
+ "arm": "conc4-budget2",
+ "budget": 2,
+ "concurrency": 4,
+ "wall_s": 1.081,
+ "results": [
+  {
+   "index": 0,
+   "bytes": 67108864,
+   "kind": 6,
+   "result": "success",
+   "code": null,
+   "daemon_exit": 0,
+   "daemon_stderr_tail": [],
+   "latency_s": 1.061523
+  },
+  {
+   "index": 1,
+   "bytes": 67108864,
+   "kind": 6,
+   "result": "success",
+   "code": null,
+   "daemon_exit": 0,
+   "daemon_stderr_tail": [],
+   "latency_s": 0.95793
+  },
+  {
+   "index": 2,
+   "bytes": 67108864,
+   "kind": 7,
+   "result": "refused",
+   "code": 4,
+   "daemon_exit": 1,
+   "daemon_stderr_tail": [
+    "Error: Capacity unknown=false cleanup=None history=None"
+   ],
+   "latency_s": 0.01593
+  },
+  {
+   "index": 3,
+   "bytes": 67108864,
+   "kind": 7,
+   "result": "refused",
+   "code": 4,
+   "daemon_exit": 1,
+   "daemon_stderr_tail": [
+    "Error: Capacity unknown=false cleanup=None history=None"
+   ],
+   "latency_s": 0.009071
+  }
+ ],
+ "outcomes": {
+  "success": 2,
+  "refused": 2,
+  "no_response": 0
+ },
+ "load_before": "9:22  up 1 day,  7:25, 2 users, load averages: 5.89 6.21 6.21"
+}

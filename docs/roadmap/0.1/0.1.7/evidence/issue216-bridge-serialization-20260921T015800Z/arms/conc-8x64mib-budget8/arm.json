@@ -1,0 +1,88 @@
+{
+ "arm": "conc-8x64mib-budget8",
+ "budget": 8,
+ "concurrency": 8,
+ "operations": 8,
+ "bytes": 536870912,
+ "wall_s": 3.9161,
+ "mib_per_s": 130.74,
+ "successes": 8,
+ "refusals": 0,
+ "refusal_codes": [],
+ "daemon_cpu_s": 2.57,
+ "service_cpu_s": 7.4,
+ "effective_cores": 2.546,
+ "results": [
+  {
+   "index": 5,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "f5ab7ff9a90b302de115a471c0ebd904b4c0078ebafc936806da395d5426eefa",
+   "code": null,
+   "latency_s": 3.349426
+  },
+  {
+   "index": 0,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "1a00f18274baa0cec42a40af78dbfad043ab8f327b8da4bdf8e56fa7d5d58451",
+   "code": null,
+   "latency_s": 3.416082
+  },
+  {
+   "index": 4,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "6b26be53e1e3638f37f1f8e14f43803fb932970b5783cff2904f3cdb48465d95",
+   "code": null,
+   "latency_s": 3.383565
+  },
+  {
+   "index": 2,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "0a24c02bc852eff0a4bf3817b2c05ffac1984cb4f3742644132834ddd4af02fe",
+   "code": null,
+   "latency_s": 3.407765
+  },
+  {
+   "index": 1,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "59a305ae14fce5d3264ccad999fa00095b030e97e38b5721045eec6e2d1e1bea",
+   "code": null,
+   "latency_s": 3.420912
+  },
+  {
+   "index": 3,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "6f07097969651925e686a13effd22965d55de21bc6161ee1e3f318dd81ca22b5",
+   "code": null,
+   "latency_s": 3.403398
+  },
+  {
+   "index": 7,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "b661ad2bee2be8c4ef2e14c2ec345059ac5d4874851419b915c0b75cf86b37f2",
+   "code": null,
+   "latency_s": 3.369558
+  },
+  {
+   "index": 6,
+   "bytes": 67108864,
+   "kind": 6,
+   "root": "c3a4b0196029b469e358d43c18fab1933e7645899f3e7bf3c2e2b3e585432971",
+   "code": null,
+   "latency_s": 3.84601
+  }
+ ],
+ "fixture_setup": {
+  "master_sha256": "f950147154344071662d7d8035ebc393ee2299954ed3598807cda8ae3debfb92",
+  "executable_sha256": "678f7090e3fe0d6fd533002fbb8c541d748b09d726883b37e6c3767a99eb4922",
+  "reused": true,
+  "clone_method": "closed independent writable byte copy; not an OS cache claim"
+ },
+ "load_before": "9:22  up 1 day,  7:24, 2 users, load averages: 6.24 6.30 6.24"
+}
