@@ -14,7 +14,20 @@ limits, and verify a small real-daemon workflow with two explicit Commits.
 DSH, scalability expansion, stress and speed/R6 qualification are deferred.
 The historical results below remain unchanged; use51 for the next agent's task.
 
-**Current namespace implementation state:** the three tasks [55](55-issue179-realdaemon-handoff.md)
+**Current namespace implementation state:** [58 — closure report](58-issue179-closure-report.md)
+records the bounded Linux implementation as complete per
+[51 section 7](51-implementation-completion-spec.md#7-definition-of-implementation-phase-completion):
+every required operation works through native Workspace and its applicable
+actual FUSE path, the real-daemon small-project scenario passes two explicit
+Commits, and the final whole-core checks are recorded (host 702 passed /
+0 failed / 3 ignored; Linux 700 passed / 0 failed; clean clippy, build, fmt,
+boundary guard and guard self-tests; the Linux clippy component gap remains an
+owner item). It lists the accepted bounds, optional unsupported features,
+deferred load work and historical open failures separately. The push, the
+merge to the main line and the issue closure remain owner acts; no release
+claim is made.
+
+**Previous namespace implementation state:** the three tasks [55](55-issue179-realdaemon-handoff.md)
 section 5 left are complete. Task 1 (`a9657b85f`) finished the 51 section 6
 real-daemon scenario: two explicit Commits, public saved-state reads, root A
 readable after B, remount, acknowledged read and checked Unmount + CloseClean
@@ -35,7 +48,7 @@ declared limitations, not oversights. The final whole-core checks and the #179
 closure report remain for the final round; the merge and issue closure are
 owner acts.
 
-**Previous namespace implementation state:** [54 — third-round closure handoff](54-issue179-namespace-closure-handoff.md)
+**Earlier namespace implementation state:** [54 — third-round closure handoff](54-issue179-namespace-closure-handoff.md)
 records commits `5e4a89d0a` and `a7356d665`, which raise the registered selections
 that pass from eight of sixteen to sixteen of sixteen: all ten `namespace_route.py`
 cases and all six `mkdir_route.py` cases, with the stage route's ten selections
@@ -45,7 +58,7 @@ what is still open, including the section 6 real-daemon integration. The earlier
 handoff [53](53-issue179-namespace-completion-handoff.md) remains the record of
 the round that took the count to eight.
 
-**Earlier namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
+**Historical namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
 records commit `578ef7012`, which raises the registered selections that pass from
 four of sixteen to eight of sixteen: `namespace/setattr`, `mknod`, `link` and
 `rmdir`, and `mkdir/semantics`, `refusals`, `reserve_denied` and
