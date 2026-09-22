@@ -1,12 +1,13 @@
 {
-  "method": "gzip mtime0; json/jsonl/log/txt/rs/py/stdout/stderr/md including service and fixture/client logs; exclude sqlite/binaries/commit snapshots; append-only evidence. All 41 previously archived unchanged-source entries were re-asserted byte-identical (same source sha256 and same archive sha256); the remaining entries are new in this round.",
+  "method": "gzip mtime0; json/jsonl/log/txt/rs/py/stdout/stderr/md including service and fixture/client logs; exclude sqlite/binaries/commit snapshots and the uncompressed commit confirmations; append-only evidence. All 104 entries committed by eb2fbd76 were re-asserted byte-identical (same source sha256 and same archive sha256); 2 entries are new: ['issue-blockers-followup-01.md.gz', 'issue-update-02.json.gz'].",
   "family": "core/target/pair1-evidence/fresh-stream",
   "excluded": [
     "commit-01/** (commit snapshots)",
     "runner-01/dsh-largest-input (18259144-byte pinned input)",
     "runner-01/fresh_stream (31393208-byte Linux test executable)",
     "service/*.sqlite",
-    "binary-archive/**"
+    "binary-archive/**",
+    "commit-confirmed*.json (committed uncompressed)"
   ],
   "files": [
     {
@@ -528,11 +529,25 @@
       "archive_sha256": "8c5a2e299845aa75cb7a6bf610e890e188280b75531596c2a8bc7b2d31c951e2"
     },
     {
+      "source": "core/target/pair1-evidence/fresh-stream/issue-blockers-followup-01.md",
+      "archive": "issue-blockers-followup-01.md.gz",
+      "bytes": 3233,
+      "sha256": "b6c70b28aeb102eb17f5e2c1d9f920aae19c36222fb4f66c55ccd1fda1052bd7",
+      "archive_sha256": "9add12f265ad83a1fc2db479cf9e57125f0b3b22eb6471e41208dc5bfcbb5456"
+    },
+    {
       "source": "core/target/pair1-evidence/fresh-stream/issue-progress.md",
       "archive": "issue-progress.md.gz",
       "bytes": 5628,
       "sha256": "9ae9b7436fc089a360aa395eafe32b0f4387328591d7c2d1528bed2e39deb403",
       "archive_sha256": "89548aadc53254a027967ddf0fbf3941e81a337221ae1ff1897acdbfff253fdb"
+    },
+    {
+      "source": "core/target/pair1-evidence/fresh-stream/issue-update-02.json",
+      "archive": "issue-update-02.json.gz",
+      "bytes": 920,
+      "sha256": "c1a836d9dd9ccf37eee023e9494c143defb4f59ef4e59499313c769f982f1ee0",
+      "archive_sha256": "c961b2260fe8a1aed79e003b8e809afb82998e803c9a9b23dbef5f795fa03250"
     },
     {
       "source": "core/target/pair1-evidence/fresh-stream/issue-update.json",

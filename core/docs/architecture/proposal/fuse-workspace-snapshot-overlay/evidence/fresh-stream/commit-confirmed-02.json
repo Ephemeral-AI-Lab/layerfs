@@ -1,0 +1,19 @@
+{
+  "commit": "eb2fbd7633e1320315c316da02587b90f655bb39",
+  "tree": "51a3aff30c0aaf9852235a372e938cbd32cb305c",
+  "parent": "9499012926f661ce4a7b357b18810e76c3179806",
+  "production_loc": {
+    "before": 112975,
+    "after": 112975,
+    "delta": 0,
+    "reference_before": 65417,
+    "reference_after": 65417,
+    "core_before": 47558,
+    "core_after": 47558
+  },
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive of the exact first parent and the final staged tree (crates, core/crates); unchanged tools/production_loc.py --root SNAPSHOT --json; product Rust/runtime SQL excluding tests including inline cfg(test), docs/tooling/fixtures/generated/dependencies",
+  "confirmation": "Committed tree re-read from Git and equal to the final staged tree used for the LOC comparison; worktree clean.",
+  "scope": "documentation and evidence only: 49/14/30/31/README, the fresh-stream archive (104 entries, 41 historical byte-identical) and the parent implementation confirmation",
+  "carry_forward": "This file lives in the ignored evidence family directory. Following the packet precedent (48 confirmation committed by 9499012926f6), the next commit should carry it into core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/evidence/fresh-stream/commit-confirmed-02.json."
+}
