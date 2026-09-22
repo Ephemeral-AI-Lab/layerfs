@@ -15,8 +15,10 @@ existing Service save owner. [Native mkdir39](39-native-mkdir.md) now verifies t
 maintained namespace index and Commit integration. [Mounted mkdir40](40-mounted-mkdir.md)
 now verifies kernel/SDK creation and checked entry coherence. [Portable metadata41](41-construct-portable-metadata.md)
 now verifies no-base construction through the existing save owner. [Prepared files42](42-prepared-files.md)
-now verifies fresh regular-file declarations on direct and C5 routes. Native file
-creation is next; file/symlink creation and the full prepared
+now verifies fresh regular-file declarations on direct and C5 routes. [Native file
+creation43](43-native-create.md) is implemented with13 registered functional
+selections passing; its capacity gate remains failed/open despite a successful
+labelled diagnostic. Mounted file/symlink creation and the full prepared
 upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 

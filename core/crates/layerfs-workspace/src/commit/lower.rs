@@ -193,17 +193,19 @@ impl Workspace {
         &self,
         submission: &Submission,
         deadline: Instant,
-    ) -> Result<Vec<InodeChange>, WorkspaceError> {
+    ) -> Result<(Vec<InodeChange>, Vec<u64>), WorkspaceError> {
         let captured = submission.capture()?;
         let files = captured
             .count
             .checked_sub(captured.directories)
             .ok_or(WorkspaceError::Io)?;
         if files == 0 {
-            if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL {
+            if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL
+                || captured.fresh_files != 0
+            {
                 return Err(WorkspaceError::Io);
             }
-            return vector(0);
+            return Ok((vector(0)?, vector(0)?));
         }
         let root = submission.result_root()?.ok_or(WorkspaceError::Io)?;
         let host = self
@@ -215,6 +217,7 @@ impl Workspace {
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut inodes = vector(files)?;
+        let mut fresh = vector(captured.fresh_files)?;
         let mut after = 0;
         while let Some(cell) = root.arena.next(
             root.root()?,
@@ -252,6 +255,12 @@ impl Workspace {
             {
                 return Err(WorkspaceError::Io);
             }
+            if inode.fresh {
+                if fresh.len() == captured.fresh_files {
+                    return Err(WorkspaceError::Io);
+                }
+                fresh.push(serial);
+            }
             inodes.push(InodeChange {
                 serial,
                 kind: 1,
@@ -260,10 +269,10 @@ impl Workspace {
             });
             after = serial;
         }
-        if inodes.len() != files {
+        if inodes.len() != files || fresh.len() != captured.fresh_files {
             return Err(WorkspaceError::Io);
         }
-        Ok(inodes)
+        Ok((inodes, fresh))
     }
 }
 

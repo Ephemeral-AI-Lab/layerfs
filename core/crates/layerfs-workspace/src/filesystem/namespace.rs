@@ -125,6 +125,22 @@ impl Workspace {
         };
         let view = super::namespace_view::View { base, root };
         let resolved = self.resolve_child(&mut operation, &view, parent, &path, name, deadline)?;
+        let path = child_path(&path, name)?;
+        let mut state = self.state()?;
+        if state.revision != revision || state.baseline != baseline {
+            return Err(WorkspaceError::Busy);
+        }
+        self.cache_lookup(&mut state, resolved, &path, parent, scope, baseline)
+    }
+    pub(super) fn cache_lookup(
+        &self,
+        state: &mut crate::runtime::state::State,
+        resolved: super::namespace_view::Resolved,
+        path: &[u8],
+        parent: u64,
+        scope: ReferenceScope,
+        baseline: u64,
+    ) -> Result<NodeAttributes, WorkspaceError> {
         let super::namespace_view::Resolved {
             original,
             attr,
@@ -132,11 +148,6 @@ impl Workspace {
             metadata,
             canonical,
         } = resolved;
-        let path = child_path(&path, name)?;
-        let mut state = self.state()?;
-        if state.revision != revision || state.baseline != baseline {
-            return Err(WorkspaceError::Busy);
-        }
         if let Some(node) = state
             .nodes
             .iter_mut()
@@ -164,7 +175,7 @@ impl Workspace {
             if state.nodes.len() == NODE_LIMIT {
                 return Err(WorkspaceError::Capacity);
             }
-            let mut node = Node::new(original, content, metadata, &path, parent);
+            let mut node = Node::new(original, content, metadata, path, parent);
             node.attr = attr;
             node.baseline = if canonical { baseline } else { 0 };
             *node.references(scope) = 1;

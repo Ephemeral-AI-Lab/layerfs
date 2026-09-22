@@ -74,6 +74,7 @@ impl Workspace {
         let mut base = Some(view.base);
         let mut binding = None;
         let mut local = None;
+        let mut file = None;
         if let Some(owner) = &view.root {
             let host = self
                 .host
@@ -88,7 +89,7 @@ impl Workspace {
                 binding = owner
                     .arena
                     .find(directory.entries, &key, window, deadline)?
-                    .map(|cell| directories::entry_serial(cell.value()))
+                    .map(|cell| directories::entry_info(cell.value()))
                     .transpose()?;
                 let origin = match directory.origin {
                     Origin::Captured(reference) => {
@@ -97,7 +98,7 @@ impl Workspace {
                             binding = owner
                                 .arena
                                 .find(prior.entries, &key, window, deadline)?
-                                .map(|cell| directories::entry_serial(cell.value()))
+                                .map(|cell| directories::entry_info(cell.value()))
                                 .transpose()?;
                         }
                         prior.origin
@@ -110,14 +111,49 @@ impl Workspace {
                     Origin::Captured(_) => return Err(WorkspaceError::Io),
                 };
             }
-            if let Some(serial) = binding {
-                local = Some(
-                    directories::load(owner, serial, window, deadline)?
-                        .ok_or(WorkspaceError::Io)?,
-                );
+            if let Some((serial, kind)) = binding {
+                if kind == NodeKind::Directory {
+                    local = Some(
+                        directories::load(owner, serial, window, deadline)?
+                            .ok_or(WorkspaceError::Io)?,
+                    );
+                } else {
+                    let cell = owner
+                        .arena
+                        .find(
+                            owner.root()?,
+                            &metadata_pages::inode_key(serial),
+                            window,
+                            deadline,
+                        )?
+                        .ok_or(WorkspaceError::Io)?;
+                    file = Some(crate::overlay::pieces::Inode::parse(cell.value())?);
+                }
             }
         }
-        if let (Some(serial), Some(directory)) = (binding, local) {
+        if let (Some((serial, _)), Some(inode)) = (binding, file) {
+            if inode.fresh || inode.captured {
+                let original = inode.attributes(NodeAttributes {
+                    serial,
+                    kind: NodeKind::File,
+                    size: 0,
+                    references: 1,
+                    mode: 0,
+                    mtime_seconds: 0,
+                    mtime_nanoseconds: 0,
+                    uid: self.inner.root.uid,
+                    gid: self.inner.root.gid,
+                });
+                return Ok(Resolved {
+                    original,
+                    attr: original,
+                    content: [0; 32],
+                    metadata: [0; 32],
+                    canonical: false,
+                });
+            }
+        }
+        if let (Some((serial, _)), Some(directory)) = (binding, local) {
             match directory.origin {
                 Origin::Empty | Origin::Captured(_) => {
                     let original = directory.attributes(NodeAttributes {
@@ -147,7 +183,8 @@ impl Workspace {
             self.inspect_view(operation, base, Inspect::Attributes { path }, deadline)?;
         let (original, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-        if binding.is_some_and(|serial| serial != original.serial) {
+        if binding.is_some_and(|(serial, kind)| serial != original.serial || kind != original.kind)
+        {
             return Err(WorkspaceError::InvalidInput);
         }
         let attr = self.overlay_attributes(original, view.root.as_ref(), deadline)?;

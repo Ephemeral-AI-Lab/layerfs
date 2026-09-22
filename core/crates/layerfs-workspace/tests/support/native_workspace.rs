@@ -9,12 +9,48 @@ use std::{
     io::Write,
     net::{SocketAddr, ToSocketAddrs},
     path::PathBuf,
-    sync::{Arc, Condvar, Mutex},
+    sync::{atomic::AtomicBool, Arc, Condvar, Mutex},
     time::{Duration, Instant},
 };
 
 pub fn deadline() -> Instant {
     Instant::now() + Duration::from_secs(10)
+}
+pub fn diagnostic_trace() -> bool {
+    std::env::var_os("LAYERFS_NATIVE_DIAGNOSTIC_TRACE").is_some_and(|v| v == "1")
+}
+#[derive(Default, Debug)]
+struct SourceObservations {
+    calls: u64,
+    bytes: u64,
+    eof: bool,
+    error: Option<String>,
+    max_read_us: u128,
+}
+struct TracedSource<'a> {
+    inner: &'a mut dyn Source,
+    observed: SourceObservations,
+}
+impl Source for TracedSource<'_> {
+    fn read(
+        &mut self,
+        buffer: &mut [u8],
+        end: Instant,
+        cancel: &AtomicBool,
+    ) -> std::io::Result<usize> {
+        let started = Instant::now();
+        let result = self.inner.read(buffer, end, cancel);
+        self.observed.calls += 1;
+        self.observed.max_read_us = self.observed.max_read_us.max(started.elapsed().as_micros());
+        match &result {
+            Ok(n) => {
+                self.observed.bytes += *n as u64;
+                self.observed.eof |= *n == 0 && !buffer.is_empty();
+            }
+            Err(error) => self.observed.error = Some(format!("{:?}: {error}", error.kind())),
+        }
+        result
+    }
 }
 pub fn hex<const N: usize>(name: &str) -> [u8; N] {
     let value = std::env::var(name).unwrap();
@@ -55,6 +91,7 @@ pub struct Native {
     pub private: Root,
     pub server: Root,
     pub gate: Gate,
+    allow_fresh_files: bool,
     pub observations: Mutex<Observations>,
     pub changed: Condvar,
 }
@@ -70,9 +107,15 @@ impl Native {
             private: pipe::key(&std::env::var("LAYERFS_PRIVATE_KEY").unwrap()).unwrap(),
             server: pipe::key(&std::env::var("LAYERFS_SERVER_KEY").unwrap()).unwrap(),
             gate,
+            allow_fresh_files: false,
             observations: Mutex::new(Observations::default()),
             changed: Condvar::new(),
         })
+    }
+    pub fn new_fresh(gate: Gate) -> Arc<Self> {
+        let mut native = Self::new(gate);
+        Arc::get_mut(&mut native).unwrap().allow_fresh_files = true;
+        native
     }
     pub fn call(
         &self,
@@ -86,12 +129,15 @@ impl Native {
             assert!(
                 !matches!(
                     request.operation,
-                    Operation::UpdatePreparedFilesystem { .. } | Operation::ConstructFile { .. }
-                ),
+                    Operation::UpdatePreparedFilesystem { .. }
+                ) && (self.allow_fresh_files
+                    || !matches!(request.operation, Operation::ConstructFile { .. })),
                 "unexpected construction route"
             );
-            let first =
-                matches!(request.operation, Operation::EditFile { .. }) && !observations.entered;
+            let first = matches!(
+                request.operation,
+                Operation::EditFile { .. } | Operation::ConstructFile { .. }
+            ) && !observations.entered;
             observations.operations.push(request.operation.clone());
             if first {
                 observations.entered = true;
@@ -179,15 +225,23 @@ impl Native {
         } else {
             (1, self.private)
         };
-        let mut client = Client::new(connect_until(
-            endpoint,
-            principal,
-            &private,
-            &self.server,
-            end,
-        )?)?;
-        let response = client.call_until(request, input, output, end);
-        if matches!(request.operation, Operation::EditFile { .. }) {
+        let (client, response) = if diagnostic_trace() {
+            self.traced_call((endpoint, principal, &private), request, input, output, end)?
+        } else {
+            let mut client = Client::new(connect_until(
+                endpoint,
+                principal,
+                &private,
+                &self.server,
+                end,
+            )?)?;
+            let response = client.call_until(request, input, output, end);
+            (client, response)
+        };
+        if matches!(
+            request.operation,
+            Operation::EditFile { .. } | Operation::ConstructFile { .. }
+        ) {
             if let Ok(Response::Saved { root, .. }) = &response {
                 self.observations.lock().unwrap().saved_files.push(*root);
             }
@@ -233,7 +287,64 @@ impl Native {
             println!("STAGE_SAVE_DONE");
             std::io::stdout().flush().unwrap();
         }
+        drop(client);
         response
+    }
+    fn traced_call(
+        &self,
+        authority: (SocketAddr, u32, &Root),
+        request: &Request,
+        input: &mut dyn Source,
+        output: &mut dyn Write,
+        end: Instant,
+    ) -> Result<(Client, Result<Response, Failure>), Failure> {
+        let (endpoint, principal, private) = authority;
+        let operation = match &request.operation {
+            Operation::ConstructFile { .. } => "ConstructFile",
+            Operation::EditFile { .. } => "EditFile",
+            Operation::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
+            Operation::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
+            Operation::HistoryCommand(HistoryCommand::ReserveInodes { .. }) => "ReserveInodes",
+            Operation::HistoryCommand(HistoryCommand::Commit(_)) => "Commit",
+            Operation::HistoryQuery(_) => "HistoryQuery",
+            Operation::Inspect { .. } => "Inspect",
+            Operation::ReadFile { .. } => "ReadFile",
+            _ => "Other",
+        };
+        let started = Instant::now();
+        let log = |phase: &str, phase_start: Instant, result: Option<&Failure>| {
+            eprintln!("NATIVE_DIAGNOSTIC id={} operation={operation} phase={phase} phase_us={} elapsed_us={} remaining_us={} failure={result:?}",
+                request.id, phase_start.elapsed().as_micros(), started.elapsed().as_micros(),
+                end.saturating_duration_since(Instant::now()).as_micros());
+        };
+        eprintln!(
+            "NATIVE_DIAGNOSTIC id={} operation={operation} request_ms={} input_bytes={:?}",
+            request.id,
+            request.deadline_ms,
+            request.operation.input_length()
+        );
+        log("connect-start", started, None);
+        let connection = connect_until(endpoint, principal, private, &self.server, end);
+        log("connect-end", started, connection.as_ref().err());
+        let connection = connection?;
+        let hello_start = Instant::now();
+        log("hello-start", hello_start, None);
+        let client = Client::new(connection);
+        log("hello-end", hello_start, client.as_ref().err());
+        let mut client = client?;
+        let mut source = TracedSource {
+            inner: input,
+            observed: SourceObservations::default(),
+        };
+        let call_start = Instant::now();
+        log("call-start", call_start, None);
+        let response = client.call_until(request, &mut source, output, end);
+        log("call-end", call_start, response.as_ref().err());
+        eprintln!(
+            "NATIVE_DIAGNOSTIC id={} source={:?}",
+            request.id, source.observed
+        );
+        Ok((client, response))
     }
     pub fn delivery(self: &Arc<Self>) -> OperationDelivery {
         let native = self.clone();

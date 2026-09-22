@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the declared prepared-file scope.**
 > Implementation parent: `82c87d70a1f3e723b627bf1d0777305c9eb393ea`.
+> Exact implementation commit: `ab473145a606a71327d55d10f12205edb1803946`; [confirmation](evidence/prepared-files/commit-confirmed.json).
 > Product input seal: `3c40e8466e8dfefeeb8f6f85e51d6cd23fe9eab42ebac8e940e53c6ae06c5fc3`.
 
 This round extends the existing direct prepared filesystem request and C5 prepared

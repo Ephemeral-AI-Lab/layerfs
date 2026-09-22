@@ -117,6 +117,7 @@ fn canonical_inode(
         || original.revision != reference.revision
         || original.revision > captured.revision
         || original.length != inode.base_length
+        || original.fresh != inode.fresh
         || get(saved.value(), 0)? != original.revision
         || get(saved.value(), 8)? != original.length
     {
@@ -129,6 +130,7 @@ fn canonical_inode(
         .try_into()
         .map_err(|_| WorkspaceError::Io)?;
     inode.captured = false;
+    inode.fresh = false;
     // Piece offsets already name this exact captured file version; only its
     // representation changes from the pinned local version to its saved root.
     Ok(inode)

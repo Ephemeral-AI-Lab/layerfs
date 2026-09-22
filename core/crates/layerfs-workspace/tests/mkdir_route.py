@@ -30,6 +30,7 @@ TEST_SOURCE = Path(__file__).with_name('mkdir.rs')
 TEST_PREFIX = 'mkdir_'
 TEST_MARKER = 'MKDIR_CHECK'
 MODE = 'functional-native-workspace-mkdir'
+BOOTSTRAP = shared.bootstrap
 NOT_RUN = ['successful mounted/kernel mkdir', 'create/unlink/rename/symlink',
            'prepared npm workload', 'R6', 'hard RSS/cgroup memory bound', 'crash/restart recovery']
 
@@ -109,7 +110,7 @@ def execute(args, report, started):
         readiness = shared.mounted.line_until(service, timeout=min(10, remaining()))
         assert 'ready' in readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
-        report['fixture'] = shared.bootstrap(service_dir, port, private, server_public,
+        report['fixture'] = BOOTSTRAP(service_dir, port, private, server_public,
                                              bytes.fromhex(fixture['file_root']), False)
         command(['docker', 'volume', 'create', volume]); made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,
@@ -140,6 +141,8 @@ def execute(args, report, started):
         child_env = os.environ.copy()
         child_env.update(LAYERFS_PRIVATE_KEY=private, LAYERFS_SERVER_KEY=server_public,
                          LAYERFS_CONSTRUCTION_WORKERS='1')
+        if args.diagnostic_trace:
+            invocation += ['-e', 'LAYERFS_NATIVE_DIAGNOSTIC_TRACE=1']
         if denied:
             child_env['LAYERFS_RESERVE_PRIVATE_KEY'] = denied
             invocation += ['-e', 'LAYERFS_RESERVE_PRIVATE_KEY']
@@ -223,6 +226,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--image', required=True)
     parser.add_argument('--case', choices=CASES, required=True)
+    parser.add_argument('--diagnostic-trace', action='store_true',
+                        help='record external native phases and Source counters; diagnostic evidence only')
     args = parser.parse_args()
     for key in ('fixture', 'binaries', 'test_binary', 'output'):
         setattr(args, key, getattr(args, key).resolve())
@@ -234,6 +239,9 @@ def main():
         'hard_budget_seconds': 60, 'callback_deadline_seconds': 10, 'construction_workers': 1,
         'performance_claim': False, 'cache_claim': None,
         'not_run': NOT_RUN}
+    if args.diagnostic_trace:
+        report.update(evidence_role='DIAGNOSTIC_NOT_GATE', diagnostic_trace=True,
+                      diagnostic_log=str(args.output / 'test.stderr'))
     started = time.monotonic()
     def expired(_signal, _frame):
         raise TimeoutError('complete mkdir selection exceeded 60 seconds')

@@ -48,7 +48,7 @@ impl Workspace {
             };
             submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
             let plan = self.lower_file(submission, inode, deadline)?;
-            let content = if plan.edits.is_empty() {
+            let content = if plan.edits.is_empty() && !inode.fresh {
                 inode.base
             } else {
                 submission.phase(StagePhase::FileSave, Some(serial))?;
@@ -59,10 +59,16 @@ impl Workspace {
                     .map_or_else(|| self.begin(true, deadline), Ok)?;
                 let response = self.host.call_input(
                     (self.inner.store, captured.generation),
-                    Operation::EditFile {
-                        root: inode.base,
-                        base_length: inode.base_length,
-                        edits: plan.edits,
+                    if inode.fresh {
+                        Operation::ConstructFile {
+                            length: inode.length,
+                        }
+                    } else {
+                        Operation::EditFile {
+                            root: inode.base,
+                            base_length: inode.base_length,
+                            edits: plan.edits,
+                        }
                     },
                     &mut source,
                     0,
@@ -107,12 +113,21 @@ impl Workspace {
                 .map_or_else(|| self.begin(true, deadline), Ok)?;
             let response = self.host.call_input(
                 (self.inner.store, captured.generation),
-                Operation::UpdatePortableMetadata {
-                    base: inode.metadata,
-                    kind: 1,
-                    mode: inode.mode,
-                    mtime_seconds: inode.seconds,
-                    mtime_nanoseconds: inode.nanos,
+                if inode.fresh {
+                    Operation::ConstructPortableMetadata {
+                        kind: 1,
+                        mode: inode.mode,
+                        mtime_seconds: inode.seconds,
+                        mtime_nanoseconds: inode.nanos,
+                    }
+                } else {
+                    Operation::UpdatePortableMetadata {
+                        base: inode.metadata,
+                        kind: 1,
+                        mode: inode.mode,
+                        mtime_seconds: inode.seconds,
+                        mtime_nanoseconds: inode.nanos,
+                    }
                 },
                 &mut &[][..],
                 0,
@@ -121,21 +136,34 @@ impl Workspace {
             );
             drop(remote);
             let response = response?;
-            response.validate_metadata_saved()?;
-            let Response::MetadataSaved {
-                base,
-                kind,
-                mode,
-                mtime_seconds,
-                mtime_nanoseconds,
-                metadata,
-                ..
-            } = response
-            else {
-                return Err(WorkspaceError::InvalidInput);
+            if inode.fresh {
+                response.validate_metadata_constructed()?;
+            } else {
+                response.validate_metadata_saved()?;
+            }
+            let (kind, mode, mtime_seconds, mtime_nanoseconds, metadata) = match response {
+                Response::MetadataConstructed {
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata,
+                    ..
+                } if inode.fresh => (kind, mode, mtime_seconds, mtime_nanoseconds, metadata),
+                Response::MetadataSaved {
+                    base,
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata,
+                    ..
+                } if !inode.fresh && base == inode.metadata => {
+                    (kind, mode, mtime_seconds, mtime_nanoseconds, metadata)
+                }
+                _ => return Err(WorkspaceError::InvalidInput),
             };
-            if base != inode.metadata
-                || kind != 1
+            if kind != 1
                 || mode != inode.mode
                 || mtime_seconds != inode.seconds
                 || mtime_nanoseconds != inode.nanos
@@ -159,12 +187,12 @@ impl Workspace {
         if first_remote.is_none() {
             *first_remote = Some(self.begin(true, deadline)?);
         }
-        let inodes = self.prepared_inodes(submission, deadline)?;
+        let (inodes, new_file_serials) = self.prepared_inodes(submission, deadline)?;
         let (directories, new_directories, directory_metadata) =
             self.prepared_directories(submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
-            new_file_serials: Vec::new(),
+            new_file_serials,
             directory_metadata,
             new_directories,
             workspace: self.inner.incarnation,
@@ -187,7 +215,11 @@ impl Workspace {
             + 73 * changes.inodes.len()
             + 34 * captured.directories
             + captured.name_bytes
-            + usize::from(captured.directories > 0) * 5;
+            + if captured.fresh_files > 0 {
+                7 + 8 * captured.fresh_files
+            } else {
+                usize::from(captured.directories > 0) * 5
+            };
         if expected > layerfs_bridge::contract::METADATA_BYTES {
             return Err(WorkspaceError::Io);
         }

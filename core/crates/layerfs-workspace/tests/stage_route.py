@@ -111,7 +111,7 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def bootstrap(service_dir, port, client_key, server_public, content, wide, data_mode=0o644):
+def bootstrap(service_dir, port, client_key, server_public, content, wide, data_mode=0o644, manifest_extras=()):
     daemon, _ = route.start_daemon(service_dir, port, client_key, server_public, 1, None)
     try:
         manifest = (route.manifest_entry(0, b'', 2, 0o755, 1700000000, 0)
@@ -120,7 +120,8 @@ def bootstrap(service_dir, port, client_key, server_public, content, wide, data_
         if wide:
             for index in range(102):
                 manifest += route.manifest_entry(0, f'f{index:03}'.encode(), 1, 0o644, 1700000003, index, content)
-        command = b'\x01' + b'\xa1'*16 + route.blob(b'stage-fixture') + b'\xa2'*32 + struct.pack('>H', 105 if wide else 3) + manifest
+        manifest += b''.join(manifest_extras)
+        command = b'\x01' + b'\xa1'*16 + route.blob(b'stage-fixture') + b'\xa2'*32 + struct.pack('>H', (105 if wide else 3) + len(manifest_extras)) + manifest
         kind, body = route.exchange(daemon, 1, route.COMMAND_OPCODE, command, route.HISTORY_PROFILE)
         assert kind == 6, body
         tag, created = route.history(body); assert tag == 'StackCreated'
@@ -185,10 +186,12 @@ def execute(args, report, started):
         port = int(readiness.strip().rsplit(':', 1)[1])
         report['fixture'] = bootstrap(service_dir, port, client_key, server_public, bytes.fromhex(fixture['file_root']), args.case == 'frontier', DATA_MODES.get(args.case, 0o644))
         command(['docker', 'volume', 'create', volume]); made_volume = True
-        command(['docker', 'run', '-d', '--privileged', '--name', name,
+        command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',
                  '--mount', f'type=bind,src={args.test_binary.parent},dst=/runner,readonly',
                  '--mount', f'type=volume,src={volume},dst=/stage', args.image, 'sleep', 'infinity']); created = True
+        report['actual_nano_cpus'] = int(command(['docker', 'inspect', '--format', '{{.HostConfig.NanoCpus}}', name]).stdout)
+        assert report['actual_nano_cpus'] == 2_000_000_000
         command(['docker', 'exec', name, 'chmod', '700', '/stage'])
         caller = CALLER_USERS.get(args.case)
         if caller:

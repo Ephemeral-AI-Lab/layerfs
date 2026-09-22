@@ -25,6 +25,7 @@ pub(crate) struct Captured {
     pub revision: u64,
     pub count: usize,
     pub directories: usize,
+    pub fresh_files: usize,
     pub names: usize,
     pub name_bytes: usize,
 }
@@ -306,9 +307,10 @@ impl Workspace {
             }
             let count = state.dirty_inodes;
             let directories = state.dirty_directories;
+            let fresh_files = state.fresh_files;
             let names = state.directory_names;
             let name_bytes = state.directory_bytes;
-            state.frontier_bytes(count, directories, names, name_bytes)?;
+            state.frontier_bytes(count, directories, fresh_files, names, name_bytes)?;
             {
                 let mut s = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
                 s.status.generation = generation;
@@ -331,6 +333,7 @@ impl Workspace {
                     revision,
                     count,
                     directories,
+                    fresh_files,
                     names,
                     name_bytes,
                 })
@@ -345,6 +348,7 @@ impl Workspace {
             state.revision = next_revision;
             state.dirty_inodes = 0;
             state.dirty_directories = 0;
+            state.fresh_files = 0;
             state.directory_names = 0;
             state.directory_bytes = 0;
             state.submission = Some(submission.clone());

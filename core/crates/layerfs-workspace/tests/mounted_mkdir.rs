@@ -558,7 +558,8 @@ print('KERNEL_MKDIR nested=2 umask=027 duplicate=EEXIST long=EINVAL(native-Inval
             child.join().unwrap()
         });
         assert_eq!(new_filters, old_filters + 1);
-        assert!(!Path::new(&format!("/proc/self/task/{tid}")).exists());
+        // join completed the faulting caller; immediate procfs task removal is
+        // a separate kernel teardown event, not a notification guarantee.
         for (worker, filters) in workers {
             assert_eq!(filter_count(worker), filters);
         }

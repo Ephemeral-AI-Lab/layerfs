@@ -11,7 +11,9 @@
 is implemented and functionally verified through the existing Service save owner.
 [Prepared fresh regular files](42-prepared-files.md) now verifies the existing
 direct and C5 save routes with zero/nonzero content and derived references.
-Native file creation and its mounted projection are next.
+[Native file creation](43-native-create.md) is implemented, with13 registered
+functional selections passing and the capacity gate still failed/open. Its
+labelled diagnostic PASS does not replace that failure. Mounted CREATE is next.
 
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry

@@ -1,7 +1,7 @@
 //! Portable file-open rights and atomic admission of truncating handles.
 use crate::{
     backing::budget::Charge,
-    runtime::state::{Handle, State, HANDLE_LIMIT},
+    runtime::state::{Handle, OperationGuard, State, HANDLE_LIMIT},
     *,
 };
 use std::{mem::size_of, time::Instant};
@@ -79,6 +79,25 @@ fn mask(access: FileAccess) -> u8 {
         FileAccess::ReadWrite => 6,
     }
 }
+pub(super) fn check_options(
+    options: FileOpenOptions,
+    access: WorkspaceAccess,
+) -> Result<(), WorkspaceError> {
+    if options.access == FileAccess::ReadOnly && (options.append || options.truncate) {
+        return Err(WorkspaceError::InvalidInput);
+    }
+    if options.access != FileAccess::ReadOnly && access == WorkspaceAccess::ReadOnly {
+        return Err(WorkspaceError::ReadOnly);
+    }
+    Ok(())
+}
+pub(super) fn handle_slot(state: &State) -> Result<(HandleId, u64), WorkspaceError> {
+    if state.handles.len() == HANDLE_LIMIT || state.handles.len() == state.handles.capacity() {
+        return Err(WorkspaceError::Capacity);
+    }
+    let id = state.next_handle;
+    Ok((id, id.checked_add(1).ok_or(WorkspaceError::Capacity)?))
+}
 impl Workspace {
     /// Opens an existing cached regular inode. Truncation and handle publication
     /// form one operation; append intent is retained for the handle's lifetime.
@@ -91,19 +110,27 @@ impl Workspace {
         scope: ReferenceScope,
         deadline: Instant,
     ) -> Result<HandleId, WorkspaceError> {
-        if options.access == FileAccess::ReadOnly && (options.append || options.truncate) {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        if options.access != FileAccess::ReadOnly && self.inner.access == WorkspaceAccess::ReadOnly
-        {
-            return Err(WorkspaceError::ReadOnly);
-        }
+        check_options(options, self.inner.access)?;
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(false, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
+        self.open_file_admitted(serial, options, scope, deadline, &mut operation)
+            .map(|(_, handle)| handle)
+    }
+    pub(super) fn open_file_admitted(
+        &self,
+        serial: u64,
+        options: FileOpenOptions,
+        scope: ReferenceScope,
+        deadline: Instant,
+        operation: &mut OperationGuard,
+    ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
+        check_options(options, self.inner.access)?;
         if !options.truncate {
             let mut state = self.state()?;
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-            return self.insert_handle(&mut state, serial, false, scope, options, true);
+            let attr = state.node(serial)?.attr;
+            let handle = self.insert_handle(&mut state, serial, false, scope, options, true)?;
+            return Ok((attr, handle));
         }
         let charge = self.host.budget.reserve(size_of::<OpenReservation>())?;
         let mut reserved = {
@@ -120,8 +147,8 @@ impl Workspace {
                 _charge: charge,
             }
         };
-        self.truncate_open(&mut reserved, deadline)?;
-        Ok(reserved.id)
+        let attr = self.truncate_open(&mut reserved, deadline, operation)?;
+        Ok((attr, reserved.id))
     }
     pub(crate) fn open_directory_handle(
         &self,
@@ -167,11 +194,7 @@ impl Workspace {
             return Err(WorkspaceError::WrongKind);
         }
         super::namespace::check_access(attr, self.root().uid, mask(options.access))?;
-        if state.handles.len() == HANDLE_LIMIT || state.handles.len() == state.handles.capacity() {
-            return Err(WorkspaceError::Capacity);
-        }
-        let id = state.next_handle;
-        let next = id.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        let (id, next) = handle_slot(state)?;
         let references = state.nodes[node]
             .handles
             .checked_add(1)

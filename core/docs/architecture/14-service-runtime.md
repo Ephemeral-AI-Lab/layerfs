@@ -661,3 +661,18 @@ regular files fail; directory omission is a separate rule. The128 combined inode
 and32768-byte request limits remain. [Round42](proposal/fuse-workspace-snapshot-overlay/42-prepared-files.md)
 records the implementation, resource delta and verification state. Workspace still
 supplies an empty fresh-file list until its native create operation is implemented.
+
+The native regular-file creation extension after source commit
+`ab473145a606a71327d55d10f12205edb1803946` adds Workspace::create_file with
+atomic name, inode, lookup-reference and ready-handle publication. It shares
+child creation with mkdir and opens existing regular files through the existing
+admitted open path. Initial handles retain their admitted rights independently
+of the created mode; later opens and handleless edits still check mode. Fresh
+identity uses reserved inode-record byte25, and fresh/captured local originals
+resolve before absent base paths. Fresh content and metadata save through the
+existing ConstructFile/ConstructPortableMetadata operations; captured F IDs enter
+the prepared request, and own-result reconciliation replaces both saved roots
+while preserving D1. The128-row/name,32768-byte prepared request and8-MiB
+replacement bounds are unchanged. [Round43](proposal/fuse-workspace-snapshot-overlay/43-native-create.md)
+records the exact evidence, including the unresolved capacity gate failure.
+Mounted CREATE and full preinstalled-workload admission remain subsequent work.

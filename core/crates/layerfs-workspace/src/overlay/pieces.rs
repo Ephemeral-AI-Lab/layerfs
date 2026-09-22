@@ -63,6 +63,7 @@ impl Piece {
 #[derive(Clone, Copy)]
 pub struct Inode {
     pub captured: bool,
+    pub fresh: bool,
     pub revision: u64,
     pub length: u64,
     pub base_length: u64,
@@ -81,6 +82,7 @@ impl Inode {
     pub fn initial(attr: NodeAttributes, base: Root, metadata: Root) -> Self {
         Self {
             captured: false,
+            fresh: false,
             revision: 0,
             length: attr.size,
             base_length: attr.size,
@@ -99,6 +101,7 @@ impl Inode {
     pub fn value(self) -> [u8; 160] {
         let mut b = [0; 160];
         b[24] = u8::from(self.captured);
+        b[25] = u8::from(self.fresh);
         for (at, value) in [
             (0, self.revision),
             (8, self.length),
@@ -119,11 +122,16 @@ impl Inode {
         b
     }
     pub fn parse(b: &[u8]) -> Result<Self, WorkspaceError> {
-        if b.len() != 160 || b[24] > 1 || b[25..32].iter().chain(&b[140..]).any(|v| *v != 0) {
+        if b.len() != 160
+            || b[24] > 1
+            || b[25] > 1
+            || b[26..32].iter().chain(&b[140..]).any(|v| *v != 0)
+        {
             return Err(WorkspaceError::Io);
         }
         let i = Self {
             captured: b[24] == 1,
+            fresh: b[25] == 1,
             revision: get(b, 0)?,
             length: get(b, 8)?,
             base_length: get(b, 16)?,
@@ -149,11 +157,15 @@ impl Inode {
             || i.count > 1024
             || i.edits > 256
             || i.replacement > 8 * 1024 * 1024
+            || (i.fresh && i.metadata != [0; 32])
         {
             return Err(WorkspaceError::Io);
         }
         if i.captured {
             CapturedBase::parse(i.base)?;
+        } else if i.fresh && (i.base != [0; 32] || i.base_length != 0 || i.replacement != i.length)
+        {
+            return Err(WorkspaceError::Io);
         }
         Ok(i)
     }

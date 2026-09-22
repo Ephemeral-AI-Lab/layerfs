@@ -151,19 +151,33 @@ pub fn captured(
     }
     Ok(directory)
 }
-pub fn entry(serial: u64) -> [u8; 16] {
+pub fn entry(serial: u64, kind: crate::NodeKind) -> Result<[u8; 16], WorkspaceError> {
     let mut value = [0; 16];
     value[..8].copy_from_slice(&serial.to_be_bytes());
-    value[8] = 2;
-    value
+    value[8] = match kind {
+        crate::NodeKind::File => 1,
+        crate::NodeKind::Directory => 2,
+        _ => return Err(WorkspaceError::Unsupported),
+    };
+    Ok(value)
 }
 pub fn entry_serial(value: &[u8]) -> Result<u64, WorkspaceError> {
-    if value.len() != 16 || value[8] != 2 || value[9..].iter().any(|b| *b != 0) {
+    entry_info(value).map(|(serial, _)| serial)
+}
+pub fn entry_info(value: &[u8]) -> Result<(u64, crate::NodeKind), WorkspaceError> {
+    if value.len() != 16 || !matches!(value[8], 1 | 2) || value[9..].iter().any(|b| *b != 0) {
         return Err(WorkspaceError::Io);
     }
     let serial = get(value, 0)?;
     if serial == 0 || serial > i64::MAX as u64 {
         return Err(WorkspaceError::Io);
     }
-    Ok(serial)
+    Ok((
+        serial,
+        if value[8] == 1 {
+            crate::NodeKind::File
+        } else {
+            crate::NodeKind::Directory
+        },
+    ))
 }

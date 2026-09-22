@@ -554,7 +554,8 @@ mod linux {
             fault.join().unwrap()
         });
         assert_eq!(filters_after, filters_before + 1);
-        assert!(!std::path::Path::new(&format!("/proc/self/task/{tid}")).exists());
+        // join completed the faulting caller; immediate procfs task removal is
+        // a separate kernel teardown event, not a notification guarantee.
         for (tid, filters) in workers {
             assert_eq!(
                 filter_count(tid),

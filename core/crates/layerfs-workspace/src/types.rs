@@ -20,6 +20,15 @@ pub struct FileOpenOptions {
     pub truncate: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Native regular creation and its initial open. Mode and umask use portable
+/// permission bits; exclusive refuses every existing name.
+pub struct FileCreateOptions {
+    pub mode: u32,
+    pub umask: u32,
+    pub exclusive: bool,
+    pub open: FileOpenOptions,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReferenceScope {
     Local,
     Projection,

@@ -1,4 +1,5 @@
 //! One local splice, prepared outside the state lock and published with an exact head stamp.
+use super::original::Original;
 use crate::{
     backing::{
         metadata::RootOwner,
@@ -12,12 +13,11 @@ use crate::{
     },
     *,
 };
-use layerfs_bridge::contract::{Inspect, Operation, Root, MAX_FILE};
+use layerfs_bridge::contract::MAX_FILE;
 use std::{
     sync::{atomic::Ordering, Arc},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
-type Original = (NodeAttributes, Root, Root, u64);
 struct Publication {
     receipt: MutationReceipt,
     attributes: NodeAttributes,
@@ -85,7 +85,6 @@ impl Workspace {
         if node.attr.kind != NodeKind::File {
             return Err(WorkspaceError::BadHandle);
         }
-        super::namespace::check_access(node.attr, self.inner.root.uid, 2)?;
         Ok(handle)
     }
     fn mutation_handle(
@@ -136,7 +135,7 @@ impl Workspace {
             return Err(WorkspaceError::ReadOnly);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(false, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
         self.check_payload_owner(replacement)?;
         if replacement.len() > 8 * 1024 * 1024 {
             return Err(WorkspaceError::Capacity);
@@ -174,7 +173,7 @@ impl Workspace {
             replacement,
             origin,
         };
-        let original = self.serial_original(serial, deadline);
+        let original = self.serial_original(serial, deadline, &mut operation);
         {
             let state = self.state()?;
             self.available(&state)?;
@@ -235,118 +234,6 @@ impl Workspace {
             .overlay_inode(attr.serial, root, deadline)?
             .map_or(attr, |inode| inode.attributes(attr)))
     }
-    fn edit_original(
-        &self,
-        path: &WorkspacePath,
-        deadline: Instant,
-    ) -> Result<Original, WorkspaceError> {
-        let (base, baseline) = {
-            let state = self.state()?;
-            if let Some(node) = state
-                .nodes
-                .iter()
-                .find(|n| n.path() == path.as_ref() && n.baseline == state.baseline)
-            {
-                return Ok((node.original, node.content, node.metadata, state.baseline));
-            }
-            (state.base, state.baseline)
-        };
-        let _remote = self.begin(true, deadline)?;
-        let mut parent = self.inner.root;
-        let mut bytes = vector(4096)?;
-        let parts = path.as_ref().split(|b| *b == b'/');
-        let total = parts.clone().count();
-        let mut result = None;
-        for (index, name) in parts.enumerate() {
-            super::namespace::check_access(parent, self.inner.root.uid, 1)?;
-            if !bytes.is_empty() {
-                bytes.push(b'/')
-            }
-            bytes.extend_from_slice(name);
-            let response = self.call(
-                Operation::Inspect {
-                    root: base,
-                    query: Inspect::Attributes {
-                        path: {
-                            let mut path = vector(bytes.len())?;
-                            path.extend_from_slice(&bytes);
-                            path
-                        },
-                    },
-                },
-                0,
-                &mut std::io::sink(),
-                deadline,
-            )?;
-            let node = super::namespace::attributes(
-                response,
-                false,
-                self.inner.root.uid,
-                self.inner.root.gid,
-            )?;
-            if index + 1 < total && node.0.kind != NodeKind::Directory {
-                return Err(WorkspaceError::NotDirectory);
-            }
-            parent = node.0;
-            result = Some(node);
-        }
-        result
-            .map(|(attr, content, metadata)| (attr, content, metadata, baseline))
-            .ok_or(WorkspaceError::InvalidInput)
-    }
-    fn serial_original(&self, serial: u64, deadline: Instant) -> Result<Original, WorkspaceError> {
-        let _path = self
-            .host
-            .budget
-            .reserve(crate::runtime::state::PATH_BYTES)?;
-        let (base, baseline, path, path_len, selected) = {
-            let state = self.state()?;
-            self.available(&state)?;
-            let node = state.node(serial)?;
-            if node.attr.kind == NodeKind::Directory {
-                return Err(WorkspaceError::IsDirectory);
-            }
-            if node.attr.kind != NodeKind::File {
-                return Err(WorkspaceError::WrongKind);
-            }
-            super::namespace::check_access(node.attr, self.inner.root.uid, 2)?;
-            if node.baseline == state.baseline {
-                return Ok((node.original, node.content, node.metadata, state.baseline));
-            }
-            (
-                state.base,
-                state.baseline,
-                node.path,
-                node.path_len,
-                node.attr,
-            )
-        };
-        let _remote = self.begin(true, deadline)?;
-        let mut bytes = vector(path_len)?;
-        bytes.extend_from_slice(&path[..path_len]);
-        let response = self.call(
-            Operation::Inspect {
-                root: base,
-                query: Inspect::Attributes { path: bytes },
-            },
-            0,
-            &mut std::io::sink(),
-            deadline,
-        )?;
-        let (attr, content, metadata) = super::namespace::attributes(
-            response,
-            false,
-            self.inner.root.uid,
-            self.inner.root.gid,
-        )?;
-        if attr.serial != serial
-            || attr.kind != selected.kind
-            || attr.references != selected.references
-        {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        Ok((attr, content, metadata, baseline))
-    }
     /// Changes an existing cached regular inode's length and modification time.
     /// Logical extension owns Zero pieces, without accepting payload bytes.
     pub fn set_len(
@@ -386,7 +273,7 @@ impl Workspace {
             return Err(WorkspaceError::ReadOnly);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(false, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
         }
@@ -395,12 +282,16 @@ impl Workspace {
             handle,
             origin,
         };
+        if handle.is_none() {
+            let state = self.state()?;
+            super::namespace::check_access(state.node(serial)?.attr, self.inner.root.uid, 2)?;
+        }
         if origin.projected() {
             let state = self.state()?;
             self.available(&state)?;
             self.mutation_handle(&state, mutation, serial)?;
         }
-        let original = self.serial_original(serial, deadline);
+        let original = self.serial_original(serial, deadline, &mut operation);
         if origin.projected() {
             let state = self.state()?;
             self.available(&state)?;
@@ -418,7 +309,7 @@ impl Workspace {
             return Err(WorkspaceError::ReadOnly);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _operation = self.begin(false, deadline)?;
+        let mut operation = self.begin(false, deadline)?;
         self.check_payload_owner(&edit.replacement)?;
         if edit.start > edit.end {
             return Err(WorkspaceError::InvalidInput);
@@ -426,7 +317,7 @@ impl Workspace {
         if edit.replacement.len() > 8 * 1024 * 1024 {
             return Err(WorkspaceError::Capacity);
         }
-        let original = self.edit_original(path, deadline)?;
+        let original = self.edit_original(path, deadline, &mut operation)?;
         self.mutate_file(original, FileMutation::Range(edit), deadline, None)
             .map(|published| published.receipt)
     }
@@ -434,8 +325,9 @@ impl Workspace {
         &self,
         reserved: &mut super::open::OpenReservation,
         deadline: Instant,
-    ) -> Result<(), WorkspaceError> {
-        let original = self.serial_original(reserved.serial, deadline)?;
+        operation: &mut crate::runtime::state::OperationGuard,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        let original = self.serial_original(reserved.serial, deadline, operation)?;
         self.mutate_file(
             original,
             FileMutation::SetLen {
@@ -445,8 +337,8 @@ impl Workspace {
             },
             deadline,
             Some(reserved),
-        )?;
-        Ok(())
+        )
+        .map(|published| published.attributes)
     }
     fn mutate_file(
         &self,
@@ -487,7 +379,12 @@ impl Workspace {
         if original.kind != NodeKind::File {
             return Err(WorkspaceError::WrongKind);
         }
-        super::namespace::check_access(original, self.inner.root.uid, 2)?;
+        if matches!(
+            mutation,
+            FileMutation::Range(_) | FileMutation::SetLen { handle: None, .. }
+        ) {
+            super::namespace::check_access(original, self.inner.root.uid, 2)?;
+        }
         {
             let state = self.state()?;
             self.available(&state)?;
@@ -640,6 +537,7 @@ impl Workspace {
             state.frontier_bytes(
                 dirty + usize::from(!already_dirty),
                 state.dirty_directories,
+                state.fresh_files,
                 state.directory_names,
                 state.directory_bytes,
             )?;
