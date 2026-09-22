@@ -14,6 +14,15 @@ limits, and verify a small real-daemon workflow with two explicit Commits.
 DSH, scalability expansion, stress and speed/R6 qualification are deferred.
 The historical results below remain unchanged; use51 for the next agent's task.
 
+**Current namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
+records commit `578ef7012`, which raises the registered selections that pass from
+four of sixteen to eight of sixteen: `namespace/setattr`, `mknod`, `link` and
+`rmdir`, and `mkdir/semantics`, `refusals`, `reserve_denied` and
+`reserve_unknown`. It names the exact remaining cause of each failure still open
+and carries the task prompt for the next implementation round. The earlier
+handoff [52](52-issue179-handoff.md) remains the historical record of the round
+that added the operations.
+
 **Fresh streaming, first live attempts:** [Round49](49-fresh-file-streaming.md)
 implements the fresh-file streaming prerequisite, and its two live selections have
 now run once each. The largest already-preinstalled DSH file18,259,144 bytes
