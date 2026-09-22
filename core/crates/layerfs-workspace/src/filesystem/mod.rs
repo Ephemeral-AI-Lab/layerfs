@@ -9,7 +9,7 @@ mod open;
 mod original;
 mod read;
 mod remove;
-mod rename;
+pub(crate) mod rename;
 mod resize;
 mod symlink;
 mod write;

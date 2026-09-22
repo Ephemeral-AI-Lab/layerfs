@@ -301,11 +301,13 @@ impl ProjectionMutationPermit {
         }
         self.used = true;
         self.workspace.rename_from(
-            source_parent,
-            source,
-            destination_parent,
-            destination,
-            flags,
+            crate::filesystem::rename::RenameRequest {
+                source_parent,
+                source,
+                destination_parent,
+                destination,
+                flags,
+            },
             deadline.min(self.deadline),
             MutationOrigin::ProjectionRename,
         )

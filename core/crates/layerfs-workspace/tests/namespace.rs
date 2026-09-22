@@ -504,7 +504,9 @@ mod linux {
         // The replaced inode keeps its own content for its existing handle.
         assert_eq!(read(&f, held, 0, 5), b"older");
         assert_eq!(f.workspace.getattr(replaced.serial).unwrap().size, 5);
-        // A same-inode alias is a no-op, and NOREPLACE honours the destination.
+        // A same-inode alias is a no-op, and NOREPLACE honours the destination
+        // in both directions: an occupied name is refused with the source left
+        // where it was, and a free name is accepted.
         f.workspace
             .rename(
                 right.serial,
@@ -515,17 +517,6 @@ mod linux {
                 deadline(),
             )
             .unwrap();
-        assert_eq!(
-            f.workspace.rename(
-                right.serial,
-                b"target",
-                left.serial,
-                b"target",
-                RenameFlags { noreplace: true },
-                deadline()
-            ),
-            Err(WorkspaceError::NotFound)
-        );
         let blocker = file(&f, left.serial, b"blocker", 0o644);
         assert_eq!(
             f.workspace.rename(
@@ -537,6 +528,27 @@ mod linux {
                 deadline()
             ),
             Err(WorkspaceError::Exists)
+        );
+        f.workspace
+            .rename(
+                left.serial,
+                b"blocker",
+                left.serial,
+                b"spare",
+                RenameFlags { noreplace: true },
+                deadline(),
+            )
+            .unwrap();
+        assert_eq!(
+            f.workspace.rename(
+                left.serial,
+                b"spare",
+                left.serial,
+                b"blocker",
+                RenameFlags::default(),
+                deadline()
+            ),
+            Ok(())
         );
         // A directory moves with its subtree; moving it beneath its own
         // descendant is refused before any publication.
@@ -575,6 +587,9 @@ mod linux {
         println!(
             "NAMESPACE_RENAME cross_parent=true replaced_handle_intact=true noreplace=true same_inode_noop=true directory_cycle_refused=true"
         );
+        // Every Local lookup reference this case took, including the two
+        // directories it created: a checked clean close refuses while any of
+        // them is still held.
         close(
             &f,
             &[handle, held],
@@ -583,6 +598,8 @@ mod linux {
                 (replaced.serial, 1),
                 (blocker.serial, 1),
                 (inner.serial, 1),
+                (left.serial, 1),
+                (right.serial, 1),
             ],
         );
         check("rename-publishes-both-parent-edits-atomically");
@@ -672,14 +689,16 @@ mod linux {
         let frozen = stage.stage().clone();
         let first = f.workspace.commit_staged(&stage, deadline()).unwrap();
         assert_eq!(first.stage_token, Some(frozen.token));
-        assert_eq!(first.generation, 0);
+        // A fresh attach starts at generation 1, so the staged generation is 1
+        // and the successor this Commit preserves is 2.
+        assert_eq!(first.generation, 1);
         let (saved_attr, content) = saved(&f, frozen.candidate_root, b"held");
         assert_eq!(saved_attr.mode, 0o644);
         assert_eq!(f.native.bytes(content, 0, 5), b"first");
         missing(&f, frozen.candidate_root, b"moved");
         // G completion must not erase the later rename or metadata update.
         let second = commit(&f);
-        assert_eq!(second.generation, 1);
+        assert_eq!(second.generation, 2);
         let head = committed_root(&second);
         missing(&f, head, b"held");
         missing(&f, head, b"extra");
@@ -728,11 +747,23 @@ mod linux {
         let file = std::fs::read(f.workspace.mount_path().join("right/b")).unwrap();
         assert!(file.is_empty());
         mount.unmount(deadline()).unwrap();
+        // The published mutation is uncommitted, and a dirty Workspace keeps the
+        // native close refusal. One explicit Commit settles it and shows the
+        // multi-entry rename survived into the committed tree.
+        let report = commit(&f);
+        let head = committed_root(&report);
+        missing(&f, head, b"left/a");
+        let (moved, _) = saved(&f, head, b"right/b");
+        assert_eq!(moved.serial, a.serial);
         println!(
             "NAMESPACE_NOTIFY multi_entry_rename_published=true status={:?}",
             after.coherence
         );
-        close(&f, &[], &[(a.serial, 1)]);
+        close(
+            &f,
+            &[],
+            &[(a.serial, 1), (left.serial, 1), (right.serial, 1)],
+        );
         check("multi-entry-sdk-mutation-keeps-its-published-result");
     }
 }

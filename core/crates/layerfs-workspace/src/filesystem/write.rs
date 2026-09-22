@@ -594,6 +594,12 @@ impl Workspace {
             .bytes();
             inode.captured = true;
             inode.base_length = inode.length;
+            // The whole version is one base read of the frozen root from here on,
+            // so the local edit list this generation had is exactly empty. A
+            // metadata-only mutation keeps the piece list it selected above, and
+            // a stale edit count would describe pieces that no longer exist.
+            inode.edits = 0;
+            inode.replacement = 0;
             let mut pieces = vector(1024)?;
             if inode.length > 0 {
                 pieces.push(Piece {

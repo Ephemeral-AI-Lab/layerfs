@@ -345,10 +345,10 @@ pub fn remove_name(
     candidate.build_ordered(name_page(&mut names, 0), window, deadline)
 }
 /// Yields the remaining tombstone entries in key order, one per call.
-fn name_page<'a>(
-    names: &'a mut Vec<Vec<u8>>,
+fn name_page(
+    names: &mut [Vec<u8>],
     mut at: usize,
-) -> impl FnMut(&mut Window) -> Result<Option<Cell>, WorkspaceError> + 'a {
+) -> impl FnMut(&mut Window) -> Result<Option<Cell>, WorkspaceError> + '_ {
     move |_| {
         if at == names.len() {
             return Ok(None);

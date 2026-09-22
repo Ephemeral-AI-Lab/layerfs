@@ -22,6 +22,15 @@ use crate::{
 };
 use layerfs_bridge::contract::Code;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+/// One rename request: both parents, both names and the selected flags.
+#[derive(Clone, Copy)]
+pub(crate) struct RenameRequest<'a> {
+    pub source_parent: u64,
+    pub source: &'a [u8],
+    pub destination_parent: u64,
+    pub destination: &'a [u8],
+    pub flags: RenameFlags,
+}
 /// One parent whose entry set this operation edits.
 struct Parent {
     serial: u64,
@@ -48,25 +57,30 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
         self.rename_from(
-            source_parent,
-            source,
-            destination_parent,
-            destination,
-            flags,
+            RenameRequest {
+                source_parent,
+                source,
+                destination_parent,
+                destination,
+                flags,
+            },
             deadline,
             MutationOrigin::Local,
         )
     }
     pub(crate) fn rename_from(
         &self,
-        source_parent: u64,
-        source: &[u8],
-        destination_parent: u64,
-        destination: &[u8],
-        flags: RenameFlags,
+        request: RenameRequest<'_>,
         deadline: Instant,
         origin: MutationOrigin,
     ) -> Result<(), WorkspaceError> {
+        let RenameRequest {
+            source_parent,
+            source,
+            destination_parent,
+            destination,
+            flags,
+        } = request;
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
@@ -243,39 +257,44 @@ impl Workspace {
         // Rows this publication adds to the two parents it edits. A locally bound
         // source trades its entry row for its removal record, and a replaced
         // destination rewrites a row that already existed, so neither adds one.
-        let mut rows = 0usize;
-        let mut row_bytes = 0usize;
+        // Signed: dropping a locally bound name without a removal record takes a
+        // row away, and the generation's counters must follow it down. A
+        // saturating unsigned count would keep the row and refuse the Commit.
+        let mut rows = 0isize;
+        let mut row_bytes = 0isize;
         for parent in &mut parents {
             if parent.remove.is_none() && parent.bind.is_none() {
                 continue;
             }
             changed += 1;
             if parent.reanchor {
-                if let (Some(prior), Some(previous)) = (
-                    loaded(&parent.directory),
-                    crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref(),
-                ) {
-                    // The delta anchors on the exact earlier root this operation's
-                    // candidate is built on; a frozen submission's captured root
-                    // is the same root only while nothing replaced it.
-                    if let Some(capture) = capture {
-                        if prior.generation != capture.generation {
-                            return Err(WorkspaceError::Io);
-                        }
+                // The delta anchors on the root this generation started from: the
+                // frozen capture when one exists, otherwise the exact previous root
+                // the record's own revision still names. It is never the root about
+                // to be published.
+                let previous = capture
+                    .as_ref()
+                    .map(|capture| capture.root.clone())
+                    .or_else(|| crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()));
+                if let (Some(prior), Some(previous)) = (loaded(&parent.directory), previous) {
+                    // Only a version the frozen root itself holds becomes a delta
+                    // against it. A record the successor generation created keeps its
+                    // own rows, which are exactly what this generation counted.
+                    if capture.is_none_or(|capture| prior.generation == capture.generation) {
+                        parent.directory.origin = Origin::Captured(CapturedBase {
+                            root: previous.root()?,
+                            inode: parent.serial,
+                            generation: prior.generation,
+                            revision: prior.revision,
+                        });
+                        // The inherited pages now live in the referenced version, so
+                        // this record keeps exactly what the operation adds. Without an
+                        // anchor nothing else would hold those names, so it keeps them.
+                        parent.directory.entries = PageRef::NULL;
+                        parent.directory.tombstones = PageRef::NULL;
+                        parent.directory.count = 0;
+                        parent.directory.bytes = 0;
                     }
-                    parent.directory.origin = Origin::Captured(CapturedBase {
-                        root: previous.root()?,
-                        inode: parent.serial,
-                        generation: prior.generation,
-                        revision: prior.revision,
-                    });
-                    // The inherited pages now live in the referenced version, so
-                    // this record keeps exactly what the operation adds. Without an
-                    // anchor nothing else would hold those names, so it keeps them.
-                    parent.directory.entries = PageRef::NULL;
-                    parent.directory.tombstones = PageRef::NULL;
-                    parent.directory.count = 0;
-                    parent.directory.bytes = 0;
                 }
             }
             parent.directory.generation = generation;
@@ -293,12 +312,12 @@ impl Workspace {
                     parent.directory.count = parent.directory.count.saturating_sub(1);
                     parent.directory.bytes = parent.directory.bytes.saturating_sub(removed);
                     if !shadowed {
-                        rows = rows.saturating_sub(1);
-                        row_bytes = row_bytes.saturating_sub(removed as usize);
+                        rows -= 1;
+                        row_bytes -= removed as isize;
                     }
                 } else {
                     rows += 1;
-                    row_bytes += removed as usize;
+                    row_bytes += removed as isize;
                 }
                 if shadowed {
                     parent.directory.tombstones = directories::remove_name(
@@ -330,7 +349,7 @@ impl Workspace {
                         .checked_add(added)
                         .ok_or(WorkspaceError::Capacity)?;
                     rows += 1;
-                    row_bytes += added as usize;
+                    row_bytes += added as isize;
                 }
                 if parent.directory.count > 128 {
                     return Err(WorkspaceError::Capacity);
@@ -389,10 +408,13 @@ impl Workspace {
                 .ok_or(WorkspaceError::Busy)?;
             state.nodes[index].attr = parent.directory.attributes(state.nodes[index].attr);
         }
-        // The moved name is the destination name from here on.
+        // The moved name is the destination name from here on, for the moved
+        // identity and for every descendant a moved directory carries. A cached
+        // path is the locator a later service read uses, so a stale one would ask
+        // for a name this operation just removed.
         let new_path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
+        let old_path = child_path(&parents[0].path, source)?;
         if source_attr.attr.kind == NodeKind::Directory {
-            let old_path = child_path(&parents[0].path, source)?;
             for node in &mut state.nodes {
                 if node.path() == old_path.as_slice() {
                     node.parent = destination_parent;
@@ -408,14 +430,37 @@ impl Workspace {
                     }
                 }
             }
+        } else {
+            for node in &mut state.nodes {
+                if node.path() == old_path.as_slice() {
+                    let len = new_path.len();
+                    node.path[..len].copy_from_slice(&new_path);
+                    node.path_len = len;
+                    node.parent = destination_parent;
+                }
+            }
         }
         if let Some(replaced) = &destination_attr {
+            // The replaced name is gone exactly like an unlinked one: it releases
+            // the lookup reference it owned, and an identity this generation
+            // created that no name binds any more has no canonical identity to
+            // declare. Its record still moves to the successor root, so its open
+            // handle keeps reading its own version.
             if let Some(index) = state
                 .nodes
                 .iter()
                 .position(|node| node.attr.serial == replaced.attr.serial)
             {
                 state.nodes[index].names = state.nodes[index].names.saturating_sub(1);
+                let reference = state.nodes[index].references(if origin.projected() {
+                    ReferenceScope::Projection
+                } else {
+                    ReferenceScope::Local
+                });
+                *reference = reference.saturating_sub(1);
+            }
+            if replaced.attr.kind == NodeKind::File {
+                state.unlinked(replaced.attr.serial);
             }
         }
         let receipt = MutationReceipt {
@@ -443,8 +488,8 @@ impl Workspace {
         state.revision = receipt.revision;
         state.dirty_inodes += new_dirty;
         state.dirty_directories += new_dirty;
-        state.directory_names += rows;
-        state.directory_bytes += row_bytes;
+        state.directory_names = state.directory_names.saturating_add_signed(rows);
+        state.directory_bytes = state.directory_bytes.saturating_add_signed(row_bytes);
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,

@@ -18,6 +18,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
+    sync::atomic::AtomicUsize,
     time::Instant,
 };
 const WORKSPACE_STATE_BYTES: usize =
@@ -32,7 +33,19 @@ pub struct WorkspaceHost {
 pub(crate) struct Host {
     pub config: WorkspaceConfig,
     pub budget: Arc<Budget>,
+    /// The one admitted non-consultation call: save, construction, history or
+    /// attach. A second such call never overlaps it, so one construction worker
+    /// stays one producer.
     pub remote: AtomicBool,
+    /// One bounded metadata call that may overlap a call actually in flight, so
+    /// an ordinary namespace operation can still resolve a name its delta
+    /// inherits and reserve one serial while a save is in flight. It carries no
+    /// content: never input, construction, a save or a history Commit.
+    pub metadata_call: AtomicBool,
+    /// Calls currently inside the delivery. A retained admission whose call has
+    /// already returned — a held read reply, a pending submission — is not
+    /// progress and admits no second call.
+    pub in_flight: AtomicUsize,
     pub frozen: Arc<AtomicBool>,
     pub deliver: OperationDelivery,
     pub request_id: AtomicU64,
@@ -117,13 +130,15 @@ impl WorkspaceHost {
         // The caller can supply a small path with a much larger spare allocation.
         config.root = config.root.into_boxed_path().into_path_buf();
         let budget = Budget::new(config.memory_budget_bytes);
+        // Two call allowances: the primary admission plus the one bounded
+        // metadata call that may overlap it.
         let minimum = 16384usize
             .checked_add(
                 size_of::<Entry>()
                     + 63
                     + ATTACH_FAILURE_BYTES
                     + WORKSPACE_STATE_BYTES
-                    + CALL_SCRATCH
+                    + 2 * CALL_SCRATCH
                     + MAX_READ_BYTES
                     + NODE_LIMIT * size_of::<Node>()
                     + HANDLE_LIMIT * size_of::<Handle>()
@@ -160,6 +175,8 @@ impl WorkspaceHost {
                 config,
                 budget,
                 remote: AtomicBool::new(false),
+                metadata_call: AtomicBool::new(false),
+                in_flight: AtomicUsize::new(0),
                 frozen: Arc::new(AtomicBool::new(false)),
                 deliver,
                 request_id: AtomicU64::new(1),
@@ -466,7 +483,16 @@ impl Host {
             operation,
         };
         request.validate()?;
+        self.in_flight.fetch_add(1, Ordering::AcqRel);
+        let _in_flight = InFlight(&self.in_flight);
         (self.deliver)(&request, input, output, deadline).map_err(WorkspaceError::Service)
+    }
+}
+/// One call inside the delivery; the count is progress, not an admission.
+struct InFlight<'a>(&'a AtomicUsize);
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 pub(crate) fn validate_id(id: &str) -> Result<(), WorkspaceError> {

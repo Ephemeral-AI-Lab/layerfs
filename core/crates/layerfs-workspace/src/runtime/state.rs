@@ -120,6 +120,9 @@ pub(crate) struct Cookie {
 pub(crate) struct OperationGuard {
     pub workspace: Workspace,
     pub remote: bool,
+    /// This guard holds the one bounded metadata-call slot instead of the
+    /// primary admission, because another call already owns that.
+    pub metadata_call: bool,
     pub _charge: Charge,
 }
 
@@ -349,6 +352,7 @@ impl Workspace {
         Ok(OperationGuard {
             workspace: self.clone(),
             remote,
+            metadata_call: false,
             _charge: charge,
         })
     }
@@ -407,6 +411,54 @@ impl OperationGuard {
             self.workspace.host.remote.store(false, Ordering::Release);
         }
     }
+    /// Admits one bounded metadata call: a read-only inspection or one serial
+    /// reservation. The primary admission is taken first, so a lone call keeps
+    /// the original single-call behaviour; while another call owns it, the one
+    /// metadata-call slot admits this one instead and refuses a second.
+    /// Construction, save and history Commit never take this path.
+    pub fn metadata_call(&mut self) -> Result<(), WorkspaceError> {
+        if self.remote || self.metadata_call {
+            return Ok(());
+        }
+        let host = &self.workspace.host;
+        if host
+            .remote
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            if let Err(error) = self._charge.resize(CALL_SCRATCH) {
+                host.remote.store(false, Ordering::Release);
+                return Err(error);
+            }
+            self.remote = true;
+            return Ok(());
+        }
+        // Only a call that is actually in flight makes progress worth
+        // overlapping; a retained admission whose call has returned keeps its
+        // single-call refusal.
+        if host.in_flight.load(Ordering::Acquire) == 0 {
+            return Err(WorkspaceError::Busy);
+        }
+        host.metadata_call
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| WorkspaceError::Busy)?;
+        if let Err(error) = self._charge.resize(CALL_SCRATCH) {
+            host.metadata_call.store(false, Ordering::Release);
+            return Err(error);
+        }
+        self.metadata_call = true;
+        Ok(())
+    }
+    pub fn release_metadata_call(&mut self) {
+        if self.metadata_call {
+            self.metadata_call = false;
+            self.workspace
+                .host
+                .metadata_call
+                .store(false, Ordering::Release);
+        }
+        self.release_remote();
+    }
     pub fn remote(&mut self) -> Result<(), WorkspaceError> {
         if self.remote {
             return Ok(());
@@ -434,6 +486,15 @@ impl Drop for OperationGuard {
                 .resize(0)
                 .expect("shrinking a call reservation cannot fail");
             self.workspace.host.remote.store(false, Ordering::Release);
+        }
+        if self.metadata_call {
+            self._charge
+                .resize(0)
+                .expect("shrinking a call reservation cannot fail");
+            self.workspace
+                .host
+                .metadata_call
+                .store(false, Ordering::Release);
         }
     }
 }

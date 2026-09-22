@@ -28,14 +28,14 @@ impl Workspace {
         query: Inspect,
         deadline: Instant,
     ) -> Result<Response, WorkspaceError> {
-        operation.remote()?;
+        operation.metadata_call()?;
         let result = self.call(
             Operation::Inspect { root: base, query },
             0,
             &mut std::io::sink(),
             deadline,
         );
-        operation.release_remote();
+        operation.release_metadata_call();
         result
     }
     pub(crate) fn directory_record(

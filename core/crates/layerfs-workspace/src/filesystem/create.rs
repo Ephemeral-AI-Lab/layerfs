@@ -289,7 +289,7 @@ impl Workspace {
         let serial = if let Creation::Link { serial, .. } = creation {
             serial
         } else {
-            operation.remote()?;
+            operation.metadata_call()?;
             let response = self.host.call_input(
                 (self.inner.store, generation),
                 Operation::HistoryCommand(HistoryCommand::ReserveInodes { scope, count: 1 }),
@@ -298,7 +298,7 @@ impl Workspace {
                 &mut std::io::sink(),
                 deadline,
             );
-            operation.release_remote();
+            operation.release_metadata_call();
             match response? {
                 Response::History(result) => match *result {
                     HistoryResult::Reservation {
@@ -394,32 +394,33 @@ impl Workspace {
             // The maintained delta now anchors on the root this generation
             // started from: the frozen capture when one exists, otherwise the
             // exact previous root the record's own revision still names.
-            if let (Some(prior), Some(previous)) = (
-                old,
-                crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref(),
-            ) {
-                // The delta anchors on the exact earlier root this operation's
-                // candidate is built on, which is the version its own entries and
-                // tombstones were read from. A frozen submission's captured root
-                // is the same root only while no later operation replaced it.
-                if let Some(capture) = capture {
-                    if prior.generation != capture.generation {
-                        return Err(WorkspaceError::Io);
-                    }
+            // The delta anchors on the root this generation started from: the
+            // frozen capture when one exists, otherwise the exact previous root
+            // the record's own revision still names. It is never the root about to
+            // be published.
+            let previous = capture
+                .as_ref()
+                .map(|capture| capture.root.clone())
+                .or_else(|| crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()));
+            if let (Some(prior), Some(previous)) = (old, previous) {
+                // Only a version the frozen root itself holds becomes a delta
+                // against it. A record the successor generation created keeps its
+                // own rows, which are exactly what this generation counted.
+                if capture.is_none_or(|capture| prior.generation == capture.generation) {
+                    parent_directory.origin = Origin::Captured(CapturedBase {
+                        root: previous.root()?,
+                        inode: parent,
+                        generation: prior.generation,
+                        revision: prior.revision,
+                    });
+                    // The inherited pages now live in the referenced version, so this
+                    // record keeps exactly what the operation adds. Without an anchor
+                    // nothing else would hold those names, so the record keeps them.
+                    parent_directory.entries = PageRef::NULL;
+                    parent_directory.tombstones = PageRef::NULL;
+                    parent_directory.count = 0;
+                    parent_directory.bytes = 0;
                 }
-                parent_directory.origin = Origin::Captured(CapturedBase {
-                    root: previous.root()?,
-                    inode: parent,
-                    generation: prior.generation,
-                    revision: prior.revision,
-                });
-                // The inherited pages now live in the referenced version, so this
-                // record keeps exactly what the operation adds. Without an anchor
-                // nothing else would hold those names, so the record keeps them.
-                parent_directory.entries = PageRef::NULL;
-                parent_directory.tombstones = PageRef::NULL;
-                parent_directory.count = 0;
-                parent_directory.bytes = 0;
             }
         }
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
