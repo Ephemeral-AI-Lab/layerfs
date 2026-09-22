@@ -362,6 +362,7 @@ impl Workspace {
             state.fresh_symlinks = 0;
             state.directory_names = 0;
             state.directory_bytes = 0;
+            state.fresh.clear();
             state.submission = Some(submission.clone());
             Ok(())
         })();

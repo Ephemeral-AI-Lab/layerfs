@@ -1,10 +1,15 @@
 mod create;
 mod directory;
+mod link;
 mod mkdir;
+mod mknod;
 pub(crate) mod namespace;
 pub(crate) mod namespace_view;
 mod open;
 mod original;
 mod read;
+mod remove;
+mod rename;
+mod resize;
 mod symlink;
 mod write;

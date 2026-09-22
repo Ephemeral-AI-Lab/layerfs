@@ -33,6 +33,9 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
         } else if cell.key_len >= 2 && cell.key()[0] == b'E' && cell.value_len == 16 {
             crate::overlay::directories::entry_serial(cell.value())?;
             PageRef::NULL
+        } else if cell.key_len >= 2 && cell.key()[0] == b'T' && cell.value() == [1] {
+            crate::overlay::directories::tombstone(cell.key())?;
+            PageRef::NULL
         } else if cell.key_len == 8 && cell.value_len == 64 {
             let piece = Piece::parse(
                 u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
@@ -58,7 +61,7 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
 }
 fn index_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
     match key.first() {
-        Some(b'E') if key.len() <= 256 => Ok(3),
+        Some(b'E' | b'T') if key.len() <= 256 => Ok(3),
         Some(b'D') if key.len() == 17 => Ok(2),
         Some(b'I' | b'N' | b'R') if key.len() == 9 => Ok(2),
         _ => Err(WorkspaceError::Io),
@@ -75,6 +78,7 @@ fn check_index(cells: &[Cell], level: u8, limit: u8) -> Result<(), WorkspaceErro
         if level == 0 {
             let valid = match cell.key()[0] {
                 b'E' => cell.value_len == 16,
+                b'T' => cell.value_len == 1 && cell.value() == [1] && cell.key_len >= 2,
                 b'I' => cell.value_len == 160,
                 b'N' => cell.value_len == 128,
                 b'R' => cell.value_len == 80,

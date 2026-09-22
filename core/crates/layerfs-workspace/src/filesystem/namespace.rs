@@ -95,6 +95,54 @@ pub(crate) fn check_access(attr: NodeAttributes, uid: u32, mask: u8) -> Result<(
     Ok(())
 }
 impl Workspace {
+    /// The one directory-delta decision every namespace mutation shares: whether
+    /// the maintained delta must be re-anchored on the current root, and whether
+    /// this generation's ledger already carries the exact dirty key.
+    ///
+    /// The record's own generation cannot answer the second question, because it
+    /// only advances at capture. The origin answers the first: a delta that is
+    /// already captured or empty keeps the entries it inherited.
+    pub(crate) fn directory_delta(
+        &self,
+        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
+        generation: u64,
+        serial: u64,
+        record: Option<&crate::overlay::directories::Directory>,
+        window: &mut crate::backing::segments::Window,
+        deadline: Instant,
+    ) -> Result<(bool, bool), WorkspaceError> {
+        let maintained = record.is_some_and(|directory| {
+            matches!(
+                directory.origin,
+                crate::overlay::directories::Origin::Captured(_)
+                    | crate::overlay::directories::Origin::Empty
+            )
+        });
+        let dirty = self.dirty_in_generation(root, generation, serial, window, deadline)?;
+        Ok((!maintained, dirty))
+    }
+    /// True when this generation's ledger already carries the exact dirty key
+    /// for `serial`. A directory with a maintained delta is not a new dirty
+    /// inode, and one without it is, whatever record it still holds.
+    pub(crate) fn dirty_in_generation(
+        &self,
+        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
+        generation: u64,
+        serial: u64,
+        window: &mut crate::backing::segments::Window,
+        deadline: Instant,
+    ) -> Result<bool, WorkspaceError> {
+        let Some(root) = root else { return Ok(false) };
+        Ok(root
+            .arena
+            .find(
+                root.root()?,
+                &crate::backing::metadata_pages::dirty_key(generation, serial),
+                window,
+                deadline,
+            )?
+            .is_some_and(|cell| cell.value() == [1]))
+    }
     pub fn lookup(
         &self,
         parent: u64,

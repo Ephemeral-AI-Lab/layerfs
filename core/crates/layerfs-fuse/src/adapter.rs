@@ -439,16 +439,14 @@ impl Filesystem for Adapter {
         reply: ReplyAttr,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
-        let mut permit = self.guard(req).and_then(|()| {
+        let request = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
             }
-            if size.is_none()
-                || mode.is_some()
-                || uid.is_some()
+            // No atime setter, no ownership change and no platform flag has a
+            // persisted representation. UTIME_OMIT selects no change.
+            if uid.is_some()
                 || gid.is_some()
-                || atime.is_some()
-                || mtime.is_some()
                 || ctime.is_some()
                 || crtime.is_some()
                 || chgtime.is_some()
@@ -457,27 +455,64 @@ impl Filesystem for Adapter {
             {
                 return Err(Errno::EOPNOTSUPP);
             }
+            // `None` is an omitted field (the kernel clears FATTR_*_OMIT).
+            // A selected atime is refused unless it names the same instant the
+            // selected mtime does, because only one portable timestamp exists.
+            let mtime = match mtime {
+                None => None,
+                Some(TimeOrNow::Now) => Some(SystemTime::now()),
+                Some(TimeOrNow::SpecificTime(value)) => Some(value),
+            };
+            let atime = match atime {
+                None => None,
+                Some(TimeOrNow::Now) => Some(SystemTime::now()),
+                Some(TimeOrNow::SpecificTime(value)) => Some(value),
+            };
+            if atime.is_some() && atime != mtime {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            let mtime = match mtime.or(atime) {
+                Some(value) => {
+                    let seconds = value
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .map_err(|_| Errno::EINVAL)?;
+                    Some((
+                        i64::try_from(seconds.as_secs()).map_err(|_| Errno::EOVERFLOW)?,
+                        seconds.subsec_nanos(),
+                    ))
+                }
+                None => None,
+            };
+            if size.is_none() && mode.is_none() && mtime.is_none() {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            Ok(layerfs_workspace::PortableAttributes {
+                size,
+                mode: mode.map(|value| value & 0o7777),
+                mtime,
+            })
+        });
+        let mut permit = request.and_then(|request| {
             self.workspace
                 .begin_projection_mutation(deadline)
+                .map(|permit| (permit, request))
                 .map_err(errno)
         });
-        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
-            if let Some(handle) = fh {
-                self.handle(ino, handle)?;
-            }
-            let serial = serial(ino, self.root());
-            // Check unchanged kernel representation fields before publication.
-            attributes(self.workspace.getattr(serial).map_err(errno)?, self.root())?;
-            let value = permit
-                .set_len(
-                    serial,
-                    size.ok_or(Errno::EOPNOTSUPP)?,
-                    fh.map(|handle| handle.0),
-                    deadline,
-                )
-                .map_err(errno)?;
-            attributes(value, self.root())
-        });
+        let result = permit
+            .as_mut()
+            .map_err(|error| *error)
+            .and_then(|(permit, request)| {
+                if let Some(handle) = fh {
+                    self.handle(ino, handle)?;
+                }
+                let serial = serial(ino, self.root());
+                // Check unchanged kernel representation fields before publication.
+                attributes(self.workspace.getattr(serial).map_err(errno)?, self.root())?;
+                let value = permit
+                    .set_attributes(serial, *request, deadline)
+                    .map_err(errno)?;
+                attributes(value, self.root())
+            });
         // Size SETATTR's kernel caller owns cache invalidation after releasing
         // NOWRITE. No userspace notifier or invented post-kernel fence runs here.
         match result {
@@ -544,14 +579,51 @@ impl Filesystem for Adapter {
     fn mknod(
         &self,
         req: &Request,
-        _: INodeNo,
-        _: &OsStr,
-        _: u32,
-        _: u32,
-        _: u32,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        _umask: u32,
+        rdev: u32,
         reply: ReplyEntry,
     ) {
-        reply.error(self.readonly(req));
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            // INIT does not enable DONT_MASK: Linux sends final permission bits
+            // after applying umask. Special kinds have no storage contract.
+            if mode & libc::S_IFMT != libc::S_IFREG || mode & !0o777 != libc::S_IFREG {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            if rdev != 0 {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            let value = permit
+                .mknod(
+                    serial(parent, self.root()),
+                    name.as_bytes(),
+                    mode & 0o777,
+                    0,
+                    deadline,
+                )
+                .map_err(errno)?;
+            attributes(value, self.root()).inspect_err(|_| {
+                self.workspace
+                    .forget(value.serial, 1, ReferenceScope::Projection);
+            })
+        });
+        // The kernel installs the entry and invalidates its parent; hold the
+        // permit through the reply attempt as CREATE does.
+        match result {
+            Ok(value) => reply.entry(&TTL, &value, Generation(0)),
+            Err(error) => reply.error(error),
+        }
     }
     fn mkdir(
         &self,
@@ -596,11 +668,46 @@ impl Filesystem for Adapter {
             Err(error) => reply.error(error),
         }
     }
-    fn unlink(&self, req: &Request, _: INodeNo, _: &OsStr, reply: ReplyEmpty) {
-        reply.error(self.readonly(req));
+    fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            permit
+                .unlink(serial(parent, self.root()), name.as_bytes(), deadline)
+                .map_err(errno)
+        });
+        // The kernel owns the parent lock and cache invalidation through UNLINK.
+        match result {
+            Ok(()) => reply.ok(),
+            Err(error) => reply.error(error),
+        }
     }
-    fn rmdir(&self, req: &Request, _: INodeNo, _: &OsStr, reply: ReplyEmpty) {
-        reply.error(self.readonly(req));
+    fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            permit
+                .rmdir(serial(parent, self.root()), name.as_bytes(), deadline)
+                .map_err(errno)
+        });
+        match result {
+            Ok(()) => reply.ok(),
+            Err(error) => reply.error(error),
+        }
     }
     fn symlink(
         &self,
@@ -643,17 +750,86 @@ impl Filesystem for Adapter {
     fn rename(
         &self,
         req: &Request,
-        _: INodeNo,
-        _: &OsStr,
-        _: INodeNo,
-        _: &OsStr,
-        _: RenameFlags,
+        parent: INodeNo,
+        name: &OsStr,
+        new_parent: INodeNo,
+        new_name: &OsStr,
+        flags: RenameFlags,
         reply: ReplyEmpty,
     ) {
-        reply.error(self.readonly(req));
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        // RENAME_NOREPLACE is the only selected flag; exchange and whiteout stay
+        // unsupported and are refused before any publication.
+        let noreplace = match flags.bits() {
+            0 => false,
+            1 => true,
+            _ => {
+                reply.error(Errno::EINVAL);
+                return;
+            }
+        };
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            permit
+                .rename(
+                    serial(parent, self.root()),
+                    name.as_bytes(),
+                    serial(new_parent, self.root()),
+                    new_name.as_bytes(),
+                    layerfs_workspace::RenameFlags { noreplace },
+                    deadline,
+                )
+                .map_err(errno)
+        });
+        // RENAME holds both parent locks until the reply; the kernel installs
+        // and invalidates both entries itself, so no reverse notification runs.
+        match result {
+            Ok(()) => reply.ok(),
+            Err(error) => reply.error(error),
+        }
     }
-    fn link(&self, req: &Request, _: INodeNo, _: INodeNo, _: &OsStr, reply: ReplyEntry) {
-        reply.error(self.readonly(req));
+    fn link(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        new_parent: INodeNo,
+        new_name: &OsStr,
+        reply: ReplyEntry,
+    ) {
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            let value = permit
+                .link(
+                    serial(new_parent, self.root()),
+                    new_name.as_bytes(),
+                    serial(ino, self.root()),
+                    deadline,
+                )
+                .map_err(errno)?;
+            attributes(value, self.root()).inspect_err(|_| {
+                self.workspace
+                    .forget(value.serial, 1, ReferenceScope::Projection);
+            })
+        });
+        match result {
+            Ok(value) => reply.entry(&TTL, &value, Generation(0)),
+            Err(error) => reply.error(error),
+        }
     }
     fn create(
         &self,

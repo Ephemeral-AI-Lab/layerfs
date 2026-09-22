@@ -57,6 +57,16 @@ pub(crate) struct State {
     pub next_cookie: u64,
     pub mounted: bool,
     pub projection: Option<Box<super::coherence::ProjectionState>>,
+    /// One entry per regular inode this generation created, with the names the
+    /// effective namespace still binds. A fresh identity at zero has no
+    /// canonical identity to save, so lowering drops it instead of declaring an
+    /// unbound fresh inode. Reset when a capture starts the next generation.
+    pub fresh: Vec<FreshName>,
+    /// One entry per directory this generation created whose declaration the
+    /// canonical state has not accepted yet. A fresh directory serial exists in
+    /// the service only after the first Commit that names it, so lowering must
+    /// declare it exactly once and never re-declare it in a later generation.
+    pub declared: Vec<u64>,
     pub closed: bool,
     pub active: usize,
     pub tables: Option<Charge>,
@@ -73,6 +83,15 @@ pub(crate) struct Node {
     pub lookups: u64,
     pub projection_lookups: u64,
     pub handles: usize,
+    /// Names this delta generation knows bind this inode. Exact for an inode
+    /// created in the generation, a lower bound for one inherited from a base.
+    pub names: u32,
+}
+/// One regular inode this generation created and its live name count.
+#[derive(Clone, Copy)]
+pub(crate) struct FreshName {
+    pub serial: u64,
+    pub names: u32,
 }
 #[derive(Clone)]
 pub(crate) struct Handle {
@@ -121,6 +140,7 @@ impl Node {
             lookups: 0,
             projection_lookups: 0,
             handles: 0,
+            names: 1,
         }
     }
     pub fn path(&self) -> &[u8] {
@@ -196,6 +216,41 @@ impl State {
             return Err(WorkspaceError::Capacity);
         }
         Ok(total)
+    }
+    /// Registers one regular identity this generation created.
+    pub fn created(&mut self, serial: u64) {
+        if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
+            entry.names = entry.names.saturating_add(1);
+        } else {
+            self.fresh.push(FreshName { serial, names: 1 });
+        }
+    }
+    /// Registers one directory identity this generation created and has not
+    /// yet declared to the canonical state.
+    pub fn declaring(&mut self, serial: u64) {
+        if !self.declared.contains(&serial) {
+            self.declared.push(serial);
+        }
+    }
+    /// True while the canonical state still has to learn this directory serial.
+    pub fn undeclared(&self, serial: u64) -> bool {
+        self.declared.contains(&serial)
+    }
+    /// Forgets every declaration the canonical state has now accepted.
+    pub fn declared_committed(&mut self) {
+        self.declared.clear();
+    }
+    /// Removes one name; the identity keeps its own live-owner lifetime.
+    pub fn unlinked(&mut self, serial: u64) {
+        if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
+            entry.names = entry.names.saturating_sub(1);
+        }
+    }
+    /// A regular identity this generation created and no name binds any more.
+    pub fn unbound(&self, serial: u64) -> bool {
+        self.fresh
+            .iter()
+            .any(|entry| entry.serial == serial && entry.names == 0)
     }
     pub fn collect(&mut self, root: u64) {
         self.nodes.retain(|node| {

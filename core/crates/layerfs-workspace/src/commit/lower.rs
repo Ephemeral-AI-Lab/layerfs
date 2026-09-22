@@ -5,7 +5,7 @@ use crate::{
         metadata_pages::{self, Cell},
     },
     overlay::{
-        directories::{Directory, Origin},
+        directories::Directory,
         pieces::{get, Inode, PieceKind},
         snapshot::Submission,
     },
@@ -17,6 +17,9 @@ type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
     Inode(Inode),
     Directory(Directory),
+    /// A dirty identity this generation created and no name binds any more.
+    /// It has no canonical identity, so lowering emits nothing for it.
+    Unbound,
 }
 pub struct FilePlan {
     pub inode: Inode,
@@ -41,6 +44,8 @@ impl Workspace {
         let _view = host.writer()?;
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        // The cursor is the exact key of the last record this walk returned, so
+        // a successor is the next key and never the same serial again.
         let key = metadata_pages::dirty_key(captured.generation, after);
         let found =
             captured
@@ -58,39 +63,49 @@ impl Workspace {
         if serial <= after {
             return Err(WorkspaceError::Io);
         }
-        if let Some(record) = captured.root.arena.find(
+        // A maintained directory owns a namespace record and no inode record;
+        // a regular identity owns an inode record. The namespace record is
+        // checked first so a directory is never mistaken for a file.
+        let directory = captured.root.arena.find(
             captured.root.root()?,
-            &metadata_pages::inode_key(serial),
+            &metadata_pages::namespace_key(serial),
             window,
             deadline,
-        )? {
-            let inode = Inode::parse(record.value())?;
-            if inode.generation != captured.generation
-                || inode.revision > captured.revision
-                || inode.captured
+        )?;
+        if let Some(record) = directory {
+            let directory = Directory::parse(record.value())?;
+            // A maintained delta may still be captured: that origin is the exact
+            // root its entries and tombstones are deltas against, and it is the
+            // same root this capture was taken from.
+            if directory.generation != captured.generation || directory.revision > captured.revision
             {
                 return Err(WorkspaceError::Io);
             }
-            return Ok(Some((serial, Dirty::Inode(inode))));
+            return Ok(Some((serial, Dirty::Directory(directory))));
         }
         let record = captured
             .root
             .arena
             .find(
                 captured.root.root()?,
-                &metadata_pages::namespace_key(serial),
+                &metadata_pages::inode_key(serial),
                 window,
                 deadline,
             )?
             .ok_or(WorkspaceError::Io)?;
-        let directory = Directory::parse(record.value())?;
-        if directory.generation != captured.generation
-            || directory.revision > captured.revision
-            || matches!(directory.origin, Origin::Captured(_))
+        let inode = Inode::parse(record.value())?;
+        if inode.generation != captured.generation
+            || inode.revision > captured.revision
+            || inode.captured
         {
             return Err(WorkspaceError::Io);
         }
-        Ok(Some((serial, Dirty::Directory(directory))))
+        if inode.constructs_file() && self.state()?.unbound(serial) {
+            // A complete-file construction this generation created that no name
+            // binds any more has no identity to save, so lowering drops it.
+            return Ok(Some((serial, Dirty::Unbound)));
+        }
+        Ok(Some((serial, Dirty::Inode(inode))))
     }
     pub(crate) fn lower_file(
         &self,
@@ -198,6 +213,10 @@ impl Workspace {
         }
         Ok(())
     }
+    /// One typed row per dirty regular identity, in serial order. The saved
+    /// version of each is exactly the result record this capture wrote for it;
+    /// an identity with no result record was saved by no content at all, which
+    /// only a fresh empty file can be.
     pub(crate) fn prepared_inodes(
         &self,
         submission: &Submission,
@@ -208,64 +227,58 @@ impl Workspace {
             .count
             .checked_sub(captured.directories)
             .ok_or(WorkspaceError::Io)?;
-        if files == 0 {
-            if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL
-                || captured.fresh_files != 0
-                || captured.fresh_symlinks != 0
-            {
-                return Err(WorkspaceError::Io);
-            }
-            return Ok((vector(0)?, vector(0)?, vector(0)?));
-        }
-        let root = submission.result_root()?.ok_or(WorkspaceError::Io)?;
-        let host = self
-            .host
-            .metadata
-            .as_ref()
-            .ok_or(WorkspaceError::Unsupported)?;
-        let _view = host.writer()?;
-        let mut lease = host.payloads.window(1, 3)?;
-        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut inodes = vector(files)?;
         let mut fresh = vector(captured.fresh_files)?;
         let mut symlinks = vector(captured.fresh_symlinks)?;
         let mut after = 0;
-        while let Some(cell) = root.arena.next(
-            root.root()?,
-            &metadata_pages::result_key(after),
-            after != 0,
-            window,
-            deadline,
-        )? {
-            if cell.key().len() != 9
-                || cell.key()[0] != b'R'
-                || cell.value_len != 80
-                || inodes.len() == files
-            {
+        let mut seen = 0;
+        while let Some((serial, dirty)) = self.next_dirty(submission, after, deadline)? {
+            after = serial;
+            seen += 1;
+            let Dirty::Inode(inode) = dirty else {
+                continue;
+            };
+            if inodes.len() == files {
                 return Err(WorkspaceError::Io);
             }
-            let serial = get(cell.key(), 1)?;
-            if serial <= after {
-                return Err(WorkspaceError::Io);
-            }
-            let value = cell.value();
-            let original = captured
-                .root
-                .arena
-                .find(
-                    captured.root.root()?,
-                    &metadata_pages::inode_key(serial),
+            // `next_dirty` owns its own read window, so this record is read
+            // under a separate one rather than nested inside it.
+            let saved = submission.result_ref()?;
+            let record = {
+                let host = self
+                    .host
+                    .metadata
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                let _view = host.writer()?;
+                let mut lease = host.payloads.window(1, 3)?;
+                let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+                captured.root.arena.find(
+                    saved,
+                    &metadata_pages::result_key(serial),
                     window,
                     deadline,
                 )?
-                .ok_or(WorkspaceError::Io)?;
-            let inode = Inode::parse(original.value())?;
-            if get(value, 0)? != inode.revision
-                || get(value, 8)? != inode.length
-                || inode.generation != captured.generation
-            {
-                return Err(WorkspaceError::Io);
-            }
+            };
+            let (content, metadata) = match record {
+                Some(cell) => {
+                    let value = cell.value();
+                    if cell.value_len != 80
+                        || get(value, 0)? != inode.revision
+                        || get(value, 8)? != inode.length
+                    {
+                        return Err(WorkspaceError::Io);
+                    }
+                    (
+                        value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
+                        value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
+                    )
+                }
+                // A fresh empty file constructs no content, so its declaration
+                // carries no saved root.
+                None if inode.fresh && inode.length == 0 => ([0; 32], [0; 32]),
+                None => return Err(WorkspaceError::Io),
+            };
             if inode.fresh {
                 let (list, maximum) = if inode.symlink {
                     (&mut symlinks, captured.fresh_symlinks)
@@ -280,21 +293,20 @@ impl Workspace {
             inodes.push(InodeChange {
                 serial,
                 kind: if inode.symlink { 3 } else { 1 },
-                content: value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
-                metadata: value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
+                content,
+                metadata,
             });
-            after = serial;
         }
-        if inodes.len() != files
-            || fresh.len() != captured.fresh_files
-            || symlinks.len() != captured.fresh_symlinks
+        if seen != captured.count
+            || inodes.len() != files
+            || fresh.len() > captured.fresh_files
+            || symlinks.len() > captured.fresh_symlinks
         {
             return Err(WorkspaceError::Io);
         }
         Ok((inodes, fresh, symlinks))
     }
 }
-
 fn push_edit(
     edits: &mut Vec<Edit>,
     base: u64,

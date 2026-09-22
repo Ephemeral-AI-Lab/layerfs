@@ -42,6 +42,8 @@ impl Workspace {
                 return Err(WorkspaceError::Io);
             }
             let Dirty::Inode(inode) = inode else {
+                // A maintained directory needs no content save, and an identity
+                // this generation created without a name needs no declaration.
                 after = serial;
                 count += 1;
                 continue;

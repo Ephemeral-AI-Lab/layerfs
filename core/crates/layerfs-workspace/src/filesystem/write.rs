@@ -1,5 +1,6 @@
 //! One local splice, prepared outside the state lock and published with an exact head stamp.
 use super::original::Original;
+use crate::types::PortableAttributes;
 use crate::{
     backing::{
         metadata::RootOwner,
@@ -18,17 +19,17 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
-struct Publication {
-    receipt: MutationReceipt,
-    attributes: NodeAttributes,
-    delivery: Option<ProjectionInvalidation>,
-    published_handle: Option<HandleId>,
+pub(crate) struct Publication {
+    pub(crate) receipt: MutationReceipt,
+    pub(crate) attributes: NodeAttributes,
+    pub(crate) delivery: Option<ProjectionInvalidation>,
+    pub(crate) published_handle: Option<HandleId>,
 }
 #[derive(Clone, Copy)]
-enum FileMutation<'a> {
+pub(crate) enum FileMutation<'a> {
     Range(&'a RangeEdit),
-    SetLen {
-        length: u64,
+    Attributes {
+        request: PortableAttributes,
         handle: Option<HandleId>,
         origin: MutationOrigin,
     },
@@ -40,11 +41,14 @@ enum FileMutation<'a> {
     },
 }
 impl FileMutation<'_> {
-    fn origin(self) -> MutationOrigin {
+    pub(crate) fn origin(self) -> MutationOrigin {
         match self {
-            Self::Write { origin, .. } | Self::SetLen { origin, .. } => origin,
+            Self::Write { origin, .. } | Self::Attributes { origin, .. } => origin,
             Self::Range(_) => MutationOrigin::Local,
         }
+    }
+    fn is_metadata_only(self) -> bool {
+        matches!(self, Self::Attributes { request, .. } if request.size.is_none())
     }
 }
 impl Workspace {
@@ -72,13 +76,10 @@ impl Workspace {
         if handle.options.access == FileAccess::ReadOnly {
             return Err(WorkspaceError::BadHandle);
         }
-        let scope = match origin {
-            MutationOrigin::Local => ReferenceScope::Local,
-            MutationOrigin::ProjectionWrite { .. }
-            | MutationOrigin::ProjectionSize
-            | MutationOrigin::ProjectionMkdir
-            | MutationOrigin::ProjectionCreate
-            | MutationOrigin::ProjectionSymlink => ReferenceScope::Projection,
+        let scope = if origin.projected() {
+            ReferenceScope::Projection
+        } else {
+            ReferenceScope::Local
         };
         if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);
@@ -101,7 +102,7 @@ impl Workspace {
         }
         let handle = match mutation {
             FileMutation::Write { handle, .. } => Some(handle),
-            FileMutation::SetLen { handle, .. } => handle,
+            FileMutation::Attributes { handle, .. } => handle,
             FileMutation::Range(_) => None,
         };
         if let Some(handle) = handle {
@@ -281,8 +282,11 @@ impl Workspace {
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
         }
-        let mutation = FileMutation::SetLen {
-            length,
+        let mutation = FileMutation::Attributes {
+            request: PortableAttributes {
+                size: Some(length),
+                ..PortableAttributes::default()
+            },
             handle,
             origin,
         };
@@ -335,8 +339,11 @@ impl Workspace {
         let original = self.serial_original(reserved.serial, deadline, operation)?;
         self.mutate_file(
             original,
-            FileMutation::SetLen {
-                length: 0,
+            FileMutation::Attributes {
+                request: PortableAttributes {
+                    size: Some(0),
+                    ..PortableAttributes::default()
+                },
                 handle: None,
                 origin,
             },
@@ -345,7 +352,7 @@ impl Workspace {
         )
         .map(|published| published.attributes)
     }
-    fn mutate_file(
+    pub(super) fn mutate_file(
         &self,
         original: Original,
         mutation: FileMutation<'_>,
@@ -386,7 +393,12 @@ impl Workspace {
         }
         if matches!(
             mutation,
-            FileMutation::Range(_) | FileMutation::SetLen { handle: None, .. }
+            FileMutation::Range(_)
+                | FileMutation::Attributes {
+                    handle: None,
+                    request: PortableAttributes { size: Some(_), .. },
+                    ..
+                }
         ) {
             super::namespace::check_access(original, self.inner.root.uid, 2)?;
         }
@@ -441,6 +453,9 @@ impl Workspace {
                 .transpose()?,
             None => None,
         };
+        if let FileMutation::Attributes { request, .. } = mutation {
+            let _ = &request;
+        }
         let mut inode = old.unwrap_or_else(|| Inode::initial(original, content, metadata));
         if inode.symlink {
             return Err(WorkspaceError::Io);
@@ -456,7 +471,7 @@ impl Workspace {
         let payload = match mutation {
             FileMutation::Range(edit) => Some(&edit.replacement),
             FileMutation::Write { replacement, .. } => Some(replacement),
-            FileMutation::SetLen { .. } => None,
+            FileMutation::Attributes { .. } => None,
         };
         let (start, end, accepted_bytes) = match mutation {
             FileMutation::Range(edit) => {
@@ -465,7 +480,8 @@ impl Workspace {
                 }
                 (edit.start, edit.end, edit.replacement.len())
             }
-            FileMutation::SetLen { length, .. } => {
+            FileMutation::Attributes { request, .. } => {
+                let length = request.size.unwrap_or(inode.length);
                 replacement[0].length = length.saturating_sub(inode.length);
                 (length.min(inode.length), inode.length, 0)
             }
@@ -508,6 +524,14 @@ impl Workspace {
                 delivery: None,
                 published_handle: None,
             });
+        }
+        // A metadata-only request never selects replacement pieces: the selected
+        // content root this generation already is the exact desired content.
+        let metadata_only = mutation.is_metadata_only();
+        if metadata_only {
+            for piece in &mut replacement {
+                piece.length = 0;
+            }
         }
         if let Some(payload) = payload {
             let held = payload
@@ -600,14 +624,18 @@ impl Workspace {
         };
         // Capture conversion above selects replay for D1 edits, even if G created
         // the file. Only an uncaptured fresh file streams complete construction.
-        let (mut pieces, edits, replacement_bytes) = pieces::splice(
-            &old_pieces,
-            start,
-            end,
-            &replacement,
-            inode.base_length,
-            inode.constructs_file(),
-        )?;
+        let (mut pieces, edits, replacement_bytes) = if metadata_only {
+            (old_pieces, inode.edits, inode.replacement)
+        } else {
+            pieces::splice(
+                &old_pieces,
+                start,
+                end,
+                &replacement,
+                inode.base_length,
+                inode.constructs_file(),
+            )?
+        };
         let revision = expected_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
@@ -617,8 +645,17 @@ impl Workspace {
         inode.length = length;
         inode.revision = revision;
         inode.generation = generation;
-        inode.seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
-        inode.nanos = time.subsec_nanos();
+        let (next_mode, next_seconds, next_nanos) = match mutation {
+            FileMutation::Attributes { request, .. } => request.selected(original),
+            _ => (
+                inode.mode,
+                i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?,
+                time.subsec_nanos(),
+            ),
+        };
+        inode.mode = next_mode;
+        inode.seconds = next_seconds;
+        inode.nanos = next_nanos;
         inode.edits = edits;
         inode.replacement = replacement_bytes;
         inode.count = pieces.len() as u16;

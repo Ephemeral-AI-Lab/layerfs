@@ -105,6 +105,13 @@ impl Workspace {
                     }
                     origin => origin,
                 };
+                // A loaded delta's tombstone overrides its inherited origin. An
+                // addition it carries is already the exact binding.
+                if binding.is_none()
+                    && directories::removed(owner, directory, name, window, deadline)?
+                {
+                    return Err(WorkspaceError::NotFound);
+                }
                 base = match origin {
                     Origin::Empty => None,
                     Origin::Canonical(root) => Some(root),
@@ -253,11 +260,19 @@ impl Workspace {
                         (a, b) => a.or(b),
                     };
                     let Some(cell) = next else { break };
-                    let name = cell.key()[1..].to_vec();
-                    child_path(path, &name)?;
-                    names.push((name, directories::entry_serial(cell.value())?));
                     lower = cell.key().to_vec();
                     exclusive = true;
+                    let name = &cell.key()[1..];
+                    child_path(path, name)?;
+                    let removal = directories::tombstone_key(name)?;
+                    if owner
+                        .arena
+                        .find(directory.tombstones, &removal, window, deadline)?
+                        .is_some()
+                    {
+                        continue;
+                    }
+                    names.push((name.to_vec(), directories::entry_serial(cell.value())?));
                 }
             }
         }

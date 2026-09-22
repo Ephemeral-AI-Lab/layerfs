@@ -13,6 +13,7 @@ pub(crate) fn errno(error: WorkspaceError) -> Errno {
         WorkspaceError::Exists => Errno::EEXIST,
         WorkspaceError::NotDirectory => Errno::ENOTDIR,
         WorkspaceError::IsDirectory => Errno::EISDIR,
+        WorkspaceError::NotEmpty => Errno::ENOTEMPTY,
         WorkspaceError::WrongKind => Errno::EINVAL,
         WorkspaceError::BadHandle => Errno::EBADF,
         WorkspaceError::ReadOnly => Errno::EROFS,

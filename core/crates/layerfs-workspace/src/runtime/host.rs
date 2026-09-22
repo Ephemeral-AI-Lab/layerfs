@@ -380,6 +380,8 @@ impl WorkspaceHost {
                     next_cookie: 1,
                     mounted: false,
                     projection: None,
+                    fresh: Vec::new(),
+                    declared: Vec::new(),
                     closed: false,
                     active: 0,
                     tables: Some(tables),

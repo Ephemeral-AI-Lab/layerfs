@@ -33,6 +33,58 @@ pub enum ReferenceScope {
     Local,
     Projection,
 }
+/// One requested portable attribute of a regular file or directory. Absent
+/// fields keep their selected version; `size` is a regular-file length only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PortableAttributes {
+    pub size: Option<u64>,
+    pub mode: Option<u32>,
+    pub mtime: Option<(i64, u32)>,
+}
+impl PortableAttributes {
+    pub fn is_empty(self) -> bool {
+        self.size.is_none() && self.mode.is_none() && self.mtime.is_none()
+    }
+    /// Checks every requested field against the selected kind before any page is
+    /// written. An unsupported or invalid field refuses the whole request.
+    pub(crate) fn check(self, kind: NodeKind, length: u64) -> Result<(), WorkspaceError> {
+        if let Some(size) = self.size {
+            if kind != NodeKind::File || size > layerfs_bridge::contract::MAX_FILE {
+                return Err(WorkspaceError::Unsupported);
+            }
+        }
+        if let Some(mode) = self.mode {
+            let mask = if kind == NodeKind::Directory {
+                0o1777
+            } else {
+                0o777
+            };
+            if mode & !mask != 0 {
+                return Err(WorkspaceError::InvalidInput);
+            }
+        }
+        if self.mtime.is_some_and(|(_, nanos)| nanos >= 1_000_000_000) {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        if self.is_empty() && length == 0 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        Ok(())
+    }
+    /// The selected mode and mtime after this request, given one version.
+    pub(crate) fn selected(self, attr: NodeAttributes) -> (u32, i64, u32) {
+        let (seconds, nanos) = self
+            .mtime
+            .unwrap_or((attr.mtime_seconds, attr.mtime_nanoseconds));
+        (self.mode.unwrap_or(attr.mode), seconds, nanos)
+    }
+}
+/// The exact rename behaviours this profile selects. Exchange and whiteout
+/// remain unsupported and are refused before any publication.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RenameFlags {
+    pub noreplace: bool,
+}
 pub type OperationDelivery = Arc<
     dyn Fn(&Request, &mut dyn Source, &mut dyn Write, Instant) -> Result<Response, Failure>
         + Send
@@ -118,6 +170,9 @@ pub enum WorkspaceError {
     NotFound,
     NotDirectory,
     IsDirectory,
+    /// One selected empty directory was required and the effective namespace
+    /// still binds a child.
+    NotEmpty,
     WrongKind,
     BadHandle,
     ReadOnly,

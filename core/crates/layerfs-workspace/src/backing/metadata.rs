@@ -231,6 +231,14 @@ impl MetadataHost {
         }
         Ok(())
     }
+
+    /// The exact earlier root a maintained delta written into a candidate built
+    /// on `owner` is a delta against. One generation may publish more than one
+    /// root, so the operation's own base is the candidate's parent, never the
+    /// root it is about to publish.
+    pub(crate) fn anchor(owner: Option<&Arc<RootOwner>>) -> Option<Arc<RootOwner>> {
+        owner.and_then(|owner| owner.parent.clone())
+    }
     pub fn candidate(
         self: &Arc<Self>,
         arena: &Arc<Arena>,

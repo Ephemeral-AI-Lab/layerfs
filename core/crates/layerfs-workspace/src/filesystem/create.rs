@@ -35,12 +35,17 @@ pub(super) enum Creation<'a> {
     },
     File {
         options: FileCreateOptions,
+        /// `None` creates the regular file without opening a handle.
+        open: Option<FileOpenOptions>,
         origin: MutationOrigin,
     },
     Symlink {
         target: &'a [u8],
         origin: MutationOrigin,
     },
+    /// One additional name for an existing regular inode. No identity is
+    /// allocated and no handle is opened.
+    Link { serial: u64, origin: MutationOrigin },
 }
 impl Workspace {
     /// Creates or opens a regular file, returning one Local lookup reference and
@@ -65,8 +70,16 @@ impl Workspace {
         deadline: Instant,
         origin: MutationOrigin,
     ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
-        let (attr, handle) =
-            self.create_child(parent, name, Creation::File { options, origin }, deadline)?;
+        let (attr, handle) = self.create_child(
+            parent,
+            name,
+            Creation::File {
+                options,
+                open: Some(options.open),
+                origin,
+            },
+            deadline,
+        )?;
         Ok((
             attr,
             handle.expect("a regular create/open publishes its handle"),
@@ -85,16 +98,20 @@ impl Workspace {
                 umask,
                 origin,
             } => (mode, umask, origin, None, NodeKind::Directory),
-            Creation::File { options, origin } => (
-                options.mode,
-                options.umask,
+            Creation::File {
+                options,
+                open,
                 origin,
-                Some(options.open),
-                NodeKind::File,
-            ),
+            } => (options.mode, options.umask, origin, open, NodeKind::File),
             Creation::Symlink { origin, .. } => (0o777, 0, origin, None, NodeKind::Symlink),
+            Creation::Link { origin, .. } => (0o777, 0, origin, None, NodeKind::File),
         };
-        let file = kind == NodeKind::File;
+        let link = matches!(creation, Creation::Link { .. });
+        let link_serial = match creation {
+            Creation::Link { serial, .. } => Some(serial),
+            _ => None,
+        };
+        let file = kind == NodeKind::File && !link;
         let directory = kind == NodeKind::Directory;
         let symlink = kind == NodeKind::Symlink;
         let reference = if origin.projected() {
@@ -113,7 +130,7 @@ impl Workspace {
                 return Err(WorkspaceError::InvalidInput);
             }
         }
-        if mode & !(if file { 0o777 } else { 0o1777 }) != 0 || umask & !0o777 != 0 {
+        if !link && (mode & !(if file { 0o777 } else { 0o1777 }) != 0 || umask & !0o777 != 0) {
             return Err(WorkspaceError::InvalidInput);
         }
         if let Some(options) = open {
@@ -153,7 +170,12 @@ impl Workspace {
         };
         match self.resolve_child(operation, &view, parent, &path, name, deadline) {
             Ok(resolved) => {
-                if let Creation::File { options, .. } = creation {
+                if link {
+                    // The destination name is bound by this operation only.
+                    return Err(WorkspaceError::Exists);
+                }
+                if let Creation::File { options, open, .. } = creation {
+                    let _ = open;
                     if !options.exclusive {
                         let child_path = child_path(&path, name)?;
                         let serial = resolved.attr.serial;
@@ -198,25 +220,32 @@ impl Workspace {
             Err(error) => return Err(error),
         }
         check_access(attr, self.inner.root.uid, 3)?;
+        let target = match creation {
+            Creation::Link { serial, .. } => Some(self.link_target(serial, operation, deadline)?),
+            _ => None,
+        };
         let old = self.directory_record(&view, parent, deadline)?;
-        let already_dirty = old.is_some_and(|directory| directory.generation == generation);
-        let new_dirty = if already_dirty { 1 } else { 2 };
-        let new_directories = usize::from(!already_dirty) + usize::from(directory);
+        let (reanchor, already_dirty) = {
+            let host = self
+                .host
+                .metadata
+                .as_ref()
+                .ok_or(WorkspaceError::Unsupported)?;
+            let _view = host.writer()?;
+            let mut lease = host.payloads.window(1, 3)?;
+            self.directory_delta(
+                view.root.as_ref(),
+                generation,
+                parent,
+                old.as_ref(),
+                lease.window.as_mut().ok_or(WorkspaceError::Io)?,
+                deadline,
+            )?
+        };
         let name_bytes = 10 + name.len();
-        {
-            let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
-            self.check_mutation_coherence(&state, origin, false)?;
-            state.frontier_bytes(
-                state.dirty_inodes + new_dirty,
-                state.dirty_directories + new_directories,
-                state.fresh_files + usize::from(file),
-                state.fresh_symlinks + usize::from(symlink),
-                state.directory_names + 1,
-                state.directory_bytes + name_bytes,
-            )?;
-        }
-        let serial = {
+        let serial = if let Creation::Link { serial, .. } = creation {
+            serial
+        } else {
             operation.remote()?;
             let response = self.host.call_input(
                 (self.inner.store, generation),
@@ -239,6 +268,41 @@ impl Workspace {
                 _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
             }
         };
+        // One dirty identity per directory this publication first marks in this
+        // generation: the parent, and the child when it is a new directory.
+        let child_dirty = if directory {
+            let host = self
+                .host
+                .metadata
+                .as_ref()
+                .ok_or(WorkspaceError::Unsupported)?;
+            let _view = host.writer()?;
+            let mut lease = host.payloads.window(1, 3)?;
+            self.dirty_in_generation(
+                view.root.as_ref(),
+                generation,
+                serial,
+                lease.window.as_mut().ok_or(WorkspaceError::Io)?,
+                deadline,
+            )?
+        } else {
+            false
+        };
+        let new_dirty = usize::from(!already_dirty) + usize::from(!child_dirty);
+        let new_directories = usize::from(!already_dirty) + usize::from(directory && !child_dirty);
+        {
+            let state = self.state()?;
+            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
+            self.check_mutation_coherence(&state, origin, false)?;
+            state.frontier_bytes(
+                state.dirty_inodes + new_dirty,
+                state.dirty_directories + new_directories,
+                state.fresh_files + usize::from(file),
+                state.fresh_symlinks + usize::from(symlink),
+                state.directory_names + 1,
+                state.directory_bytes + name_bytes,
+            )?;
+        }
         // Even a later race/failure leaves this real reservation consumed.
         self.maintain_backing(deadline)?;
         let payload = if let Creation::Symlink { target, .. } = creation {
@@ -304,19 +368,29 @@ impl Workspace {
             .as_ref()
             .map(|submission| submission.capture())
             .transpose()?;
-        if !already_dirty {
-            if let (Some(prior), Some(capture)) = (old, capture) {
-                if prior.generation != capture.generation {
-                    return Err(WorkspaceError::Io);
+        if reanchor {
+            // The maintained delta now anchors on the root this generation
+            // started from: the frozen capture when one exists, otherwise the
+            // exact previous root the record's own revision still names.
+            if let (Some(prior), Some(previous)) = (old, crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref()) {
+                // The delta anchors on the exact earlier root this operation's
+                // candidate is built on, which is the version its own entries and
+                // tombstones were read from. A frozen submission's captured root
+                // is the same root only while no later operation replaced it.
+                if let Some(capture) = capture {
+                    if prior.generation != capture.generation {
+                        return Err(WorkspaceError::Io);
+                    }
                 }
                 parent_directory.origin = Origin::Captured(CapturedBase {
-                    root: capture.root.root()?,
+                    root: previous.root()?,
                     inode: parent,
                     generation: prior.generation,
                     revision: prior.revision,
                 });
             }
             parent_directory.entries = PageRef::NULL;
+            parent_directory.tombstones = PageRef::NULL;
             parent_directory.count = 0;
             parent_directory.bytes = 0;
         }
@@ -373,7 +447,15 @@ impl Workspace {
             &metadata_pages::namespace_key(parent),
             &parent_directory.value(),
         )?);
-        if !directory {
+        if link {
+            // One additional name for the existing inode; identity, content and
+            // metadata are unchanged, so no inode record is rewritten here.
+            let target = target.ok_or(WorkspaceError::InvalidInput)?;
+            updates.push(Cell::new(
+                &metadata_pages::dirty_key(generation, target.serial),
+                &[1],
+            )?);
+        } else if !directory {
             let mut inode = Inode::initial(child_attr, [0; 32], [0; 32]);
             inode.fresh = true;
             inode.generation = generation;
@@ -428,6 +510,7 @@ impl Workspace {
         node.baseline = 0;
         *node.references(reference) = 1;
         node.handles = usize::from(file);
+        node.names = 1;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
         self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
@@ -435,7 +518,7 @@ impl Workspace {
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
-        if state.nodes.iter().any(|node| node.attr.serial == serial) {
+        if link_serial.is_none() && state.nodes.iter().any(|node| node.attr.serial == serial) {
             return Err(WorkspaceError::Service(Code::Unknown.into()));
         }
         let parent_node = state
@@ -495,10 +578,50 @@ impl Workspace {
             }
         }
         state.nodes[parent_node].attr = parent_directory.attributes(state.nodes[parent_node].attr);
-        state.nodes.push(node);
+        if let Some(serial) = link_serial {
+            // A hard link adds one name to the shared inode. The destination name
+            // is this operation's only new lookup reference on that inode.
+            match state
+                .nodes
+                .iter()
+                .position(|entry| entry.attr.serial == serial)
+            {
+                Some(index) => {
+                    state.nodes[index].names = state.nodes[index]
+                        .names
+                        .checked_add(1)
+                        .ok_or(WorkspaceError::Capacity)?;
+                    *node.references(reference) = 0;
+                }
+                None => {
+                    let mut linked = Node::new(
+                        target.ok_or(WorkspaceError::Io)?,
+                        [0; 32],
+                        [0; 32],
+                        &child_path,
+                        parent,
+                    );
+                    linked.baseline = 0;
+                    *linked.references(reference) = 1;
+                    linked.names = 1;
+                    state.nodes.push(linked);
+                }
+            }
+            state.created(serial);
+        } else {
+            if file {
+                state.created(serial);
+            }
+            state.nodes.push(node);
+        }
         if let Some((handle, next)) = handle {
             state.next_handle = next;
             state.handles.push(handle);
+        }
+        if directory {
+            // The canonical state learns this serial from the first Commit that
+            // names it as a new directory, and never again.
+            state.declaring(serial);
         }
         let retired = state.overlay.replace(candidate);
         state.revision = next;
@@ -534,7 +657,7 @@ impl Workspace {
         }
         Ok((child_attr, returned_handle))
     }
-    fn check_child_stamp(
+    pub(super) fn check_child_stamp(
         &self,
         state: &crate::runtime::state::State,
         baseline: u64,

@@ -10,9 +10,15 @@ pub(crate) enum MutationOrigin {
     Local,
     ProjectionWrite { append: bool },
     ProjectionSize,
+    ProjectionAttributes,
     ProjectionMkdir,
     ProjectionCreate,
     ProjectionSymlink,
+    ProjectionMknod,
+    ProjectionLink,
+    ProjectionUnlink,
+    ProjectionRmdir,
+    ProjectionRename,
 }
 impl MutationOrigin {
     pub fn projected(self) -> bool {
@@ -23,9 +29,15 @@ impl MutationOrigin {
             Self::Local => stored,
             Self::ProjectionWrite { append } => append,
             Self::ProjectionSize
+            | Self::ProjectionAttributes
             | Self::ProjectionMkdir
             | Self::ProjectionCreate
-            | Self::ProjectionSymlink => false,
+            | Self::ProjectionSymlink
+            | Self::ProjectionMknod
+            | Self::ProjectionLink
+            | Self::ProjectionUnlink
+            | Self::ProjectionRmdir
+            | Self::ProjectionRename => false,
         }
     }
 }
@@ -191,6 +203,130 @@ impl ProjectionMutationPermit {
             target,
             deadline.min(self.deadline),
             MutationOrigin::ProjectionSymlink,
+        )
+    }
+    /// Publishes one regular file without opening a handle. Keep this permit
+    /// through the entry reply; the kernel owns entry installation and parent
+    /// invalidation, so this operation sends no reverse notification.
+    pub fn mknod(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        mode: u32,
+        umask: u32,
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.mknod_from(
+            parent,
+            name,
+            mode,
+            umask,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionMknod,
+        )
+    }
+    /// Publishes one additional name for an existing regular file.
+    pub fn link(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        serial: u64,
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.link_from(
+            parent,
+            name,
+            serial,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionLink,
+        )
+    }
+    /// Removes one regular-file or symlink name. The kernel owns the parent lock
+    /// through the reply, so this operation sends no reverse notification.
+    pub fn unlink(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.unlink_from(
+            parent,
+            name,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionUnlink,
+        )
+    }
+    /// Removes one empty directory name under the same parent-lock ownership.
+    pub fn rmdir(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.rmdir_from(
+            parent,
+            name,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionRmdir,
+        )
+    }
+    /// Publishes one atomic rename between two parents.
+    pub fn rename(
+        &mut self,
+        source_parent: u64,
+        source: &[u8],
+        destination_parent: u64,
+        destination: &[u8],
+        flags: crate::RenameFlags,
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.rename_from(
+            source_parent,
+            source,
+            destination_parent,
+            destination,
+            flags,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionRename,
+        )
+    }
+    /// Publishes one checked portable-attribute change. The kernel owns cache
+    /// invalidation after the reply, so this operation sends no notification.
+    pub fn set_attributes(
+        &mut self,
+        serial: u64,
+        request: PortableAttributes,
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.set_attributes_from(
+            serial,
+            request,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionAttributes,
         )
     }
 }

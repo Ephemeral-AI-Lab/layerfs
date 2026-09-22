@@ -24,6 +24,7 @@ struct Current {
 impl Current {
     fn next(
         &self,
+        submission: &Submission,
         after: u64,
         window: &mut Window,
         deadline: Instant,
@@ -53,6 +54,11 @@ impl Current {
             if inode.generation != self.generation || inode.revision > self.revision {
                 return Err(WorkspaceError::Io);
             }
+            if inode.constructs_file() && !prior_inode(submission, serial, window, deadline)? {
+                // This generation created the identity and no name binds it any
+                // more, so it has no canonical identity and no dirty frontier.
+                return Ok(Some((serial, Dirty::Unbound)));
+            }
             return Ok(Some((serial, Dirty::Inode(inode))));
         }
         let cell = self
@@ -71,6 +77,26 @@ impl Current {
         }
         Ok(Some((serial, Dirty::Directory(directory))))
     }
+}
+/// True when the captured root already declared this identity as an existing
+/// one. A fresh record there is still this delta's own creation.
+fn prior_inode(
+    submission: &Submission,
+    serial: u64,
+    window: &mut Window,
+    deadline: Instant,
+) -> Result<bool, WorkspaceError> {
+    let captured = submission.capture()?;
+    Ok(captured
+        .root
+        .arena
+        .find(
+            captured.root.root()?,
+            &metadata_pages::inode_key(serial),
+            window,
+            deadline,
+        )?
+        .is_some_and(|cell| Inode::parse(cell.value()).is_ok_and(|inode| !inode.fresh)))
 }
 fn canonical_inode(
     submission: &Submission,
@@ -239,12 +265,17 @@ impl Workspace {
         let mut phase = 0;
         let root = attempt.root.build_ordered(
             |window| loop {
-                if let Some((serial, inode)) = current.next(after, window, deadline)? {
+                if let Some((serial, inode)) = current.next(submission, after, window, deadline)? {
                     if seen == current.count {
                         return Err(WorkspaceError::Io);
                     }
                     after = serial;
                     seen += 1;
+                    if matches!(inode, Dirty::Unbound) {
+                        // The dropped identity contributes no dirty frontier and
+                        // no record to the canonical successor.
+                        continue;
+                    }
                     match (phase, inode) {
                         (0, _) => {
                             return Ok(Some(Cell::new(
@@ -260,6 +291,7 @@ impl Workspace {
                                 &inode.value(),
                             )?));
                         }
+                        (1, Dirty::Unbound) => continue,
                         (2, Dirty::Directory(directory)) => {
                             let directory = canonical_directory(
                                 submission, serial, directory, canonical, window, deadline,
@@ -323,6 +355,7 @@ impl Workspace {
             state.base = canonical;
             state.baseline = next_baseline;
             state.revision = revision;
+            state.declared_committed();
             status.installed_revision = Some(revision);
             // Fixed local bookkeeping is acquired before any publication changes
             // so a poisoned status cannot hide an installed canonical head.
