@@ -400,16 +400,6 @@ mod linux {
         check("post-publication-deadline-preserves-receipt-and-retained-completed-failure");
     }
 
-    fn filter_count(tid: i32) -> u32 {
-        fs::read_to_string(format!("/proc/self/task/{tid}/status"))
-            .unwrap()
-            .lines()
-            .find_map(|line| line.strip_prefix("Seccomp_filters:"))
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap()
-    }
     fn fuse_fd() -> i32 {
         use std::os::unix::fs::FileTypeExt;
         let entries: Vec<_> = fs::read_dir("/proc/self/fd")
@@ -509,9 +499,9 @@ mod linux {
         let before = f.workspace.status().unwrap();
         let workers: Vec<_> = fs::read_dir("/proc/self/task")
             .unwrap()
-            .map(|e| {
+            .filter_map(|e| {
                 let tid: i32 = e.unwrap().file_name().to_str().unwrap().parse().unwrap();
-                (tid, filter_count(tid))
+                seccomp_filter_count(tid).map(|filters| (tid, filters))
             })
             .collect();
         let calls = f.native.observations.lock().unwrap().operations.len();
@@ -519,9 +509,11 @@ mod linux {
         let (error, tid, filters_before, filters_after) = std::thread::scope(|scope| {
             let fault = scope.spawn(|| {
                 let tid = unsafe { nix::libc::syscall(nix::libc::SYS_gettid) as i32 };
-                let filters_before = filter_count(tid);
+                let filters_before =
+                    seccomp_filter_count(tid).expect("faulting caller is still live");
                 deny_notifier_writev(fd);
-                let filters_after = filter_count(tid);
+                let filters_after =
+                    seccomp_filter_count(tid).expect("faulting caller is still live");
                 assert_eq!(
                     ordinary
                         .write_vectored(&[IoSlice::new(b"allowed")])
@@ -557,11 +549,9 @@ mod linux {
         // join completed the faulting caller; immediate procfs task removal is
         // a separate kernel teardown event, not a notification guarantee.
         for (tid, filters) in workers {
-            assert_eq!(
-                filter_count(tid),
-                filters,
-                "filter spread to an existing thread"
-            );
+            if let Some(actual) = seccomp_filter_count(tid) {
+                assert_eq!(actual, filters, "filter spread to a surviving thread");
+            }
         }
         assert_eq!(
             f.native.observations.lock().unwrap().operations.len(),

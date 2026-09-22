@@ -2,8 +2,8 @@
 use crate::replies::{attributes, errno, inode, kind, serial};
 use fuser::*;
 use layerfs_workspace::{
-    FileAccess, FileOpenOptions, ProjectionReplyPermit, ReferenceScope, Workspace,
-    MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+    FileAccess, FileCreateOptions, FileOpenOptions, ProjectionReplyPermit, ReferenceScope,
+    Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
 };
 use std::{
     ffi::OsStr,
@@ -618,14 +618,78 @@ impl Filesystem for Adapter {
     fn create(
         &self,
         req: &Request,
-        _: INodeNo,
-        _: &OsStr,
-        _: u32,
-        _: u32,
-        _: i32,
+        parent: INodeNo,
+        name: &OsStr,
+        mode: u32,
+        _umask: u32,
+        requested: i32,
         reply: ReplyCreate,
     ) {
-        reply.error(self.readonly(req));
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            // Linux CREATE includes S_IFREG and has already applied umask;
+            // INIT does not negotiate DONT_MASK. Other mode bits stay refused.
+            if mode & !0o777 != libc::S_IFREG {
+                return Err(Errno::EINVAL);
+            }
+            if requested & (libc::O_DIRECTORY | KERNEL_FMODE_EXEC) != 0 {
+                return Err(Errno::EOPNOTSUPP);
+            }
+            let mut open = flags(
+                OpenFlags(requested & !(libc::O_CREAT | libc::O_EXCL | libc::O_TRUNC)),
+                false,
+                true,
+            )?;
+            open.truncate = requested & libc::O_TRUNC != 0;
+            let options = FileCreateOptions {
+                mode: mode & 0o777,
+                umask: 0,
+                exclusive: requested & libc::O_EXCL != 0,
+                open,
+            };
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map(|permit| (permit, options))
+                .map_err(errno)
+        });
+        let result = permit
+            .as_mut()
+            .map_err(|error| *error)
+            .and_then(|(permit, options)| {
+                let (value, handle) = permit
+                    .create_file(
+                        serial(parent, self.root()),
+                        name.as_bytes(),
+                        *options,
+                        deadline,
+                    )
+                    .map_err(errno)?;
+                match attributes(value, self.root()) {
+                    Ok(value) => Ok((value, handle)),
+                    Err(error) => {
+                        let released = self.workspace.release(handle);
+                        self.workspace
+                            .forget(value.serial, 1, ReferenceScope::Projection);
+                        released.map_err(errno)?;
+                        Err(error)
+                    }
+                }
+            });
+        // The kernel installs the entry and invalidates its parent. Hold the
+        // permit through the reply attempt; fuser does not report send success.
+        match result {
+            Ok((value, handle)) => reply.created(
+                &TTL,
+                &value,
+                Generation(0),
+                FileHandle(handle),
+                FopenFlags::FOPEN_DIRECT_IO,
+            ),
+            Err(error) => reply.error(error),
+        }
     }
     fn setxattr(
         &self,

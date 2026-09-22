@@ -16,6 +16,27 @@ use std::{
 pub fn deadline() -> Instant {
     Instant::now() + Duration::from_secs(10)
 }
+/// A baseline task can finish between procfs enumeration and this read.
+/// Only ENOENT means vanished; live fault callers must require Some.
+#[cfg(target_os = "linux")]
+pub fn seccomp_filter_count(tid: i32) -> Option<u32> {
+    // Linux errno ABI; keep this shared external helper independent of nix/libc.
+    const LINUX_ENOENT: i32 = 2;
+    let status = match std::fs::read_to_string(format!("/proc/self/task/{tid}/status")) {
+        Ok(status) => status,
+        Err(error) if error.raw_os_error() == Some(LINUX_ENOENT) => return None,
+        Err(error) => panic!("cannot read task {tid} seccomp status: {error}"),
+    };
+    Some(
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix("Seccomp_filters:"))
+            .expect("task status contains Seccomp_filters")
+            .trim()
+            .parse()
+            .expect("Seccomp_filters is an integer"),
+    )
+}
 pub fn diagnostic_trace() -> bool {
     std::env::var_os("LAYERFS_NATIVE_DIAGNOSTIC_TRACE").is_some_and(|v| v == "1")
 }

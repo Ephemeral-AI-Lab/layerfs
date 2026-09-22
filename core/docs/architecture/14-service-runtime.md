@@ -676,3 +676,18 @@ while preserving D1. The128-row/name,32768-byte prepared request and8-MiB
 replacement bounds are unchanged. [Round43](proposal/fuse-workspace-snapshot-overlay/43-native-create.md)
 records the exact evidence, including the unresolved capacity gate failure.
 Mounted CREATE and full preinstalled-workload admission remain subsequent work.
+
+The mounted CREATE extension after source commit
+`7eb46ef0766eae0d6ccfb894d07919a39c69ef38` reuses child creation through a
+single-use ProjectionMutationPermit. Kernel creation atomically acquires a
+Projection lookup reference and ready handle; the permit remains held through
+ReplyCreate. CREATE validates/removes S_IFREG, accepts its selected creation flags
+through the existing access/append parser, and uses already-masked portable mode
+because DONT_MASK remains off. Existing-name truncation carries its projection
+origin through the existing open reservation and publication path. Kernel CREATE
+sends no reverse notification while the parent lock is held. Native mounted
+creation uses the existing parent/entry invalidator, records the published Local
+handle in Pending/Failed custody, and releases only the withheld lookup reference
+on notification failure. No backing format, count/byte budget, queue or worker
+changes. [Round44](proposal/fuse-workspace-snapshot-overlay/44-mounted-create.md)
+records verification and preserves Round43's open capacity failure.

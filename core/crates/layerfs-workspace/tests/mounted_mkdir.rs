@@ -421,16 +421,6 @@ print('KERNEL_MKDIR nested=2 umask=027 duplicate=EEXIST long=EINVAL(native-Inval
         close(&f, &[a.serial]);
     }
 
-    fn filter_count(tid: i32) -> u32 {
-        fs::read_to_string(format!("/proc/self/task/{tid}/status"))
-            .unwrap()
-            .lines()
-            .find_map(|line| line.strip_prefix("Seccomp_filters:"))
-            .unwrap()
-            .trim()
-            .parse()
-            .unwrap()
-    }
     fn fuse_fd() -> i32 {
         let fds: Vec<i32> = fs::read_dir("/proc/self/fd")
             .unwrap()
@@ -523,18 +513,18 @@ print('KERNEL_MKDIR nested=2 umask=027 duplicate=EEXIST long=EINVAL(native-Inval
         let fd = fuse_fd();
         let workers: Vec<_> = fs::read_dir("/proc/self/task")
             .unwrap()
-            .map(|e| {
+            .filter_map(|e| {
                 let tid: i32 = e.unwrap().file_name().to_str().unwrap().parse().unwrap();
-                (tid, filter_count(tid))
+                seccomp_filter_count(tid).map(|filters| (tid, filters))
             })
             .collect();
         let (mut ordinary, mut reader) = UnixStream::pair().unwrap();
         let (error, tid, old_filters, new_filters) = std::thread::scope(|scope| {
             let child = scope.spawn(|| {
                 let tid = unsafe { nix::libc::syscall(nix::libc::SYS_gettid) as i32 };
-                let old = filter_count(tid);
+                let old = seccomp_filter_count(tid).expect("faulting caller is still live");
                 deny_notifier_writev(fd, Some(4));
-                let new = filter_count(tid);
+                let new = seccomp_filter_count(tid).expect("faulting caller is still live");
                 assert_eq!(
                     ordinary
                         .write_vectored(&[
@@ -561,7 +551,9 @@ print('KERNEL_MKDIR nested=2 umask=027 duplicate=EEXIST long=EINVAL(native-Inval
         // join completed the faulting caller; immediate procfs task removal is
         // a separate kernel teardown event, not a notification guarantee.
         for (worker, filters) in workers {
-            assert_eq!(filter_count(worker), filters);
+            if let Some(actual) = seccomp_filter_count(worker) {
+                assert_eq!(actual, filters, "filter spread to a surviving thread");
+            }
         }
         let WorkspaceError::Coherence(failure) = error else {
             panic!("{error:?}")

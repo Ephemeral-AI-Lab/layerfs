@@ -11,6 +11,7 @@ pub(crate) enum MutationOrigin {
     ProjectionWrite { append: bool },
     ProjectionSize,
     ProjectionMkdir,
+    ProjectionCreate,
 }
 impl MutationOrigin {
     pub fn projected(self) -> bool {
@@ -20,7 +21,7 @@ impl MutationOrigin {
         match self {
             Self::Local => stored,
             Self::ProjectionWrite { append } => append,
-            Self::ProjectionSize | Self::ProjectionMkdir => false,
+            Self::ProjectionSize | Self::ProjectionMkdir | Self::ProjectionCreate => false,
         }
     }
 }
@@ -141,6 +142,29 @@ impl ProjectionMutationPermit {
             umask,
             deadline.min(self.deadline),
             MutationOrigin::ProjectionMkdir,
+        )
+    }
+    /// Creates or opens one regular file with one Projection lookup reference
+    /// and ready handle. Keep this permit through the CREATE reply attempt;
+    /// the kernel owns entry installation and cache invalidation, so this
+    /// operation sends no notification while the parent lock is held.
+    pub fn create_file(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        options: FileCreateOptions,
+        deadline: Instant,
+    ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.create_file_from(
+            parent,
+            name,
+            options,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionCreate,
         )
     }
 }

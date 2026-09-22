@@ -1,7 +1,10 @@
 //! Portable file-open rights and atomic admission of truncating handles.
 use crate::{
     backing::budget::Charge,
-    runtime::state::{Handle, OperationGuard, State, HANDLE_LIMIT},
+    runtime::{
+        coherence::MutationOrigin,
+        state::{Handle, OperationGuard, State, HANDLE_LIMIT},
+    },
     *,
 };
 use std::{mem::size_of, time::Instant};
@@ -113,8 +116,15 @@ impl Workspace {
         check_options(options, self.inner.access)?;
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
-        self.open_file_admitted(serial, options, scope, deadline, &mut operation)
-            .map(|(_, handle)| handle)
+        self.open_file_admitted(
+            serial,
+            options,
+            scope,
+            deadline,
+            &mut operation,
+            MutationOrigin::Local,
+        )
+        .map(|(_, handle)| handle)
     }
     pub(super) fn open_file_admitted(
         &self,
@@ -123,11 +133,15 @@ impl Workspace {
         scope: ReferenceScope,
         deadline: Instant,
         operation: &mut OperationGuard,
+        origin: MutationOrigin,
     ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
         check_options(options, self.inner.access)?;
         if !options.truncate {
             let mut state = self.state()?;
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+            if origin.projected() {
+                self.check_projected_mutation(&state, true)?;
+            }
             let attr = state.node(serial)?.attr;
             let handle = self.insert_handle(&mut state, serial, false, scope, options, true)?;
             return Ok((attr, handle));
@@ -136,6 +150,9 @@ impl Workspace {
         let mut reserved = {
             let mut state = self.state()?;
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+            if origin.projected() {
+                self.check_projected_mutation(&state, false)?;
+            }
             let id = self.insert_handle(&mut state, serial, false, scope, options, false)?;
             OpenReservation {
                 workspace: self.clone(),
@@ -147,7 +164,7 @@ impl Workspace {
                 _charge: charge,
             }
         };
-        let attr = self.truncate_open(&mut reserved, deadline, operation)?;
+        let attr = self.truncate_open(&mut reserved, deadline, operation, origin)?;
         Ok((attr, reserved.id))
     }
     pub(crate) fn open_directory_handle(

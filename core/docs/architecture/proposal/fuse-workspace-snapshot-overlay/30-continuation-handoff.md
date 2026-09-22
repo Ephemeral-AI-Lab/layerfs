@@ -18,7 +18,8 @@ now verifies no-base construction through the existing save owner. [Prepared fil
 now verifies fresh regular-file declarations on direct and C5 routes. [Native file
 creation43](43-native-create.md) is implemented with13 registered functional
 selections passing; its capacity gate remains failed/open despite a successful
-labelled diagnostic. Mounted file/symlink creation and the full prepared
+labelled diagnostic. [Mounted CREATE44](44-mounted-create.md) verifies its
+selected kernel/SDK, custody and G/D1 paths. Fresh symlinks and the full prepared
 upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 

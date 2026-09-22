@@ -32,11 +32,17 @@ pub(super) enum Creation {
         umask: u32,
         origin: MutationOrigin,
     },
-    File(FileCreateOptions),
+    File {
+        options: FileCreateOptions,
+        origin: MutationOrigin,
+    },
 }
 impl Workspace {
     /// Creates or opens a regular file, returning one Local lookup reference and
     /// one Local handle. A new binding and its initial handle publish atomically.
+    /// Mounted success includes required invalidation. A later Coherence error
+    /// retains the published handle in its receipt and releases the unreturned
+    /// lookup reference; callers can inspect or release that handle without replay.
     pub fn create_file(
         &self,
         parent: u64,
@@ -44,7 +50,18 @@ impl Workspace {
         options: FileCreateOptions,
         deadline: Instant,
     ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
-        let (attr, handle) = self.create_child(parent, name, Creation::File(options), deadline)?;
+        self.create_file_from(parent, name, options, deadline, MutationOrigin::Local)
+    }
+    pub(crate) fn create_file_from(
+        &self,
+        parent: u64,
+        name: &[u8],
+        options: FileCreateOptions,
+        deadline: Instant,
+        origin: MutationOrigin,
+    ) -> Result<(NodeAttributes, HandleId), WorkspaceError> {
+        let (attr, handle) =
+            self.create_child(parent, name, Creation::File { options, origin }, deadline)?;
         Ok((
             attr,
             handle.expect("a regular create/open publishes its handle"),
@@ -63,14 +80,16 @@ impl Workspace {
                 umask,
                 origin,
             } => (mode, umask, origin, None),
-            Creation::File(options) => (
-                options.mode,
-                options.umask,
-                MutationOrigin::Local,
-                Some(options.open),
-            ),
+            Creation::File { options, origin } => {
+                (options.mode, options.umask, origin, Some(options.open))
+            }
         };
         let file = open.is_some();
+        let reference = if origin.projected() {
+            ReferenceScope::Projection
+        } else {
+            ReferenceScope::Local
+        };
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
@@ -87,9 +106,6 @@ impl Workspace {
         let (view, path, attr, baseline, revision, generation, frozen, scope) = {
             let state = self.state()?;
             self.available(&state)?;
-            if file && state.mounted {
-                return Err(WorkspaceError::Unsupported);
-            }
             self.check_mutation_coherence(&state, origin, false)?;
             let node = state.node(parent)?;
             if node.attr.kind != NodeKind::Directory {
@@ -117,16 +133,14 @@ impl Workspace {
         };
         match self.resolve_child(operation, &view, parent, &path, name, deadline) {
             Ok(resolved) => {
-                if let Creation::File(options) = creation {
+                if let Creation::File { options, .. } = creation {
                     if !options.exclusive {
                         let child_path = child_path(&path, name)?;
                         let serial = resolved.attr.serial;
                         {
                             let mut state = self.state()?;
                             self.available(&state)?;
-                            if state.mounted {
-                                return Err(WorkspaceError::Unsupported);
-                            }
+                            self.check_mutation_coherence(&state, origin, false)?;
                             if state.revision != revision || state.baseline != baseline {
                                 return Err(WorkspaceError::Busy);
                             }
@@ -135,20 +149,21 @@ impl Workspace {
                                 resolved,
                                 &child_path,
                                 parent,
-                                ReferenceScope::Local,
+                                reference,
                                 baseline,
                             )?;
                         }
                         return match self.open_file_admitted(
                             serial,
                             options.open,
-                            ReferenceScope::Local,
+                            reference,
                             deadline,
                             operation,
+                            origin,
                         ) {
                             Ok((attr, handle)) => Ok((attr, Some(handle))),
                             Err(error) => {
-                                self.forget(serial, 1, ReferenceScope::Local);
+                                self.forget(serial, 1, reference);
                                 Err(error)
                             }
                         };
@@ -345,11 +360,6 @@ impl Workspace {
         let child_path = child_path(&path, name)?;
         let mut node = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
         node.baseline = 0;
-        let reference = if origin.projected() {
-            ReferenceScope::Projection
-        } else {
-            ReferenceScope::Local
-        };
         *node.references(reference) = 1;
         node.handles = usize::from(file);
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
@@ -382,7 +392,7 @@ impl Workspace {
                     id,
                     serial,
                     directory: false,
-                    scope: ReferenceScope::Local,
+                    scope: reference,
                     options,
                     ready: true,
                     view: None,
@@ -400,7 +410,7 @@ impl Workspace {
             revision: next,
             accepted_bytes: 0,
         };
-        // The kernel's mkdir request holds the parent lock until its reply.
+        // Kernel namespace creation holds the parent lock until its reply.
         // Only native callers notify; projected callers let that reply install
         // the entry and invalidate the parent without waiting on themselves.
         let delivery = if origin.projected() {
@@ -433,7 +443,7 @@ impl Workspace {
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,
-                published_handle: None,
+                published_handle: returned_handle,
             };
         }
         drop(state);
@@ -445,7 +455,7 @@ impl Workspace {
                 delivery,
                 receipt,
                 Some((parent, name)),
-                None,
+                returned_handle,
                 deadline,
             ) {
                 // The name remains published. An error returns no attributes,
@@ -467,9 +477,6 @@ impl Workspace {
     ) -> Result<(), WorkspaceError> {
         self.available(state)?;
         if file {
-            if state.mounted {
-                return Err(WorkspaceError::Unsupported);
-            }
             super::open::handle_slot(state)?;
         }
         if state.nodes.len() == NODE_LIMIT || state.nodes.len() == state.nodes.capacity() {

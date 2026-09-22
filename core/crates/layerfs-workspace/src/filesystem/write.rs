@@ -76,7 +76,8 @@ impl Workspace {
             MutationOrigin::Local => ReferenceScope::Local,
             MutationOrigin::ProjectionWrite { .. }
             | MutationOrigin::ProjectionSize
-            | MutationOrigin::ProjectionMkdir => ReferenceScope::Projection,
+            | MutationOrigin::ProjectionMkdir
+            | MutationOrigin::ProjectionCreate => ReferenceScope::Projection,
         };
         if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);
@@ -326,6 +327,7 @@ impl Workspace {
         reserved: &mut super::open::OpenReservation,
         deadline: Instant,
         operation: &mut crate::runtime::state::OperationGuard,
+        origin: MutationOrigin,
     ) -> Result<NodeAttributes, WorkspaceError> {
         let original = self.serial_original(reserved.serial, deadline, operation)?;
         self.mutate_file(
@@ -333,7 +335,7 @@ impl Workspace {
             FileMutation::SetLen {
                 length: 0,
                 handle: None,
-                origin: MutationOrigin::Local,
+                origin,
             },
             deadline,
             Some(reserved),
@@ -671,9 +673,12 @@ impl Workspace {
         };
         let published_handle = open.as_ref().map(|reserved| reserved.id);
         let attributes = inode.attributes(original);
-        // SETATTR's kernel owner invalidates after its attribute reply and
-        // NOWRITE boundary. A synchronous notification here could wait on itself.
-        let delivery = if mutation.origin() == MutationOrigin::ProjectionSize {
+        // SETATTR and CREATE's kernel owners invalidate after their replies and
+        // lock boundaries. A synchronous notification here could wait on itself.
+        let delivery = if matches!(
+            mutation.origin(),
+            MutationOrigin::ProjectionSize | MutationOrigin::ProjectionCreate
+        ) {
             None
         } else {
             state

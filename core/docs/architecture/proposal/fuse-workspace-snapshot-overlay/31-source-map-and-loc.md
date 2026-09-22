@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `ab473145a606a71327d55d10f12205edb1803946`.
-> Frozen production input seal: `2ba9298beca16b990d1fa9f4884a630461623f9ade02a82923236daace74aa65`.
+> Implementation parent: `7eb46ef0766eae0d6ccfb894d07919a39c69ef38`.
+> Frozen production input seal: `eaa740c5c19b9e3fc858f65cbf45b6f6bcd9233b00973481ae847cc1ef6a776c`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -22,9 +22,11 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/native-create/source-loc.json)
+[Current per-file machine-readable inventory](evidence/mounted-create/source-loc.json)
 records this new frozen production inventory and unchanged reference
-tree. The prior [prepared-file inventory](evidence/prepared-files/source-loc.json) and its
+tree. The prior [native-create inventory](evidence/native-create/source-loc.json) and its
+[commit confirmation](evidence/native-create/commit-confirmed.json), plus the
+[prepared-file inventory](evidence/prepared-files/source-loc.json) and its
 [commit confirmation](evidence/prepared-files/commit-confirmed.json), plus the
 [constructor inventory](evidence/construct-metadata/source-loc.json) and its
 [commit confirmation](evidence/construct-metadata/commit-confirmed.json), plus the
@@ -48,8 +50,8 @@ retain their original source pins and counts. No historical receipt is relabeled
 | Core crate | P | L | Production files | Responsibility |
 | --- | ---: | ---: | ---: | --- |
 | `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
-| `layerfs-fuse` | 1111 | 1209 | 4 | Linux kernel projection, replies, mount/session ownership |
-| `layerfs-workspace` | 11571 | 11788 | 44 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
+| `layerfs-fuse` | 1171 | 1273 | 4 | Linux kernel projection, replies, mount/session ownership |
+| `layerfs-workspace` | 11617 | 11841 | 44 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
 | `layerfs-bridge` | 5484 | 6006 | 26 | Logical operation contract, Source, authorization identity and native framing/delivery |
 | `layerfs-service` | 2213 | 2408 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
@@ -57,10 +59,17 @@ retain their original source pins and counts. No historical receipt is relabeled
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **46947 P / 56199 L**, across 254 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **112364 P / 147665 L**. Root `crates/` is reference-only, including its
+Core total: **47053 P / 56316 L**, across 254 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **112470 P / 147782 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Mounted regular-file creation
+
+ProjectionMutationPermit now owns CREATE and its exact Projection handle/reference.
+The adapter validates Linux CREATE arguments and retains that permit through reply.
+SDK mounted creation reuses checked entry notification and published-handle custody.
+No state format or resource bound changes; see [44](44-mounted-create.md).
 
 ## Native regular-file creation
 
@@ -216,9 +225,9 @@ core/crates/layerfs-daemon/  [P=1364; L=1458; N=8]
 ### layerfs-fuse
 
 ```text
-core/crates/layerfs-fuse/  [P=1111; L=1209; N=4]
-`-- src/  [P=1111; L=1209; N=4]
-    |-- adapter.rs  [P=603; L=645]
+core/crates/layerfs-fuse/  [P=1171; L=1273; N=4]
+`-- src/  [P=1171; L=1273; N=4]
+    |-- adapter.rs  [P=663; L=709]
     |-- lib.rs  [P=7; L=10]
     |-- mount.rs  [P=403; L=448]
     `-- replies.rs  [P=98; L=106]
@@ -227,8 +236,8 @@ core/crates/layerfs-fuse/  [P=1111; L=1209; N=4]
 ### layerfs-workspace
 
 ```text
-core/crates/layerfs-workspace/  [P=11571; L=11788; N=44]
-`-- src/  [P=11571; L=11788; N=44]
+core/crates/layerfs-workspace/  [P=11617; L=11841; N=44]
+`-- src/  [P=11617; L=11841; N=44]
     |-- backing/  [P=4488; L=4551; N=13]
     |   |-- budget.rs  [P=54; L=56]
     |   |-- directory.rs  [P=206; L=208]
@@ -252,25 +261,25 @@ core/crates/layerfs-workspace/  [P=11571; L=11788; N=44]
     |   |-- reconcile.rs  [P=328; L=334]
     |   |-- save.rs  [P=284; L=285]
     |   `-- source.rs  [P=155; L=156]
-    |-- filesystem/  [P=2528; L=2571; N=10]
-    |   |-- create.rs  [P=483; L=492]
+    |-- filesystem/  [P=2554; L=2600; N=10]
+    |   |-- create.rs  [P=487; L=499]
     |   |-- directory.rs  [P=152; L=153]
     |   |-- mkdir.rs  [P=36; L=39]
     |   |-- mod.rs  [P=9; L=9]
     |   |-- namespace.rs  [P=211; L=214]
     |   |-- namespace_view.rs  [P=312; L=314]
-    |   |-- open.rs  [P=213; L=219]
+    |   |-- open.rs  [P=230; L=236]
     |   |-- original.rs  [P=121; L=125]
     |   |-- read.rs  [P=284; L=288]
-    |   `-- write.rs  [P=707; L=718]
+    |   `-- write.rs  [P=712; L=723]
     |-- overlay/  [P=865; L=869; N=4]
     |   |-- directories.rs  [P=181; L=183]
     |   |-- mod.rs  [P=3; L=3]
     |   |-- pieces.rs  [P=316; L=317]
     |   `-- snapshot.rs  [P=365; L=366]
-    |-- runtime/  [P=1603; L=1666; N=6]
+    |-- runtime/  [P=1623; L=1690; N=6]
     |   |-- attachment.rs  [P=256; L=266]
-    |   |-- coherence.rs  [P=327; L=357]
+    |   |-- coherence.rs  [P=347; L=381]
     |   |-- host.rs  [P=498; L=505]
     |   |-- lifecycle.rs  [P=161; L=168]
     |   |-- mod.rs  [P=5; L=5]

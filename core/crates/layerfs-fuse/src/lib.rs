@@ -1,4 +1,4 @@
-//! Linux read and existing-file write projection; Workspace owns filesystem semantics.
+//! Linux filesystem projection; Workspace owns filesystem semantics.
 #![forbid(unsafe_code)]
 
 #[cfg(target_os = "linux")]

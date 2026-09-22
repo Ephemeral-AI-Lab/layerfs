@@ -13,7 +13,9 @@ is implemented and functionally verified through the existing Service save owner
 direct and C5 save routes with zero/nonzero content and derived references.
 [Native file creation](43-native-create.md) is implemented, with13 registered
 functional selections passing and the capacity gate still failed/open. Its
-labelled diagnostic PASS does not replace that failure. Mounted CREATE is next.
+labelled diagnostic PASS does not replace that failure. [Mounted CREATE](44-mounted-create.md)
+now verifies kernel/SDK creation, handle ownership, entry coherence and G/D1
+reconciliation; symlinks and complete workload admission remain open.
 
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry

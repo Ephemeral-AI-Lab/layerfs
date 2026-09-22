@@ -793,7 +793,7 @@ mod linux {
     }
 
     #[test]
-    #[ignore = "requires native owner-permission and actual mounted refusal"]
+    #[ignore = "requires native owner-permission and unbound projection refusal"]
     fn create_refusals() {
         let f = fixture(Gate::None);
         let parent = f.workspace.root().serial;
@@ -868,15 +868,15 @@ mod linux {
             Err(WorkspaceError::ReadOnly)
         );
         ro.close_clean().unwrap();
-        // The Linux adapter requires a genuinely root-owned Workspace. Keep
-        // this separate from the UID1000 native permission fixture above.
+        // An acquired but unbound projection excludes native creation before
+        // reservation; actual mounted creation is covered by mounted_create.
         let projected = Fixture::new(Gate::None);
         assert_eq!(projected.workspace.root().uid, 0);
         let projected_root = PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap());
         for path in [&projected_root, &projected_root.join("workspace")] {
             assert_eq!(fs::symlink_metadata(path).unwrap().uid(), 0);
         }
-        let mut mount = layerfs_fuse::mount_writable(&projected.workspace, deadline()).unwrap();
+        let mut mount = projected.workspace.reserve_mount().unwrap();
         assert!(projected.workspace.status().unwrap().mounted);
         assert_eq!(
             projected.workspace.create_file(
@@ -885,11 +885,11 @@ mod linux {
                 ordinary(),
                 deadline()
             ),
-            Err(WorkspaceError::Unsupported)
+            Err(WorkspaceError::Busy)
         );
         assert_eq!(reserves(&projected), 0);
         assert_eq!(publications(&projected), 0);
-        mount.unmount(deadline()).unwrap();
+        mount.finish().unwrap();
         assert!(!projected.workspace.status().unwrap().mounted);
         projected.workspace.close_clean().unwrap();
         assert_eq!(reserves(&f), 0);

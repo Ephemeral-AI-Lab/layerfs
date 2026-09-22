@@ -2,6 +2,7 @@
 
 > **Status: implemented; native capacity gate failed/open. Other functional proof is recorded below.**
 > Implementation parent: `ab473145a606a71327d55d10f12205edb1803946`.
+> Exact implementation commit: `7eb46ef0766eae0d6ccfb894d07919a39c69ef38`; [confirmation](evidence/native-create/commit-confirmed.json).
 > Product input seal: `2ba9298beca16b990d1fa9f4884a630461623f9ade02a82923236daace74aa65`.
 
 This round adds one native Workspace operation, `create_file(parent, name,
