@@ -584,8 +584,14 @@ mod linux {
         assert_eq!(f.native.bytes(content, 0, 7), b"payload");
         let (moved_dir, _) = saved(&f, head, b"left/inner");
         assert_eq!(moved_dir.kind, NodeKind::Directory);
+        // The replaced identity's open handle still addresses its own inode
+        // and bytes after the Commit, exactly as the mounted scenario asserts:
+        // the name is gone from the saved tree, the handle keeps reading its
+        // own version.
+        assert_eq!(read(&f, held, 0, 5), b"older");
+        assert_eq!(f.workspace.getattr(replaced.serial).unwrap().size, 5);
         println!(
-            "NAMESPACE_RENAME cross_parent=true replaced_handle_intact=true noreplace=true same_inode_noop=true directory_cycle_refused=true"
+            "NAMESPACE_RENAME cross_parent=true replaced_handle_intact=true replaced_handle_readable_after_commit=true noreplace=true same_inode_noop=true directory_cycle_refused=true"
         );
         // Every Local lookup reference this case took, including the two
         // directories it created: a checked clean close refuses while any of

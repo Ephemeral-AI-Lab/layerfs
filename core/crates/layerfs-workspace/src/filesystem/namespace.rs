@@ -195,6 +195,7 @@ impl Workspace {
             content,
             metadata,
             canonical,
+            ..
         } = resolved;
         if let Some(node) = state
             .nodes

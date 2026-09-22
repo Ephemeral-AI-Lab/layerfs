@@ -3,6 +3,7 @@ use super::{
     budget::{Budget, Charge},
     directory::Directory,
     metadata_pages::PageRef,
+    ownership::CleanupFrame,
     payload::{bare_failure, PayloadHost},
     segments::Window,
 };
@@ -750,7 +751,24 @@ impl RootOwner {
             };
             let Some(page) = page else { break };
             if page != root {
-                self.arena.change_refs(page, -1, window, deadline)?;
+                // A page whose only reference was this candidate's own
+                // temporary slot — an intermediate root a later chained update
+                // of the same publication replaced — reaches zero here. The
+                // reclaim queues exactly this case for cleanup, and seal must
+                // too: a page seal orphans would keep its slot and every edge
+                // it holds referenced forever, and a workspace that published
+                // this way could never close clean.
+                if self.arena.change_refs(page, -1, window, deadline)? == 0 {
+                    let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                    if state.cleanup.len() == 12 {
+                        return Err(WorkspaceError::Capacity);
+                    }
+                    state.cleanup.push(CleanupFrame {
+                        page,
+                        next: 0,
+                        phase: 0,
+                    });
+                }
             }
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             state.temporary.pop();
@@ -768,12 +786,38 @@ impl RootOwner {
                     .copied()
             };
             let Some(page) = page else { break };
-            self.arena.change_refs(page, -1, window, deadline)?;
+            if self.arena.change_refs(page, -1, window, deadline)? == 0 {
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                if state.cleanup.len() == 12 {
+                    return Err(WorkspaceError::Capacity);
+                }
+                state.cleanup.push(CleanupFrame {
+                    page,
+                    next: 0,
+                    phase: 0,
+                });
+            }
             self.state
                 .lock()
                 .map_err(|_| WorkspaceError::Io)?
                 .custodies
                 .pop();
+        }
+        // Complete every frame this seal queued before the candidate returns,
+        // exactly as a reclaim would: a sealed root owns no pending cleanup, so
+        // it stays eligible for the routine reclaim every later mutation runs.
+        let mut report = MetadataCleanupReport::default();
+        loop {
+            let frame = {
+                self.state
+                    .lock()
+                    .map_err(|_| WorkspaceError::Io)?
+                    .cleanup
+                    .last()
+                    .copied()
+            };
+            let Some(frame) = frame else { break };
+            self.cleanup_step(frame, window, deadline, &mut report)?;
         }
         self.release_slot_credits()?;
         let host = self.arena.host.upgrade().ok_or(WorkspaceError::Closed)?;

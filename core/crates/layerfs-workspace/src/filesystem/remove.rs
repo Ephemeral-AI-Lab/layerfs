@@ -117,6 +117,18 @@ impl Workspace {
                 Err(error) => return Err(error),
             };
         let child = resolved.attr;
+        // An identity the live root holds no record of lives only in the
+        // canonical tree. Removing one of its names while a live local owner
+        // still addresses it leaves the reconcile carry an identity whose record
+        // it would fail to read, so this publication writes the canonical record
+        // the carry reads, exactly as a link writes its target's. It is a
+        // counted dirty identity for the same reason a link's target is: the
+        // record's generation is what a later edit of the same identity reads as
+        // already-dirty.
+        let carried_record = !directory
+            && child.kind == NodeKind::File
+            && self.carried_owner(child.serial)?
+            && self.record_absent(&view, child.serial, false, deadline)?;
         if directory {
             if child.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
@@ -148,10 +160,13 @@ impl Workspace {
                 deadline,
             )?
         };
-        // This publication marks the parent dirty and nothing else: a fresh child
-        // already owns its own dirty key, and a canonical child needs none because
-        // the tree is derived from names.
-        let new_dirty = usize::from(!already_dirty);
+        // This publication marks the parent dirty, plus a canonical child that
+        // a live local owner still addresses and whose record it must write for
+        // the reconcile carry. Every other child needs no key of its own: a
+        // fresh one already owns its dirty key, and a canonical one without an
+        // owner is derived from names alone.
+        let parent_dirty = usize::from(!already_dirty);
+        let new_dirty = parent_dirty + usize::from(carried_record);
         let new_directories = usize::from(!already_dirty);
         let name_bytes = 10 + name.len();
         {
@@ -259,7 +274,7 @@ impl Workspace {
             parent_directory.tombstones =
                 directories::remove_name(&candidate, parent_directory, name, window, deadline)?;
         }
-        let mut updates = vector(2)?;
+        let mut updates = vector(4)?;
         updates.push(Cell::new(
             &metadata_pages::dirty_key(generation, parent),
             &[1],
@@ -268,6 +283,38 @@ impl Workspace {
             &metadata_pages::namespace_key(parent),
             &parent_directory.value(),
         )?);
+        if carried_record {
+            let mut inode = crate::overlay::pieces::Inode::initial(
+                resolved.original,
+                resolved.content,
+                resolved.metadata,
+            );
+            inode.generation = generation;
+            inode.revision = next;
+            updates.push(Cell::new(
+                &metadata_pages::dirty_key(generation, child.serial),
+                &[1],
+            )?);
+            if inode.length > 0 {
+                inode.pieces = candidate.build_pieces(
+                    &[crate::overlay::pieces::Piece {
+                        kind: crate::overlay::pieces::PieceKind::Base,
+                        start: 0,
+                        length: inode.length,
+                        offset: 0,
+                        payload: 0,
+                        custody: PageRef::NULL,
+                    }],
+                    window,
+                    deadline,
+                )?;
+                inode.count = 1;
+            }
+            updates.push(Cell::new(
+                &metadata_pages::inode_key(child.serial),
+                &inode.value(),
+            )?);
+        }
         updates.sort_unstable_by(|a, b| a.key().cmp(b.key()));
         let root = candidate.update(
             view.root

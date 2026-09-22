@@ -652,7 +652,18 @@ impl Workspace {
         inode.revision = revision;
         inode.generation = generation;
         let (next_mode, next_seconds, next_nanos) = match mutation {
-            FileMutation::Attributes { request, .. } => request.selected(original),
+            // A portable-attribute request changes exactly the fields it names.
+            // The fallback for an unnamed field is the selected record's own
+            // current value, never the base version's: a mode-only change keeps
+            // the live mtime, and an mtime-only change keeps a mode an earlier
+            // request in the same generation selected.
+            FileMutation::Attributes { request, .. } => {
+                let mut current = original;
+                current.mode = inode.mode;
+                current.mtime_seconds = inode.seconds;
+                current.mtime_nanoseconds = inode.nanos;
+                request.selected(current)
+            }
             _ => (
                 inode.mode,
                 i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?,

@@ -19,6 +19,11 @@ pub(crate) struct Resolved {
     pub content: Root,
     pub metadata: Root,
     pub canonical: bool,
+    /// The root a path query actually answered from, or zero when the overlay
+    /// resolved the name locally. A caller that must re-ask the service about
+    /// the same identity (a symlink target, a record for a name this operation
+    /// moves) uses this root, never a cached path.
+    pub base: Root,
 }
 impl Workspace {
     pub(crate) fn inspect_view(
@@ -161,6 +166,7 @@ impl Workspace {
                     content: [0; 32],
                     metadata: [0; 32],
                     canonical: false,
+                    base: [0; 32],
                 });
             }
             // A name this generation added for an identity the attached base
@@ -178,6 +184,7 @@ impl Workspace {
                 content,
                 metadata,
                 canonical: true,
+                base: view.base,
             });
         }
         if let (Some((serial, _)), Some(directory)) = (binding, local) {
@@ -200,6 +207,7 @@ impl Workspace {
                         content: [0; 32],
                         metadata: [0; 32],
                         canonical: false,
+                        base: [0; 32],
                     });
                 }
                 Origin::Canonical(root) => base = Some(root),
@@ -221,6 +229,7 @@ impl Workspace {
             content,
             metadata,
             canonical: base == view.base,
+            base,
         })
     }
     pub(crate) fn list_view(

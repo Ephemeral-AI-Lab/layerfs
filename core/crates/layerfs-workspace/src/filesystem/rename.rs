@@ -15,12 +15,12 @@ use crate::{
     },
     overlay::{
         directories::{self, Directory, Origin},
-        pieces::CapturedBase,
+        pieces::{CapturedBase, Inode, Piece, PieceKind},
     },
     runtime::coherence::MutationOrigin,
     *,
 };
-use layerfs_bridge::contract::Code;
+use layerfs_bridge::contract::{Code, Root};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 /// One rename request: both parents, both names and the selected flags.
 #[derive(Clone, Copy)]
@@ -30,6 +30,17 @@ pub(crate) struct RenameRequest<'a> {
     pub destination_parent: u64,
     pub destination: &'a [u8],
     pub flags: RenameFlags,
+}
+/// The moved identity's record, when this publication must write one.
+struct Moved {
+    serial: u64,
+    original: NodeAttributes,
+    content: Root,
+    metadata: Root,
+    symlink: bool,
+    payload: Option<OwnedPayload>,
+    /// The identity becomes a counted dirty identity this generation.
+    dirty: bool,
 }
 /// One parent whose entry set this operation edits.
 struct Parent {
@@ -138,7 +149,9 @@ impl Workspace {
             {
                 None
             }
-            Err(error) => return Err(error),
+            Err(error) => {
+                return Err(error);
+            }
         };
         if let Some(replaced) = &destination_attr {
             if replaced.attr.serial == source_attr.attr.serial {
@@ -174,6 +187,22 @@ impl Workspace {
             // Moving a directory beneath its own descendant would create a cycle.
             return Err(WorkspaceError::InvalidInput);
         }
+        let moved = self.moved_identity(
+            &mut operation,
+            &view,
+            &source_attr,
+            &child_path(&parents[0].path, source)?,
+            deadline,
+        )?;
+        let replaced = if let Some(replaced) = destination_attr
+            .as_ref()
+            .filter(|replaced| replaced.attr.kind == NodeKind::File)
+        {
+            self.carried_owner(replaced.attr.serial)?
+                && self.record_absent(&view, replaced.attr.serial, false, deadline)?
+        } else {
+            false
+        };
         let (seconds, nanos) = now()?;
         parents[0].mtime = (seconds, nanos);
         parents[0].remove = Some(source.to_vec());
@@ -192,8 +221,14 @@ impl Workspace {
             ));
         }
         // Exactly one dirty key per edited parent this generation has not marked
-        // yet; the publication below writes no other dirty record.
-        let new_dirty = parents.iter().filter(|parent| !parent.dirty).count();
+        // yet, plus the moved identity when this publication writes the record
+        // its new binding needs. A moved directory is refused above unless its
+        // record already exists, and a symlink's record is never a counted
+        // dirty identity, so only a regular file adds one here.
+        let parent_dirty = parents.iter().filter(|parent| !parent.dirty).count();
+        let new_dirty = parent_dirty
+            + usize::from(moved.as_ref().is_some_and(|moved| moved.dirty))
+            + usize::from(replaced);
         let name_bytes = 10 + source.len() + 10 + destination.len();
         {
             let state = self.state()?;
@@ -208,7 +243,7 @@ impl Workspace {
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 state.dirty_inodes + new_dirty,
-                state.dirty_directories + new_dirty,
+                state.dirty_directories + parent_dirty,
                 state.fresh_files,
                 state.fresh_symlinks,
                 state.directory_names + 2,
@@ -252,7 +287,7 @@ impl Workspace {
             needs_completion,
             capture.map(|capture| capture.root.clone()),
         )?;
-        let mut updates = vector(6)?;
+        let mut updates = vector(4)?;
         let mut changed = 0usize;
         // Rows this publication adds to the two parents it edits. A locally bound
         // source trades its entry row for its removal record, and a replaced
@@ -382,7 +417,7 @@ impl Workspace {
             return Err(WorkspaceError::Io);
         }
         updates.sort_unstable_by(|a, b| a.key().cmp(b.key()));
-        let root = candidate.update(
+        let mut root = candidate.update(
             view.root
                 .as_ref()
                 .map(|owner| owner.root())
@@ -392,6 +427,114 @@ impl Workspace {
             window,
             deadline,
         )?;
+        if let Some(moved) = &moved {
+            // The moved identity's own record, exactly as a link's target gets
+            // one: the destination binding names it, and a lookup of that name
+            // must resolve the identity from this overlay instead of asking the
+            // service for a path the canonical tree does not hold. A regular
+            // file also becomes a counted dirty identity this generation, so
+            // the next Commit declares it; a symlink's record is never counted,
+            // because the service already owns its constructed identity and a
+            // fresh declaration for a serial the base holds would be refused.
+            // One arena update admits at most four cells, so this record and
+            // the parents' edits publish as two chained updates of one root.
+            let mut inode = Inode::initial(moved.original, moved.content, moved.metadata);
+            inode.generation = generation;
+            inode.revision = revision + 1;
+            if moved.symlink {
+                inode.fresh = true;
+                inode.base = [0; 32];
+                inode.base_length = 0;
+                inode.metadata = [0; 32];
+                inode.replacement = inode.length;
+                if let Some(payload) = moved.payload.as_ref() {
+                    let custody = arena.custody(&candidate, payload, window, deadline)?;
+                    inode.pieces = candidate.build_pieces(
+                        &[Piece {
+                            kind: PieceKind::Local,
+                            start: 0,
+                            length: payload.len(),
+                            offset: 0,
+                            payload: payload.record.id,
+                            custody,
+                        }],
+                        window,
+                        deadline,
+                    )?;
+                    inode.count = 1;
+                    inode.edits = 1;
+                }
+            } else if inode.length > 0 {
+                inode.pieces = candidate.build_pieces(
+                    &[Piece {
+                        kind: PieceKind::Base,
+                        start: 0,
+                        length: inode.length,
+                        offset: 0,
+                        payload: 0,
+                        custody: PageRef::NULL,
+                    }],
+                    window,
+                    deadline,
+                )?;
+                inode.count = 1;
+            }
+            let mut cells = vector(2)?;
+            if moved.dirty {
+                cells.push(Cell::new(
+                    &metadata_pages::dirty_key(generation, moved.serial),
+                    &[1],
+                )?);
+            }
+            cells.push(Cell::new(
+                &metadata_pages::inode_key(moved.serial),
+                &inode.value(),
+            )?);
+            root = candidate.update(root, cells, window, deadline)?;
+        }
+        if let Some(resolved) = destination_attr
+            .as_ref()
+            .filter(|resolved| resolved.attr.kind == NodeKind::File && replaced)
+        {
+            // A replaced destination keeps its inode for its existing handles
+            // and readers. When a live local owner still addresses an identity
+            // the live root holds no record of, this publication writes the
+            // canonical record the reconcile carry reads, exactly as a link
+            // writes its target's: a handle that outlives the name keeps
+            // reading its own version across the next Commit instead of
+            // failing the carry's record read. It is a counted dirty identity
+            // for the same reason a link's target is: the record's generation
+            // is what a later edit of the same identity reads as already-dirty.
+            let mut inode = Inode::initial(resolved.original, resolved.content, resolved.metadata);
+            inode.generation = generation;
+            inode.revision = revision + 1;
+            let mut cells = vector(2)?;
+            cells.push(Cell::new(
+                &metadata_pages::dirty_key(generation, resolved.attr.serial),
+                &[1],
+            )?);
+            if inode.length > 0 {
+                inode.pieces = candidate.build_pieces(
+                    &[Piece {
+                        kind: PieceKind::Base,
+                        start: 0,
+                        length: inode.length,
+                        offset: 0,
+                        payload: 0,
+                        custody: PageRef::NULL,
+                    }],
+                    window,
+                    deadline,
+                )?;
+                inode.count = 1;
+            }
+            cells.push(Cell::new(
+                &metadata_pages::inode_key(resolved.attr.serial),
+                &inode.value(),
+            )?);
+            root = candidate.update(root, cells, window, deadline)?;
+        }
+        candidate.seal(root, window, deadline)?;
         candidate.seal(root, window, deadline)?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
@@ -494,7 +637,7 @@ impl Workspace {
         let retired = state.overlay.replace(candidate);
         state.revision = receipt.revision;
         state.dirty_inodes += new_dirty;
-        state.dirty_directories += new_dirty;
+        state.dirty_directories += parent_dirty;
         state.directory_names = state.directory_names.saturating_add_signed(rows);
         state.directory_bytes = state.directory_bytes.saturating_add_signed(row_bytes);
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
@@ -529,6 +672,143 @@ impl Workspace {
             }
         }
         Ok(())
+    }
+    /// True when the live root holds no record of `serial`: an inode record for
+    /// a regular identity, a namespace record for a directory. A name a later
+    /// mutation binds for such an identity must publish one, because the
+    /// binding is local while the identity itself lives only in the canonical
+    /// tree the record's roots name.
+    pub(super) fn record_absent(
+        &self,
+        view: &View,
+        serial: u64,
+        directory: bool,
+        deadline: Instant,
+    ) -> Result<bool, WorkspaceError> {
+        let Some(owner) = &view.root else {
+            return Ok(false);
+        };
+        let host = self
+            .host
+            .metadata
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let _view = host.writer()?;
+        let mut lease = host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let key = if directory {
+            metadata_pages::namespace_key(serial)
+        } else {
+            metadata_pages::inode_key(serial)
+        };
+        Ok(owner
+            .arena
+            .find(owner.root()?, &key, window, deadline)?
+            .is_none())
+    }
+    /// True while a live local owner (an open handle or a lookup reference)
+    /// still addresses `serial`, which is exactly the condition the reconcile
+    /// carry uses: an identity that lost its last local name is carried only
+    /// while such an owner exists, and the carry reads the identity's record.
+    pub(super) fn carried_owner(&self, serial: u64) -> Result<bool, WorkspaceError> {
+        let state = self.state()?;
+        Ok(state.nodes.iter().any(|node| {
+            node.attr.serial == serial
+                && (node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0)
+        }))
+    }
+    /// The moved identity's own record, when the live root holds none of it.
+    ///
+    /// A regular file carries the exact base roots the source resolution
+    /// observed, exactly like a link's target, and becomes a counted dirty
+    /// identity so the next Commit declares it. A symlink's record form is
+    /// fresh-only, so its target is materialised into the local payload owner
+    /// through the same root that resolved the source name; it is never a
+    /// counted dirty identity, because the service already owns the identity
+    /// and would refuse a fresh declaration for a serial its base holds. A
+    /// directory whose record is absent is refused: its inherited children
+    /// resolve through the canonical tree by path, and the bounded profile has
+    /// no identity-keyed service query that could re-anchor them after a move.
+    fn moved_identity(
+        &self,
+        operation: &mut crate::runtime::state::OperationGuard,
+        view: &View,
+        resolved: &super::namespace_view::Resolved,
+        path: &[u8],
+        deadline: Instant,
+    ) -> Result<Option<Moved>, WorkspaceError> {
+        let directory = resolved.attr.kind == NodeKind::Directory;
+        if !self.record_absent(view, resolved.attr.serial, directory, deadline)? {
+            return Ok(None);
+        }
+        match resolved.attr.kind {
+            NodeKind::Directory => Err(WorkspaceError::Unsupported),
+            NodeKind::File => Ok(Some(Moved {
+                serial: resolved.attr.serial,
+                original: resolved.original,
+                content: resolved.content,
+                metadata: resolved.metadata,
+                symlink: false,
+                payload: None,
+                dirty: true,
+            })),
+            NodeKind::Symlink => {
+                if resolved.base == [0; 32] {
+                    return Err(WorkspaceError::Io);
+                }
+                let response = self.inspect_view(
+                    operation,
+                    resolved.base,
+                    layerfs_bridge::contract::Inspect::Readlink {
+                        path: path.to_vec(),
+                    },
+                    deadline,
+                )?;
+                let layerfs_bridge::contract::Response::Link(target) = response else {
+                    return Err(WorkspaceError::InvalidInput);
+                };
+                if target.len() > layerfs_bridge::contract::SYMLINK_TARGET_BYTES
+                    || target.contains(&0)
+                    || target.len() as u64 != resolved.original.size
+                {
+                    return Err(WorkspaceError::InvalidInput);
+                }
+                // An empty target owns no payload, exactly as a created symlink
+                // with an empty target does; every other target is materialised
+                // into the local payload owner once, here, before publication.
+                let payload = if target.is_empty() {
+                    None
+                } else {
+                    let host = self
+                        .host
+                        .payloads
+                        .as_ref()
+                        .ok_or(WorkspaceError::Unsupported)?;
+                    let directory = self
+                        .inner
+                        .directory
+                        .clone()
+                        .ok_or(WorkspaceError::Unsupported)?;
+                    let mut source = target.as_slice();
+                    Some(host.acquire(
+                        directory,
+                        target.len() as u64,
+                        &mut source,
+                        deadline,
+                        &self.inner.stopping,
+                    )?)
+                };
+                Ok(Some(Moved {
+                    serial: resolved.attr.serial,
+                    original: resolved.original,
+                    content: [0; 32],
+                    metadata: [0; 32],
+                    symlink: true,
+                    payload,
+                    dirty: false,
+                }))
+            }
+        }
     }
     /// Loads both edited parents and resolves the destination's prior binding.
     fn rename_parents(

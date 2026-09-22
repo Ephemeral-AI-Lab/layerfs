@@ -97,7 +97,13 @@ class Witness:
             if kind == 5:
                 data.extend(value); assert len(data) <= 128 * 1024
             else:
-                assert kind == 6, (opcode, kind, value, len(data), body.hex(), self.client.poll())
+                # The headless client terminates its session after any refused
+                # request, so a failure frame ends this client: read it, close
+                # the exited process, and let the next request open a fresh one.
+                if kind != 6:
+                    exit = self.client.poll()
+                    self.close()
+                    raise AssertionError((opcode, kind, value, len(data), body.hex(), exit))
                 return value, bytes(data)
 
     def branch(self, branch):
@@ -371,24 +377,30 @@ print(json.dumps(out))
 
 
 SMALL_PROJECT_NAMES = ('left', 'right')
-SMALL_PROJECT_A_PRESENT = (b'left/a.txt', b'left/sym', b'left', b'right/victim.txt')
-SMALL_PROJECT_A_ABSENT = (b'left/node.bin', b'left/alias.bin', b'left/empty', b'right')
-SMALL_PROJECT_B_PRESENT = (b'left', b'right/moved.txt')
-SMALL_PROJECT_B_ABSENT = (b'left/a.txt', b'left/sym', b'right/victim.txt', b'right')
+SMALL_PROJECT_A_PRESENT = (b'left/a.txt', b'left/sym', b'left', b'right', b'right/victim.txt')
+SMALL_PROJECT_A_ABSENT = (b'left/node.bin', b'left/alias.bin', b'left/empty')
+SMALL_PROJECT_B_PRESENT = (b'left', b'left/sym', b'right', b'right/moved.txt')
+SMALL_PROJECT_B_ABSENT = (b'left/a.txt', b'right/victim.txt')
 
 
-def verify_small_project(witness, branch, result, observed, previous):
-    """Exact saved-tree check for one explicit Commit, through public Service reads."""
+def verify_small_project(witness, branch, result, observed, previous, head):
+    """Exact saved-tree check for one explicit Commit, through public Service reads.
+
+    The daemon admits one control session, so both Commits complete before any
+    public read: the branch snapshot is already at the last Commit's head when
+    either verification runs. The snapshot names that head; each Commit's own
+    head comes from its outcome, and B's parent must name A's.
+    """
     assert result['kind'] == 'Completed' and result['outcome']['kind'] == 'Committed', result
     outcome = result['outcome']
     snapshot = witness.branch(branch)
-    assert snapshot['effective_root'] == outcome['root'], (snapshot, outcome)
-    assert snapshot['branch']['head_commit'] == outcome['commit']
+    assert snapshot['effective_root'] == head['outcome']['root'], (snapshot, head)
+    assert snapshot['branch']['head_commit'] == head['outcome']['commit'], (snapshot, head)
     if previous is not None:
         assert outcome['parent'] == previous['head'], (outcome, previous)
     root = outcome['root']
     expected = observed['final_tree'] if previous is None else observed['second_edit']
-    assert sorted(expected['left']) == (['a.txt', 'sym'] if previous is None else [])
+    assert sorted(expected['left']) == (['a.txt', 'sym'] if previous is None else ['sym'])
     assert sorted(expected['right']) == (['victim.txt'] if previous is None else ['moved.txt'])
     names = {name: witness.root_observation(root, name)
              for name in (SMALL_PROJECT_A_PRESENT if previous is None else SMALL_PROJECT_B_PRESENT)}
@@ -412,7 +424,7 @@ def verify_small_project(witness, branch, result, observed, previous):
         assert victim['references'] == 1 and victim['mode'] == 0o644, victim
         assert names[b'right/victim.txt']['digest'] == observed['digests']['victim.txt']
         assert bytes.fromhex(names[b'right/victim.txt']['data']).decode() == observed['contents']['victim.txt']
-        return {'root': root, 'head': snapshot['branch']['head_commit'], 'branch': snapshot,
+        return {'root': root, 'head': outcome['commit'], 'branch': snapshot,
                 'names': {name.decode(): names[name]['attributes'] for name in names},
                 'a_content': names[b'left/a.txt']['content'],
                 'a_data': names[b'left/a.txt']['data'],
@@ -422,10 +434,20 @@ def verify_small_project(witness, branch, result, observed, previous):
     assert moved['serial'] == observed['second_edit']['moved_inode'], (moved, observed)
     assert moved['kind'] == 1 and moved['mode'] == 0o640, moved
     assert (moved['mtime'], moved['nanoseconds']) == (1_700_000_999, 0), moved
-    assert names[b'right/moved.txt']['digest'] == observed['digests']['a.txt']
-    assert bytes.fromhex(names[b'right/moved.txt']['data']).decode() == observed['contents']['a.txt']
+    # The moved file carries exactly the bytes Commit A saved as left/a.txt and
+    # the mounted tree read back after the second edit, under a new name.
+    moved_data = names[b'right/moved.txt']['data']
+    assert moved_data == previous['a_data'], (moved_data, previous)
+    assert bytes.fromhex(moved_data).decode() == observed['second_edit']['moved_body'], (moved_data, observed)
+    assert names[b'right/moved.txt']['digest'] == hashlib.sha256(bytes.fromhex(moved_data)).hexdigest()
+    # The untouched symlink keeps its exact target bytes across both Commits;
+    # the target name it spells is gone, and the link itself is unchanged.
+    assert names[b'left/sym']['attributes']['kind'] == 3, names[b'left/sym']
+    assert names[b'left/sym']['attributes']['mode'] == 0o777, names[b'left/sym']
+    assert names[b'left/sym']['target'] == 'a.txt', names[b'left/sym']
     assert names[b'left']['attributes']['kind'] == 2, names[b'left']
-    return {'root': root, 'head': snapshot['branch']['head_commit'], 'branch': snapshot,
+    assert names[b'right']['attributes']['kind'] == 2, names[b'right']
+    return {'root': root, 'head': outcome['commit'], 'branch': snapshot,
             'previous_root': previous['root'],
             'names': {name.decode(): names[name]['attributes'] for name in names},
             'moved_content': names[b'right/moved.txt']['content'],
@@ -908,10 +930,10 @@ def execute(args, report):
             # after the last Commit and before the remount.
             close_client(client, name); client = None
             saved_a = observe(lambda: verify_small_project(witness, branch, commit_a,
-                                                           report['mounted'], None), 'verify-A')
+                                                           report['mounted'], None, commit_b), 'verify-A')
             report['saved_A'] = saved_a
             saved_b = observe(lambda: verify_small_project(witness, branch, commit_b,
-                                                           report['second_edit'], saved_a), 'verify-B')
+                                                           report['second_edit'], saved_a, commit_b), 'verify-B')
             report['saved_B'] = saved_b
             assert saved_a['root'] != saved_b['root'] and saved_b['previous_root'] == saved_a['root']
             # A's root stays readable and unchanged while B is the live head.
@@ -930,8 +952,18 @@ def execute(args, report):
             report['remounted'] = control(lambda session: current(session, next_id()), 'remounted-status')
             report['remounted_read'] = small_project_read(name)
             assert control(lambda session: driver.unmount(session, next_id()), 'unmount-B')['outcome'] == 'Unmounted'
-            assert control(lambda session: driver.close_clean(session, next_id()), 'close')['outcome'] == 'Closed'
-            report['closed'] = control(lambda session: current(session, next_id(), writable=False), 'closed-status')
+            close_result = control(lambda session: driver.close_clean(session, next_id()), 'close')
+            assert close_result['outcome'] == 'Closed', close_result
+            # The acknowledged closed state: closed, unmounted and drained. A
+            # closed Workspace keeps its stopping flag set (it admits no
+            # further operations) and a closed writable one still reports its
+            # generation, so this reads the status directly instead of the
+            # writable/readonly helper.
+            kind, closed = control(lambda session: driver.status.query(session, next_id()), 'closed-status')
+            assert kind == 6 and closed['closed'] and not closed['mounted'] and closed['stopping'], closed
+            assert closed['active_operations'] == closed['nodes'] == closed['handles'] == 0, closed
+            report['close'] = close_result
+            report['closed'] = closed
         else: raise AssertionError(args.case)
         close_client(client, name); client = None
         witness.close(); witness = None

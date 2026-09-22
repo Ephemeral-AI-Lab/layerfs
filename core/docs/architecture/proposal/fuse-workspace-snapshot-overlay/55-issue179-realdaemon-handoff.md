@@ -392,3 +392,114 @@ stated separately from the open failures, the study's answers, and the two items
 that need the owner's decision or action - the push/merge and the issue closure
 itself, and the Linux clippy component.
 ```
+
+## 10. The v0.1.6 study, answered (owed by section 4)
+
+Written by the next round before any product edit, from the `v0.1.6` blobs
+(`44cf748486863ab7c21ca47e731bd88e2b9a7b4a`, read through `git show`) plus
+`05-v016-source-comparison.md` sections 1, 3, 4, 6 and 9.1. Line numbers are
+`git show v0.1.6:<path>` blob lines.
+
+**Q1 — name resolution and identity.** A name is resolved by
+`crates/layerfs-workspace/src/cow_tree.rs::acquire_name` (L251): it calls
+`LiveWorkspace::prepare_name`
+(`crates/layerfs-workspace-core/src/namespace.rs` L312), which answers from the
+parent's live delta (`directory.changes`) or from the per-parent `known_names`
+cache — validated against the *current* `base_root` and the directory's `base`
+(L316-322) — and otherwise returns `NameLookup::Acquire(NameInput)` (L182)
+carrying the **parent directory's own base root** (`input.directory:
+DirectoryStateRoot`, L178) plus the parent's revision. `acquire_name` then does
+a directory-page lookup keyed by that directory root and the name
+(`directory_lookup_cache.lookup(..., input.directory, &input.name, ...)`,
+cow_tree.rs L265-268) — never a path. Identity is the `NodeId`;
+`canonical_nodes: HashMap<InodeId, NodeId>` maps a base inode to its one live
+node, so a name that resolves to an already-resident inode **reuses the existing
+node** (cow_tree.rs L271-286; `install_immutable_node` namespace.rs L517 returns
+the same id when `canonical_nodes` already maps the inode, L540-554). Rename
+moves names and rewrites `paths` (`namespace.rs::rename` L718, whole-table path
+rewrite ~L794-800, `directory_parents` update L804) but never reallocates
+identity. Across a Commit, `capture_frontier`
+(`crates/layerfs-workspace-core/src/frozen.rs` L36) + `install_covered_record`
+(L133) + `finish_covered_generation` (L202) substitute saved content into the
+same nodes; `rebase_host_workspace`
+(`crates/layerfs-workspace/src/remote_commit.rs` L536) swaps reader/base and
+clears the lookup caches — the resident tables and every `NodeId` survive
+untouched. The replacement replaced this with bounded (256) resident `Node`s
+keyed by serial, each carrying one cached path locator
+(`runtime/state.rs::Node.path`), maintained per-directory delta records
+(`overlay/directories.rs::Directory`, keyed by serial in the arena) and a
+path-based `Inspect::Attributes` fallback
+(`filesystem/namespace_view.rs::resolve_child`). Why: 51 section 2 keeps the
+256-resident-node bound, and the release's acquire-on-lookup tables grow with
+the whole touched namespace — exactly the unbounded resident table the audit's
+9.1 must-not-port list rejects.
+
+**Q2 — the locator for a nameless node.** The locator is the `NodeId` itself; no
+code path consults a name to find a node's bytes. Bytes live in `Data`:
+`FileData::Base{root,len}` or `FileData::Edited{pieces,...}`
+(`crates/layerfs-workspace-core/src/lib.rs` L57-77). An open handle owns a
+**pin**: FUSE `open` → `pin_async`/`prepare_kernel_open`
+(`crates/layerfs-fuse/src/live_owner.rs` L1786, L1401; `state.pin(node)`), and
+`release` unpins (L1822). `reclaim` (namespace.rs L237) drops a node only when
+`paths.is_empty() && pins == 0` (and it is not a dirty linked file), so an
+unlinked-but-open inode stays resident with its own `Data`, fully readable and
+writable by `NodeId`. The replacement instead keeps one cached path per node, so
+a node whose last name is gone holds a locator that names a *missing* name; it
+compensates with `State::carried`/`State::unbound` plus reconcile's
+`Frontier::Unbound` (commit/reconcile.rs), which carry the record only while a
+live local owner exists. The release needs no such compensation because its
+identity never depended on a name.
+
+**Q3 — the destination parent.** The kernel callback
+(`crates/layerfs-fuse/src/filesystem.rs::rename`, L569) maps both parent inodes
+to `NodeId`s directly (`this.node(parent)`/`this.node(new_parent)`, ~L616-623) —
+a parent is never found by path. `rename_async` (live_owner.rs L2016) resolves
+source and destination names through `self.name(parent, name)` →
+`name_with_prefetch` (L822). When the parent's record is not in the live delta,
+`prepare_name` returns `NameLookup::Acquire(NameInput)` and the exact lookup key
+is the workspace `base_root` bytes ++ **the parent directory's own
+`DirectoryStateRoot` bytes** ++ the name (live_owner.rs ~L865-871:
+`root.as_bytes()`, `directory.0.as_bytes()`, then the name; the store-local path
+is the same key through `directory_lookup_cache`). There is no path fallback, so
+a stale cached path cannot misdirect the query — the parent's own directory root
+is the locator.
+
+**Q4 — Commit with a nameless live node.** Better, and structurally simpler than
+the carry-plus-liveness filter. Because identity is the resident `NodeId`, a
+nameless-but-pinned node is simply still in `nodes` at capture (its removal made
+it dirty, so it is in the frontier), and completion records are generated from
+the *published checkpoint* (`remote_commit.rs::completion_records` L483,
+`checkpoint.visit(...)` L496-500): a nameless node contributes no inode to the
+constructed tree, so the host sends **no** completion record for it — the node
+keeps its live `Data` until its last pin is released and `reclaim` drops it.
+`install_covered_record`'s guard (paths empty and links zero →
+`Integrity("covered record presentation")`, frozen.rs L148-155) exists precisely
+because a record for a nameless node would violate that invariant. So: no carry
+list, no liveness filter, and no way for the Commit to lose the identity — the
+resident table *is* the ownership. The replacement cannot copy this because its
+resident set is bounded at 256 and evicts unreferenced nodes; the
+`carried`-while-owned rule is the bounded substitute and is the right shape.
+
+**Q5 — what is not portable.** The release's **resident node table**
+(`nodes: HashMap<NodeId, Node>` + `canonical_nodes: HashMap<InodeId, NodeId>` +
+per-node `paths` sets + `known_names`), which grows with the entire touched
+namespace and keeps every acquired name resident, is not portable into this
+profile: 51 section 2 keeps 256 resident nodes, 128 handles, 128-entry
+admission, 32 KiB metadata and the 8 MiB accounted default. The bounded
+substitute is what the replacement already has — serial-keyed delta records in
+the arena (`namespace_key(serial)`), a per-record `Origin` naming the exact
+root/generation/revision the delta is against, and `serial_original`-style
+identity resolution — plus the one thing this study says the fix must add:
+**resolve a parent/child from the live root and the record's own revision
+rather than from a cached path**, i.e. the replacement's analogue of the
+release's directory-root-keyed lookup (Q3).
+
+**Which answer changes the fix.** Q3. The release never resolves a rename's
+destination parent through a path; its lookup key is the parent directory's own
+root at the parent's own revision. The replacement's `resolve_child` instead
+trusts a cached node path plus a path-based service fallback whenever the
+resident node's `baseline` is stale, which is exactly the state every resident
+node is in after a Commit. Q1/Q2 confirm the *invariant* the fix must preserve
+(identity is the serial, not the path), and Q4 confirms the existing
+`carried`-while-owned rule should be kept rather than replaced. Q5 forbids
+"fixing" this by importing the release's tables.

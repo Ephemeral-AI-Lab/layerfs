@@ -14,7 +14,7 @@ use std::{
     time::Instant,
 };
 impl RootOwner {
-    fn cleanup_step(
+    pub(super) fn cleanup_step(
         &self,
         frame: CleanupFrame,
         window: &mut Window,
