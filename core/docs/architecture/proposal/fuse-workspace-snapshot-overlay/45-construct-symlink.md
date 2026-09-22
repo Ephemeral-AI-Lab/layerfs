@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the declared content-object scope.**
 > Implementation parent: `5ed91aaca38dc54e145753a6844b12e6baf30abd`.
+> Exact implementation commit: `521bcb304c382e53f454eb3eb9007a010c1de486`; [confirmation](evidence/construct-symlink/commit-confirmed.json).
 > Product input seal: `ab247a3da4597e0429239b2b6b8a912d4455e83d380172300fabe947c913a80a`.
 
 This round adds one shared no-base symlink-content save. It reuses C1's existing

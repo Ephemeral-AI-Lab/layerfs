@@ -93,6 +93,7 @@ pub enum Operation {
         new_directories: Vec<DirectoryMetadata>,
         directory_metadata: Vec<DirectoryMetadata>,
         new_file_serials: Vec<u64>,
+        new_symlink_serials: Vec<u64>,
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
@@ -488,6 +489,7 @@ impl Request {
                 new_directories,
                 directory_metadata,
                 new_file_serials,
+                new_symlink_serials,
                 ..
             } => {
                 if *root_serial == 0 || *root_serial > i64::MAX as u64 {
@@ -503,6 +505,7 @@ impl Request {
                     new_directories,
                     directory_metadata,
                     new_file_serials,
+                    new_symlink_serials,
                 )?;
                 let mut count = 0usize;
                 for directory in directories {
@@ -624,6 +627,7 @@ fn check_prepared(changes: &PreparedChanges) -> Result<(), Failure> {
         &changes.new_directories,
         &changes.directory_metadata,
         &changes.new_file_serials,
+        &changes.new_symlink_serials,
     )
 }
 
@@ -670,6 +674,7 @@ fn check_prepared_additions(
     new_directories: &[DirectoryMetadata],
     directory_metadata: &[DirectoryMetadata],
     new_file_serials: &[u64],
+    new_symlink_serials: &[u64],
 ) -> Result<(), Failure> {
     if inodes
         .len()
@@ -680,7 +685,12 @@ fn check_prepared_additions(
     {
         return Err(Code::Capacity.into());
     }
-    if new_file_serials.len() > inodes.len() {
+    if new_file_serials
+        .len()
+        .checked_add(new_symlink_serials.len())
+        .ok_or(Code::Capacity)?
+        > inodes.len()
+    {
         return Err(Code::Capacity.into());
     }
     for records in [new_directories, directory_metadata] {
@@ -706,27 +716,31 @@ fn check_prepared_additions(
     }
     if (!new_directories.is_empty()
         || !directory_metadata.is_empty()
-        || !new_file_serials.is_empty())
+        || !new_file_serials.is_empty()
+        || !new_symlink_serials.is_empty())
         && inodes
             .windows(2)
             .any(|pair| pair[0].serial >= pair[1].serial)
     {
         return Err(Code::InvalidInput.into());
     }
-    if new_file_serials.windows(2).any(|pair| pair[0] >= pair[1]) {
-        return Err(Code::InvalidInput.into());
-    }
-    for serial in new_file_serials {
-        if *serial == 0 || *serial > i64::MAX as u64 || *serial == root_serial {
+    for (serials, kind) in [(new_file_serials, 1), (new_symlink_serials, 3)] {
+        if serials.windows(2).any(|pair| pair[0] >= pair[1]) {
             return Err(Code::InvalidInput.into());
         }
-        let index = inodes
-            .binary_search_by_key(serial, |inode| inode.serial)
-            .map_err(|_| Code::InvalidInput)?;
-        if inodes[index].kind != 1 {
-            return Err(Code::InvalidInput.into());
+        for serial in serials {
+            if *serial == 0 || *serial > i64::MAX as u64 || *serial == root_serial {
+                return Err(Code::InvalidInput.into());
+            }
+            let index = inodes
+                .binary_search_by_key(serial, |inode| inode.serial)
+                .map_err(|_| Code::InvalidInput)?;
+            if inodes[index].kind != kind {
+                return Err(Code::InvalidInput.into());
+            }
         }
-        // Directory declarations and patches above are disjoint from every I row.
+        // Different required kinds keep the two subsets disjoint. Directory
+        // declarations and patches above are disjoint from every I row.
     }
     for directory in new_directories {
         if directory.serial == root_serial

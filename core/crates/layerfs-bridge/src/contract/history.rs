@@ -185,6 +185,9 @@ pub struct PreparedChanges {
     /// Fresh regular-file identities, a sorted subset of kind-1 `inodes` rows.
     /// The caller's scope allocator must never reuse an exposed serial.
     pub new_file_serials: Vec<u64>,
+    /// Fresh symlink identities, a sorted subset of kind-3 `inodes` rows.
+    /// The caller's scope allocator must never reuse an exposed serial.
+    pub new_symlink_serials: Vec<u64>,
 }
 
 /// One pathless manifest entry of a bounded namespace initialization.

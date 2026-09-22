@@ -3,7 +3,7 @@
 //! The prepared-update surface is shared by the legacy content operation and by
 //! history staging. It is the same production body in both cases: one builder,
 //! one ownership rule, one place where a supplied root is checked against the
-//! base tree. Callers validate fresh-file roles; history validates every inode role.
+//! base tree. Callers validate fresh file/symlink roles; history validates every inode role.
 use super::{
     failure::content, history_bootstrap::build_metadata, metadata::patch_portable, read::id,
 };
@@ -37,6 +37,8 @@ pub(crate) struct PreparedUpdate<'a> {
     pub(crate) directory_metadata: &'a [DirectoryMetadata],
     /// Fresh regular identities, a subset of the role-validated final inode values.
     pub(crate) new_file_serials: &'a [u64],
+    /// Fresh symlink identities, a subset of the role-validated final inode values.
+    pub(crate) new_symlink_serials: &'a [u64],
 }
 
 pub(crate) fn update(
@@ -55,6 +57,7 @@ pub(crate) fn update(
         new_directories,
         directory_metadata,
         new_file_serials,
+        new_symlink_serials,
     } = *update;
     let mut fs = FilesystemRead::new(provider, FilesystemRootId(id(&base))).map_err(content)?;
     if fs.root().scope().object() != id(&allocation)
@@ -85,7 +88,8 @@ pub(crate) fn update(
                 != (new_directories
                     .binary_search_by_key(serial, |d| d.serial)
                     .is_ok()
-                    || new_file_serials.binary_search(serial).is_ok())
+                    || new_file_serials.binary_search(serial).is_ok()
+                    || new_symlink_serials.binary_search(serial).is_ok())
         })
     {
         return Err(Code::InvalidInput.into());
@@ -96,7 +100,9 @@ pub(crate) fn update(
         let kind = InodeKind::from_code(i.kind).map_err(content)?;
         // Directory content is changed through changed-name records, never wholesale
         // replacement with a caller's unrelated directory tree.
-        let references = if new_file_serials.binary_search(&i.serial).is_ok() {
+        let references = if new_file_serials.binary_search(&i.serial).is_ok()
+            || new_symlink_serials.binary_search(&i.serial).is_ok()
+        {
             // Both callers checked these roots with validate_inode_role before
             // construction. C1 derives the count from retained bindings.
             0
@@ -164,8 +170,11 @@ pub(crate) fn update(
             },
         });
     }
-    let mut new_inodes = Vec::with_capacity(new_directories.len() + new_file_serials.len());
+    let mut new_inodes = Vec::with_capacity(
+        new_directories.len() + new_file_serials.len() + new_symlink_serials.len(),
+    );
     new_inodes.extend_from_slice(new_file_serials);
+    new_inodes.extend_from_slice(new_symlink_serials);
     for directory in new_directories {
         if Instant::now() >= deadline {
             return Err(Code::Deadline.into());

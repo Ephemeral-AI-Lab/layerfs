@@ -641,6 +641,7 @@ mod linux {
                 mtime_nanoseconds: 0,
             }],
             new_file_serials: (0..count).map(|i| 1000 + i as u64).collect(),
+            new_symlink_serials: Vec::new(),
         };
         encode_prepared(p)
     }

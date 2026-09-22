@@ -193,6 +193,7 @@ impl Workspace {
         let context = &captured.context;
         let changes = PreparedChanges {
             new_file_serials,
+            new_symlink_serials: Vec::new(),
             directory_metadata,
             new_directories,
             workspace: self.inner.incarnation,

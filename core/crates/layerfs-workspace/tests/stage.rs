@@ -324,6 +324,7 @@ mod linux {
                     directory_metadata: Vec::new(),
                     new_directories: Vec::new(),
                     new_file_serials: Vec::new(),
+                    new_symlink_serials: Vec::new(),
                     workspace: [44; 32],
                     branch: before.branch.branch,
                     expected_head: before.branch.head_commit,

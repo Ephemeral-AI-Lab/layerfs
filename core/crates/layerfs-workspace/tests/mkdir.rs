@@ -415,6 +415,7 @@ mod linux {
             inodes: vec![file],
             new_directories,
             new_file_serials: Vec::new(),
+            new_symlink_serials: Vec::new(),
             directory_metadata: vec![DirectoryMetadata {
                 serial: snapshot.root_serial.unwrap(),
                 mode: 0o755,

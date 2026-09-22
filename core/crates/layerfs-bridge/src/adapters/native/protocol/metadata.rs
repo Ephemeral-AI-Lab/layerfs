@@ -213,6 +213,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             new_directories,
             directory_metadata,
             new_file_serials,
+            new_symlink_serials,
         } => {
             e.put(base)?;
             e.put(scope)?;
@@ -224,6 +225,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                 new_directories,
                 directory_metadata,
                 new_file_serials,
+                new_symlink_serials,
             )?;
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
@@ -721,7 +723,7 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             let root_serial = d.u64()?;
             let directories = take_directories(&mut d)?;
             let inodes = take_inodes(&mut d)?;
-            let (new_directories, directory_metadata, new_file_serials) =
+            let (new_directories, directory_metadata, new_file_serials, new_symlink_serials) =
                 take_additions(&mut d, inodes.len())?;
             Operation::UpdatePreparedFilesystem {
                 base,
@@ -732,6 +734,7 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 new_directories,
                 directory_metadata,
                 new_file_serials,
+                new_symlink_serials,
             }
         }
         6 => Operation::HistoryQuery(take_query(&mut d)?),

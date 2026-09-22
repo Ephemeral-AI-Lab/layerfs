@@ -461,6 +461,7 @@ fn stage(
         new_directories: &changes.new_directories,
         directory_metadata: &changes.directory_metadata,
         new_file_serials: &changes.new_file_serials,
+        new_symlink_serials: &changes.new_symlink_serials,
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);

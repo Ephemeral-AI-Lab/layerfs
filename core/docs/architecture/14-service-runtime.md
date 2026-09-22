@@ -706,3 +706,16 @@ through SaveHandoff and the common finish/retained-failure/abort path. No inode,
 namespace, Stage or Commit is created. Empty object targets do not relax the
 history manifest's nonempty rule. [Round45](proposal/fuse-workspace-snapshot-overlay/45-construct-symlink.md)
 records exact checks and qualifications; fresh symlink admission remains separate.
+
+The prepared fresh-symlink extension after source commit
+`521bcb304c382e53f454eb3eb9007a010c1de486` adds sorted new_symlink_serials (S)
+as a kind3 subset of inode rows, separate from kind1 fresh-file IDs (F). The shared
+row budget remains I+N+P<=128 and the combined fresh lists satisfy F+S<=I. Only
+nonempty S selects trailer v3, sized9+24(N+P)+8(F+S); S0 preserves older bytes.
+Decode checks the remaining fresh-ID budget before allocating S. Shared Service
+base checks recognize declared N/F/S absence; fresh file/symlink values start at
+reference count0, and C1 derives their final topology. Direct new-S rows use the
+existing canonical symlink/portable metadata validator; C5 keeps its single
+all-inode validation pass. No C1 builder, allocator or ownership path changes.
+Workspace currently supplies an empty S. [Round46](proposal/fuse-workspace-snapshot-overlay/46-prepared-symlinks.md)
+records verification and the remaining native/kernel mutation prerequisite.

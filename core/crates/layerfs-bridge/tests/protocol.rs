@@ -92,6 +92,7 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
             directory_metadata: Vec::new(),
             new_directories: Vec::new(),
             new_file_serials: Vec::new(),
+            new_symlink_serials: Vec::new(),
             base: [1; 32],
             scope: [2; 32],
             root_serial: 1,

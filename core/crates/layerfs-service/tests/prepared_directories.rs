@@ -257,6 +257,7 @@ impl Fixture {
             inodes: vec![],
             new_directories: vec![],
             new_file_serials: Vec::new(),
+            new_symlink_serials: Vec::new(),
             directory_metadata: vec![],
         }
     }
@@ -359,6 +360,7 @@ fn update(changes: &PreparedChanges) -> Operation {
         inodes: changes.inodes.clone(),
         new_directories: changes.new_directories.clone(),
         new_file_serials: changes.new_file_serials.clone(),
+        new_symlink_serials: changes.new_symlink_serials.clone(),
         directory_metadata: changes.directory_metadata.clone(),
     }
 }

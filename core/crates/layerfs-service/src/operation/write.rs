@@ -125,22 +125,28 @@ pub fn mutate(
             new_directories,
             directory_metadata,
             new_file_serials,
+            new_symlink_serials,
         } => (|| {
-            for serial in new_file_serials {
-                if Instant::now() >= deadline {
-                    return Err(Code::Deadline.into());
+            for (serials, kind) in [
+                (new_file_serials, InodeKind::RegularFile),
+                (new_symlink_serials, InodeKind::Symlink),
+            ] {
+                for serial in serials {
+                    if Instant::now() >= deadline {
+                        return Err(Code::Deadline.into());
+                    }
+                    let index = inodes
+                        .binary_search_by_key(serial, |inode| inode.serial)
+                        .map_err(|_| Code::InvalidInput)?;
+                    let inode = &inodes[index];
+                    validate_inode_role(
+                        &provider,
+                        kind,
+                        id(&inode.content),
+                        id(&inode.metadata),
+                        scope,
+                    )?;
                 }
-                let index = inodes
-                    .binary_search_by_key(serial, |inode| inode.serial)
-                    .map_err(|_| Code::InvalidInput)?;
-                let inode = &inodes[index];
-                validate_inode_role(
-                    &provider,
-                    InodeKind::RegularFile,
-                    id(&inode.content),
-                    id(&inode.metadata),
-                    scope,
-                )?;
             }
             filesystem::update(
                 &provider,
@@ -153,6 +159,7 @@ pub fn mutate(
                     new_directories,
                     directory_metadata,
                     new_file_serials,
+                    new_symlink_serials,
                 },
                 &mut handoff,
                 deadline,

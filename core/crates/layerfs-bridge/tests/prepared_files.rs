@@ -25,6 +25,7 @@ fn prepared() -> PreparedChanges {
         new_directories: vec![],
         directory_metadata: vec![],
         new_file_serials: vec![7],
+        new_symlink_serials: Vec::new(),
     }
 }
 fn request(route: u8, p: PreparedChanges) -> Request {
@@ -38,6 +39,7 @@ fn request(route: u8, p: PreparedChanges) -> Request {
             new_directories: p.new_directories,
             directory_metadata: p.directory_metadata,
             new_file_serials: p.new_file_serials,
+            new_symlink_serials: p.new_symlink_serials,
         },
         1 => Operation::HistoryCommand(HistoryCommand::StageChanges(p)),
         2 => Operation::HistoryCommand(HistoryCommand::Commit(p)),

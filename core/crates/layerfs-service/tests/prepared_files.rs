@@ -314,6 +314,7 @@ impl Fixture {
             new_directories: vec![],
             directory_metadata: vec![],
             new_file_serials: vec![first, first + 1],
+            new_symlink_serials: Vec::new(),
         }
     }
     fn verify(&self, root: Root, first: u64, prefix: &str) {
@@ -369,6 +370,7 @@ fn operation(route: u8, p: PreparedChanges) -> Operation {
             new_directories: p.new_directories,
             directory_metadata: p.directory_metadata,
             new_file_serials: p.new_file_serials,
+            new_symlink_serials: p.new_symlink_serials,
         },
         1 => Operation::HistoryCommand(HistoryCommand::StageChanges(p)),
         2 => Operation::HistoryCommand(HistoryCommand::Commit(p)),
