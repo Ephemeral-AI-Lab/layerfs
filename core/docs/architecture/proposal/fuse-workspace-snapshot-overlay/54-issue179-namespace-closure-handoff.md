@@ -224,8 +224,9 @@ through the real daemon and mount, and hand the owner a completed closure
 checklist.
 
 Use /Users/yifanxu/.codex/worktrees/795c/layerfs on codex/pair1-remote-mount.
-HEAD is e26b40bf9, working tree clean, the product commits already made; nothing
-is pushed.
+HEAD is the tip of that branch - the documentation commit that carries this
+prompt, whose parent is the last product commit - the working tree is clean, and
+nothing is pushed.
 
 Read AGENTS.md and core/AGENTS.md, then, in this order:
   core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/51-implementation-completion-spec.md
