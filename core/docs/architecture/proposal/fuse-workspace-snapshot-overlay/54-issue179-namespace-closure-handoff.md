@@ -4,7 +4,8 @@ Written after the round that closed the eight registered selections
 `53-issue179-namespace-completion-handoff.md` left open. The governing plan is
 still `51-implementation-completion-spec.md`; this file does not replace it and
 does not close the issue. It records what now passes, the cause and fix of each
-selection, the four owner rulings this round used, and what is still not done.
+selection, the four owner rulings this round used, and the four tasks plus two
+owner acts that remain before #179 can be closed.
 
 ## 1. State in one paragraph
 
@@ -150,23 +151,53 @@ python3 core/tools/check_product_boundary.py
 python3 -m unittest discover -s core/tools -p 'test_*.py'
 ```
 
-## 6. Still not done
+## 6. What is left to close #179
 
-- The section 6 real-daemon small-project integration (two explicit Commits,
-  public saved-state inspection, remount, clean close) is still not written, and
-  the mounted FUSE syscall coverage for the six operations is still not a route.
-- The architecture/operation matrix update in 51 section 7 is still open. This
-  round changes an admission rule, the re-anchor rule and several ownership
-  rules, so the affected documents need that update in a later commit.
-- A *replaced* identity that is a base identity, not one this generation created,
-  still loses its local record when a later Commit produces an empty successor
-  root; its open handle then needs the service to resolve a name that is gone.
-  The registered cases read such a handle before their Commit, so this is not
-  covered, and it is the same class as the unbound case fixed here.
-- The pinned Linux image has no clippy component, so a Linux clippy run still
-  needs the owner's decision on installing one; the host clippy above is clean.
-- `Service(Failure { code: Io })` on a long selection is a real transient
-  transport outcome, not a product refusal, and deserves its own bounded check.
+The work below is what section 8's prompt asks for, in the order it asks for it.
+Each item names the artifact to change and the evidence that closes it.
+
+1. **The 51 section 6 real-daemon small-project scenario.** Add one registered
+   case to `core/crates/layerfs-daemon/tests/control_commit.py`, reusing its
+   helpers, and script all six of 51 section 6's steps through a real mount,
+   service and two explicit authenticated Commits, with a remount and a checked
+   close. Closes 51 section 7's real-daemon integration box.
+2. **Mounted FUSE syscall evidence for `mknod`, `link`, `unlink`, `rmdir`,
+   `rename` and `setattr`.** Add one mounted route that specialises
+   `namespace_route.py`'s driver plus its Rust cases, following
+   `mounted_mkdir_route.py` and `mounted_create.rs`. The callbacks already exist
+   in `layerfs-fuse/src/adapter.rs`; this supplies the missing actual-kernel
+   evidence for the six operations. Closes 51 section 3's "applicable actual
+   FUSE path" requirement.
+3. **The last correctness gap.** A replaced identity that the generation did not
+   create still loses its local record when a later Commit produces an empty
+   successor root, so its open handle then needs the service to resolve a name
+   that is gone. Materialise that identity's content and metadata roots at
+   replacement time, carry records for identities with a live local owner into
+   the successor root, and extend the registered `rename` case to read the
+   replaced FD after its Commit. Closes 51 section 7's replaced/open-unlinked
+   identity box for base identities.
+4. **The architecture and operation-matrix update.** Refresh
+   `01-workspace-fuse-contract.md` section 7 and the documents that state the
+   rules this round changed: the bounded second metadata call and its derived
+   floor, the re-anchor rule, the page-edge ownership rule, `close_clean`'s
+   overlay release, the reconcile carry, the declaration ledger, rename
+   replacement semantics and the `list_view` tombstone filter. Record the exact
+   reproduction commands for every route this phase uses. Closes 51 section 7's
+   documentation box and `core/AGENTS.md`'s same-commit documentation rule.
+
+Two items need the owner rather than the agent: the **Linux clippy component**
+(the pinned image reports `cargo-clippy is not installed for the toolchain
+'1.85.1-aarch64-unknown-linux-gnu'`, so the clean host clippy run above is what
+stands), and the **push, merge and issue closure** themselves. A third item is
+worth one bounded check: `Service(Failure { code: Io })` on a long selection is a
+real transient transport outcome — already recorded at
+`native-create/create-capacity-01`, `ab473145` — rather than a product refusal,
+and it should be characterised rather than silently re-run.
+
+Beyond the bounded phase, and deferred by 51 section 2 rather than cancelled:
+R5b (the declared npm workflow), R6 and the matched mounted comparison owned by
+#207, and the full writable target's capacity, concurrency and performance
+qualification.
 
 ## 7. Production LOC comparison
 
@@ -188,39 +219,109 @@ count. This handoff's own documentation commit changes no production line.
 ## 8. Copyable prompt for the next implementation agent
 
 ```text
-Finish #179's bounded Linux integration.
+Close #179: finish the bounded Linux Workspace/FUSE implementation, prove it
+through the real daemon and mount, and hand the owner a completed closure
+checklist.
 
 Use /Users/yifanxu/.codex/worktrees/795c/layerfs on codex/pair1-remote-mount.
-HEAD is a7356d665, working tree clean, both product commits already made;
-nothing is pushed. Preserve every existing worktree, receipt and historical
-failure.
+HEAD is e26b40bf9, working tree clean, the product commits already made; nothing
+is pushed.
 
 Read AGENTS.md and core/AGENTS.md, then, in this order:
   core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/51-implementation-completion-spec.md
   core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/54-issue179-namespace-closure-handoff.md
 
-51 is still the governing owner-directed plan. 54 is the current state: all
-sixteen registered namespace and mkdir selections pass, the stage route still
-passes, and the whole-core checks are clean. Do not redo that round; start from
-54 section 6.
+51 is the governing owner-directed plan, and its section 7 is the definition of
+done for this phase. 54 records the current state: all sixteen registered
+namespace and mkdir selections pass, the stage route still passes and the
+whole-core checks are clean. Start from 54 section 6 and work these four tasks in
+order, committing each one with its exact per-commit production LOC accounting.
 
-Remaining work, in order: the section 6 real-daemon small-project integration
-with two explicit Commits, public saved-state inspection, remount and clean
-close; the mounted FUSE syscall coverage for the six namespace operations; the
-architecture/operation matrix update for the admission, re-anchor and ownership
-rules this round changed; and the replaced-base-identity record gap in 54
-section 6. Keep every numeric limit, one construction worker, the host's single
-primary remote admission and the existing failure ownership. Do not raise a
-bound to make a line green, do not rewrite a registered case to make it pass,
-and do not add a test that only restates the implementation.
+1. Write the 51 section 6 real-daemon small-project scenario. Extend
+   core/crates/layerfs-daemon/tests/control_commit.py with one new registered
+   case, reusing its existing helpers (begin_commit, commit, current,
+   verify_saved, remount, mounted_edit, held_live_files, close_client) and the
+   docker_route.py / mounted_read.py harness, and script all six of 51 section
+   6's steps: attach and mount a writable Workspace with one negative
+   authorization check; create two directories, several tiny files, a regular
+   mknod file, a symlink and a hard-link alias, then write, append, truncate,
+   chmod and set mtime with atime omitted (UTIME_OMIT); rename between
+   directories while the replaced destination FD stays open and check that FD
+   still addresses its own inode; unlink a last name with its FD held and read
+   and write that FD; prove a nonempty rmdir and a NOREPLACE collision fail
+   without partial change, then remove an empty directory; verify names,
+   contents, inode identities, link counts and portable metadata with
+   lstat/readlink/read/listing. Request explicit authenticated Commit A, verify
+   the branch head and the saved namespace, content and metadata through public
+   Service reads, then make a small second edit with a rename, an unlink and a
+   metadata change, request Commit B, and verify B's exact tree while A's root
+   stays readable and unchanged. Close every FD, remount the same live
+   Workspace, read the acknowledged state, and finish with checked
+   Unmount/CloseClean and normal cleanup. Acceptance: the case passes with two
+   explicit Commits, no hidden intermediate Commit, and a receipt naming both
+   generations and heads.
 
-Verify with namespace_route.py (10 cases), mkdir_route.py (6 cases) and the stage
-route (10 cases) as the regression check, one attempt each and one output
-directory each, building the Linux test binaries in the long-lived container
-described in 53 section 5 and comparing against a build of the parent commit in
-its own target directory. Run the whole-core checks once on the final source.
-Commit each coherent step with the exact per-commit production LOC accounting
-(tools/production_loc.py, parent and staged snapshots,
-"Production LOC: <before> -> <after> (delta <signed>)"). Do not push, merge or
-close the issue without authorization.
+2. Add the mounted FUSE syscall evidence for the six operations. Follow the
+   mounted-route pattern (mounted_mkdir_route.py is 22 lines specialising the
+   shared driver): add one mounted route that specialises namespace_route.py's
+   driver, with its Rust cases modelled on mounted_create.rs, covering kernel
+   mknod, link, unlink with a held FD, rmdir for the empty and nonempty cases,
+   rename for cross-directory, NOREPLACE collision and directory-cycle refusal,
+   and setattr for chmod plus UTIME_OMIT mtime. Assert errno, inode identity,
+   link counts, listing visibility and post-Commit durability through the real
+   mount. The adapter callbacks already exist in layerfs-fuse/src/adapter.rs, so
+   this task produces evidence for them and fixes whatever it exposes.
+
+3. Close the last correctness gap in 54 section 6: a replaced identity the
+   generation did not create must keep its record for its open handle across a
+   Commit. Materialise that identity's exact content and metadata roots at
+   replacement time using the link-to-base pattern in filesystem/create.rs, and
+   have commit/reconcile.rs carry records for identities that still have a live
+   local owner (a handle or a lookup reference) into the successor root even
+   when the dirty frontier is empty. Extend the registered rename case to read
+   the replaced FD after its Commit, which is the assertion 51 section 6 step 2
+   already asks the integration scenario to make.
+
+4. Update the architecture documents and the operation matrix for the rules the
+   last round changed, in the same commits as any further change: the bounded
+   second metadata call and its derived floor (runtime/host.rs,
+   runtime/state.rs), the re-anchor rule (filesystem/create.rs, remove.rs,
+   rename.rs), the page-edge ownership rule (backing/metadata_index.rs),
+   close_clean's overlay release (runtime/lifecycle.rs), the reconcile carry and
+   the declaration ledger (commit/reconcile.rs, commit/directories.rs), rename
+   replacement semantics and the list_view tombstone filter
+   (filesystem/namespace_view.rs). Refresh the operation matrix in
+   01-workspace-fuse-contract.md section 7 and record the exact reproduction
+   commands for every route this phase uses.
+
+Then run the whole-core checks once on the final source, from the repository root
+with Rust 1.85.1, locked and offline, CARGO_BUILD_JOBS=2,
+LAYERFS_CONSTRUCTION_WORKERS=1, CARGO_TARGET_DIR=$PWD/core/target:
+
+  cargo +1.85.1 test   --manifest-path core/Cargo.toml --workspace --locked --offline
+  cargo +1.85.1 clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked --offline -- -D warnings
+  cargo +1.85.1 fmt    --manifest-path core/Cargo.toml --all -- --check
+  python3 core/tools/check_product_boundary.py
+  python3 -m unittest discover -s core/tools -p 'test_*.py'
+
+Work the way this phase works. Run one attempt per registered selection into its
+own output directory under core/target/pair1-evidence/, build the Linux test
+binaries in the long-lived container described in 53 section 5, and compare
+against a build of the parent commit in its own container target directory so a
+pre-existing failure is never reported as a regression or the reverse. Keep
+every registered numeric limit, one construction worker, the host's single
+primary remote admission and the existing failure ownership. Make a failing
+selection pass by fixing the product it registers; when a registered case
+contradicts the operation it registers, bring the owner the trace and a
+recommendation, as this round did for rename and for the remote admission. Add
+tests that verify new behaviour end to end rather than restating the
+implementation, and report FAIL, INCOMPLETE and unrun work as plainly as PASS.
+
+Finish with the closure report the owner needs to close #179: which of 51
+section 7's boxes are now closed and which are not, the exact commands and
+receipt paths, the per-commit LOC comparison, the accepted bounds and deferred
+work stated separately from the open failures, and the two items that need the
+owner's decision or action — the push/merge and the issue closure itself, and
+the Linux clippy component. Request those two authorizations with the completed
+checklist attached; they are the last step before #179 can be closed.
 ```
