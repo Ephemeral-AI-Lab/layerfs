@@ -6,10 +6,13 @@
 > Prepared 2026-09-22 for a separate Codex implementation task.
 
 **Budget-stop continuation:** [Round49](49-fresh-file-streaming.md) implements the
-fresh-file streaming prerequisite and passes build/review checks; all its live
-selections are NOT_RUN. The owner requested commit and handoff because the budget
-was exhausted. Continue from [50](50-budget-stop-handoff.md), preserving the current
-prepared inputs, completed evidence and open failures.
+fresh-file streaming prerequisite, and its live attempts have now run once each.
+`mounted_dsh` PASSED: the pinned18,259,144-byte DSH file streamed through the
+writable mounted projection in140 caller buffers with one complete
+ConstructFile/Commit and one4-byte EditFile/Commit. `captured_replay` FAILED its
+post-rebase `refuse_extra` assertion and stays open, with the diagnostic trace
+recorded and no product or caller source changed. The four registered regressions
+passed. [50](50-budget-stop-handoff.md) remains the historical budget-stop record.
 
 **Continuation update:** [Mount32](32-control-mount.md), [native failed-Attach35](35-failed-attachment-ownership.md)
 and [authenticated Attach36](36-control-attach.md) now have their source-pinned

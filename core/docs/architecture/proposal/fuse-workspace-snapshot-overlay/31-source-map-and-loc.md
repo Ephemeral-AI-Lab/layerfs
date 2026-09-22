@@ -3,7 +3,7 @@
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
 > Implementation parent: `74d4a2ace173d09689b8fbb42953658e94277bab`.
 > Frozen production input seal: `ffa9fa10899063601d7520581f7db932644a9c45a34b2123fa895f012320da08`.
-> Exact implementation commit: **pending**; counts bind the frozen production seal above.
+> Exact implementation commit: `9499012926f661ce4a7b357b18810e76c3179806` (fresh streaming, parent `74d4a2ace173d09689b8fbb42953658e94277bab`); the counts below bind the frozen production seal, which the following evidence-and-documentation commit does not change.
 > These are actual source counts, not 04's historical planning allowances.
 
 `P` means production LOC: nonblank, non-comment implementation lines, including

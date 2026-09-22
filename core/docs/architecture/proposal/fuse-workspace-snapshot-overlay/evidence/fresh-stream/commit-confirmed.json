@@ -1,0 +1,18 @@
+{
+  "commit": "9499012926f661ce4a7b357b18810e76c3179806",
+  "tree": "ade442b255435b7bac810f4cfc340f01cf6a97d5",
+  "parent": "74d4a2ace173d09689b8fbb42953658e94277bab",
+  "parent_tree": "754131d795ba996fd8dd3b49ef12e86966a99cff",
+  "production_loc": {
+    "before": 112949,
+    "after": 112975,
+    "delta": 26,
+    "reference_before": 65417,
+    "reference_after": 65417,
+    "core_before": 47532,
+    "core_after": 47558
+  },
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive parent and committed tree crates core/crates; unchanged tools/production_loc.py --root SNAPSHOT --json; product Rust/runtime SQL excluding tests including inline cfg(test), docs/tooling/fixtures/generated/dependencies",
+  "confirmation": "Commit and tree re-derived from Git; both LOC snapshots recomputed and matching 112949 ->112975. That commit was made at the budget stop without any live selection; its live outcomes and its one open failure are recorded in 49-fresh-file-streaming.md, functional-index-02.json and captured-replay-failure-01.json."
+}

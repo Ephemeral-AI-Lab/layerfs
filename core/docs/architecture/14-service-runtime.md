@@ -800,3 +800,18 @@ Per-payload8 MiB,128-KiB read/FUSE-write windows,1024 pieces,256 edits, quotas,
 4096 payload records, worker count and deadlines stay unchanged. See
 [Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md) for
 selected actual-file proofs and remaining full-corpus admission prerequisites.
+
+The first live attempts of that extension are now recorded. The largest already
+preinstalled DSH file18,259,144 bytes streamed through one mounted writable
+Workspace in140 caller buffers of131072 bytes with SHA256 verified during the
+upload, then one complete ConstructFile/Commit and one4-byte EditFile/Commit,
+with native close and teardown clean: **PASS** in40.81s complete. The captured-G
+replay selection **FAILED** at its post-rebase `refuse_extra` assertion: the +1
+write returned `Capacity` and changed no observed state, but one native
+`Inspect` preceded the refusal, so the case is open and neither product nor
+caller source was changed on that evidence. Four registered regressions against
+the same frozen product passed. These are functional receipts with an undeclared
+cache state; the full prepared tree, its one complete upload Commit, incremental
+Commits and matched R6 remain unqualified, and Round43's capacity failure stays
+open. [Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md)
+records the selectors, the diagnostic trace and the open failure.
