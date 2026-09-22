@@ -136,6 +136,9 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         Operation::UpdatePortableMetadata { .. } => {
             Encoder::bounded(PORTABLE_METADATA_REQUEST_BYTES)
         }
+        Operation::ConstructPortableMetadata { .. } => {
+            Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES)
+        }
         _ => Encoder::default(),
     };
     e.u64(r.generation)?;
@@ -248,6 +251,17 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             mtime_nanoseconds,
         } => {
             e.put(base)?;
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
+        }
+        Operation::ConstructPortableMetadata {
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => {
             e.u8(*kind)?;
             e.u32(*mode)?;
             e.u64(*mtime_seconds as u64)?;
@@ -784,6 +798,11 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     if opcode == UPDATE_PORTABLE_METADATA_OPCODE && b.len() > PORTABLE_METADATA_REQUEST_BYTES {
         return Err(Code::Capacity.into());
     }
+    if opcode == CONSTRUCT_PORTABLE_METADATA_OPCODE
+        && b.len() > CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES
+    {
+        return Err(Code::Capacity.into());
+    }
     let operation = match opcode {
         1 => Operation::ReadFile {
             root: d.root()?,
@@ -878,6 +897,12 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         },
         UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
             base: d.root()?,
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+        },
+        CONSTRUCT_PORTABLE_METADATA_OPCODE => Operation::ConstructPortableMetadata {
             kind: d.u8()?,
             mode: d.u32()?,
             mtime_seconds: d.u64()? as i64,

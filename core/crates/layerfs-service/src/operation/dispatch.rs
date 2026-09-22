@@ -48,6 +48,7 @@ pub(crate) fn dispatch(
         Operation::ConstructFile { .. }
         | Operation::EditFile { .. }
         | Operation::UpdatePortableMetadata { .. }
+        | Operation::ConstructPortableMetadata { .. }
         | Operation::UpdatePreparedFilesystem { .. } => {
             write::mutate(store, r, input, deadline, scope)
         }

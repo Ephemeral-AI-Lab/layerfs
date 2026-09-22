@@ -1,5 +1,5 @@
-//! Two portable patches over an existing metadata root, under one save owner.
-use super::{failure::content, read::id};
+//! Fresh portable fields or two existing-root patches, under one save owner.
+use super::{failure::content, history_bootstrap::build_metadata, read::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::{
     filesystem::attributes::{
@@ -63,21 +63,33 @@ impl FinalizedConsumer for Output<'_> {
     }
 }
 
-pub(crate) fn update(
+pub(crate) fn save(
     provider: &StoreProvider<'_>,
     request: &Request,
     consumer: &mut dyn FinalizedConsumer,
     deadline: Instant,
 ) -> Result<(Root, u64), Failure> {
-    let Operation::UpdatePortableMetadata {
-        base,
-        kind,
-        mode,
-        mtime_seconds,
-        mtime_nanoseconds,
-    } = &request.operation
-    else {
-        return Err(Code::Unsupported.into());
+    let (base, kind, mode, mtime_seconds, mtime_nanoseconds) = match &request.operation {
+        Operation::UpdatePortableMetadata {
+            base,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => (
+            Some(id(base)),
+            *kind,
+            *mode,
+            *mtime_seconds,
+            *mtime_nanoseconds,
+        ),
+        Operation::ConstructPortableMetadata {
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => (None, *kind, *mode, *mtime_seconds, *mtime_nanoseconds),
+        _ => return Err(Code::Unsupported.into()),
     };
     let deadline = Deadline {
         end: deadline,
@@ -88,19 +100,23 @@ pub(crate) fn update(
         deadline: &deadline,
     };
     let result = (|| {
-        deadline.check()?;
-        let kind = InodeKind::from_code(*kind)?;
+        deadline.check().map_err(content)?;
+        let kind = InodeKind::from_code(kind).map_err(content)?;
         let metadata = PortableMetadata {
-            mode: *mode,
-            mtime_seconds: *mtime_seconds,
-            mtime_nanoseconds: *mtime_nanoseconds,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
         };
         let mut output = Output {
             inner: consumer,
             deadline: &deadline,
         };
         let mut objects = FilesystemObjects::new(&reader, &mut output);
-        patch_portable(&mut objects, id(base), kind, metadata).map(|root| (*root.as_bytes(), 0))
+        let root = match base {
+            Some(base) => patch_portable(&mut objects, base, kind, metadata).map_err(content)?,
+            None => build_metadata(&mut objects, kind, metadata)?,
+        };
+        Ok((*root.as_bytes(), 0))
     })();
     // C1 has no deadline variant. The operation-owned flag distinguishes this
     // expiry from provider I/O without inspecting diagnostics. The save owner
@@ -108,7 +124,7 @@ pub(crate) fn update(
     if deadline.expired.get() {
         Err(Code::Deadline.into())
     } else {
-        result.map_err(content)
+        result
     }
 }
 

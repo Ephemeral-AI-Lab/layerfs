@@ -13,8 +13,9 @@ dirty-shutdown custody prerequisites. [Shared prepared directories38](38-prepare
 now verifies new directories and existing-directory portable patches through the
 existing Service save owner. [Native mkdir39](39-native-mkdir.md) now verifies the
 maintained namespace index and Commit integration. [Mounted mkdir40](40-mounted-mkdir.md)
-now verifies kernel/SDK creation and checked entry coherence. Shared fresh-file
-construction is the next prerequisite; file/symlink creation and the full prepared
+now verifies kernel/SDK creation and checked entry coherence. [Portable metadata41](41-construct-portable-metadata.md)
+now verifies no-base construction through the existing save owner. Fresh regular-file
+declarations are the next shared prerequisite; file/symlink creation and the full prepared
 upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 

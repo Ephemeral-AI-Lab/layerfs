@@ -7,6 +7,11 @@
 > in [08](08-readable-implementation.md). That R1 checkpoint does not qualify writable behavior;
 > later scoped functional proofs are linked below. Performance and durability remain unqualified.
 
+**Fresh-file prerequisite:** [portable metadata construction](41-construct-portable-metadata.md)
+is implemented and functionally verified through the existing Service save owner.
+Fresh regular-file declarations in the prepared filesystem request are next,
+followed by native file creation and its mounted projection.
+
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry
 notification failure/recovery. It uses [native mkdir](39-native-mkdir.md)'s maintained

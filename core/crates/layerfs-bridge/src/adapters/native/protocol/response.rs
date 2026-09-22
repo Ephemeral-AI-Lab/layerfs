@@ -17,6 +17,9 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         }
         Response::WorkspaceCloseClean(_) => Encoder::bounded(WORKSPACE_CLOSE_CLEAN_RESULT_BYTES),
         Response::MetadataSaved { .. } => Encoder::bounded(PORTABLE_METADATA_RESULT_BYTES),
+        Response::MetadataConstructed { .. } => {
+            Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_RESULT_BYTES)
+        }
         _ => Encoder::default(),
     };
     match r {
@@ -165,6 +168,25 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             r.validate_metadata_saved()?;
             e.u8(11)?;
             e.put(base)?;
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
+            e.put(metadata)?;
+            e.u64(*inserted)?;
+            e.u64(*reused)?;
+        }
+        Response::MetadataConstructed {
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+            metadata,
+            inserted,
+            reused,
+        } => {
+            r.validate_metadata_constructed()?;
+            e.u8(19)?;
             e.u8(*kind)?;
             e.u32(*mode)?;
             e.u64(*mtime_seconds as u64)?;
@@ -532,6 +554,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     if b.first() == Some(&11) && b.len() > PORTABLE_METADATA_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
+    if b.first() == Some(&19) && b.len() > CONSTRUCT_PORTABLE_METADATA_RESULT_BYTES {
+        return Err(Code::Capacity.into());
+    }
     if b.first() == Some(&12) && b.len() > WORKSPACE_UNMOUNT_RESULT_BYTES {
         return Err(Code::Capacity.into());
     }
@@ -625,6 +650,15 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
         16 => Response::WorkspaceAttachment(Box::new(take_attachment(&mut d)?)),
         17 => Response::WorkspaceCommit(Box::new(take_workspace_commit(&mut d)?)),
         18 => Response::WorkspaceWritableStatus(Box::new(take_writable_status(&mut d)?)),
+        19 => Response::MetadataConstructed {
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+            metadata: d.root()?,
+            inserted: d.u64()?,
+            reused: d.u64()?,
+        },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
@@ -636,6 +670,9 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
     }
     if matches!(r, Response::MetadataSaved { .. }) {
         r.validate_metadata_saved()?;
+    }
+    if matches!(r, Response::MetadataConstructed { .. }) {
+        r.validate_metadata_constructed()?;
     }
     Ok(r)
 }

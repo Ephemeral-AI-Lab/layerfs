@@ -638,3 +638,14 @@ namespace and receipt, releases the withheld Local return reference and refuses
 further mutation until checked unmount/remount. No retained name queue or new
 persistent layout is added. [Round40](proposal/fuse-workspace-snapshot-overlay/40-mounted-mkdir.md)
 records real mounted proofs and the two corrected caller failures.
+
+The portable metadata constructor after source commit
+`3b34e3002b4a7abfd205b68bc94de9a4af22b572` adds operation15/profile1 under the
+existing metadata grant128. It saves mode/mtime for a stated kind without a prior
+metadata root, through the same deadline-aware metadata helper and C2 save owner.
+The helper selects the existing portable patcher for update or the existing C1
+builder for construction. Request44/result66 bytes and typed result tag19 carry
+only the portable fields, saved root and save counts; no inode allocation,
+filesystem publication or history authority is implied. [Round41](proposal/fuse-workspace-snapshot-overlay/41-construct-portable-metadata.md)
+records the implementation and verification state. Fresh regular-file declarations
+in a prepared filesystem remain a separate prerequisite.

@@ -135,9 +135,31 @@ pub enum Response {
         inserted: u64,
         reused: u64,
     },
+    /// Fresh portable attribute tree, with no base or namespace publication.
+    MetadataConstructed {
+        kind: u8,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+        metadata: Root,
+        inserted: u64,
+        reused: u64,
+    },
 }
 
 impl Response {
+    pub fn validate_metadata_constructed(&self) -> Result<(), Failure> {
+        let Self::MetadataConstructed {
+            kind,
+            mode,
+            mtime_nanoseconds,
+            ..
+        } = self
+        else {
+            return Err(Code::InvalidInput.into());
+        };
+        super::metadata::check_portable_metadata(*kind, *mode, *mtime_nanoseconds)
+    }
     pub fn validate_metadata_saved(&self) -> Result<(), Failure> {
         let Self::MetadataSaved {
             kind,

@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca`.
-> Frozen production input seal: `01706a3acbaf1381755aa0ff602d08b92fa8521f168199951c3dc56573074cbd`.
+> Implementation parent: `3b34e3002b4a7abfd205b68bc94de9a4af22b572`.
+> Frozen production input seal: `5708eecb436c8b1a386cbd0bf20b80e03dcf3589cef5e4032445aa98b13ad2e2`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -22,9 +22,11 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/mounted-mkdir/source-loc.json)
+[Current per-file machine-readable inventory](evidence/construct-metadata/source-loc.json)
 records this new frozen production inventory and unchanged reference
-tree. The prior [native-mkdir inventory](evidence/native-mkdir/source-loc.json) and its
+tree. The prior [mounted-mkdir inventory](evidence/mounted-mkdir/source-loc.json) and its
+[commit confirmation](evidence/mounted-mkdir/commit-confirmed.json), plus the
+[native-mkdir inventory](evidence/native-mkdir/source-loc.json) and its
 [commit confirmation](evidence/native-mkdir/commit-confirmed.json), plus the
 [prepared-directory inventory](evidence/prepared-directories/source-loc.json) and its
 [commit confirmation](evidence/prepared-directories/commit-confirmed.json), plus the
@@ -44,17 +46,24 @@ retain their original source pins and counts. No historical receipt is relabeled
 | `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
 | `layerfs-fuse` | 1111 | 1209 | 4 | Linux kernel projection, replies, mount/session ownership |
 | `layerfs-workspace` | 11237 | 11445 | 42 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
-| `layerfs-bridge` | 5284 | 5800 | 25 | Logical operation contract, Source, authorization identity and native framing/delivery |
-| `layerfs-service` | 2139 | 2331 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
+| `layerfs-bridge` | 5412 | 5930 | 25 | Logical operation contract, Source, authorization identity and native framing/delivery |
+| `layerfs-service` | 2177 | 2369 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
 | `layerfs-storage` | 7676 | 10653 | 47 | C2 Store, physical persistence and writer admission |
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **46339 P / 55573 L**, across 251 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **111756 P / 147039 L**. Root `crates/` is reference-only, including its
+Core total: **46505 P / 55741 L**, across 251 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **111922 P / 147207 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Portable metadata constructor
+
+Bridge adds the no-base constructor and typed result under the existing metadata
+grant. Service shares the portable metadata helper for fresh construction and
+existing-root patches under the same save/finish/abort owner. No Workspace state
+or persisted format changes. See [41](41-construct-portable-metadata.md).
 
 ## Mounted directory creation
 
@@ -253,34 +262,34 @@ core/crates/layerfs-workspace/  [P=11237; L=11445; N=42]
 ### layerfs-bridge
 
 ```text
-core/crates/layerfs-bridge/  [P=5284; L=5800; N=25]
-`-- src/  [P=5284; L=5800; N=25]
-    |-- adapters/  [P=3577; L=3750; N=15]
-    |   |-- native/  [P=3576; L=3749; N=14]
-    |   |   |-- protocol/  [P=2320; L=2395; N=8]
+core/crates/layerfs-bridge/  [P=5412; L=5930; N=25]
+`-- src/  [P=5412; L=5930; N=25]
+    |-- adapters/  [P=3661; L=3834; N=15]
+    |   |-- native/  [P=3660; L=3833; N=14]
+    |   |   |-- protocol/  [P=2382; L=2457; N=8]
     |   |   |   |-- control.rs  [P=166; L=168]
     |   |   |   |-- frame.rs  [P=89; L=96]
     |   |   |   |-- history_failure.rs  [P=163; L=169]
-    |   |   |   |-- metadata.rs  [P=861; L=900]
+    |   |   |   |-- metadata.rs  [P=886; L=925]
     |   |   |   |-- mod.rs  [P=12; L=12]
-    |   |   |   |-- response.rs  [P=758; L=776]
+    |   |   |   |-- response.rs  [P=795; L=813]
     |   |   |   |-- state.rs  [P=55; L=56]
     |   |   |   `-- workspace_commit.rs  [P=216; L=218]
-    |   |   |-- client.rs  [P=481; L=497]
+    |   |   |-- client.rs  [P=503; L=519]
     |   |   |-- connection.rs  [P=416; L=471]
     |   |   |-- mod.rs  [P=7; L=7]
     |   |   |-- payload.rs  [P=146; L=148]
     |   |   |-- pipe.rs  [P=112; L=132]
     |   |   `-- server.rs  [P=94; L=99]
     |   `-- mod.rs  [P=1; L=1]
-    |-- contract/  [P=1703; L=2045; N=9]
+    |-- contract/  [P=1747; L=2091; N=9]
     |   |-- caller.rs  [P=13; L=19]
     |   |-- control.rs  [P=135; L=151]
-    |   |-- history.rs  [P=338; L=571]
-    |   |-- metadata.rs  [P=20; L=23]
+    |   |-- history.rs  [P=340; L=573]
+    |   |-- metadata.rs  [P=23; L=26]
     |   |-- mod.rs  [P=16; L=16]
-    |   |-- outcome.rs  [P=164; L=185]
-    |   |-- request.rs  [P=781; L=833]
+    |   |-- outcome.rs  [P=185; L=207]
+    |   |-- request.rs  [P=799; L=852]
     |   |-- source.rs  [P=29; L=34]
     |   `-- workspace_commit.rs  [P=207; L=213]
     `-- lib.rs  [P=4; L=5]
@@ -289,8 +298,8 @@ core/crates/layerfs-bridge/  [P=5284; L=5800; N=25]
 ### layerfs-service
 
 ```text
-core/crates/layerfs-service/  [P=2139; L=2331; N=17]
-`-- src/  [P=2139; L=2331; N=17]
+core/crates/layerfs-service/  [P=2177; L=2369; N=17]
+`-- src/  [P=2177; L=2369; N=17]
     |-- input/  [P=33; L=35; N=2]
     |   |-- mod.rs  [P=2; L=2]
     |   `-- sequential.rs  [P=31; L=33]
@@ -298,16 +307,16 @@ core/crates/layerfs-service/  [P=2139; L=2331; N=17]
     |   |-- config.rs  [P=124; L=142]
     |   |-- mod.rs  [P=3; L=3]
     |   `-- startup.rs  [P=175; L=183]
-    |-- operation/  [P=1639; L=1766; N=9]
-    |   |-- dispatch.rs  [P=58; L=67]
+    |-- operation/  [P=1677; L=1804; N=9]
+    |   |-- dispatch.rs  [P=59; L=68]
     |   |-- failure.rs  [P=45; L=46]
     |   |-- filesystem.rs  [P=182; L=201]
     |   |-- history.rs  [P=618; L=660]
     |   |-- history_bootstrap.rs  [P=278; L=322]
-    |   |-- metadata.rs  [P=128; L=137]
+    |   |-- metadata.rs  [P=144; L=153]
     |   |-- mod.rs  [P=9; L=9]
     |   |-- read.rs  [P=136; L=137]
-    |   `-- write.rs  [P=185; L=187]
+    |   `-- write.rs  [P=206; L=208]
     |-- lib.rs  [P=6; L=7]
     |-- main.rs  [P=9; L=9]
     `-- owner.rs  [P=150; L=186]

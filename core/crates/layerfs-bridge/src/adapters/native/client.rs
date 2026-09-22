@@ -322,6 +322,28 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
     }
     match (&r.operation, response) {
         (
+            Operation::ConstructPortableMetadata {
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            },
+            Response::MetadataConstructed {
+                kind: actual_kind,
+                mode: actual_mode,
+                mtime_seconds: actual_seconds,
+                mtime_nanoseconds: actual_nanoseconds,
+                ..
+            },
+        ) => {
+            kind == actual_kind
+                && mode == actual_mode
+                && mtime_seconds == actual_seconds
+                && mtime_nanoseconds == actual_nanoseconds
+                && response.validate_metadata_constructed().is_ok()
+                && bytes == 0
+        }
+        (
             Operation::UpdatePortableMetadata {
                 base,
                 kind,

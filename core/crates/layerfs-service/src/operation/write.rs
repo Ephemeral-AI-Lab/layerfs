@@ -31,7 +31,9 @@ pub fn mutate(
     }
     if matches!(
         r.operation,
-        Operation::UpdatePreparedFilesystem { .. } | Operation::UpdatePortableMetadata { .. }
+        Operation::UpdatePreparedFilesystem { .. }
+            | Operation::UpdatePortableMetadata { .. }
+            | Operation::ConstructPortableMetadata { .. }
     ) {
         end_input(input)?;
     }
@@ -46,9 +48,11 @@ pub fn mutate(
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let built = match &r.operation {
-        Operation::UpdatePortableMetadata { .. } => scope
-            .child("service.metadata")
-            .run(|_| metadata::update(&provider, r, &mut handoff, deadline)),
+        Operation::UpdatePortableMetadata { .. } | Operation::ConstructPortableMetadata { .. } => {
+            scope
+                .child("service.metadata")
+                .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
+        }
         Operation::ConstructFile { length } => {
             let mut source = Exact::new(input, *length, deadline);
             construct_stream(
@@ -150,6 +154,23 @@ pub fn mutate(
             {
                 return Ok(Response::MetadataSaved {
                     base,
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata: root,
+                    inserted: outcome.inserted,
+                    reused: outcome.reused,
+                });
+            }
+            if let Operation::ConstructPortableMetadata {
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } = r.operation
+            {
+                return Ok(Response::MetadataConstructed {
                     kind,
                     mode,
                     mtime_seconds,

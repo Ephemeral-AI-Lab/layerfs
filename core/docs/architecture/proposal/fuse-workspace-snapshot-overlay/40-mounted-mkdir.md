@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the selected mounted scope.**
 > Implementation parent: `e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca`.
+> Exact implementation commit: `3b34e3002b4a7abfd205b68bc94de9a4af22b572`; [confirmation](evidence/mounted-mkdir/commit-confirmed.json).
 > Product input seal: `01706a3acbaf1381755aa0ff602d08b92fa8521f168199951c3dc56573074cbd`.
 
 This round projects the native mkdir operation from [39](39-native-mkdir.md) into

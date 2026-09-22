@@ -1,13 +1,14 @@
 //! Closed operation profile. Root bytes are logical identities, never paths.
 use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
-    BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CURSOR_BYTES, HISTORY_PROFILE, LAYER_BYTES,
-    MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE,
-    STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_ATTACH_MAX_MS, WORKSPACE_ATTACH_OPCODE,
-    WORKSPACE_CLOSE_CLEAN_MAX_MS, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_MAX_MS,
-    WORKSPACE_COMMIT_OPCODE, WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE,
-    WORKSPACE_STATUS_MAX_MS, WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE,
-    WORKSPACE_UNMOUNT_MAX_MS, WORKSPACE_UNMOUNT_OPCODE,
+    BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
+    HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES,
+    PAGE_RECORDS, QUERY_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
+    WORKSPACE_ATTACH_MAX_MS, WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_MAX_MS,
+    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_MAX_MS, WORKSPACE_COMMIT_OPCODE,
+    WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE, WORKSPACE_STATUS_MAX_MS,
+    WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS,
+    WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -123,6 +124,13 @@ pub enum Operation {
         mtime_seconds: i64,
         mtime_nanoseconds: u32,
     },
+    /// Saves a fresh portable attribute tree; does not allocate or attach an inode.
+    ConstructPortableMetadata {
+        kind: u8,
+        mode: u32,
+        mtime_seconds: i64,
+        mtime_nanoseconds: u32,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Inspect {
@@ -189,6 +197,7 @@ impl Operation {
             Self::WorkspaceAttach { .. } => WORKSPACE_ATTACH_OPCODE,
             Self::WorkspaceCommit { .. } => WORKSPACE_COMMIT_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
+            Self::ConstructPortableMetadata { .. } => CONSTRUCT_PORTABLE_METADATA_OPCODE,
         }
     }
     pub const fn label(&self) -> &'static str {
@@ -207,6 +216,7 @@ impl Operation {
             Self::WorkspaceAttach { .. } => "WorkspaceAttach",
             Self::WorkspaceCommit { .. } => "WorkspaceCommit",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
+            Self::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
         }
     }
     /// True for an operation that changes neither stored nor daemon lifecycle state.
@@ -220,6 +230,7 @@ impl Operation {
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
+            | Self::ConstructPortableMetadata { .. }
             | Self::WorkspaceUnmount { .. }
             | Self::WorkspaceCloseClean { .. }
             | Self::WorkspaceMount { .. }
@@ -236,6 +247,7 @@ impl Operation {
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
+            | Self::ConstructPortableMetadata { .. }
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
                 | HistoryCommand::StageChanges(_)
@@ -285,6 +297,7 @@ impl Operation {
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
+            | Self::ConstructPortableMetadata { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
@@ -333,6 +346,12 @@ impl Request {
         }
         match &self.operation {
             Operation::UpdatePortableMetadata {
+                kind,
+                mode,
+                mtime_nanoseconds,
+                ..
+            }
+            | Operation::ConstructPortableMetadata {
                 kind,
                 mode,
                 mtime_nanoseconds,
