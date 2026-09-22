@@ -9,6 +9,16 @@ architecture onto the shape the [v0.2.0 model](../../0.2/README.md) assumes, so
 that 0.2.0 adds new semantics on top of prepared structure instead of replacing
 it, and set the tone for that release.
 
+## Research inputs
+
+These source-pinned studies are accepted as research inputs, not as product
+decisions or release evidence:
+
+- [LayerFS architecture overview](architecture-overview.md) ([#156](https://github.com/Ephemeral-AI-Lab/layerfs/issues/156))
+- [Drive9](study/drive9/architecture_overview.md) ([#157](https://github.com/Ephemeral-AI-Lab/layerfs/issues/157))
+- [Cloudflare Computer](study/cloudflare-computer/architecture_overview.md) ([#158](https://github.com/Ephemeral-AI-Lab/layerfs/issues/158))
+- [AgentFS](study/agentfs/architecture_overview.md) ([#159](https://github.com/Ephemeral-AI-Lab/layerfs/issues/159))
+
 ## Direction from 0.2.0
 
 The [0.2 roadmap](../../0.2/README.md) defines the target collaboration model:
