@@ -13,8 +13,9 @@ use crate::{
 };
 use layerfs_bridge::contract::{Edit, InodeChange};
 use std::time::Instant;
+type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
-    File(Inode),
+    Inode(Inode),
     Directory(Directory),
 }
 pub struct FilePlan {
@@ -70,7 +71,7 @@ impl Workspace {
             {
                 return Err(WorkspaceError::Io);
             }
-            return Ok(Some((serial, Dirty::File(inode))));
+            return Ok(Some((serial, Dirty::Inode(inode))));
         }
         let record = captured
             .root
@@ -97,6 +98,9 @@ impl Workspace {
         inode: Inode,
         deadline: Instant,
     ) -> Result<FilePlan, WorkspaceError> {
+        if inode.symlink {
+            return Err(WorkspaceError::Io);
+        }
         let captured = submission.capture()?;
         let host = self
             .host
@@ -193,7 +197,7 @@ impl Workspace {
         &self,
         submission: &Submission,
         deadline: Instant,
-    ) -> Result<(Vec<InodeChange>, Vec<u64>), WorkspaceError> {
+    ) -> Result<PreparedInodes, WorkspaceError> {
         let captured = submission.capture()?;
         let files = captured
             .count
@@ -202,10 +206,11 @@ impl Workspace {
         if files == 0 {
             if submission.result_ref()? != crate::backing::metadata_pages::PageRef::NULL
                 || captured.fresh_files != 0
+                || captured.fresh_symlinks != 0
             {
                 return Err(WorkspaceError::Io);
             }
-            return Ok((vector(0)?, vector(0)?));
+            return Ok((vector(0)?, vector(0)?, vector(0)?));
         }
         let root = submission.result_root()?.ok_or(WorkspaceError::Io)?;
         let host = self
@@ -218,6 +223,7 @@ impl Workspace {
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut inodes = vector(files)?;
         let mut fresh = vector(captured.fresh_files)?;
+        let mut symlinks = vector(captured.fresh_symlinks)?;
         let mut after = 0;
         while let Some(cell) = root.arena.next(
             root.root()?,
@@ -256,23 +262,31 @@ impl Workspace {
                 return Err(WorkspaceError::Io);
             }
             if inode.fresh {
-                if fresh.len() == captured.fresh_files {
+                let (list, maximum) = if inode.symlink {
+                    (&mut symlinks, captured.fresh_symlinks)
+                } else {
+                    (&mut fresh, captured.fresh_files)
+                };
+                if list.len() == maximum {
                     return Err(WorkspaceError::Io);
                 }
-                fresh.push(serial);
+                list.push(serial);
             }
             inodes.push(InodeChange {
                 serial,
-                kind: 1,
+                kind: if inode.symlink { 3 } else { 1 },
                 content: value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
                 metadata: value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
             });
             after = serial;
         }
-        if inodes.len() != files || fresh.len() != captured.fresh_files {
+        if inodes.len() != files
+            || fresh.len() != captured.fresh_files
+            || symlinks.len() != captured.fresh_symlinks
+        {
             return Err(WorkspaceError::Io);
         }
-        Ok((inodes, fresh))
+        Ok((inodes, fresh, symlinks))
     }
 }
 

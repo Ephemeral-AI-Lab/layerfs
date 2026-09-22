@@ -231,9 +231,11 @@ impl Workspace {
                 )?
                 .map_or(attr, |directory| directory.attributes(attr)));
         }
-        Ok(self
-            .overlay_inode(attr.serial, root, deadline)?
-            .map_or(attr, |inode| inode.attributes(attr)))
+        match self.overlay_inode(attr.serial, root, deadline)? {
+            Some(inode) if inode.kind() == attr.kind => Ok(inode.attributes(attr)),
+            Some(_) => Err(WorkspaceError::Io),
+            None => Ok(attr),
+        }
     }
     /// Changes an existing cached regular inode's length and modification time.
     /// Logical extension owns Zero pieces, without accepting payload bytes.
@@ -439,6 +441,9 @@ impl Workspace {
             None => None,
         };
         let mut inode = old.unwrap_or_else(|| Inode::initial(original, content, metadata));
+        if inode.symlink {
+            return Err(WorkspaceError::Io);
+        }
         let mut replacement = [Piece {
             kind: PieceKind::Zero,
             start: 0,
@@ -540,6 +545,7 @@ impl Workspace {
                 dirty + usize::from(!already_dirty),
                 state.dirty_directories,
                 state.fresh_files,
+                state.fresh_symlinks,
                 state.directory_names,
                 state.directory_bytes,
             )?;

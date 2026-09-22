@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the declared prepared-symlink scope.**
 > Implementation parent: `521bcb304c382e53f454eb3eb9007a010c1de486`.
+> Exact implementation commit: `2fc2e8d7a100b812a46753c4b35d383bedac448d`; [confirmation](evidence/prepared-symlinks/commit-confirmed.json).
 > Product input seal: `edb4b9e3005fb867f7d2cdbe66c33fa7a51e19840b6a899a635ea3e5f7ed27b1`.
 
 This round adds new_symlink_serials (S) to the existing direct prepared filesystem

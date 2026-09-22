@@ -53,7 +53,7 @@ impl Current {
             if inode.generation != self.generation || inode.revision > self.revision {
                 return Err(WorkspaceError::Io);
             }
-            return Ok(Some((serial, Dirty::File(inode))));
+            return Ok(Some((serial, Dirty::Inode(inode))));
         }
         let cell = self
             .root
@@ -118,6 +118,7 @@ fn canonical_inode(
         || original.revision > captured.revision
         || original.length != inode.base_length
         || original.fresh != inode.fresh
+        || original.symlink != inode.symlink
         || get(saved.value(), 0)? != original.revision
         || get(saved.value(), 8)? != original.length
     {
@@ -251,7 +252,7 @@ impl Workspace {
                                 &[1],
                             )?))
                         }
-                        (1, Dirty::File(inode)) => {
+                        (1, Dirty::Inode(inode)) => {
                             let inode =
                                 canonical_inode(submission, serial, inode, window, deadline)?;
                             return Ok(Some(Cell::new(

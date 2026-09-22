@@ -157,7 +157,7 @@ pub fn entry(serial: u64, kind: crate::NodeKind) -> Result<[u8; 16], WorkspaceEr
     value[8] = match kind {
         crate::NodeKind::File => 1,
         crate::NodeKind::Directory => 2,
-        _ => return Err(WorkspaceError::Unsupported),
+        crate::NodeKind::Symlink => 3,
     };
     Ok(value)
 }
@@ -165,7 +165,7 @@ pub fn entry_serial(value: &[u8]) -> Result<u64, WorkspaceError> {
     entry_info(value).map(|(serial, _)| serial)
 }
 pub fn entry_info(value: &[u8]) -> Result<(u64, crate::NodeKind), WorkspaceError> {
-    if value.len() != 16 || !matches!(value[8], 1 | 2) || value[9..].iter().any(|b| *b != 0) {
+    if value.len() != 16 || !matches!(value[8], 1..=3) || value[9..].iter().any(|b| *b != 0) {
         return Err(WorkspaceError::Io);
     }
     let serial = get(value, 0)?;
@@ -174,10 +174,10 @@ pub fn entry_info(value: &[u8]) -> Result<(u64, crate::NodeKind), WorkspaceError
     }
     Ok((
         serial,
-        if value[8] == 1 {
-            crate::NodeKind::File
-        } else {
-            crate::NodeKind::Directory
+        match value[8] {
+            1 => crate::NodeKind::File,
+            2 => crate::NodeKind::Directory,
+            _ => crate::NodeKind::Symlink,
         },
     ))
 }

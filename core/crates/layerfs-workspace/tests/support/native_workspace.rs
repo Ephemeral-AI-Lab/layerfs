@@ -152,12 +152,17 @@ impl Native {
                     request.operation,
                     Operation::UpdatePreparedFilesystem { .. }
                 ) && (self.allow_fresh_files
-                    || !matches!(request.operation, Operation::ConstructFile { .. })),
+                    || !matches!(
+                        request.operation,
+                        Operation::ConstructFile { .. } | Operation::ConstructSymlink { .. }
+                    )),
                 "unexpected construction route"
             );
             let first = matches!(
                 request.operation,
-                Operation::EditFile { .. } | Operation::ConstructFile { .. }
+                Operation::EditFile { .. }
+                    | Operation::ConstructFile { .. }
+                    | Operation::ConstructSymlink { .. }
             ) && !observations.entered;
             observations.operations.push(request.operation.clone());
             if first {
@@ -261,7 +266,9 @@ impl Native {
         };
         if matches!(
             request.operation,
-            Operation::EditFile { .. } | Operation::ConstructFile { .. }
+            Operation::EditFile { .. }
+                | Operation::ConstructFile { .. }
+                | Operation::ConstructSymlink { .. }
         ) {
             if let Ok(Response::Saved { root, .. }) = &response {
                 self.observations.lock().unwrap().saved_files.push(*root);
@@ -322,6 +329,7 @@ impl Native {
         let (endpoint, principal, private) = authority;
         let operation = match &request.operation {
             Operation::ConstructFile { .. } => "ConstructFile",
+            Operation::ConstructSymlink { .. } => "ConstructSymlink",
             Operation::EditFile { .. } => "EditFile",
             Operation::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
             Operation::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",

@@ -371,6 +371,7 @@ impl WorkspaceHost {
                     dirty_inodes: 0,
                     dirty_directories: 0,
                     fresh_files: 0,
+                    fresh_symlinks: 0,
                     directory_names: 0,
                     directory_bytes: 0,
                     handles,

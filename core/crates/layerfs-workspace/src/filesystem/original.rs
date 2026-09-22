@@ -100,6 +100,9 @@ impl Workspace {
             )
         };
         if let Some(inode) = self.overlay_inode(serial, view.root.as_ref(), deadline)? {
+            if inode.symlink {
+                return Err(WorkspaceError::Io);
+            }
             if inode.fresh || inode.captured {
                 return Ok((inode.attributes(selected), [0; 32], [0; 32], baseline));
             }

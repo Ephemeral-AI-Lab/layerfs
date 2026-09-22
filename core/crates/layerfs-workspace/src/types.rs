@@ -345,6 +345,7 @@ pub struct MetadataStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StagePhase {
     Captured,
+    /// Saving regular-file or symlink content through the shared Service.
     FileSave,
     MetadataSave,
     StageChanges,
@@ -365,6 +366,7 @@ pub struct SubmissionStatus {
     pub dirty_inodes: usize,
     pub phase: StagePhase,
     pub inode: Option<u64>,
+    /// Completed regular-file and symlink content saves.
     pub saved_files: u16,
     pub saved_metadata: u16,
     pub stage_token: Option<u64>,

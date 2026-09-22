@@ -48,6 +48,7 @@ pub(crate) struct State {
     pub dirty_inodes: usize,
     pub dirty_directories: usize,
     pub fresh_files: usize,
+    pub fresh_symlinks: usize,
     pub directory_names: usize,
     pub directory_bytes: usize,
     pub handles: Vec<Handle>,
@@ -158,10 +159,16 @@ impl State {
         dirty: usize,
         directories: usize,
         fresh_files: usize,
+        fresh_symlinks: usize,
         names: usize,
         bytes: usize,
     ) -> Result<usize, WorkspaceError> {
-        if dirty > 128 || directories > dirty || fresh_files > dirty - directories || names > 128 {
+        if dirty > 128
+            || directories > dirty
+            || fresh_files > dirty - directories
+            || fresh_symlinks > dirty - directories - fresh_files
+            || names > 128
+        {
             return Err(WorkspaceError::Capacity);
         }
         let header = if self.submission.is_some()
@@ -178,7 +185,9 @@ impl State {
             + 73 * (dirty - directories)
             + 34 * directories
             + bytes
-            + if fresh_files > 0 {
+            + if fresh_symlinks > 0 {
+                9 + 8 * (fresh_files + fresh_symlinks)
+            } else if fresh_files > 0 {
                 7 + 8 * fresh_files
             } else {
                 usize::from(directories > 0) * 5

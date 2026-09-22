@@ -127,7 +127,11 @@ impl Workspace {
                             deadline,
                         )?
                         .ok_or(WorkspaceError::Io)?;
-                    file = Some(crate::overlay::pieces::Inode::parse(cell.value())?);
+                    let inode = crate::overlay::pieces::Inode::parse(cell.value())?;
+                    if inode.kind() != kind {
+                        return Err(WorkspaceError::Io);
+                    }
+                    file = Some(inode);
                 }
             }
         }
@@ -135,7 +139,7 @@ impl Workspace {
             if inode.fresh || inode.captured {
                 let original = inode.attributes(NodeAttributes {
                     serial,
-                    kind: NodeKind::File,
+                    kind: inode.kind(),
                     size: 0,
                     references: 1,
                     mode: 0,

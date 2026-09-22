@@ -41,52 +41,38 @@ impl Workspace {
             if count == captured.count {
                 return Err(WorkspaceError::Io);
             }
-            let Dirty::File(inode) = inode else {
+            let Dirty::Inode(inode) = inode else {
                 after = serial;
                 count += 1;
                 continue;
             };
             submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
-            let plan = self.lower_file(submission, inode, deadline)?;
-            let content = if plan.edits.is_empty() && !inode.fresh {
-                inode.base
-            } else {
+            let kind = if inode.symlink { 3 } else { 1 };
+            let content = if inode.symlink {
                 submission.phase(StagePhase::FileSave, Some(serial))?;
-                let mut source =
-                    ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
                 let remote = first_remote
                     .take()
                     .map_or_else(|| self.begin(true, deadline), Ok)?;
+                let target = self
+                    .symlink_target(&captured.root, inode, deadline)
+                    .inspect_err(|failure| {
+                        if let Ok(mut state) = submission.state.lock() {
+                            state.source_failure = Some(failure.clone());
+                        }
+                    })?;
                 let response = self.host.call_input(
                     (self.inner.store, captured.generation),
-                    if inode.fresh {
-                        Operation::ConstructFile {
-                            length: inode.length,
-                        }
-                    } else {
-                        Operation::EditFile {
-                            root: inode.base,
-                            base_length: inode.base_length,
-                            edits: plan.edits,
-                        }
-                    },
-                    &mut source,
+                    Operation::ConstructSymlink { target },
+                    &mut &[][..],
                     0,
                     &mut std::io::sink(),
                     deadline,
                 );
                 drop(remote);
-                if let Some(failure) = source.failure.take() {
-                    submission
-                        .state
-                        .lock()
-                        .map_err(|_| WorkspaceError::Io)?
-                        .source_failure = Some(failure);
-                }
                 let Response::Saved { root, length, .. } = response? else {
                     return Err(WorkspaceError::InvalidInput);
                 };
-                if length != inode.length || !source.complete() {
+                if length != inode.length {
                     return Err(WorkspaceError::InvalidInput);
                 }
                 submission
@@ -96,6 +82,57 @@ impl Workspace {
                     .status
                     .saved_files += 1;
                 root
+            } else {
+                let plan = self.lower_file(submission, inode, deadline)?;
+                if plan.edits.is_empty() && !inode.fresh {
+                    inode.base
+                } else {
+                    submission.phase(StagePhase::FileSave, Some(serial))?;
+                    let mut source =
+                        ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
+                    let remote = first_remote
+                        .take()
+                        .map_or_else(|| self.begin(true, deadline), Ok)?;
+                    let response = self.host.call_input(
+                        (self.inner.store, captured.generation),
+                        if inode.fresh {
+                            Operation::ConstructFile {
+                                length: inode.length,
+                            }
+                        } else {
+                            Operation::EditFile {
+                                root: inode.base,
+                                base_length: inode.base_length,
+                                edits: plan.edits,
+                            }
+                        },
+                        &mut source,
+                        0,
+                        &mut std::io::sink(),
+                        deadline,
+                    );
+                    drop(remote);
+                    if let Some(failure) = source.failure.take() {
+                        submission
+                            .state
+                            .lock()
+                            .map_err(|_| WorkspaceError::Io)?
+                            .source_failure = Some(failure);
+                    }
+                    let Response::Saved { root, length, .. } = response? else {
+                        return Err(WorkspaceError::InvalidInput);
+                    };
+                    if length != inode.length || !source.complete() {
+                        return Err(WorkspaceError::InvalidInput);
+                    }
+                    submission
+                        .state
+                        .lock()
+                        .map_err(|_| WorkspaceError::Io)?
+                        .status
+                        .saved_files += 1;
+                    root
+                }
             };
             {
                 let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -115,7 +152,7 @@ impl Workspace {
                 (self.inner.store, captured.generation),
                 if inode.fresh {
                     Operation::ConstructPortableMetadata {
-                        kind: 1,
+                        kind,
                         mode: inode.mode,
                         mtime_seconds: inode.seconds,
                         mtime_nanoseconds: inode.nanos,
@@ -123,7 +160,7 @@ impl Workspace {
                 } else {
                     Operation::UpdatePortableMetadata {
                         base: inode.metadata,
-                        kind: 1,
+                        kind,
                         mode: inode.mode,
                         mtime_seconds: inode.seconds,
                         mtime_nanoseconds: inode.nanos,
@@ -141,7 +178,7 @@ impl Workspace {
             } else {
                 response.validate_metadata_saved()?;
             }
-            let (kind, mode, mtime_seconds, mtime_nanoseconds, metadata) = match response {
+            let (actual_kind, mode, mtime_seconds, mtime_nanoseconds, metadata) = match response {
                 Response::MetadataConstructed {
                     kind,
                     mode,
@@ -163,7 +200,7 @@ impl Workspace {
                 }
                 _ => return Err(WorkspaceError::InvalidInput),
             };
-            if kind != 1
+            if actual_kind != kind
                 || mode != inode.mode
                 || mtime_seconds != inode.seconds
                 || mtime_nanoseconds != inode.nanos
@@ -187,13 +224,14 @@ impl Workspace {
         if first_remote.is_none() {
             *first_remote = Some(self.begin(true, deadline)?);
         }
-        let (inodes, new_file_serials) = self.prepared_inodes(submission, deadline)?;
+        let (inodes, new_file_serials, new_symlink_serials) =
+            self.prepared_inodes(submission, deadline)?;
         let (directories, new_directories, directory_metadata) =
             self.prepared_directories(submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
             new_file_serials,
-            new_symlink_serials: Vec::new(),
+            new_symlink_serials,
             directory_metadata,
             new_directories,
             workspace: self.inner.incarnation,
@@ -216,7 +254,9 @@ impl Workspace {
             + 73 * changes.inodes.len()
             + 34 * captured.directories
             + captured.name_bytes
-            + if captured.fresh_files > 0 {
+            + if captured.fresh_symlinks > 0 {
+                9 + 8 * (captured.fresh_files + captured.fresh_symlinks)
+            } else if captured.fresh_files > 0 {
                 7 + 8 * captured.fresh_files
             } else {
                 usize::from(captured.directories > 0) * 5

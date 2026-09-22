@@ -1,4 +1,4 @@
-use crate::{backing::metadata_pages::PageRef, NodeAttributes, WorkspaceError};
+use crate::{backing::metadata_pages::PageRef, NodeAttributes, NodeKind, WorkspaceError};
 use layerfs_bridge::contract::{Root, MAX_FILE};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceKind {
@@ -64,6 +64,7 @@ impl Piece {
 pub struct Inode {
     pub captured: bool,
     pub fresh: bool,
+    pub symlink: bool,
     pub revision: u64,
     pub length: u64,
     pub base_length: u64,
@@ -83,6 +84,7 @@ impl Inode {
         Self {
             captured: false,
             fresh: false,
+            symlink: attr.kind == NodeKind::Symlink,
             revision: 0,
             length: attr.size,
             base_length: attr.size,
@@ -102,6 +104,7 @@ impl Inode {
         let mut b = [0; 160];
         b[24] = u8::from(self.captured);
         b[25] = u8::from(self.fresh);
+        b[26] = u8::from(self.symlink);
         for (at, value) in [
             (0, self.revision),
             (8, self.length),
@@ -125,13 +128,15 @@ impl Inode {
         if b.len() != 160
             || b[24] > 1
             || b[25] > 1
-            || b[26..32].iter().chain(&b[140..]).any(|v| *v != 0)
+            || b[26] > 1
+            || b[27..32].iter().chain(&b[140..]).any(|v| *v != 0)
         {
             return Err(WorkspaceError::Io);
         }
         let i = Self {
             captured: b[24] == 1,
             fresh: b[25] == 1,
+            symlink: b[26] == 1,
             revision: get(b, 0)?,
             length: get(b, 8)?,
             base_length: get(b, 16)?,
@@ -167,7 +172,24 @@ impl Inode {
         {
             return Err(WorkspaceError::Io);
         }
+        if i.symlink
+            && (!i.fresh
+                || i.captured
+                || i.mode != 0o777
+                || i.length > layerfs_bridge::contract::SYMLINK_TARGET_BYTES as u64
+                || i.count != u16::from(i.length > 0)
+                || i.edits != i.count)
+        {
+            return Err(WorkspaceError::Io);
+        }
         Ok(i)
+    }
+    pub fn kind(self) -> NodeKind {
+        if self.symlink {
+            NodeKind::Symlink
+        } else {
+            NodeKind::File
+        }
     }
     pub fn attributes(self, mut a: NodeAttributes) -> NodeAttributes {
         a.size = self.length;

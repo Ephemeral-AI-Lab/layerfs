@@ -1,4 +1,4 @@
-//! One atomic child publication with a directory or a fresh regular-file handle.
+//! One atomic child publication; regular-file creation also installs its handle.
 use super::{
     namespace::{check_access, child_path},
     namespace_view::View,
@@ -10,7 +10,7 @@ use crate::{
     },
     overlay::{
         directories::{self, Directory, Origin},
-        pieces::{CapturedBase, Inode},
+        pieces::{CapturedBase, Inode, Piece, PieceKind},
     },
     runtime::{
         coherence::MutationOrigin,
@@ -20,13 +20,14 @@ use crate::{
 };
 use layerfs_bridge::contract::{
     Code, HistoryCommand, HistoryResult, Operation, Response, HISTORY_RESULT_BYTES,
+    SYMLINK_TARGET_BYTES,
 };
 use std::{
     sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 #[derive(Clone, Copy)]
-pub(super) enum Creation {
+pub(super) enum Creation<'a> {
     Directory {
         mode: u32,
         umask: u32,
@@ -35,6 +36,9 @@ pub(super) enum Creation {
     File {
         options: FileCreateOptions,
         origin: MutationOrigin,
+    },
+    Symlink {
+        target: &'a [u8],
     },
 }
 impl Workspace {
@@ -71,20 +75,27 @@ impl Workspace {
         &self,
         parent: u64,
         name: &[u8],
-        creation: Creation,
+        creation: Creation<'_>,
         deadline: Instant,
     ) -> Result<(NodeAttributes, Option<HandleId>), WorkspaceError> {
-        let (mode, umask, origin, open) = match creation {
+        let (mode, umask, origin, open, kind) = match creation {
             Creation::Directory {
                 mode,
                 umask,
                 origin,
-            } => (mode, umask, origin, None),
-            Creation::File { options, origin } => {
-                (options.mode, options.umask, origin, Some(options.open))
-            }
+            } => (mode, umask, origin, None, NodeKind::Directory),
+            Creation::File { options, origin } => (
+                options.mode,
+                options.umask,
+                origin,
+                Some(options.open),
+                NodeKind::File,
+            ),
+            Creation::Symlink { .. } => (0o777, 0, MutationOrigin::Local, None, NodeKind::Symlink),
         };
-        let file = open.is_some();
+        let file = kind == NodeKind::File;
+        let directory = kind == NodeKind::Directory;
+        let symlink = kind == NodeKind::Symlink;
         let reference = if origin.projected() {
             ReferenceScope::Projection
         } else {
@@ -92,6 +103,14 @@ impl Workspace {
         };
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
+        }
+        if let Creation::Symlink { target } = creation {
+            if target.len() > SYMLINK_TARGET_BYTES {
+                return Err(WorkspaceError::Capacity);
+            }
+            if target.contains(&0) {
+                return Err(WorkspaceError::InvalidInput);
+            }
         }
         if mode & !(if file { 0o777 } else { 0o1777 }) != 0 || umask & !0o777 != 0 {
             return Err(WorkspaceError::InvalidInput);
@@ -106,6 +125,9 @@ impl Workspace {
         let (view, path, attr, baseline, revision, generation, frozen, scope) = {
             let state = self.state()?;
             self.available(&state)?;
+            if symlink && state.mounted {
+                return Err(WorkspaceError::Unsupported);
+            }
             self.check_mutation_coherence(&state, origin, false)?;
             let node = state.node(parent)?;
             if node.attr.kind != NodeKind::Directory {
@@ -181,16 +203,17 @@ impl Workspace {
         let old = self.directory_record(&view, parent, deadline)?;
         let already_dirty = old.is_some_and(|directory| directory.generation == generation);
         let new_dirty = if already_dirty { 1 } else { 2 };
-        let new_directories = usize::from(!already_dirty) + usize::from(!file);
+        let new_directories = usize::from(!already_dirty) + usize::from(directory);
         let name_bytes = 10 + name.len();
         {
             let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, file)?;
+            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 state.dirty_inodes + new_dirty,
                 state.dirty_directories + new_directories,
                 state.fresh_files + usize::from(file),
+                state.fresh_symlinks + usize::from(symlink),
                 state.directory_names + 1,
                 state.directory_bytes + name_bytes,
             )?;
@@ -220,6 +243,32 @@ impl Workspace {
         };
         // Even a later race/failure leaves this real reservation consumed.
         self.maintain_backing(deadline)?;
+        let payload = if let Creation::Symlink { target } = creation {
+            if target.is_empty() {
+                None
+            } else {
+                let host = self
+                    .host
+                    .payloads
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                let directory = self
+                    .inner
+                    .directory
+                    .clone()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                let mut source = target;
+                Some(host.acquire(
+                    directory,
+                    target.len() as u64,
+                    &mut source,
+                    deadline,
+                    &self.inner.stopping,
+                )?)
+            }
+        } else {
+            None
+        };
         let host = self
             .host
             .metadata
@@ -228,7 +277,7 @@ impl Workspace {
         let _writer = host.writer()?;
         let needs_completion = {
             let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, file)?;
+            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             if state.nodes.iter().any(|node| node.attr.serial == serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
@@ -280,12 +329,12 @@ impl Workspace {
         let seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
         let child_attr = NodeAttributes {
             serial,
-            kind: if file {
-                NodeKind::File
+            kind,
+            size: if let Creation::Symlink { target } = creation {
+                target.len() as u64
             } else {
-                NodeKind::Directory
+                0
             },
-            size: 0,
             references: 1,
             mode: mode & !umask,
             mtime_seconds: seconds,
@@ -326,11 +375,30 @@ impl Workspace {
             &metadata_pages::namespace_key(parent),
             &parent_directory.value(),
         )?);
-        if file {
+        if !directory {
             let mut inode = Inode::initial(child_attr, [0; 32], [0; 32]);
             inode.fresh = true;
             inode.generation = generation;
             inode.revision = next;
+            inode.base_length = 0;
+            inode.replacement = child_attr.size;
+            if let Some(payload) = &payload {
+                let custody = arena.custody(&candidate, payload, window, deadline)?;
+                inode.pieces = candidate.build_pieces(
+                    &[Piece {
+                        kind: PieceKind::Local,
+                        start: 0,
+                        length: payload.len(),
+                        offset: 0,
+                        payload: payload.record.id,
+                        custody,
+                    }],
+                    window,
+                    deadline,
+                )?;
+                inode.count = 1;
+                inode.edits = 1;
+            }
             updates.push(Cell::new(
                 &metadata_pages::inode_key(serial),
                 &inode.value(),
@@ -364,7 +432,7 @@ impl Workspace {
         node.handles = usize::from(file);
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(&state, baseline, revision, generation, &view, file)?;
+        self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
@@ -382,6 +450,7 @@ impl Workspace {
             state.dirty_inodes + new_dirty,
             state.dirty_directories + new_directories,
             state.fresh_files + usize::from(file),
+            state.fresh_symlinks + usize::from(symlink),
             state.directory_names + 1,
             state.directory_bytes + name_bytes,
         )?;
@@ -438,6 +507,7 @@ impl Workspace {
         state.dirty_inodes += new_dirty;
         state.dirty_directories += new_directories;
         state.fresh_files += usize::from(file);
+        state.fresh_symlinks += usize::from(symlink);
         state.directory_names += 1;
         state.directory_bytes += name_bytes;
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
@@ -473,10 +543,13 @@ impl Workspace {
         revision: u64,
         generation: u64,
         view: &View,
-        file: bool,
+        kind: NodeKind,
     ) -> Result<(), WorkspaceError> {
         self.available(state)?;
-        if file {
+        if kind == NodeKind::Symlink && state.mounted {
+            return Err(WorkspaceError::Unsupported);
+        }
+        if kind == NodeKind::File {
             super::open::handle_slot(state)?;
         }
         if state.nodes.len() == NODE_LIMIT || state.nodes.len() == state.nodes.capacity() {

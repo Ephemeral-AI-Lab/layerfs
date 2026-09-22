@@ -41,6 +41,12 @@ The R2 portable metadata extension is based on
 prerequisite `d3d767393`. It adds one typed C1/C2 metadata save, with no Workspace
 mutation, automatic inode attachment or Branch publication.
 
+The native symlink addition described below is based on parent
+`2fc2e8d7a100b812a46753c4b35d383bedac448d` and frozen product input seal
+`af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
+Its final verification and implementation-commit evidence are pending in
+[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md).
+
 ## Boundaries and public calls
 
 `layerfs-bridge::contract` owns the closed content/history operation union and typed results.
@@ -717,5 +723,35 @@ base checks recognize declared N/F/S absence; fresh file/symlink values start at
 reference count0, and C1 derives their final topology. Direct new-S rows use the
 existing canonical symlink/portable metadata validator; C5 keeps its single
 all-inode validation pass. No C1 builder, allocator or ownership path changes.
-Workspace currently supplies an empty S. [Round46](proposal/fuse-workspace-snapshot-overlay/46-prepared-symlinks.md)
-records verification and the remaining native/kernel mutation prerequisite.
+Workspace supplied an empty S in that round.
+[Round46](proposal/fuse-workspace-snapshot-overlay/46-prepared-symlinks.md)
+records its shared prepared-update verification.
+
+The native symlink extension after source commit
+`2fc2e8d7a100b812a46753c4b35d383bedac448d` adds
+`Workspace::symlink(parent, name, target, deadline)`. It shares child publication,
+atomically installing one Local lookup reference, a kind3 binding/inode, parent
+mtime and generation accounting, with no file handle. Mounted creation refuses
+before reservation or target preparation. One exact-scope C5 reservation precedes
+bounded payload acquisition. Empty targets use no payload; nonempty targets use
+one existing Local piece and custody, with byte26 of the160-byte I record marking
+the kind and the16-byte E record accepting kind3.
+
+Lookup and Readlink consult pinned local state before a canonical Service call,
+so forget/relookup and reads during captured-G delivery retain exact target bytes.
+Known own completion replaces the filesystem base, removes G-only records and
+preserves D1-born symlinks and directory deltas. Commit saves target and kind3
+portable metadata through the existing shared constructors, records both roots in
+R, then lowers kind3 I and S through the prepared update. No canonical object
+construction moves into Workspace. The existing public FileSave phase and
+saved_files counter cover regular-file and symlink content saves; no status field
+or wire tag is added. Local payload reads preserve typed BackingFailure details
+through Stage source-failure observations and unknown-outcome classification.
+
+The fresh-symlink count participates in current/captured generation accounting and
+the same complete-request admission as files and directories. Existing128-row/name,
+32768-byte request, backing, worker and scratch limits remain.
+[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md) records the
+implementation, source-derived resource arithmetic and pending verification.
+Kernel SYMLINK, full preinstalled DSH admission and Round43's native-capacity
+failure remain open.

@@ -6,4 +6,5 @@ pub(crate) mod namespace_view;
 mod open;
 mod original;
 mod read;
+mod symlink;
 mod write;

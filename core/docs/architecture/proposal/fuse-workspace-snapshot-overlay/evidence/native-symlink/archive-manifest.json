@@ -1,0 +1,600 @@
+{
+  "method": "gzip mtime0; all json/jsonl/log/txt/rs/py artifacts including service directory client and fixture logs; sqlite/runtime/binary excluded; no historical evidence replaced",
+  "files": [
+    {
+      "source": "core/target/pair1-evidence/native-symlink/caller-review.json",
+      "archive": "caller-review.json.gz",
+      "bytes": 1327,
+      "sha256": "f2e3f77254d5b659c4f65522b6b749e6914937c2ec07d434235954610769c981",
+      "archive_sha256": "08081e80ed594b5b3bbf72258da432730b9bed093d7f39ff6e7b7c0306423ea1"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/caller-snapshots/75a69bbeb4c16bef9efe25b896c22a378f5f28a2ee1d8f027a518df563abafc4/native_workspace.rs",
+      "archive": "caller-snapshots/75a69bbeb4c16bef9efe25b896c22a378f5f28a2ee1d8f027a518df563abafc4/native_workspace.rs.gz",
+      "bytes": 23586,
+      "sha256": "75a69bbeb4c16bef9efe25b896c22a378f5f28a2ee1d8f027a518df563abafc4",
+      "archive_sha256": "36abb45916db563cd5cfde57258cf5b2e9d2e86fc58853b12ebfe9edb8fdcec0"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/caller-snapshots/e71b377ad88c8116d642dd109fcd920fc03c77a251b96ebc18a019ce5cc461f6/symlink.rs",
+      "archive": "caller-snapshots/e71b377ad88c8116d642dd109fcd920fc03c77a251b96ebc18a019ce5cc461f6/symlink.rs.gz",
+      "bytes": 35000,
+      "sha256": "e71b377ad88c8116d642dd109fcd920fc03c77a251b96ebc18a019ce5cc461f6",
+      "archive_sha256": "d203b25f4cd45011216749a8bd557b729544dfc43dfb1d49c327aee2452ddf91"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/boundary-01-command.json",
+      "archive": "checks/boundary-01-command.json.gz",
+      "bytes": 207,
+      "sha256": "fbdb88add631661677f7e273ba61dd971dfa8c478fb31db199d29ba1a5a7261b",
+      "archive_sha256": "80938458516f0cb2500a79eaa9f8d150f19b693f0d45c0f42bc717b122672028"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/boundary-01.log",
+      "archive": "checks/boundary-01.log.gz",
+      "bytes": 76,
+      "sha256": "b3a25d0bfc05ee7b84ab384ccad69942b17851168d75150ca0cbcb45c4b5057e",
+      "archive_sha256": "74bc2fe9429bcd92a275504ccba5dbbb96fc52879c5cf43690760a6251bc2077"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/boundary-selftest-01-command.json",
+      "archive": "checks/boundary-selftest-01-command.json.gz",
+      "bytes": 269,
+      "sha256": "9afb094ed7ca9e0fd48951488fed6e7e287848cc92dde465ec21a0163b2a1c70",
+      "archive_sha256": "4baa45cd841ad9c1d409396724e27cac81880a46cf14766289222d84b0ad5cbc"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/boundary-selftest-01.log",
+      "archive": "checks/boundary-selftest-01.log.gz",
+      "bytes": 104,
+      "sha256": "a25b5619af971eae96a8c9d37ebc69133b4c28e990455e210be0507206df182c",
+      "archive_sha256": "45c7a88ec391ecef888d5c198333a912aaff7661ed939b8445d4cd1e26385d34"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/fmt-01-command.json",
+      "archive": "checks/fmt-01-command.json.gz",
+      "bytes": 265,
+      "sha256": "400beb6a585321b11eeeed5a045e1a8d949158efbd9e5cb2726d728043afcc7a",
+      "archive_sha256": "f9772ca291f83db23de42bab970480351ff015fdd2585095456423d8dd53fb51"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/fmt-01.log",
+      "archive": "checks/fmt-01.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-build-01-command.json",
+      "archive": "checks/host-build-01-command.json.gz",
+      "bytes": 371,
+      "sha256": "c3f441fc59e99c8848379262e37ca1f049b0b780b1b6b82e853007f59835cde8",
+      "archive_sha256": "167e5af851e97004afc72ac4d39b4083a32522b7560e6f51642a77574e458b9d"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-build-01.log",
+      "archive": "checks/host-build-01.log.gz",
+      "bytes": 401,
+      "sha256": "be40ae5c72bf1a3f416984edf5fe8ccfe7e98f47f6bc51cc5aa0130809fa67e5",
+      "archive_sha256": "b21124d21ccccf785a935d79ead19c745f3935a58ba23d6743b79f42563196aa"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-clippy-01-command.json",
+      "archive": "checks/host-clippy-01-command.json.gz",
+      "bytes": 347,
+      "sha256": "1f1dad81bfcc671fde6015c4d4daf5878f53f8cdc31086b5c37930efccc55b7d",
+      "archive_sha256": "776cd9d35a783abad8874b25736ce82e3c385b514d8fa94c2aa0b144fd99e6e0"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-clippy-01.log",
+      "archive": "checks/host-clippy-01.log.gz",
+      "bytes": 401,
+      "sha256": "a71142a2eed420b3d08a29c6b696b015f18a45ff26bb855e277d04f8d99f75c8",
+      "archive_sha256": "a81c3537c0976ea02d017907b1039901887bfdf34ad70244d60eb709592dc91a"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-product-check-01-command.json",
+      "archive": "checks/host-product-check-01-command.json.gz",
+      "bytes": 374,
+      "sha256": "1f99dc40d810f2129e0454f6a04d2f76125c12f0a52f37e361efdefc16e79cd6",
+      "archive_sha256": "ed1734c4fea6f252795c310f9848f19d12daa9178d5b643305348fab198d615a"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-product-check-01.log",
+      "archive": "checks/host-product-check-01.log.gz",
+      "bytes": 401,
+      "sha256": "f3f017498186003593b49bdedfaddff449794d74ac5920d747837c5217544ab1",
+      "archive_sha256": "0b29f9d5f041fef7c872a4c27c54b7aa3f14cc2dd3e51eca24cd8b715afa889d"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-test-01-command.json",
+      "archive": "checks/host-test-01-command.json.gz",
+      "bytes": 285,
+      "sha256": "2f3ed0ed9940133326b86d76a114fab8d36cda2e018c5bf428fab1da1f641962",
+      "archive_sha256": "ecc0a65bab4581a17a1196131acf337bcb4e1c1a69ad1d7f2ed534e564e42399"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/host-test-01.log",
+      "archive": "checks/host-test-01.log.gz",
+      "bytes": 105513,
+      "sha256": "23744ba946650b301fc774193753e7f0e0c0b0395d9a6e5a511bef6edd7836d4",
+      "archive_sha256": "fef2af97eb4ab973fb5bfddc10c16a0f13a122f99e6ef9253c240ea21b3a9c2d"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-clippy-01-command.json",
+      "archive": "checks/linux-clippy-01-command.json.gz",
+      "bytes": 833,
+      "sha256": "5d5b12e11dcc90831abe69c209d9d4b27d996ac41da8656df8b321ca32816a89",
+      "archive_sha256": "a8915eb2f95b05008bef13734820018e683f1fa52ef604a47247d22e7367a8de"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-clippy-01.log",
+      "archive": "checks/linux-clippy-01.log.gz",
+      "bytes": 284,
+      "sha256": "9cd4ed283e9fdc33841786a0b9866aa41d0392f2ba928e4a03d0bae022f1205b",
+      "archive_sha256": "6da032e6ad865f8548369a5accfd0f8e3c5be2a5651eda52bc6bab1c172fa4ec"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-product-check-01-command.json",
+      "archive": "checks/linux-product-check-01-command.json.gz",
+      "bytes": 861,
+      "sha256": "7c30bf9ef5cdbf7d8dd793e5c51e9db008d0f1cbc4c833e7082f13d48e95c876",
+      "archive_sha256": "11557aab50c66d94512a63be9246bd044ce3b49416032b5109e5223496962d1b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-product-check-01.log",
+      "archive": "checks/linux-product-check-01.log.gz",
+      "bytes": 284,
+      "sha256": "bfaf83d194816dd578e56c94ee6ce299d0f1cad0e63968b478eb6c66c70d756c",
+      "archive_sha256": "9df3dd6be71c071735819ec59883870da7086491555967e4b3aa0ea85fb21ffd"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-test-01-command.json",
+      "archive": "checks/linux-test-01-command.json.gz",
+      "bytes": 772,
+      "sha256": "5bdd1255c32bc1b57fe4469a731afe9da2789563cb8d6f37daacb012da1599cb",
+      "archive_sha256": "e7d4a14bcfa4ca30bc2e818f4d28dbbdadc1f7272e28d6a4d0eda8cf1c3c98af"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks/linux-test-01.log",
+      "archive": "checks/linux-test-01.log.gz",
+      "bytes": 122144,
+      "sha256": "f1b9afac8a390dccb6b3a54a5179e3fef9c07cf13b848f8987b64e1f5efb6b7a",
+      "archive_sha256": "62b88c38689b03f16d686679815612b1138c203a40a2dafbdbbe75ea0c2cbd20"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/checks-index.json",
+      "archive": "checks-index.json.gz",
+      "bytes": 6390,
+      "sha256": "b9c7af4962f2cfd8632f21e1b8f6a52705c6fbb2c8e2d0e15ecc2f56861f43b6",
+      "archive_sha256": "3a043971f257370d89c12a8bc9075dafb9a1a76701bae3d2710687fe741251c5"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/cpu-observation-01.json",
+      "archive": "cpu-observation-01.json.gz",
+      "bytes": 511,
+      "sha256": "79a2436b1e30f0c29fc9db2bae4d9440adc034ecbb6462920f975f0672544543",
+      "archive_sha256": "10ca6fa4e98a939833c2577e391a4e557beec461d6dfc2f542f6f3db2c4daa34"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/owners.jsonl",
+      "archive": "create-semantics-01/owners.jsonl.gz",
+      "bytes": 886,
+      "sha256": "fc18d9dff380d53b1867490fb69f2e60134264c4bbe9f535774fa4c47dbea44e",
+      "archive_sha256": "74135172260c2fab75d29b78f355036122d5327e8b09eafe3347b82bc279ded8"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/result.json",
+      "archive": "create-semantics-01/result.json.gz",
+      "bytes": 6524,
+      "sha256": "7d90f7280ae70e76c74438d8fe4c2f170df059dc8121b6606b47398ea480fcad",
+      "archive_sha256": "f2fe1bd8a989b347d0873cbb41a3862426d918c53241364cae99d33fba0fc088"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01-command.json",
+      "archive": "create-semantics-01-command.json.gz",
+      "bytes": 1081,
+      "sha256": "870569e9e084571dc035f8ba9c212900d6611b561a524383f47d4b48e1c04dd8",
+      "archive_sha256": "f46bbe76d7fcc9ebea714b88a68bef9f7899f28fa11ee316bbc62eb61998ff45"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01-driver.log",
+      "archive": "create-semantics-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/owners.jsonl",
+      "archive": "create-successor-01/owners.jsonl.gz",
+      "bytes": 886,
+      "sha256": "e7b78029153977f5ac16953aa594a4928deeb8dad3159f8e642aca74bb790ec8",
+      "archive_sha256": "b38b8eb245f5e9696b7c037da06e1729f52d176c47b7cce76f756371cf09b6d8"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/result.json",
+      "archive": "create-successor-01/result.json.gz",
+      "bytes": 6520,
+      "sha256": "46021c096d030c420d37bea88075979aebadaf221db72ae7b26c29d6d9d17aa5",
+      "archive_sha256": "4b6d87fb1ea17b5c43f983f793ba34186f05474109e17703833fb9a8222f7110"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01-command.json",
+      "archive": "create-successor-01-command.json.gz",
+      "bytes": 1081,
+      "sha256": "0be7fd3a0eca408443dc4b20d3ede4d27621c46fc9bad28f16221f5c094d9032",
+      "archive_sha256": "7ac81db559b462f53d0343c7ceb6870a47c52b82f5670e07351db5a2ee5aca9f"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01-driver.log",
+      "archive": "create-successor-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/functional-index.json",
+      "archive": "functional-index.json.gz",
+      "bytes": 19343,
+      "sha256": "543cde9635ba839a766de8c68dbf5d282a0d3c338bed83a65d02f6d2f519d9f7",
+      "archive_sha256": "b02a03e37992d93424c76df4b1068ccda370f7430204b9f22bbd1b1f35e8e10d"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/host-binaries-01.json",
+      "archive": "host-binaries-01.json.gz",
+      "bytes": 643,
+      "sha256": "da8742e82875f2f46473bbd9b712b06269dcef7909963431b7c4e312a839c3fb",
+      "archive_sha256": "c9960760d49079075b94da9478a37fff984c9c99b41e078d15b5bdd091cf14fe"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/after-linux-parents-01.json",
+      "archive": "layout/after-linux-parents-01.json.gz",
+      "bytes": 51154,
+      "sha256": "92c8a78e4cffdb4ca5201fdfae512c318e2a3e6efaa4dcf4b13f1b20c3e2e030",
+      "archive_sha256": "e710321ccfe38f42076316e506c9723593975f6118dff4a58783d609cb7a3aad"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/after-linux-parents-01.txt",
+      "archive": "layout/after-linux-parents-01.txt.gz",
+      "bytes": 2764558,
+      "sha256": "2a7fd6fcbf76662b1777bea9e14750bfbcbe984aeaddceba4839ed5580437f9b",
+      "archive_sha256": "2d3bc1c2781226a493ce4cb946d6f281db9ad2c2e231c9736c3bb8e3e5682337"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/before-linux-parents-01.json",
+      "archive": "layout/before-linux-parents-01.json.gz",
+      "bytes": 27633,
+      "sha256": "7789fee1f01d6715c748dde1adbe0ddecae85d74bc0f6391df0515baf2c7ee2b",
+      "archive_sha256": "0572f63896b5354b28e7c88d43927f709ad2435467181358e1f271790d13e170"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/before-linux-parents-01.txt",
+      "archive": "layout/before-linux-parents-01.txt.gz",
+      "bytes": 1764311,
+      "sha256": "a9e253a8272593d7867b2fa96ea4322dc3351c48d1cbc43adb3a6953379f975d",
+      "archive_sha256": "3777f8aa9e8edc13e2a1a94e0b496b76db08342d5f70b7844f3672a147a264a8"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/before-linux-parents-02.json",
+      "archive": "layout/before-linux-parents-02.json.gz",
+      "bytes": 50688,
+      "sha256": "f95af61e003780ed590ba5faac3dbe186e72a5e09af969f31e9ecd4f7c034046",
+      "archive_sha256": "e718cc67433e4a2daad421233ee3d580423d960ae8b56edfcca95b53df3dc999"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/before-linux-parents-02.txt",
+      "archive": "layout/before-linux-parents-02.txt.gz",
+      "bytes": 2635056,
+      "sha256": "25158057a8b26078224dd680fac7d5207b994d66c131d91883dc3cd2ad48e030",
+      "archive_sha256": "d0c6217c3b2d9f6d2148c480c7673ac6ad56d08dde99ea4f67005a98b4a2bac3"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/capture_layout-02.py",
+      "archive": "layout/capture_layout-02.py.gz",
+      "bytes": 4695,
+      "sha256": "81a973238caf227a94fd887b3dcf6386be3f092551c2c1003945e69c80b42102",
+      "archive_sha256": "77d73567b0ad2d820cd756d87d31ed3351d181733627c2fc86d877fc1981347e"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/capture_layout.py",
+      "archive": "layout/capture_layout.py.gz",
+      "bytes": 4174,
+      "sha256": "5f22124356384d994ce0f48950479d64a8ce5460969131810d71b710525737b1",
+      "archive_sha256": "15bde5a8fcd1177c5970d200f493f4392723093610f5e34945bd4d157baba11b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/layout/layout-01.json",
+      "archive": "layout/layout-01.json.gz",
+      "bytes": 117435,
+      "sha256": "70fa8225fb5d17b7688ec136833753031876f9877de67312ee049e799eeea5ef",
+      "archive_sha256": "a8a30622ee69114489851d7ab80ed882d257de03cb3f9c48a24a903c92ab77a4"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/owners.jsonl",
+      "archive": "mkdir-successor-01/owners.jsonl.gz",
+      "bytes": 884,
+      "sha256": "ec92915455d190da835acb1e6e9151b48388c5cd65c5cefb31b37a61b4f41158",
+      "archive_sha256": "f7030c0ab20d4c94bf5d826146b66c712f1ddfe47d7cc023f3a10317276dcb01"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/result.json",
+      "archive": "mkdir-successor-01/result.json.gz",
+      "bytes": 6162,
+      "sha256": "ab765bed5381262501e2b5869a92c86dd4eed91d85b7d46341b4fc1f4cdfad51",
+      "archive_sha256": "4f110e7bf29ba7563ef6fb091db90122bf83aebef6a75c8d986511324401d3fe"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01-command.json",
+      "archive": "mkdir-successor-01-command.json.gz",
+      "bytes": 1077,
+      "sha256": "10c33610d9fb240c8b00f110cf703f6d70f92d1bdce226559acd306e618fefc3",
+      "archive_sha256": "daee0501cbdf9f510f183ce6f2440709a7a4f958698bdbd3bfd0ad78cd7b6cd8"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01-driver.log",
+      "archive": "mkdir-successor-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/plan-01.json",
+      "archive": "plan-01.json.gz",
+      "bytes": 1385,
+      "sha256": "0cdb057fc04f5b32e1c3790084e534e1f66ece5c7f97f87bea8a4fc1485c894a",
+      "archive_sha256": "94a52578dd0d98f70c5b370842ee8fd9633db255888fc8a189bd2f3ce20a0f53"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/plan-02.json",
+      "archive": "plan-02.json.gz",
+      "bytes": 1867,
+      "sha256": "95603bfc40dc26476c0d5f56984dc4d3bf42dcfdd630620cc9c58b5ebfcbd104",
+      "archive_sha256": "907c1cd3cfe0a95e3093040116430324007b72fa80eb132e358b5fe3e0c7c9c1"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/product-snapshots/c2ccd610d6d601d6960718c11826175f8cba81a8d6f482617fe3a340c4eeae8f/symlink.rs",
+      "archive": "product-snapshots/c2ccd610d6d601d6960718c11826175f8cba81a8d6f482617fe3a340c4eeae8f/symlink.rs.gz",
+      "bytes": 5043,
+      "sha256": "c2ccd610d6d601d6960718c11826175f8cba81a8d6f482617fe3a340c4eeae8f",
+      "archive_sha256": "33f23d5512fad3d9893654e117dd45ad2a4c3aad19d3680a7fb23025cd6f7ebc"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/regenerate_inventory.py",
+      "archive": "regenerate_inventory.py.gz",
+      "bytes": 8415,
+      "sha256": "a61205a0439762c52ad324894987e129cdbcc8572d25589fba9764b0b2c466c3",
+      "archive_sha256": "bb4ba44061b9ae4bbf67392ca761f92fde19f5482922e1cf9947da495444ee9a"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/run-checks.py",
+      "archive": "run-checks.py.gz",
+      "bytes": 1329,
+      "sha256": "39d2c79a7ae3efc6c3a752da46eb86121ffe864e014ea01c6fcf1d4be268320d",
+      "archive_sha256": "a370c4494371f98765c52a7408a041ad0de798df8b8d137bc865e5d42361f4e8"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/run-selections.py",
+      "archive": "run-selections.py.gz",
+      "bytes": 1992,
+      "sha256": "534299ff4699280015511304bfa3649b6b3bc258207746a5cc38d339fb52841c",
+      "archive_sha256": "170c395e7559e73d587220b97e12128df1fc037402c4b1b684f8e8faac37ea5b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/source-freeze-01.json",
+      "archive": "source-freeze-01.json.gz",
+      "bytes": 34017,
+      "sha256": "798ce8f021d77c55211464fc999936b1e962182e32e874413ede19eef4f7b5d9",
+      "archive_sha256": "0216004fe34b9621cfa66c568d4074b662642d58a8a3c7dc3338808840f2296e"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/source-freeze-02.json",
+      "archive": "source-freeze-02.json.gz",
+      "bytes": 62987,
+      "sha256": "df940f332645614575524fd7f3b733b13cc432ac606b3669b3d10b42715b3730",
+      "archive_sha256": "8b41cc1ec7b3990a862fa670dfda995c9159aa2945259366cc9be817c21fb877"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/source-review.json",
+      "archive": "source-review.json.gz",
+      "bytes": 1124,
+      "sha256": "8206d2dee6bcb53b74dfe0e5464b861adc02ca9cea3fac0f8fa33d475ef99f4f",
+      "archive_sha256": "e83f782bb58d7ddd353bdd3c83982018a59d0be3fa9928a9e104c8b2f3853b76"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01/result.json",
+      "archive": "symlink-backing_failure-01/result.json.gz",
+      "bytes": 5989,
+      "sha256": "c6440e77a0489fc918df1ac962d8dbc6cf4265ed22c7c6e04fb87a499ad0519c",
+      "archive_sha256": "af1e9b9f82bce0edcf025c5ab07599955ab191c9b08f782896105f588b7253f6"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01-command.json",
+      "archive": "symlink-backing_failure-01-command.json.gz",
+      "bytes": 1119,
+      "sha256": "b2398535c81ae088ecb72baed598317972b1fde79840a697540274227239b56d",
+      "archive_sha256": "196191398971e95cdb94a037dbb454ab140da8c55a6f048fb1a3e32d80505826"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01-driver.log",
+      "archive": "symlink-backing_failure-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/owners.jsonl",
+      "archive": "symlink-capacity-01/owners.jsonl.gz",
+      "bytes": 885,
+      "sha256": "1176ec0bae7bf7d81909c3691fc9d57070a95211e3761d3e5039d2fe65daa328",
+      "archive_sha256": "7db309ec3f178a3b1c1d886a212dd99caa097c274b51510a90a13bd5877c12fc"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/result.json",
+      "archive": "symlink-capacity-01/result.json.gz",
+      "bytes": 6683,
+      "sha256": "38cad39a89396118346e709e8ec467b59ab883568cf8ba963334358be06dd944",
+      "archive_sha256": "72a15cd00a34f66fdbdc9b369abdbd5febaa2cec342bd8bf434393b05a814253"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01-command.json",
+      "archive": "symlink-capacity-01-command.json.gz",
+      "bytes": 1081,
+      "sha256": "9aa6edd61514c22cfee81d628eb3b06b66c051beeed8f41d765b326206b5fb41",
+      "archive_sha256": "2d2ea6294085eed64919627e84072d953b01164e6112b9da79c210057a31e071"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01-driver.log",
+      "archive": "symlink-capacity-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/owners.jsonl",
+      "archive": "symlink-refusals-01/owners.jsonl.gz",
+      "bytes": 900,
+      "sha256": "6f8d26c026d9a4e8280c14cb063bea000746c71c25afa4c0f5af316fb6295d9c",
+      "archive_sha256": "fca607fbfc5989ef683ef87e25da80906d969767aea4eff6805f731559ae5211"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/result.json",
+      "archive": "symlink-refusals-01/result.json.gz",
+      "bytes": 6771,
+      "sha256": "3e40993377c80a47d2177813195938462812e43028c0a89a761cb495b7ef0725",
+      "archive_sha256": "924a66538bd90bfadb79f9322a19a433d725215a26983cd238403491f8b0d280"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01-command.json",
+      "archive": "symlink-refusals-01-command.json.gz",
+      "bytes": 1082,
+      "sha256": "61ac1efd8d38569a285a504a8efe4fb32aaeedda834b7c24e4db80974400ffab",
+      "archive_sha256": "766c0812acfd0c86f7db23a625eb694b72e903e17f38b61e44f1a555f8cc219c"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01-driver.log",
+      "archive": "symlink-refusals-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/owners.jsonl",
+      "archive": "symlink-reserve_denied-01/owners.jsonl.gz",
+      "bytes": 903,
+      "sha256": "4fa07955598934ad83bb0ec626bcd2fc4e2d2e36b6ac06c304639310d2420e87",
+      "archive_sha256": "7f42dcae4468eb3f72fd6db0c593ac2ecd968a9691e11fbb38223b9d36868975"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/result.json",
+      "archive": "symlink-reserve_denied-01/result.json.gz",
+      "bytes": 6693,
+      "sha256": "03c4626557ebe3d075842245ad4a876384a3f498b2afaa161e763a6f142828fa",
+      "archive_sha256": "9573acbe39a92b5c3e91305f5e69c7eca071c67cc2a9e6e02316caaba9aed070"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01-command.json",
+      "archive": "symlink-reserve_denied-01-command.json.gz",
+      "bytes": 1099,
+      "sha256": "0e900c0c1ac8a4bc316a005cd514427299e99cfd16c2aea9b0ec0f8060801bf0",
+      "archive_sha256": "fc6923e6c9fad2edff22d8fc4ae86eae7fd983e907504541a37a878a93dc4d86"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01-driver.log",
+      "archive": "symlink-reserve_denied-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/owners.jsonl",
+      "archive": "symlink-reserve_unknown-01/owners.jsonl.gz",
+      "bytes": 906,
+      "sha256": "cdcd160bc7524b982f9aa118fedb9607c3158b5fe46569129ee63ed3962ed71c",
+      "archive_sha256": "3aa0050e3b75af59fa4dfead26ecd98aba679df0a3d5f9423b6460f3f5311267"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/result.json",
+      "archive": "symlink-reserve_unknown-01/result.json.gz",
+      "bytes": 6909,
+      "sha256": "d06df989b5ac8ef7d4538831898f4053be604c1c36a23c9785b9915a547dc952",
+      "archive_sha256": "e983768bc366e061addc3cea9101c9cdd796f6ce93ad00fe0d65f33144036f26"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01-command.json",
+      "archive": "symlink-reserve_unknown-01-command.json.gz",
+      "bytes": 1103,
+      "sha256": "8a5832c4d6d6dc55e59e36aa5dbb84d889e3725ec8ce315b8573ad5f3d0a2832",
+      "archive_sha256": "2556c84f6af93ff1d360494a306af7454b591005c0eeeb9c58206adb8bbfd935"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01-driver.log",
+      "archive": "symlink-reserve_unknown-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/owners.jsonl",
+      "archive": "symlink-semantics-01/owners.jsonl.gz",
+      "bytes": 885,
+      "sha256": "cee3f9fd6c111a9b9e1eedf98ebee0a1f5fbad3ee51eb639d7d3fc1f656846dd",
+      "archive_sha256": "fed83dce576c4f680375867e7bd289db3cf9c74f03cc265c19e97621670616e4"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/result.json",
+      "archive": "symlink-semantics-01/result.json.gz",
+      "bytes": 6481,
+      "sha256": "9aecef6e94e4972429722068ae2336bbf876751b30b7cdfc9cdaaf55a7aa3535",
+      "archive_sha256": "3aefdad4327121f9a2986044b7f9e8bdf6a970936cc4f3767ea5dbb2d1b7a5e9"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01-command.json",
+      "archive": "symlink-semantics-01-command.json.gz",
+      "bytes": 1084,
+      "sha256": "70e593f8535dda8176149c23413a70efc6796873de9a58863ed61ae510ab41f0",
+      "archive_sha256": "bcaf3b2422f0b823d5e2b25ab7b781725da0faee5c331c44a3199e660cb1e949"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01-driver.log",
+      "archive": "symlink-semantics-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/owners.jsonl",
+      "archive": "symlink-successor-01/owners.jsonl.gz",
+      "bytes": 888,
+      "sha256": "b21e31f30b1c3415a79c1cc6bfcb5289c1f16d62d269db4d66813f725f23290f",
+      "archive_sha256": "3d6201c5718ee5caa4ccfdf7bf5e65fef2dac285a425a3e142d89f7b73004d15"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/result.json",
+      "archive": "symlink-successor-01/result.json.gz",
+      "bytes": 6470,
+      "sha256": "ebc278830c19464f2ca01e0d9c9a96dc67385273e1221e13c06e66521a27d90a",
+      "archive_sha256": "03d82de50e13bb78b143177bb5034aa5da4a9a084b3e32562a10c1ace603543d"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01-command.json",
+      "archive": "symlink-successor-01-command.json.gz",
+      "bytes": 1085,
+      "sha256": "593449b42152a8e7d902c04cc63196e8c858e359af836e6bd68d5bae07487eed",
+      "archive_sha256": "12bc7f126309f650ece1789ccad0ca8d3343ef2fd207a87eb4d92eb6c468c6e7"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01-driver.log",
+      "archive": "symlink-successor-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/test-binaries-01.json",
+      "archive": "test-binaries-01.json.gz",
+      "bytes": 1223,
+      "sha256": "f4904fa98c1a8f96323721b8f80b2ff971eba0031f330fd5b9a1a860e6d5273b",
+      "archive_sha256": "07e318110ae2a5b531b46bb872315a150d22fe12a45615068af57546f3ab3252"
+    }
+  ]
+}

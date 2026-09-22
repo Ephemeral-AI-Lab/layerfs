@@ -129,39 +129,6 @@ impl Workspace {
             _operation: operation,
         })
     }
-    pub fn readlink(&self, serial: u64, deadline: Instant) -> Result<ReadReply, WorkspaceError> {
-        let deadline = Self::callback_deadline(deadline);
-        let operation = self.begin(true, deadline)?;
-        let (path, size, base) = {
-            let state = self.state()?;
-            let node = state.node(serial)?;
-            if node.attr.kind != NodeKind::Symlink {
-                return Err(WorkspaceError::WrongKind);
-            }
-            (node.path().to_vec(), node.attr.size, state.base)
-        };
-        let response = self.call(
-            Operation::Inspect {
-                root: base,
-                query: Inspect::Readlink { path },
-            },
-            0,
-            &mut std::io::sink(),
-            deadline,
-        )?;
-        let Response::Link(bytes) = response else {
-            return Err(WorkspaceError::InvalidInput);
-        };
-        if bytes.len() > 4096 || bytes.len() as u64 != size || bytes.contains(&0) {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        let charge = self.host.budget.reserve(bytes.capacity())?;
-        Ok(ReadReply {
-            bytes,
-            _charge: charge,
-            _operation: operation,
-        })
-    }
     /// Reports a retained notification failure for this inode, without saving
     /// or releasing any ownership. Handle release remains a separate operation.
     pub fn flush(&self, handle: HandleId) -> Result<(), WorkspaceError> {
@@ -191,6 +158,9 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
         use layerfs_bridge::contract::Source;
+        if inode.symlink {
+            return Err(WorkspaceError::Io);
+        }
         let host = self
             .host
             .payloads

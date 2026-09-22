@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `521bcb304c382e53f454eb3eb9007a010c1de486`.
-> Frozen production input seal: `edb4b9e3005fb867f7d2cdbe66c33fa7a51e19840b6a899a635ea3e5f7ed27b1`.
+> Implementation parent: `2fc2e8d7a100b812a46753c4b35d383bedac448d`.
+> Frozen production input seal: `af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -10,7 +10,7 @@
 imports, declarations and runtime SQL. `L` means all physical lines, including
 comments and blanks. They must not be confused: the 999-file/200-entry-file ceilings
 apply to L. `N` means the recursive number of production files in a folder.
-JSON includes all 254 core and 193 reference production files separately,
+JSON includes all 255 core and 193 reference production files separately,
 plus each scope/crate and every recursive production-folder total.
 Tests, fixtures, examples, tools, docs and manifests are excluded from P; their
 folder locations are still shown in the continuation handoff.
@@ -22,7 +22,7 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/prepared-symlinks/source-loc.json)
+[Current per-file machine-readable inventory](evidence/native-symlink/source-loc.json)
 records this new frozen production inventory and unchanged reference
 tree. The prior [symlink-constructor inventory](evidence/construct-symlink/source-loc.json) and its
 [commit confirmation](evidence/construct-symlink/commit-confirmed.json), plus the
@@ -55,7 +55,7 @@ retain their original source pins and counts. No historical receipt is relabeled
 | --- | ---: | ---: | ---: | --- |
 | `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
 | `layerfs-fuse` | 1171 | 1273 | 4 | Linux kernel projection, replies, mount/session ownership |
-| `layerfs-workspace` | 11618 | 11842 | 44 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
+| `layerfs-workspace` | 11915 | 12150 | 45 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
 | `layerfs-bridge` | 5570 | 6100 | 26 | Logical operation contract, Source, authorization identity and native framing/delivery |
 | `layerfs-service` | 2242 | 2438 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
@@ -63,10 +63,17 @@ retain their original source pins and counts. No historical receipt is relabeled
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **47169 P / 56441 L**, across 254 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **112586 P / 147907 L**. Root `crates/` is reference-only, including its
+Core total: **47466 P / 56749 L**, across 255 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **112883 P / 148215 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Native symbolic links
+
+Workspace publishes kind3 children through existing bounded metadata and payload
+ownership, reads local and captured targets, and emits fresh symlink identities
+through the prepared v3 trailer. Mounted creation remains refused in this round;
+see [47](47-native-symlink.md).
 
 ## Prepared fresh symbolic links
 
@@ -254,8 +261,8 @@ core/crates/layerfs-fuse/  [P=1171; L=1273; N=4]
 ### layerfs-workspace
 
 ```text
-core/crates/layerfs-workspace/  [P=11618; L=11842; N=44]
-`-- src/  [P=11618; L=11842; N=44]
+core/crates/layerfs-workspace/  [P=11915; L=12150; N=45]
+`-- src/  [P=11915; L=12150; N=45]
     |-- backing/  [P=4488; L=4551; N=13]
     |   |-- budget.rs  [P=54; L=56]
     |   |-- directory.rs  [P=206; L=208]
@@ -270,41 +277,42 @@ core/crates/layerfs-workspace/  [P=11618; L=11842; N=44]
     |   |-- reader.rs  [P=132; L=134]
     |   |-- reclaim.rs  [P=224; L=229]
     |   `-- segments.rs  [P=323; L=355]
-    |-- commit/  [P=1578; L=1595; N=8]
+    |-- commit/  [P=1633; L=1650; N=8]
     |   |-- completion.rs  [P=340; L=343]
     |   |-- directories.rs  [P=106; L=107]
-    |   |-- lower.rs  [P=302; L=304]
+    |   |-- lower.rs  [P=316; L=318]
     |   |-- mod.rs  [P=7; L=9]
     |   |-- operation.rs  [P=55; L=56]
-    |   |-- reconcile.rs  [P=328; L=334]
-    |   |-- save.rs  [P=285; L=286]
+    |   |-- reconcile.rs  [P=329; L=335]
+    |   |-- save.rs  [P=325; L=326]
     |   `-- source.rs  [P=155; L=156]
-    |-- filesystem/  [P=2554; L=2600; N=10]
-    |   |-- create.rs  [P=487; L=499]
+    |-- filesystem/  [P=2753; L=2808; N=11]
+    |   |-- create.rs  [P=560; L=572]
     |   |-- directory.rs  [P=152; L=153]
     |   |-- mkdir.rs  [P=36; L=39]
-    |   |-- mod.rs  [P=9; L=9]
+    |   |-- mod.rs  [P=10; L=10]
     |   |-- namespace.rs  [P=211; L=214]
-    |   |-- namespace_view.rs  [P=312; L=314]
+    |   |-- namespace_view.rs  [P=316; L=318]
     |   |-- open.rs  [P=230; L=236]
-    |   |-- original.rs  [P=121; L=125]
-    |   |-- read.rs  [P=284; L=288]
-    |   `-- write.rs  [P=712; L=723]
-    |-- overlay/  [P=865; L=869; N=4]
+    |   |-- original.rs  [P=124; L=128]
+    |   |-- read.rs  [P=254; L=258]
+    |   |-- symlink.rs  [P=142; L=151]
+    |   `-- write.rs  [P=718; L=729]
+    |-- overlay/  [P=898; L=902; N=4]
     |   |-- directories.rs  [P=181; L=183]
     |   |-- mod.rs  [P=3; L=3]
-    |   |-- pieces.rs  [P=316; L=317]
-    |   `-- snapshot.rs  [P=365; L=366]
-    |-- runtime/  [P=1623; L=1690; N=6]
+    |   |-- pieces.rs  [P=338; L=339]
+    |   `-- snapshot.rs  [P=376; L=377]
+    |-- runtime/  [P=1633; L=1700; N=6]
     |   |-- attachment.rs  [P=256; L=266]
     |   |-- coherence.rs  [P=347; L=381]
-    |   |-- host.rs  [P=498; L=505]
+    |   |-- host.rs  [P=499; L=506]
     |   |-- lifecycle.rs  [P=161; L=168]
     |   |-- mod.rs  [P=5; L=5]
-    |   `-- state.rs  [P=356; L=365]
+    |   `-- state.rs  [P=365; L=374]
     |-- commit_types.rs  [P=73; L=75]
     |-- lib.rs  [P=17; L=20]
-    `-- types.rs  [P=420; L=442]
+    `-- types.rs  [P=420; L=444]
 ```
 
 ### layerfs-bridge
