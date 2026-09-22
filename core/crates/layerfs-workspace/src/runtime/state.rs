@@ -72,6 +72,15 @@ pub(crate) struct State {
     /// because lowering runs after the capture and must still recognise the
     /// identity as unbound. Cleared once the canonical successor is installed.
     pub unbound: Vec<u64>,
+    /// One entry per regular identity the attached base owns that lost its last
+    /// local name while a live local owner (an open handle or a lookup
+    /// reference) still addresses it. Its record is carried into the successor
+    /// root exactly as this generation left it: the identity has no canonical
+    /// version of its own in this delta, so it gets no dirty key and no
+    /// declaration, but a handle that outlives the name keeps reading its own
+    /// version instead of asking the service for a name that is gone. Cleared
+    /// once the canonical successor is installed.
+    pub carried: Vec<u64>,
     pub closed: bool,
     pub active: usize,
     pub tables: Option<Charge>,
@@ -267,16 +276,22 @@ impl State {
     pub fn declared_committed(&mut self, accepted: &[u64]) {
         self.declared.retain(|serial| !accepted.contains(serial));
         self.unbound.clear();
+        self.carried.clear();
     }
     /// Removes one name; the identity keeps its own live-owner lifetime. Losing
     /// the last name of an identity this generation created removes it from the
     /// captured dirty frontier as well, because lowering then declares nothing
-    /// for it: an unbound fresh identity has no canonical identity to name.
+    /// for it: an unbound fresh identity has no canonical identity to name. A
+    /// base identity keeps no live-name count here, so it is carried only while
+    /// a live local owner can still address it.
     pub fn unlinked(&mut self, serial: u64) {
         let mut unbound = false;
+        let mut owned = false;
         if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
             unbound = entry.names == 1;
             entry.names = entry.names.saturating_sub(1);
+        } else if let Some(node) = self.nodes.iter().find(|node| node.attr.serial == serial) {
+            owned = node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0;
         }
         if unbound {
             self.dirty_inodes = self.dirty_inodes.saturating_sub(1);
@@ -284,6 +299,8 @@ impl State {
             if !self.unbound.contains(&serial) {
                 self.unbound.push(serial);
             }
+        } else if owned && !self.carried.contains(&serial) {
+            self.carried.push(serial);
         }
     }
     /// A regular identity this generation created and no name binds any more.

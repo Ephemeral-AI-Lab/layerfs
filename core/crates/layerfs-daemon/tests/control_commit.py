@@ -31,10 +31,12 @@ driver.CASES = {
     'commit_authority': ['Commit-grant-target-service-authority-and-expiry-are-independent'],
     'commit_refusals': ['readonly-Commit-partial-input-and-budget-refusals-preserve-source'],
     'commit_denied': ['known-service-Commit-denial-retains-full-typed-failure-with-explicit-native-cleanup-refusal'],
+    'commit_small_project': ['writable-mount-two-explicit-Commits-and-the-acknowledged-remounted-tree'],
 }
 driver.NOT_RUN = ['upstream native Unknown Commit failure (control-terminal loss is a separate outer delivery case)',
-                  'namespace/new-inode operations', 'prepared npm workload', 'R6',
-                  'hard RSS/cgroup/performance qualification', 'failed-submission discard/recovery']
+                  'prepared npm workload', 'R6', 'directory deltas beyond the 128-name admission bound',
+                  'hard RSS/cgroup/performance qualification', 'failed-submission discard/recovery',
+                  'writable process-restart or crash recovery']
 
 TARGET = {'workspace': b'read', 'incarnation': b'\x71' * 32}
 COMMIT_MS = 10_000
@@ -63,15 +65,24 @@ def refused(result, code):
 
 
 class Witness:
-    """Independent public observation calls; no idle connection survives a schedule."""
-    def __init__(self, port, private, public):
+    """Independent public observation calls over one owned control session.
+
+    The daemon admits exactly one control session, so this witness owns its
+    session for the whole case and numbers its requests from one.
+    """
+    def __init__(self, port, private, public, name):
         self.authority = port, private, public
+        self.name = name
         self.client = None
         self.ids = itertools.count(1)
 
+    @staticmethod
+    def blob(value):
+        return driver.route.blob(value)
+
     def request(self, opcode, body, profile=1):
-        assert self.client is None
-        self.client = driver.status.controller(*self.authority)
+        if self.client is None:
+            self.open()
         identity = next(self.ids)
         self.client.stdin.write(driver.route.begin(identity, opcode, body, profile=profile))
         self.client.stdin.write(driver.route.frame(4, identity, struct.pack('>Q', 0)))
@@ -86,8 +97,7 @@ class Witness:
             if kind == 5:
                 data.extend(value); assert len(data) <= 128 * 1024
             else:
-                assert kind == 6, (kind, value)
-                self.close()
+                assert kind == 6, (opcode, kind, value, len(data), body.hex(), self.client.poll())
                 return value, bytes(data)
 
     def branch(self, branch):
@@ -105,6 +115,54 @@ class Witness:
                   'mtime': r.u64(), 'nanoseconds': int.from_bytes(r.take(4), 'big'), 'size': r.u64()}
         r.done(); return result
 
+    def open(self, endpoint=None, server=None):
+        assert self.client is None
+        port, private, public = self.authority
+        self.client = driver.status.controller(endpoint or port, private, server or public)
+        self.ids = itertools.count(1)
+
+    def closed(self):
+        return self.client is None
+
+    def root_observation(self, root, path):
+        """One public read of a saved root: attributes, content and its digest.
+
+        A symlink's selected payload is its target, which the public Readlink
+        query returns; its content root is not a regular-file root.
+        """
+        attr = self.attributes(root, path)
+        if attr['kind'] == 2:
+            return {'attributes': attr, 'content': attr['content']}
+        if attr['kind'] == 3:
+            target = self.readlink(root, path)
+            return {'attributes': attr, 'content': attr['content'], 'target': target,
+                    'digest': hashlib.sha256(target.encode()).hexdigest()}
+        data = self.read(attr['content'], attr['size'])
+        return {'attributes': attr, 'content': attr['content'], 'data': data.hex(),
+                'digest': hashlib.sha256(data).hexdigest()}
+
+    def readlink(self, root, path):
+        body, data = self.request(2, bytes.fromhex(root) + b'\x03' + driver.route.blob(path))
+        assert not data
+        r = driver.route.Reader(body)
+        assert r.u8() == 6
+        value = r.blob().decode()
+        r.done()
+        return value
+
+    def missing(self, root, path):
+        """The path is absent from this saved root; the public Inspect says so."""
+        try:
+            self.attributes(root, path)
+        except AssertionError as error:
+            # One refusal response is the expected outcome; the request helper
+            # reports it as (opcode, kind, body, length, raw, client exit).
+            observed = error.args[0] if error.args else None
+            if isinstance(observed, tuple) and len(observed) > 2 and observed[1] == 7 and observed[2] == b'\x07\x00\x00':
+                return True
+            raise
+        raise AssertionError(f'{path!r} is present in {root}')
+
     def read(self, content, length):
         body, data = self.request(1, bytes.fromhex(content) + struct.pack('>QQ', 0, length))
         r = driver.route.Reader(body); assert r.u8() == 1 and r.u64() == length; r.done()
@@ -112,9 +170,21 @@ class Witness:
         return data
 
     def close(self):
-        if self.client is not None:
-            self.client.stdin.close(); assert self.client.wait(timeout=6) == 0, self.client.stderr.read()
-            self.client = None
+        """Close this session and wait for the daemon to be alone again."""
+        if self.client is None:
+            return
+        ended = self.client
+        self.client = None
+        try:
+            ended.stdin.close()
+        except BrokenPipeError:
+            ended.wait(timeout=6)
+        else:
+            ended.wait(timeout=6)
+        # The daemon clears the closed session on its own schedule; the next
+        # request retries a hand-off that arrives while the slot is still closing.
+        time.sleep(0.1)
+
 
 
 def small_expected(value):
@@ -124,6 +194,278 @@ def small_expected(value):
 def large_prefix():
     return b''.join(hashlib.sha256(b'layerfs-control-commit-v1' + i.to_bytes(8, 'big')).digest()
                     for i in range(4096))
+
+
+SMALL_PROJECT = r'''import ctypes, errno, hashlib, json, os, stat, sys
+
+
+class Timespec(ctypes.Structure):
+    _fields_ = [('seconds', ctypes.c_long), ('nanos', ctypes.c_long)]
+
+
+LIBC = ctypes.CDLL(None, use_errno=True)
+AT_FDCWD, UTIME_OMIT = -100, (1 << 30) - 2
+
+
+def set_mtime(path, mtime_ns):
+    """One utimensat with atime omitted, so the request carries no atime setter."""
+    times = (Timespec * 2)()
+    times[0].seconds, times[0].nanos = 0, UTIME_OMIT
+    times[1].seconds, times[1].nanos = divmod(mtime_ns, 10 ** 9)
+    ctypes.set_errno(0)
+    rc = LIBC.utimensat(AT_FDCWD, path.encode(), ctypes.byref(times), 0)
+    assert rc == 0, 'utimensat %s -> %s(%d)' % (path, errno.errorcode.get(ctypes.get_errno(), '?'), ctypes.get_errno())
+
+root, phase = sys.argv[1], sys.argv[2]
+left, right = root + '/left', root + '/right'
+out = {}
+assert phase in ('first', 'second')
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+def listing(path):
+    return sorted(os.listdir(path))
+
+if phase == 'first':
+    # ---- step 2: names, contents, aliases and portable metadata -------------
+    os.mkdir(left, 0o750)
+    os.mkdir(right, 0o750)
+    out['mkdir_modes'] = [stat.S_IMODE(os.lstat(left).st_mode), stat.S_IMODE(os.lstat(right).st_mode)]
+
+    # A regular mknod file: no handle is opened by the creation itself.
+    os.mknod(left + '/node.bin', 0o644 | stat.S_IFREG)
+    mknod_ino = os.lstat(left + '/node.bin').st_ino
+    os.mknod(right + '/victim.txt', 0o644 | stat.S_IFREG)
+    victim_ino = os.lstat(right + '/victim.txt').st_ino
+    out['mknod'] = {'size': os.lstat(left + '/node.bin').st_size,
+                    'mode': stat.S_IMODE(os.lstat(left + '/node.bin').st_mode),
+                    'inode': mknod_ino}
+
+    # Write, append and truncate through real syscalls.
+    fd = os.open(left + '/a.txt', os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o640)
+    os.write(fd, b'alpha')
+    os.close(fd)
+    fd = os.open(left + '/a.txt', os.O_RDWR | os.O_APPEND)
+    os.write(fd, b'-beta')
+    os.close(fd)
+    appended = open(left + '/a.txt', 'rb').read()
+    fd = os.open(left + '/a.txt', os.O_RDWR)
+    os.ftruncate(fd, 5)
+    truncated = os.read(fd, 64)
+    os.close(fd)
+    out['write_append_truncate'] = {'after_append': appended.decode(),
+                                    'after_truncate': truncated.decode(),
+                                    'size': os.lstat(left + '/a.txt').st_size}
+
+    # chmod plus an mtime set with atime omitted (UTIME_OMIT).
+    os.chmod(left + '/a.txt', 0o600)
+    set_mtime(left + '/a.txt', 1700000123456789000)
+    os.chmod(left, 0o1777)
+    a = os.lstat(left + '/a.txt')
+    out['metadata'] = {'file_mode': stat.S_IMODE(a.st_mode), 'file_mtime_ns': a.st_mtime_ns,
+                       'dir_mode': stat.S_IMODE(os.lstat(left).st_mode),
+                       'dir_mtime_ns': os.lstat(left).st_mtime_ns}
+
+    # A symlink and a hard-link alias.
+    os.symlink('a.txt', left + '/sym')
+    alias_ino = os.link(left + '/node.bin', left + '/alias.bin')
+    alias = os.lstat(left + '/alias.bin')
+    out['symlink'] = {'target': os.readlink(left + '/sym'), 'mode': stat.S_IMODE(os.lstat(left + '/sym').st_mode)}
+    out['link'] = {'inode': alias.st_ino, 'mknod_inode': mknod_ino,
+                   'nlink': alias.st_nlink, 'names': [os.lstat(left + '/node.bin').st_nlink]}
+
+    # ---- step 2/3: replacement with the destination FD held, and unlink ------
+    victim_fd = os.open(right + '/victim.txt', os.O_RDWR)
+    os.write(victim_fd, b'victim-body')
+    os.rename(left + '/node.bin', right + '/victim.txt')
+    after_rename = os.fstat(victim_fd)
+    out['replace'] = {'held_inode': after_rename.st_ino, 'replaced_inode': victim_ino,
+                      'held_nlink': after_rename.st_nlink,
+                      'held_body': os.pread(victim_fd, 64, 0).decode(),
+                      'name_inode': os.lstat(right + '/victim.txt').st_ino,
+                      'alias_inode': os.lstat(left + '/alias.bin').st_ino,
+                      'left': listing(left), 'right': listing(right)}
+    assert after_rename.st_ino == victim_ino and out['replace']['held_body'] == 'victim-body'
+    assert out['replace']['name_inode'] == mknod_ino == out['replace']['alias_inode']
+
+    # Unlink the last name of the mknod inode while its own FD stays open.
+    held = os.open(left + '/alias.bin', os.O_RDWR)
+    os.unlink(left + '/alias.bin')
+    held_ino = os.fstat(held).st_ino
+    os.write(held, b'orphan')
+    orphan = os.pread(held, 64, 0)
+    out['unlink'] = {'inode': held_ino, 'nlink': os.fstat(held).st_nlink,
+                     'body': orphan.decode(), 'left': listing(left), 'right': listing(right)}
+    # The kernel answers fstat from its own inode, so its nlink is not the product's
+    # link count here; identity, content and name removal are what this step proves.
+    assert held_ino == mknod_ino and orphan == b'orphan', out['unlink'] | {'mknod_ino': mknod_ino}
+    assert 'alias.bin' not in out['unlink']['left'] and 'node.bin' not in out['unlink']['left']
+
+    # ---- step 3: refusals leave no partial change, then an empty rmdir -------
+    refusals = {}
+    try:
+        os.rmdir(right)
+    except OSError as error:
+        refusals['nonempty_rmdir'] = error.errno
+    else:
+        raise AssertionError('nonempty rmdir accepted')
+
+    renameat2 = getattr(LIBC, 'renameat2', None)
+    assert renameat2 is not None, 'renameat2 unavailable'
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    RENAME_NOREPLACE = 1
+    before_names = [listing(left), listing(right)]
+    before_inodes = [os.lstat(left + '/a.txt').st_ino, os.lstat(right + '/victim.txt').st_ino]
+    ctypes.set_errno(0)
+    rc = renameat2(AT_FDCWD, (left + '/a.txt').encode(), AT_FDCWD, (right + '/victim.txt').encode(), RENAME_NOREPLACE)
+    refusals['noreplace_collision'] = ctypes.get_errno() if rc != 0 else 0
+    assert rc != 0 and ctypes.get_errno() == errno.EEXIST, (rc, ctypes.get_errno())
+    assert before_names == [listing(left), listing(right)]
+    assert before_inodes == [os.lstat(left + '/a.txt').st_ino, os.lstat(right + '/victim.txt').st_ino]
+    os.mkdir(left + '/empty', 0o755)
+    os.rmdir(left + '/empty')
+    assert 'empty' not in listing(left)
+    out['refusals'] = refusals
+
+    # ---- step 3: names, contents, inode identities, link counts, metadata ----
+    out['final_tree'] = {'left': listing(left), 'right': listing(right)}
+    out['identities'] = {'a.txt': os.lstat(left + '/a.txt').st_ino, 'sym': os.lstat(left + '/sym').st_ino,
+                         'sym_target': os.readlink(left + '/sym'),
+                         'victim.txt': os.lstat(right + '/victim.txt').st_ino,
+                         'a.txt_nlink': os.lstat(left + '/a.txt').st_nlink,
+                         'victim.txt_nlink': os.lstat(right + '/victim.txt').st_nlink}
+    out['contents'] = {'a.txt': open(left + '/a.txt', 'rb').read().decode(),
+                       'victim.txt': open(right + '/victim.txt', 'rb').read().decode()}
+    out['held_after'] = {'body': os.pread(held, 64, 0).decode(), 'inode': held_ino}
+    out['digests'] = {'a.txt': digest(out['contents']['a.txt'].encode()),
+                      'victim.txt': digest(out['contents']['victim.txt'].encode()),
+                      'held': digest(out['held_after']['body'].encode())}
+
+if phase == 'first':
+    print(json.dumps(out))
+    sys.exit(0)
+
+# ---- step 5: the second edit: a rename, an unlink and a metadata change ----
+os.rename(left + '/a.txt', right + '/moved.txt')
+os.unlink(right + '/victim.txt')
+os.chmod(right + '/moved.txt', 0o640)
+set_mtime(right + '/moved.txt', 1700000999000000000)
+moved = os.lstat(right + '/moved.txt')
+out['second_edit'] = {'left': listing(left), 'right': listing(right),
+                      'moved_inode': moved.st_ino, 'moved_mode': stat.S_IMODE(moved.st_mode),
+                      'moved_mtime_ns': moved.st_mtime_ns, 'moved_size': moved.st_size,
+                      'moved_body': open(right + '/moved.txt', 'rb').read().decode(),
+                      'sym_inode': os.lstat(left + '/sym').st_ino,
+                      'sym_target': os.readlink(left + '/sym')}
+try:
+    os.lstat(right + '/victim.txt')
+except FileNotFoundError:
+    out['second_edit']['victim_absent'] = True
+else:
+    out['second_edit']['victim_absent'] = False
+assert out['second_edit']['victim_absent'] and out['second_edit']['left'] == ['sym']
+
+print(json.dumps(out))
+'''
+
+
+SMALL_PROJECT_NAMES = ('left', 'right')
+SMALL_PROJECT_A_PRESENT = (b'left/a.txt', b'left/sym', b'left', b'right/victim.txt')
+SMALL_PROJECT_A_ABSENT = (b'left/node.bin', b'left/alias.bin', b'left/empty', b'right')
+SMALL_PROJECT_B_PRESENT = (b'left', b'right/moved.txt')
+SMALL_PROJECT_B_ABSENT = (b'left/a.txt', b'left/sym', b'right/victim.txt', b'right')
+
+
+def verify_small_project(witness, branch, result, observed, previous):
+    """Exact saved-tree check for one explicit Commit, through public Service reads."""
+    assert result['kind'] == 'Completed' and result['outcome']['kind'] == 'Committed', result
+    outcome = result['outcome']
+    snapshot = witness.branch(branch)
+    assert snapshot['effective_root'] == outcome['root'], (snapshot, outcome)
+    assert snapshot['branch']['head_commit'] == outcome['commit']
+    if previous is not None:
+        assert outcome['parent'] == previous['head'], (outcome, previous)
+    root = outcome['root']
+    expected = observed['final_tree'] if previous is None else observed['second_edit']
+    assert sorted(expected['left']) == (['a.txt', 'sym'] if previous is None else [])
+    assert sorted(expected['right']) == (['victim.txt'] if previous is None else ['moved.txt'])
+    names = {name: witness.root_observation(root, name)
+             for name in (SMALL_PROJECT_A_PRESENT if previous is None else SMALL_PROJECT_B_PRESENT)}
+    for name in (SMALL_PROJECT_A_ABSENT if previous is None else SMALL_PROJECT_B_ABSENT):
+        witness.missing(root, name)
+    if previous is None:
+        file_attr = names[b'left/a.txt']['attributes']
+        assert file_attr['kind'] == 1 and file_attr['mode'] == 0o600, file_attr
+        assert (file_attr['mtime'], file_attr['nanoseconds']) == (1_700_000_123, 456_789_000), file_attr
+        assert file_attr['size'] == observed['write_append_truncate']['size'] == 5
+        assert names[b'left/a.txt']['digest'] == observed['digests']['a.txt'], (
+            names[b'left/a.txt']['digest'], observed['digests']['a.txt'], observed['contents'])
+        assert bytes.fromhex(names[b'left/a.txt']['data']).decode() == observed['contents']['a.txt']
+        assert names[b'left/sym']['attributes']['kind'] == 3, names[b'left/sym']
+        assert names[b'left/sym']['attributes']['mode'] == 0o777, names[b'left/sym']
+        assert names[b'left/sym']['target'] == 'a.txt', names[b'left/sym']
+        assert names[b'left']['attributes']['kind'] == 2, names[b'left']
+        assert names[b'left']['attributes']['mode'] == 0o1777, names[b'left']
+        victim = names[b'right/victim.txt']['attributes']
+        assert victim['serial'] == observed['identities']['victim.txt'], (victim, observed)
+        assert victim['references'] == 1 and victim['mode'] == 0o644, victim
+        assert names[b'right/victim.txt']['digest'] == observed['digests']['victim.txt']
+        assert bytes.fromhex(names[b'right/victim.txt']['data']).decode() == observed['contents']['victim.txt']
+        return {'root': root, 'head': snapshot['branch']['head_commit'], 'branch': snapshot,
+                'names': {name.decode(): names[name]['attributes'] for name in names},
+                'a_content': names[b'left/a.txt']['content'],
+                'a_data': names[b'left/a.txt']['data'],
+                'victim_content': names[b'right/victim.txt']['content'],
+                'absent': [name.decode() for name in SMALL_PROJECT_A_ABSENT]}
+    moved = names[b'right/moved.txt']['attributes']
+    assert moved['serial'] == observed['second_edit']['moved_inode'], (moved, observed)
+    assert moved['kind'] == 1 and moved['mode'] == 0o640, moved
+    assert (moved['mtime'], moved['nanoseconds']) == (1_700_000_999, 0), moved
+    assert names[b'right/moved.txt']['digest'] == observed['digests']['a.txt']
+    assert bytes.fromhex(names[b'right/moved.txt']['data']).decode() == observed['contents']['a.txt']
+    assert names[b'left']['attributes']['kind'] == 2, names[b'left']
+    return {'root': root, 'head': snapshot['branch']['head_commit'], 'branch': snapshot,
+            'previous_root': previous['root'],
+            'names': {name.decode(): names[name]['attributes'] for name in names},
+            'moved_content': names[b'right/moved.txt']['content'],
+            'absent': [name.decode() for name in SMALL_PROJECT_B_ABSENT]}
+
+
+def small_project_read(name):
+    """The acknowledged state as the remounted read-only Workspace presents it."""
+    code = """import json,os,stat
+p='/layerfs/workspace/read'
+def row(path):
+    s=os.lstat(p+path)
+    return {'inode':s.st_ino,'mode':stat.S_IMODE(s.st_mode),'size':s.st_size,'nlink':s.st_nlink,
+            'mtime_ns':s.st_mtime_ns,'kind':'link' if stat.S_ISLNK(s.st_mode) else ('dir' if stat.S_ISDIR(s.st_mode) else 'file')}
+result={'left':sorted(os.listdir(p+'/left')),'right':sorted(os.listdir(p+'/right')),
+        'left_row':row('/left'),'moved':row('/right/moved.txt'),'moved_body':open(p+'/right/moved.txt','rb').read().decode()}
+try: os.lstat(p+'/right/victim.txt')
+except FileNotFoundError: result['victim_absent']=True
+else: result['victim_absent']=False
+print(json.dumps(result))
+"""
+    return json.loads(driver.mount.checked(['docker', 'exec', name, 'python3', '-c', code], text=True).stdout)
+
+
+def small_project(name, output, phase):
+    """Run the 51 section 6 syscall scenario inside the mounted runtime container.
+
+    The mounted runtime's root is read-only, so the program arrives on stdin and
+    the receipt keeps both the exact source and its stdout.
+    """
+    program = output / 'small-project.py'
+    if not program.exists():
+        program.write_text(SMALL_PROJECT)
+    result = subprocess.run(['docker', 'exec', '-i', name, 'python3', '-u', '-',
+                             '/layerfs/workspace/read', phase],
+                            input=SMALL_PROJECT.encode(), capture_output=True, timeout=30)
+    (output / f'small-project-{phase}.stdout').write_bytes(result.stdout)
+    (output / f'small-project-{phase}.stderr').write_bytes(result.stderr)
+    assert result.returncode == 0, result.stderr.decode(errors='replace')
+    return json.loads(result.stdout)
 
 
 def mounted_edit(name, operation, value=0, resize=0):
@@ -220,7 +562,21 @@ def completed(client, identity, before):
 
 
 def close_client(client, name, expected=0):
+    """Close one controller and wait for its control session to be released.
+
+    The daemon admits exactly one control session and clears the slot on its own
+    schedule, so a checked close waits for the listener to be alone again.
+    """
     driver.close(client, name, expected)
+    end = time.monotonic() + 5
+    while True:
+        try:
+            driver.status.control_threads(name, 1)
+            return
+        except subprocess.CalledProcessError:
+            if time.monotonic() >= end:
+                raise
+            time.sleep(0.02)
 
 
 def execute(args, report):
@@ -260,7 +616,13 @@ def execute(args, report):
         report['fixture'] = stage_route.bootstrap(service_dir, port, keys['writer'], public['service'],
                                                  bytes.fromhex(fixture['file_root']), False)
         branch = report['fixture']['branch']
-        witness = Witness(port, keys['writer'], public['service']); previous = witness.branch(branch)
+        witness = Witness(port, keys['writer'], public['service'], name)
+        if args.case == 'commit_small_project':
+            # This case owns the daemon's single control session from its first
+            # request, so the witness opens only when the case asks it to.
+            previous = None
+        else:
+            witness.open(); previous = witness.branch(branch); witness.close()
         report['initial_branch'] = previous
         driver.mount.checked(['docker', 'volume', 'create', name + '-root']); volume = True
         expiry = int(time.time()) + 10
@@ -284,6 +646,48 @@ def execute(args, report):
         control_port = int(driver.mount.checked(['docker', 'port', name, '23456/tcp'], text=True).stdout.strip().rsplit(':', 1)[1])
         def controller(key='good', selector=1, endpoint=control_port):
             return driver.status.controller(endpoint, keys[key], public[selected], selector)
+        def next_id():
+            """One monotonically increasing request identity for this case.
+
+            A fresh session accepts any identity for its first request, so one
+            counter serves every session the case opens.
+            """
+            nonlocal identity
+            identity += 1
+            return identity
+
+        def session():
+            """One authenticated control session, once the daemon is alone again."""
+            nonlocal identity
+            time.sleep(0.1)
+            opened = controller()
+            identity = 0
+            return opened
+
+        def retry(operation, label, reopen=None):
+            """Run one operation on a live authenticated control session.
+
+            The daemon admits exactly one session and clears the slot on its own
+            schedule, so a request that arrives while another session is closing is
+            retried on a fresh session; every other failure keeps its own identity.
+            """
+            nonlocal client, identity
+            end = time.monotonic() + 20
+            while True:
+                try:
+                    return operation(client)
+                except (EOFError, BrokenPipeError):
+                    if time.monotonic() >= end:
+                        raise
+                    report.setdefault('session_handoff_retries', []).append(label)
+                    if reopen is not None:
+                        reopen.close()
+                        reopen.open()
+                        continue
+                    if client.poll() is None:
+                        close_client(client, name, 1)
+                    client = session()
+
         client = controller(); report['initial_status'] = current(client, 1, not readonly)
         if args.case == 'commit_repeated':
             reports = []; saved = []; contents = []
@@ -428,6 +832,106 @@ def execute(args, report):
             report.update(typed_failure=result, retained_status=retained, close_refusal=close,
                           qualification='Known service failure with retained submission; native clean close refused, external teardown only')
             expected_retention = True
+        elif args.case == 'commit_small_project':
+            report['checks'] = []
+            identity = 0
+            report['mounted_kernel'] = driver.mount.checked(
+                ['docker', 'exec', name, 'uname', '-srmo'], text=True).stdout.strip()
+
+            def control(operation, label):
+                """One authenticated control session for one step.
+
+                The daemon admits exactly one control session, so this case closes
+                it before the witness opens the public Service session it needs.
+                """
+                nonlocal client, identity
+                end = time.monotonic() + 20
+                while True:
+                    if client is None:
+                        time.sleep(0.1)
+                        client = controller()
+                        identity = 0
+                    try:
+                        return operation(client)
+                    except (EOFError, BrokenPipeError):
+                        if time.monotonic() >= end:
+                            raise
+                        report.setdefault('session_handoff_retries', []).append(label)
+                        if client.poll() is None:
+                            close_client(client, name, 1)
+                        client = None
+
+            def observe(operation, label):
+                """One public Service session for one read."""
+                end = time.monotonic() + 20
+                while True:
+                    if witness.closed():
+                        witness.open()
+                    try:
+                        return operation()
+                    except (EOFError, BrokenPipeError):
+                        if time.monotonic() >= end:
+                            raise
+                        report.setdefault('session_handoff_retries', []).append(label)
+                        witness.close()
+
+            def next_id():
+                nonlocal identity
+                identity += 1
+                return identity
+
+            before = control(lambda session: current(session, next_id()), 'initial-status')
+            assert before['mounted'] and not before['stopping'] and not before['closed'], before
+            assert before['generation'] == 1 and before['dirty_inodes'] == 0, before
+            report['initial_status'] = before
+            # One negative authorization check on this authenticated control
+            # surface: a Commit that names another incarnation is refused before
+            # any admission, so the live Workspace does not move.
+            denied_result = control(lambda session: commit(session, next_id(), incarnation=b'\x72' * 32),
+                                    'negative-authorization')
+            refused(denied_result, 3)
+            unchanged = control(lambda session: current(session, next_id()), 'status-after-refusal')
+            assert (unchanged['generation'], unchanged['dirty_inodes'], unchanged['revision']) == (
+                before['generation'], before['dirty_inodes'], before['revision']), unchanged
+            report['negative_authorization'] = {'selection': 'Commit-for-another-incarnation',
+                                                'result': denied_result, 'status_unchanged': unchanged}
+            report['mounted'] = small_project(name, args.output, 'first')
+            edited = control(lambda session: current(session, next_id()), 'edited-status')
+            assert edited['dirty_inodes'] > 0 and edited['mounted'], edited
+            commit_a, after_a = control(lambda session: completed(session, next_id(), edited), 'commit-A')
+            report['commit_A'] = commit_a
+            report['second_edit'] = small_project(name, args.output, 'second')
+            commit_b, after_b = control(lambda session: completed(session, next_id(), after_a), 'commit-B')
+            report['commit_B'] = commit_b
+            # Both Commits are explicit and complete before any public read: the
+            # daemon admits one control session, so the saved-state inspection runs
+            # after the last Commit and before the remount.
+            close_client(client, name); client = None
+            saved_a = observe(lambda: verify_small_project(witness, branch, commit_a,
+                                                           report['mounted'], None), 'verify-A')
+            report['saved_A'] = saved_a
+            saved_b = observe(lambda: verify_small_project(witness, branch, commit_b,
+                                                           report['second_edit'], saved_a), 'verify-B')
+            report['saved_B'] = saved_b
+            assert saved_a['root'] != saved_b['root'] and saved_b['previous_root'] == saved_a['root']
+            # A's root stays readable and unchanged while B is the live head.
+            report['root_A_after_B'] = observe(lambda: witness.root_observation(saved_a['root'], b'left/a.txt'),
+                                               'root-A-after-B')
+            assert report['root_A_after_B']['data'] == saved_a['a_data']
+            report['generations'] = {'A': {'generation': commit_a['generation'], 'head': saved_a['head'],
+                                           'root': saved_a['root']},
+                                     'B': {'generation': commit_b['generation'], 'head': saved_b['head'],
+                                           'root': saved_b['root']}}
+            witness.close()
+            report['no_hidden_commit'] = ('exactly two Commit commands were submitted; every other '
+                                          'request is Status or a public Service read')
+            assert control(lambda session: driver.unmount(session, next_id()), 'unmount-A')['outcome'] == 'Unmounted'
+            assert control(lambda session: driver.remount(session, next_id()), 'remount')['outcome'] == 'Mounted'
+            report['remounted'] = control(lambda session: current(session, next_id()), 'remounted-status')
+            report['remounted_read'] = small_project_read(name)
+            assert control(lambda session: driver.unmount(session, next_id()), 'unmount-B')['outcome'] == 'Unmounted'
+            assert control(lambda session: driver.close_clean(session, next_id()), 'close')['outcome'] == 'Closed'
+            report['closed'] = control(lambda session: current(session, next_id(), writable=False), 'closed-status')
         else: raise AssertionError(args.case)
         close_client(client, name); client = None
         witness.close(); witness = None
@@ -443,6 +947,12 @@ def execute(args, report):
         report['checks'] = [{'id': key, 'status': 'PASS'} for key in driver.CASES[args.case]]
     finally:
         original_failure = sys.exc_info()[0] is not None
+        if daemon is not None and daemon.poll() is None:
+            probe = driver.mount.checked(['docker', 'exec', name, 'sh', '-c',
+                'cat /proc/net/tcp | head -8; echo ---; python3 -c \"'
+                'import socket;s=socket.create_connection((\'127.0.0.1\',23456),timeout=3);'
+                'print(\'CONNECTED\',s.getsockname());s.close()\"'], text=True)
+            report['daemon_probe'] = probe.stdout
         cleanup_failures = []
         def cleanup_attempt(owner, operation):
             try: return operation()

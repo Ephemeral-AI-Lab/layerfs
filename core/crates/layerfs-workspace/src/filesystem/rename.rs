@@ -331,13 +331,18 @@ impl Workspace {
             }
             if let Some((name, serial, kind)) = &parent.bind {
                 let added = (10 + name.len()) as u32;
-                if !directories::has_entry(
+                // The destination name is bound by this publication whatever the
+                // origin held: an inherited binding for it is shadowed by the new
+                // entry, and a removal record this operation wrote for the same
+                // name is cleared, because one name owns a binding or a removal.
+                let local = directories::has_entry(
                     &candidate,
                     parent.directory.entries,
                     name,
                     window,
                     deadline,
-                )? {
+                )?;
+                if !local {
                     parent.directory.count = parent
                         .directory
                         .count
@@ -354,6 +359,8 @@ impl Workspace {
                 if parent.directory.count > 128 {
                     return Err(WorkspaceError::Capacity);
                 }
+                parent.directory.tombstones =
+                    directories::keep_name(&candidate, parent.directory, name, window, deadline)?;
                 let mut entry = vector(1)?;
                 entry.push(Cell::new(
                     &metadata_pages::entry_key(name)?,

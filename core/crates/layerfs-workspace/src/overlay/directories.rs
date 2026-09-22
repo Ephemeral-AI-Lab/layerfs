@@ -253,6 +253,50 @@ pub fn has_entry(
         .find(entries, &metadata_pages::entry_key(name)?, window, deadline)?
         .is_some())
 }
+/// Rebuilds one directory's removal page without `name`, so a name this delta
+/// binds again carries no removal record. One name owns a binding or a removal,
+/// never both.
+pub fn keep_name(
+    candidate: &RootOwner,
+    directory: Directory,
+    name: &[u8],
+    window: &mut Window,
+    deadline: Instant,
+) -> Result<PageRef, WorkspaceError> {
+    if directory.tombstones == PageRef::NULL {
+        return Ok(PageRef::NULL);
+    }
+    let mut names: Vec<Vec<u8>> = crate::backing::metadata_index::vector(128)?;
+    let mut lower = vec![b'T'];
+    let mut removed = false;
+    while let Some(cell) = candidate.arena.next(
+        directory.tombstones,
+        &lower,
+        !names.is_empty(),
+        window,
+        deadline,
+    )? {
+        if names.len() == 128 || cell.key() <= lower.as_slice() {
+            return Err(WorkspaceError::Capacity);
+        }
+        let existing = tombstone(cell.key())?;
+        if existing == name {
+            removed = true;
+        } else {
+            names.push(existing.to_vec());
+        }
+        lower = cell.key().to_vec();
+    }
+    if !removed {
+        // The name carries no removal record, so the page is already the one
+        // this binding needs and no page is written.
+        return Ok(directory.tombstones);
+    }
+    if names.len() == 128 {
+        return Err(WorkspaceError::Capacity);
+    }
+    candidate.build_ordered(name_page(&mut names, 0), window, deadline)
+}
 /// Rebuilds one directory's entry page without `name`, and reports whether the
 /// name was bound locally. A removed name becomes a tombstone instead, because
 /// one name must never own both a binding and its removal: lowering would emit

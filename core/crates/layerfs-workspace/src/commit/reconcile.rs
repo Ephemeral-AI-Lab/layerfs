@@ -16,12 +16,14 @@ use crate::{
 use layerfs_bridge::contract::CommitOutcomeWire;
 use std::{sync::Arc, time::Instant};
 /// One record the successor root must carry: a counted dirty identity, or an
-/// identity this generation created that no name binds any more.
+/// identity no name binds any more that still has a live local owner.
 enum Frontier {
     Counted(Dirty),
     /// No dirty key and no declaration, but its record still moves to the
     /// successor root so a live handle and a pinned reader keep reading their
     /// own version locally instead of asking the service for a name that is gone.
+    /// Either this generation created the identity, or the attached base owns it
+    /// and a live local owner still addresses the record this generation left.
     Unbound(Inode),
 }
 struct Current {
@@ -29,8 +31,9 @@ struct Current {
     generation: u64,
     revision: u64,
     count: usize,
-    /// Serials of identities this generation created that no name binds any
-    /// more, in increasing order.
+    /// Serials of identities no name binds any more that still have a live local
+    /// owner, in increasing order: the ones this generation created, and the
+    /// base identities a replacement or removal left with a record to keep.
     unbound: Vec<u64>,
 }
 impl Current {
@@ -299,7 +302,17 @@ impl Workspace {
             {
                 return Err(WorkspaceError::Io);
             }
+            // A record is carried only while a live local owner can still
+            // address it. An identity whose handle and lookup references are both
+            // gone has no owner left to serve, so nothing is carried for it and
+            // the arena can be reclaimed.
             let mut unbound = state.unbound.clone();
+            unbound.extend(state.carried.iter().copied().filter(|serial| {
+                state.nodes.iter().any(|node| {
+                    node.attr.serial == *serial
+                        && (node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0)
+                })
+            }));
             unbound.sort_unstable();
             unbound.dedup();
             (

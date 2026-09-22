@@ -14,11 +14,11 @@ use std::{
     io::Write,
     mem::size_of,
     path::{Component, Path},
+    sync::atomic::AtomicUsize,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
-    sync::atomic::AtomicUsize,
     time::Instant,
 };
 const WORKSPACE_STATE_BYTES: usize =
@@ -400,6 +400,7 @@ impl WorkspaceHost {
                     fresh: Vec::new(),
                     declared: Vec::new(),
                     unbound: Vec::new(),
+                    carried: Vec::new(),
                     closed: false,
                     active: 0,
                     tables: Some(tables),
