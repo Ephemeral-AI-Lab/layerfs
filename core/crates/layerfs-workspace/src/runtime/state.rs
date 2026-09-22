@@ -315,6 +315,40 @@ impl State {
                 || node.handles > 0
         });
     }
+    /// The attributes one caller sees: a regular inode presents its live
+    /// namespace link count as `references`. Other kinds are not linkable and
+    /// keep the count their resolution selected.
+    pub(crate) fn presented(&self, mut attr: NodeAttributes) -> NodeAttributes {
+        if attr.kind == NodeKind::File {
+            if let Some(count) = self.live_names(attr.serial) {
+                attr.references = count;
+            }
+        }
+        attr
+    }
+    /// The live namespace link count of one regular identity, if this state
+    /// knows it: the resident node's maintained count, or this generation's
+    /// tracked count for an identity it created. A re-resolved base identity
+    /// keeps the canonical count its resolution selected until the next Commit
+    /// republishes it.
+    fn live_names(&self, serial: u64) -> Option<u64> {
+        if let Some(node) = self.nodes.iter().find(|node| node.attr.serial == serial) {
+            return Some(node.names as u64);
+        }
+        self.fresh
+            .iter()
+            .find(|entry| entry.serial == serial)
+            .map(|entry| entry.names as u64)
+    }
+    /// The live namespace link count a newly resolved identity starts from:
+    /// this generation's tracked count for an identity it created, otherwise
+    /// the count the resolution itself selected.
+    pub(crate) fn resolved_names(&self, attr: &NodeAttributes) -> u32 {
+        match self.fresh.iter().find(|entry| entry.serial == attr.serial) {
+            Some(entry) => entry.names,
+            None => u32::try_from(attr.references).unwrap_or(u32::MAX),
+        }
+    }
 }
 impl Workspace {
     pub fn id(&self) -> &str {
@@ -396,7 +430,7 @@ impl Workspace {
             .iter()
             .find(|entry| entry.id == handle && entry.ready)
             .ok_or(WorkspaceError::BadHandle)?;
-        Ok(state.node(handle.serial)?.attr)
+        Ok(state.presented(state.node(handle.serial)?.attr))
     }
     pub(crate) fn release_handle(
         &self,

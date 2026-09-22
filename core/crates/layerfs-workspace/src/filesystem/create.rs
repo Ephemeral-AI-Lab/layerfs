@@ -431,7 +431,7 @@ impl Workspace {
         // A hard link adds one name to an inode that already exists, so the new
         // name reports exactly the shared inode's kind, size and portable
         // metadata instead of a freshly constructed file's defaults.
-        let child_attr = match target {
+        let mut child_attr = match target {
             Some(target) => target,
             None => NodeAttributes {
                 serial,
@@ -659,6 +659,7 @@ impl Workspace {
                         .names
                         .checked_add(1)
                         .ok_or(WorkspaceError::Capacity)?;
+                    child_attr.references = state.nodes[index].names as u64;
                     *node.references(reference) = 0;
                 }
                 None => {

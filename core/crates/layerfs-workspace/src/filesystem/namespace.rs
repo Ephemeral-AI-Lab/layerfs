@@ -210,7 +210,14 @@ impl Workspace {
             {
                 return Err(WorkspaceError::InvalidInput);
             }
-            if node.attr.kind != original.kind || node.attr.references != original.references {
+            if node.attr.kind != original.kind {
+                return Err(WorkspaceError::InvalidInput);
+            }
+            // Within one baseline the resident node and this resolution must
+            // agree on the namespace link count. A Commit that republished the
+            // identity canonically can change it (a link or a removal), and the
+            // node then refreshes exactly as its original and roots do below.
+            if node.baseline == baseline && node.attr.references != original.references {
                 return Err(WorkspaceError::InvalidInput);
             }
             node.original = original;
@@ -227,15 +234,18 @@ impl Workspace {
             let mut node = Node::new(original, content, metadata, path, parent);
             node.attr = attr;
             node.baseline = if canonical { baseline } else { 0 };
+            // A newly resolved identity starts from the live namespace link
+            // count this state already tracks, not from a single name.
+            node.names = state.resolved_names(&attr);
             *node.references(scope) = 1;
             state.nodes.push(node);
         }
-        Ok(attr)
+        Ok(state.presented(attr))
     }
     pub fn getattr(&self, serial: u64) -> Result<NodeAttributes, WorkspaceError> {
         let state = self.state()?;
         self.available(&state)?;
-        Ok(state.node(serial)?.attr)
+        Ok(state.presented(state.node(serial)?.attr))
     }
     pub fn forget(&self, serial: u64, count: u64, scope: ReferenceScope) {
         if let Ok(mut state) = self.state() {

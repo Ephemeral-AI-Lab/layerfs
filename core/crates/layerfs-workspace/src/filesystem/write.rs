@@ -520,7 +520,7 @@ impl Workspace {
                     revision: state.revision,
                     accepted_bytes: 0,
                 },
-                attributes: inode.attributes(original),
+                attributes: state.presented(inode.attributes(original)),
                 delivery: None,
                 published_handle: None,
             });
@@ -740,7 +740,7 @@ impl Workspace {
             accepted_bytes,
         };
         let published_handle = open.as_ref().map(|reserved| reserved.id);
-        let attributes = inode.attributes(original);
+        let attributes = state.presented(inode.attributes(original));
         // SETATTR and CREATE's kernel owners invalidate after their replies and
         // lock boundaries. A synchronous notification here could wait on itself.
         let delivery = if matches!(

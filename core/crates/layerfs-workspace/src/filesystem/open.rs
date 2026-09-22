@@ -142,7 +142,7 @@ impl Workspace {
             if origin.projected() {
                 self.check_projected_mutation(&state, true)?;
             }
-            let attr = state.node(serial)?.attr;
+            let attr = state.presented(state.node(serial)?.attr);
             let handle = self.insert_handle(&mut state, serial, false, scope, options, true)?;
             return Ok((attr, handle));
         }

@@ -117,10 +117,11 @@ impl Workspace {
         )?;
         let (attr, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-        if attr.serial != serial
-            || attr.kind != selected.kind
-            || attr.references != selected.references
-        {
+        // This query runs only when the node's baseline is stale, so the cached
+        // path must still name the same identity. Its link count is not part of
+        // that stability: the Commit that moved the baseline may have republished
+        // the identity with a changed count, and this resolution is the refresh.
+        if attr.serial != serial || attr.kind != selected.kind {
             return Err(WorkspaceError::InvalidInput);
         }
         Ok((attr, content, metadata, baseline))
