@@ -23,7 +23,8 @@ selected kernel/SDK, custody and G/D1 paths. [Symlink-content constructor45](45-
 verifies exact target-object saves. [Prepared symlinks46](46-prepared-symlinks.md)
 verifies shared direct/C5 fresh declarations. [Native symlink47](47-native-symlink.md)
 verifies ten selected functional routes, including typed backing failure custody.
-Kernel symlinks and the full prepared upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
+[Mounted SYMLINK48](48-mounted-symlink.md) verifies seven kernel/native selections.
+The full prepared upload remains open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 
 ## Continuation recorded after this checkpoint

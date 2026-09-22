@@ -77,7 +77,8 @@ impl Workspace {
             MutationOrigin::ProjectionWrite { .. }
             | MutationOrigin::ProjectionSize
             | MutationOrigin::ProjectionMkdir
-            | MutationOrigin::ProjectionCreate => ReferenceScope::Projection,
+            | MutationOrigin::ProjectionCreate
+            | MutationOrigin::ProjectionSymlink => ReferenceScope::Projection,
         };
         if handle.scope != scope {
             return Err(WorkspaceError::Unsupported);

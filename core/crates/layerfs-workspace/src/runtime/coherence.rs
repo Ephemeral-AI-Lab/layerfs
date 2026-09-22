@@ -12,6 +12,7 @@ pub(crate) enum MutationOrigin {
     ProjectionSize,
     ProjectionMkdir,
     ProjectionCreate,
+    ProjectionSymlink,
 }
 impl MutationOrigin {
     pub fn projected(self) -> bool {
@@ -21,7 +22,10 @@ impl MutationOrigin {
         match self {
             Self::Local => stored,
             Self::ProjectionWrite { append } => append,
-            Self::ProjectionSize | Self::ProjectionMkdir | Self::ProjectionCreate => false,
+            Self::ProjectionSize
+            | Self::ProjectionMkdir
+            | Self::ProjectionCreate
+            | Self::ProjectionSymlink => false,
         }
     }
 }
@@ -165,6 +169,28 @@ impl ProjectionMutationPermit {
             options,
             deadline.min(self.deadline),
             MutationOrigin::ProjectionCreate,
+        )
+    }
+    /// Publishes one symlink and returns one Projection lookup reference. Keep
+    /// this permit through the entry reply; the kernel installs the entry and
+    /// invalidates its parent, so this operation sends no reverse notification.
+    pub fn symlink(
+        &mut self,
+        parent: u64,
+        name: &[u8],
+        target: &[u8],
+        deadline: Instant,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.symlink_from(
+            parent,
+            name,
+            target,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionSymlink,
         )
     }
 }

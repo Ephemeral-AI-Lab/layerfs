@@ -3,7 +3,7 @@
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Implementation parent: `2fc2e8d7a100b812a46753c4b35d383bedac448d`.
 > Frozen product input seal: `af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
-> Implementation and declared functional checks are complete; exact commit confirmation is pending.
+> Exact implementation commit: `9060c26bcc3e905e031415da20cec54352b94192`; [confirmation](evidence/native-symlink/commit-confirmed.json).
 
 This round adds `Workspace::symlink(parent, name, target, deadline)`, returning
 `NodeAttributes` with one Local lookup reference and no file handle. The operation
@@ -178,7 +178,8 @@ worker and an actual two-CPU Linux runtime. No forced cleanup or failed attempt
 occurred. These are functional elapsed times, not eligible cold/performance rows.
 [Functional index](evidence/native-symlink/functional-index.json.gz),
 [caller review](evidence/native-symlink/caller-review.json.gz) and
-[archive manifest](evidence/native-symlink/archive-manifest.json) retain commands,
+[archive manifest](evidence/native-symlink/archive-manifest.json) plus the append-only
+[stdout/stderr supplement](evidence/native-symlink/log-supplement-manifest.json) retain commands,
 identities, logs including client/fixture stderr, and cleanup qualifications.
 
 Locked/offline Rust1.85.1 whole-core checks passed: host702 tests/3 ignored;

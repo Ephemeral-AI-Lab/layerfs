@@ -8,7 +8,7 @@ driver.CASES = {
     'semantics': 'native-opaque-empty-self-symlinks-forget-listing-and-explicit-Commit',
     'successor': 'captured-local-readlink-and-D1-file-plus-symlink-reconcile',
     'capacity': 'exact-long-name-v3-frontier-full4096-target-and-mixed-file-Commit',
-    'refusals': 'native-symlink-target-name-access-kind-readonly-deadline-and-mounted-refusals',
+    'refusals': 'native-symlink-target-name-access-kind-readonly-deadline-and-unbound-projection-refusals',
     'reserve_denied': 'symlink-denied-Reserve-no-name-handle-or-replay',
     'reserve_unknown': 'symlink-unknown-Reserve-consumed-once-no-name-or-replay',
 }

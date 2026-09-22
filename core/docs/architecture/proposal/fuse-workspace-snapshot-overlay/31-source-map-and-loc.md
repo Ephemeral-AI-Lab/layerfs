@@ -1,8 +1,8 @@
 # Current source map and exact LOC
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Implementation parent: `2fc2e8d7a100b812a46753c4b35d383bedac448d`.
-> Frozen production input seal: `af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
+> Implementation parent: `9060c26bcc3e905e031415da20cec54352b94192`.
+> Frozen production input seal: `e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`.
 > Exact implementation commit: **pending**; counts bind the frozen production seal above.
 > These are actual source counts, not 04's historical planning allowances.
 
@@ -22,7 +22,7 @@ against the frozen source snapshot. Once committed, archive that exact commit's
 `crates` and `core/crates` and rerun the same commands for confirmation.
 The linked JSON uses the same counter's per_file() function and records the parent
 and product seal without representing the unchanged parent as the counted source.
-[Current per-file machine-readable inventory](evidence/native-symlink/source-loc.json)
+[Current per-file machine-readable inventory](evidence/mounted-symlink/source-loc.json)
 records this new frozen production inventory and unchanged reference
 tree. The prior [symlink-constructor inventory](evidence/construct-symlink/source-loc.json) and its
 [commit confirmation](evidence/construct-symlink/commit-confirmed.json), plus the
@@ -54,8 +54,8 @@ retain their original source pins and counts. No historical receipt is relabeled
 | Core crate | P | L | Production files | Responsibility |
 | --- | ---: | ---: | ---: | --- |
 | `layerfs-daemon` | 1364 | 1458 | 8 | Process/configuration, authenticated control and one current lifecycle owner shared with shutdown |
-| `layerfs-fuse` | 1171 | 1273 | 4 | Linux kernel projection, replies, mount/session ownership |
-| `layerfs-workspace` | 11915 | 12150 | 45 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
+| `layerfs-fuse` | 1207 | 1313 | 4 | Linux kernel projection, replies, mount/session ownership |
+| `layerfs-workspace` | 11945 | 12185 | 45 | Shared portable filesystem semantics, private backing, capture and Commit orchestration |
 | `layerfs-bridge` | 5570 | 6100 | 26 | Logical operation contract, Source, authorization identity and native framing/delivery |
 | `layerfs-service` | 2242 | 2438 | 17 | Authorized operation dispatch and service-local C1/C2/C5 assembly |
 | `layerfs-content` | 12549 | 16356 | 70 | C1 canonical content/filesystem algorithms and attributes |
@@ -63,10 +63,16 @@ retain their original source pins and counts. No historical receipt is relabeled
 | `layerfs-history` | 2722 | 3578 | 15 | C5 stages, Branch/Commit/Layer catalog transactions |
 | `layerfs-telemetry` | 2257 | 2743 | 23 | Shared bounded operation observation/output |
 
-Core total: **47466 P / 56749 L**, across 255 files. Reference total:
-**65417 P / 91466 L**, across 193 files. Combined: **112883 P / 148215 L**. Root `crates/` is reference-only, including its
+Core total: **47532 P / 56824 L**, across 255 files. Reference total:
+**65417 P / 91466 L**, across 193 files. Combined: **112949 P / 148290 L**. Root `crates/` is reference-only, including its
 same-named packages; never import, link or include it into the replacement product.
 These are source-size observations, not memory or performance evidence.
+
+## Mounted symbolic links
+
+FUSE projects the shared symlink operation with existing mutation permits and
+checked entry coherence. Native target storage and save paths remain unchanged;
+see [48](48-mounted-symlink.md).
 
 ## Native symbolic links
 
@@ -250,9 +256,9 @@ core/crates/layerfs-daemon/  [P=1364; L=1458; N=8]
 ### layerfs-fuse
 
 ```text
-core/crates/layerfs-fuse/  [P=1171; L=1273; N=4]
-`-- src/  [P=1171; L=1273; N=4]
-    |-- adapter.rs  [P=663; L=709]
+core/crates/layerfs-fuse/  [P=1207; L=1313; N=4]
+`-- src/  [P=1207; L=1313; N=4]
+    |-- adapter.rs  [P=699; L=749]
     |-- lib.rs  [P=7; L=10]
     |-- mount.rs  [P=403; L=448]
     `-- replies.rs  [P=98; L=106]
@@ -261,8 +267,8 @@ core/crates/layerfs-fuse/  [P=1171; L=1273; N=4]
 ### layerfs-workspace
 
 ```text
-core/crates/layerfs-workspace/  [P=11915; L=12150; N=45]
-`-- src/  [P=11915; L=12150; N=45]
+core/crates/layerfs-workspace/  [P=11945; L=12185; N=45]
+`-- src/  [P=11945; L=12185; N=45]
     |-- backing/  [P=4488; L=4551; N=13]
     |   |-- budget.rs  [P=54; L=56]
     |   |-- directory.rs  [P=206; L=208]
@@ -286,8 +292,8 @@ core/crates/layerfs-workspace/  [P=11915; L=12150; N=45]
     |   |-- reconcile.rs  [P=329; L=335]
     |   |-- save.rs  [P=325; L=326]
     |   `-- source.rs  [P=155; L=156]
-    |-- filesystem/  [P=2753; L=2808; N=11]
-    |   |-- create.rs  [P=560; L=572]
+    |-- filesystem/  [P=2760; L=2817; N=11]
+    |   |-- create.rs  [P=555; L=567]
     |   |-- directory.rs  [P=152; L=153]
     |   |-- mkdir.rs  [P=36; L=39]
     |   |-- mod.rs  [P=10; L=10]
@@ -296,16 +302,16 @@ core/crates/layerfs-workspace/  [P=11915; L=12150; N=45]
     |   |-- open.rs  [P=230; L=236]
     |   |-- original.rs  [P=124; L=128]
     |   |-- read.rs  [P=254; L=258]
-    |   |-- symlink.rs  [P=142; L=151]
-    |   `-- write.rs  [P=718; L=729]
+    |   |-- symlink.rs  [P=153; L=164]
+    |   `-- write.rs  [P=719; L=730]
     |-- overlay/  [P=898; L=902; N=4]
     |   |-- directories.rs  [P=181; L=183]
     |   |-- mod.rs  [P=3; L=3]
     |   |-- pieces.rs  [P=338; L=339]
     |   `-- snapshot.rs  [P=376; L=377]
-    |-- runtime/  [P=1633; L=1700; N=6]
+    |-- runtime/  [P=1656; L=1726; N=6]
     |   |-- attachment.rs  [P=256; L=266]
-    |   |-- coherence.rs  [P=347; L=381]
+    |   |-- coherence.rs  [P=370; L=407]
     |   |-- host.rs  [P=499; L=506]
     |   |-- lifecycle.rs  [P=161; L=168]
     |   |-- mod.rs  [P=5; L=5]

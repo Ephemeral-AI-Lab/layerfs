@@ -276,6 +276,11 @@ impl Filesystem for Adapter {
                 .map_err(errno)
         });
         match result {
+            // Keep the Linux projection within its PATH_MAX convention, even
+            // when native SDK/C1 state contains a valid 4096-byte target.
+            Ok(bytes) if bytes.as_ref().len() >= libc::PATH_MAX as usize => {
+                reply.error(Errno::ENAMETOOLONG)
+            }
             Ok(bytes) => reply.data(bytes.as_ref()),
             Err(error) => reply.error(error),
         }
@@ -597,8 +602,43 @@ impl Filesystem for Adapter {
     fn rmdir(&self, req: &Request, _: INodeNo, _: &OsStr, reply: ReplyEmpty) {
         reply.error(self.readonly(req));
     }
-    fn symlink(&self, req: &Request, _: INodeNo, _: &OsStr, _: &Path, reply: ReplyEntry) {
-        reply.error(self.readonly(req));
+    fn symlink(
+        &self,
+        req: &Request,
+        parent: INodeNo,
+        name: &OsStr,
+        target: &Path,
+        reply: ReplyEntry,
+    ) {
+        let deadline = Instant::now() + CALLBACK_BUDGET;
+        let mut permit = self.guard(req).and_then(|()| {
+            if !self.writable {
+                return Err(Errno::EROFS);
+            }
+            self.workspace
+                .begin_projection_mutation(deadline)
+                .map_err(errno)
+        });
+        let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
+            let value = permit
+                .symlink(
+                    serial(parent, self.root()),
+                    name.as_bytes(),
+                    target.as_os_str().as_bytes(),
+                    deadline,
+                )
+                .map_err(errno)?;
+            attributes(value, self.root()).inspect_err(|_| {
+                self.workspace
+                    .forget(value.serial, 1, ReferenceScope::Projection);
+            })
+        });
+        // The parent lock remains kernel-owned through SYMLINK. Keep the permit
+        // through the reply attempt and let the kernel install/invalidate entries.
+        match result {
+            Ok(value) => reply.entry(&TTL, &value, Generation(0)),
+            Err(error) => reply.error(error),
+        }
     }
     fn rename(
         &self,

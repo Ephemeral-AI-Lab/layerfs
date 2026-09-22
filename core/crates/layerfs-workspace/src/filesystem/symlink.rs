@@ -3,6 +3,7 @@ use super::create::Creation;
 use crate::{
     backing::{metadata::RootOwner, metadata_index::vector},
     overlay::pieces::{Inode, PieceKind},
+    runtime::coherence::MutationOrigin,
     *,
 };
 use layerfs_bridge::contract::{Inspect, Operation, Response, Source, SYMLINK_TARGET_BYTES};
@@ -11,7 +12,9 @@ use std::{sync::Arc, time::Instant};
 impl Workspace {
     /// Creates a symlink with mode 0777 and one Local lookup reference, without
     /// opening a handle. Targets are opaque non-NUL bytes, including empty.
-    /// Mounted namespace creation is unsupported by this native operation.
+    /// Mounted success includes checked parent/entry invalidation. A later
+    /// Coherence error retains the published name and target and releases only
+    /// this attempt's unreturned lookup reference.
     pub fn symlink(
         &self,
         parent: u64,
@@ -19,7 +22,17 @@ impl Workspace {
         target: &[u8],
         deadline: Instant,
     ) -> Result<NodeAttributes, WorkspaceError> {
-        self.create_child(parent, name, Creation::Symlink { target }, deadline)
+        self.symlink_from(parent, name, target, deadline, MutationOrigin::Local)
+    }
+    pub(crate) fn symlink_from(
+        &self,
+        parent: u64,
+        name: &[u8],
+        target: &[u8],
+        deadline: Instant,
+        origin: MutationOrigin,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        self.create_child(parent, name, Creation::Symlink { target, origin }, deadline)
             .map(|(attributes, _)| attributes)
     }
 

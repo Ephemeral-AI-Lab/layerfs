@@ -39,6 +39,7 @@ pub(super) enum Creation<'a> {
     },
     Symlink {
         target: &'a [u8],
+        origin: MutationOrigin,
     },
 }
 impl Workspace {
@@ -91,7 +92,7 @@ impl Workspace {
                 Some(options.open),
                 NodeKind::File,
             ),
-            Creation::Symlink { .. } => (0o777, 0, MutationOrigin::Local, None, NodeKind::Symlink),
+            Creation::Symlink { origin, .. } => (0o777, 0, origin, None, NodeKind::Symlink),
         };
         let file = kind == NodeKind::File;
         let directory = kind == NodeKind::Directory;
@@ -104,7 +105,7 @@ impl Workspace {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
-        if let Creation::Symlink { target } = creation {
+        if let Creation::Symlink { target, .. } = creation {
             if target.len() > SYMLINK_TARGET_BYTES {
                 return Err(WorkspaceError::Capacity);
             }
@@ -125,9 +126,6 @@ impl Workspace {
         let (view, path, attr, baseline, revision, generation, frozen, scope) = {
             let state = self.state()?;
             self.available(&state)?;
-            if symlink && state.mounted {
-                return Err(WorkspaceError::Unsupported);
-            }
             self.check_mutation_coherence(&state, origin, false)?;
             let node = state.node(parent)?;
             if node.attr.kind != NodeKind::Directory {
@@ -243,7 +241,7 @@ impl Workspace {
         };
         // Even a later race/failure leaves this real reservation consumed.
         self.maintain_backing(deadline)?;
-        let payload = if let Creation::Symlink { target } = creation {
+        let payload = if let Creation::Symlink { target, .. } = creation {
             if target.is_empty() {
                 None
             } else {
@@ -330,7 +328,7 @@ impl Workspace {
         let child_attr = NodeAttributes {
             serial,
             kind,
-            size: if let Creation::Symlink { target } = creation {
+            size: if let Creation::Symlink { target, .. } = creation {
                 target.len() as u64
             } else {
                 0
@@ -546,9 +544,6 @@ impl Workspace {
         kind: NodeKind,
     ) -> Result<(), WorkspaceError> {
         self.available(state)?;
-        if kind == NodeKind::Symlink && state.mounted {
-            return Err(WorkspaceError::Unsupported);
-        }
         if kind == NodeKind::File {
             super::open::handle_slot(state)?;
         }

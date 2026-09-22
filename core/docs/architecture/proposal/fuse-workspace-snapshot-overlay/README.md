@@ -20,13 +20,14 @@ now verifies exact target saves through the existing C1/C2 path. [Prepared fresh
 symlinks](46-prepared-symlinks.md) verifies shared direct/C5 declarations with
 canonical reference counts. [Native symlink creation](47-native-symlink.md) now
 verifies target ownership, local/canonical Readlink, G/D1 and typed failures.
-Kernel symlink creation and complete workload admission remain open.
+[Mounted SYMLINK](48-mounted-symlink.md) now verifies kernel/SDK creation,
+checked notification custody and exact target/readlink boundaries. Complete workload
+admission remains open.
 
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry
 notification failure/recovery. It uses [native mkdir](39-native-mkdir.md)'s maintained
-directory state, exact saveability admission and G/D1 reconciliation. Mounted
-symlink creation, full prepared upload and R6 remain open.
+directory state, exact saveability admission and G/D1 reconciliation. Full prepared upload and R6 remain open.
 
 **Shared directory prerequisite:** [prepared directory construction and metadata](38-prepared-directories.md)
 is implemented and functionally verified under the existing Service save path.

@@ -44,8 +44,11 @@ mutation, automatic inode attachment or Branch publication.
 The native symlink addition described below is based on parent
 `2fc2e8d7a100b812a46753c4b35d383bedac448d` and frozen product input seal
 `af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
-Its final verification and implementation-commit evidence are pending in
-[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md).
+Its verification and commit `9060c26bcc3e905e031415da20cec54352b94192` are recorded in
+[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md). The mounted
+extension is based on that commit and frozen seal
+`e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`;
+its actual checks are recorded in [Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md).
 
 ## Boundaries and public calls
 
@@ -731,8 +734,8 @@ The native symlink extension after source commit
 `2fc2e8d7a100b812a46753c4b35d383bedac448d` adds
 `Workspace::symlink(parent, name, target, deadline)`. It shares child publication,
 atomically installing one Local lookup reference, a kind3 binding/inode, parent
-mtime and generation accounting, with no file handle. Mounted creation refuses
-before reservation or target preparation. One exact-scope C5 reservation precedes
+mtime and generation accounting, with no file handle. The mounted extension below
+uses the same ownership path. One exact-scope C5 reservation precedes
 bounded payload acquisition. Empty targets use no payload; nonempty targets use
 one existing Local piece and custody, with byte26 of the160-byte I record marking
 the kind and the16-byte E record accepting kind3.
@@ -752,6 +755,26 @@ The fresh-symlink count participates in current/captured generation accounting a
 the same complete-request admission as files and directories. Existing128-row/name,
 32768-byte request, backing, worker and scratch limits remain.
 [Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md) records the
-implementation, source-derived resource arithmetic and pending verification.
-Kernel SYMLINK, full preinstalled DSH admission and Round43's native-capacity
-failure remain open.
+implementation, source-derived resource arithmetic and completed native checks.
+Full preinstalled DSH admission and Round43's native-capacity failure remain open.
+
+The mounted symlink extension after `9060c26bcc3e905e031415da20cec54352b94192`
+adds ProjectionMutationPermit::symlink and a kernel SYMLINK callback. The single
+attempt uses the earlier permit/call deadline, publishes one Projection reference
+and no handle, and holds the permit through the entry reply. The kernel owns
+parent/name invalidation after its reply, so this path sends no reverse notification.
+Pre-reply attribute conversion failure releases the withheld reference. An entry
+reply has no observed delivery result; no guessed rollback follows its send.
+
+Native SDK creation while mounted uses the existing parent-attribute/name invalidator.
+It publishes a Pending receipt with no handle; a failed notifier retains the name,
+target and Failed state and releases only its unreturned Local reference. Checked
+Unmount/Mount recovers projection through the existing lifecycle path.
+
+The native target grammar remains0..4096 opaque non-NUL bytes. Actual Linux syscall
+creation accepts1..4095, rejecting empty/4096 before FUSE. Shared FUSE Readlink
+returns ENAMETOOLONG for a target at least Linux PATH_MAX bytes, on both local and
+canonical paths, preserving exact native4096-byte reads without a truncated kernel
+success. Native empty targets remain available for mounted SDK qualification.
+[Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md) records
+sources, selected kernel proofs and exact verification.

@@ -571,7 +571,7 @@ mod linux {
     }
 
     #[test]
-    #[ignore = "requires configured UID1000 access and separate root-owned actual mount"]
+    #[ignore = "requires configured UID1000 access and unbound projection refusal"]
     fn symlink_refusals() {
         let f = fixture(Gate::None);
         let parent = f.workspace.root().serial;
@@ -643,7 +643,7 @@ mod linux {
         ro.close_clean().unwrap();
         let projected = Fixture::new(Gate::None);
         assert_eq!(projected.workspace.root().uid, 0);
-        let mut mount = layerfs_fuse::mount(&projected.workspace, deadline()).unwrap();
+        let mut mount = projected.workspace.reserve_mount().unwrap();
         assert!(projected.workspace.status().unwrap().mounted);
         assert_eq!(
             projected.workspace.symlink(
@@ -652,12 +652,12 @@ mod linux {
                 b"target",
                 deadline()
             ),
-            Err(WorkspaceError::Unsupported)
+            Err(WorkspaceError::Busy)
         );
         assert_eq!(reserves(&projected), 0);
         assert_eq!(constructors(&projected), 0);
         assert_eq!(projected.workspace.backing_status().unwrap().payloads, 0);
-        mount.unmount(deadline()).unwrap();
+        mount.finish().unwrap();
         projected.workspace.close_clean().unwrap();
         assert_eq!(reserves(&f), 0);
         assert_eq!(constructors(&f), 0);
@@ -706,7 +706,7 @@ mod linux {
         assert_eq!(readlink(&f, a.serial), b"data.bin");
         let report = commit(&f);
         saved(&f, root(&report), b"link", b"data.bin", a);
-        check("native-symlink-target-name-access-kind-readonly-deadline-and-mounted-refusals");
+        check("native-symlink-target-name-access-kind-readonly-deadline-and-unbound-projection-refusals");
         close(
             &f,
             &[],
