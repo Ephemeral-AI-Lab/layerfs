@@ -50,6 +50,7 @@ fn prepared(workspace: [u8; 32], branch: [u8; 17]) -> PreparedChanges {
     PreparedChanges {
         directory_metadata: Vec::new(),
         new_directories: Vec::new(),
+        new_file_serials: Vec::new(),
         workspace,
         branch,
         expected_head: Some([0x12; 33]),
@@ -690,6 +691,7 @@ fn classification_is_exhaustive_and_semantic() {
         Operation::UpdatePreparedFilesystem {
             directory_metadata: Vec::new(),
             new_directories: Vec::new(),
+            new_file_serials: Vec::new(),
             base: [0; 32],
             scope: [0; 32],
             root_serial: 1,

@@ -181,6 +181,9 @@ pub struct PreparedChanges {
     pub new_directories: Vec<super::DirectoryMetadata>,
     /// Portable patches to existing directories, preserving their other attributes.
     pub directory_metadata: Vec<super::DirectoryMetadata>,
+    /// Fresh regular-file identities, a sorted subset of kind-1 `inodes` rows.
+    /// The caller's scope allocator must never reuse an exposed serial.
+    pub new_file_serials: Vec<u64>,
 }
 
 /// One pathless manifest entry of a bounded namespace initialization.

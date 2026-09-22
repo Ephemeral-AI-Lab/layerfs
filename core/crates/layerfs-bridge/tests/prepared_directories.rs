@@ -32,6 +32,7 @@ fn prepared() -> PreparedChanges {
         inodes: vec![],
         directory_metadata: vec![],
         new_directories: vec![directory(7)],
+        new_file_serials: Vec::new(),
     }
 }
 fn request(route: u8, changes: PreparedChanges) -> Request {
@@ -43,6 +44,7 @@ fn request(route: u8, changes: PreparedChanges) -> Request {
             directories: changes.directories,
             inodes: changes.inodes,
             new_directories: changes.new_directories,
+            new_file_serials: changes.new_file_serials,
             directory_metadata: changes.directory_metadata,
         },
         1 => Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
@@ -91,7 +93,7 @@ fn absent_extension_keeps_legacy_bytes_and_nonempty_extension_is_explicit() {
             assert!(decode_request(1, &actual[..end]).is_err(), "{route}/{end}");
         }
         for (suffix, code) in [
-            (vec![2], Code::Unsupported),
+            (vec![3], Code::Unsupported),
             (vec![1, 0, 0, 0, 0], Code::InvalidInput),
             (vec![1, 0, 129], Code::Capacity),
         ] {

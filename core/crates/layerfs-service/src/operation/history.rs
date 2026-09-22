@@ -460,6 +460,7 @@ fn stage(
         inodes: &changes.inodes,
         new_directories: &changes.new_directories,
         directory_metadata: &changes.directory_metadata,
+        new_file_serials: &changes.new_file_serials,
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);

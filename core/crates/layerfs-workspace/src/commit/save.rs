@@ -164,6 +164,7 @@ impl Workspace {
             self.prepared_directories(submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
+            new_file_serials: Vec::new(),
             directory_metadata,
             new_directories,
             workspace: self.inner.incarnation,

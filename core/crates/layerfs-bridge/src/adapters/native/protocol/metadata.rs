@@ -1,4 +1,5 @@
 //! Checked binary metadata; every vector count is bounded before reservation.
+use super::prepared::*;
 use crate::contract::*;
 
 pub struct Decoder<'a> {
@@ -55,6 +56,9 @@ impl<'a> Decoder<'a> {
             return Err(Code::Capacity.into());
         }
         Ok(n)
+    }
+    pub(super) fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
     pub fn finish(self) -> Result<(), Failure> {
         if self.bytes.is_empty() {
@@ -206,13 +210,19 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             inodes,
             new_directories,
             directory_metadata,
+            new_file_serials,
         } => {
             e.put(base)?;
             e.put(scope)?;
             e.u64(*root_serial)?;
             put_directories(&mut e, directories)?;
             put_inodes(&mut e, inodes)?;
-            put_directory_metadata(&mut e, new_directories, directory_metadata)?;
+            put_additions(
+                &mut e,
+                new_directories,
+                directory_metadata,
+                new_file_serials,
+            )?;
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
@@ -271,124 +281,8 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     Ok(e.finish())
 }
 
-/// Writes the final directory bindings of one prepared filesystem update.
-fn put_directories(e: &mut Encoder, directories: &[DirectoryChange]) -> Result<(), Failure> {
-    e.count(directories.len())?;
-    for d in directories {
-        e.u64(d.parent)?;
-        e.count(d.changes.len())?;
-        for (name, serial) in &d.changes {
-            e.blob(name)?;
-            e.u64(serial.unwrap_or(0))?;
-        }
-    }
-    Ok(())
-}
-
-/// Reads the final directory bindings of one prepared filesystem update.
-fn take_directories(d: &mut Decoder<'_>) -> Result<Vec<DirectoryChange>, Failure> {
-    let count = d.count(128, 10)?;
-    let mut directories = Vec::with_capacity(count);
-    let mut total = 0;
-    for _ in 0..count {
-        let parent = d.u64()?;
-        let n = d.count(128 - total, 10)?;
-        total += n;
-        let mut changes = Vec::with_capacity(n);
-        for _ in 0..n {
-            let name = d.blob(255)?;
-            let serial = d.u64()?;
-            changes.push((name, (serial != 0).then_some(serial)));
-        }
-        directories.push(DirectoryChange { parent, changes });
-    }
-    Ok(directories)
-}
-
-/// Writes the typed final inode values of one prepared filesystem update.
-fn put_inodes(e: &mut Encoder, inodes: &[InodeChange]) -> Result<(), Failure> {
-    e.count(inodes.len())?;
-    for i in inodes {
-        e.u64(i.serial)?;
-        e.u8(i.kind)?;
-        e.put(&i.content)?;
-        e.put(&i.metadata)?;
-    }
-    Ok(())
-}
-
-/// Reads the typed final inode values of one prepared filesystem update.
-fn take_inodes(d: &mut Decoder<'_>) -> Result<Vec<InodeChange>, Failure> {
-    let n = d.count(128, 73)?;
-    let mut inodes = Vec::with_capacity(n);
-    for _ in 0..n {
-        inodes.push(InodeChange {
-            serial: d.u64()?,
-            kind: d.u8()?,
-            content: d.root()?,
-            metadata: d.root()?,
-        });
-    }
-    Ok(inodes)
-}
-
-/// An absent trailer preserves the original prepared-update bytes exactly.
-fn put_directory_metadata(
-    e: &mut Encoder,
-    new_directories: &[DirectoryMetadata],
-    directory_metadata: &[DirectoryMetadata],
-) -> Result<(), Failure> {
-    if new_directories.is_empty() && directory_metadata.is_empty() {
-        return Ok(());
-    }
-    e.u8(1)?;
-    for records in [new_directories, directory_metadata] {
-        e.count(records.len())?;
-        for directory in records {
-            e.u64(directory.serial)?;
-            e.u32(directory.mode)?;
-            e.u64(directory.mtime_seconds as u64)?;
-            e.u32(directory.mtime_nanoseconds)?;
-        }
-    }
-    Ok(())
-}
-fn take_directory_metadata(
-    d: &mut Decoder<'_>,
-    maximum: usize,
-) -> Result<(Vec<DirectoryMetadata>, Vec<DirectoryMetadata>), Failure> {
-    if d.bytes.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
-    }
-    if d.u8()? != 1 {
-        return Err(Code::Unsupported.into());
-    }
-    let new_directories = take_directory_records(d, maximum)?;
-    let directory_metadata = take_directory_records(d, maximum - new_directories.len())?;
-    if new_directories.is_empty() && directory_metadata.is_empty() {
-        return Err(Code::InvalidInput.into());
-    }
-    Ok((new_directories, directory_metadata))
-}
-fn take_directory_records(
-    d: &mut Decoder<'_>,
-    maximum: usize,
-) -> Result<Vec<DirectoryMetadata>, Failure> {
-    let count = d.count(maximum, 24)?;
-    let mut directories = Vec::with_capacity(count);
-    for _ in 0..count {
-        directories.push(DirectoryMetadata {
-            serial: d.u64()?,
-            mode: d.u32()?,
-            mtime_seconds: d.u64()? as i64,
-            mtime_nanoseconds: d.u32()?,
-        });
-    }
-    Ok(directories)
-}
-
 /// Reads one fixed-width identity of `N` bytes.
-fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
+pub(super) fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
     d.take(N)?.try_into().map_err(|_| Code::InvalidInput.into())
 }
 
@@ -426,41 +320,6 @@ fn put_page(e: &mut Encoder, cursor: &[u8], limit: u16) -> Result<(), Failure> {
 fn take_page(d: &mut Decoder<'_>) -> Result<(Vec<u8>, u16), Failure> {
     let cursor = d.blob(CURSOR_BYTES)?;
     Ok((cursor, d.u16()?))
-}
-
-/// Writes the prepared filesystem update history carries.
-fn put_prepared(e: &mut Encoder, changes: &PreparedChanges) -> Result<(), Failure> {
-    e.put(&changes.workspace)?;
-    e.put(&changes.branch)?;
-    put_optional(e, changes.expected_head.as_ref())?;
-    e.put(&changes.expected_base)?;
-    e.u64(changes.generation)?;
-    e.put(&changes.base)?;
-    e.put(&changes.scope)?;
-    e.u64(changes.root_serial)?;
-    put_directories(e, &changes.directories)?;
-    put_inodes(e, &changes.inodes)?;
-    put_directory_metadata(e, &changes.new_directories, &changes.directory_metadata)
-}
-
-fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
-    let mut changes = PreparedChanges {
-        workspace: take_array::<32>(d)?,
-        branch: take_array::<17>(d)?,
-        expected_head: take_optional::<33>(d)?,
-        expected_base: take_array::<33>(d)?,
-        generation: d.u64()?,
-        base: d.root()?,
-        scope: d.root()?,
-        root_serial: d.u64()?,
-        directories: take_directories(d)?,
-        inodes: take_inodes(d)?,
-        new_directories: Vec::new(),
-        directory_metadata: Vec::new(),
-    };
-    (changes.new_directories, changes.directory_metadata) =
-        take_directory_metadata(d, 128 - changes.inodes.len())?;
-    Ok(changes)
 }
 
 /// Writes one pathless manifest.
@@ -857,8 +716,8 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             let root_serial = d.u64()?;
             let directories = take_directories(&mut d)?;
             let inodes = take_inodes(&mut d)?;
-            let (new_directories, directory_metadata) =
-                take_directory_metadata(&mut d, 128 - inodes.len())?;
+            let (new_directories, directory_metadata, new_file_serials) =
+                take_additions(&mut d, inodes.len())?;
             Operation::UpdatePreparedFilesystem {
                 base,
                 scope,
@@ -867,6 +726,7 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 inodes,
                 new_directories,
                 directory_metadata,
+                new_file_serials,
             }
         }
         6 => Operation::HistoryQuery(take_query(&mut d)?),

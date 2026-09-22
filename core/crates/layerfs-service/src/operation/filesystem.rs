@@ -1,9 +1,9 @@
-//! Existing inode values, directory metadata patches and new directories under one save.
+//! Existing inode values, directory metadata and fresh declarations under one save.
 //!
 //! The prepared-update surface is shared by the legacy content operation and by
 //! history staging. It is the same production body in both cases: one builder,
 //! one ownership rule, one place where a supplied root is checked against the
-//! base tree. History adds semantic-role validation before calling it.
+//! base tree. Callers validate fresh-file roles; history validates every inode role.
 use super::{
     failure::content, history_bootstrap::build_metadata, metadata::patch_portable, read::id,
 };
@@ -35,6 +35,8 @@ pub(crate) struct PreparedUpdate<'a> {
     pub(crate) new_directories: &'a [DirectoryMetadata],
     /// Portable metadata patches to existing directories, including the root.
     pub(crate) directory_metadata: &'a [DirectoryMetadata],
+    /// Fresh regular identities, a subset of the role-validated final inode values.
+    pub(crate) new_file_serials: &'a [u64],
 }
 
 pub(crate) fn update(
@@ -52,6 +54,7 @@ pub(crate) fn update(
         inodes,
         new_directories,
         directory_metadata,
+        new_file_serials,
     } = *update;
     let mut fs = FilesystemRead::new(provider, FilesystemRootId(id(&base))).map_err(content)?;
     if fs.root().scope().object() != id(&allocation)
@@ -79,9 +82,10 @@ pub(crate) fn update(
         .zip(&serials)
         .any(|(found, serial)| {
             found.is_none()
-                != new_directories
+                != (new_directories
                     .binary_search_by_key(serial, |d| d.serial)
                     .is_ok()
+                    || new_file_serials.binary_search(serial).is_ok())
         })
     {
         return Err(Code::InvalidInput.into());
@@ -92,18 +96,27 @@ pub(crate) fn update(
         let kind = InodeKind::from_code(i.kind).map_err(content)?;
         // Directory content is changed through changed-name records, never wholesale
         // replacement with a caller's unrelated directory tree.
-        let old = fs.lookup_inodes(&[i.serial]).map_err(content)?[0].ok_or(Code::InvalidInput)?;
-        if old.kind != kind || (kind == InodeKind::Directory && old.content_root != id(&i.content))
-        {
-            return Err(Code::InvalidInput.into());
-        }
-        provider.read_canonical(id(&i.content)).map_err(content)?;
-        provider.read_canonical(id(&i.metadata)).map_err(content)?;
+        let references = if new_file_serials.binary_search(&i.serial).is_ok() {
+            // Both callers checked these roots with validate_inode_role before
+            // construction. C1 derives the count from retained bindings.
+            0
+        } else {
+            let old =
+                fs.lookup_inodes(&[i.serial]).map_err(content)?[0].ok_or(Code::InvalidInput)?;
+            if old.kind != kind
+                || (kind == InodeKind::Directory && old.content_root != id(&i.content))
+            {
+                return Err(Code::InvalidInput.into());
+            }
+            provider.read_canonical(id(&i.content)).map_err(content)?;
+            provider.read_canonical(id(&i.metadata)).map_err(content)?;
+            old.namespace_ref_count
+        };
         values.push(InodeUpdate {
             serial: i.serial,
             value: InodeValue {
                 kind,
-                namespace_ref_count: old.namespace_ref_count,
+                namespace_ref_count: references,
                 content_root: id(&i.content),
                 metadata_root: id(&i.metadata),
             },
@@ -151,7 +164,8 @@ pub(crate) fn update(
             },
         });
     }
-    let mut new_inodes = Vec::with_capacity(new_directories.len());
+    let mut new_inodes = Vec::with_capacity(new_directories.len() + new_file_serials.len());
+    new_inodes.extend_from_slice(new_file_serials);
     for directory in new_directories {
         if Instant::now() >= deadline {
             return Err(Code::Deadline.into());
@@ -178,6 +192,7 @@ pub(crate) fn update(
             },
         });
     }
+    new_inodes.sort_unstable();
     if !new_directories.is_empty() || !directory_metadata.is_empty() {
         values.sort_unstable_by_key(|value| value.serial);
     }

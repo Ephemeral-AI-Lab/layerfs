@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the declared constructor scope.**
 > Implementation parent: `3b34e3002b4a7abfd205b68bc94de9a4af22b572`.
+> Exact implementation commit: `82c87d70a1f3e723b627bf1d0777305c9eb393ea`; [confirmation](evidence/construct-metadata/commit-confirmed.json).
 > Frozen product input seal: `5708eecb436c8b1a386cbd0bf20b80e03dcf3589cef5e4032445aa98b13ad2e2`.
 
 This round adds one shared Service operation, ConstructPortableMetadata, for a

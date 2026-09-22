@@ -649,3 +649,15 @@ only the portable fields, saved root and save counts; no inode allocation,
 filesystem publication or history authority is implied. [Round41](proposal/fuse-workspace-snapshot-overlay/41-construct-portable-metadata.md)
 records the implementation and verification state. Fresh regular-file declarations
 in a prepared filesystem remain a separate prerequisite.
+
+The prepared fresh-file extension after source commit
+`82c87d70a1f3e723b627bf1d0777305c9eb393ea` adds sorted fresh regular-file IDs as a
+subset of the final inode rows in both direct and C5 prepared changes. Empty and
+v1 directory trailers remain byte-identical; v2 adds the nonempty file-ID list.
+Direct fresh rows and all C5 rows receive semantic content/metadata role checks.
+The shared filesystem handler verifies base absence exactly for fresh declarations,
+then lets C1 derive new file references from retained bindings. Unbound fresh
+regular files fail; directory omission is a separate rule. The128 combined inode
+and32768-byte request limits remain. [Round42](proposal/fuse-workspace-snapshot-overlay/42-prepared-files.md)
+records the implementation, resource delta and verification state. Workspace still
+supplies an empty fresh-file list until its native create operation is implemented.

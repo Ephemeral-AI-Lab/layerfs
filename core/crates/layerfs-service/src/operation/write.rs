@@ -2,11 +2,14 @@
 use super::{
     dispatch::end_input,
     failure::{content, storage},
-    filesystem, metadata,
+    filesystem,
+    history_bootstrap::validate_inode_role,
+    metadata,
     read::id,
 };
 use crate::input::Exact;
 use layerfs_bridge::contract::*;
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream, Replacements};
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -109,21 +112,41 @@ pub fn mutate(
             inodes,
             new_directories,
             directory_metadata,
-        } => filesystem::update(
-            &provider,
-            &filesystem::PreparedUpdate {
-                base: *base,
-                scope: *allocation,
-                root_serial: *root_serial,
-                directories,
-                inodes,
-                new_directories,
-                directory_metadata,
-            },
-            &mut handoff,
-            deadline,
-            scope,
-        ),
+            new_file_serials,
+        } => (|| {
+            for serial in new_file_serials {
+                if Instant::now() >= deadline {
+                    return Err(Code::Deadline.into());
+                }
+                let index = inodes
+                    .binary_search_by_key(serial, |inode| inode.serial)
+                    .map_err(|_| Code::InvalidInput)?;
+                let inode = &inodes[index];
+                validate_inode_role(
+                    &provider,
+                    InodeKind::RegularFile,
+                    id(&inode.content),
+                    id(&inode.metadata),
+                    scope,
+                )?;
+            }
+            filesystem::update(
+                &provider,
+                &filesystem::PreparedUpdate {
+                    base: *base,
+                    scope: *allocation,
+                    root_serial: *root_serial,
+                    directories,
+                    inodes,
+                    new_directories,
+                    directory_metadata,
+                    new_file_serials,
+                },
+                &mut handoff,
+                deadline,
+                scope,
+            )
+        })(),
         _ => Err(Code::Unsupported.into()),
     };
     let retained = handoff.take_failure();

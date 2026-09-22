@@ -256,6 +256,7 @@ impl Fixture {
             directories: vec![],
             inodes: vec![],
             new_directories: vec![],
+            new_file_serials: Vec::new(),
             directory_metadata: vec![],
         }
     }
@@ -357,6 +358,7 @@ fn update(changes: &PreparedChanges) -> Operation {
         directories: changes.directories.clone(),
         inodes: changes.inodes.clone(),
         new_directories: changes.new_directories.clone(),
+        new_file_serials: changes.new_file_serials.clone(),
         directory_metadata: changes.directory_metadata.clone(),
     }
 }

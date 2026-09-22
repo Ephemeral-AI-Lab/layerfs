@@ -83,6 +83,7 @@ pub enum Operation {
         inodes: Vec<InodeChange>,
         new_directories: Vec<DirectoryMetadata>,
         directory_metadata: Vec<DirectoryMetadata>,
+        new_file_serials: Vec<u64>,
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
@@ -464,6 +465,7 @@ impl Request {
                 inodes,
                 new_directories,
                 directory_metadata,
+                new_file_serials,
                 ..
             } => {
                 if *root_serial == 0 || *root_serial > i64::MAX as u64 {
@@ -472,12 +474,13 @@ impl Request {
                 if directories.len() > 128 || inodes.len() > 128 {
                     return Err(Code::Capacity.into());
                 }
-                check_directory_metadata(
+                check_prepared_additions(
                     *root_serial,
                     directories,
                     inodes,
                     new_directories,
                     directory_metadata,
+                    new_file_serials,
                 )?;
                 let mut count = 0usize;
                 for directory in directories {
@@ -592,12 +595,13 @@ fn check_prepared(changes: &PreparedChanges) -> Result<(), Failure> {
         return Err(Code::InvalidInput.into());
     }
     check_prepared_lists(&changes.directories, &changes.inodes)?;
-    check_directory_metadata(
+    check_prepared_additions(
         changes.root_serial,
         &changes.directories,
         &changes.inodes,
         &changes.new_directories,
         &changes.directory_metadata,
+        &changes.new_file_serials,
     )
 }
 
@@ -637,12 +641,13 @@ fn check_prepared_lists(
     Ok(())
 }
 
-fn check_directory_metadata(
+fn check_prepared_additions(
     root_serial: u64,
     directories: &[DirectoryChange],
     inodes: &[InodeChange],
     new_directories: &[DirectoryMetadata],
     directory_metadata: &[DirectoryMetadata],
+    new_file_serials: &[u64],
 ) -> Result<(), Failure> {
     if inodes
         .len()
@@ -651,6 +656,9 @@ fn check_directory_metadata(
         .ok_or(Code::Capacity)?
         > 128
     {
+        return Err(Code::Capacity.into());
+    }
+    if new_file_serials.len() > inodes.len() {
         return Err(Code::Capacity.into());
     }
     for records in [new_directories, directory_metadata] {
@@ -674,12 +682,29 @@ fn check_directory_metadata(
             )?;
         }
     }
-    if (!new_directories.is_empty() || !directory_metadata.is_empty())
+    if (!new_directories.is_empty()
+        || !directory_metadata.is_empty()
+        || !new_file_serials.is_empty())
         && inodes
             .windows(2)
             .any(|pair| pair[0].serial >= pair[1].serial)
     {
         return Err(Code::InvalidInput.into());
+    }
+    if new_file_serials.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(Code::InvalidInput.into());
+    }
+    for serial in new_file_serials {
+        if *serial == 0 || *serial > i64::MAX as u64 || *serial == root_serial {
+            return Err(Code::InvalidInput.into());
+        }
+        let index = inodes
+            .binary_search_by_key(serial, |inode| inode.serial)
+            .map_err(|_| Code::InvalidInput)?;
+        if inodes[index].kind != 1 {
+            return Err(Code::InvalidInput.into());
+        }
+        // Directory declarations and patches above are disjoint from every I row.
     }
     for directory in new_directories {
         if directory.serial == root_serial

@@ -314,6 +314,7 @@ fn changes(
     PreparedChanges {
         directory_metadata: Vec::new(),
         new_directories: Vec::new(),
+        new_file_serials: Vec::new(),
         workspace,
         branch: init.branch,
         expected_head: None,
@@ -1997,6 +1998,7 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
         let change = PreparedChanges {
             directory_metadata: Vec::new(),
             new_directories: Vec::new(),
+            new_file_serials: Vec::new(),
             workspace: [index as u8 + 1; 32],
             branch: base.branch.branch,
             expected_head: None,

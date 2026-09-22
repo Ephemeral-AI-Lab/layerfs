@@ -9,8 +9,9 @@
 
 **Fresh-file prerequisite:** [portable metadata construction](41-construct-portable-metadata.md)
 is implemented and functionally verified through the existing Service save owner.
-Fresh regular-file declarations in the prepared filesystem request are next,
-followed by native file creation and its mounted projection.
+[Prepared fresh regular files](42-prepared-files.md) now verifies the existing
+direct and C5 save routes with zero/nonzero content and derived references.
+Native file creation and its mounted projection are next.
 
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry
