@@ -460,6 +460,9 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         (Operation::ConstructFile { length }, Response::Saved { length: actual, .. }) => {
             length == actual && bytes == 0
         }
+        (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
+            target.len() as u64 == *length && bytes == 0
+        }
         (
             Operation::EditFile {
                 base_length, edits, ..

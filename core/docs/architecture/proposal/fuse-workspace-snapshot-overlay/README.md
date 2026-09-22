@@ -15,7 +15,9 @@ direct and C5 save routes with zero/nonzero content and derived references.
 functional selections passing and the capacity gate still failed/open. Its
 labelled diagnostic PASS does not replace that failure. [Mounted CREATE](44-mounted-create.md)
 now verifies kernel/SDK creation, handle ownership, entry coherence and G/D1
-reconciliation; symlinks and complete workload admission remain open.
+reconciliation. [Shared symlink-content construction](45-construct-symlink.md)
+now verifies exact target saves through the existing C1/C2 path; fresh symlink
+attachment and complete workload admission remain open.
 
 **Mounted namespace continuation:** [mounted mkdir](40-mounted-mkdir.md) now verifies
 kernel creation, coherent SDK creation, stable directory handles and checked entry

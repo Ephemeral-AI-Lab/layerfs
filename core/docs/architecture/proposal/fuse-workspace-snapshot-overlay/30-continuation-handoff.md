@@ -19,7 +19,8 @@ now verifies fresh regular-file declarations on direct and C5 routes. [Native fi
 creation43](43-native-create.md) is implemented with13 registered functional
 selections passing; its capacity gate remains failed/open despite a successful
 labelled diagnostic. [Mounted CREATE44](44-mounted-create.md) verifies its
-selected kernel/SDK, custody and G/D1 paths. Fresh symlinks and the full prepared
+selected kernel/SDK, custody and G/D1 paths. [Symlink-content constructor45](45-construct-symlink.md)
+verifies exact target-object saves. Fresh symlink attachment and the full prepared
 upload remain open. The prepared DSH workload in [34](34-preinstalled-dsh-workload.md)
 remains unchanged and will be uploaded in full before one explicit Commit.
 

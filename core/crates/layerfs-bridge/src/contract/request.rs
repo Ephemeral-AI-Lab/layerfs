@@ -15,6 +15,10 @@ pub const METADATA_BYTES: usize = 32768;
 pub const MAX_FILE: u64 = 4 * 1024 * 1024 * 1024;
 pub const MAX_OPERATION_MS: u32 = 600_000;
 pub const IO_PROGRESS_MS: u64 = 5_000;
+pub const CONSTRUCT_SYMLINK_OPCODE: u8 = 16;
+pub const SYMLINK_TARGET_BYTES: usize = 4096;
+/// Fixed request envelope and target length followed by the bounded target.
+pub const CONSTRUCT_SYMLINK_REQUEST_BYTES: usize = 29 + SYMLINK_TARGET_BYTES;
 /// Concurrent reads one service process admits without a writer permit.
 ///
 /// A read holds one bounded decode workspace and one connection for its wave, and
@@ -69,6 +73,11 @@ pub enum Operation {
     },
     ConstructFile {
         length: u64,
+    },
+    /// Saves an opaque symlink target; does not allocate or attach an inode.
+    ConstructSymlink {
+        /// Zero through 4,096 opaque bytes without NUL; no path normalization.
+        target: Vec<u8>,
     },
     EditFile {
         root: Root,
@@ -187,6 +196,7 @@ impl Operation {
             Self::ReadFile { .. } => 1,
             Self::Inspect { .. } => 2,
             Self::ConstructFile { .. } => 3,
+            Self::ConstructSymlink { .. } => CONSTRUCT_SYMLINK_OPCODE,
             Self::EditFile { .. } => 4,
             Self::UpdatePreparedFilesystem { .. } => 5,
             Self::HistoryQuery(_) => QUERY_OPCODE,
@@ -206,6 +216,7 @@ impl Operation {
             Self::ReadFile { .. } => "ReadFile",
             Self::Inspect { .. } => "Inspect",
             Self::ConstructFile { .. } => "ConstructFile",
+            Self::ConstructSymlink { .. } => "ConstructSymlink",
             Self::EditFile { .. } => "EditFile",
             Self::UpdatePreparedFilesystem { .. } => "UpdatePreparedFilesystem",
             Self::HistoryQuery(_) => "HistoryQuery",
@@ -228,6 +239,7 @@ impl Operation {
             | Self::HistoryQuery(_)
             | Self::WorkspaceStatus { .. } => true,
             Self::ConstructFile { .. }
+            | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
@@ -245,6 +257,7 @@ impl Operation {
     pub const fn content_mutation(&self) -> bool {
         match self {
             Self::ConstructFile { .. }
+            | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
@@ -295,6 +308,7 @@ impl Operation {
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
             | Self::ConstructFile { .. }
+            | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
@@ -346,6 +360,14 @@ impl Request {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
+            Operation::ConstructSymlink { target } => {
+                if target.len() > SYMLINK_TARGET_BYTES {
+                    return Err(Code::Capacity.into());
+                }
+                if target.contains(&0) || self.response_bytes != 0 {
+                    return Err(invalid());
+                }
+            }
             Operation::UpdatePortableMetadata {
                 kind,
                 mode,

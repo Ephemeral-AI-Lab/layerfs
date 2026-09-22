@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified for the declared mounted CREATE scope.**
 > Implementation parent: `7eb46ef0766eae0d6ccfb894d07919a39c69ef38`.
+> Exact implementation commit: `5ed91aaca38dc54e145753a6844b12e6baf30abd`; [confirmation](evidence/mounted-create/commit-confirmed.json).
 > Product input seal: `eaa740c5c19b9e3fc858f65cbf45b6f6bcd9233b00973481ae847cc1ef6a776c`.
 
 This round projects the native create/open operation through the existing mounted
@@ -123,3 +124,7 @@ The Round43 native capacity failure remains open. Fresh symlink construction and
 admission, larger full-input admission, the unchanged prepared DSH tree uploaded
 in full before one explicit Commit, subsequent incremental Commits, hard memory
 qualification and matched R6/#207 remain subsequent work.
+
+Additional retained client/fixture output is indexed in the
+[archive supplement](evidence/mounted-create/archive-supplement-01.json).
+Original receipts and result classifications are unchanged.

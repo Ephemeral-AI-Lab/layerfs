@@ -46,6 +46,7 @@ pub(crate) fn dispatch(
         }
         // A known successful C2 finish is never changed into a claimed abort.
         Operation::ConstructFile { .. }
+        | Operation::ConstructSymlink { .. }
         | Operation::EditFile { .. }
         | Operation::UpdatePortableMetadata { .. }
         | Operation::ConstructPortableMetadata { .. }

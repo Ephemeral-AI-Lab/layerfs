@@ -143,6 +143,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         Operation::ConstructPortableMetadata { .. } => {
             Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES)
         }
+        Operation::ConstructSymlink { .. } => Encoder::bounded(CONSTRUCT_SYMLINK_REQUEST_BYTES),
         _ => Encoder::default(),
     };
     e.u64(r.generation)?;
@@ -158,6 +159,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.u64(*end)?;
         }
         Operation::ConstructFile { length } => e.u64(*length)?,
+        Operation::ConstructSymlink { target } => e.blob(target)?,
         Operation::Inspect { root, query } => {
             e.put(root)?;
             match query {
@@ -692,6 +694,9 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             Operation::Inspect { root, query }
         }
         3 => Operation::ConstructFile { length: d.u64()? },
+        CONSTRUCT_SYMLINK_OPCODE => Operation::ConstructSymlink {
+            target: d.blob(SYMLINK_TARGET_BYTES)?,
+        },
         4 => {
             let root = d.root()?;
             let base_length = d.u64()?;

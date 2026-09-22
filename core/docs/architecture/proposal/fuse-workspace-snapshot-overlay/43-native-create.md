@@ -189,3 +189,7 @@ Mounted CREATE, symlinks, larger full-input admission, the unchanged preinstalle
 DSH tree uploaded in full before one explicit Commit, repeated incremental Commits,
 hard memory qualification and matched R6/#207 remain open. The capacity failure
 also remains an explicit qualification gap.
+
+Additional retained client/fixture output is indexed in the
+[archive supplement](evidence/native-create/archive-supplement-01.json).
+Original receipts and result classifications are unchanged.

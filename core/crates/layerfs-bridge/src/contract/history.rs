@@ -47,11 +47,12 @@ pub const MANIFEST_TARGET_BYTES: usize = 4096;
 /// The mapping is total and explicit rather than a shift of an unchecked
 /// opcode, so unknown and daemon-control opcodes have no Store permission bit.
 /// A legacy grant mask of 31 therefore grants neither history opcode.
+/// Mask 0x04 grants file or symlink content construction, including in legacy masks.
 pub const fn permission_bit(opcode: u8) -> Option<u8> {
     match opcode {
         1 => Some(1 << 0),
         2 => Some(1 << 1),
-        3 => Some(1 << 2),
+        3 | super::CONSTRUCT_SYMLINK_OPCODE => Some(1 << 2),
         4 => Some(1 << 3),
         5 => Some(1 << 4),
         QUERY_OPCODE => Some(1 << 5),

@@ -71,18 +71,20 @@ No request carries a native Store path or independent construction capacities.
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
 
-A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. Complete
+A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. File
 construction uses exact-length streaming; edits acquire at most 8 MiB of separate
 replacement parts before the save, preserving current-result coordinates. Known
 failures retain the available typed cause and checked cleanup disposition. Unknown
-C2 outcomes are not aborted or replayed on a guess. A successful file or filesystem
+C2 outcomes are not aborted or replayed on a guess. A successful content-object or filesystem
 root is returned only after validated input finality and successful C2 `finish`.
 
 Prepared updates verify the original scope/root serial, existing identities and
 retained references. They send final bindings only for changed names. Directory
 content cannot be swapped through an inode value; it uses directory changes.
-`FilesystemSaved` is a separate result from file `Saved`, with no fictitious file
-length on a tree result. File saves followed by attachment remain separate saves;
+`FilesystemSaved` is a separate result from content-object `Saved`. The latter
+length is the file logical length or exact symlink-target byte count, according
+to the operation; a tree result has no such length. Content saves followed by
+attachment remain separate saves;
 no atomic composite, history publication or crash-durability promise exists.
 
 Inspect supports File, combined Stat (identity, roots, count, mode and full mtime),
@@ -691,3 +693,16 @@ handle in Pending/Failed custody, and releases only the withheld lookup referenc
 on notification failure. No backing format, count/byte budget, queue or worker
 changes. [Round44](proposal/fuse-workspace-snapshot-overlay/44-mounted-create.md)
 records verification and preserves Round43's open capacity failure.
+
+The shared symlink-content constructor after source commit
+`5ed91aaca38dc54e145753a6844b12e6baf30abd` adds ConstructSymlink with0..4096
+opaque non-NUL target bytes. Opcode16/profile1 carries the target in29+L bytes of
+request metadata and has no input body. It reuses Saved tag2 (57 bytes) with
+length==target.len and no ResultData, through an explicit client result matcher.
+Grant0x04 now explicitly authorizes file or symlink content construction, including
+legacy mask31; no other authority follows from that bit. Service validates empty
+input before acquiring its one save, then calls the existing C1 symlink builder
+through SaveHandoff and the common finish/retained-failure/abort path. No inode,
+namespace, Stage or Commit is created. Empty object targets do not relax the
+history manifest's nonempty rule. [Round45](proposal/fuse-workspace-snapshot-overlay/45-construct-symlink.md)
+records exact checks and qualifications; fresh symlink admission remains separate.

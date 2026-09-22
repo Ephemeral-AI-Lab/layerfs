@@ -64,6 +64,7 @@ pub enum Response {
     Read {
         length: u64,
     },
+    /// Saved content object: file length or symlink target byte count, by operation.
     Saved {
         root: Root,
         length: u64,

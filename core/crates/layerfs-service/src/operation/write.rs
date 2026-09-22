@@ -9,6 +9,8 @@ use super::{
 };
 use crate::input::Exact;
 use layerfs_bridge::contract::*;
+use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::FilesystemObjects;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream, Replacements};
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
@@ -35,6 +37,7 @@ pub fn mutate(
     if matches!(
         r.operation,
         Operation::UpdatePreparedFilesystem { .. }
+            | Operation::ConstructSymlink { .. }
             | Operation::UpdatePortableMetadata { .. }
             | Operation::ConstructPortableMetadata { .. }
     ) {
@@ -51,6 +54,15 @@ pub fn mutate(
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let built = match &r.operation {
+        Operation::ConstructSymlink { target } => scope.child("service.symlink").run(|_| {
+            let checked = SymlinkTarget::new(target.clone()).map_err(content)?;
+            let root = emit_symlink(
+                &mut FilesystemObjects::new(&provider, &mut handoff),
+                checked,
+            )
+            .map_err(content)?;
+            Ok((*root.as_bytes(), target.len() as u64))
+        }),
         Operation::UpdatePortableMetadata { .. } | Operation::ConstructPortableMetadata { .. } => {
             scope
                 .child("service.metadata")
