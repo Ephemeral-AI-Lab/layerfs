@@ -1,5 +1,11 @@
 # Pair 1 continuation handoff: daemon management through npm and R6
 
+> **Current continuation:** [51](51-implementation-completion-spec.md) supersedes
+> this handoff's DSH/R6 sequence for the current implementation phase. Finish the
+> bounded Linux operation surface with small correctness/integration checks;
+> retain current limits and defer load/speed qualification. The checkpoint below
+> remains historical context and does not override that newer owner direction.
+
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
 > Production base: `2e7f42ea22778e0119d5e3d0da806130bcd50330`.
 > Product input seal: `375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d`.

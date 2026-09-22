@@ -1,9 +1,14 @@
 # Next-agent handoff: continue Pair1 after the budget stop
 
+> **Superseded for execution:** use [51](51-implementation-completion-spec.md).
+> The owner now prioritizes complete bounded implementation and fast, small
+> correctness checks. Do not resume this document's DSH-first sequence or treat
+> large-workspace/R6 work as a prerequisite for the current phase.
+
 This is the handoff prompt. The owner stopped work because the budget was exhausted,
 then explicitly requested an issue progress update, this prompt, and a commit of
 all existing changes. This file is committed with the unfinished Round49 work.
-Read the exact checkpoint from `git log -1 --format=%H -- core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/50-budget-stop-handoff.md`.
+The exact historical checkpoint is `9499012926f661ce4a7b357b18810e76c3179806`.
 Its first parent is `74d4a2ace173d09689b8fbb42953658e94277bab`; its frozen product
 seal is `ffa9fa10899063601d7520581f7db932644a9c45a34b2123fa895f012320da08`.
 

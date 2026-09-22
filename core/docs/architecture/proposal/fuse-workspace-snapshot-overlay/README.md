@@ -7,6 +7,13 @@
 > in [08](08-readable-implementation.md). That R1 checkpoint does not qualify writable behavior;
 > later scoped functional proofs are linked below. Performance and durability remain unqualified.
 
+**Current owner-directed completion plan:** [51 — bounded Linux implementation](51-implementation-completion-spec.md)
+supersedes the DSH-first continuation and large-workload gates for the current
+phase. Finish the missing required operations end to end, keep existing numeric
+limits, and verify a small real-daemon workflow with two explicit Commits.
+DSH, scalability expansion, stress and speed/R6 qualification are deferred.
+The historical results below remain unchanged; use51 for the next agent's task.
+
 **Fresh streaming, first live attempts:** [Round49](49-fresh-file-streaming.md)
 implements the fresh-file streaming prerequisite, and its two live selections have
 now run once each. The largest already-preinstalled DSH file18,259,144 bytes

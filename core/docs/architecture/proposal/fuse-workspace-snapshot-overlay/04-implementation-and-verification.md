@@ -1,5 +1,11 @@
 # Implementation and verification plan
 
+> **Current implementation-phase plan:** [51](51-implementation-completion-spec.md)
+> supersedes the large/npm workload gates and per-operation verification cadence
+> below. Complete the selected bounded Linux operations and one small integrated
+> daemon workflow; defer scalability and performance qualification. Preserve the
+> architecture, ownership and correctness requirements in this historical plan.
+
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Source basis: `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`, consolidated
 > 2026-09-21. All new implementation and verification rows below are planned,
