@@ -14,7 +14,28 @@ limits, and verify a small real-daemon workflow with two explicit Commits.
 DSH, scalability expansion, stress and speed/R6 qualification are deferred.
 The historical results below remain unchanged; use51 for the next agent's task.
 
-**Current namespace implementation state:** [54 — third-round closure handoff](54-issue179-namespace-closure-handoff.md)
+**Current namespace implementation state:** the three tasks [55](55-issue179-realdaemon-handoff.md)
+section 5 left are complete. Task 1 (`a9657b85f`) finished the 51 section 6
+real-daemon scenario: two explicit Commits, public saved-state reads, root A
+readable after B, remount, acknowledged read and checked Unmount + CloseClean
+(`core/target/pair1-evidence/round56/t1-small-project-0j`), with all ten native
+namespace selections re-passing on the fixed source. Task 2 (`f802cc124`) added
+the mounted FUSE syscall evidence for the six namespace operations and fixed the
+live link-count presentation defect the route exposed
+(`core/target/pair1-evidence/round57/final-ns-mounted-{kernel,durability}-01`,
+plus `round57/final3-ns-<case>-01` and `round57/final3-t1-small-project-01`).
+Task 3 refreshed the operation matrix and the rule documents and gave the exact
+reproduction commands a permanent home
+([01 section 7.4](01-workspace-fuse-contract.md#74-phase-evidence-and-exact-reproduction-commands));
+[57](57-issue179-architecture-matrix-handoff.md) records the invariants that
+update states, including the live namespace link-count presentation with its
+baseline-gated guards. The committed-directory move refusal, rename
+exchange/whiteout and the re-resolved base-identity link-count corner are
+declared limitations, not oversights. The final whole-core checks and the #179
+closure report remain for the final round; the merge and issue closure are
+owner acts.
+
+**Previous namespace implementation state:** [54 — third-round closure handoff](54-issue179-namespace-closure-handoff.md)
 records commits `5e4a89d0a` and `a7356d665`, which raise the registered selections
 that pass from eight of sixteen to sixteen of sixteen: all ten `namespace_route.py`
 cases and all six `mkdir_route.py` cases, with the stage route's ten selections
@@ -24,7 +45,7 @@ what is still open, including the section 6 real-daemon integration. The earlier
 handoff [53](53-issue179-namespace-completion-handoff.md) remains the record of
 the round that took the count to eight.
 
-**Previous namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
+**Earlier namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
 records commit `578ef7012`, which raises the registered selections that pass from
 four of sixteen to eight of sixteen: `namespace/setattr`, `mknod`, `link` and
 `rmdir`, and `mkdir/semantics`, `refusals`, `reserve_denied` and

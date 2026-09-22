@@ -1,7 +1,9 @@
 # R3b — bounded local range editing and maintained metadata
 
 > Status: bounded local RangeEdit implemented and verified; mounted writes and Commit remain open.
-> Implementation base: `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`.
+> Implementation base: `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`. The page-edge
+> ownership rule below was refreshed in the issue-179 documentation round
+> against product source `f802cc124`.
 > The source audit, v0.1.6 receipts and earlier round identities remain unchanged.
 
 This round implements one operation: local `Workspace::edit_file_range`. It uses
@@ -93,7 +95,18 @@ both also charged to the main Workspace budget. It covers actual retained
 capacities, including bounded piece plans, decoded pages, cleanup cursors and
 ownership anchors. There is no resident edge-change vector: completed candidate
 pages own temporary root references that explicit ledger transitions release.
-Uncertain mutable ledger writes quarantine their retained descriptors. Payload,
+Uncertain mutable ledger writes quarantine their retained descriptors.
+
+The **page-edge ownership rule** makes chained candidate updates safe
+(`backing/metadata.rs::seal`, `backing/metadata_index.rs::update`): a page whose
+only reference was the candidate's own temporary slot — an intermediate root a
+later chained update of the same publication replaced — reaches zero refs at
+seal, and seal queues exactly that case as a cleanup frame. Without it, a page
+that seal orphaned would keep its slot and every edge it holds referenced
+forever, and a Workspace that published this way could never close clean. The
+arena `update` that produces those chains admits at most four cells per call
+for D/I/N/R keys and one for E/T keys, with strictly increasing keys checked
+against the key-family index limit. Payload,
 metadata, ownership, failed resources and reservations share the configured
 disk budget; the allowance is not multiplied by Workspace count.
 

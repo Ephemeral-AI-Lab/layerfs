@@ -1,11 +1,14 @@
 # Workspace overlay and coherent snapshot
 
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
-> Dated 2026-09-21. This specifies the proposed daemon runtime algorithm and its
+> Dated 2026-09-23. This specifies the proposed daemon runtime algorithm and its
 > required proofs. The records below are conceptual design notation, not existing
-> Rust APIs. No implementation, mounted acceptance, latency or memory result is
-> claimed. Product/API observations are pinned to
-> `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`.
+> Rust APIs. Section 2.3's precedence rules were refreshed in the issue-179
+> documentation round against product source `f802cc124` to state the implemented
+> binding-versus-removal, shadowing, listing and re-anchor behavior; the design
+> notation elsewhere remains pinned to
+> `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`. No performance or memory result is
+> claimed.
 
 Packet: [overview](README.md), [Workspace/FUSE contract](01-workspace-fuse-contract.md),
 [Commit integration](03-commit-integration.md), and
@@ -181,12 +184,44 @@ merely inherits G. Complete inode versions use the same newest-version
 precedence; fields from different versions must not be assembled into one attr
 reply or save input.
 
+The implemented delta records add three rules to this precedence:
+
+- **One name owns a binding or a removal, never both.** A publication that
+  binds a name again clears the removal record that name carried
+  (`overlay/directories.rs::keep_name` rebuilds the directory's removal page
+  without the name), so a rename destination is listed and resolvable instead
+  of being hidden by its own stale tombstone.
+- **A rename destination binding shadows an inherited binding.** The
+  publication writes the destination binding whatever the destination parent's
+  origin held (`filesystem/rename.rs`), so an inherited base binding is
+  shadowed rather than skipped and the replacement is resolvable from the very
+  next lookup.
+- **A listing merges its origin through the tombstone filter.** The origin
+  still lists every name it holds, including the ones this delta removed; the
+  merge drops a tombstoned name and reads the next origin page instead of
+  returning a short listing, because a mounted caller reads a page that is not
+  full as the end of the directory (`filesystem/namespace_view.rs::list_view`).
+
+The **re-anchor rule** governs how an edited parent's record is resolved: from
+the live root and the record's own revision, never from a cached path plus a
+service fallback (`filesystem/create.rs`, `remove.rs`, `rename.rs` treat a
+directory delta this way). A node's cached path is not a valid live locator
+after a Commit advanced the baseline, and a path-addressed `Inspect` against a
+root that no longer contains that path answers `PathNotFound` — the mutation
+itself must read the delta record the live overlay owns. The same rule is
+stated from the lookup side in [01 §7.1](01-workspace-fuse-contract.md#71-required-r-operations-and-local-lifecycle).
+
 Namespace overlays are keyed by parent identity. If a base directory moves, a
 read of its inherited contents retains an immutable base-root/original-path
 locator or another already-supported logical locator from that selected view.
 It must not ask the service about a new live pathname inside an older root.
 Current shared inspection operations are path-addressed; they do not provide a
-private by-inode or per-canonical-object RPC. [Existing read handlers][service-read]
+private by-inode or per-canonical-object RPC. This is why the bounded profile
+refuses to move a committed directory whose namespace record is absent: its
+inherited children resolve through the canonical tree by path, and no
+identity-keyed service query can re-anchor them after the move
+([01 §7.3](01-workspace-fuse-contract.md#73-optional-kernel-owned-or-unsupported-operations)).
+[Existing read handlers][service-read]
 
 ### 2.4 Many tiny files: metadata must scale independently of payload
 

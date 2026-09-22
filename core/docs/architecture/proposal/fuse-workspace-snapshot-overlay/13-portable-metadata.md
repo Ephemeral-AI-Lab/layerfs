@@ -1,7 +1,10 @@
 # R2: save portable metadata through the shared service
 
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
-> Implemented from `f566015b1ed2905f987f3fa9c10c99ecf959aea3`, 2026-09-21.
+> Implemented from `f566015b1ed2905f987f3fa9c10c99ecf959aea3`, 2026-09-21. The
+> Workspace-consumption rules below (bounded second metadata call, metadata-only
+> setattr fallback) were refreshed in the issue-179 documentation round against
+> product source `f802cc124`.
 
 R2 adds one public operation, `UpdatePortableMetadata`, through the existing
 bridge/service C1/C2 route. It constructs a changed attribute tree from an
@@ -113,6 +116,39 @@ still require the Workspace mutation/index/capture/lowering pipeline and R4
 proof. Generic attribute inspection over transport, larger shared inputs, all
 remaining R1-C lifecycle/edit/Commit controls, R3a–R5b and R6 remain open. No issue
 is closed and no durability, npm or matched performance claim is made.
+
+## Workspace consumption: bounded second call and metadata-only fallback
+
+Two implemented rules govern how the live Workspace consumes this operation's
+surface (`runtime/host.rs`, `runtime/state.rs`, `filesystem/write.rs`), stated
+here against product source `f802cc124`:
+
+- **The bounded second metadata call and its derived floor.** The host admits
+  one bounded metadata call — a read-only inspection or one serial reservation
+  — that may overlap a remote call **actually in flight**, so an ordinary
+  namespace operation can still resolve a name its delta inherits and reserve
+  one serial while a save is in flight. The primary admission still admits
+  exactly one save, construction, history or attach call, so one construction
+  worker stays one producer; the second slot carries no content — never input,
+  construction, a save or a history Commit — and it is refused while no call
+  is in flight, so a retained admission (a held read reply, a pending
+  submission) keeps the single-call refusal. The host's minimum memory budget
+  grows by one call allowance (128 KiB, `CALL_SCRATCH`) for that slot — the
+  derived floor reserves `2 * CALL_SCRATCH` — while the 8 MiB default budget
+  and every other registered bound are unchanged.
+- **The metadata-only setattr fallback.** A portable-attribute request changes
+  exactly the fields it names; the fallback for an unnamed field is the
+  selected record's own current value, never the base version's — a mode-only
+  change keeps the live mtime, and an mtime-only change keeps a mode an
+  earlier request in the same generation selected. A metadata-only request
+  also never selects replacement pieces: the selected content root this
+  generation already is the exact desired content.
+
+Both rules are evidenced through the real mount: `round57/final3-ns-setattr-01`
+(native mode/mtime/size combinations and refusals),
+`round57/final-ns-mounted-kernel-01` (chmod, `UTIME_OMIT` mtime, and a later
+mtime-only setattr does not revert the mode) and
+`round57/final-ns-mounted-durability-01` (post-Commit metadata unchanged).
 
 ## Production source comparison
 

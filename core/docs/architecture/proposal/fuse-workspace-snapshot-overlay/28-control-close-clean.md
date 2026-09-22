@@ -3,7 +3,9 @@
 > **Status: implemented and verified through the actual authenticated daemon/Linux mount route; target v0.1.7, not released.**
 > Implementation parent: `dab1751312adecdc57d073145582a9a702449744`.
 > Product input seal: `e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304`.
-> Selected 2026-09-22 as the next individual R1-C lifecycle operation.
+> Selected 2026-09-22 as the next individual R1-C lifecycle operation. The
+> overlay-release rule below was refreshed in the issue-179 documentation round
+> against product source `f802cc124`.
 
 ## Operation and exact completion
 
@@ -33,8 +35,19 @@ headroom. Complete input, authorization, exact launched identity, expiry, deadli
 and control-stop checks precede native entry. It calls only the existing
 `Workspace::close_clean_until`; it does not implicitly unmount, Commit or discard.
 Mounted, dirty, submitted, active, held or externally pinned states retain the
-native Busy refusal. The current daemon profile is read-only, so dirty/submitted
-network routes are not qualified by this round.
+native Busy refusal. The daemon profile was read-only when this round ran, so
+dirty/submitted network routes were not qualified then; the writable close is now
+evidenced end to end by the real-daemon small-project scenario, whose checked
+Unmount + CloseClean follows two explicit Commits
+(`core/target/pair1-evidence/round57/final3-t1-small-project-01`).
+
+**The overlay release.** The live overlay is the Workspace's own reference to
+its arena roots, exactly like the generations a Commit retires: a Commit whose
+successor root carries records leaves the arena unreclaimable if the overlay
+keeps holding it, so `close_clean_until` takes and drops `state.overlay` before
+the arena is reclaimed (`runtime/lifecycle.rs`). Nothing runs after `stopping`
+is set, so a refused teardown has no later operation to mislead; a later
+explicit request continues the checked cleanup.
 
 Pre-admission refusals use Failure. Once native cleanup is entered, incomplete
 cleanup returns Retained(Busy/Deadline/Unsupported/Io), preserving the same owner

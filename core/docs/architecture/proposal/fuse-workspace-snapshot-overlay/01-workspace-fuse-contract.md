@@ -1,10 +1,15 @@
 # Workspace and FUSE contract
 
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
-> Updated 2026-09-21. This document specifies intended behavior and admission
+> Updated 2026-09-23. This document specifies intended behavior and admission
 > requirements. The implemented R1 read-only slice and its actual mounted proof
-> are recorded in [08](08-readable-implementation.md). Full POSIX conformance,
-> writable/concurrency qualification, measured latency and crash durability remain unclaimed.
+> are recorded in [08](08-readable-implementation.md). Sections 7 and 8.1 were
+> refreshed in the issue-179 documentation round against product source
+> `f802cc124` (the mounted namespace syscall evidence and live link-count
+> presentation): every selected W namespace operation in §7.2 is implemented,
+> mounted and evidenced, and the evidence paths and reproduction commands are
+> recorded in §7.4. Full POSIX conformance, writable/concurrency qualification,
+> measured latency and crash durability remain unclaimed.
 
 [Packet index](README.md) · [Overlay and snapshot](02-overlay-snapshot.md) ·
 [Commit integration](03-commit-integration.md) ·
@@ -754,9 +759,11 @@ any later measurement.
 
 The tables enumerate fuser 0.18's callback vocabulary, plus relevant syscall
 activities which have no separate callback. “Required” means required before
-claiming the selected capability; no table row claims it already runs in core.
-Unexpected flag combinations fail before local mutation. Mutation attempts on R
-return `EROFS` after applicable request/identity validation.
+claiming the selected capability. At the 2026-09-23 refresh every §7.2 row is
+implemented through the real daemon, bridge, service and mount, and its receipt
+is named in the row; §7.4 records the reproduction commands. Unexpected flag
+combinations fail before local mutation. Mutation attempts on R return `EROFS`
+after applicable request/identity validation.
 
 ### 7.1 Required R operations and local lifecycle
 
@@ -764,8 +771,8 @@ return `EROFS` after applicable request/identity validation.
 | --- | --- | --- |
 | `init` | Validate root, configuration and implemented capability set; use GetBranch or explicit-root Stat | Wrong root/profile/authority fails mount. No construction hidden in mount. Prove actual root serial mapping |
 | `destroy` | Stop admission and drain/join owned work; release references | One-shot cleanup, no implicit Commit or guessed discard. Prove bounded shutdown/failure handling |
-| `lookup` | Resolve a name in a pinned view; Stat plus size inspection as needed | No stale reply reinstalls a removed/replaced name; distinguish absent name from unavailable content |
-| `getattr` | Current selected inode version and declared projected attributes | Handle-based getattr must work after rename/unlink; no false persisted uid/gid or physical block claim |
+| `lookup` | Resolve a name in a pinned view through the overlay precedence (delta bind or tombstone, then the origin); Stat plus size inspection as needed; an edited parent's record resolves from the live root and the record's own revision, never from a cached path plus a service fallback ([02 §2.3](02-overlay-snapshot.md#23-precedence-and-tombstones)) | No stale reply reinstalls a removed/replaced name; distinguish absent name from unavailable content. A regular inode presents the live namespace link count (§8.1); within one baseline the resident node and a resolution must agree on it, and a Commit that republishes the identity canonically refreshes the resident node's count instead of refusing. Evidenced by `round57/final-ns-mounted-kernel-01` and `round57/final-ns-mounted-durability-01` |
+| `getattr` | Current selected inode version and declared projected attributes; the link count is the live namespace count for regular files (§8.1) | Handle-based getattr after rename/unlink is implemented and evidenced: a destination FD held across a replacement still `fstat`s its own inode with link count 0 while the name resolves to the moved one (`round57/final-ns-mounted-kernel-01`), and the replaced FD stays readable through its own Commit (`round57/final3-ns-rename-01`). No false persisted uid/gid or physical block claim |
 | `forget`, `batch_forget` | Release kernel lookup references | Never delete open, frozen or in-flight-read state. Repeated/invalid counts must not underflow or resurrect IDs |
 | `access` | Local owner/mode/search checks and kernel `default_permissions`; independent service authorization | Do not return unconditional success. R write access fails; denial is not missing content |
 | `open` | Validate access, kind and flags; allocate bounded local handle | Writable/`O_TRUNC` requests fail on R. Refuse unsupported synchronous flags explicitly. Handle admission is bounded |
@@ -774,30 +781,39 @@ return `EROFS` after applicable request/identity validation.
 | `flush` | Report defined local accepted-visibility/known-error state | No save, logical Commit or durability promise. Multiple flush calls must not drop ownership |
 | `release` | Drop one file handle; keep any other semantic/kernel/read references | Closing must not lose dirty bytes or make another alias/descriptor invalid |
 | `opendir` | Bind directory handle to a declared immutable view and cursor policy | Validate kind and reserve view/handle state; no unbounded directory snapshot collection |
-| `readdir` | Merge bounded ordered entries with tombstones; List plus required kind inspections | Dot entries, byte/count bounds and resumable cookies; avoid duplicate/skipped/resurrected entries across pages |
+| `readdir` | Merge bounded ordered entries with tombstones; List plus required kind inspections | Dot entries, byte/count bounds and resumable cookies; avoid duplicate/skipped/resurrected entries across pages. The tombstone filter is implemented: a name this delta removed is dropped from the merge and the next origin page is read, so a caller never mistakes a short page for the end of the directory ([02 §2.3](02-overlay-snapshot.md#23-precedence-and-tombstones)); evidenced by `round57/final3-ns-rename_base-01` |
 | `releasedir` | Release cursor/view ownership | Old generations remain charged until the final reference drops |
 | `statfs` | Synthetic projection information, not Store physical allocation | Declare zero/unknown backing capacity convention and `name_max=255`; read-only is a mount policy. Prove tools do not receive fabricated free-space data |
 
-### 7.2 Selected W operations and missing shared capabilities
+### 7.2 Selected W operations, implemented and evidenced
 
-| Callback | Required local behavior | Save mapping / gap and test obligation |
+Every row below is implemented through the Workspace public operation, the
+overlay/commit lowering and the FUSE adapter, and evidenced through actual
+kernel syscalls on a real mount. The evidence column names the native
+selection receipt, the mounted receipt and — where the operation is part of
+the end-to-end lifecycle — the real-daemon scenario receipt; §7.4 records the
+exact reproduction commands. Receipt paths are relative to
+`core/target/pair1-evidence/`.
+
+| Callback | Implemented local behavior | Save mapping and evidence |
 | --- | --- | --- |
-| `write` | Reserve, then atomically install accepted bytes, length and timestamp; aliases see the change | Final supported EditFile or legitimate complete-file construction, then history save. General portable-metadata construction is missing. Test append races, overlapping edits and failure before visibility |
-| `setattr` size | Truncate removes old tail; extension is logically zero; update metadata coherently | Piece lowering plus metadata operation. Test shrink/extend/shrink and open handles across G completion |
-| `setattr` mode/mtime | Validate every requested field before applying any; no partial unsupported update | C1 attribute functionality exists, general shared live constructor/update does not. Test invalid bits/nanoseconds and unchanged content |
-| `create` | Atomic name absence check, allocation, metadata/content initialization and open | ReserveInodes alone is insufficient; live new-identity attachment missing. Test `O_EXCL`, umask, failure rollback and allocated-serial nonreuse |
-| `mknod` regular file | Same empty regular-file namespace semantics without open | Same new-identity/metadata gap; special types remain unsupported |
-| `mkdir` | Validate parent/name, allocate identity, create canonical empty directory and metadata | Live new-directory attachment missing. Test empty-directory representation and no partial parent binding |
-| `symlink` | Validate target/name; create one new symlink identity and metadata | Live symlink constructor/attachment missing despite bootstrap support. Test exact target, empty/maximum target according to C1 grammar and invalid bytes |
-| `unlink` | Remove name; retain zero-link inode for handles/readers; update parent metadata | Existing binding removal plus missing general metadata path. Test writes through still-open unlinked handle and no resurrection on completion |
-| `rmdir` | Validate directory and emptiness, then remove one name | C1 subtree release is not POSIX emptiness checking. Test `ENOTEMPTY`, wrong kind and no recursive deletion |
-| `link` | Regular-file names share one inode and observe all later writes | Existing-identity binding; derived canonical reference counts. Directory/symlink hard links unsupported; test aliases and unlink of one alias |
-| `rename` | Atomic source removal/destination final binding; type, emptiness, flags, cycle and alias checks | One changed-name batch through history staging. Pre-visibility bounded validation and typed work-limit result are still gaps. Test same-inode aliases, replacement, failed destination preservation and cross-directory capture |
+| `write` | Reserve, then atomically install accepted bytes, length and timestamp; aliases see the change | Final supported EditFile or legitimate complete-file construction, then history save; portable-metadata construction is the implemented [R2 operation](13-portable-metadata.md). Append races, overlapping edits and failure before visibility are covered by the mounted write/resize routes ([25](25-mounted-write.md), [26](26-mounted-resize.md)) and by the real-daemon scenario's write/append/truncate phase (`round57/final3-t1-small-project-01`) |
+| `setattr` size | Truncate removes old tail; extension is logically zero; update metadata coherently | Piece lowering plus metadata operation, evidenced by the mounted resize route ([26](26-mounted-resize.md)) and the scenario's truncate/extend phase (`round57/final3-t1-small-project-01`) |
+| `setattr` mode/mtime | Every requested field is validated before any is applied; a request changes exactly the fields it names and falls back to the selected record's current unnamed fields ([13](13-portable-metadata.md)) | Atomic validation/publication, save and reconciliation are implemented: `round57/final3-ns-setattr-01` (native mode/mtime/size combinations and refusals), `round57/final-ns-mounted-kernel-01` (chmod, `UTIME_OMIT` mtime, mtime-only keeps the mode), `round57/final-ns-mounted-durability-01` (post-Commit metadata) |
+| `create` | Atomic name absence check, allocation, metadata/content initialization and open; allocated serials are never reused; the whole local envelope is admitted before a serial reservation is consumed | Implemented natively ([43](43-native-create.md)) and mounted ([44](44-mounted-create.md)); the real-daemon scenario creates files through the mount (`round56/t1-small-project-0j`, re-passed as `round57/final3-t1-small-project-01`) |
+| `mknod` regular file | Same empty regular-file namespace semantics without opening a handle (no file-handle slot consumed); mode/umask applied; duplicate name `EEXIST`; special types remain unsupported | `round57/final3-ns-mknod-01` (empty file, no handle, duplicate refusal, one save), `round57/final-ns-mounted-kernel-01` (kernel mknod with umask, size 0, `EEXIST`) |
+| `mkdir` | Validate parent/name, allocate identity, create canonical empty directory and metadata; no partial parent binding on refusal | Implemented natively ([39](39-native-mkdir.md)) and mounted ([40](40-mounted-mkdir.md)); the scenario creates two directories through the mount (`round57/final3-t1-small-project-01`) |
+| `symlink` | Validate target/name; create one new symlink identity and metadata; exact target bytes, bounded by the C1 grammar | Implemented natively ([47](47-native-symlink.md)) and mounted ([48](48-mounted-symlink.md)); the scenario creates a symlink through the mount (`round57/final3-t1-small-project-01`) |
+| `unlink` | Remove exactly one name; a zero-link inode is retained for its open handles and pinned readers; the parent's metadata updates; a Commit never resurrects the name | `round57/final3-ns-unlink-01` (alias then last-name removal with an open FD, read/write across Commit, close and reclaim), `round57/final3-ns-unlink_fresh-01` (fresh create-then-unlink emits no unbound declaration), `round57/final-ns-mounted-kernel-01` (held FD reads and writes its own inode, `st_nlink` 0) |
+| `rmdir` | Validate directory kind/root and the effective emptiness of the selected view (including pending additions and removals), then remove one name; never a recursive deletion | `round57/final3-ns-rmdir-01` (effective-emptiness check), `round57/final-ns-mounted-kernel-01` (nonempty `ENOTEMPTY` with no partial change, empty success, absent from the parent listing) |
+| `link` | Regular-file names share one inode and observe all later writes; directory/symlink hard links are refused; a hard link to a base-owned identity materialises that identity's record from its exact base roots | `round57/final3-ns-link-01` (two names share serial/content/metadata, one save, fresh aliases before first Commit), `round57/final-ns-mounted-kernel-01` (`st_ino` equal, `st_nlink` 2, write visible through both) |
+| `rename` | Atomic source removal/destination final binding in one publication; type, emptiness, flag, cycle and alias checks before visibility; a same-inode rename is a no-op; `RENAME_NOREPLACE` collision refuses with both trees unchanged; replacement preserves the replaced inode for its open handles; a rename publishes the moved identity's own record when the live root holds none, and the destination binding shadows an inherited binding ([02 §2.3](02-overlay-snapshot.md#23-precedence-and-tombstones)) | One changed-name batch through history staging with pre-visibility validation; evidenced by `round57/final3-ns-rename-01` (both parent edits atomic, replacement with the destination FD held, the replaced FD readable after its Commit, NOREPLACE both directions), `round57/final3-ns-rename_base-01` (tombstone hides an inherited binding), `round57/final-ns-mounted-kernel-01` (cross-directory move keeps the inode, held-FD replacement, `EEXIST`, cycle `EINVAL`), and the scenario's between-directory rename (`round57/final3-t1-small-project-01`) |
 
-`setattr` of unsupported uid/gid, atime/ctime/birthtime or platform flags must fail
+`setattr` of unsupported uid/gid, atime/ctime/birthtime or platform flags fails
 explicitly rather than report a persisted change. Ordinary rename and
-`NOREPLACE` may be selected once their preconditions can be enforced; exchange
-and whiteout remain unsupported initially. Root moves/removals remain prohibited.
+`RENAME_NOREPLACE` are implemented; `NOREPLACE` is the only selected flag, and
+exchange and whiteout remain unsupported (§7.3). Root moves/removals remain
+prohibited.
 
 ### 7.3 Optional, kernel-owned or unsupported operations
 
@@ -816,6 +832,8 @@ and whiteout remain unsupported initially. Root moves/removals remain prohibited
 | `lseek` for `SEEK_DATA`/`SEEK_HOLE` | Unsupported optional query | Zero bytes do not prove a hole. Ordinary `SEEK_SET/CUR/END` offsets remain kernel/file-description behavior |
 | `copy_file_range` | Unsupported optional acceleration | Do not invent private copy RPCs or claim atomic/overlap semantics from read+write helpers |
 | `setvolname`, `exchange`, `getxtimes` | Outside the initial Linux adapter | No implicit Apple metadata semantics or future-platform claim |
+| Rename exchange/whiteout | Unsupported; `RENAME_NOREPLACE` is the only selected flag | No atomic-swap or whiteout semantics; a `RENAME_EXCHANGE`/`RENAME_WHITEOUT` request is refused with the trees unchanged. This is a selected-scope decision, not an oversight |
+| Moving a committed directory | Refused (`Unsupported`) — declared limitation of the bounded profile | A moved directory whose namespace record is absent from the live root is refused: a committed directory's inherited children resolve through the canonical tree by path, and this profile has no identity-keyed service query that could re-anchor them after a move. Moving a directory this generation created works (`round57/final-ns-mounted-kernel-01` moves a fresh directory and keeps its inode); the committed-directory move is named in the mounted route's `NOT_RUN` list. Do not write a case that expects such a move to succeed |
 | `execve`, read-only/executable mappings | Candidate R behavior requiring mounted proof | Not separate FUSE callbacks; require loader reads, execute permission, compatible binary/interpreter/libraries and supported kernel mapping mode |
 | Shared writable `mmap` | Outside initial W unless coherently implemented | Must be enforceably refused or supported with correct visibility/capture/resource semantics before W; documentation alone is not refusal |
 | `O_SYNC` / `O_DSYNC` | Explicitly refuse unsupported requested guarantee | Do not accept at open and rely on a later unsupported fsync. Audit other synchronous I/O flags delivered by the selected interface |
@@ -828,6 +846,60 @@ reason to create a distributed lock service. Do not assume that two Workspace
 mounts backed by the same Branch share lock state. Test the selected POSIX and
 Linux lock types rather than treating all advisory locks as interchangeable.
 [fuser 0.18 Filesystem API][fuser-api] [Linux record locks][linux-locks]
+
+### 7.4 Phase evidence and exact reproduction commands
+
+The routes below evidence the §7.2 matrix rows on product source `f802cc124`.
+Receipts are append-only and live under `core/target/pair1-evidence/`; the
+closing receipts for this phase are `round57/final3-ns-<case>-01` (the ten
+native namespace selections), `round57/final-ns-mounted-{kernel,durability}-01`
+(the mounted selections) and `round57/final3-t1-small-project-01` (the
+real-daemon scenario, first passed as `round56/t1-small-project-0j`).
+Earlier mounted routes keep their own records: [mounted mkdir](40-mounted-mkdir.md),
+[mounted CREATE](44-mounted-create.md) and [mounted SYMLINK](48-mounted-symlink.md).
+
+Each run goes into its own fresh output directory; runs are serialized
+(per-worktree measurement lock). A documentation-only round needs no rebuild:
+the receipts above already exist, and these commands are recorded for
+reproduction, not for re-running. Rebuilding the Linux test binaries and the
+daemon in the long-lived `lfs-build-179` container uses the exact commands in
+[56 §5](56-issue179-mounted-syscall-handoff.md#5-build-and-run-mechanics-exact-identities).
+
+| Identity | Value |
+| --- | --- |
+| Host binaries | `core/target/pair1-evidence/binary-archive/57cc5227bb963dc4e0fde628dc594ba088e1411d95d485eca8266dc78c28084e/host` |
+| Runtime image | `sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4` |
+| Fixture | `core/target/pair1-evidence/fixtures/large-edit-master-01/result.json` |
+| Native namespace test binary | `core/target-linux/debug/deps/namespace-dc60a93a3a48653b` |
+| Mounted namespace test binary | `core/target-linux/debug/deps/mounted_namespace-b4fa939a7bd6f016` |
+| Linux daemon | `core/target/pair1-evidence/round57/layerfs-daemon-fixed` |
+
+From the repository root:
+
+```sh
+BIN=core/target/pair1-evidence/binary-archive/57cc5227bb963dc4e0fde628dc594ba088e1411d95d485eca8266dc78c28084e/host
+IMG=sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+
+# The ten native namespace selections (setattr mknod link unlink unlink_fresh
+# rmdir rename rename_base generation notification_failure):
+python3 core/crates/layerfs-workspace/tests/namespace_route.py \
+  --fixture core/target/pair1-evidence/fixtures/large-edit-master-01/result.json \
+  --binaries "$BIN" --test-binary core/target-linux/debug/deps/namespace-dc60a93a3a48653b \
+  --output core/target/pair1-evidence/<round>/<fresh-dir> --case <case> --image "$IMG"
+
+# The two mounted namespace selections (kernel, durability):
+python3 core/crates/layerfs-workspace/tests/mounted_namespace_route.py \
+  --fixture core/target/pair1-evidence/fixtures/large-edit-master-01/result.json \
+  --binaries "$BIN" --test-binary core/target-linux/debug/deps/mounted_namespace-b4fa939a7bd6f016 \
+  --output core/target/pair1-evidence/<round>/<fresh-dir> --case <case> --image "$IMG"
+
+# The real-daemon small-project scenario:
+LAYERFS_CONSTRUCTION_WORKERS=1 python3 core/crates/layerfs-daemon/tests/control_commit.py \
+  --fixture core/target/pair1-evidence/fixtures/large-edit-master-01/result.json \
+  --binaries "$BIN" --linux-daemon core/target/pair1-evidence/round57/layerfs-daemon-fixed \
+  --output core/target/pair1-evidence/<round>/<fresh-dir> --case commit_small_project \
+  --image "$IMG"
+```
 
 ## 8. Projected metadata, names and handles
 
@@ -845,8 +917,8 @@ Linux lock types rather than treating all advisory locks as interchangeable.
 | uid/gid | Configured mount owner, not persisted C1 owner identities |
 | atime/ctime | Explicit synthetic copies of mtime; no promise of independent persisted POSIX timestamps |
 | birthtime/platform flags | Not persisted; use a declared unavailable/zero projection where the interface requires fields; reject unsupported setters |
-| regular nlink | Namespace reference count, including current local binding effects |
-| symlink nlink / directory nlink | 1 / explicit synthetic 2; no implied stored subdirectory-count semantics |
+| regular nlink | The **live namespace link count**, presented at every attribute seam: `State::presented` maps a regular inode's `references` to the resident node's maintained count (with the generation's fresh-name count as the fallback when the node was collected), `cache_lookup` baselines a newly resolved node from that tracked count, and the link, OPEN, SETATTR and resize replies all present it (`runtime/state.rs`, `filesystem/namespace.rs`, `filesystem/write.rs`, `filesystem/create.rs`, `filesystem/open.rs`). Within one baseline the resident node and a resolution must agree on the count; a Commit that republishes the identity with a changed canonical count refreshes the resident node instead of refusing (`cache_lookup`'s references comparison is baseline-gated like the adjacent original/roots staleness check, and `serial_original`'s stale-baseline query checks serial and kind only). Declared bounded corner: a re-resolved base identity whose delta link-count adjustment was lost with its resident node presents the canonical count until the next Commit republishes it; no registered selection reaches it. Evidenced by `round57/final-ns-mounted-kernel-01` and `round57/final-ns-mounted-durability-01` |
+| symlink nlink / directory nlink | 1 / explicit synthetic 2; no implied stored subdirectory-count semantics. The kind-to-`st_nlink` mapping lives in `core/crates/layerfs-fuse/src/replies.rs` |
 | blocks | Logical size rounded to 512-byte units, not allocated pack/disk bytes |
 | rdev / preferred I/O block size | 0 / declared projection value, initially 4096 |
 

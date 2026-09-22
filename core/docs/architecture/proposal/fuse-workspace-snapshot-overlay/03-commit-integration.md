@@ -3,9 +3,12 @@
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Written 2026-09-21 against merged source
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`. The shared service/history APIs
-> below exist at that pin. The Workspace integration is proposed; no mount,
+> below exist at that pin. Section 7's successor-reconciliation rules were
+> refreshed in the issue-179 documentation round against product source
+> `f802cc124` to state the implemented reconcile carry, declaration ledger,
+> rename replacement semantics and canonical link-count re-baseline. No
 > performance result, crash-durability guarantee or completed qualification is
-> claimed. The local checkout need not contain that newer implementation.
+> claimed.
 
 Read the [packet overview](README.md), [Workspace/FUSE contract](01-workspace-fuse-contract.md)
 and [overlay/snapshot design](02-overlay-snapshot.md) for runtime behavior.
@@ -510,10 +513,55 @@ root as a substitute for PreparedChanges. [Base validation and staging](https://
 | All canonical content, namespace and metadata return to the acknowledged state | Normal explicit Commit may return UpToDate after exact stage/context checks | File-byte equality alone is insufficient; mtime or another metadata change can make a new root |
 | Another Workspace advances the same Branch | Preserve the captured root/head and report the stale/conflict outcome | No automatic refresh, replay, merge or adoption of the competitor's root |
 
-New-inode attachment and live portable metadata still require the shared
-capabilities identified in §4. These scenarios specify the full writable target;
-they do not claim the mounted write path exists at the source pin. In particular,
-a rename's file-content reuse does not excuse missing POSIX timestamp handling.
+New-inode attachment, live portable metadata and the mounted write path are
+implemented and evidenced at `f802cc124`; [01 §7.2/§7.4](01-workspace-fuse-contract.md#72-selected-w-operations-implemented-and-evidenced)
+record the per-operation receipts and reproduction commands. A rename's
+file-content reuse still does not excuse POSIX timestamp handling: the mounted
+`setattr` evidence covers chmod, `UTIME_OMIT` mtime and mode preservation.
+
+#### Successor-root content after a known own Commit
+
+Four implemented rules govern what the successor root carries and how live
+state re-baselines when the Commit outcome is known (all in
+`commit/reconcile.rs`, `commit/directories.rs` and `runtime/state.rs`):
+
+- **The reconcile carry with its live-owner filter.** A replaced or unlinked
+  committed identity — one whose last local name went away while the attached
+  base still owns it — is recorded at replacement/removal time and carried into
+  the successor root as an `Unbound` frontier record (no dirty key, no
+  declaration), but **only while a live local owner can still address it** (an
+  open handle or a lookup reference). An identity whose handle and lookup
+  references are both gone has no owner left to serve, so nothing is carried
+  for it and the arena can be reclaimed. Carrying unconditionally keeps the
+  arena unreclaimable after its last owner is gone — that regression is why
+  the filter exists.
+- **The declaration ledger.** The submission records the exact directory
+  declarations it sends; a completed Commit forgets exactly those, so a
+  directory a later generation created while the submission was in flight
+  stays undeclared and the next Commit declares it. Clearing the ledger
+  wholesale loses such a directory.
+- **Rename replacement semantics.** The replaced identity's record is
+  preserved for its open handles and moves to the successor root, so a held FD
+  keeps reading its own inode and bytes across the Commit instead of asking
+  the service for a name that is gone; the moved identity's own record is
+  published when the live root holds none ([02 §2.3](02-overlay-snapshot.md#23-precedence-and-tombstones)).
+- **The canonical link-count re-baseline.** The successor root republishes an
+  identity's canonical namespace link count, and the resident node refreshes
+  to it rather than refusing: `cache_lookup`'s references comparison is
+  baseline-gated exactly like the adjacent original/roots staleness check, and
+  `serial_original`'s stale-baseline query checks serial and kind only
+  (`filesystem/namespace.rs`, `filesystem/original.rs`). The bounded corner —
+  a re-resolved base identity whose delta link-count adjustment was lost with
+  its resident node presents the canonical count until the next Commit — is
+  declared in [01 §8.1](01-workspace-fuse-contract.md#81-attribute-projection).
+
+These rules are evidenced by `round57/final3-ns-unlink-01` (open-orphan record
+across Commit), `round57/final3-ns-rename-01` (the replaced FD readable after
+its Commit), `round57/final3-ns-generation-01` (a later generation's namespace
+and metadata changes survive G completion),
+`round54/final3-mkdir-successor-01` (a directory the successor generation
+created is declared by the next Commit) and the mounted durability selection
+`round57/final-ns-mounted-durability-01`.
 
 Incremental input does not mean that every operation touches only the modified
 bytes or costs O(number of changes). The existing algorithms provide these
