@@ -1,0 +1,23 @@
+{
+  "source_parent": "6702e31e629ada5e78981b6854e36721e619e65b",
+  "product_inputs_sha256": "b6acbb4ef773fdaec17dd9922a47ec6a92ccb6f5e91ca963ba5f857d8953ee12",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/83c832a66cc766325dfd3cc93540a2f908dd2b687c2a93def8be5535bcd67db4/composite-test",
+  "test_binary_sha256": "83c832a66cc766325dfd3cc93540a2f908dd2b687c2a93def8be5535bcd67db4",
+  "test_source_sha256": "e9031369e4654a894dffd86dda0417c3e0295dfab296bb086c71097849969f02",
+  "helper_source_sha256": "77323daa166d0c48fbb0be6f79b4f97eea129e96bd749b2510cc4a7793bb6605",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/9c3e43f4a9fa83534dd252f137b46348c910c2da6b1002171b962d4aa0436019/host",
+  "host_binary_sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "ad453d7be7ffd8988c44b5516658bfb2cc4e31bb9da7d222ddf4059994d85e26",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "stage_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/7909fbf2733d1260a19b825277b29f564515064e220d12cc0acbc70c20f24c43/stage-test",
+  "stage_sha256": "7909fbf2733d1260a19b825277b29f564515064e220d12cc0acbc70c20f24c43",
+  "commit_staged_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/d8166be27a7ad3f68a58b4a8951f4361d990b98af80166fa3f92becec102e388/commit_staged-test",
+  "commit_staged_sha256": "d8166be27a7ad3f68a58b4a8951f4361d990b98af80166fa3f92becec102e388",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/b12d23b192d0575399729c8bbbcc6beef47108d08eeaffd57d5066f51d5ec2ff/layerfs-daemon",
+  "linux_daemon_sha256": "b12d23b192d0575399729c8bbbcc6beef47108d08eeaffd57d5066f51d5ec2ff"
+}

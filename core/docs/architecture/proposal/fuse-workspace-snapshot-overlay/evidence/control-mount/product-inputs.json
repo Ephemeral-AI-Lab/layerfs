@@ -1,0 +1,1020 @@
+{
+  "implementation_parent": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "initial_whole_core_checks_product_seal": "b623ea07bf90988b83b66e006b980247372ea251f73fdd5b8988b114bbb6469a",
+  "after_equivalent_response_pattern_product_seal": "d65f43e9394f87229ed4bb1fae7a030877c4c82ed403d6e956a3217218bd92a8",
+  "final_product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35",
+  "files": [
+    {
+      "path": ".cargo/config.toml",
+      "sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+    },
+    {
+      "path": "core/Cargo.lock",
+      "sha256": "ed460f22618f46cacc7fc2490ba2c8d9cdecefff461e3f2e2a1bddf5af5e973a"
+    },
+    {
+      "path": "core/Cargo.toml",
+      "sha256": "a5d2490583e8d5c7076099890053811efe97c3d0551cac4239f12e9e0ccbef16"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/Cargo.toml",
+      "sha256": "1d2c5b62ea5288a464fcc9fcc0aeb6f272cdbf2940c6ffb0d887a78804144c4f"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/mod.rs",
+      "sha256": "cf38556459d8b8ede4f96d49148e2b8746eb9dda54394e45a3b12396f22a141e"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/client.rs",
+      "sha256": "bdb4b3c568655435c0ba93141595c6544438dcd61c08ae0a86a5efa2a596e8fb"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/connection.rs",
+      "sha256": "42f7810c2c76306c33d79db080ae3b9d39b58e9ec594ed2271a6dcbab6738b5c"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/mod.rs",
+      "sha256": "6bfad6255addba352fc87ce07fedfc6f1a57f9442631650c10282303719e6c35"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/payload.rs",
+      "sha256": "53c633cf8bad474f93f67328343f1517820a2f8893bc14e7115fdc0d5cd72e41"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/pipe.rs",
+      "sha256": "6663e1a4a809812c64e636ecd927b3a5f6eb68d26debf1d07412360df66a6bb7"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/frame.rs",
+      "sha256": "fef17531935a4a9d7d02c5f55f029d4f8a02706b867e53f48627c3e571cabb93"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/history_failure.rs",
+      "sha256": "b7aa93ec640c1081102c1e2613dcc90a7f495c0ac4569b9f0ca72d8f2ebc06d2"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/metadata.rs",
+      "sha256": "7be6db7239acd3061fe869213f1d443ab9d60eba1d58749eb590c792705dc01d"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/mod.rs",
+      "sha256": "b94d3ba39d26d548a02a4fd0458b0a8aa449312c16eab94714f986aa0c3f2bdf"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs",
+      "sha256": "17a5248f8ae949263ef1c4425c85a42ee60b5bac00f249b7158185c938840f02"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/state.rs",
+      "sha256": "1c9541c3a0f84d4ea65441570141db89e6f88d96a797f10bb9d49a4627150e69"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/server.rs",
+      "sha256": "46c1c119b9e8fb9901822e7262cace4abcd96517d692794da104531e14ba0725"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/caller.rs",
+      "sha256": "cdb7e041d8d2c9f55d499c1e9e1606380296bf5b1752df1fe0161c032d258205"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/control.rs",
+      "sha256": "d86212a6df070c56b294e10c43eb614f577a9506cf1bf0d3ceab50bf51a9760b"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/history.rs",
+      "sha256": "1a4999f1ceece7f60dd7875a721d866bf1b80c2b643ce50c994a6676b98823f9"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/metadata.rs",
+      "sha256": "a9969acd657a65c075528ae3bcb00595c1952cef556c669628df9e92114f2823"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/mod.rs",
+      "sha256": "c6569622afa8392a301bcd635d7e8172fc1fc0dd0bb23ee0b5b2d7e41c5ded6f"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/outcome.rs",
+      "sha256": "3423afa15b14cae67a6239b90d89c340ca9ffb61f2a0348ad8a9b2bef3075568"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/request.rs",
+      "sha256": "229d67e8ee4bde7106561352d6fa75fee58e5181fabaee2d4cbfcde370770a01"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/source.rs",
+      "sha256": "937844f81fbf76e174374844841daf99af44161f99d4df39f2bdb44ec8d0cf14"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/lib.rs",
+      "sha256": "47ca012f7980070dd751c167fa04dfaebe0619f363fad423e89cfe82f33d66f8"
+    },
+    {
+      "path": "core/crates/layerfs-content/Cargo.toml",
+      "sha256": "acc00095e78434ad474a129b261cd5388b498ed2b469fb26a3ea7bb259f5a1a7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/error.rs",
+      "sha256": "b9f5796c0cd55c50fcf41a2314f7a40611f3be395dc5b9ee777562bdde5f970b"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/cdc/gear.rs",
+      "sha256": "a8fc5131257ef4610864c648bcb6573107caf7efc1b7b33d2b31e0141050de8d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/cdc/mod.rs",
+      "sha256": "3bfd895120ffca7e0f1b60314b4725d5ff1678d83e23f6deb558709cc535dae1"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/content.rs",
+      "sha256": "d834515b25d980fa2cb2ae46b33eaac3e944cbdcff4b1a64afde3cffc61cdd82"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/apply.rs",
+      "sha256": "aa628912ec2d8e8c86c0f3683e01726ad1a5c35a7c844b117eea3c0566664d42"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/compare.rs",
+      "sha256": "2855ac1e66373daf97ac0577c9f2dad3e9c1a61a5a2a844cc271aefd7b3047e0"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/concat.rs",
+      "sha256": "f006907618e33bab5487c9209e024024cdc20e094f0798c7c6e7746f096078c4"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/finish.rs",
+      "sha256": "0dcd0e00715aead47305ad24d8c70ef19eac0ad4cca843542368f2e49f8e1579"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/input.rs",
+      "sha256": "88c31396a834d596acf70da82149b1374cdb8578e4f6d8ceffad0004a05be29d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/mod.rs",
+      "sha256": "67e2b5ec3d2304a937d914e1655fae182bb1c115a6443575757f34ff7be9f9db"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/split.rs",
+      "sha256": "2b31d4e573ad7c95b035b649997dd8de2a9d2189671d32f509f38e5620528c9d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/edit/tree.rs",
+      "sha256": "fa998240699d4d7a1ff5e42ad8425d15f8391df761122033f0b56ea367c3804a"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/build.rs",
+      "sha256": "298eee40738d67325c9322e59ed6b47948aeb30dc6fca570d6467911d0583ea0"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/codec.rs",
+      "sha256": "103ec5ee9763824c9d77e32b6734412f0fb71ba073acc76fbf63b7c167917cf0"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/mod.rs",
+      "sha256": "6fabb19a338e920fa81edc18b037c1bd37c4db4e8eff32d3f5ee296495c74666"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/predecessor.rs",
+      "sha256": "bcb16187b923f1f016c29b4979b7ad4b2ecc81c5ea5815c8d2c1ceb9b1e665db"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/read.rs",
+      "sha256": "ccf32cf8baa909cfef289fbbdc09ac7a5192ac3317b4c1501471316222981816"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mapping/types.rs",
+      "sha256": "caed65804b8472d2c389472e459eae7d60b1d319d87958e35d76fd958fd07467"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/mod.rs",
+      "sha256": "b327e7660f7ae8643f87ad29648f12616052493a3c009198732c5e0da6de349f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/read.rs",
+      "sha256": "8e3132e610d702c0473e7267e631e111eb8508c12ee93e2bab24c1a94a76368d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/file/view.rs",
+      "sha256": "78e56260a54db20497da6dc333441675a4f27f60d787113dcd94749214a06e6a"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/build.rs",
+      "sha256": "923e41a7ad8daed08cd401d17acc38c6ffd2a4de11e90d1b919c573349b34d4d"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/codec.rs",
+      "sha256": "0d54c5c23a24307081cd918fd316fed9932bf1ef0dc3b0d458d64e438ad91eb7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/keys.rs",
+      "sha256": "6d002a62da2ed69454f7e8068505705ed3057d00ac660d151b48f9c23e0f32fe"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/mod.rs",
+      "sha256": "890c5a3e2c8575f03fdf3cbaef6301642b37ba6bf426c1e9e4402dda49d0ab82"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/patch.rs",
+      "sha256": "354d0b6eac7dbcc02d388bc382566a9c130fe1410e40d4af085141c40dd85f8f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/portable.rs",
+      "sha256": "c51b980299f49b269b7cdd51e7f1d72dfed3c2b419e27aef20781e9f81df9196"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/read.rs",
+      "sha256": "09febdef8010246f39b6cd1d3333db91c6bee744b364d6361ad7e6edb4e94401"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/attributes/value.rs",
+      "sha256": "4b8a1f82fc8819e5f3421f293c9ac1a51c73174e1653075fb14e7f0ec320dc76"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/codec.rs",
+      "sha256": "8a520ff456104fc1f9d8bd394c619bc8cfc27f0cd0b8ff4fae375446a17fdee7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/mod.rs",
+      "sha256": "bdb0945de2e12424446c40aebacdba1f6b77b6d32504d569264e5f72f0c78257"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/read.rs",
+      "sha256": "4377d563fb24ce46acdbb74104480812c3de220f7abefaa3ec9051d7450a4c12"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/directory/update.rs",
+      "sha256": "e0bec2484c25adf5a5c5dc095f21c8ac5899d820a5d575ec568e469b74ad5f10"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/identity.rs",
+      "sha256": "ebcf5920f50dc93746b95fa7f72cd32f21b43f68ca0a6fa7b3a4252e1107f127"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/codec.rs",
+      "sha256": "e85f41d546aab5e6ad7b85547a0b3055c424deab99afba3cc59ea0a3699724b4"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/mod.rs",
+      "sha256": "b19b720d1fc5f66c8004e723cf1b0efa050e1713eeef453739466628664efccf"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/read.rs",
+      "sha256": "50e7a0d077b84abd3147a9f31b4c3ba135830ad641b7cb35f557a149dbb943d9"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/inode/update.rs",
+      "sha256": "ef29dd7c65411b6adf5b188df549895886951e47c7087955dd472cc081f5ba25"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/input.rs",
+      "sha256": "955b90fb6078c8d5cadeed0cf5183e14652bc9e52cf1361b7ea3a57a49280f5f"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/limits.rs",
+      "sha256": "e59934e5160315960c6e225d6ae7272773d9b9132546c99ca814416371e34396"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/mod.rs",
+      "sha256": "effcbb0c07df143ad4173ce40db604a0ffce3401bd96b965ac39094d5a1b2cf0"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/objects.rs",
+      "sha256": "45dc7d342a9c6179da2cdf2ecab28e602c6381d2682fb33c9a45fe5dea076ea9"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/path.rs",
+      "sha256": "e884f2908a227336b8d2bc6b3ff55521d3d9710c6a730ad3a2888d4f89adae42"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/read.rs",
+      "sha256": "2931a263f78b4e00eef5b4f184638e1e9cc86fd5e00c8947650e22632fe3bb37"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/backing.rs",
+      "sha256": "27f02248384214b2d0a976af03eef91439aa5d1c034a1465fd800d6d19b47c01"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/merge.rs",
+      "sha256": "f9e8935a1ea8e11730f7b3ab77abfdf134dd82246db6fba4e59123d9009a7e1c"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/mod.rs",
+      "sha256": "1a32c372e8233c3b5fdd810759ada339f0ae4e058db7d96a9d5e957e6092d58c"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/record.rs",
+      "sha256": "84643e5b910e407c1f93fe025be17b08a66551e73628c897a54aff4e03ae4b7c"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/reduce.rs",
+      "sha256": "9dce3fc9a0ad0e205fb19963a599cca02b4ee5ed3801fa70ee514fbf09f81da1"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/release.rs",
+      "sha256": "ef80f9be2970601475215611402c17a83407fc3d86c29933b256a1e4e638edbd"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/references/runs.rs",
+      "sha256": "3110fe96b6e66df3f469ebfcd84d1657d4595d96f9fe5371b6d19cfdc89b8cd5"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/root.rs",
+      "sha256": "70071de39381eb0f6b3e47e1e748ce0b640b88608c5e2a730794c6be00f19c01"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/budget.rs",
+      "sha256": "51824731ab743b2ab469834ad5ca03b661478ef50ac2aa5da5893b897a54547e"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/finish.rs",
+      "sha256": "60baace4d2fe6fcc2328777091f68ef53c2f635fa1c1e24ecc3fb1239157a747"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/format.rs",
+      "sha256": "0ca3dbd29fd2fd3edcbc4e17078a3b1dcdde7ab32e3f16475e49b5ba783e76d7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/merge.rs",
+      "sha256": "dea92933a1bbbdebec00f8c0d09b42db6cb4417476c81692450a5acb1cbca7ab"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/mod.rs",
+      "sha256": "78224e9269c267ec2367e68294c690081cccb0ec7d0eaf3a225087a96871248c"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/sorted/page.rs",
+      "sha256": "de9688ee3d9ffb510502ed3842dc1c97d071ff8dc0b2fc03b0bdc471d6318899"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/symlink.rs",
+      "sha256": "e7033c7bdbcb5219ec615466141c34df5311119424950a10aff8a699f0bfebbd"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "sha256": "8d4762d1750284536f03a066931ac01fe1213aaee2ff273a7ffaaf2cbe98f8a7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "sha256": "e3a68f76295eaec87ca96006c3700a397b0d15f0dd80568f07af73277c5db9e7"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/lib.rs",
+      "sha256": "477477b6cbf54bb9370d3e83b3e06bdbd88bf472ea96b693e7a4e74b347a5271"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/access.rs",
+      "sha256": "d8059e620ca315dde38f3ee7bbb6fa35de2dcd2928fe4e4a8041fd55ff3e3e63"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/codec.rs",
+      "sha256": "43f5451f3741033de14f9b26b4d9da85a64acb2c42a9a250601973d4cd3b8296"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/id.rs",
+      "sha256": "55ed393424616301411906e29e12c2674cbf507fb7041ff4532835849125eff4"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/inode_leaf.rs",
+      "sha256": "151b952dc787411dd433532280d709437ca47f0588dae1ee6ceb1e84b935887e"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/mod.rs",
+      "sha256": "68bba6043a48f30927ad77a66c5ca4ac26a06c6869c73fbf1787736c23206d2a"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/output.rs",
+      "sha256": "38d8f2bd23ae0e846da7f92b7902b50cfd4c032a5a647c1fe9088373b24976f5"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/object/predecessor.rs",
+      "sha256": "51026c1a11cb80c84ffb2f323da1d3acc59a6320518afff1413b7ff541173936"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/policy.rs",
+      "sha256": "03920ff2dd221f3504b1c27e352ae9ab11e79ead174a62ea7543c19eb7c65921"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/Cargo.toml",
+      "sha256": "7b219575342971b3fa45712b6e789ce8f6e3397e58afeb58bf061acc73eaefa5"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/config.rs",
+      "sha256": "e981203c0a9d8a7f8f6c3feec4ab3316d651507c7d2664100a8cded4ee18172e"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/control.rs",
+      "sha256": "8f1528d9aaa64c418040b331aff5df8d6bf5803d6f2faa9f2b58fdcb1da8eb10"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/headless.rs",
+      "sha256": "47045d742646ff694a3bbbe4c87b674a09191e9dc9def88e91ed575c734bd0c8"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/lib.rs",
+      "sha256": "ea040b411cc060a6b3f6f67be348cf5eb4a1cd44bd01fd4d04c0c7e5f1f610f4"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/main.rs",
+      "sha256": "35805a7e6e06d00aa29209ddc9e76d946e8cc8de25f446e17317383080f4e010"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/run.rs",
+      "sha256": "b0e2b0c8181c0e1dcab613ef78f8ba060822d0bc6923786d29502d6c7d0ecb14"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/Cargo.toml",
+      "sha256": "671c535c820999b02241a60c136a9be9b77a756a5e6c3b2f581e99c3e3ad23c9"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/adapter.rs",
+      "sha256": "d637fdb478e248261b52ab6bd145eff74014355208cf9e81351d5704fe4d13e9"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/lib.rs",
+      "sha256": "162dcdb5f792159158966c2d820161645ae37e1db7dcef6453eaf4a9a1987dca"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/mount.rs",
+      "sha256": "07fc686a6db4c808649492e1a8c1ea8ef755797e3bac6be6be37013fe87628f5"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/replies.rs",
+      "sha256": "2193205f6a1138e6e810a7a14b4d0ea98dbbee26dc730efaa4253209a01b78a7"
+    },
+    {
+      "path": "core/crates/layerfs-history/Cargo.toml",
+      "sha256": "5e446e9caa5b0e5009974c6a84d2f68af1910a34375d14b0b5ce4786ba5dd091"
+    },
+    {
+      "path": "core/crates/layerfs-history/sql/schema-v1.sql",
+      "sha256": "b95ae1749245b9047b007f031fa4d84bbb4d80f311fb8547060fd46da634fb95"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/catalog.rs",
+      "sha256": "d6bc47b8e1aad5a263be260765e5bf6d2a93542ae0c1a274597cff0d49a66661"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/error.rs",
+      "sha256": "176350aaeab919d80ec593df7a75dea0f95a0430f59662bd1193c409b838c7d8"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/identity.rs",
+      "sha256": "00e056f69757dedc0ea748d336d5f3c749e0f8da9cd6c0ad0dbb469c64ee089d"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/lib.rs",
+      "sha256": "ae75fad11ef9552611df059d35c92982e438463e689299a68d1730051ac7b985"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/records.rs",
+      "sha256": "819ca376a9ea7c939793df2b0f7fe4d9c52d88c7dbe768dd5c922b9832151171"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/allocation.rs",
+      "sha256": "0b3fac2875899659eb1ecfa8d84d6e116a345e133715349416aa969d64e77396"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/branch.rs",
+      "sha256": "8138b328b9f59fcfa8cf4d3041d114ed6aa9395c29be7a34cd226c112467229d"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/commit.rs",
+      "sha256": "fdef678727a6bc793045100905ef7421dfd10a3dc51e5c635cc882765cc1ce5a"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/layerstack.rs",
+      "sha256": "862f2816f0bd307b7e968c0057485669ec4a175dfc5a98fe897b57dabea146ca"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/mod.rs",
+      "sha256": "3b5a6ae8cd87d0a5ddd71fb392be981ba0f97c72a26bf02ac8eca2cc66070e58"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/open.rs",
+      "sha256": "c755fd639bb824943601d5913b7be50fc9b008af20113a9b27eda09e4f6aef30"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/query.rs",
+      "sha256": "30ec5a70587f97dc3179db37682cd5ff98cad51a3672ee0d8e11c496c5d360dd"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/rows.rs",
+      "sha256": "e2007bf9bfbb7b5643f9af5c33650a015cf1b7496e99b5bd5e8369a873792f20"
+    },
+    {
+      "path": "core/crates/layerfs-history/src/sqlite/staging.rs",
+      "sha256": "a040fa51b91ccc861617f061bb06b0e9af2f0f9285796a8aa41e001cf4d53887"
+    },
+    {
+      "path": "core/crates/layerfs-service/Cargo.toml",
+      "sha256": "e7dbaa97ad4bf6d77f94fe6469965894221ae62c95d426539db9c1834a94e827"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/input/mod.rs",
+      "sha256": "52d26169130d87dcfd8224611c21940d9e8c1c3c96df88ccd2199f16d4691822"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/input/sequential.rs",
+      "sha256": "b09c78bb6e3a110a32b0e09f55b345165b03c7483d2ddc6ea42774e8df95e7af"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/lib.rs",
+      "sha256": "0b3c79038a1c1c1ae9747f762b0577d6ccd8d65deddc2d1cc49f8cd269bff473"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/main.rs",
+      "sha256": "4f72149f1a96f6e90586b8f082dc78a92eca1ac87975ea22ad7440fac6923c4e"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/config.rs",
+      "sha256": "09a8e11b4458320df6e55604105adefe004de12e47dbf4b8ba5ceaf6b7180731"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/mod.rs",
+      "sha256": "f0810f0673b9eb95b795db33ebd309e59dc5be63eb1fc86d64421e50defc6e82"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/native/startup.rs",
+      "sha256": "596f1928160bf811b02b50a8e7aa3b4b6c5e00ebe7800c42ea5828f499ed8e34"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/dispatch.rs",
+      "sha256": "8fb8997f25f21529fd3b8cdccc2467444ff233c5a076aca109e8c7a645aae528"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/failure.rs",
+      "sha256": "bce4036d8f77e337936dc26757af34c53055e3fffced5f2435c3f19ee03a2a3c"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/filesystem.rs",
+      "sha256": "2d4f763a82cc91709d0ca2b3982c46c105f4dcc5d0f9dc7c2247b9ca5ce56493"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/history.rs",
+      "sha256": "1dc7fa6430444c87ed80b6b671a4f785ec013b5cde6a3dc61544403267e28fc1"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/history_bootstrap.rs",
+      "sha256": "8f23981dd295d7d0b72f09bb19e6d178372bd67a32bef134268ff2b0d1154caa"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/metadata.rs",
+      "sha256": "4ced3124f34c7aefa16bd5d785d5d1615ad61d888fefb829e64e3d58ce2bfebe"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/mod.rs",
+      "sha256": "32288febeba376cd99e90a98c070485e30f72966f3a876daac0889a951f7a2c3"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/read.rs",
+      "sha256": "e6f828f2f17f4ab57cc6bfb6d4183bc718c023f8425081cdc60d8b905e42e5e0"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/operation/write.rs",
+      "sha256": "86dd4573b0601d2e8609eb8b3472add612c2aee1dadcfa691ab557326b7ffe50"
+    },
+    {
+      "path": "core/crates/layerfs-service/src/owner.rs",
+      "sha256": "bf163b2410502c9f598bfdb68eb184cf75a30ab606a12c68073a2b09e99a9dc3"
+    },
+    {
+      "path": "core/crates/layerfs-storage/Cargo.toml",
+      "sha256": "9c837f1f1fc3257fd42af0bafccb1910150cc8a8c56b61ce82e1bcb75d3fb380"
+    },
+    {
+      "path": "core/crates/layerfs-storage/sql/schema.sql",
+      "sha256": "7c4f3c3491206169508fd9e04939f2597ddf55e476324355e284698e9133c2ab"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/batch.rs",
+      "sha256": "01f4b15af1ca927929a0920c7032b0ebf439a83ebc0fc61495823bd1f50950e4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/collision.rs",
+      "sha256": "811a0a0d5cc25b349a654fcf708af092bfc25cbb3e8d7ea3deda9ece69f99a82"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/dependencies.rs",
+      "sha256": "68ec6ce5bd17a92553aa7e93a73c53e322dd83ff518b77b6a9e64654167967e0"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/finish.rs",
+      "sha256": "9eb3eff81c08dfe5146fb40dc41c8a1bdbbc38c358218d3857482905cc26923d"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/lifecycle.rs",
+      "sha256": "382ed847e55dcbee1a9f9aa78e599412ba195b6da6c3770475d1e2dc4eea9ef7"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/membership.rs",
+      "sha256": "a6a9e8a3937c1d561d5d7341d50740cec8dc7e89d7909f42459ca682393b7446"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/mod.rs",
+      "sha256": "c3b43f2f504fa2255ae39fc0514b7a01a48cd7a296defb20b29a26262deebcd4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/owner.rs",
+      "sha256": "ace068f96b1cf5cd84a4234c80de3771f01649f9435344452db682ad824661ac"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/placement.rs",
+      "sha256": "c6f470b24cdca76e3c4531ad652a13a6de6b851552f7bb3b1490e9c9f235f0c5"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/pool_lane.rs",
+      "sha256": "4c9f1e26fce91c0c9c713350d7b90b05ef42c76379dd843bbbc2ae7593f76ed2"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/provider.rs",
+      "sha256": "58b0928aea68ae491403898abb2963d5ef876649dd7bbc590f9e2a623e531b1f"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/read.rs",
+      "sha256": "26c393d1fca25e8947fd87c417d050aea4eedf8d61cffc25e49f0fbc7a82df5c"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/save.rs",
+      "sha256": "d4e5805896d10f7622450f5676227764420c1eeafce7dc7b674c0c0663da2569"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/selection.rs",
+      "sha256": "98a635982b86a678b39cbf0f9a018a62adb628d2f52edcf5936bd35fe319dafc"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/cas/store.rs",
+      "sha256": "8ace39f9bc61cb4d591220640c279354916f1ccb2219ad68a3d5fc5d62033aab"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/codec.rs",
+      "sha256": "0625a4e9e481828b58afb3bdf7805ef93debfdfa407cd6065f7fe19f2428c5ef"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/decode.rs",
+      "sha256": "518f7a5afcc0a1da24ee1f10926dc8bdb0fdf4af99fffcc1b54346f233c737f4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/candidates.rs",
+      "sha256": "6123b7502f4b67e6ccc5fe90071643bb01180da609d7d4696368434989929e04"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/mod.rs",
+      "sha256": "e57c281053c72be05ca92f367465d3662449de0f6e806a645cc9838b1351380f"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/read.rs",
+      "sha256": "3e046d1cacddb13ff0ff0fb57cd1f973a990cb1a9c4125f10cba0d3dfe17ae66"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/record.rs",
+      "sha256": "9688cf3f765be103ff0671a6c963aa3eff3d3ad158347cfe01afdba3b340cca4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/delta/select.rs",
+      "sha256": "01f5b207b810e2f4bdac252349c9a3df3cbf5b5678d169342804107b61b0495e"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/full.rs",
+      "sha256": "668657e539358dd2b18e670598b5230938d5b62ecd1bde540b5d61237203dc4c"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/mod.rs",
+      "sha256": "ed53fd3e82d28521e4d0de70944b584f1e7297b9dae25900728e524bba4207bd"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/counters.rs",
+      "sha256": "f38b855981e8322b3d55a7f58af491aaf031b3cb9358275adbfd4a6eaa8dcca6"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/delta.rs",
+      "sha256": "1cd51cbb043d8e5d92effe13f1cc56b6598f7c3c98c3390dc7631180080c2bd3"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/index.rs",
+      "sha256": "e44c502b1d0a5d85354419201b9298a30637c000e637d49a049b00caa84c8047"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/leaf.rs",
+      "sha256": "beab3b4880eb50b018afaa4f377dd8abfaa2929be4e15b52296d5839f6a62c14"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/mod.rs",
+      "sha256": "8ce767702144dfe9905eab9d8c355fe0b999040c9b45c1e298fe230b99a4a49e"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/read.rs",
+      "sha256": "910c86927fc50512d013f5a499cb6891373e82ab31bdcf119d4aeb3c7a491b67"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/encoding/pool/value_group.rs",
+      "sha256": "ad534e753c6ec47d5a37b9bca3bb2529ca84acf1fe134dc8a7fb1ec9a452b2a4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/error.rs",
+      "sha256": "7c81996839e74824712d4b2db718fa9ed3dc102ebe8c41e5346d46cb927b2c71"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/lib.rs",
+      "sha256": "d4b84f27554df0f40f972284eb6c9d70f9051a6caf6d7af0b50f6d09a3b71dfc"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/assemble.rs",
+      "sha256": "5650e61ad52a372f36bcecc3bbf52584fb929eb23f9cd1402bfba6d2cb4f548a"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/layout.rs",
+      "sha256": "7c36549cccedfd758768d43f3991783feac852cd6ba72961dd7e701ae3402761"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/mod.rs",
+      "sha256": "566d025842bc015e0c9a54e39540ce99bc6abcb4d415ddb4cc3f1405710612e4"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/pack/placement.rs",
+      "sha256": "2a06d3efa953ee82bc03771e0b0c4f6b901659f12cbd5d7068d5d09f8b2816ae"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/policy.rs",
+      "sha256": "e8056821d0cd35ad67f440c14e7241f6d4eeb7875c64b852fd712878c04296c7"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/cleanup.rs",
+      "sha256": "d596e71c0aac1bf1a1d40be3d01044c8f2445e32b6ab7153ec23df1555d9a25f"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/connection.rs",
+      "sha256": "70aad0792b249cfd46752434c3c05e514a0e81e48f736e508b9dc2becfb196ac"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/lookup.rs",
+      "sha256": "6e480bf8d192ca7be771cbb8a9e3ff74c387732648630e7787d5da7f3db061e9"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/mod.rs",
+      "sha256": "7925319686d474b78c7833de9d046dbfd79763a64225d42df8ecaa086990f223"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/ownership.rs",
+      "sha256": "33108f35bfe2a6b45a762f64d42f0a823c703ef6400d22067be9a5aa1f0d434b"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/pool.rs",
+      "sha256": "a2baf411d2501d337849a773bbfcde470557af5f48d162a332a498092c6e0e98"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/schema.rs",
+      "sha256": "2f713e290ab299c3a85219ea7b8b8001f1e3a9b2f081ee389c032bac450fdff6"
+    },
+    {
+      "path": "core/crates/layerfs-storage/src/sqlite/write.rs",
+      "sha256": "9139362c52a14d871e5752a63d2f29798aacce3a77c0f4be571d141c93b57cba"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/Cargo.toml",
+      "sha256": "1d7d988a4d660c8840ad0721dac40a601780c706a44772fe3589b458ce5bc376"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/health.rs",
+      "sha256": "c1f5a18bc4ebcffb4a4369ea76eef30b53da322d30c20ed6ef915195d57a8892"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/lib.rs",
+      "sha256": "b9a0f4a025bcf85940c7e94d098fb82b99ed536187dd0c580eaa47fe330334b6"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/observation.rs",
+      "sha256": "1581d309e601c363d2d43c081bece154069084e12692b0cfabdc916337cff25c"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/operation.rs",
+      "sha256": "02c15751aa15ff2098c244a8289eaa2d3f661421d2ff8371c11ef83d9a3594c6"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/collector.rs",
+      "sha256": "e65f18efb0803c02d748069c4ce67ef5690149415d17701215cf9b87b53577a0"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/encode.rs",
+      "sha256": "734ba1eb3df83dbe1f5a5c7d5d1740c7358d221053411b6278692c2c630df264"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/mod.rs",
+      "sha256": "ebc346343c126fa654514e7a82aab4ab5adde344ecde5f1922e8f496f1eae561"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/queue.rs",
+      "sha256": "ca0916542501840011169dc9dd56715e9fa20384f6a7183779d92ffda22469a2"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/output/retention.rs",
+      "sha256": "c1de75b01d39194696b716c55ad2328f135d82ee50d2e57ba11bc833e05a0ac3"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/linux.rs",
+      "sha256": "e3c69701b3fcd7951577112e4a8b02c843828b0fb51bcf64aa0671a9d447fad0"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/macos.rs",
+      "sha256": "ed975b2e1b43a14456ec91fb285af4473acb9e481b0854d642a3a9d64f23380b"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/platform/mod.rs",
+      "sha256": "23a58eac9ce8bdaff33de9dcb808b5cc0db87be0cedf78fce70bb93b2816897a"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/mod.rs",
+      "sha256": "401067415debb932b57f7fb2246b03cc07738397935e2143ae253879a86f4bb3"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/monitor.rs",
+      "sha256": "86c1052ac8d105c2fdd3ce233eb001e40c5734b79ca49da0c61c2af84477c4af"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/runtime/session.rs",
+      "sha256": "e60006e33b6a703767c232c4100bc0c657cc75d17889c9eaf8bb647d1b51aae9"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/bounded_json.rs",
+      "sha256": "604fc084901fea26ce52b1eb68f7914a82ef66859910755a87309a7209a5685d"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/format.rs",
+      "sha256": "e70acaf83fee62fdaec195e3f692de3b697c002f07c9d965cfdc3bd5999ff741"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/json.rs",
+      "sha256": "61119c928b5e8586171d8dda2223a95e7824c9fe1afd677c44e69b8891956882"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/limits.rs",
+      "sha256": "f8e6596329ffc00c5f1d17da3457439cdd98946a70514155cc4b006863d91428"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/mod.rs",
+      "sha256": "297b4fb36cb12812519101c282f920e36ff376e8c0c8521e92c5d7f9ffa5aacd"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/recording.rs",
+      "sha256": "be77a517d27591e413c08dac54ee46bf566955407d3fd330aba3b898c46b02dd"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/report.rs",
+      "sha256": "69711ecfefec1f17a7fe778f44695e9fbaf6666809835f2173ccb9318fdc08a2"
+    },
+    {
+      "path": "core/crates/layerfs-telemetry/src/timer/scope.rs",
+      "sha256": "5f9cfa1705504aa76419f1984a90617d7cd779ca19117e2c617b7313d2d21406"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/Cargo.toml",
+      "sha256": "7adaf644515fc404ef4e64a86d4e263a6eff9e913acc9f4b7e82b2c31f0868fb"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/budget.rs",
+      "sha256": "2926a368d50a76b6ad7dde8c91f094d28f4138b4f3e1439f0e45e9ee5e5f6ebd"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/directory.rs",
+      "sha256": "4a2e75f0dbc2eb2ac718e6e3a7db360bebb2f9eaad0987e353b7b03e99870730"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata.rs",
+      "sha256": "041d28a90bbd600a89a17cef637c6ded1efcff4311e96e482947e5403b3cdb12"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_build.rs",
+      "sha256": "e08adf59169e641d02c24fea5b0bf143f2edddbb185b45e2886dabf8f04624c5"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_index.rs",
+      "sha256": "0ad68166de9b615949fdabd1578d6edcd1d8a3a2a8547b5902998e83e383dc54"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_pages.rs",
+      "sha256": "781b7de2bca948dcfde1f9b53a0d02d1aa7bbe73dc9170484e33de5d21566334"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs",
+      "sha256": "f7f6239c4d80e3b398f5906c1b94d709a15c515347b4d6fa1acfa52d39e6747b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/mod.rs",
+      "sha256": "e236c9da1aea48e728354d9e96de82a5d7d3825170d04356b55fbaa1ea55a076"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/ownership.rs",
+      "sha256": "51e13e143fff1cdf5876f41095c1129787c4498db6b021f903b03611028479f8"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/payload.rs",
+      "sha256": "1bbaa60574780ab7df0e09914524bea06417138dd8b7815d4e291d5149968176"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/reader.rs",
+      "sha256": "17fb9f088ae9b78175d472fa7cb39cce895be7a4f9087fe096ce62836f838a7f"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/reclaim.rs",
+      "sha256": "013f4fe476afc0f6012d5a2b2ba215f9cfad97d013acf04ea9860e550b3aa11e"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/segments.rs",
+      "sha256": "d2f8b0f09f035fefd00c7fbaaeccb432f57d70b87e6380470345a18865acad13"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/completion.rs",
+      "sha256": "837aed727ea0d3e569ca1e7fa66e41c6c3d2f9e2a9962784470dc287aa41d737"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/lower.rs",
+      "sha256": "8b021b4ab8ff03ac6b972c54a3f6d0a0403ce50c7d5c7b1eb23ce51e3491afb6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/mod.rs",
+      "sha256": "513535a6b00267aeb4da80c9892459dbcd0735b184dc908bce21af1629babd6d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/operation.rs",
+      "sha256": "18a5f246dd0921fd80bdba089f2314f2e8d5dbd99e2c3b85e69a9e38a04858b6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/reconcile.rs",
+      "sha256": "c85709615c1d62c25e6362d9a3730ddec8bf1f1559bf2278d10bdf2319ede008"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/save.rs",
+      "sha256": "132de3fbf9b6a3d2dc90cccf00a4b01aab212358251c676a3f77123e925bf5b0"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/source.rs",
+      "sha256": "385d007631857dfbb12a6114b61cbe07c1cf0364897a54ec658a3919ce2f881a"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit_types.rs",
+      "sha256": "523dbce80488943ed8600699fee452f4b8ec5db1c884384a4b3c0fd3fa5db960"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/directory.rs",
+      "sha256": "27fff6cc50c28536db6120d6648da2f1d7cd13bc7e08dd81f1deb84d1ac52780"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/mod.rs",
+      "sha256": "d53f86e41da444b56fc7f2e8713dff4081c30178526b5ffb146fa57158a3bec3"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/namespace.rs",
+      "sha256": "f6cdf029920603a5ce937aecb0c057a7968790bb14e80673bc9b9fcad2060c13"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/open.rs",
+      "sha256": "e815cd25151bc4e6ef072ffdbfa6eaf127bd71194d6433528e560809054265b7"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/read.rs",
+      "sha256": "53b2ec3369ef40229554cf99ccd4296f1ffca879962548a6722c0510390bf6cd"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/write.rs",
+      "sha256": "dc03892268ccb5aeed22b1771752e9157aa17b7c06385674328ac88b7562b654"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/lib.rs",
+      "sha256": "7be3376b320e0d6ffbac83d8af34849678f35a644d2405f33183680ee178cdca"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/mod.rs",
+      "sha256": "246e14aedcaca8e960f0d4372a81902d3cc59c8bcd4724100c14287bce4ccfd6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/pieces.rs",
+      "sha256": "2456bf429c1a26ca9b4122d68c1fdfa698b64aa1f3c8452a92e534b49611d45d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/snapshot.rs",
+      "sha256": "595645cd266be37d6fa77f5b16db0e1fc3ec798f700fdd0da50efc3b90306b7c"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+      "sha256": "12a900adb9bc8e3190acf87627e1b3dad572777e2a2d71e28dd31c770d91ae78"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/host.rs",
+      "sha256": "78d33ccf7cb3f44b4efb61f688b5fb6607f8f674475ec19b7565ccd4b4de2ed7"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/lifecycle.rs",
+      "sha256": "98ae99c061a2a6a2dd8924a109f225fc604c21c0ad25c1a7a6c1dff4f2623d30"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/mod.rs",
+      "sha256": "f501296ac683759ad74440c48f547fd72d0b278733ee301777cab5ff074d721f"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/state.rs",
+      "sha256": "26dc5c233623d81f3f1219dd9371bb5a9da5882f46ed9e696b10a6599e15f3ad"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/types.rs",
+      "sha256": "617f6e124910e2ea2472d0d11d880bd6211aceb2893a0877b8890a2a540fcac3"
+    }
+  ]
+}

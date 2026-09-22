@@ -1,0 +1,40 @@
+{
+  "parent": "451a1f6bdda00482a528659489c8e4d053677e01",
+  "measured_staged_tree": "a768a20ad3bd62ed025ca19f791af59632738c68",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive <revision> crates core/crates; python3 tools/production_loc.py --root <archive> --json; identical nonblank/noncomment Rust/runtime SQL scope excluding inline/external tests, examples, tools, docs, manifests and generated output",
+  "combined": {
+    "before": 108284,
+    "after": 108474,
+    "delta": 190
+  },
+  "scopes": {
+    "reference": {
+      "before": 65417,
+      "after": 65417,
+      "delta": 0
+    },
+    "core": {
+      "before": 42867,
+      "after": 43057,
+      "delta": 190
+    }
+  },
+  "packages": {
+    "layerfs-bridge": {
+      "before": 4183,
+      "after": 4288,
+      "delta": 105
+    },
+    "layerfs-daemon": {
+      "before": 710,
+      "after": 790,
+      "delta": 80
+    },
+    "layerfs-service": {
+      "before": 2024,
+      "after": 2029,
+      "delta": 5
+    }
+  }
+}

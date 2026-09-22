@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::commit_cycles ... COMMIT_CYCLES completed=12 maximum_boundary_roots=4
+COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 13, revision: 36, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 1997674 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 114688, reserved_bytes: 0, payloads: 12, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 4, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 16384, reserved_bytes: 0, working_bytes: 8168, accounting_complete: true, admission_stopped: false }
+COMMIT_CHECK repeated-commit-frontiers-and-eligible-root-cleanup-stay-bounded PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 1.11s
+

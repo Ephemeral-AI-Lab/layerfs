@@ -1,0 +1,7 @@
+
+running 1 test
+test linux::open_modes ... OPEN_CHECK portable-open-rights-legacy-readonly-and-unsupported-options PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.05s
+

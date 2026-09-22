@@ -1,0 +1,52 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.94s
+     Running tests/readable.rs (core/target-linux/debug/deps/readable-fc200e08c74dc893)
+
+running 9 tests
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test failed_close_keeps_its_registry_count_until_cleanup_succeeds ... ok
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test registry_grows_on_demand_and_keeps_retained_capacity_charged ... ok
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.51s
+info: downloading component 'clippy'
+info: installing component 'clippy'
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+error: clamp-like pattern without using clamp function
+   --> crates/layerfs-workspace/src/backing/payload.rs:313:28
+    |
+313 |               let capacity = state
+    |  ____________________________^
+314 | |                 .records
+315 | |                 .capacity()
+316 | |                 .saturating_mul(2)
+317 | |                 .max(1)
+318 | |                 .min(MAX_PAYLOADS);
+    | |__________________________________^
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+    = note: `-D clippy::manual-clamp` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_clamp)]`
+help: replace with clamp
+    |
+313 ~             let capacity = state
+314 +                 .records
+315 +                 .capacity()
+316 ~                 .saturating_mul(2).clamp(1, MAX_PAYLOADS);
+    |
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-workspace` (lib test) due to 1 previous error

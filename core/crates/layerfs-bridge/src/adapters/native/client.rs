@@ -1,30 +1,14 @@
 //! One operation at a time; bounded concurrent upload and response consumption.
-use super::{connection::Connection, protocol::*};
+use super::{connection::Connection, payload::COALESCE_BYTES, protocol::*};
 use crate::contract::*;
 use std::{
-    io::{self, Write},
+    io::Write,
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
 };
 
-/// A stable, cooperative input capability. Implementations must stop on the
-/// absolute deadline/cancellation; the native pipe source enforces this with poll.
-pub trait Source: Send {
-    fn read(
-        &mut self,
-        buffer: &mut [u8],
-        deadline: Instant,
-        cancel: &AtomicBool,
-    ) -> io::Result<usize>;
-}
-impl Source for &[u8] {
-    fn read(&mut self, b: &mut [u8], _: Instant, cancel: &AtomicBool) -> io::Result<usize> {
-        if cancel.load(Ordering::Acquire) {
-            return Err(io::ErrorKind::Interrupted.into());
-        }
-        io::Read::read(self, b)
-    }
-}
+pub use crate::contract::Source;
+
 pub struct Client {
     connection: Connection,
     previous: u64,
@@ -51,7 +35,7 @@ impl Client {
     pub fn call(
         &mut self,
         r: &Request,
-        source: &mut impl Source,
+        source: &mut (impl Source + ?Sized),
         output: &mut dyn Write,
     ) -> Result<Response, Failure> {
         let deadline = Instant::now() + Duration::from_millis(r.deadline_ms as u64);
@@ -63,7 +47,7 @@ impl Client {
     pub fn call_until(
         &mut self,
         r: &Request,
-        source: &mut impl Source,
+        source: &mut (impl Source + ?Sized),
         output: &mut dyn Write,
         deadline: Instant,
     ) -> Result<Response, Failure> {
@@ -110,30 +94,47 @@ impl Client {
                         let mut buffer = [0u8; FRAME_BYTES];
                         let mut bytes = 0u64;
                         let mut frames = 0u64;
+                        let mut filled = 0;
                         loop {
-                            let n = source.read(&mut buffer, deadline, &cancel)?;
-                            if n > buffer.len() {
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(Code::Io.into());
+                            }
+                            if Instant::now() >= deadline {
+                                return Err(Code::Deadline.into());
+                            }
+                            let n = source.read(&mut buffer[filled..], deadline, &cancel)?;
+                            if n > buffer.len() - filled {
                                 return Err(Code::InvalidInput.into());
                             }
-                            if n == 0 {
-                                if bytes != expected {
-                                    return Err(Code::InvalidInput.into());
-                                }
-                                break;
+                            if cancel.load(Ordering::Acquire) {
+                                return Err(Code::Io.into());
+                            }
+                            if Instant::now() >= deadline {
+                                return Err(Code::Deadline.into());
                             }
                             bytes = bytes
                                 .checked_add(n as u64)
                                 .filter(|v| *v <= expected)
                                 .ok_or(Code::InvalidInput)?;
-                            frames += 1;
-                            if frames >= frame_budget(expected) {
-                                return Err(Code::Capacity.into());
+                            if n == 0 && bytes != expected {
+                                return Err(Code::InvalidInput.into());
                             }
-                            send.write(&Frame {
-                                kind: Kind::Body,
-                                id: r.id,
-                                bytes: buffer[..n].to_vec(),
-                            })?;
+                            filled += n;
+                            if filled >= COALESCE_BYTES || (n == 0 && filled > 0) {
+                                frames += 1;
+                                if frames >= frame_budget(expected) {
+                                    return Err(Code::Capacity.into());
+                                }
+                                send.write(&Frame {
+                                    kind: Kind::Body,
+                                    id: r.id,
+                                    bytes: buffer[..filled].to_vec(),
+                                })?;
+                                filled = 0;
+                            }
+                            if n == 0 {
+                                break;
+                            }
                         }
                         send.write(&Frame {
                             kind: Kind::EndInput,
@@ -320,11 +321,147 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             && bytes == 0;
     }
     match (&r.operation, response) {
+        (
+            Operation::ConstructPortableMetadata {
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            },
+            Response::MetadataConstructed {
+                kind: actual_kind,
+                mode: actual_mode,
+                mtime_seconds: actual_seconds,
+                mtime_nanoseconds: actual_nanoseconds,
+                ..
+            },
+        ) => {
+            kind == actual_kind
+                && mode == actual_mode
+                && mtime_seconds == actual_seconds
+                && mtime_nanoseconds == actual_nanoseconds
+                && response.validate_metadata_constructed().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::UpdatePortableMetadata {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            },
+            Response::MetadataSaved {
+                base: actual_base,
+                kind: actual_kind,
+                mode: actual_mode,
+                mtime_seconds: actual_seconds,
+                mtime_nanoseconds: actual_nanoseconds,
+                ..
+            },
+        ) => {
+            base == actual_base
+                && kind == actual_kind
+                && mode == actual_mode
+                && mtime_seconds == actual_seconds
+                && mtime_nanoseconds == actual_nanoseconds
+                && response.validate_metadata_saved().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceStatus(status),
+        ) => {
+            status.workspace == *workspace
+                && status.incarnation == *incarnation
+                && status.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceAttachment(status),
+        ) => {
+            status.workspace == *workspace
+                && status.incarnation == *incarnation
+                && status.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceAttach {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceAttach(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceCommit {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceCommit(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceWritableStatus(result),
+        ) => {
+            result.status.workspace == *workspace
+                && result.status.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceUnmount {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceUnmount(result),
+        )
+        | (
+            Operation::WorkspaceCloseClean {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceCloseClean(result),
+        )
+        | (
+            Operation::WorkspaceMount {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceMount(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }
         (Operation::ConstructFile { length }, Response::Saved { length: actual, .. }) => {
             length == actual && bytes == 0
+        }
+        (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
+            target.len() as u64 == *length && bytes == 0
         }
         (
             Operation::EditFile {
@@ -357,6 +494,13 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             },
             Response::Stat { nanoseconds, .. },
         ) => *nanoseconds < 1_000_000_000 && bytes == 0,
+        (
+            Operation::Inspect {
+                query: Inspect::Attributes { path },
+                ..
+            },
+            Response::Attributes { .. },
+        ) => response.validate_attributes(Some(path.is_empty())).is_ok() && bytes == 0,
         (
             Operation::Inspect {
                 query: Inspect::List { entries, .. },

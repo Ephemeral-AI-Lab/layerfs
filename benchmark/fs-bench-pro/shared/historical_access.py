@@ -11,6 +11,7 @@ import time
 import uuid
 
 import runtime
+import isolation
 import runner
 
 FIXTURE = runner.BENCH / 'families/historical_access/fixture.json'
@@ -160,7 +161,7 @@ def selected(args, started_ns):
     result = {'schema': SCHEMA, 'family': 'historical_access', 'status': 'FAIL', 'admission_eligible': False}
     lock = None
     try:
-        lock = (Path(os.environ.get('TMPDIR', '/tmp')) / 'layerfs-infra-measurement.lock').open('a')
+        lock = isolation.worktree_lock_path().open('a')
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         raw = runtime.run([sys.executable, str(Path(__file__).resolve()), '--worker', str(output / 'invocation.json')],
             deadline=runtime.Deadline(end - 3), check=False)

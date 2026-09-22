@@ -1,0 +1,12 @@
+{
+  "local_links": "PASS",
+  "documents": [
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/README.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/31-source-map-and-loc.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/34-preinstalled-dsh-workload.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/35-failed-attachment-ownership.md",
+    "core/docs/architecture/14-service-runtime.md"
+  ],
+  "counts": "242 core files /54 recursive folders verified by unchanged per_file; same product seal",
+  "performance_claim": false
+}

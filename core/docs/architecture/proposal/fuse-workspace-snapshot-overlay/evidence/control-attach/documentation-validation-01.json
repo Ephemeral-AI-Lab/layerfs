@@ -1,0 +1,11 @@
+{
+  "files": [
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/31-source-map-and-loc.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/35-failed-attachment-ownership.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/36-control-attach.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/README.md",
+    "core/docs/architecture/14-service-runtime.md"
+  ],
+  "missing_links": [],
+  "status": "PASS"
+}

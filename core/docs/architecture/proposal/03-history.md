@@ -57,3 +57,8 @@ Native writable authority initially lasts for one continuing service authority;
 read-only catalog reopen is supported, and arbitrary writable recovery is refused.
 This explicit limitation and the initial bounded logical-manifest bootstrap are
 part of the implementation scope, not hidden work deferred to a FUSE consumer.
+
+The earlier expanded local investigation is retained verbatim in the
+[81ace2778 checkpoint](https://github.com/Ephemeral-AI-Lab/layerfs/blob/81ace2778201036e9b1ca3040c63949e595f5971/core/docs/architecture/proposal/03-history.md).
+It records its older inspection and design decisions; this overview and the
+linked implementation/remediation contracts supersede its implementation status.

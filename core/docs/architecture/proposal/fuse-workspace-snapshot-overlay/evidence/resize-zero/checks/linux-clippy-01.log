@@ -1,0 +1,65 @@
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>`
+   --> crates/layerfs-workspace/tests/resize.rs:126:9
+    |
+126 | /         assert_eq!(
+127 | |             f.workspace
+128 | |                 .set_len(data.serial, 8 * 1024 * 1024 + 1, deadline()),
+129 | |             Err(WorkspaceError::Capacity)
+130 | |         );
+    | |         ^
+    | |_________|
+    | |_________std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |           std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |
+note: the foreign item type `layerfs_workspace::MutationReceipt` doesn't implement `std::cmp::PartialEq`
+   --> /work/core/crates/layerfs-workspace/src/types.rs:240:1
+    |
+240 | pub struct MutationReceipt {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ not implement `std::cmp::PartialEq`
+    = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>`
+   --> crates/layerfs-workspace/tests/resize.rs:160:9
+    |
+160 | /         assert_eq!(
+161 | |             f.workspace
+162 | |                 .set_len(data.serial, 16 * 1024 * 1024 + 1, deadline()),
+163 | |             Err(WorkspaceError::Capacity)
+164 | |         );
+    | |         ^
+    | |_________|
+    | |_________std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |           std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |
+note: the foreign item type `layerfs_workspace::MutationReceipt` doesn't implement `std::cmp::PartialEq`
+   --> /work/core/crates/layerfs-workspace/src/types.rs:240:1
+    |
+240 | pub struct MutationReceipt {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ not implement `std::cmp::PartialEq`
+    = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0369]: binary operation `==` cannot be applied to type `std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>`
+   --> crates/layerfs-workspace/tests/resize.rs:324:9
+    |
+324 | /         assert_eq!(
+325 | |             ro.set_len(data.serial, 0, deadline()),
+326 | |             Err(WorkspaceError::ReadOnly)
+327 | |         );
+    | |         ^
+    | |_________|
+    | |_________std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |           std::result::Result<layerfs_workspace::MutationReceipt, layerfs_workspace::WorkspaceError>
+    |
+note: the foreign item type `layerfs_workspace::MutationReceipt` doesn't implement `std::cmp::PartialEq`
+   --> /work/core/crates/layerfs-workspace/src/types.rs:240:1
+    |
+240 | pub struct MutationReceipt {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ not implement `std::cmp::PartialEq`
+    = note: this error originates in the macro `assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0369`.
+error: could not compile `layerfs-workspace` (test "resize") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

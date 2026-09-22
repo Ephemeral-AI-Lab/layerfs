@@ -1,0 +1,15 @@
+{
+  "local_edit": {
+    "path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/ab0f36941ba969fed324919a841d002daaaaa815b57d23a0aa715d9debdd9d31/local-edit-test",
+    "sha256": "ab0f36941ba969fed324919a841d002daaaaa815b57d23a0aa715d9debdd9d31"
+  },
+  "payload": {
+    "path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/f8aecce40dfbf9fb3623d46ed836fe613f219a812cd99530677f2c7e3b442314/payload-test",
+    "sha256": "f8aecce40dfbf9fb3623d46ed836fe613f219a812cd99530677f2c7e3b442314"
+  },
+  "linux_daemon": {
+    "path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/ff31865d4222c082c5b39887dc78fe87d9b84080a7c741e417dca7280316a658/layerfs-daemon",
+    "sha256": "ff31865d4222c082c5b39887dc78fe87d9b84080a7c741e417dca7280316a658"
+  },
+  "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf"
+}

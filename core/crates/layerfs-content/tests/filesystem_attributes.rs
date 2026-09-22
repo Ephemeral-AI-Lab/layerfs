@@ -741,3 +741,132 @@ fn the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set() {
     .expect("emit");
     assert_eq!(emitted, patched_root);
 }
+
+#[test]
+fn every_attribute_descent_rejects_same_or_skipped_child_levels() {
+    use layerfs_content::filesystem::attributes::patch::{
+        visit_keys, visit_keys_counted, AttributePatchWork,
+    };
+    let mut store = TreeStore::new();
+    // Long keys give a genuine three-level tree without a large fixture. The
+    // public builder produces every child, its fill and its maximum-key summary.
+    let entries: Vec<_> = (0..1000)
+        .map(|index| {
+            entry(
+                "user",
+                format!("{index:04}-{}", "x".repeat(250)).as_bytes(),
+                &format!("levels/{index}"),
+            )
+        })
+        .collect();
+    let (root, _) = with_objects(&mut store, |objects| {
+        build_attribute_tree(objects, entries.iter().cloned().map(Ok))
+    })
+    .unwrap();
+    let page = decode_attribute_page(store.canonical(root).unwrap()).unwrap();
+    assert_eq!(page.level(), 2);
+    let keys = [
+        entries[0].key.clone(),
+        entries[999].key.clone(),
+        entries[0].key.clone(),
+    ];
+    let result = lookup_many(&store, root, &keys, &mut AttributeReadWork::default()).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Some(entries[0].clone()),
+            Some(entries[999].clone()),
+            Some(entries[0].clone())
+        ]
+    );
+    let mut visited = 0;
+    visit_keys(&store, root, |_, _| {
+        visited += 1;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(visited, entries.len());
+    let reader = store.clone();
+    let (patched, work) = with_objects(&mut store, |objects| {
+        apply_patches(
+            &reader,
+            objects,
+            root,
+            &[AttributePatch::Set {
+                key: keys[0].clone(),
+                value: b"updated".to_vec(),
+            }],
+        )
+    })
+    .unwrap();
+    assert_eq!(work.preserved, entries.len() as u64 - 1);
+    assert_eq!(
+        read_opaque(
+            &store,
+            patched,
+            &keys[0],
+            7,
+            &mut AttributeReadWork::default()
+        )
+        .unwrap(),
+        Some(b"updated".to_vec())
+    );
+    let mut index = 0;
+    visit_keys(&store, patched, |key, value| {
+        assert_eq!(key, &entries[index].key);
+        if index != 0 {
+            assert_eq!(*value, entries[index].value_root);
+        }
+        index += 1;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(index, entries.len());
+    for root_level in [1, 3] {
+        let mut malformed = page.clone();
+        let AttributePage::Branch { level, .. } = &mut malformed else {
+            panic!("branch root")
+        };
+        *level = root_level;
+        let canonical = encode_attribute_page(&malformed).unwrap();
+        assert_eq!(decode_attribute_page(&canonical).unwrap(), malformed);
+        let malformed = store.insert(layerfs_content::ObjectRole::AttributeBranch, canonical);
+        let mut read = AttributeReadWork::default();
+        assert!(matches!(
+            lookup_many(&store, malformed, &keys, &mut read),
+            Err(ContentError::InvalidRecord("attribute child level"))
+        ));
+        assert_eq!(read.read_waves, 2, "refuse at the first incorrect edge");
+        let mut work = AttributePatchWork::default();
+        assert!(matches!(
+            visit_keys_counted(&store, malformed, &mut work, |_, _| {
+                panic!("no row crosses the invalid edge")
+            }),
+            Err(ContentError::InvalidRecord("attribute child level"))
+        ));
+        assert_eq!(work.base_pages, 2);
+        assert!(matches!(
+            visit_keys(&store, malformed, |_, _| {
+                panic!("no row crosses the invalid edge")
+            }),
+            Err(ContentError::InvalidRecord("attribute child level"))
+        ));
+        let reader = store.clone();
+        let emitted_before = store.order().len();
+        let patches = [AttributePatch::Set {
+            key: keys[0].clone(),
+            value: b"replacement".to_vec(),
+        }];
+        assert!(matches!(
+            with_objects(&mut store, |objects| {
+                apply_patches(&reader, objects, malformed, &patches)
+            }),
+            Err(ContentError::InvalidRecord("attribute child level"))
+        ));
+        assert_eq!(
+            store.order().len(),
+            emitted_before,
+            "invalid first edge emits nothing"
+        );
+    }
+}

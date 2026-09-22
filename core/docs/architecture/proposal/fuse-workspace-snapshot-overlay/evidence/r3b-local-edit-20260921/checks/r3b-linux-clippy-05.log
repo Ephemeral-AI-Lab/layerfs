@@ -1,0 +1,28 @@
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.12
+   Compiling shlex v2.0.1
+    Checking constant_time_eq v0.4.2
+    Checking arrayref v0.3.9
+    Checking arrayvec v0.7.8
+   Compiling vcpkg v0.2.15
+    Checking foldhash v0.2.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking hashbrown v0.17.1
+    Checking fallible-iterator v0.3.0
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking hashlink v0.12.2
+   Compiling libsqlite3-sys v0.38.2
+    Checking layerfs-telemetry v0.1.6 (/work/core/crates/layerfs-telemetry)
+    Checking rusqlite v0.40.2
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Checking layerfs-content v0.1.6 (/work/core/crates/layerfs-content)
+    Checking layerfs-storage v0.1.6 (/work/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/work/core/crates/layerfs-history)
+    Checking layerfs-service v0.1.6 (/work/core/crates/layerfs-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.32s

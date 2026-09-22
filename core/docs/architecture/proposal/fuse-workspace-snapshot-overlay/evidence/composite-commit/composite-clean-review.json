@@ -1,0 +1,16 @@
+{
+  "source_parent": "6702e31e629ada5e78981b6854e36721e619e65b",
+  "scope": "clean capture, reserve rollback, zero frontier and successor ownership",
+  "finding": "No concrete clean capture, ownership rollback or successor-loss issue found",
+  "not_qualified": [
+    "dynamic concurrent execution",
+    "native cleanup failure",
+    "composite reply validation"
+  ],
+  "files": {
+    "overlay/snapshot.rs": "a5eab139b5e71f5db5a563bfdd418f78d65066f3dc5966d179464f59e2765267",
+    "backing/metadata.rs": "7291fe0fea179b8afdd4d69dfa4d6cdc572ad3371d07e422377fc18beac1292a",
+    "commit/lower.rs": "d1a5e31d5546e40e0aeab4c8f2e5d9094de2c0d3139594cde3a5ac40443726a0",
+    "commit/reconcile.rs": "c85709615c1d62c25e6362d9a3730ddec8bf1f1559bf2278d10bdf2319ede008"
+  }
+}

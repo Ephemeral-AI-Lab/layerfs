@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::composite_lost_result ... COMMIT_FAILURE CommitFailure { generation: 1, phase: CompositeCommit, disposition: Unknown, cause: Service(Failure { code: Unknown, unknown: true, cleanup: None, history: None }), stage: None, observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None }
+COMMIT_LATER_OBSERVATION root=[159, 157, 166, 142, 168, 2, 76, 181, 122, 204, 239, 122, 1, 7, 194, 36, 219, 187, 33, 133, 130, 110, 82, 144, 120, 141, 116, 143, 17, 179, 67, 202] head=Some([18, 1, 94, 11, 15, 18, 54, 82, 169, 152, 139, 47, 38, 12, 254, 245, 47, 93, 171, 214, 158, 40, 80, 114, 16, 160, 42, 184, 73, 182, 73, 166, 157]) original_outcome=Unknown
+COMPOSITE_CHECK composite-terminal-loss-does-not-adopt-later-Branch-observation PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.10s
+

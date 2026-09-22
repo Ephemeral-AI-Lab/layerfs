@@ -257,11 +257,41 @@ pub fn connect(
     private: &[u8; 32],
     server: &[u8; 32],
 ) -> Result<Connection, Failure> {
-    let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))?;
+    connect_with_deadline(address, selector, private, server, None)
+}
+
+/// One connection attempt whose connect, authentication and subsequent HELLO
+/// share the caller's deadline. Each native phase retains its five-second cap.
+pub fn connect_until(
+    address: SocketAddr,
+    selector: u32,
+    private: &[u8; 32],
+    server: &[u8; 32],
+    deadline: Instant,
+) -> Result<Connection, Failure> {
+    connect_with_deadline(address, selector, private, server, Some(deadline))
+}
+
+fn connect_with_deadline(
+    address: SocketAddr,
+    selector: u32,
+    private: &[u8; 32],
+    server: &[u8; 32],
+    deadline: Option<Instant>,
+) -> Result<Connection, Failure> {
+    let phase_limit = Duration::from_secs(5);
+    let remaining = deadline
+        .map_or(Some(phase_limit), |end| {
+            end.checked_duration_since(Instant::now())
+                .filter(|left| !left.is_zero())
+        })
+        .ok_or(Code::Deadline)?;
+    let stream = TcpStream::connect_timeout(&address, remaining.min(phase_limit))?;
     stream.set_nodelay(true)?;
+    let phase_end = Instant::now() + phase_limit;
     let mut io = Socket {
         stream,
-        deadline: Instant::now() + Duration::from_secs(5),
+        deadline: deadline.map_or(phase_end, |end| end.min(phase_end)),
         activity: Arc::new(Mutex::new(Instant::now())),
     };
     io.write_all(&selector.to_be_bytes())?;

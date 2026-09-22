@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::local_range_edit_ledger_write_failure ... LOCAL_EDIT_NATIVE_FAILURE existing_ledger_write=BackingFailure { phase: Write, payload: 0, declared_bytes: 0, completed_bytes: 8192, created_segments: 3, allocated_bytes: 12288, reserved_bytes: 1413120, cleanup_failed: false, accounting_complete: true, kind: WriteZero } positive_short_write=true retained=BackingStatus { quota_bytes: 134217728, allocated_bytes: 28672, reserved_bytes: 1413120, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: true, accounting_complete: true }
+LOCAL_EDIT_CHECK native-ledger-write-failure-retains-prospective-payload-custody PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+

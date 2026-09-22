@@ -1,0 +1,33 @@
+{
+  "parent": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "product_inputs_sha256": "41eb35f3c8be9f524570868cef18ebeef020ceac247c5aea4dc56477209cde35",
+  "source_archive_sha256": "87709cd3aaf9cf68a2cb36bd92dd25525af1c2d5e909e04378c2580de2fa17a5",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/e45d0ab69052a8f95f8b04372e71ca8169f0b53d5dac9cbec4c8685aa15c91c2/host",
+  "host_binary_sha256": {
+    "layerfs-daemon": "056166e5b511ff7e0d2a3f0523d8000b819c37a2b3ff1251044a06c8199d7a86",
+    "layerfs-service": "81c85c01cb19609586d5f05f35740b33927e9efbe8fd6a506e4982a218dfc605",
+    "examples/public_key": "7066cc5b062cee48ef8747b3edbbda994e481476eaf6a38b765c9bd259685d73"
+  },
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9/layerfs-daemon",
+  "linux_daemon_sha256": "f5391919af800f00083200aa74faf505f57e29bb22ba8159670b74a29c9a1ca9",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_profile": "dev, whole core workspace bins/examples after final targeted tests",
+  "cargo_build_jobs": 2,
+  "runtime_nano_cpus": 2000000000,
+  "tool_image_id": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "construction_workers": 1,
+  "dependency_reuse": "read-only existing Cargo registry and unchanged pinned Docker images; targets owned by this worktree",
+  "source_state": "uncommitted implementation after exact parent; final seal and per-file hashes bind tested source",
+  "core/crates/layerfs-daemon/tests/control_mount.py_sha256": "8f274afd39a150edd5828c91767c3801131976ed96509b06dd310a8a7398c208",
+  "core/crates/layerfs-daemon/tests/control_unmount.py_sha256": "0b995ec16b4c1a444da691ab03938543a617ab89e4eed9a49124f3222676f4ff",
+  "core/crates/layerfs-daemon/tests/control_close.py_sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+  "core/crates/layerfs-daemon/tests/control_status.py_sha256": "0ac4f3b85685ade1a009bcd113b47efa4cb8f127701e0a7b973736be78ba2476",
+  "core/crates/layerfs-daemon/tests/mounted_read.py_sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+  "core/crates/layerfs-daemon/tests/history_route.py_sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+  "core/crates/layerfs-workspace/tests/stage_route.py_sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+  "previous_inputs": "control-mount-inputs-01.json",
+  "previous_inputs_sha256": "9f047a6980700f98a7c0bff64e21007d49ab1df565da2be726f69a47a6fbbfd4",
+  "harness_correction": "Accept supported fuse/fuse.layerfs mountinfo filesystem with exact layerfs source; preserve text and binary subprocess diagnostics. Product and all executable identities unchanged."
+}

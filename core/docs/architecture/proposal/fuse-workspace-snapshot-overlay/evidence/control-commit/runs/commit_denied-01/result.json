@@ -1,0 +1,196 @@
+{
+  "status": "PASS",
+  "mode": "functional-authenticated-workspace-commit",
+  "case": "commit_denied",
+  "checks": [
+    {
+      "id": "known-service-Commit-denial-retains-full-typed-failure-with-explicit-native-cleanup-refusal",
+      "status": "PASS"
+    }
+  ],
+  "source": "74e6fbd2d23cb7519ea63c275f42283ce3c79d17",
+  "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+  "hard_budget_seconds": 60,
+  "lifecycle_wire_max_ms": 5000,
+  "terminal_reserve_ms": 100,
+  "signal_attempt_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "driver_sha256": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+  "entrypoint_sha256": "84e77afd69c6dea7fd25ce84616aa3f14398b95ceeace7134efb27ab2711851c",
+  "status_driver_sha256": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+  "mount_driver_sha256": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+  "control_mount_driver_sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+  "caller_dependencies_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+    "core/crates/layerfs-daemon/tests/control_commit.py": "84e77afd69c6dea7fd25ce84616aa3f14398b95ceeace7134efb27ab2711851c",
+    "core/crates/layerfs-daemon/tests/control_commit_wire.py": "751f0076a5bea39c16149ed36531b5bb35bff59984181854b8172f721de3f862",
+    "core/crates/layerfs-daemon/tests/control_status.py": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+    "core/crates/layerfs-daemon/tests/control_unmount.py": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+    "core/crates/layerfs-workspace/tests/payload_route.py": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+    "core/crates/layerfs-workspace/tests/stage_route.py": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4"
+  },
+  "linux_binary_sha256": "89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71",
+  "host_binary_sha256": {
+    "layerfs-service": "e1a7e34844c68b5a83bb0f6a42be0a6f3f9cff66b7cff9268fcb7f4dfc245cf9",
+    "layerfs-daemon": "b84d232c979576f9b3d29a22c74000946abae41d0c1e4133de59f4b6f352f42d",
+    "examples/public_key": "e786a3d5b2cf890d060d36d27191e64ebe06ad357d411156a5d6601ff38eb647"
+  },
+  "not_run": [
+    "upstream native Unknown Commit failure (control-terminal loss is a separate outer delivery case)",
+    "namespace/new-inode operations",
+    "prepared npm workload",
+    "R6",
+    "hard RSS/cgroup/performance qualification",
+    "failed-submission discard/recovery"
+  ],
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "f80d246d4f3c",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs",
+    "build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/commit_denied-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target-linux",
+    "concurrent_work": [],
+    "observation": "snapshot before functional driver; no quiet-host/performance claim"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live C5 producer; CREATE=1 and no copied/restarted catalog",
+    "cache_claim": null
+  },
+  "commit_request_budget_ms": 10000,
+  "commit_wire_max_ms": 600000,
+  "caller_receive_seconds": 11,
+  "workspace_disk_budget_bytes": 67108864,
+  "fixture_logical_bytes": 67108864,
+  "verification_coverage": "Repeated edits verify the entire declared8192-byte file; live-successor verifies128KiB from captured and successor content, exact C5 roots/heads and alias identity. Mounted truncation to8192B or4MiB is an explicit workload operation; no full64MiB readback or performance claim.",
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "initial_branch": {
+    "branch": {
+      "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+      "stack": "31a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "name": "7374616765",
+      "base_layer": "32d81851458248188abf6a3ffa20a417d4141eb740e6cae37f3769962332e05e52",
+      "head_commit": "12e112065999cd4ff94d1fb4bc9a523c472f3ec55f6e91f108137ea255b6332839"
+    },
+    "head_root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "base_root": "f036d74add3b6971af126ee12928ab80a6585bfa54612442549eb2de9c01e93c",
+    "effective_root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "scope": "84e939e288424a2994f4eaf95e28ee414bd30ca8ff302df46bac7ff55e60bc9a",
+    "profile": "d9bc397d578dab71b49f0816eb2d4f3bc5699cfd755addef915a303b35748ee0",
+    "root_serial": "0000000000000001"
+  },
+  "runtime_nano_cpus": 2000000000,
+  "initial_status": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": true,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1987809,
+    "generation": 1,
+    "revision": 0,
+    "dirty_inodes": 0,
+    "submission": null
+  },
+  "typed_failure": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "kind": "Failed",
+    "generation": 1,
+    "phase": "CompositeCommit",
+    "disposition": "KnownBeforeCommit",
+    "cause": {
+      "code": 3,
+      "unknown": 0,
+      "cleanup": 0,
+      "conflict": null,
+      "stage": {
+        "kind": "Unobserved"
+      }
+    },
+    "known_stage": null,
+    "observed_stage": null,
+    "known_outcome": null,
+    "observed_outcome": null,
+    "installed_revision": null
+  },
+  "retained_status": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": true,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 2,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 2056830,
+    "generation": 2,
+    "revision": 3,
+    "dirty_inodes": 0,
+    "submission": {
+      "generation": 1,
+      "captured_revision": 2,
+      "dirty_inodes": 1,
+      "phase": "LocalBookkeeping",
+      "inode": null,
+      "saved_files": 1,
+      "saved_metadata": 1,
+      "stage_token": null,
+      "candidate_root": null,
+      "failure": null,
+      "failure_phase": null,
+      "commit": {
+        "phase": "CompositeCommit",
+        "known_root": null,
+        "known_head": null,
+        "installed_revision": null,
+        "failure": "KnownBeforeCommit"
+      }
+    }
+  },
+  "close_refusal": {
+    "kind": "close",
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "outcome": "Retained",
+    "code": 13
+  },
+  "qualification": "Known service failure with retained submission; native clean close refused, external teardown only",
+  "native_cleanup": "REFUSED: retained failed submission; no clean-close/reuse qualification",
+  "runtime_identity": {
+    "container": "layerfs-control-commit-f29adca39461",
+    "volume": "layerfs-control-commit-f29adca39461-root"
+  },
+  "forced_daemon_cleanup": true,
+  "master_unchanged": true,
+  "cleanup": "EXTERNAL_ONLY: declared retained failure; owned runtime forcibly removed, no native clean-close claim",
+  "command_wall_seconds": 1.2499677920004615
+}

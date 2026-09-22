@@ -199,8 +199,13 @@ to its actual external test/deployment evidence. Distinguish deterministic tests
 from native OS/Docker proof. Record real commands, identities, cleanup and
 PASS/FAIL/INCOMPLETE/INELIGIBLE/NOT_RUN; do not call unavailable metrics zero.
 Read the repository benchmark and release rules before any measurement work.
-Observe shared measurement locks; no resource-sensitive parallel runs merely
-because build outputs differ. Preserve all append-only evidence.
+Observe the measurement lock, which is **per worktree** (owner direction,
+2026-09-21 — [isolation](../../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)): builds and measurements in different worktrees
+no longer exclude each other, two runs in one worktree still never overlap, and no
+build may take a Cargo target directory outside its own worktree. A build that
+overlaps a timed phase is recorded as declared interference on the row, not
+prevented; do not re-introduce a machine-global lock. Preserve all append-only
+evidence.
 
 Run focused checks while implementing and the required final core checks:
 

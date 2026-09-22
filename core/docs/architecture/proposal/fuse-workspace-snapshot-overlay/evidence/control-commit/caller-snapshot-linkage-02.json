@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-21T21:01:57.979685+00:00",
+  "input_manifest": "inputs-02.json",
+  "archived_before_runs": true,
+  "records": [
+    {
+      "source_path": "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "snapshot_path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py",
+      "bytes": 12669,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/configuration.rs",
+      "sha256": "e9d3e69fe1be38e9f54ec4aca05795e517f22a1e92a7a0e6a8aeb038bbccd4aa",
+      "snapshot_path": "caller-snapshots/e9d3e69fe1be38e9f54ec4aca05795e517f22a1e92a7a0e6a8aeb038bbccd4aa/configuration.rs",
+      "bytes": 6372,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "snapshot_path": "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py",
+      "bytes": 19149,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "sha256": "04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8",
+      "snapshot_path": "caller-snapshots/04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8/control_attach_startup.py",
+      "bytes": 11650,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_close.py",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "snapshot_path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py",
+      "bytes": 1250,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_commit.py",
+      "sha256": "84e77afd69c6dea7fd25ce84616aa3f14398b95ceeace7134efb27ab2711851c",
+      "snapshot_path": "caller-snapshots/84e77afd69c6dea7fd25ce84616aa3f14398b95ceeace7134efb27ab2711851c/control_commit.py",
+      "bytes": 32086,
+      "creation_method": "exact changed caller bytes archived before corrected selection; previous snapshot retained",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_commit_wire.py",
+      "sha256": "751f0076a5bea39c16149ed36531b5bb35bff59984181854b8172f721de3f862",
+      "snapshot_path": "caller-snapshots/751f0076a5bea39c16149ed36531b5bb35bff59984181854b8172f721de3f862/control_commit_wire.py",
+      "bytes": 4927,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "snapshot_path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py",
+      "bytes": 14073,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_status.py",
+      "sha256": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+      "snapshot_path": "caller-snapshots/ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e/control_status.py",
+      "bytes": 15026,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "sha256": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+      "snapshot_path": "caller-snapshots/47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a/control_unmount.py",
+      "bytes": 28355,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/history_route.py",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "snapshot_path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py",
+      "bytes": 22854,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/mount_startup.py",
+      "sha256": "5c50e3cb9af6a07c4f422dfb03382e6cba7c33777144085221e870d499310a54",
+      "snapshot_path": "caller-snapshots/5c50e3cb9af6a07c4f422dfb03382e6cba7c33777144085221e870d499310a54/mount_startup.py",
+      "bytes": 24349,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-daemon/tests/mounted_read.py",
+      "sha256": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+      "snapshot_path": "caller-snapshots/3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f/mounted_read.py",
+      "bytes": 18208,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-workspace/tests/payload_route.py",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "snapshot_path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py",
+      "bytes": 6543,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-workspace/tests/stage_route.py",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "snapshot_path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py",
+      "bytes": 22967,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/crates/layerfs-workspace/tests/store_lock.c",
+      "sha256": "b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945",
+      "snapshot_path": "caller-snapshots/b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945/store_lock.c",
+      "bytes": 988,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/target/pair1-evidence/control-commit/checks/observer-build-01.json",
+      "sha256": "080ff736d26b8e67aefa613d7b04d98e70873192c792b747e9da12d0d67b9f94",
+      "snapshot_path": "caller-snapshots/080ff736d26b8e67aefa613d7b04d98e70873192c792b747e9da12d0d67b9f94/observer-build-01.json",
+      "bytes": 884,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/target/pair1-evidence/control-commit/checks/observer-build-01.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "snapshot_path": "caller-snapshots/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/observer-build-01.log",
+      "bytes": 0,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    },
+    {
+      "source_path": "core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib",
+      "sha256": "8bf0db14877e566cd08dbe4c031f2ed6923e6e64c0df81d1930aa0e2d01f1776",
+      "snapshot_path": "caller-snapshots/8bf0db14877e566cd08dbe4c031f2ed6923e6e64c0df81d1930aa0e2d01f1776/libstore_lock.dylib",
+      "bytes": 33584,
+      "creation_method": "exact byte copy before the first functional sample",
+      "archived_before_runs": true
+    }
+  ],
+  "prior_linkage": "caller-snapshot-linkage-01.json"
+}

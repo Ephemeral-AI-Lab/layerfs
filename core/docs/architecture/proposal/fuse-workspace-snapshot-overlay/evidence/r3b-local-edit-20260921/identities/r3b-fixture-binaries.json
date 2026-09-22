@@ -1,0 +1,9 @@
+{
+  "path": "core/target/pair1-evidence/binary-archive/46f79570c7c5bacfab4d1cfa4d161643aadcdbb69028f5e760785962e855f41d/host",
+  "sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "b33833d21249cdfc7e84c176bae1af5d5f1655aca0db9fe8f7b752ac1deec96e",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "precheck_correction": "Initial assertion incorrectly compared service with control_status host_binary_sha256 (which identifies daemon); no producer was launched. Corrected roles match the existing Status-04 and metadata-02 receipts."
+}

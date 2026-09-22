@@ -1,0 +1,146 @@
+{
+  "status": "PASS",
+  "mode": "functional-control-status",
+  "checks": [
+    {
+      "id": "STATUS-01",
+      "status": "PASS",
+      "observation": {
+        "workspace": "read",
+        "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+        "mounted": true,
+        "stopping": false,
+        "closed": false,
+        "active_operations": 0,
+        "nodes": 1,
+        "handles": 0,
+        "cookies": 0,
+        "consumer_accounted_bytes": 1418324
+      }
+    },
+    {
+      "id": "STATUS-LOCAL-PROGRESS",
+      "status": "PASS",
+      "boundary": "FUSE read waiting on paused service; control status completes",
+      "observation": {
+        "workspace": "read",
+        "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+        "mounted": true,
+        "stopping": false,
+        "closed": false,
+        "active_operations": 1,
+        "nodes": 2,
+        "handles": 1,
+        "cookies": 0,
+        "consumer_accounted_bytes": 1565780
+      }
+    },
+    {
+      "id": "STATUS-02",
+      "status": "PASS",
+      "opened": {
+        "workspace": "read",
+        "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+        "mounted": true,
+        "stopping": false,
+        "closed": false,
+        "active_operations": 0,
+        "nodes": 2,
+        "handles": 1,
+        "cookies": 0,
+        "consumer_accounted_bytes": 1418324
+      },
+      "closed": {
+        "workspace": "read",
+        "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+        "mounted": true,
+        "stopping": false,
+        "closed": false,
+        "active_operations": 0,
+        "nodes": 2,
+        "handles": 0,
+        "cookies": 0,
+        "consumer_accounted_bytes": 1418324
+      }
+    },
+    {
+      "id": "STATUS-03",
+      "status": "PASS",
+      "policy": "one control session/Q0"
+    },
+    {
+      "id": "STATUS-04",
+      "case": "wrong-workspace",
+      "status": "PASS",
+      "failure": {
+        "code": 3,
+        "unknown": 0,
+        "cleanup": 0
+      }
+    },
+    {
+      "id": "STATUS-04",
+      "case": "wrong-incarnation",
+      "status": "PASS",
+      "failure": {
+        "code": 3,
+        "unknown": 0,
+        "cleanup": 0
+      }
+    },
+    {
+      "id": "STATUS-04",
+      "case": "no-status-grant",
+      "status": "PASS",
+      "failure": {
+        "code": 3,
+        "unknown": 0,
+        "cleanup": 0
+      }
+    },
+    {
+      "id": "STATUS-05",
+      "status": "PASS",
+      "service_refusal": {
+        "code": 2,
+        "unknown": 0,
+        "cleanup": 0
+      }
+    },
+    {
+      "id": "STATUS-06",
+      "status": "PASS",
+      "expiry_unix": 1789983888,
+      "explicit_observations": 92
+    },
+    {
+      "id": "STATUS-07",
+      "status": "PASS",
+      "shutdown": "closes accepted silent handshake, joins, unmounts and cleans"
+    }
+  ],
+  "performance_claim": false,
+  "source": "788a63950500e6ba79c6a55dc07f7b84ca0fde89",
+  "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+  "linux_binary_sha256": "ff31865d4222c082c5b39887dc78fe87d9b84080a7c741e417dca7280316a658",
+  "host_binary_sha256": "98fe34e05d5329f3ca2787a8ce794286c4cac41df6f6720ccfe8c6816a9bce70",
+  "driver_sha256": "0ac4f3b85685ade1a009bcd113b47efa4cb8f127701e0a7b973736be78ba2476",
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "not_run": [
+    "remote Attach/Mount/Unmount/CloseClean",
+    "SDK edits/Commit",
+    "malformed authenticated frames against daemon",
+    "control during actual service save",
+    "performance/RSS qualification"
+  ],
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/mounted-07/result.json",
+    "clone_method": "independent-byte-copy",
+    "closed_master_sha256": {
+      "store.sqlite": "903a50b09be126cad1ffba7738b3833d513f8ecab2b6eb3a326dd08e7ab259bc",
+      "history.sqlite": "167aac87e7b629790a0b06e97f686c8ecad55890b1f9f05548fadcae7b2f64fb"
+    },
+    "cache_claim": null
+  },
+  "command_wall_seconds": 25.01910379099718
+}

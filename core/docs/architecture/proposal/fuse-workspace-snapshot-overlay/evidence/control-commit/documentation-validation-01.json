@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "files": [
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/30-continuation-handoff.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/31-source-map-and-loc.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/36-control-attach.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/37-control-commit.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/README.md",
+    "core/docs/architecture/14-service-runtime.md"
+  ],
+  "missing_local_links": [],
+  "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+  "source_counts": "109490 -> 110285 (+795), exact staged comparison follows"
+}

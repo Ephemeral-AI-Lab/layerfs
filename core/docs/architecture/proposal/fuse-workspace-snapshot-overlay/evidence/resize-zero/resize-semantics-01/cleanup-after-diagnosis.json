@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "container": "layerfs-stage-60fc374f18b74521",
+  "volume": "layerfs-stage-60fc374f18b74521-data",
+  "processes_before_cleanup": "UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD\nroot                96041               96017               0                   11:28               ?                   00:00:00            sleep infinity\n",
+  "reason": "A held canonical ReadReply retains the Q0 remote permit; test expected another canonical read to succeed. Corrected test asserts Busy until that reply is dropped, then verifies full bytes; a local zero ReadReply stays across the later Commits. Product unchanged.",
+  "no_clean_Workspace_close_claim": true
+}

@@ -1,0 +1,15 @@
+{
+  "method": "Apple dwarfdump reading compiler DWARF of unchanged locked Rust1.85.1 Linux AArch64 ELF; requested object layout bytes only, excluding allocator overhead/RSS",
+  "binary_sha256": "0db282132d14fb22b3631951babfcd70ba92ec2d7e48679575a2e8b317c0fa45",
+  "MountHandle": {
+    "before": 96,
+    "after": 104,
+    "delta": 8
+  },
+  "MountFailure_box": 208,
+  "temporary_Session_Arc_allocation": 144,
+  "native_failure_allocations_sum": 352,
+  "daemon_owner_Arc_allocation": 128,
+  "daemon_retained_startup_allocations_sum": 480,
+  "not_counted": "existing Session/Config owned allocations move without duplication; existing Workspace/fuser/transport allocations, thread stacks and kernel memory remain separate; no total RSS claim"
+}

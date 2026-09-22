@@ -1,0 +1,16 @@
+{
+  "parent": "e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca",
+  "staged_tree": "a49b5de04e715b58bc5acdd892c76902f17ef089",
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive exact first parent and final staged tree crates core/crates; unchanged tools/production_loc.py scan, excluding tests including inline cfg(test), examples, tooling, docs and generated output",
+  "before": 111632,
+  "after": 111756,
+  "delta": 124,
+  "core_before": 46215,
+  "core_after": 46339,
+  "reference_before": 65417,
+  "reference_after": 65417,
+  "commit": "3b34e3002b4a7abfd205b68bc94de9a4af22b572",
+  "committed_tree": "a49b5de04e715b58bc5acdd892c76902f17ef089",
+  "status": "PASS exact counted staged tree equals committed tree"
+}

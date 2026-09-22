@@ -1,0 +1,16 @@
+{
+  "commit": "74d4a2ace173d09689b8fbb42953658e94277bab",
+  "tree": "754131d795ba996fd8dd3b49ef12e86966a99cff",
+  "parent": "9060c26bcc3e905e031415da20cec54352b94192",
+  "production_loc": {
+    "before": 112883,
+    "after": 112949,
+    "delta": 66,
+    "reference_before": 65417,
+    "reference_after": 65417,
+    "core_before": 47466,
+    "core_after": 47532
+  },
+  "counter_blob": "b5b9617d08204977176302311e0b2c72a811b420",
+  "method": "git archive parent and final staged tree crates core/crates; unchanged tools/production_loc.py --root SNAPSHOT --json; product Rust/runtime SQL excluding tests including inline cfg(test), docs/tooling/fixtures/generated/dependencies"
+}

@@ -1,0 +1,19 @@
+[
+  "core/crates/layerfs-bridge/src/adapters/native/client.rs",
+  "core/crates/layerfs-bridge/src/adapters/native/protocol/metadata.rs",
+  "core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs",
+  "core/crates/layerfs-bridge/src/contract/control.rs",
+  "core/crates/layerfs-bridge/src/contract/outcome.rs",
+  "core/crates/layerfs-bridge/src/contract/request.rs",
+  "core/crates/layerfs-bridge/tests/workspace_close_clean.rs",
+  "core/crates/layerfs-bridge/tests/workspace_unmount.rs",
+  "core/crates/layerfs-daemon/src/config.rs",
+  "core/crates/layerfs-daemon/src/control.rs",
+  "core/crates/layerfs-daemon/src/run.rs",
+  "core/crates/layerfs-daemon/tests/configuration.rs",
+  "core/crates/layerfs-daemon/tests/control_close.py",
+  "core/crates/layerfs-daemon/tests/control_unmount.py",
+  "core/crates/layerfs-service/src/operation/dispatch.rs",
+  "core/crates/layerfs-service/src/owner.rs",
+  "core/crates/layerfs-service/tests/history.rs"
+]

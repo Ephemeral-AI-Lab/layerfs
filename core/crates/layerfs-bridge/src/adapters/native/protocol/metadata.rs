@@ -1,4 +1,5 @@
 //! Checked binary metadata; every vector count is bounded before reservation.
+use super::prepared::*;
 use crate::contract::*;
 
 pub struct Decoder<'a> {
@@ -55,6 +56,9 @@ impl<'a> Decoder<'a> {
             return Err(Code::Capacity.into());
         }
         Ok(n)
+    }
+    pub(super) fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
     pub fn finish(self) -> Result<(), Failure> {
         if self.bytes.is_empty() {
@@ -124,7 +128,24 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
     if remaining_ms == 0 || remaining_ms > r.deadline_ms {
         return Err(Code::InvalidInput.into());
     }
-    let mut e = Encoder::default();
+    let mut e = match r.operation {
+        Operation::WorkspaceStatus { .. } => Encoder::bounded(WORKSPACE_STATUS_REQUEST_BYTES),
+        Operation::WorkspaceUnmount { .. } => Encoder::bounded(WORKSPACE_UNMOUNT_REQUEST_BYTES),
+        Operation::WorkspaceMount { .. } => Encoder::bounded(WORKSPACE_MOUNT_REQUEST_BYTES),
+        Operation::WorkspaceAttach { .. } => Encoder::bounded(WORKSPACE_ATTACH_REQUEST_BYTES),
+        Operation::WorkspaceCommit { .. } => Encoder::bounded(WORKSPACE_COMMIT_REQUEST_BYTES),
+        Operation::WorkspaceCloseClean { .. } => {
+            Encoder::bounded(WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES)
+        }
+        Operation::UpdatePortableMetadata { .. } => {
+            Encoder::bounded(PORTABLE_METADATA_REQUEST_BYTES)
+        }
+        Operation::ConstructPortableMetadata { .. } => {
+            Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES)
+        }
+        Operation::ConstructSymlink { .. } => Encoder::bounded(CONSTRUCT_SYMLINK_REQUEST_BYTES),
+        _ => Encoder::default(),
+    };
     e.u64(r.generation)?;
     e.u32(r.store)?;
     e.u16(r.profile)?;
@@ -138,6 +159,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.u64(*end)?;
         }
         Operation::ConstructFile { length } => e.u64(*length)?,
+        Operation::ConstructSymlink { target } => e.blob(target)?,
         Operation::Inspect { root, query } => {
             e.put(root)?;
             match query {
@@ -162,6 +184,10 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                     e.u8(3)?;
                     e.blob(path)?;
                 }
+                Inspect::Attributes { path } => {
+                    e.u8(4)?;
+                    e.blob(path)?;
+                }
             }
         }
         Operation::EditFile {
@@ -184,82 +210,83 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             root_serial,
             directories,
             inodes,
+            new_directories,
+            directory_metadata,
+            new_file_serials,
+            new_symlink_serials,
         } => {
             e.put(base)?;
             e.put(scope)?;
             e.u64(*root_serial)?;
             put_directories(&mut e, directories)?;
             put_inodes(&mut e, inodes)?;
+            put_additions(
+                &mut e,
+                new_directories,
+                directory_metadata,
+                new_file_serials,
+                new_symlink_serials,
+            )?;
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
+        Operation::WorkspaceStatus {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceUnmount {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceCloseClean {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceMount {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceAttach {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceCommit {
+            workspace,
+            incarnation,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+        }
+        Operation::UpdatePortableMetadata {
+            base,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => {
+            e.put(base)?;
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
+        }
+        Operation::ConstructPortableMetadata {
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => {
+            e.u8(*kind)?;
+            e.u32(*mode)?;
+            e.u64(*mtime_seconds as u64)?;
+            e.u32(*mtime_nanoseconds)?;
+        }
     }
     Ok(e.finish())
 }
 
-/// Writes the final directory bindings of one prepared filesystem update.
-fn put_directories(e: &mut Encoder, directories: &[DirectoryChange]) -> Result<(), Failure> {
-    e.count(directories.len())?;
-    for d in directories {
-        e.u64(d.parent)?;
-        e.count(d.changes.len())?;
-        for (name, serial) in &d.changes {
-            e.blob(name)?;
-            e.u64(serial.unwrap_or(0))?;
-        }
-    }
-    Ok(())
-}
-
-/// Reads the final directory bindings of one prepared filesystem update.
-fn take_directories(d: &mut Decoder<'_>) -> Result<Vec<DirectoryChange>, Failure> {
-    let count = d.count(128, 10)?;
-    let mut directories = Vec::with_capacity(count);
-    let mut total = 0;
-    for _ in 0..count {
-        let parent = d.u64()?;
-        let n = d.count(128 - total, 10)?;
-        total += n;
-        let mut changes = Vec::with_capacity(n);
-        for _ in 0..n {
-            let name = d.blob(255)?;
-            let serial = d.u64()?;
-            changes.push((name, (serial != 0).then_some(serial)));
-        }
-        directories.push(DirectoryChange { parent, changes });
-    }
-    Ok(directories)
-}
-
-/// Writes the typed final inode values of one prepared filesystem update.
-fn put_inodes(e: &mut Encoder, inodes: &[InodeChange]) -> Result<(), Failure> {
-    e.count(inodes.len())?;
-    for i in inodes {
-        e.u64(i.serial)?;
-        e.u8(i.kind)?;
-        e.put(&i.content)?;
-        e.put(&i.metadata)?;
-    }
-    Ok(())
-}
-
-/// Reads the typed final inode values of one prepared filesystem update.
-fn take_inodes(d: &mut Decoder<'_>) -> Result<Vec<InodeChange>, Failure> {
-    let n = d.count(128, 73)?;
-    let mut inodes = Vec::with_capacity(n);
-    for _ in 0..n {
-        inodes.push(InodeChange {
-            serial: d.u64()?,
-            kind: d.u8()?,
-            content: d.root()?,
-            metadata: d.root()?,
-        });
-    }
-    Ok(inodes)
-}
-
 /// Reads one fixed-width identity of `N` bytes.
-fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
+pub(super) fn take_array<const N: usize>(d: &mut Decoder<'_>) -> Result<[u8; N], Failure> {
     d.take(N)?.try_into().map_err(|_| Code::InvalidInput.into())
 }
 
@@ -297,35 +324,6 @@ fn put_page(e: &mut Encoder, cursor: &[u8], limit: u16) -> Result<(), Failure> {
 fn take_page(d: &mut Decoder<'_>) -> Result<(Vec<u8>, u16), Failure> {
     let cursor = d.blob(CURSOR_BYTES)?;
     Ok((cursor, d.u16()?))
-}
-
-/// Writes the prepared filesystem update history carries.
-fn put_prepared(e: &mut Encoder, changes: &PreparedChanges) -> Result<(), Failure> {
-    e.put(&changes.workspace)?;
-    e.put(&changes.branch)?;
-    put_optional(e, changes.expected_head.as_ref())?;
-    e.put(&changes.expected_base)?;
-    e.u64(changes.generation)?;
-    e.put(&changes.base)?;
-    e.put(&changes.scope)?;
-    e.u64(changes.root_serial)?;
-    put_directories(e, &changes.directories)?;
-    put_inodes(e, &changes.inodes)
-}
-
-fn take_prepared(d: &mut Decoder<'_>) -> Result<PreparedChanges, Failure> {
-    Ok(PreparedChanges {
-        workspace: take_array::<32>(d)?,
-        branch: take_array::<17>(d)?,
-        expected_head: take_optional::<33>(d)?,
-        expected_base: take_array::<33>(d)?,
-        generation: d.u64()?,
-        base: d.root()?,
-        scope: d.root()?,
-        root_serial: d.u64()?,
-        directories: take_directories(d)?,
-        inodes: take_inodes(d)?,
-    })
 }
 
 /// Writes one pathless manifest.
@@ -641,7 +639,34 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     let profile = d.u16()?;
     let deadline_ms = d.u32()?;
     let response_bytes = d.u64()?;
-    let operation = match d.u8()? {
+    let opcode = d.u8()?;
+    if opcode == WORKSPACE_STATUS_OPCODE && b.len() > WORKSPACE_STATUS_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == WORKSPACE_UNMOUNT_OPCODE && b.len() > WORKSPACE_UNMOUNT_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == WORKSPACE_CLOSE_CLEAN_OPCODE && b.len() > WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == WORKSPACE_MOUNT_OPCODE && b.len() > WORKSPACE_MOUNT_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == WORKSPACE_ATTACH_OPCODE && b.len() > WORKSPACE_ATTACH_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == WORKSPACE_COMMIT_OPCODE && b.len() > WORKSPACE_COMMIT_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == UPDATE_PORTABLE_METADATA_OPCODE && b.len() > PORTABLE_METADATA_REQUEST_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    if opcode == CONSTRUCT_PORTABLE_METADATA_OPCODE
+        && b.len() > CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES
+    {
+        return Err(Code::Capacity.into());
+    }
+    let operation = match opcode {
         1 => Operation::ReadFile {
             root: d.root()?,
             start: d.u64()?,
@@ -663,11 +688,17 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 3 => Inspect::Readlink {
                     path: d.blob(4096)?,
                 },
+                4 => Inspect::Attributes {
+                    path: d.blob(4096)?,
+                },
                 _ => return Err(Code::Unsupported.into()),
             };
             Operation::Inspect { root, query }
         }
         3 => Operation::ConstructFile { length: d.u64()? },
+        CONSTRUCT_SYMLINK_OPCODE => Operation::ConstructSymlink {
+            target: d.blob(SYMLINK_TARGET_BYTES)?,
+        },
         4 => {
             let root = d.root()?;
             let base_length = d.u64()?;
@@ -692,16 +723,59 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             let root_serial = d.u64()?;
             let directories = take_directories(&mut d)?;
             let inodes = take_inodes(&mut d)?;
+            let (new_directories, directory_metadata, new_file_serials, new_symlink_serials) =
+                take_additions(&mut d, inodes.len())?;
             Operation::UpdatePreparedFilesystem {
                 base,
                 scope,
                 root_serial,
                 directories,
                 inodes,
+                new_directories,
+                directory_metadata,
+                new_file_serials,
+                new_symlink_serials,
             }
         }
         6 => Operation::HistoryQuery(take_query(&mut d)?),
         7 => Operation::HistoryCommand(take_command(&mut d)?),
+        WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_UNMOUNT_OPCODE => Operation::WorkspaceUnmount {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_CLOSE_CLEAN_OPCODE => Operation::WorkspaceCloseClean {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_MOUNT_OPCODE => Operation::WorkspaceMount {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_ATTACH_OPCODE => Operation::WorkspaceAttach {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_COMMIT_OPCODE => Operation::WorkspaceCommit {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
+            base: d.root()?,
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+        },
+        CONSTRUCT_PORTABLE_METADATA_OPCODE => Operation::ConstructPortableMetadata {
+            kind: d.u8()?,
+            mode: d.u32()?,
+            mtime_seconds: d.u64()? as i64,
+            mtime_nanoseconds: d.u32()?,
+        },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

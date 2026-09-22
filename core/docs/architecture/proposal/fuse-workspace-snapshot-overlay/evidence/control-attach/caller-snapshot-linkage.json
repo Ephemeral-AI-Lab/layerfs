@@ -1,0 +1,482 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-09-21T20:18:25.216284+00:00",
+  "custody_scope": "Post-run source-byte archive/recovery. Every snapshot matches the preexisting input-manifest SHA256; this does not claim snapshots existed at run time. Original manifests, receipts and journals are unchanged.",
+  "unique_snapshots": 14,
+  "available_records": 44,
+  "unavailable_records": 0,
+  "inputs": {
+    "inputs-01.json": {
+      "path": "inputs-01.json",
+      "sha256": "112720b52d70df4667ea4ebb40aeba9dd266cdbc7161de748afae74cc445c4bf"
+    },
+    "inputs-02.json": {
+      "path": "inputs-02.json",
+      "sha256": "75a2f3c4fe008282f20b807061fd7ac38655997b485530d5ddb8630edf9ce5ff"
+    },
+    "inputs-03.json": {
+      "path": "inputs-03.json",
+      "sha256": "3247e966218e2f6322303ae2356568ec0b85a9a0c6d9b2affb2c87d71e337ee6"
+    },
+    "inputs-04.json": {
+      "path": "inputs-04.json",
+      "sha256": "aca1a263290640bf96456bc18965f58f4540bae61c59a08bc41ebc7352dd0e48"
+    }
+  },
+  "snapshots": {
+    "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py": {
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "bytes": 12669
+    },
+    "caller-snapshots/9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d/control_attach.py": {
+      "sha256": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+      "bytes": 19024
+    },
+    "caller-snapshots/05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0/control_attach_startup.py": {
+      "sha256": "05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0",
+      "bytes": 7349
+    },
+    "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py": {
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "bytes": 1250
+    },
+    "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py": {
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "bytes": 14073
+    },
+    "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py": {
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "bytes": 14903
+    },
+    "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py": {
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "bytes": 28062
+    },
+    "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py": {
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "bytes": 22854
+    },
+    "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py": {
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "bytes": 18137
+    },
+    "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py": {
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "bytes": 6543
+    },
+    "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py": {
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "bytes": 22967
+    },
+    "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py": {
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "bytes": 19149
+    },
+    "caller-snapshots/2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186/control_attach_startup.py": {
+      "sha256": "2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186",
+      "bytes": 10499
+    },
+    "caller-snapshots/04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8/control_attach_startup.py": {
+      "sha256": "04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8",
+      "bytes": 11650
+    }
+  },
+  "linkage": [
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "sha256": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d/control_attach.py",
+      "creation_method": "Recovered after runs by exactly reversing the recorded InvalidInput-to-Capacity oracle correction.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "sha256": "05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0/control_attach_startup.py",
+      "creation_method": "Recovered after runs by exactly reversing the recorded proxy schedule and incremental diagnostic logging changes.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_close.py",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_status.py",
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/history_route.py",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-daemon/tests/mounted_read.py",
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-workspace/tests/payload_route.py",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-01.json",
+      "source_path": "core/crates/layerfs-workspace/tests/stage_route.py",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "sha256": "05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0/control_attach_startup.py",
+      "creation_method": "Recovered after runs by exactly reversing the recorded proxy schedule and incremental diagnostic logging changes.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_close.py",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_status.py",
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/history_route.py",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-daemon/tests/mounted_read.py",
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-workspace/tests/payload_route.py",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-02.json",
+      "source_path": "core/crates/layerfs-workspace/tests/stage_route.py",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "sha256": "2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/2e36136f84eda894829e53a526b31cec3847a45ef6a0969b6683a94f87737186/control_attach_startup.py",
+      "creation_method": "Recovered after runs by exactly reversing the recorded partial-ciphertext progress schedule change.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_close.py",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_status.py",
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/history_route.py",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-daemon/tests/mounted_read.py",
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-workspace/tests/payload_route.py",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-03.json",
+      "source_path": "core/crates/layerfs-workspace/tests/stage_route.py",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py",
+      "sha256": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426/isolation.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach.py",
+      "sha256": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5/control_attach.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_attach_startup.py",
+      "sha256": "04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8/control_attach_startup.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_close.py",
+      "sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c/control_close.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_mount.py",
+      "sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75/control_mount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_status.py",
+      "sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c/control_status.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/control_unmount.py",
+      "sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a/control_unmount.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/history_route.py",
+      "sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f/history_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-daemon/tests/mounted_read.py",
+      "sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503/mounted_read.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-workspace/tests/payload_route.py",
+      "sha256": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213/payload_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    },
+    {
+      "input_manifest": "inputs-04.json",
+      "source_path": "core/crates/layerfs-workspace/tests/stage_route.py",
+      "sha256": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4",
+      "availability": "verified",
+      "snapshot_path": "caller-snapshots/99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4/stage_route.py",
+      "creation_method": "Copied current helper bytes after runs; exact SHA256 matches the original input manifest.",
+      "archived_after_run": true
+    }
+  ]
+}

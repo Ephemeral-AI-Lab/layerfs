@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "original_receipt_unchanged": true,
+  "scope": "external failed-test runtime cleanup only; original admission test stays FAIL",
+  "observed_no_fuse_mount_before_cleanup": true,
+  "container_removed": "layerfs-stage-effd870f273d40d1",
+  "volume_removed": "layerfs-stage-effd870f273d40d1-data"
+}

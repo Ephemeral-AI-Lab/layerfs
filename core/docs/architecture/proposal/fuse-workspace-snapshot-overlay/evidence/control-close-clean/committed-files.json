@@ -1,0 +1,8 @@
+{
+  "commit": "3c227266b6740cb9c50f63f0ba27a38d1b8b9a00",
+  "first_parent": "dab1751312adecdc57d073145582a9a702449744",
+  "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304",
+  "production_loc": "108474 -> 108562 (delta +88)",
+  "source_tree_confirmation": "core/target/pair1-evidence/loc-control-close/confirmation.json",
+  "scope": "identity binding only; original receipts are unchanged"
+}

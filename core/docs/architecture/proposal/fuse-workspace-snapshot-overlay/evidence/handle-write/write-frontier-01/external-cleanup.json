@@ -1,0 +1,21 @@
+{
+  "container": "layerfs-stage-ec6ba5a3900d4614",
+  "volume": "layerfs-stage-ec6ba5a3900d4614-data",
+  "before_state": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 46255,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-09-21T13:13:32.502456837Z",
+    "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "external_owned_runtime_removed": true,
+  "product_cleanup_claim": false,
+  "failed_receipt_unchanged": true,
+  "saved_root_diagnostic": "../fragmentation-retained-root-before-01/result.json"
+}

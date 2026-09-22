@@ -1,0 +1,2 @@
+FROM rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4
+RUN rustup component add clippy rustfmt --toolchain 1.85.1

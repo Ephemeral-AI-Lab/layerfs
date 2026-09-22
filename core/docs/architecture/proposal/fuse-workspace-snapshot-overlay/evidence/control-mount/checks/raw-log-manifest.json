@@ -1,0 +1,102 @@
+{
+  "fmt.log": {
+    "file": "fmt.log.gz",
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "encoding": "gzip"
+  },
+  "host-clippy-02.log": {
+    "file": "host-clippy-02.log.gz",
+    "uncompressed_sha256": "61afb09c6841319bd703c978aa4d00956eeb783a10b43992a217fa0d34376c4c",
+    "encoding": "gzip"
+  },
+  "linux-clippy-final.log": {
+    "file": "linux-clippy-final.log.gz",
+    "uncompressed_sha256": "26092d79398d264386f45b5a94cf8ec6710ff23c0225b613ab2321102d2b38c2",
+    "encoding": "gzip"
+  },
+  "host-test.log": {
+    "file": "host-test.log.gz",
+    "uncompressed_sha256": "49aba15ec52b77707d3ae7e6bea59d711786e1dc70a2ffa2f088016c97a2e941",
+    "encoding": "gzip"
+  },
+  "host-clippy.log": {
+    "file": "host-clippy.log.gz",
+    "uncompressed_sha256": "5c5378eb2591d936b1acf842ad9cd40a069a678ccad90f9e53b36577025b9e23",
+    "encoding": "gzip"
+  },
+  "host-affected-final.log": {
+    "file": "host-affected-final.log.gz",
+    "uncompressed_sha256": "bc42b60ffca63305ea7c3e17cccd660d70b9d25a3f0bf2d2c1d32c31a9191afd",
+    "encoding": "gzip"
+  },
+  "pipe-cancel-before-01.log": {
+    "file": "pipe-cancel-before-01.log.gz",
+    "uncompressed_sha256": "4f9ea97d8c10a54ac97b73550f9527724d34ed0feaf9f6b7b5aaa0ac8f734ea8",
+    "encoding": "gzip"
+  },
+  "pipe-cancel-after-01.log": {
+    "file": "pipe-cancel-after-01.log.gz",
+    "uncompressed_sha256": "a3b1d3963a96f1200a39baf279bb13d073f0768d70f7892cedc8d87d7037d331",
+    "encoding": "gzip"
+  },
+  "linux-clippy.log": {
+    "file": "linux-clippy.log.gz",
+    "uncompressed_sha256": "5999006aaac58f8254671dbcff8c974786b8916bd45cbd71f4f5954a259df1db",
+    "encoding": "gzip"
+  },
+  "fmt-final.log": {
+    "file": "fmt-final.log.gz",
+    "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "encoding": "gzip"
+  },
+  "linux-test.log": {
+    "file": "linux-test.log.gz",
+    "uncompressed_sha256": "e5b118e7f13e2fd4e109e4a9e15905009817032a9275fd49589bf72bc10fe0fa",
+    "encoding": "gzip"
+  },
+  "boundary.log": {
+    "file": "boundary.log.gz",
+    "uncompressed_sha256": "49073106ab8905030ea7b85ba7c4476569afb78fe76a4d0daf36f24f34e46c32",
+    "encoding": "gzip"
+  },
+  "linux-build-final.log": {
+    "file": "linux-build-final.log.gz",
+    "uncompressed_sha256": "5a49437186db2adbde23f783a3393666be79c072214fb6a1e59ce1ee78f63b59",
+    "encoding": "gzip"
+  },
+  "host-clippy-final.log": {
+    "file": "host-clippy-final.log.gz",
+    "uncompressed_sha256": "54ff473249d682e6465954ddd30ea269cf4c30319126ac8d1542c85f9a6b2c52",
+    "encoding": "gzip"
+  },
+  "boundary-final.log": {
+    "file": "boundary-final.log.gz",
+    "uncompressed_sha256": "49073106ab8905030ea7b85ba7c4476569afb78fe76a4d0daf36f24f34e46c32",
+    "encoding": "gzip"
+  },
+  "linux-affected-final.log": {
+    "file": "linux-affected-final.log.gz",
+    "uncompressed_sha256": "919bb7c7d533d212a6de789072158badb767b880f1a2aa241770cd98beadd545",
+    "encoding": "gzip"
+  },
+  "host-build-final.log": {
+    "file": "host-build-final.log.gz",
+    "uncompressed_sha256": "a100bd70137291a7035c0b36eba3b649f20ac0e6b7bded752de24d30a44941b5",
+    "encoding": "gzip"
+  },
+  "linux-build.log": {
+    "file": "linux-build.log.gz",
+    "uncompressed_sha256": "3d4526832cb71f4266de655b8a7653aa423870e34002ffeaa6d54caa2240fdca",
+    "encoding": "gzip"
+  },
+  "host-build.log": {
+    "file": "host-build.log.gz",
+    "uncompressed_sha256": "586ddc6f7885b118657743708aa1106f8aa0fc40dc698f24c90d3d6c4b077c2b",
+    "encoding": "gzip"
+  },
+  "boundary-self-tests.log": {
+    "file": "boundary-self-tests.log.gz",
+    "uncompressed_sha256": "d1a3bdcaa925bbf92cc120237c5ab1078f911832e5f3bbdd16fd82aab85d59fa",
+    "encoding": "gzip"
+  }
+}

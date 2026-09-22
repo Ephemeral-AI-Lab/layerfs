@@ -1,0 +1,100 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-open",
+  "case": "permissions",
+  "checks": [
+    {
+      "id": "nonroot-owner-DAC-applies-to-open-access-and-truncation",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "W-01",
+    "W-02",
+    "W-12"
+  ],
+  "requirement_scope": "Portable open/atomic truncation SDK subsets; no mounted write or append-positioning claim",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "handle writes and atomic append positioning",
+    "writable kernel coherence/mapping profile",
+    "mounted writes/truncate/extend",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "explicit failed-state disposition",
+    "metadata-prepared-open vs capture race"
+  ],
+  "source": "1343b00accf2277085410c2fd84144b2432f6222",
+  "product_inputs_sha256": "64e5b72cb535b230074b12db667671740d7727d3632748da9714fb0b1b8c9f1c",
+  "driver_sha256": "eea281b32f98c075158ca0f9b6d51a4702f5420e49e47a37695dc9e901deab11",
+  "test_source_sha256": "5fa770c6810531169b4d708d07ac39313e625d9370f530f263d540794fa59017",
+  "entrypoint_sha256": "d02af4be92a86f6df5d39785172efa258ee217c9659efef1b1f71f5dd7213b7d",
+  "helper_source_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c",
+  "test_binary_sha256": "541d547c5bebca940131bb29c5f4ed3f4dca395139ebf90e36f9a775d2ea6962",
+  "binaries": {
+    "layerfs-service": "72e7af38e695c9646b212ac3de6165ac9c77fd5d7c0bdf928889ffa571ee6805",
+    "layerfs-daemon": "bd6925ce003372a0822c70daec2ad07c3751706b7d3cbbdfefa4f7a134873300",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/541d547c5bebca940131bb29c5f4ed3f4dca395139ebf90e36f9a775d2ea6962/open-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/write-regression-open-permissions-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ]
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "0f160d243fa4555bebff687223486b6627d1ad3b7b4e998b5bb9aa02b885ff8d",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 292,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "caller_identity": "1001:1001",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::open_permissions",
+  "test_exit": 0,
+  "observations": [],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 0.8243845000106376
+}

@@ -7,6 +7,18 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 `ce2d738ff`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
 
+The child-hierarchy validation update, 2026-09-21, is based on
+`acb4558e3d6ca2fe0d2696d9865239c30dc201ee`. It is a prerequisite for the new R2
+metadata operation: grouped reads and the streaming patch/key cursor now retain
+and check each child's expected level, and builder finalization emits the same
+correct level as streaming construction. The grammar is unchanged, but the old
+core builder could emit incorrect branch levels for wide metadata: corrected
+outputs can have different identities, and strict readers reject those malformed
+old roots. No migration, fallback or historical receipt relabelling is provided.
+The sealed reference attribute goldens are leaves and remain unchanged. This
+targeted correctness prerequisite reopens no Stage 5 acceptance row and makes no
+measurement claim.
+
 Chapter numbers are global to the set: this paper holds **chapter 17**.
 
 ---
@@ -113,10 +125,20 @@ Fill rules, shared with the directory and inode formats
 | page ceiling | `MAXIMUM_PAGE_BYTES` = 8,192 | `AttributePage::fits` |
 | non-root fill | ≥ `MINIMUM_FILLED_PAGE_BYTES` = 3,277 (the 2/5 rule) | `AttributePage::filled` |
 | branch level | `level > 0` **and** `count >= 2` | `decode_attribute_page` |
-| tree depth | ≤ `MAXIMUM_TREE_LEVEL` = 31 | `lookup_many` |
+| page level | ≤ `MAXIMUM_TREE_LEVEL` = 31 | `decode_attribute_page` |
+| parent/child hierarchy | child level = parent level − 1 | shared checked descent in `read.rs`, used by grouped lookup and the patch/key cursor |
 
 The branch rule is the one to note: an attribute branch must have **at least two
 children**. A single-child branch is non-canonical, so the partition is unique.
+
+Individual valid page headers do not establish a valid hierarchy. Previously,
+both lookup demands and pending cursor entries carried a child's identity and
+maximum key but discarded its parent's level; a same-level branch chain or a
+skipped level could pass those checks. Each pending child now carries the exact
+expected level and maximum key. The shared decoder rejects a wrong level before
+rows are returned or descendants are queued. Together with the checked root
+level and leaf level zero, every descent ends within the declared tree depth.
+No independent cursor retry, fallback or full-tree prevalidation is introduced.
 
 ### 17.3a Two role numberings — a real trap
 
@@ -196,6 +218,16 @@ records the requirement: the partition must match the reference builder's
 An empty tree is legal and is a real object: `finish` with no entries emits an
 empty leaf page, so every inode has a `metadata_root` whether or not it carries
 attributes.
+
+Pending child summaries at index `N` belong to a branch at level `N`:
+`push_summary` places a child's summary at `child_level + 1`. Finalization now
+uses that index directly, matching the streaming flush. Previously it added one
+again, so finishing leaf summaries could emit level 2 directly over level-0
+leaves; deeper outputs could mix those pages with correctly streamed branches.
+The new hierarchy checks exposed this existing construction defect. The public
+multi-level builder regression checks grouped reads, key visits and patching;
+the existing 4,097-key filesystem fixture still tests its declared 4,096-key
+operation refusal using the corrected hierarchy.
 
 ---
 
@@ -295,9 +327,11 @@ Two shortcuts: an **empty patch list returns the base root unchanged** (no page 
 rebuilt), and both typed and generic keys travel the identical route —
 *"there is no per-domain branch and no platform dispatch."*
 
-`visit_keys` / `visit_keys_counted` enumerate keys without reading values, bounded
-by `MAXIMUM_ATTRIBUTE_KEYS` = 4,096, which the source calls *"a declared operation
-bound, not a format bound"* — the grammar bounds a page, not a tree.
+`visit_keys` / `visit_keys_counted` enumerate keys without reading values through
+the same checked cursor as nonempty patches. They stream to a visitor;
+`FilesystemRead::attribute_keys` is the caller that enforces
+`MAXIMUM_ATTRIBUTE_KEYS` = 4,096. This is an operation bound, not a format bound:
+the grammar bounds pages and depth rather than a tree's complete key count.
 
 ---
 
@@ -309,7 +343,7 @@ less than a loop of point lookups:
 ```text
    keys: [k0, k1, k2, …]      one frontier, carried down the tree
 
-   level = [(root, is_root, None, [0..keys.len()])]
+   level = [(root, expected_child_context = None, [0..keys.len()])]
         │
         ▼
    ┌─ one read_canonical_batch(ids) for the WHOLE level ─────────────────┐
@@ -329,7 +363,10 @@ less than a loop of point lookups:
 So the cost is `O(levels)` read waves, not `O(keys)`: *"a batch costs one
 authenticated read per shared page instead of one traversal per key."* Duplicate
 demands are answered in demand order, and `depth` is bounded by
-`MAXIMUM_TREE_LEVEL`, so the loop cannot run away.
+`MAXIMUM_TREE_LEVEL`. Child demands additionally carry
+`(parent_level - 1, maximum_key)`, checked by the same guard the patch/key cursor
+uses. Point lookup, portable metadata and opaque-value reads delegate to this
+grouped lookup; none has an unchecked alternate descent.
 
 `read_value_bounded` and `read_opaque` then take the resolved value root and read
 the value, bounded by the caller's maximum.
@@ -364,7 +401,7 @@ requested, `v` = value bytes, `L` = tree height ≤ 31.
 | Build (`push` × e) | O(e) | **O(P)** — two pending groups | O(e/P) pages |
 | `finish` + rebalance | O(P · L) | O(P · L) | — |
 | `emit_value` (v bytes) | O(v) | O(v) | 3 objects |
-| `apply_patches` (b base, p patches) | O(b + p) | O(P) | O((b+p)/P) pages |
+| `apply_patches` (b base, p patches) | O(b + p) | O(P · L) — one leaf plus pending siblings by level | O((b+p)/P) pages |
 | `lookup_many` (k keys) | O(L · P) per level | O(children per level) | — |
 | `read_value` (v bytes) | O(v) | O(v) | — |
 

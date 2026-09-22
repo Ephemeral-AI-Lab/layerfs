@@ -356,7 +356,9 @@ only with matched operation/workload/harness/cache semantics and exact identitie
 Reuse prepared pristine inputs/builds/images under the existing seals and clone
 contract; use fresh outputs and samples. Reuse never moves measured work outside
 its phase or credits resident bytes to a cold claim. Separate verifier readback
-from operation timing. Respect the measurement lock and other owners' runs.
+from operation timing. Respect the measurement lock, which is per worktree
+(owner direction, 2026-09-21 — [isolation](../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)), and other owners' runs: two
+runs in one worktree never overlap, while another worktree is not excluded.
 
 Unavailable counters/phase peaks are unavailable, not zero. No meaningful
 percentile follows from one sample. Missing required proof is INCOMPLETE/NOT_RUN,

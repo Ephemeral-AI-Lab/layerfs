@@ -178,8 +178,10 @@ profiles, worker counts or durability to make integration pass.
 Retain legacy root crates as reference only. No dependency, include, fallback or
 binary reuse from them. No third-party patches, vendor edits or unbounded retries.
 Do not run the retired preflight or add an equivalent aggregate gate/CI workflow.
-Respect other agents' files and the existing measurement lock; this specification
-does not authorize overlapping resource-sensitive work.
+Respect other agents' files and the measurement lock, which is per worktree
+(owner direction, 2026-09-21 — [isolation](../../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)). This specification does not
+authorize a machine-global lock or overlapping runs inside one worktree; work in
+another worktree is not excluded, and the interference it causes is recorded.
 
 ## 7. Evidence, LOC and exclusions
 

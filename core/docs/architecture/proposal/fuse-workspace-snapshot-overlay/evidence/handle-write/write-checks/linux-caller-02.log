@@ -1,0 +1,3 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.47s
+  Executable tests/write.rs (core/target-linux/debug/deps/write-4f23ba597e9ec02c)

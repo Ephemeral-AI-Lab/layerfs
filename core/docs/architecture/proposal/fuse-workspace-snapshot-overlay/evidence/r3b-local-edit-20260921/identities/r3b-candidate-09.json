@@ -1,0 +1,6 @@
+{
+  "test_binary": "core/target/pair1-evidence/binary-archive/9ab9e8be201c346d25e27585a34a66e214630874566438549d7baaf0ba8913a0/local-edit-test",
+  "test_binary_sha256": "9ab9e8be201c346d25e27585a34a66e214630874566438549d7baaf0ba8913a0",
+  "product_inputs_sha256": "fdb03e06c68fa9058339e3c73bc9ef80b67233338311d0fab4427968b51b7b87",
+  "test_source_sha256": "11863483d956c7cf5dcab04f0199ab27c55ad4a2b38aeccd0c460cf8190c200c"
+}

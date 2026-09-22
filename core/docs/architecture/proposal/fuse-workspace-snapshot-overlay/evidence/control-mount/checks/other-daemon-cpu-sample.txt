@@ -1,0 +1,116 @@
+Analysis of sampling layerfs-daemon (pid 11323) every 10 milliseconds
+Process:         layerfs-daemon [11323]
+Path:            /Users/USER/*/layerfs-daemon
+Load Address:    0x10031c000
+Identifier:      layerfs-daemon
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  time [11322]
+Target Type:     live task
+
+Date/Time:       2026-09-22 02:12:57.487 +0800
+Launch Time:     2026-09-21 09:19:25.119 +0800
+OS Version:      macOS 26.4.1 (25E253)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+
+Physical footprint:         1232K
+Physical footprint (peak):  1232K
+Idle exit:                  untracked
+----
+
+Call graph:
+    91 Thread_2874761   DispatchQueue_1: com.apple.main-thread  (serial)
+    + 91 start  (in dyld) + 6992  [0x18f4ffda4]
+    +   91 main  (in layerfs-daemon) + 52  [0x100328788]
+    +     91 std::rt::lang_start_internal::hd55fd6ef897020fb  (in layerfs-daemon) + 1092  [0x100380ba8]
+    +       91 std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::hfec67550efaf1089  (in layerfs-daemon) + 16  [0x1003263a4]
+    +         91 std::sys::backtrace::__rust_begin_short_backtrace::hebd6547f8956992f  (in layerfs-daemon) + 12  [0x10032810c]
+    +           91 layerfs_daemon::main::h0d4778d03a47cd07  (in layerfs-daemon) + 28  [0x100328650]
+    +             91 layerfs_daemon::run::run::hc445ca9cfd07ac39  (in layerfs-daemon) + 1312  [0x100322ef0]
+    +               91 layerfs_daemon::headless::run::hb0832c95d16ebe71  (in layerfs-daemon) + 656  [0x1003200e8]
+    +                 91 layerfs_telemetry::operation::OperationRecorder::run::hd56f621d06bf7407  (in layerfs-daemon) + 304  [0x1003255d0]
+    +                   91 layerfs_bridge::adapters::native::client::Client::call_until::ha4e1a30bb1b3d57d  (in layerfs-daemon) + 612  [0x100321b94]
+    +                     91 std::thread::scoped::scope::h5ac761eddaa7b5ff  (in layerfs-daemon) + 1592  [0x100324424]
+    +                       91 std::thread::JoinInner$LT$T$GT$::join::hbbe66d91b1666f8e  (in layerfs-daemon) + 32  [0x100322f94]
+    +                         91 std::sys::pal::unix::thread::Thread::join::hd2bf363181644416  (in layerfs-daemon) + 24  [0x10038a04c]
+    +                           91 _pthread_join  (in libsystem_pthread.dylib) + 616  [0x18f8be114]
+    +                             91 __ulock_wait  (in libsystem_kernel.dylib) + 8  [0x18f879af8]
+    91 Thread_2874767: layerfs-upload
+      91 thread_start  (in libsystem_pthread.dylib) + 8  [0x18f8b6c1c]
+        91 _pthread_start  (in libsystem_pthread.dylib) + 136  [0x18f8bbc58]
+          91 std::sys::pal::unix::thread::Thread::new::thread_start::hdb877a8060df0ba1  (in layerfs-daemon) + 52  [0x100389f20]
+            91 core::ops::function::FnOnce::call_once$u7b$$u7b$vtable.shim$u7d$$u7d$::hf72d7d516501f27d  (in layerfs-daemon) + 172  [0x100323710]
+              91 std::sys::backtrace::__rust_begin_short_backtrace::h724302438acd4be0  (in layerfs-daemon) + 200  [0x100327e9c]
+                91 _$LT$layerfs_daemon..headless..Submission$u20$as$u20$layerfs_bridge..adapters..native..client..Source$GT$::read::h16a7976e3964822d  (in layerfs-daemon) + 128  [0x100320640]
+                  91 layerfs_bridge::adapters::native::protocol::frame::Frame::read_optional::h88a32b824f0b62bf  (in layerfs-daemon) + 388  [0x100325f70]
+                    90 std::io::default_read_exact::h013e033ebcfc4f49  (in layerfs-daemon) + 84  [0x100320af4]
+                    ! 90 _$LT$layerfs_bridge..adapters..native..pipe..Pipe$LT$T$GT$$u20$as$u20$std..io..Read$GT$::read::h96c305b7d74a40cf  (in layerfs-daemon) + 60  [0x1003252f0]
+                    !   88 std::sys::pal::unix::time::Timespec::now::h882f66a53f06895c  (in layerfs-daemon) + 24  [0x10038a0f0]
+                    !   : 85 clock_gettime  (in libsystem_c.dylib) + 60  [0x18f758d60]
+                    !   : | 81 clock_gettime_nsec_np  (in libsystem_c.dylib) + 384  [0x18f74b15c]
+                    !   : | + 79 mach_absolute_time  (in libsystem_kernel.dylib) + 108,112  [0x18f87810c,0x18f878110]
+                    !   : | + 2 DYLD-STUB$$mach_absolute_time  (in libsystem_c.dylib) + 8,12  [0x18f7c3990,0x18f7c3994]
+                    !   : | 3 clock_gettime_nsec_np  (in libsystem_c.dylib) + 228,28  [0x18f74b0c0,0x18f74aff8]
+                    !   : | 1 clock_gettime_nsec_np  (in libsystem_c.dylib) + 240  [0x18f74b0cc]
+                    !   : |   1 mach_timebase_info  (in libsystem_kernel.dylib) + 68  [0x18f878010]
+                    !   : 3 clock_gettime  (in libsystem_c.dylib) + 92,0  [0x18f758d80,0x18f758d24]
+                    !   2 std::sys::pal::unix::time::Timespec::now::h882f66a53f06895c  (in layerfs-daemon) + 96  [0x10038a138]
+                    1 _$LT$layerfs_bridge..adapters..native..pipe..Pipe$LT$T$GT$$u20$as$u20$std..io..Read$GT$::read::h96c305b7d74a40cf  (in layerfs-daemon) + 168  [0x10032535c]
+
+Total number in stack (recursive counted multiple, when >=5):
+
+Sort by top of stack, same collapsed (when >= 5):
+        __ulock_wait  (in libsystem_kernel.dylib)        91
+        mach_absolute_time  (in libsystem_kernel.dylib)        79
+
+Binary Images:
+       0x10031c000 -        0x1003cfffb +layerfs-daemon (0) <7BC5920B-B70D-36F8-A38E-C7044C56ACF1> /Users/*/layerfs-daemon
+       0x18f458000 -        0x18f4aab4b  libobjc.A.dylib (951.7) <2E858E25-1FF6-3DA6-84F6-911630620512> /usr/lib/libobjc.A.dylib
+       0x18f4ab000 -        0x18f4dfb34  libdyld.dylib (1376.6) <2C3C5F75-3686-39A1-9202-BD4D2133379D> /usr/lib/system/libdyld.dylib
+       0x18f4e0000 -        0x18f585ec7  dyld (1.0.0 - 1376.6) <9F682DCF-340C-3BFA-BCDD-DD702F30313E> /usr/lib/dyld
+       0x18f586000 -        0x18f589228  libsystem_blocks.dylib (96) <2EA73169-CF76-3DD1-9869-F23C8B338022> /usr/lib/system/libsystem_blocks.dylib
+       0x18f58a000 -        0x18f5de51f  libxpc.dylib (3102.100.102) <618039C8-9965-3782-A7D2-90FD4C3DD66F> /usr/lib/system/libxpc.dylib
+       0x18f5df000 -        0x18f5ff9bf  libsystem_trace.dylib (1861.100.19) <08629650-54FC-3AA6-910E-EACA563804D0> /usr/lib/system/libsystem_trace.dylib
+       0x18f600000 -        0x18f6addaf  libcorecrypto.dylib (1922.101.2) <D1EC203E-9B2E-391B-8DE3-7C58F0589437> /usr/lib/system/libcorecrypto.dylib
+       0x18f6ae000 -        0x18f6fe1d7  libsystem_malloc.dylib (812.100.31) <2AD21BE3-FFDB-31D5-A3D7-2F7F672D6E92> /usr/lib/system/libsystem_malloc.dylib
+       0x18f6ff000 -        0x18f74623f  libdispatch.dylib (1542.100.32) <E17AA23F-DB2A-3302-B14C-F6B08C540FCF> /usr/lib/system/libdispatch.dylib
+       0x18f747000 -        0x18f749ffb  libsystem_featureflags.dylib (103) <0DE01F76-4B36-35A2-98F9-43DD147EDD95> /usr/lib/system/libsystem_featureflags.dylib
+       0x18f74a000 -        0x18f7caef7  libsystem_c.dylib (1752.100.10) <66EBD321-6899-3863-BA24-5CFC3076A0CB> /usr/lib/system/libsystem_c.dylib
+       0x18f7cb000 -        0x18f85bae7  libc++.1.dylib (2100.43) <1E9541EC-C564-38CB-BED6-46F708E8D863> /usr/lib/libc++.1.dylib
+       0x18f85c000 -        0x18f87675f  libc++abi.dylib (2100.43) <E8D325ED-3B97-325E-B494-B1B0FF93D133> /usr/lib/libc++abi.dylib
+       0x18f877000 -        0x18f8b428f  libsystem_kernel.dylib (12377.101.15) <51565B39-F595-3E96-A217-FEF29815057A> /usr/lib/system/libsystem_kernel.dylib
+       0x18f8b5000 -        0x18f8c1b3b  libsystem_pthread.dylib (539.100.4) <E7A73008-0C09-31E3-9DD9-0C61652F0E85> /usr/lib/system/libsystem_pthread.dylib
+       0x18f8c2000 -        0x18f8ca8f3  libsystem_platform.dylib (375.100.10) <D93EC420-F465-3A3A-916D-A04AF9B023EB> /usr/lib/system/libsystem_platform.dylib
+       0x18f8cb000 -        0x18f8fa6eb  libsystem_info.dylib (600) <201FD67C-3DF6-3788-B132-A69CAA2AA3D7> /usr/lib/system/libsystem_info.dylib
+       0x193890000 -        0x193899e5f  libsystem_darwin.dylib (1752.100.10) <D5BA0CAB-F283-3620-AAA9-1EEB718E1BA8> /usr/lib/system/libsystem_darwin.dylib
+       0x193cfb000 -        0x193d0cf5b  libsystem_notify.dylib (348.100.7) <9F46F30B-B7C0-3DD7-AC38-57B78C7971FF> /usr/lib/system/libsystem_notify.dylib
+       0x195fc5000 -        0x195fdff5b  libsystem_networkextension.dylib (2226.101.1) <85169C7B-48DD-3542-AD38-F1B88EA2A95A> /usr/lib/system/libsystem_networkextension.dylib
+       0x196062000 -        0x196079fdf  libsystem_asl.dylib (406) <6427D987-7938-3278-8C14-10FB9C06BBD5> /usr/lib/system/libsystem_asl.dylib
+       0x197c1d000 -        0x197c25387  libsystem_symptoms.dylib (2169.100.30) <28B6E34E-9C7D-3437-A3F1-A3C979DE579A> /usr/lib/system/libsystem_symptoms.dylib
+       0x19beb8000 -        0x19bef025f  libsystem_containermanager.dylib (725.100.37) <14750F95-BB3A-3654-8610-A05A454643A8> /usr/lib/system/libsystem_containermanager.dylib
+       0x19d2c8000 -        0x19d2cc5d7  libsystem_configuration.dylib (1405.100.8) <634F597D-F8BD-3C00-B967-86047FC15D14> /usr/lib/system/libsystem_configuration.dylib
+       0x19d2cd000 -        0x19d2d38cf  libsystem_sandbox.dylib (2680.100.174) <AF76231D-EADC-3399-9414-6AD90FB4EA89> /usr/lib/system/libsystem_sandbox.dylib
+       0x19e913000 -        0x19e9161fb  libquarantine.dylib (196.100.8) <268FEB6E-A237-3050-BFFF-AE3A66B7EAD4> /usr/lib/system/libquarantine.dylib
+       0x19f0b2000 -        0x19f0b8d03  libsystem_coreservices.dylib (191.4.5) <7129349D-04F9-3C3C-BF37-3082C1468654> /usr/lib/system/libsystem_coreservices.dylib
+       0x19f637000 -        0x19f674a77  libsystem_m.dylib (3312.100.1) <83B173CD-7F32-3901-8E67-C0B2676BE015> /usr/lib/system/libsystem_m.dylib
+       0x19f675000 -        0x19f675c9b  libcharset.1.dylib (115.100.1) <994633BA-AA7A-31BF-94C5-E31A08CA6243> /usr/lib/libcharset.1.dylib
+       0x19f676000 -        0x19f679527  libmacho.dylib (1376.6) <9729ECEA-0A08-32E3-8BDB-B42FC15FF258> /usr/lib/system/libmacho.dylib
+       0x19f693000 -        0x19f6a03a7  libcommonCrypto.dylib (600035) <710EC5FA-F77C-3646-A9E3-C037C42E1539> /usr/lib/system/libcommonCrypto.dylib
+       0x19f6a1000 -        0x19f6aaca3  libunwind.dylib (2100.2) <FB0518B9-DF0F-3A03-A74B-AF1B21C26F8B> /usr/lib/system/libunwind.dylib
+       0x19f6b3000 -        0x19f6bd7ff  libcopyfile.dylib (240) <0B7FF027-5579-3CBF-A12B-68A4FD36641C> /usr/lib/system/libcopyfile.dylib
+       0x19f6be000 -        0x19f6c1987  libcompiler_rt.dylib (103.3) <65E29E6E-7042-3F73-A1D2-F2C4EBCD7524> /usr/lib/system/libcompiler_rt.dylib
+       0x19f6c2000 -        0x19f6c678b  libsystem_collections.dylib (1752.100.10) <B81193DE-3BEC-3340-86D0-DB7F3683D135> /usr/lib/system/libsystem_collections.dylib
+       0x19f6c7000 -        0x19f6ca4cf  libsystem_secinit.dylib (168.100.7) <A6B77B36-195D-33F8-8058-FE0B5BFA9D37> /usr/lib/system/libsystem_secinit.dylib
+       0x19f6cb000 -        0x19f6cdbf7  libremovefile.dylib (85.100.6) <BD89B1A3-0D06-3881-B5E1-EFC6CFBDFCC1> /usr/lib/system/libremovefile.dylib
+       0x19f6ce000 -        0x19f6cef27  libkeymgr.dylib (31) <DE8F8219-0072-35C2-8932-C065491ED15D> /usr/lib/system/libkeymgr.dylib
+       0x19f6cf000 -        0x19f6d7e3f  libsystem_dnssd.dylib (2881.100.56.0.1) <DEC8BDD2-366C-3BF9-A123-35744DB06354> /usr/lib/system/libsystem_dnssd.dylib
+       0x19f6d8000 -        0x19f6dd09b  libcache.dylib (95) <4D6833A3-C910-3A76-AA8A-303F698B36BF> /usr/lib/system/libcache.dylib
+       0x19f6de000 -        0x19f6dfce3  libSystem.B.dylib (1356) <E05F5341-06B7-365E-8014-E9CD64C352FE> /usr/lib/libSystem.B.dylib
+       0x19f718000 -        0x19f71f1cb  libiconv.2.dylib (115.100.1) <E384E5FE-DFF5-36ED-88C8-0EEF2FBF89CE> /usr/lib/libiconv.2.dylib
+       0x291fc1000 -        0x291fc8349  libRosetta.dylib (367.5) <2FC1EF06-04C4-35FC-8DC3-BEA1E9FBD63F> /usr/lib/libRosetta.dylib
+       0x293c9e000 -        0x293ca1a4b  libsystem_darwindirectory.dylib (122) <CCAA2170-32DD-34BD-A927-32DF30893969> /usr/lib/system/libsystem_darwindirectory.dylib
+       0x293ca2000 -        0x293cab5a7  libsystem_eligibility.dylib (319.101.1) <2D19994A-87BB-34B8-A343-CB8DD47FF110> /usr/lib/system/libsystem_eligibility.dylib
+       0x293cac000 -        0x293cb38db  libsystem_sanitizers.dylib (26) <FCB93D2F-4437-3089-A43F-A19BC23DD65B> /usr/lib/system/libsystem_sanitizers.dylib
+       0x293cb4000 -        0x293cb4bb7  libsystem_trial.dylib (474.2.18) <5BB81430-4E33-3160-94D2-1FFB2B614DB2> /usr/lib/system/libsystem_trial.dylib

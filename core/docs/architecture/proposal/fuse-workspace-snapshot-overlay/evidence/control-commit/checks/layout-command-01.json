@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/usr/bin/dwarfdump",
+    "--regex",
+    "--name=^(WorkspaceCommitWire|WorkspaceCommitFailureWire|WorkspaceWritableStatusWire|ArcInner<layerfs_daemon::lifecycle::Lifecycle>|Response)$",
+    "--show-parents",
+    "--parent-recurse-depth=3",
+    "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon"
+  ],
+  "exit_code": 0,
+  "binary_sha256": "89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71",
+  "scope": "compiler object layout only; dynamic Vec/Box allocations, allocator overhead and RSS/cgroup not measured"
+}

@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import isolation
 import subprocess
 import sys
 import time
@@ -19,7 +20,7 @@ import time
 REPO = Path(__file__).resolve().parents[3]
 BENCH = REPO / "benchmark" / "fs-bench-pro"
 RESULTS = REPO / "benchmark-results" / "v016"
-LOCK = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+LOCK = isolation.worktree_lock_path()
 
 CASES = json.loads(
     (REPO / "docs/roadmap/0.1/0.1.6/cases.json").read_text()

@@ -1,0 +1,16 @@
+{
+  "source_parent": "788a63950500e6ba79c6a55dc07f7b84ca0fde89",
+  "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/b113255aaf1cf8b515261ef20c3794d277ae162ed2360d2206224a40665a130d/stage-test",
+  "test_binary_sha256": "b113255aaf1cf8b515261ef20c3794d277ae162ed2360d2206224a40665a130d",
+  "test_source_sha256": "f32fe0596c5e2b4e89a34e43ac4083c2c99da3f2f40bacd85a3de0c976d92ada",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/5c3927be37149a830eaced701dd4fc4b9ee6a50469989d2738322544d7f40f78/host",
+  "host_binary_sha256": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "98fe34e05d5329f3ca2787a8ce794286c4cac41df6f6720ccfe8c6816a9bce70",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

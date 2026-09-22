@@ -1,0 +1,100 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-commit-staged",
+  "case": "consumed_stage",
+  "checks": [
+    {
+      "id": "consumed-token-and-identical-root-do-not-prove-own-success",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "H-06",
+    "H-07"
+  ],
+  "requirement_scope": "CommitStaged and repeated local Stage subsets; no full mounted Pair 1 completion",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "actual UpToDate: current public mutations always assign mtime and clean Stage is refused",
+    "composite Commit and explicit failed-state disposition",
+    "mounted writes",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "full read/directory in-flight and capture/prepared-mutation schedules"
+  ],
+  "source": "1343b00accf2277085410c2fd84144b2432f6222",
+  "product_inputs_sha256": "64e5b72cb535b230074b12db667671740d7727d3632748da9714fb0b1b8c9f1c",
+  "driver_sha256": "eea281b32f98c075158ca0f9b6d51a4702f5420e49e47a37695dc9e901deab11",
+  "test_source_sha256": "6ebc9a37c2fba850cf55c9c53119555be7955d5ce74b28de796ad6a37327a0d7",
+  "entrypoint_sha256": "a6f2ac0315f62d09f32f45ce2b41f2974e72d4b6d3650e4502ab6d53ec58886a",
+  "helper_source_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c",
+  "test_binary_sha256": "3ca8563ea19111e15833d26b53c16b3fcda38e46ca1d5b0cbae48adc3c488dbd",
+  "binaries": {
+    "layerfs-service": "72e7af38e695c9646b212ac3de6165ac9c77fd5d7c0bdf928889ffa571ee6805",
+    "layerfs-daemon": "bd6925ce003372a0822c70daec2ad07c3751706b7d3cbbdfefa4f7a134873300",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/3ca8563ea19111e15833d26b53c16b3fcda38e46ca1d5b0cbae48adc3c488dbd/commit_staged-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/write-regression-commit_staged-consumed_stage-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ]
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::commit_consumed_stage",
+  "test_exit": 0,
+  "observations": [
+    "COMMIT_FAILURE CommitFailure { generation: 1, phase: CommitStaged, disposition: KnownBeforeCommit, cause: Service(Failure { code: StageChanged, unknown: false, cleanup: None, history: Some(HistoryFailure { conflict: Some(StageChanged { expected: 2, actual: None }), stage: Absent([31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31]) }) }), stage: Some(StageSelector { stage: StageWire { workspace: [31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31], token: 2, stack: [49, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161], branch: [17, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163, 163], expected_head: Some([18, 225, 18, 6, 89, 153, 205, 79, 249, 77, 31, 180, 188, 154, 82, 60, 71, 47, 62, 197, 95, 110, 145, 241, 8, 19, 126, 162, 85, 182, 51, 40, 57]), expected_base: [50, 216, 24, 81, 69, 130, 72, 24, 138, 191, 106, 63, 250, 32, 164, 23, 212, 20, 30, 183, 64, 230, 202, 227, 127, 55, 105, 150, 35, 50, 224, 94, 82], expected_root: [214, 238, 226, 195, 220, 170, 223, 101, 141, 238, 33, 104, 34, 81, 42, 90, 41, 24, 22, 249, 34, 76, 135, 85, 89, 3, 241, 244, 63, 172, 189, 87], construction_base_root: [214, 238, 226, 195, 220, 170, 223, 101, 141, 238, 33, 104, 34, 81, 42, 90, 41, 24, 22, 249, 34, 76, 135, 85, 89, 3, 241, 244, 63, 172, 189, 87], intended_commit_base: [50, 216, 24, 81, 69, 130, 72, 24, 138, 191, 106, 63, 250, 32, 164, 23, 212, 20, 30, 183, 64, 230, 202, 227, 127, 55, 105, 150, 35, 50, 224, 94, 82], candidate_root: [27, 180, 190, 16, 175, 1, 255, 203, 186, 138, 22, 81, 0, 186, 153, 157, 244, 188, 164, 227, 112, 148, 234, 56, 8, 60, 70, 43, 77, 90, 100, 174], profile: [217, 188, 57, 125, 87, 141, 171, 113, 180, 159, 8, 22, 235, 45, 79, 59, 197, 105, 156, 253, 117, 90, 221, 239, 145, 90, 48, 59, 53, 116, 142, 224], scope: [132, 233, 57, 226, 136, 66, 74, 41, 148, 244, 234, 249, 94, 40, 238, 65, 75, 211, 12, 168, 255, 48, 45, 244, 107, 172, 127, 245, 94, 96, 188, 154], generation: 1 } }), observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None }"
+  ],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 0.7934219589806162
+}

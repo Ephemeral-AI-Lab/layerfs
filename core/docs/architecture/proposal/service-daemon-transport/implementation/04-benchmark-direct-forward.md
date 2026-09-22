@@ -284,8 +284,9 @@ run's original custody separately.
    the declared performance selection under its measurement lock.
 6. Publish raw receipts, derived reports, reproduction commands and every gap.
 
-Builds, verification and performance obey their existing locking/resource rules;
-do not interrupt or overlap another owner's run. No CI, aggregate preflight or
+Builds, verification and performance obey the per-worktree locking rules (owner
+direction, 2026-09-21 — [isolation](../../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)); do not interrupt another owner's run,
+and do not overlap two runs inside one worktree. No CI, aggregate preflight or
 new all-purpose runner wrapper is introduced. Proposed CLI flags must not appear
 as runnable commands until the actual parser and supported options exist.
 

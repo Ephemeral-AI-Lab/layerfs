@@ -1,0 +1,12 @@
+   Compiling layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.45s
+info: downloading component 'clippy'
+info: installing component 'clippy'
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.81s

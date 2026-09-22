@@ -25,14 +25,43 @@ The [C2 checkpoint](proposal/service-daemon-transport/implementation/evidence/op
 qualifies the storage prerequisite on macOS; the wider native/Docker profile still
 requires its own current-source evidence.
 
+Pair 1 readable prerequisite, 2026-09-21: the additions below are based on
+`0749180db34d1cdc57f905806a17e3f3f48ec2bc`. They add complete logical read
+attributes, export the existing cooperative input contract without native
+dependencies, and propagate the caller's deadline through connection setup.
+They do not establish mounted verification or measured performance.
+
+The R1-C Status extension is based on the R1 commit
+`598d8405f1168f5f8409807c4f3b6e95d1a110c9`. Its shared bridge/service changes
+define one authenticated daemon-targeted local observation. They do not add
+network attach, edit, mount management or Commit controls.
+
+The R2 portable metadata extension is based on
+`4d6f5cd0fa4d21afe51fb1dda01db0d4a0095c88`, including the attribute hierarchy
+prerequisite `d3d767393`. It adds one typed C1/C2 metadata save, with no Workspace
+mutation, automatic inode attachment or Branch publication.
+
+The native symlink addition described below is based on parent
+`2fc2e8d7a100b812a46753c4b35d383bedac448d` and frozen product input seal
+`af105d8725996152b1b94082f82ad2d0d5aaf57fe846ccb24c2303bd15f9501d`.
+Its verification and commit `9060c26bcc3e905e031415da20cec54352b94192` are recorded in
+[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md). The mounted
+extension is based on that commit and frozen seal
+`e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`;
+its actual checks are recorded in [Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md).
+
 ## Boundaries and public calls
 
-`layerfs-bridge::contract` owns five concrete operation variants and typed results.
+`layerfs-bridge::contract` owns the closed content/history operation union and typed results.
 Building bridge without its default `native` feature gives the portable contract
 without Snow/nix or socket code. The native adapter authenticates and delivers
 frames; it has no C1/C2, SQL or service dependency. `Client::call` consumes a
 cooperative deadline-aware `Source` and bounded output. The real stdin source uses
-poll and the same frame/input-state codec as the network endpoint. One scoped
+poll and the same frame/input-state codec as the network endpoint. `Source` is
+exported by the portable contract; `adapters::native::client::Source` remains a
+compatible reexport. `Client::call` and `call_until` accept a dynamic Source,
+so an embedding can bind logical delivery without importing socket ownership.
+One scoped
 upload thread permits concurrent early-response handling. It closes the upload
 half on malformed input, allowing an authoritative service failure to arrive.
 Only a returned terminal success validates provisional read bytes.
@@ -51,18 +80,20 @@ No request carries a native Store path or independent construction capacities.
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
 
-A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. Complete
+A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. File
 construction uses exact-length streaming; edits acquire at most 8 MiB of separate
 replacement parts before the save, preserving current-result coordinates. Known
 failures retain the available typed cause and checked cleanup disposition. Unknown
-C2 outcomes are not aborted or replayed on a guess. A successful file or filesystem
+C2 outcomes are not aborted or replayed on a guess. A successful content-object or filesystem
 root is returned only after validated input finality and successful C2 `finish`.
 
 Prepared updates verify the original scope/root serial, existing identities and
 retained references. They send final bindings only for changed names. Directory
 content cannot be swapped through an inode value; it uses directory changes.
-`FilesystemSaved` is a separate result from file `Saved`, with no fictitious file
-length on a tree result. File saves followed by attachment remain separate saves;
+`FilesystemSaved` is a separate result from content-object `Saved`. The latter
+length is the file logical length or exact symlink-target byte count, according
+to the operation; a tree result has no such length. Content saves followed by
+attachment remain separate saves;
 no atomic composite, history publication or crash-durability promise exists.
 
 Inspect supports File, combined Stat (identity, roots, count, mode and full mtime),
@@ -70,6 +101,78 @@ List with an explicit C1 continuation name, and Readlink. Paths use C1's canonic
 relative UTF-8 grammar; the empty path is root. `/f` is invalid; `f` is valid.
 Provider failures already collapsed by `StoreProvider` remain Provider failures;
 no error-string parsing reconstructs unavailable native categories.
+
+`Inspect::Attributes` supplies the complete Stat fields plus `size: u64` in one
+logical response. The service obtains a regular file's exact length from C1's
+FileView, a symlink's length from its checked stored target, and explicitly
+projects directory size as zero. It uses the existing Inspect grant/read permit
+and no input body. Subtag 4 and result tag 9 append to the existing wire unions;
+older tags retain their exact encoding. The bridge validates supported kinds,
+positive representable serials, namespace reference counts, mode masks,
+nanoseconds and kind-specific size bounds. Native request matching additionally
+checks that root attributes have directory kind/reference count zero and
+descendants have positive references. Roots remain opaque 32-byte identities;
+the service's C1 reader authenticates their bytes and logical role. Signed mtime
+seconds remain exact, including values before the Unix epoch.
+
+List still returns names/serials rather than complete child attributes. A consumer
+requiring per-entry kinds issues bounded Attributes calls for its page under one
+remaining callback deadline. This establishes no batching or request-count gain.
+
+`WorkspaceStatus` is a separate daemon-control operation: profile 3, opcode 8,
+positive request ID, zero Store/generation/result-body fields and at most 5,000 ms.
+It supplies a 1–63-byte managed ID and nonzero 32-byte producer incarnation. Its
+metadata is at most 124 bytes and it accepts no input or ResultData body. The
+existing content/history service explicitly refuses it before Store lookup or
+read/write admission; opcode 8 has no Store permission bit, even in an all-bits
+grant. The daemon independently authorizes the authenticated peer and expiry for
+the exact Workspace/incarnation. Service grants never confer that authority.
+
+Response tag 10 encodes the echoed ID/incarnation, three state flags and five
+u64 observations: active operations, nodes, handles, cookies and aggregate
+`consumer_accounted_bytes`. Its maximum is 139 bytes including the tag. Reserved
+flag bits and inconsistent closed-state counts are rejected. Native matching
+requires the exact request ID/incarnation binding and no output body. This is
+current local state, never an earlier edit/Commit receipt or recovery protocol.
+The existing non-history three-byte failure representation applies; transport
+loss is Io with no unknown-mutation claim. Existing framing, authentication,
+server input completion and failure/session-closure algorithms are unchanged.
+
+`UpdatePortableMetadata` uses content profile 1/opcode 9 and explicit Store grant
+bit `0x80`. Legacy grants 31/127 do not confer it; opcode 8 remains reserved to
+daemon control with no Store grant. The request is exactly 76 bytes, including
+the common envelope and existing attribute-tree base root, inode kind, mode,
+signed mtime seconds and nanoseconds. Input and ResultData budgets are zero.
+Mode/kind/nanosecond checks reuse the complete-attributes validator's portable
+rules: regular `0777`, directory `01777`, symlink exactly `0777`, and nanoseconds
+less than one billion. The kind is the caller's typed construction context; an
+attribute root does not by itself prove membership in a particular inode.
+
+The existing mutation owner validates empty input, takes one writer permit and
+opens one C2 save. `operation/metadata.rs` reads the existing typed fields through
+C1, applies the two sorted portable patches and preserves every generic value
+root through the existing streaming patch builder. No full attribute map, object
+RPC, new storage implementation or arbitrary generic mutation operation is added.
+The grouped read and patch cursor enforce the corrected hierarchy described in
+[12](12-attributes.md). Metadata-only attachment later retains the original
+content root and uses the separate prepared filesystem operation.
+
+An operation-local provider/consumer delegation checks the absolute deadline
+before and after each bounded read wave/object handoff. C1 has no deadline error,
+so a typed local expiration flag distinguishes this cause without parsing text.
+An in-progress storage call is not preempted. The existing save owner gives a
+retained C2 failure precedence, aborts definite pre-finish failure once, and
+checks the deadline before finish. A successfully acknowledged finish remains
+success even if time expires immediately afterward; lost mutation delivery is
+unknown and never automatically replayed.
+
+Result tag 11 is exactly 98 bytes: base root, kind, mode, signed seconds,
+nanoseconds, saved metadata root, inserted and reused counts. Native matching
+requires every echoed input field and zero ResultData. This result means one
+metadata tree has been saved, not that an inode, filesystem, stage, Commit or
+Branch was updated. A no-op preserves the metadata root and still reports the
+actual save result. The operation inherits current Store/C1 limits and introduces
+no larger prepared-update or EditFile input envelope.
 
 ## Native protocol and ownership
 
@@ -129,6 +232,16 @@ The daemon observes stdin/stdout deadlines with poll and closes unsynchronized
 sessions rather than draining attacker-declared input. Native macOS accepted
 sockets are explicitly switched to blocking mode because the nonblocking listener
 otherwise passes O_NONBLOCK to accepted sockets.
+
+`connect_until` shares a caller-local deadline across one TCP connect attempt,
+authentication and Client HELLO; each connection phase still has at most five
+seconds. The existing `connect` retains its separate five-second connect and
+authentication/HELLO caps. A consumer using `connect_until` also passes the same
+deadline to `Client::call_until`, so setup cannot grant a fresh operation budget.
+Connection errors retain their existing typed mapping; socket timeouts can still
+be reported as Io. Every failed Client operation closes that session, including
+confirmed logical absence; consumers must not reuse a failed client or replay
+the failed operation implicitly.
 
 ## Single-crate telemetry
 
@@ -215,11 +328,490 @@ Service keeps native Store paths, `rusqlite::Error`, connection/session lifetime
 SQLite transaction/ownership, codecs, packs and mutable caches local. A managed
 provider would replace C2's connection and grouped read/write execution and qualify
 lifetime/transaction/resource semantics. It would preserve logical requests,
-canonical identities, input finality and outcome distinctions. No provider registry,
-cloud adapter, filesystem mount, Workspace, history or allocator is implemented.
-API compatibility, canonical compatibility and schema-7 persisted compatibility
-are separate checks. Independent algorithm substitution remains #172.
+canonical identities, input finality and outcome distinctions. No managed-provider registry or cloud adapter is implemented. Pair 1 now has
+separate Workspace/FUSE owners and the existing C5 history owner; their operation
+and verification scopes are recorded in the linked round records. API and
+canonical compatibility remain separate from persisted-schema compatibility.
+The schema-7 checkpoint above retains its historical scope; the integrated tree
+uses the [configured-concurrency/schema-8 contract](../../../docs/roadmap/0.1/0.1.7/concurrency-controls.md). Independent algorithm substitution remains #172.
 
 The acceptance record must distinguish deterministic tests, real macOS/Linux
 processes, OS faults, optional local/both output and unrun platform/resource cases.
 Functional evidence does not qualify overhead, cold storage, bandwidth or #193.
+
+Native early-refusal teardown correction, 2026-09-21, based on
+`4d6f5cd0fa4d21afe51fb1dda01db0d4a0095c88`: after sending a decoded request's
+handler failure, the server half-closes output and discards remaining input
+through the existing bounded adapter before closing both directions. The
+original length/frame/progress/absolute deadline remains in force. This avoids
+resetting a terminal frame while upload bytes are unread. The handler is not
+reentered and the original failure is preserved; malformed BEGIN metadata keeps
+its immediate best-effort refusal. See the [observed failure and correction](proposal/fuse-workspace-snapshot-overlay/12-early-refusal.md).
+
+The R3a Workspace input primitive, based on `d555c8bef`, is described in
+[the owned-payload implementation](proposal/fuse-workspace-snapshot-overlay/14-owned-payload.md).
+It uses the existing portable Source contract and introduces no service operation
+or daemon input control. Read-only daemon startup keeps disk backing disabled;
+its shutdown and failed-control cleanup now pass the existing absolute deadline
+through `close_clean_until`. FUSE preserves typed local backing error causes in
+its errno mapping, without adding a writable callback.
+
+R3b, implemented from `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`, adds one
+explicit unmounted `LocalEdit` capability to Branch-backed Workspaces. The
+[local range-edit record](proposal/fuse-workspace-snapshot-overlay/15-local-range-edit.md)
+describes the maintained private page index, ownership ledger, generation
+completion reserve and exact public operation. It retains the same logical
+delivery boundary and makes no service mutation during a local edit. Daemon
+read-only launch selects `ReadOnly` explicitly; the existing authenticated Status
+wire remains its readable scope. LocalEdit projection reservation is refused
+until the writable kernel coherence binding exists.
+
+
+The next Pair 1 operation, implemented from
+`788a63950500e6ba79c6a55dc07f7b84ca0fde89`, is
+[Workspace Stage](proposal/fuse-workspace-snapshot-overlay/16-stage-capture.md).
+It captures one immutable local generation with a live successor, streams only
+its changed file spans, saves changed portable metadata and invokes the existing
+StageChanges once. There is no added service opcode or service/storage/history
+implementation dependency in Workspace. Disk completion associations use the
+private index; the ordinary candidate reserves 137 pages and each dirty generation
+reserves 208 pages for completion. The latter accounts for interleaved live slot
+allocation and is an explicit disk-admission increase, with unchanged RAM/window/
+FD limits. The real native save and failure proofs, narrower scope and pending
+CommitStaged/reconciliation are recorded in 16. FUSE's error conversion accepts
+the new Stage failure as EIO; no writable callback or daemon edit control is added.
+
+
+The next public-operation round, based on
+`0b2c729bdb3f026f12beb667ccdc15c52853280f`, adds
+[Workspace CommitStaged and reconciliation](proposal/fuse-workspace-snapshot-overlay/17-commit-staged.md)
+through the existing C5 command. It reserves 64 completion-fund pages, 26 metadata
+slot credits and ledger replacement capacity before remote publication. A bounded
+streaming builder compacts only the current D1 frontier and reuses piece trees;
+the exact captured-version/result association governs rebasing. Local state owns
+a changing canonical base/Branch context and baseline epoch, allowing lazy
+canonical cache refresh while reads retain selected roots. A validated own result
+survives later local failure; unknown results remain unknown. Exact staged replies,
+local pre-admission, failure retention, repeated commits and current-source
+regressions are recorded in 17. FUSE maps Commit errors to EIO; no new wire opcode,
+service algorithm, writable callback or daemon Commit control is added here.
+
+
+From parent `6702e31e629ada5e78981b6854e36721e619e65b`,
+[ordinary Workspace Commit](proposal/fuse-workspace-snapshot-overlay/18-composite-commit.md)
+shares Stage's file/metadata preparation and CommitStaged's known-result
+reconciliation, using one existing HistoryCommand::Commit after preparation.
+Clean Commit pre-reserves an empty capture descriptor and 208-page escrow and
+submits empty PreparedChanges for actual C5 UpToDate. Pre-admission holds the
+remote permit only through the first logical request. Composite outcome lacks a
+token, so local Commit report/selector associations are optional and native stage
+observations remain separate. The existing shared operation, wire profile and
+one-construction-worker default are unchanged. Actual native scope and remaining
+mounted/control/failure-disposition dependencies are recorded in 18.
+
+
+From parent `573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5`,
+[Workspace resize](proposal/fuse-workspace-snapshot-overlay/19-resize-zero-ranges.md)
+adds set_len for existing cached regular inodes through the same mutation and
+Commit owners. The64-byte private piece value gains strict tag2 Zero with no
+payload/custody/offset; reads and Source synthesize only bounded requested spans.
+Zero bytes count toward the8 MiB replay envelope for existing or captured-base
+files; fresh complete construction has the separate profile described below. In-memory Piece
+is48 bytes; the conservative596,448-byte transient accounting remains below the
+existing640 KiB reservation, with unchanged windows, FD and disk reserves.
+No writable mount, shared service operation or reference change is introduced;
+actual native results, retained failures and next dependencies are recorded in19.
+
+
+From parent `a5bdc9f1e7e0fa4815ae356a7c5d783315fac649`,
+[portable Workspace open](proposal/fuse-workspace-snapshot-overlay/20-portable-open.md)
+adds FileAccess/FileOpenOptions and open_file, preserving legacy read-only open.
+A charged pending handle pins its inode before truncate preparation; shared
+mutation publication installs inode state and READY together. All consumers
+reject pending IDs, and WriteOnly handles reject read even at EOF. The128-slot
+24-byte table remains3,072 bytes, with56 bytes of pending control charged per
+truncating open. No write API, FUSE option, daemon opcode or dependency is added;
+actual native results and narrower compatibility claims are recorded in20.
+
+From parent `1f9cceb73ba0ede11c86120b73b2015f900d1dd8`,
+[routine healthy-owner reclamation](proposal/fuse-workspace-snapshot-overlay/21-routine-reclamation.md)
+runs before input, mutation and submission admission. It retires registry-only
+healthy metadata roots, then payloads released from their last custody, across
+the same consumer. Existing writer/window/deadline bounds apply, without state
+locks across I/O. Earlier failed/partial owners remain charged and are excluded;
+a root marker preserves cleanup failure even before DFS starts. Explicit cleanup
+keeps its deliberate repair semantics. The former post-install Commit sweep and
+proposal CommitPhase::Cleanup are removed; the next pre-capture pass handles
+healthy retirement between repeated Commits. No public operation, dependency,
+kernel callback, worker or service opcode is added.
+
+From exact parent `c4f965357381870b3784e3423e75783496c0b7c7`, the focused
+[native stream-fragmentation correction](proposal/fuse-workspace-snapshot-overlay/23-native-stream-fragmentation.md)
+coalesces short local Source/Write fragments at the existing 1,024-byte frame
+budget quantum. Output owns a fixed 1 KiB pending tail and the original absolute
+deadline; successful completion flushes before Success, while failure discards
+unsent bytes and latches refusal without Drop flushing or replay. Upload uses its
+existing 16 KiB array. Large-frame batching, wire bounds, receiver anti-abuse
+checks and service algorithms remain unchanged. Output's selected fixed layout
+grows 40 to 1,096 bytes; upload adds an eight-byte cursor. The source-pinned failure,
+read-only discriminator and exact verification scope are recorded in 23.
+
+From parent `1343b00accf2277085410c2fd84144b2432f6222`,
+[native handle write](proposal/fuse-workspace-snapshot-overlay/22-handle-write.md)
+adds write_file over borrowed OwnedPayload. The shared mutation body validates
+READY writable Local handles, selects live EOF for native append, and uses one
+two-piece splice for positional Zero gaps and Local bytes while preserving tails.
+Handle release is checked again before publication; zero input is a validated
+no-op. Existing capture/lowering/reconciliation and limits remain, with a
+conservative 596,616-byte working allowance below 640 KiB. The FUSE adapter stays
+read-only; kernel append positioning and reply/invalidation coherence are separate
+required projection work. The original frontier failure and shared transport
+prerequisite retain their source identities in 23.
+
+From parent `cb9d5a8249602e77a454672de290f6358e04c23b`, the
+[mounted SDK-coherence binding](proposal/fuse-workspace-snapshot-overlay/24-mounted-sdk-coherence.md)
+admits at most two projection observations through their reply attempts and
+excludes SDK publication while an older observation exists. One charged callback
+and pending receipt carry checked inode invalidation outside all state/backing
+locks. Applied failures retain the receipt and any READY truncating-open handle;
+fresh observations and cleanup remain available. Mount finish drops completed
+failed bindings only after checked detach/join. LocalEdit can use the existing RO
+kernel projection, with WRITE/SETATTR and write access still explicitly refused.
+Workspace has no fuser dependency. Six real mounted cases and two native completion
+API subsets are recorded separately in 24; writable kernel and remote SDK controls
+remain open. The internal per-Workspace control account grows 8,192 to 8,200 bytes;
+mount control, both permit slots and the concrete callback Arc are separately charged.
+
+The next operation is documented against parent
+`d770f5d10bf160b57a90b212102e7960148dba18` in
+[existing-file mounted WRITE](proposal/fuse-workspace-snapshot-overlay/25-mounted-write.md).
+The public `mount_writable` explicitly chooses a LocalEdit direct-I/O projection;
+`mount` and daemon `--mount-readonly` retain the cached RO profile. One
+ProjectionWritePermit owns one of the existing two reply slots and excludes SDK
+publication through WRITE's send attempt. It makes one write attempt using the
+current kernel append flag and original deadline ceiling, shares the native
+payload/splice pipeline, validates append at live EOF, and invalidates after
+publication outside state/metadata locks. A second observation can progress during
+notification; publication refuses outstanding old replies. Matching-inode flush
+reports the existing retained coherence failure; release stays available. The
+on-demand reservation now funds one 40-byte write permit plus one 16-byte observer
+and the actual boxed-state layout, without another worker/window/FD/queue.
+Kernel SETATTR/truncate and daemon writable controls remain open. The operation
+record retains exact RWF append observability and concurrent SDK-size cached-read
+limits; no universal writable or performance qualification is asserted.
+
+The following size operation is implemented against parent
+`4d5443c1239722c2ed57f0428ad2c32bdbb3d941` in
+[size SETATTR and truncating OPEN](proposal/fuse-workspace-snapshot-overlay/26-mounted-resize.md).
+ProjectionMutationPermit replaces the proposal's write-only token name and owns
+one WRITE or size attempt. Its size method shares native SetLen/Zero publication,
+validates an optional writable Projection handle and returns exact published
+NodeAttributes. The explicit size origin skips userspace invalidation while the
+kernel caller owns NOWRITE; kernel post-reply completion installs size and
+invalidates pages. TTL stays zero, SDK publication remains excluded through reply
+attempt, and unsupported non-size fields are refused. ATOMIC_O_TRUNC remains off,
+so the existing OPEN refusal checks precede the separate truncate request.
+Actual verification/accounting status is recorded in26; daemon writable controls
+and the previous cached-size/RWF limitations remain separate.
+
+The R1-C lifecycle extension is implemented against parent
+`451a1f6bdda00482a528659489c8e4d053677e01` in
+[authenticated Unmount](proposal/fuse-workspace-snapshot-overlay/27-control-unmount.md).
+Bridge owns WorkspaceUnmount opcode10/profile3, a bounded100-byte tag12 result,
+exact identity validation and lifecycle mutation/Unknown classification. The
+result distinguishes Unmounted and entered-but-Retained; pre-admission refusal
+uses the existing Failure terminal. Service explicitly rejects it before Store
+lookup/admission and assigns it no Store permission bit. Daemon grants preserve
+Status bit1 and add Unmount bit2; keys and expiry remain independent of service
+authority. One Arc<Mutex<MountHandle>> shares native lifecycle ownership with
+main; control uses immediate try_lock, keeps Status independent and reserves100ms
+inside the original deadline for terminal delivery. No queue, worker, Source
+protocol or Workspace algorithm changes. Signal cleanup joins control first;
+incomplete cleanup retains the process/owners until another explicit signal.
+The startup profile stays read-only; wider Attach/Close/edit/Commit controls are
+not implemented by this extension. Actual results and qualifications are in27.
+
+The next R1-C operation is based on parent
+`dab1751312adecdc57d073145582a9a702449744`:
+[CloseClean](proposal/fuse-workspace-snapshot-overlay/28-control-close-clean.md).
+Bridge adds opcode11/tag13 with the same124/100-byte request/result bounds and
+renames the proposal DTO to WorkspaceLifecycleWire/Outcome. Unmount opcode10/tag12
+bytes are unchanged; operation-specific Response variants prevent cross-operation
+completion. Daemon adds grant bit4 (valid mask0..7), calls existing native clean
+closure under the same lifecycle try_lock and100ms completion headroom, and retains
+checked failures. Service refuses all three controls before Store admission. The
+closed target remains observable and a later signal skips an already-completed
+close. No Workspace/FUSE algorithm, resource limit or dependency changes. Actual
+verification status and remaining writable control prerequisites are in28.
+
+Native Mount failure ownership is corrected against parent
+`3c227266b6740cb9c50f63f0ba27a38d1b8b9a00` in
+[the retained-mount prerequisite](proposal/fuse-workspace-snapshot-overlay/29-mount-failure-ownership.md).
+FUSE mount functions return boxed MountFailure with exact phase/cause and a retained
+MountHandle after every lease reservation failure. One temporary Session transfer
+cell prevents failed worker creation from dropping the only owner. No LayerFS
+constructor cleanup or renewed deadline occurs; explicit unmount owns cleanup.
+Daemon startup keeps the original mount deadline, closes its unserved listener on
+mount failure, and retains incomplete cleanup until a new explicit signal. Checked
+cleanup preserves the original startup error exit. This does not add remote Mount,
+Attach or writable management; exact route evidence and limits belong to29.
+
+Authenticated Mount continues from documentation checkpoint
+`3e5d6a66a9f4e4df4a8a19087e63909a18046c6d` in
+[round32](proposal/fuse-workspace-snapshot-overlay/32-control-mount.md).
+It adds WorkspaceMount opcode12/profile3/tag14 and independent daemon grant bit8;
+valid masks are0..15. Exact target/incarnation, empty authenticated input and
+124/100-byte request/result bounds reuse the lifecycle contract. The existing
+native client requires the specific Mount response; service rejects it before
+Store admission. Daemon shares one Arc<Mutex<Option<MountHandle>>> with main:
+only checked successful Unmount clears it, and Mount refuses occupied, mounted,
+closed or stopping state. It installs a returned partial owner before Retained;
+ownerless admission refusal remains Failure. Original-deadline100ms headroom,
+Unknown/no replay and the read-only projection remain. Round32 records exact
+source identity, checks and limits; remote Attach/writable control remain separate.
+
+The shared [pipe-cancellation prerequisite](proposal/fuse-workspace-snapshot-overlay/33-cancelled-pipe.md)
+records an observed upload-worker busy loop caused by permanent cancellation being
+reported as Interrupted to standard read_exact/write_all loops. Cancellation must
+be terminal at the Pipe boundary; ordinary operating-system EINTR remains distinct.
+This correction adds no queue, retry, worker or replay authority. Its source and
+regression evidence are recorded with the operation round that exposed it.
+
+
+From parent`0d220870175abb6e3f162cb164dba7c49bc98f9d`, the
+[failed-Attach prerequisite](proposal/fuse-workspace-snapshot-overlay/35-failed-attachment-ownership.md)
+keeps Attaching/Attached/Failed custody in the existing WorkspaceHost registry.
+Public exact-identity observation returns the existing Workspace or bounded failed
+resource progress; explicit cleanup retains cause/progress and removes only a fully
+released failed entry. BranchContext allocation precedes resource acquisition,
+and an acquired arena survives later failure. No daemon/Bridge control is added by
+this prerequisite. Runtime locks end before backing I/O; short final custody locking
+and syscalls have deadline observation points, not preemption. Native managed roots
+are exclusively host-owned; static replacement checks do not claim atomic defense
+against hostile concurrent root-level renames. Exact resource/count/verification
+scope is recorded in35. The prepared DSH workload is pinned in[34](proposal/fuse-workspace-snapshot-overlay/34-preinstalled-dsh-workload.md).
+
+From parent `3e92fe277a0379fd85f158b858085af3ecb2e2d5`,
+[authenticated Attach](proposal/fuse-workspace-snapshot-overlay/36-control-attach.md)
+adds identity-only opcode13/profile3 and grant16 (masks0..31). The startup RO profile
+remains immutable. Daemon control and signal shutdown share one current selector,
+Workspace capability and MountHandle; the native registry retains all failed
+resources. An attempted selector is installed before Attach and restored to the
+prior closed owner only on exact confirmed absence. Tags15/16 carry the distinct
+Attach result and failed-attachment Status; existing healthy/lifecycle results
+keep their validators. Failed Status observes native custody; CloseClean disposes
+it explicitly. Startup attachment failure retains the same pending-selector
+cleanup route. Round36 records source identity, bounds, checks and qualifications.
+
+From parent `74e6fbd2d23cb7519ea63c275f42283ce3c79d17`,
+[authenticated Workspace Commit](proposal/fuse-workspace-snapshot-overlay/37-control-commit.md)
+adds opcode 14/profile 3 and independent grant 32 (masks 0..63). It invokes the
+existing native capture/preparation/composite Commit/reconciliation operation.
+Tag 17 preserves typed results and known/observed failure distinctions; tag 18
+adds bounded writable Status while existing RO/failed-attachment forms remain.
+Writable CLI entry requires Branch, explicit disk quota and current Commit grant.
+Control starts under lifecycle exclusion before writable mount publication. Signal
+cleanup retains control on dirty/refused closure, and only ends admission after
+successful close while still holding the same owner slot. This is process assembly,
+not a second Workspace or Commit algorithm; round37 records qualification.
+
+
+The prepared-directory extension after source commit
+`8e01d28a1c8b7708f5d319990c1440ae682f8b44` shares one typed directory metadata
+record across fresh declarations and existing-directory patches in both prepared
+filesystem routes. New declarations use the existing C1 directory builder under
+the same C2 save; existing patches preserve generic attributes through the common
+portable patcher. Their combined inode budget remains 128 and the complete metadata
+envelope remains 32768 bytes. Empty extensions preserve legacy bytes.
+[Round 38](proposal/fuse-workspace-snapshot-overlay/38-prepared-directories.md)
+records the exact encoding, ownership, verification state and remaining namespace
+work. This extends the earlier existing-identity-only prepared surface.
+
+
+The native mkdir extension after source commit
+`85582e1ac2fb75761897115ec9679c59439b1efe` adds backed generation-local directory
+records and name deltas to Workspace's existing COW arena. Lookup consults that
+state before immutable Service data; directory handles pin their view. Creation
+uses one exact-scope C5 reservation, then atomically publishes child, binding,
+parent metadata and generation accounting. Capture/lowering/reconciliation use
+the existing prepared Service operation and retain D1 entry roots. Files and
+directories share complete-request admission; namespace scratch remains charged
+while remote admission is released between RPCs. [Round39](proposal/fuse-workspace-snapshot-overlay/39-native-mkdir.md)
+records checked bounds and native proofs. That checkpoint refused mounted mutation.
+
+The mounted mkdir extension after source commit
+`e95c90d757d246d66ac96d2b4fa7e1d6fcbb11ca` adds a single-use projection mkdir permit
+and a FUSE callback delegating to the same native publication. SDK creation shares
+checked mutation completion with a borrowed parent/name notification target;
+the adapter invalidates parent attributes then the entry outside Workspace locks.
+Projected creation sends no reverse notification while the kernel parent lock is
+held, relying on its normal entry reply. Notification failure retains the applied
+namespace and receipt, releases the withheld Local return reference and refuses
+further mutation until checked unmount/remount. No retained name queue or new
+persistent layout is added. [Round40](proposal/fuse-workspace-snapshot-overlay/40-mounted-mkdir.md)
+records real mounted proofs and the two corrected caller failures.
+
+The portable metadata constructor after source commit
+`3b34e3002b4a7abfd205b68bc94de9a4af22b572` adds operation15/profile1 under the
+existing metadata grant128. It saves mode/mtime for a stated kind without a prior
+metadata root, through the same deadline-aware metadata helper and C2 save owner.
+The helper selects the existing portable patcher for update or the existing C1
+builder for construction. Request44/result66 bytes and typed result tag19 carry
+only the portable fields, saved root and save counts; no inode allocation,
+filesystem publication or history authority is implied. [Round41](proposal/fuse-workspace-snapshot-overlay/41-construct-portable-metadata.md)
+records the implementation and verification state. Fresh regular-file declarations
+in a prepared filesystem remain a separate prerequisite.
+
+The prepared fresh-file extension after source commit
+`82c87d70a1f3e723b627bf1d0777305c9eb393ea` adds sorted fresh regular-file IDs as a
+subset of the final inode rows in both direct and C5 prepared changes. Empty and
+v1 directory trailers remain byte-identical; v2 adds the nonempty file-ID list.
+Direct fresh rows and all C5 rows receive semantic content/metadata role checks.
+The shared filesystem handler verifies base absence exactly for fresh declarations,
+then lets C1 derive new file references from retained bindings. Unbound fresh
+regular files fail; directory omission is a separate rule. The128 combined inode
+and32768-byte request limits remain. [Round42](proposal/fuse-workspace-snapshot-overlay/42-prepared-files.md)
+records the implementation, resource delta and verification state. Workspace still
+supplies an empty fresh-file list until its native create operation is implemented.
+
+The native regular-file creation extension after source commit
+`ab473145a606a71327d55d10f12205edb1803946` adds Workspace::create_file with
+atomic name, inode, lookup-reference and ready-handle publication. It shares
+child creation with mkdir and opens existing regular files through the existing
+admitted open path. Initial handles retain their admitted rights independently
+of the created mode; later opens and handleless edits still check mode. Fresh
+identity uses reserved inode-record byte25, and fresh/captured local originals
+resolve before absent base paths. Fresh content and metadata save through the
+existing ConstructFile/ConstructPortableMetadata operations; captured F IDs enter
+the prepared request, and own-result reconciliation replaces both saved roots
+while preserving D1. At that checkpoint,128-row/name,32768-byte prepared request
+and8-MiB replacement bounds were unchanged; the fresh streaming extension below
+separates complete construction from existing-file replay. [Round43](proposal/fuse-workspace-snapshot-overlay/43-native-create.md)
+records the exact evidence, including the unresolved capacity gate failure.
+Mounted CREATE and full preinstalled-workload admission remain subsequent work.
+
+The mounted CREATE extension after source commit
+`7eb46ef0766eae0d6ccfb894d07919a39c69ef38` reuses child creation through a
+single-use ProjectionMutationPermit. Kernel creation atomically acquires a
+Projection lookup reference and ready handle; the permit remains held through
+ReplyCreate. CREATE validates/removes S_IFREG, accepts its selected creation flags
+through the existing access/append parser, and uses already-masked portable mode
+because DONT_MASK remains off. Existing-name truncation carries its projection
+origin through the existing open reservation and publication path. Kernel CREATE
+sends no reverse notification while the parent lock is held. Native mounted
+creation uses the existing parent/entry invalidator, records the published Local
+handle in Pending/Failed custody, and releases only the withheld lookup reference
+on notification failure. No backing format, count/byte budget, queue or worker
+changes. [Round44](proposal/fuse-workspace-snapshot-overlay/44-mounted-create.md)
+records verification and preserves Round43's open capacity failure.
+
+The shared symlink-content constructor after source commit
+`5ed91aaca38dc54e145753a6844b12e6baf30abd` adds ConstructSymlink with0..4096
+opaque non-NUL target bytes. Opcode16/profile1 carries the target in29+L bytes of
+request metadata and has no input body. It reuses Saved tag2 (57 bytes) with
+length==target.len and no ResultData, through an explicit client result matcher.
+Grant0x04 now explicitly authorizes file or symlink content construction, including
+legacy mask31; no other authority follows from that bit. Service validates empty
+input before acquiring its one save, then calls the existing C1 symlink builder
+through SaveHandoff and the common finish/retained-failure/abort path. No inode,
+namespace, Stage or Commit is created. Empty object targets do not relax the
+history manifest's nonempty rule. [Round45](proposal/fuse-workspace-snapshot-overlay/45-construct-symlink.md)
+records exact checks and qualifications; fresh symlink admission remains separate.
+
+The prepared fresh-symlink extension after source commit
+`521bcb304c382e53f454eb3eb9007a010c1de486` adds sorted new_symlink_serials (S)
+as a kind3 subset of inode rows, separate from kind1 fresh-file IDs (F). The shared
+row budget remains I+N+P<=128 and the combined fresh lists satisfy F+S<=I. Only
+nonempty S selects trailer v3, sized9+24(N+P)+8(F+S); S0 preserves older bytes.
+Decode checks the remaining fresh-ID budget before allocating S. Shared Service
+base checks recognize declared N/F/S absence; fresh file/symlink values start at
+reference count0, and C1 derives their final topology. Direct new-S rows use the
+existing canonical symlink/portable metadata validator; C5 keeps its single
+all-inode validation pass. No C1 builder, allocator or ownership path changes.
+Workspace supplied an empty S in that round.
+[Round46](proposal/fuse-workspace-snapshot-overlay/46-prepared-symlinks.md)
+records its shared prepared-update verification.
+
+The native symlink extension after source commit
+`2fc2e8d7a100b812a46753c4b35d383bedac448d` adds
+`Workspace::symlink(parent, name, target, deadline)`. It shares child publication,
+atomically installing one Local lookup reference, a kind3 binding/inode, parent
+mtime and generation accounting, with no file handle. The mounted extension below
+uses the same ownership path. One exact-scope C5 reservation precedes
+bounded payload acquisition. Empty targets use no payload; nonempty targets use
+one existing Local piece and custody, with byte26 of the160-byte I record marking
+the kind and the16-byte E record accepting kind3.
+
+Lookup and Readlink consult pinned local state before a canonical Service call,
+so forget/relookup and reads during captured-G delivery retain exact target bytes.
+Known own completion replaces the filesystem base, removes G-only records and
+preserves D1-born symlinks and directory deltas. Commit saves target and kind3
+portable metadata through the existing shared constructors, records both roots in
+R, then lowers kind3 I and S through the prepared update. No canonical object
+construction moves into Workspace. The existing public FileSave phase and
+saved_files counter cover regular-file and symlink content saves; no status field
+or wire tag is added. Local payload reads preserve typed BackingFailure details
+through Stage source-failure observations and unknown-outcome classification.
+
+The fresh-symlink count participates in current/captured generation accounting and
+the same complete-request admission as files and directories. Existing128-row/name,
+32768-byte request, backing, worker and scratch limits remain.
+[Round47](proposal/fuse-workspace-snapshot-overlay/47-native-symlink.md) records the
+implementation, source-derived resource arithmetic and completed native checks.
+Full preinstalled DSH admission and Round43's native-capacity failure remain open.
+
+The mounted symlink extension after `9060c26bcc3e905e031415da20cec54352b94192`
+adds ProjectionMutationPermit::symlink and a kernel SYMLINK callback. The single
+attempt uses the earlier permit/call deadline, publishes one Projection reference
+and no handle, and holds the permit through the entry reply. The kernel owns
+parent/name invalidation after its reply, so this path sends no reverse notification.
+Pre-reply attribute conversion failure releases the withheld reference. An entry
+reply has no observed delivery result; no guessed rollback follows its send.
+
+Native SDK creation while mounted uses the existing parent-attribute/name invalidator.
+It publishes a Pending receipt with no handle; a failed notifier retains the name,
+target and Failed state and releases only its unreturned Local reference. Checked
+Unmount/Mount recovers projection through the existing lifecycle path.
+
+The native target grammar remains0..4096 opaque non-NUL bytes. Actual Linux syscall
+creation accepts1..4095, rejecting empty/4096 before FUSE. Shared FUSE Readlink
+returns ENAMETOOLONG for a target at least Linux PATH_MAX bytes, on both local and
+canonical paths, preserving exact native4096-byte reads without a truncated kernel
+success. Native empty targets remain available for mounted SDK qualification.
+[Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md) records
+sources, selected kernel proofs and exact verification.
+
+The fresh-file streaming extension is based on commit
+`74d4a2ace173d09689b8fbb42953658e94277bab` and frozen product seal
+`ffa9fa10899063601d7520581f7db932644a9c45a34b2123fa895f012320da08`.
+For an inode that is fresh, noncaptured and regular, write normalization admits
+complete retained contents under MAX_FILE instead of the EditFile8-MiB replay
+bound. The sole splice caller chooses this only after any inherited-G conversion.
+Parsing and lowering require empty canonical base, no Base pieces, and the complete
+Local/Zero sum equal to both logical length and replacement count. Existing and
+captured-G edits continue counting Local and Zero bytes against8 MiB. Known G
+completion clears fresh/captured state as it substitutes saved canonical roots.
+
+The existing ReplacementSource streams one Local payload reader or Zero span at
+a time through ConstructFile; no whole-file buffer or new Service operation appears.
+Its chunk bounds are clamped in u64 before conversion to usize to preserve progress
+at the existing4-GiB MAX_FILE on32-bit platforms. Actual32-bit execution is unrun.
+Per-payload8 MiB,128-KiB read/FUSE-write windows,1024 pieces,256 edits, quotas,
+4096 payload records, worker count and deadlines stay unchanged. See
+[Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md) for
+selected actual-file proofs and remaining full-corpus admission prerequisites.
+
+The first live attempts of that extension are now recorded. The largest already
+preinstalled DSH file18,259,144 bytes streamed through one mounted writable
+Workspace in140 caller buffers of131072 bytes with SHA256 verified during the
+upload, then one complete ConstructFile/Commit and one4-byte EditFile/Commit,
+with native close and teardown clean: **PASS** in40.81s complete. The captured-G
+replay selection **FAILED** at its post-rebase `refuse_extra` assertion: the +1
+write returned `Capacity` and changed no observed state, but one native
+`Inspect` preceded the refusal, so the case is open and neither product nor
+caller source was changed on that evidence. Four registered regressions against
+the same frozen product passed. These are functional receipts with an undeclared
+cache state; the full prepared tree, its one complete upload Commit, incremental
+Commits and matched R6 remain unqualified, and Round43's capacity failure stays
+open. [Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md)
+records the selectors, the diagnostic trace and the open failure.

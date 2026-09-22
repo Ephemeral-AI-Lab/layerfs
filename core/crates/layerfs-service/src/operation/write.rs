@@ -3,10 +3,15 @@ use super::{
     dispatch::end_input,
     failure::{content, storage},
     filesystem,
+    history_bootstrap::validate_inode_role,
+    metadata,
     read::id,
 };
 use crate::input::Exact;
 use layerfs_bridge::contract::*;
+use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
+use layerfs_content::filesystem::FilesystemObjects;
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream, Replacements};
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -29,7 +34,13 @@ pub fn mutate(
         }
         end_input(input)?;
     }
-    if let Operation::UpdatePreparedFilesystem { .. } = &r.operation {
+    if matches!(
+        r.operation,
+        Operation::UpdatePreparedFilesystem { .. }
+            | Operation::ConstructSymlink { .. }
+            | Operation::UpdatePortableMetadata { .. }
+            | Operation::ConstructPortableMetadata { .. }
+    ) {
         end_input(input)?;
     }
     if Instant::now() >= deadline {
@@ -43,6 +54,20 @@ pub fn mutate(
     let policy = store.policy().construction();
     let capacities = policy.capacities();
     let built = match &r.operation {
+        Operation::ConstructSymlink { target } => scope.child("service.symlink").run(|_| {
+            let checked = SymlinkTarget::new(target.clone()).map_err(content)?;
+            let root = emit_symlink(
+                &mut FilesystemObjects::new(&provider, &mut handoff),
+                checked,
+            )
+            .map_err(content)?;
+            Ok((*root.as_bytes(), target.len() as u64))
+        }),
+        Operation::UpdatePortableMetadata { .. } | Operation::ConstructPortableMetadata { .. } => {
+            scope
+                .child("service.metadata")
+                .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
+        }
         Operation::ConstructFile { length } => {
             let mut source = Exact::new(input, *length, deadline);
             construct_stream(
@@ -97,18 +122,50 @@ pub fn mutate(
             root_serial,
             directories,
             inodes,
-        } => filesystem::update(
-            &provider,
-            &filesystem::PreparedUpdate {
-                base: *base,
-                scope: *allocation,
-                root_serial: *root_serial,
-                directories,
-                inodes,
-            },
-            &mut handoff,
-            scope,
-        ),
+            new_directories,
+            directory_metadata,
+            new_file_serials,
+            new_symlink_serials,
+        } => (|| {
+            for (serials, kind) in [
+                (new_file_serials, InodeKind::RegularFile),
+                (new_symlink_serials, InodeKind::Symlink),
+            ] {
+                for serial in serials {
+                    if Instant::now() >= deadline {
+                        return Err(Code::Deadline.into());
+                    }
+                    let index = inodes
+                        .binary_search_by_key(serial, |inode| inode.serial)
+                        .map_err(|_| Code::InvalidInput)?;
+                    let inode = &inodes[index];
+                    validate_inode_role(
+                        &provider,
+                        kind,
+                        id(&inode.content),
+                        id(&inode.metadata),
+                        scope,
+                    )?;
+                }
+            }
+            filesystem::update(
+                &provider,
+                &filesystem::PreparedUpdate {
+                    base: *base,
+                    scope: *allocation,
+                    root_serial: *root_serial,
+                    directories,
+                    inodes,
+                    new_directories,
+                    directory_metadata,
+                    new_file_serials,
+                    new_symlink_serials,
+                },
+                &mut handoff,
+                deadline,
+                scope,
+            )
+        })(),
         _ => Err(Code::Unsupported.into()),
     };
     let retained = handoff.take_failure();
@@ -129,6 +186,42 @@ pub fn mutate(
             let outcome = save
                 .finish(scope.child("service.finish"))
                 .map_err(storage)?;
+            if let Operation::UpdatePortableMetadata {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } = r.operation
+            {
+                return Ok(Response::MetadataSaved {
+                    base,
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata: root,
+                    inserted: outcome.inserted,
+                    reused: outcome.reused,
+                });
+            }
+            if let Operation::ConstructPortableMetadata {
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } = r.operation
+            {
+                return Ok(Response::MetadataConstructed {
+                    kind,
+                    mode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    metadata: root,
+                    inserted: outcome.inserted,
+                    reused: outcome.reused,
+                });
+            }
             if matches!(r.operation, Operation::UpdatePreparedFilesystem { .. }) {
                 return Ok(Response::FilesystemSaved {
                     root,

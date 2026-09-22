@@ -1,0 +1,7 @@
+{
+  "scope": "artifact preparation, no functional execution",
+  "first_archive_attempt": "refused by assert because hardcoded executable path still named original workspace test artifact; package-only build produced a distinct Cargo executable path",
+  "resolution": "preserved package-only successful build/lint logs; rebuilt corrected test with original whole-workspace feature unification using --no-run, selected executable from Cargo output and archived new SHA",
+  "original_binary_overwritten": false,
+  "new_binary_sha256": "aa9c7b7d1ce19018728dddfa4a4803ec385b25cb815fdf1cafe82eda223ceb4f"
+}

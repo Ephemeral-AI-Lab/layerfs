@@ -1,0 +1,12 @@
+
+running 1 test
+test linux::stage_native_save ... STAGE_SAVE_START
+STAGE_LIVE_READY
+STAGE_SAVE_DONE
+STAGE_CHECK actual-service-save-with-live-successor-progress PASS
+STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 1, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([152, 59, 90, 61, 46, 95, 83, 9, 191, 104, 223, 227, 148, 181, 88, 1, 175, 248, 190, 13, 240, 89, 121, 8, 146, 76, 162, 84, 18, 128, 193, 226]), failure: None, failure_phase: None, commit: None }), generation: 2, revision: 3, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 2032610 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 4243456, reserved_bytes: 1699840, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 5, reusable_pages: 0, reserved_slots: 0, roots: 4, external_roots: 4, allocated_bytes: 24576, reserved_bytes: 1699840, working_bytes: 46008, accounting_complete: true, admission_stopped: false }
+STAGE_CHECK exact-stage-and-retained-submission PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.84s
+

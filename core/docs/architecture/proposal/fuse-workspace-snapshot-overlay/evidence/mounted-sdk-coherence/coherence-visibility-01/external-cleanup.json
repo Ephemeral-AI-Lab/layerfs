@@ -1,0 +1,21 @@
+{
+  "container": "layerfs-stage-460d747ed6af497e",
+  "volume": "layerfs-stage-460d747ed6af497e-data",
+  "before_state": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 74226,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-09-21T14:30:07.243497255Z",
+    "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "external_owned_runtime_removed": true,
+  "product_cleanup_claim": false,
+  "failed_receipt_unchanged": true,
+  "diagnostic": "retained-mountinfo.log shows actual fuse source layerfs; original subtype-only oracle was wrong"
+}

@@ -24,6 +24,12 @@ pub(crate) fn dispatch(
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     match &r.operation {
+        Operation::WorkspaceStatus { .. }
+        | Operation::WorkspaceUnmount { .. }
+        | Operation::WorkspaceCloseClean { .. }
+        | Operation::WorkspaceCommit { .. }
+        | Operation::WorkspaceAttach { .. }
+        | Operation::WorkspaceMount { .. } => Err(Code::Unsupported.into()),
         Operation::HistoryQuery(query) => {
             end_input(input)?;
             history::query(catalog.ok_or(Code::Unsupported)?, query, store)
@@ -40,7 +46,10 @@ pub(crate) fn dispatch(
         }
         // A known successful C2 finish is never changed into a claimed abort.
         Operation::ConstructFile { .. }
+        | Operation::ConstructSymlink { .. }
         | Operation::EditFile { .. }
+        | Operation::UpdatePortableMetadata { .. }
+        | Operation::ConstructPortableMetadata { .. }
         | Operation::UpdatePreparedFilesystem { .. } => {
             write::mutate(store, r, input, deadline, scope)
         }

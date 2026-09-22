@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::commit_repeated ... COMMIT_CHECK same-Workspace-A-B-A-commits-preserve-handles-and-incremental-input PASS
+COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 4, revision: 9, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 3, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 1998130 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 40960, reserved_bytes: 0, payloads: 3, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 4, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 16384, reserved_bytes: 0, working_bytes: 11240, accounting_complete: true, admission_stopped: false }
+COMMIT_CHECK known-commit-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.43s
+

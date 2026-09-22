@@ -1,0 +1,3 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.31s
+  Executable tests/commit_staged.rs (core/target-linux/debug/deps/commit_staged-5bbdd79f5c246742)

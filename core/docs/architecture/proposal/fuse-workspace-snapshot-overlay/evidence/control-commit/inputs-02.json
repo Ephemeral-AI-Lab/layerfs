@@ -1,0 +1,73 @@
+{
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+  "host_binary_sha256": {
+    "layerfs-daemon": "b84d232c979576f9b3d29a22c74000946abae41d0c1e4133de59f4b6f352f42d",
+    "layerfs-service": "e1a7e34844c68b5a83bb0f6a42be0a6f3f9cff66b7cff9268fcb7f4dfc245cf9",
+    "examples/public_key": "e786a3d5b2cf890d060d36d27191e64ebe06ad357d411156a5d6601ff38eb647"
+  },
+  "parent": "74e6fbd2d23cb7519ea63c275f42283ce3c79d17",
+  "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+  "scope": "candidate after independent review corrections; final source only if unchanged through checks",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71/layerfs-daemon",
+  "linux_daemon_sha256": "89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71",
+  "tool_image_id": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cargo_build_jobs": 2,
+  "docker_cpus": 2,
+  "construction_workers": 1,
+  "build_mode": "incremental owned targets, locked offline whole-workspace bins/examples/tests",
+  "dependency_reuse": "existing immutable tool/runtime imageIDs and read-only Cargo registry; independent closed canonical Store copies plus freshliveC5",
+  "source_state": "exact uncommitted product seal after recorded parent",
+  "caller_dependencies_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+    "core/crates/layerfs-daemon/tests/control_attach.py": "959f35ad7d204d7fe0939326204f04751cd93b37f49f531ac07a3098cd9f20f5",
+    "core/crates/layerfs-daemon/tests/control_attach_startup.py": "04bf5a105283f116def43d9aa91951bafa9bd533c49d9a4e00db8fb0d02396e8",
+    "core/crates/layerfs-daemon/tests/control_close.py": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+    "core/crates/layerfs-daemon/tests/control_commit.py": "84e77afd69c6dea7fd25ce84616aa3f14398b95ceeace7134efb27ab2711851c",
+    "core/crates/layerfs-daemon/tests/control_commit_wire.py": "751f0076a5bea39c16149ed36531b5bb35bff59984181854b8172f721de3f862",
+    "core/crates/layerfs-daemon/tests/control_mount.py": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+    "core/crates/layerfs-daemon/tests/control_status.py": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+    "core/crates/layerfs-daemon/tests/control_unmount.py": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mount_startup.py": "5c50e3cb9af6a07c4f422dfb03382e6cba7c33777144085221e870d499310a54",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+    "core/crates/layerfs-workspace/tests/payload_route.py": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+    "core/crates/layerfs-workspace/tests/stage_route.py": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4"
+  },
+  "caller_snapshot_linkage": {
+    "path": "caller-snapshot-linkage-02.json",
+    "sha256": "0a6e98b8048e7f36d68dc344e7a0922b40a99d7a5234010043f2bb2f888c8ab0"
+  },
+  "lock_observer": {
+    "command": [
+      "cc",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-dynamiclib",
+      "-fPIC",
+      "core/crates/layerfs-workspace/tests/store_lock.c",
+      "-o",
+      "core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 0.2683009580005091,
+    "source_sha256": "b65112174ebdc558a31053bf671878ae43a57abc9e32913a34e041233bf1a945",
+    "compiler": "Apple clang version 16.0.0 (clang-1600.0.26.6)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin\n",
+    "scope": "external read-only F_GETLK observer, no lock acquisition or product hook",
+    "binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/tools/libstore_lock.dylib",
+    "binary_sha256": "8bf0db14877e566cd08dbe4c031f2ed6923e6e64c0df81d1930aa0e2d01f1776",
+    "build_receipt": "checks/observer-build-01.json",
+    "build_receipt_sha256": "080ff736d26b8e67aefa613d7b04d98e70873192c792b747e9da12d0d67b9f94"
+  },
+  "selection_plan": {
+    "path": "selection-plan-01.json",
+    "sha256": "5cb4a1e431d0b24e9384c4ff969b6040d2432842f4e5da9c94abe4f8740a9045"
+  },
+  "caller_freeze": "Exact executed repository Python/helper bytes and external observer inputs archived before first selection; no source changes permitted without a new manifest.",
+  "prior_inputs": "inputs-01.json",
+  "change": "Live-successor external caller opens data+alias FDs before native Commit, then uses only pwrite/pread/fstat on those FDs during confirmed C2 save pause. Original new-path open EBUSY remains unqualified; input size/budgets/product/binaries unchanged."
+}

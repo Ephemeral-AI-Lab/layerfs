@@ -1,0 +1,218 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.30s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_bridge-8621ddd56f6175c3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aead_profile.rs (core/target/debug/deps/aead_profile-a68ac49c7eb26b6b)
+
+running 1 test
+test negotiated_suite_matches_the_compiled_backend ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attributes.rs (core/target/debug/deps/attributes-a43251cbff9c2474)
+
+running 1 test
+test complete_attributes_roundtrip_and_reject_invalid_fields ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_delivery.rs (core/target/debug/deps/history_delivery-2dc86f7511fa85f3)
+
+running 1 test
+test mutation_result_data_is_rejected_before_any_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_protocol.rs (core/target/debug/deps/history_protocol-453d733cbdd0e76b)
+
+running 16 tests
+test failure_codes_round_trip_and_stay_typed ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test identity_widths_and_tags_are_checked ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test profile_and_opcode_must_agree ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test every_reply_round_trips ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test page_and_count_bounds_are_checked ... ok
+test every_query_and_command_round_trips ... ok
+test history_wire_bytes_match_pre_simplification_head ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_connections.rs (core/target/debug/deps/native_connections-b62bfda8b8686b9b)
+
+running 3 tests
+test repeated_native_connections_authenticate_with_ordinary_tcp ... ok
+test caller_deadline_covers_connect_and_hello ... ok
+test productive_upload_keeps_the_response_wait_alive ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.02s
+
+     Running tests/pipe_deadline.rs (core/target/debug/deps/pipe_deadline-2c946d1d9352b3a1)
+
+running 1 test
+test a_full_pipe_fails_at_the_deadline_instead_of_blocking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/protocol.rs (core/target/debug/deps/protocol-6a93b66522827df0)
+
+running 5 tests
+test declared_large_input_has_a_size_consistent_frame_and_time_budget ... ok
+test remote_budget_only_shortens_the_declared_duration ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/relay_write.rs (core/target/debug/deps/relay_write-f3b8194bef55d95e)
+
+running 1 test
+test result_frames_reach_the_consumer_one_write_each ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/source.rs (core/target/debug/deps/source-ea4c393a7cb81b7a)
+
+running 1 test
+test portable_source_handles_dynamic_input_deadline_and_cancellation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/upload_batch.rs (core/target/debug/deps/upload_batch-20294cacf59c504b)
+
+running 1 test
+test bulk_upload_batches_records_without_changing_frames ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests/workspace_status.rs (core/target/debug/deps/workspace_status-529f2e33b14ee0ac)
+
+running 3 tests
+test status_reply_preserves_exact_identity_and_refuses_bad_flags_or_closed_counts ... ok
+test status_profile_is_bounded_and_has_no_store_permission ... ok
+test authenticated_status_rejects_mismatched_identity_and_result_data_without_unknown_mutation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_daemon-42a00150bccf614a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/debug/deps/layerfs_daemon-ea9381bf54715ef1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/configuration.rs (core/target/debug/deps/configuration-4e3fca0ee043d560)
+
+running 1 test
+test mount_startup_rejects_invalid_inputs_before_connecting ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_service-6691ea79b9dec7ce)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/debug/deps/layerfs_service-86b17db89fdc18e8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/admission.rs (core/target/debug/deps/admission-73623d4f8f3a45ab)
+
+running 5 tests
+test a_busy_reader_bound_neither_blocks_writers_nor_exceeds_itself ... ok
+test two_sandboxes_over_one_store_share_its_budget ... ok
+test another_store_keeps_its_own_budget ... ok
+test four_writers_are_admitted_then_refused_and_reads_never_queue_behind_them ... ok
+test every_supported_budget_admits_its_writers_and_refuses_the_next ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/direct.rs (core/target/debug/deps/direct-c9c27894cf6806fc)
+
+running 5 tests
+test inherited_deadline_expires_before_direct_input_or_mutation ... ok
+test authenticated_network_after_nonblocking_accept ... ok
+test two_writers_overlap_and_capacity_is_reclaimed_after_reverse_completion ... ok
+test denial_partial_and_invalid_inputs_never_succeed ... ok
+test construct_read_edit_inspect_and_reopen ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/history.rs (core/target/debug/deps/history-abc73a4f8f56c74f)
+
+running 23 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test legacy_mask_grants_no_history ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test history_profile_and_opcode_must_agree ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test manifest_initialization_builds_a_real_namespace ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test workspace_status_is_refused_by_service_even_with_every_store_grant ... ok
+test disjoint_file_edits_still_refuse_stale_publication_without_merging ... ok
+test wrong_role_root_is_refused ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test complete_read_attributes_match_over_authenticated_transport ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/owned_load.rs (core/target/debug/deps/owned_load-2324db7783a10dfd)
+
+running 1 test
+test two_native_writers_keep_streaming_heap_bounded_as_input_grows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+   Doc-tests layerfs_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_service
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

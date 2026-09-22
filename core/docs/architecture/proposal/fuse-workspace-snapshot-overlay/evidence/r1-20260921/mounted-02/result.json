@@ -1,0 +1,54 @@
+{
+  "status": "FAIL",
+  "mode": "functional-mounted-proof",
+  "performance_claim": false,
+  "checks": [
+    {
+      "id": "R-03",
+      "route": "wrong-root-role",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: InvalidInput, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "missing-root",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: MissingObject, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "unauthorized-store",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-11",
+      "route": "unauthorized-inspect",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    }
+  ],
+  "source": "646fcd5e5027ca8bea361c4a44ffc491ed8e7b05",
+  "dirty_diff_sha256": "2f66598346dbb9731098db8ad5e431d5b687742e8c2a24bf2407ef3534e95948",
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "limits": {
+    "callback_seconds": 10,
+    "working_bytes": 8388608,
+    "max_workspaces": 2
+  },
+  "not_run": [
+    "R1-C authenticated daemon control",
+    "W/snapshot/Commit/npm",
+    "R6 matched performance",
+    "hard RSS/cgroup bound"
+  ],
+  "root": "29016e61d89251261e0a0ae2ea9c5906d4c925c681f83a7a8d95608604d0b000",
+  "branch": "1161616161616161616161616161616161",
+  "root_serial": 2,
+  "executable_sha256": "dfd1b0241759344063bd5052622d90910c53084234a26f19527d150da3e43d4b",
+  "linux_binary_sha256": "7a76e7b32a4f07302856681d88d18f2e32940cee0c1e090a61348372c4e8a33e",
+  "host_binary_sha256": "8b1e5090e6d11e2ceb907c8ec6474452ef219763c0d7cf283fa0b184a9e47357",
+  "failure": "CalledProcessError(1, ['docker', 'exec', '-i', 'layerfs-pair1-read-58311', 'python3'])",
+  "failure_stdout": "",
+  "failure_stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 15, in <module>\n  File \"/usr/lib/python3.11/pathlib.py\", line 1051, in read_bytes\n    with self.open(mode='rb') as f:\n         ^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/pathlib.py\", line 1045, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 95] Operation not supported: '/layerfs/workspace/read/alias'\n"
+}

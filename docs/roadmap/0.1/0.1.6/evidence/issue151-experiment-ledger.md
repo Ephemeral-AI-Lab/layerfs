@@ -3695,3 +3695,107 @@ is the right long-term shape and would move the frozen cardinality, the golden t
 
 Production LOC: **97100 → 97100 (delta 0)**; scope `core/crates/*/src + sql` and `crates/*/src + sql`,
 method `tools/production_loc.py --root .` (core 31683 in 194 files, reference 65417 in 193 files).
+## Merge provenance — 2026-09-21 local isolation checkpoint
+
+The following entry was independently recorded as L36 in local checkpoint
+`81ace2778201036e9b1ca3040c63949e595f5971`. Upstream had independently assigned L36
+to the 2026-09-20 pooled-read experiment and continued through L62. Both original
+entries and their recorded results are preserved without renumbering or changing
+receipt identities. The distinct dated headings disambiguate their anchors.
+The entry below records its original work; this merge runs no new measurement.
+
+### L36 — 2026-09-21: owner direction — the machine-global measurement lock retired for per-worktree isolation
+
+**Direction.** Owner instruction, 2026-09-21: unlock build/build *and*
+build/measurement pairs across worktrees, and replace the mutual exclusion with
+workspace isolation and no conflicts. Recorded normatively in
+[measurement-isolation.md](../../0.1.7/measurement-isolation.md); `AGENTS.md`
+section 3 item 5 and `benchmark/fs-bench-pro/QUICKSTART.md` now state the
+per-worktree scope.
+
+**Finding.** `$TMPDIR/layerfs-infra-measurement.lock` was acquired by build paths
+(`--build-host`, `--build-image`, `--build-storage-smoke-image`, `--prune-builds`,
+`--prune-images`), by the legacy run entry point, and — through campaign scripts —
+by preparation and custody checks. Its path contains no repository or worktree
+component, so every worktree and clone resolved one inode: a build in one worktree
+failed with `another benchmark owns the measurement lock` while another worktree
+measured, although the two share no mutable artifact. The core harness's own lock
+was already per worktree, so the two halves of the repository disagreed about what
+the lock meant.
+
+**Change.** Harness/tooling/docs only; no product source and no receipt was
+rewritten. `shared/isolation.py` added to both harness trees (namespace, target
+guard, read-only declaration, concurrent-work observation, `self_check`); the core
+runner routes `LOCK_PATH`, `RESULTS_ROOT` and `artifact_root()` through it, checks
+the effective Cargo target before every build, and publishes `resource_isolation`
+on `perf` case receipts, `verify` and run documents; the legacy tree's eight
+machine-global acquisitions use `isolation.worktree_lock_path()`, with builds
+taking no lock and pruning keeping the worktree's own; the legacy host build
+asserts its target directory is inside the worktree. `shared/test_isolation.py`
+holds the semantics and a sealed scan that fails the harness self-check if any
+harness source derives a lock from `TMPDIR` again.
+
+**Isolation, not resource isolation.** Two worktrees remain one host. A build that
+overlaps a timed phase perturbs it, and no lock now prevents that. Each receipt
+carries `resource_isolation.concurrent_work`, a `ps` snapshot taken immediately
+before the timed child starts, classifying competing work as `build`, `container`
+or `measurement`; an empty list means none observed, never that the host was
+quiet. A row whose observation names competing work carries **declared
+interference** and is not admission evidence on that basis alone. No cache,
+sample, budget or append-only rule changed.
+
+**Verification performed.**
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Isolation unit + live-flock tests | `python3 core/benchmark/fs-bench-pro-storage-content/shared/test_isolation.py` | PASS, 19 tests |
+| Core harness self-check | `python3 core/benchmark/fs-bench-pro-storage-content/runner.py self-check` | PASS (`isolation PASS`, lock parity PASS, registry/golden/corpus PASS) |
+| Legacy namespace self-check | `python3 benchmark/fs-bench-pro/shared/isolation.py` | PASS |
+| Legacy module init | import `benchmark/fs-bench-pro/shared/runner.py` | OK; `HOST_ROOT` = `benchmark-results/host-store`, lock inside the worktree |
+| Target guard, no override | `assert_target_owned(namespace(), <harness Cargo.toml>)` | accepts `<worktree>/core/benchmark/fs-bench-pro-storage-content/target` |
+| Target guard, shared target | `CARGO_TARGET_DIR=/tmp/shared-target …` | REFUSED, names the offender |
+| Target guard, foreign target | `CARGO_TARGET_DIR=<pair3 worktree>/core/target …` | REFUSED |
+| Live two-worktree lock, real paths | holder in `layerfs`, probes from `layerfs` and `pair3-foundation` | same worktree **BLOCKED**; other worktree **ACQUIRED** |
+
+**Legacy harness test sweep** (each file run directly from
+`benchmark/fs-bench-pro/shared`): `test_runner.py` 27 OK, `test_verify_selected.py`
+11 OK, `test_storage_smoke.py` 3 OK, `test_integrated_storage.py` 11 OK,
+`test_historical_access.py` 1 OK, `test_checkpoint_collector.py` 6 OK,
+`test_layout.py` 3 OK, `test_cold.py` 12 OK, `test_runtime.py` 9 OK,
+`test_build_reuse.py` 13 OK, `test_namespace_content.py` 1 OK,
+`test_repository_history.py` 1 OK. Two of those are new or rewritten to the new
+contract: `test_a_build_takes_no_measurement_lock` (the retired file stays free
+while a build runs) and `test_pruning_keeps_the_worktree_lock`. The previous
+`test_image_archive_stays_under_runner_lock` asserted the retired behavior — that
+a build holds the machine-global lock — and was replaced rather than deleted.
+`verify-selected.py` needed its namespace import made resolvable when the file is
+imported as a module, not only run as a script.
+
+**One non-passing line, pre-existing and unrelated:**
+`benchmark/fs-bench-pro/test_issue104_selection.py` fails in
+`issue54_collect.validate_campaign` with `campaign family membership/order
+differs`. The change to that file is the import and the lock path only;
+`validate_campaign` is byte-identical to HEAD, and the mismatch it reports is
+campaign-declaration data against the live registry. It is recorded here, not
+fixed here, and not claimed as passing. `test_deepseek_selection.py` is not a unit
+test: it requires `--fixture` and was not run.
+
+**Not run, stated plainly:** no end-to-end legacy `--build-host`, image build or
+measurement invocation was executed under the new lock, and no measurement was
+made for this change. No performance, release or admission claim is made here; the
+numbers above are correctness checks, not timings.
+
+**Production LOC: unchanged (delta 0).** The change touches no file in the counted
+scope (`core/crates/*/src`, `crates/*/src` and shipped runtime SQL): it is harness
+code, harness tests and documentation. The worktree also carries other owners'
+uncommitted product changes; their totals are not restated or attributed here.
+Counting method unchanged (`python3 tools/production_loc.py --json`). No commit or
+push was made.
+
+Reproduction:
+
+```sh
+python3 core/benchmark/fs-bench-pro-storage-content/shared/test_isolation.py
+python3 core/benchmark/fs-bench-pro-storage-content/runner.py self-check
+python3 benchmark/fs-bench-pro/shared/isolation.py
+```

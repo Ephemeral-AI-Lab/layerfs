@@ -1,0 +1,9 @@
+   Compiling nix v0.31.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.75s
+     Running tests/early_refusal.rs (core/target/debug/deps/early_refusal-9b8be3606143f01d)
+
+running 1 test
+test early_failure_is_delivered_while_the_bounded_upload_closes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s

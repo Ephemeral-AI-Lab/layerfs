@@ -17,6 +17,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(HERE / "shared"))
 import runner
+import isolation
 
 PERF_FAMILIES = (
     "namespace_mutation",
@@ -70,7 +71,7 @@ def retain_lock_refusal(output, stderr=""):
 def _run(argv, cwd=None):
     while True:
         if "--list" not in argv:
-            lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+            lock_path = isolation.worktree_lock_path()
             with lock_path.open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
         result = subprocess.run(argv, cwd=cwd or REPO, text=True, capture_output=True)

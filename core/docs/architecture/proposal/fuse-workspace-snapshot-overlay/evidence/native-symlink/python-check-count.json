@@ -1,0 +1,8 @@
+{
+  "qualification": "checks-index.json.gz test_totals were parsed from Rust test-result lines; boundary-selftest is Python unittest and must not be interpreted as zero tests. Its preserved log reports Ran6tests /OK.",
+  "check": "boundary-selftest-01",
+  "framework": "python unittest",
+  "run": 6,
+  "status": "PASS",
+  "log": "checks/boundary-selftest-01.log.gz"
+}

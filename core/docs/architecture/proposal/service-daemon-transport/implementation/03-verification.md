@@ -199,9 +199,10 @@ required by the [measurement rules](../../../../../../docs/general/benchmark_rul
 This specification creates no benchmark harness, registry or numerical performance
 gate. Reuse prepared setup/builds/images only outside measured work, preserve
 matched cache states, measure complete command/cleanup and keep fresh append-only
-outputs. Respect the existing measurement lock and other owners' resource-sensitive
-work. Do not launch tests/benchmarks concurrently merely because design tasks ran
-in parallel; first confirm the run's resource/lock requirements.
+outputs. Respect the measurement lock, which is per worktree (owner direction,
+2026-09-21 — [isolation](../../../../../../docs/roadmap/0.1/0.1.7/measurement-isolation.md)). Do not launch two runs inside one worktree
+concurrently; a run in another worktree is not excluded, and the interference it
+causes is recorded on the row rather than prevented.
 
 No CI or aggregate pre-push/preflight gate is reinstated. Checks for the changed
 workspace remain required, with exact omissions and reasons in the handoff. The

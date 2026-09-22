@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::local_range_edit_metadata_failure ... LOCAL_EDIT_NATIVE_FAILURE Err(Backing(BackingFailure { phase: Allocate, payload: 0, declared_bytes: 561152, completed_bytes: 0, created_segments: 1, allocated_bytes: 0, reserved_bytes: 1118208, cleanup_failed: false, accounting_complete: true, kind: FileTooLarge }))
+LOCAL_EDIT_CHECK native-metadata-failure-preserves-visible-base-and-quarantine PASS
+LOCAL_EDIT_RESOURCE metadata-failure-end workspace=WorkspaceStatus { generation: 1, revision: 0, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 1984332 } backing=BackingStatus { quota_bytes: 134217728, allocated_bytes: 0, reserved_bytes: 0, payloads: 0, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } metadata=MetadataStatus { allocated_pages: 0, reusable_pages: 0, roots: 0, external_roots: 0, allocated_bytes: 0, reserved_bytes: 0, working_bytes: 752, accounting_complete: true, admission_stopped: false } native_file_allocated=0 process_fds_at_boundary=6 fd_scope=includes_proc_enumeration_not_peak
+LOCAL_EDIT_CHECK explicit-metadata-cleanup-releases-known-partial-allocation PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.18s
+

@@ -1,0 +1,1 @@
+Initial external helper extraction added pub to qualified use paths because a field regex also matched ::. Rustfmt rejected it; no build/proof ran. Corrected the transformation and formatted successfully.

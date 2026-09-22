@@ -1,0 +1,90 @@
+{
+  "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+  "rows": [
+    {
+      "selection": "branch_capacity-01",
+      "status": "PASS",
+      "driver_wall_seconds": 1.0993380419999994,
+      "cleanup": null,
+      "receipt": "runs/branch_capacity-01/result.json",
+      "receipt_sha256": "75025075684d9de4fc1bee40d7b5301262b292fbf95dcb2d89354ff01181d4df"
+    },
+    {
+      "selection": "cleanup_deadline-01",
+      "status": "PASS",
+      "driver_wall_seconds": 1.9951221659998737,
+      "cleanup": null,
+      "receipt": "runs/cleanup_deadline-01/result.json",
+      "receipt_sha256": "72f0345df422fa51db9725597c54bd17d137df160bf4e2189e1eea9572158d93"
+    },
+    {
+      "selection": "close_cleanup_failure-01",
+      "status": "PASS",
+      "driver_wall_seconds": 1.406122417000006,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/close_cleanup_failure-01/result.json",
+      "receipt_sha256": "0141045e383876f27ea69adcbb1536ff11ff1c394871f31c9c2b2b5982168fc6"
+    },
+    {
+      "selection": "concurrent_cleanup-01",
+      "status": "PASS",
+      "driver_wall_seconds": 1.0007281250000233,
+      "cleanup": null,
+      "receipt": "runs/concurrent_cleanup-01/result.json",
+      "receipt_sha256": "4bf333d03145956040ef2dbbfb591d4a66a57a7626f6d458c3003d9de91e099f"
+    },
+    {
+      "selection": "mount_substitution-02",
+      "status": "PASS",
+      "driver_wall_seconds": 4.006215833000169,
+      "cleanup": null,
+      "receipt": "runs/mount_substitution-02/result.json",
+      "receipt_sha256": "a4cd46d71e5f32819418907cf7f6732308697d072706a0788c03c5ab02baf1fb"
+    },
+    {
+      "selection": "mount_success-01",
+      "status": "PASS",
+      "driver_wall_seconds": 3.460156250000182,
+      "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+      "receipt": "runs/mount_success-01/result.json",
+      "receipt_sha256": "ca662ec78ae347b4692373e5582ffc2c4f92b74f166176eaebfa0804fdd5af91"
+    },
+    {
+      "selection": "retained-01",
+      "status": "PASS",
+      "driver_wall_seconds": 2.9181022500001745,
+      "cleanup": null,
+      "receipt": "runs/retained-01/result.json",
+      "receipt_sha256": "264576dc6aedef0c5d2373933a2ab2a356da82f19b17ba6debb0f3af919d0217"
+    },
+    {
+      "selection": "substitution-01",
+      "status": "PASS",
+      "driver_wall_seconds": 0.9572034170000734,
+      "cleanup": null,
+      "receipt": "runs/substitution-01/result.json",
+      "receipt_sha256": "94a719e92cbb861b99b762d073854692498fd64d4f54d516fb35218aa2657d8e"
+    },
+    {
+      "selection": "mount_substitution-01",
+      "status": "INCOMPLETE",
+      "driver_wall_seconds": null,
+      "external_command_wall_seconds": 60.007986833,
+      "cleanup": "STOPPED_RETAINED; no normal product cleanup claim",
+      "receipt": "runs/mount_substitution-01/external-timeout-diagnostic.json",
+      "reason": "external caller intercepted its own statx before listener handoff; original inner outputs absent"
+    }
+  ],
+  "passing_selections": 8,
+  "retained_incomplete_attempts": 1,
+  "registered_not_run": 0,
+  "performance_claim": false,
+  "hard_budget_seconds": 60,
+  "qualifications": [
+    "six native failed-Attach selections and two actual mounted/control regressions only",
+    "remote Attach/writable controls/DSH upload/R6 not qualified",
+    "no hostile concurrent managed-root mutation protection",
+    "deadlines have observation points, not syscall or final custody-lock preemption",
+    "no poison recovery or RSS/cgroup qualification"
+  ]
+}

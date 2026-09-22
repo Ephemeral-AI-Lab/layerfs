@@ -1,0 +1,1 @@
+{"status":"PASS","parent":"788a63950500e6ba79c6a55dc07f7b84ca0fde89","source_files":234,"method":"apply retained parent-relative patch to archived parent core/crates and byte-compare every file in stage-product-01.tar"}

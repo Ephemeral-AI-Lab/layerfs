@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "scope": "observer only; not a C2 proof",
+  "library_sha256": "ed1258c9a133bffe82c46f8d0e7146bea3beb4085ae86e879e874f4ef8a797d1",
+  "observer_pid": 44037,
+  "holder_pid": 44037,
+  "after_release": 0
+}

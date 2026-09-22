@@ -1,0 +1,11 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.02s
+  Executable unittests src/lib.rs (core/target-linux/debug/deps/layerfs_workspace-0a94ea12d420f2c7)
+  Executable tests/local_edit.rs (core/target-linux/debug/deps/local_edit-08e9964648118ea0)
+  Executable tests/payload.rs (core/target-linux/debug/deps/payload-b8eeb13092377c67)
+  Executable tests/readable.rs (core/target-linux/debug/deps/readable-67227df299004cdf)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.84s

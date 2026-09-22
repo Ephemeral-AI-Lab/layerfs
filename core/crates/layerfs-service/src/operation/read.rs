@@ -2,6 +2,7 @@
 use super::failure::content;
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::root::FilesystemRootId;
+use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{read_range, FileView, FilesystemRead, LogicalPath, ObjectId, PathName};
 use layerfs_storage::{Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -52,10 +53,41 @@ pub fn read(
             let mut fs =
                 FilesystemRead::new(&provider, FilesystemRootId(id(root))).map_err(content)?;
             match query {
-                Inspect::Stat { path } => {
+                Inspect::Stat { path } | Inspect::Attributes { path } => {
                     let path = LogicalPath::from_bytes(path).map_err(content)?;
                     let value = fs.resolve(&path).map_err(content)?;
                     let meta = fs.read_portable(&path).map_err(content)?;
+                    if matches!(query, Inspect::Attributes { .. }) {
+                        let size = match value.value.kind {
+                            InodeKind::RegularFile => FileView::open(
+                                &provider,
+                                value.value.content_root,
+                                scope.child("service.inspect"),
+                            )
+                            .map_err(content)?
+                            .logical_len(),
+                            InodeKind::Directory => 0,
+                            InodeKind::Symlink => {
+                                fs.readlink(&path).map_err(content)?.as_bytes().len() as u64
+                            }
+                        };
+                        if size > MAX_FILE {
+                            return Err(Code::Capacity.into());
+                        }
+                        let response = Response::Attributes {
+                            serial: value.serial,
+                            kind: value.value.kind.code(),
+                            references: value.value.namespace_ref_count,
+                            content: *value.value.content_root.as_bytes(),
+                            metadata: *value.value.metadata_root.as_bytes(),
+                            mode: meta.mode,
+                            mtime: meta.mtime_seconds,
+                            nanoseconds: meta.mtime_nanoseconds,
+                            size,
+                        };
+                        response.validate_attributes(Some(path.is_root()))?;
+                        return Ok(response);
+                    }
                     Ok(Response::Stat {
                         serial: value.serial,
                         kind: value.value.kind.code(),

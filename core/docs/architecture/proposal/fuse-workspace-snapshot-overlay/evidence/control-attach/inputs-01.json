@@ -1,0 +1,36 @@
+{
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/bcfa9ab2ceef68d4048cd784145b01b986c02e337e08ddd9ff8f7e05654a9893/host",
+  "host_binary_sha256": {
+    "layerfs-daemon": "671eab212e1e8468ed43ca2a9be79b370030c5f418d0a84a508b4309e3a86589",
+    "layerfs-service": "6093ac3f9ff4f030fcf2d6a5b16bde390e0c8c436847f53752d89c68b6ce0bff",
+    "examples/public_key": "5cbd8906c8d2d88d2934663b5cf5cd39ae99bbdd5a32d6013bd54db7706f182d"
+  },
+  "parent": "3e92fe277a0379fd85f158b858085af3ecb2e2d5",
+  "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon",
+  "linux_daemon_sha256": "832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c",
+  "tool_image_id": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cargo_build_jobs": 2,
+  "docker_cpus": 2,
+  "construction_workers": 1,
+  "build_mode": "incremental owned targets, locked offline whole-workspace bins/examples/tests",
+  "dependency_reuse": "existing immutable tool/runtime imageIDs and read-onlyregistry; closed RO fixture cloned independentbytes, no regeneration",
+  "source_state": "exact uncommitted product seal after recorded parent",
+  "caller_dependencies_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+    "core/crates/layerfs-daemon/tests/control_attach.py": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+    "core/crates/layerfs-daemon/tests/control_attach_startup.py": "05f715d2f8affe7c432988546f006cd124f1286ada80bf3e88ce3a7f09b3f1f0",
+    "core/crates/layerfs-daemon/tests/control_close.py": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+    "core/crates/layerfs-daemon/tests/control_mount.py": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+    "core/crates/layerfs-daemon/tests/control_status.py": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+    "core/crates/layerfs-daemon/tests/control_unmount.py": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+    "core/crates/layerfs-workspace/tests/payload_route.py": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+    "core/crates/layerfs-workspace/tests/stage_route.py": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4"
+  },
+  "caller_freeze": "All executed repository Python helpers pinned before the first functional selection, including entrypoints and transitive imported helpers"
+}

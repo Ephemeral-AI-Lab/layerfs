@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::composite_frontier ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 3, revision: 109, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2024626 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 888832, reserved_bytes: 0, payloads: 105, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 223, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 28672, reserved_bytes: 0, working_bytes: 8184, accounting_complete: true, admission_stopped: false }
+COMPOSITE_CHECK composite-104-inode-frontier-and-next-generation PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 10.49s
+

@@ -1,0 +1,6 @@
+    Checking layerfs-bridge v0.1.6 (/work/core/crates/layerfs-bridge)
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-service v0.1.6 (/work/core/crates/layerfs-service)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.58s

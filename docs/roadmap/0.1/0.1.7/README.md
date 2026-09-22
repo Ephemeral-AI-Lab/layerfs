@@ -393,6 +393,12 @@ claim — subsequent integration design belongs to the co-design pairs
 [#181](https://github.com/Ephemeral-AI-Lab/layerfs/issues/181). The specification
 itself states no measurement; subsequent evidence and dispositions belong to #186.
 
+**Build and measurement isolation.** The machine-global measurement lock is
+retired: builds and measurements in different worktrees no longer exclude each
+other, and what replaces the exclusion is a per-worktree namespace plus a
+recorded observation of competing work. See
+[build and measurement isolation](measurement-isolation.md).
+
 **Retained-history operation optimization (#190).** Follow the
 [ordered optimization plan](retained-history-optimization-plan.md): measure the
 tree-update phases, then target repeated inode lookups with bounded batching and

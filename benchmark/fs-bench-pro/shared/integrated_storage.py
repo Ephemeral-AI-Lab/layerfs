@@ -9,6 +9,7 @@ import uuid
 
 import runner
 import runtime
+import isolation
 
 CONTRACT = 'docs/roadmap/0.1/0.1.5/issue103/stride3-integrated-compaction-v1.md'
 SCENARIO = 'deepseek-stride3-integrated-compaction-v1'
@@ -67,7 +68,7 @@ def check_identity(binary,image):
 
 def smoke(args):
     output=Path(args.integration_smoke).resolve();output.mkdir(parents=True)
-    with (Path(os.environ.get('TMPDIR','/tmp'))/'layerfs-infra-measurement.lock').open('a') as lock:
+    with isolation.worktree_lock_path().open('a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         current,identity,info=check_identity(args.host_binary,args.image)
         save(output/'identity.json',{'schema':'ordinary-storage-integration-smoke-v1','source':current,'host_identity':identity,'image_id':info['Id'],'contract_sha256':runtime.file_sha256(runner.REPO/'docs/roadmap/0.1/0.1.5/compaction-removal.md')})
@@ -233,7 +234,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     if args.prepare_access or args.freeze_access:
         if args.prepare_access and not args.output: parser.error('--prepare-access requires --output')
-        with (Path(os.environ.get('TMPDIR','/tmp'))/'layerfs-infra-measurement.lock').open('a') as lock:
+        with isolation.worktree_lock_path().open('a') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             if args.freeze_access: return freeze_access(args.freeze_access)
             return prepare_access(args.prepare_access,args.output,args.data)

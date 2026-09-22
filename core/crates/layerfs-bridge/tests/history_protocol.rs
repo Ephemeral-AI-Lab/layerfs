@@ -48,6 +48,10 @@ fn round_trip(operation: Operation) -> Request {
 
 fn prepared(workspace: [u8; 32], branch: [u8; 17]) -> PreparedChanges {
     PreparedChanges {
+        directory_metadata: Vec::new(),
+        new_directories: Vec::new(),
+        new_file_serials: Vec::new(),
+        new_symlink_serials: Vec::new(),
         workspace,
         branch,
         expected_head: Some([0x12; 33]),
@@ -599,8 +603,12 @@ fn every_reply_round_trips() {
 #[test]
 fn a_reply_tag_outside_the_closed_union_is_refused() {
     assert_eq!(
-        decode_response(&[0x09]).unwrap_err().code,
+        decode_response(&[0xFF]).unwrap_err().code,
         Code::Unsupported
+    );
+    assert_eq!(
+        decode_response(&[0x09]).unwrap_err().code,
+        Code::InvalidInput
     );
     assert_eq!(
         decode_response(&[0x08, 0x7F]).unwrap_err().code,
@@ -682,6 +690,10 @@ fn classification_is_exhaustive_and_semantic() {
             edits: Vec::new(),
         },
         Operation::UpdatePreparedFilesystem {
+            directory_metadata: Vec::new(),
+            new_directories: Vec::new(),
+            new_file_serials: Vec::new(),
+            new_symlink_serials: Vec::new(),
             base: [0; 32],
             scope: [0; 32],
             root_serial: 1,

@@ -112,6 +112,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("expected edited file".into());
     };
     let update = Operation::UpdatePreparedFilesystem {
+        directory_metadata: Vec::new(),
+        new_directories: Vec::new(),
+        new_file_serials: Vec::new(),
+        new_symlink_serials: Vec::new(),
         base: key(&args[2])?,
         scope: key(&args[3])?,
         root_serial: 1,

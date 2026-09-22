@@ -126,6 +126,18 @@ impl Service {
         let deadline = deadline.min(Instant::now() + Duration::from_millis(r.deadline_ms as u64));
         self.recorder.run(r.id, r.operation.label(), |scope| {
             r.validate()?;
+            // Daemon control has no Store permission bit or service admission.
+            if matches!(
+                r.operation,
+                Operation::WorkspaceStatus { .. }
+                    | Operation::WorkspaceUnmount { .. }
+                    | Operation::WorkspaceCloseClean { .. }
+                    | Operation::WorkspaceCommit { .. }
+                    | Operation::WorkspaceAttach { .. }
+                    | Operation::WorkspaceMount { .. }
+            ) {
+                return Err(Code::Unsupported.into());
+            }
             if Instant::now() >= deadline {
                 return Err(Code::Deadline.into());
             }

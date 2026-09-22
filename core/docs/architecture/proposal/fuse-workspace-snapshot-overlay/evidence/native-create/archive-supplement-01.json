@@ -1,0 +1,124 @@
+{
+  "purpose": "Append omitted client/fixture stderr under Service output subdirectories; no original receipt, source identity or result changed",
+  "files": [
+    {
+      "path": "capacity-diagnostic-01/service/fixture-daemon.stderr.gz",
+      "source": "capacity-diagnostic-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "coherence-truncate-failure-01/service/fixture-daemon.stderr.gz",
+      "source": "coherence-truncate-failure-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "coherence-truncate-failure-02/service/fixture-daemon.stderr.gz",
+      "source": "coherence-truncate-failure-02/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-capacity-01/service/fixture-daemon.stderr.gz",
+      "source": "create-capacity-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-flags_permissions-01/service/fixture-daemon.stderr.gz",
+      "source": "create-flags_permissions-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-refusals-01/service/fixture-daemon.stderr.gz",
+      "source": "create-refusals-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-reserve_denied-01/service/fixture-daemon.stderr.gz",
+      "source": "create-reserve_denied-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-reserve_unknown-01/service/fixture-daemon.stderr.gz",
+      "source": "create-reserve_unknown-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-semantics-01/service/fixture-daemon.stderr.gz",
+      "source": "create-semantics-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "create-successor-01/service/fixture-daemon.stderr.gz",
+      "source": "create-successor-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "kernel-resize-semantics-01/service/fixture-daemon.stderr.gz",
+      "source": "kernel-resize-semantics-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "mkdir-capacity-01/service/fixture-daemon.stderr.gz",
+      "source": "mkdir-capacity-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "mkdir-notification-failure-01/service/fixture-daemon.stderr.gz",
+      "source": "mkdir-notification-failure-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "mkdir-notification-failure-02/service/fixture-daemon.stderr.gz",
+      "source": "mkdir-notification-failure-02/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "mkdir-visibility-01/service/fixture-daemon.stderr.gz",
+      "source": "mkdir-visibility-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "write-successor-01/service/fixture-daemon.stderr.gz",
+      "source": "write-successor-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "write-zero-rights-01/service/fixture-daemon.stderr.gz",
+      "source": "write-zero-rights-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    }
+  ]
+}

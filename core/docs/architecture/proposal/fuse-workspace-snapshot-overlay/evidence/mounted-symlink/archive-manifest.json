@@ -1,0 +1,663 @@
+{
+  "method": "gzip mtime0; json/jsonl/log/txt/rs/py/stdout/stderr including service and fixture/client logs; exclude sqlite/binaries/commit snapshots; append-only evidence",
+  "files": [
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/caller-review.json",
+      "archive": "caller-review.json.gz",
+      "bytes": 1053,
+      "sha256": "51f569dfa41266bb31ecaa70f9f729c58027bd2753b83f535e5993263ec63208",
+      "archive_sha256": "19845d1370ed2027165e666a5392895cea057c70d64817d8bfe6185dd960a8a6"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/boundary-01-command.json",
+      "archive": "checks/boundary-01-command.json.gz",
+      "bytes": 207,
+      "sha256": "d76fa14000836ab731d466422674deb8c19a8fa0dd5620e897b71a11bcf46005",
+      "archive_sha256": "b8b6535b075b05657b547f0bcb7b70062f3cb0fd89d398ad9c208eed4c95b367"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/boundary-01.log",
+      "archive": "checks/boundary-01.log.gz",
+      "bytes": 76,
+      "sha256": "b3a25d0bfc05ee7b84ab384ccad69942b17851168d75150ca0cbcb45c4b5057e",
+      "archive_sha256": "74bc2fe9429bcd92a275504ccba5dbbb96fc52879c5cf43690760a6251bc2077"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/boundary-selftest-01-command.json",
+      "archive": "checks/boundary-selftest-01-command.json.gz",
+      "bytes": 269,
+      "sha256": "76ffbda0ca36e0036c4f16d8d173740f2c60e1c8f28c5ff2e3c1b263a6eb9a87",
+      "archive_sha256": "ab65e4e8e9928cb4a2e13742e89471c8e4c5890db2c9d748a7c27b14db7d679b"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/boundary-selftest-01.log",
+      "archive": "checks/boundary-selftest-01.log.gz",
+      "bytes": 104,
+      "sha256": "37d8a0769d6c800296764c21f8e08feca52d770d400afabe65713604062cf749",
+      "archive_sha256": "64a5b823f9791a8a723ce5137376c035187966f009e4b54b8abef87a01da1af4"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/fmt-01-command.json",
+      "archive": "checks/fmt-01-command.json.gz",
+      "bytes": 265,
+      "sha256": "937afda4af2caebd7cf043a40972241cb138d5d0a4499430b8fec1fbd514f06e",
+      "archive_sha256": "56f8966fac1977a0043e7bbdcb4551df639dc131d022e79807dab09f4e90d890"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/fmt-01.log",
+      "archive": "checks/fmt-01.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-build-01-command.json",
+      "archive": "checks/host-build-01-command.json.gz",
+      "bytes": 320,
+      "sha256": "36c02cc1f901e6c065a8429384eb6a993d9cdba18a7fb1fbeea8a621864dae8e",
+      "archive_sha256": "0556ac6e11db9cfa68a82cc30f0f7c09d6a7c546fe016ce16466156fbc7a2f4d"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-build-01.log",
+      "archive": "checks/host-build-01.log.gz",
+      "bytes": 401,
+      "sha256": "9bfd2bafc6de9855d9c9f7b505cc6ed16996a116651238146917eba38b3e9626",
+      "archive_sha256": "7a7bccc968d8a52f7a40b238f52965da9d07808d11d74d2a214d2fa6bc544695"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-clippy-01-command.json",
+      "archive": "checks/host-clippy-01-command.json.gz",
+      "bytes": 347,
+      "sha256": "2775dfc22679558966a6aef21a294da03a92f8432c751eb3641a6ca916c1d981",
+      "archive_sha256": "56adbdf008acc3b17f571ec4cc298aeac277e5fe6b78d09bb932ce9e6da4047d"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-clippy-01.log",
+      "archive": "checks/host-clippy-01.log.gz",
+      "bytes": 401,
+      "sha256": "7a3c57ccd8ceb4522fcebe1352f4d64208081b05e5fcb552318c63bd1648d5e9",
+      "archive_sha256": "cb629fa0866657c787a960f4f72857a54d7dee91356042af5a78a77abc4a1dfb"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-product-check-01-command.json",
+      "archive": "checks/host-product-check-01-command.json.gz",
+      "bytes": 323,
+      "sha256": "3c140b5bbda256ff1ef757bab8053db9e3e98b33b683b52c967b4add1586f5a5",
+      "archive_sha256": "64f0059920588d872eed1ea5fe5c44f6c0b967952953bf3fd440eb69ae599779"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-product-check-01.log",
+      "archive": "checks/host-product-check-01.log.gz",
+      "bytes": 401,
+      "sha256": "3abdcc02856736e8fed19cb8767a3e20d7f1151a6d7bb65767b75d53db5e2efc",
+      "archive_sha256": "ebab6cf82209a91b167a4fb387a94b01643728317beb0fdfb6b8ea64e2f52dcf"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-test-01-command.json",
+      "archive": "checks/host-test-01-command.json.gz",
+      "bytes": 285,
+      "sha256": "9f425d0d5994f1d92144a486242be0779d18ffd4603512aae884844c12b4f422",
+      "archive_sha256": "ee4d7be4734fc3a649fcabc28354e8ff0fbf694520d0edbefb668692166e7040"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/host-test-01.log",
+      "archive": "checks/host-test-01.log.gz",
+      "bytes": 105722,
+      "sha256": "0a58be7dc604f2b321fffb18615ef7e7ec07cad01460181ff1513645f86e5d30",
+      "archive_sha256": "10cf17b0ae60760d6efa65926fce2b02638a4d06806b9d4bbb17611e8fe386d8"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-clippy-01-command.json",
+      "archive": "checks/linux-clippy-01-command.json.gz",
+      "bytes": 833,
+      "sha256": "1b383cdf5ae956234d498120285b5b8495d1c0f38810913ff2af362e6634c0f9",
+      "archive_sha256": "4d138a3bf03ed3b2ca664b41f0d98479cdb679ab09b01725638ea8b1ce277c0b"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-clippy-01.log",
+      "archive": "checks/linux-clippy-01.log.gz",
+      "bytes": 284,
+      "sha256": "94e263a8193c7f4333cd4ba4303fc0d609721e3e0bcda2ccb8173bf334d5682d",
+      "archive_sha256": "8f767a098516ecdec4c59321c3d1387632e8d6267874ad0480ca63e685926c4c"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-product-check-01-command.json",
+      "archive": "checks/linux-product-check-01-command.json.gz",
+      "bytes": 810,
+      "sha256": "c29c1ed097dbf9d5936d2b139c8dddc050acc3a9b985ff952ffeccd51dc47ffb",
+      "archive_sha256": "8421a64a99356ebeabba1cd171928f0fe1204ac09e3617071b7b6f98984824cc"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-product-check-01.log",
+      "archive": "checks/linux-product-check-01.log.gz",
+      "bytes": 284,
+      "sha256": "11c947fcb9c82db4d2bc7a6ee0986c2617fc30a3bca940c7af66d38463dec436",
+      "archive_sha256": "354844b1444521f8a8c7cd2c9f3d7c9b898d08af9c3991492ba7e74bb6edc588"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-test-01-command.json",
+      "archive": "checks/linux-test-01-command.json.gz",
+      "bytes": 773,
+      "sha256": "562565f93dc282beb35c54b42ab6270f7d4efd867eca706c642d4ee3e9aafd2c",
+      "archive_sha256": "03304870e4170214d1bab1299bde6930d215d63db6e35a1e9fdf4e69ca3f3ea1"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks/linux-test-01.log",
+      "archive": "checks/linux-test-01.log.gz",
+      "bytes": 122843,
+      "sha256": "ce18081d7999d7c6eca3f17c2c70d4d832839f2a3c2e9b54b58d31e587658f6d",
+      "archive_sha256": "001296b03ba0836712fa4ca0c6fe4ea6f738c79d8997006b418915cecada38e1"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/checks-index.json",
+      "archive": "checks-index.json.gz",
+      "bytes": 6168,
+      "sha256": "fd330e3193ae12c535fbe7cb29d13981a0cc191e16ec6bf1a0399dd4f7744fe8",
+      "archive_sha256": "6f85a24b6560ce20c83ae83ee56e7147fd234d833b4adcdfd7ce261f4f25239b"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/functional-index.json",
+      "archive": "functional-index.json.gz",
+      "bytes": 14129,
+      "sha256": "42c4cadd4d01b8a7aed5e7b10e2b3b41bfca5a8babc1911015a55e9d3e3aba20",
+      "archive_sha256": "e2781bdd415d86164c15491d26bb84476832e543d61b423eff04fe37309f84ad"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/host-binaries-01.json",
+      "archive": "host-binaries-01.json.gz",
+      "bytes": 643,
+      "sha256": "5ca72cbe1898997a505924a4f5f8a0066fcb89e174337befaaa37738f3c767e2",
+      "archive_sha256": "772fe03103c4a5a1b807e9384e4674e0ae2e54cc33d3d65844eda3fa7da2f2f7"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/after-linux-parents-01.json",
+      "archive": "layout/after-linux-parents-01.json.gz",
+      "bytes": 32037,
+      "sha256": "7bffe9f8251e66e408ebc7b831cab6ebc9490672affcd4f4d234646c80349c4b",
+      "archive_sha256": "743d7e83ba5ff0330896712e9414a41c8c206059c0e23a2c8528b71b9de4877e"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/after-linux-parents-01.txt",
+      "archive": "layout/after-linux-parents-01.txt.gz",
+      "bytes": 1544932,
+      "sha256": "9d8d4ab4220fdeb4ec9e6712c7013bcc8d3454ab888b3a0a17f1367101345db8",
+      "archive_sha256": "f05397cad8ae93eadc83122f167975631843f85b00c498465f6135137a811e12"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/before-linux-parents-01.json",
+      "archive": "layout/before-linux-parents-01.json.gz",
+      "bytes": 31650,
+      "sha256": "124bd03cd9fe7a2dff0d2d0b41213412bb671f7e735a4d6eb52f5c683119b12a",
+      "archive_sha256": "dba9d6e99ce7a646b0e82fffcf72493f880af926ebe5f5931f8069da635566ba"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/before-linux-parents-01.txt",
+      "archive": "layout/before-linux-parents-01.txt.gz",
+      "bytes": 1593494,
+      "sha256": "9fef0064f77b439f27ecc7cb0c4bca6ac045fdcd99778d99a204514a4f4e7495",
+      "archive_sha256": "0cba9d8308760a75be44cf08fe2ce6c80ea57b5f6cb35519028b67d5d8c37fdd"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/capture_layout.py",
+      "archive": "layout/capture_layout.py.gz",
+      "bytes": 4284,
+      "sha256": "240c78b0d3e67157fe9bad3141d0711c29bc7e66cd3761dea6de9b77755dfff9",
+      "archive_sha256": "c3eaff1ce965e0858e4daf6542b0525bd11073df18c4951da346ff69efddad18"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/layout/layout-01.json",
+      "archive": "layout/layout-01.json.gz",
+      "bytes": 73607,
+      "sha256": "4c385182f1419e0aeebef267448d0311ddb7368defa9bad2db33f7e98f9424ef",
+      "archive_sha256": "9a9e77c3e49389755582a7766030c0e9e08d1caac77b96c016a6064899d5b189"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/owners.jsonl",
+      "archive": "mounted_create-kernel-01/owners.jsonl.gz",
+      "bytes": 894,
+      "sha256": "c62771a495002d37aed8ba89d41a46ef5230b1824e5de6c3e30d1fe45d103ae7",
+      "archive_sha256": "7b6996d62777ba1a7d653ba96948dec8a14810e1c1abe5cb73e428b0cd8e8fb2"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/result.json",
+      "archive": "mounted_create-kernel-01/result.json.gz",
+      "bytes": 6608,
+      "sha256": "f179f9b35164d2c764d0fd7fbb9afdd444da0cb0a969223e217f23b309e2c220",
+      "archive_sha256": "a7c404f168a2a0bee0e706d235cc27817c6bc2c0d72a0905379c7f32bdd3d206"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/service/fixture-daemon.stderr",
+      "archive": "mounted_create-kernel-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/service.stderr",
+      "archive": "mounted_create-kernel-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "7e827d77c3e94541a5baf265265143bb4c5a908d451df35b9f93cce67f83e88d",
+      "archive_sha256": "431689134aa81977c68b7adfcb5ff85fe28dd8ff6d89d0ffd1d23e2265bb3b17"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/test.stderr",
+      "archive": "mounted_create-kernel-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01/test.stdout",
+      "archive": "mounted_create-kernel-01/test.stdout.gz",
+      "bytes": 1233,
+      "sha256": "66b585d46e2e6756818fb95c344b6e5a48b6b2d8b181445f5163a95b262922bd",
+      "archive_sha256": "b0fa849a3c3fc1e6a4aeb10b9e9171b852b810938234333b6e84ad29f91d9cd8"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01-command.json",
+      "archive": "mounted_create-kernel-01-command.json.gz",
+      "bytes": 1105,
+      "sha256": "d915e218c3974ccf62fdc72fa7345e38bba80f05f960a930d8c1109bce7a0ca4",
+      "archive_sha256": "cbe7d363346f58756833465bfce8aa5e7748b6845b464cc26d2bb6bc5f30e1f8"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_create-kernel-01-driver.log",
+      "archive": "mounted_create-kernel-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/owners.jsonl",
+      "archive": "mounted_mkdir-notification_failure-01/owners.jsonl.gz",
+      "bytes": 935,
+      "sha256": "a42dbdc2270b7157bdccb55eea448966160c0e435681b6acdf47fa6fa86945a6",
+      "archive_sha256": "eda400392c3ed739d5ae6413155fde4b16b8183d274dc90cfd99fff60ec461ac"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/result.json",
+      "archive": "mounted_mkdir-notification_failure-01/result.json.gz",
+      "bytes": 7059,
+      "sha256": "54bd1c8adec8a36cc7c950521e925512f71b2ae0c570b70517b241b55890db8c",
+      "archive_sha256": "40ba7e1158098fe9761d3b4390c7f08a45f5a40846569460e40aefe81965f13a"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/service/fixture-daemon.stderr",
+      "archive": "mounted_mkdir-notification_failure-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/service.stderr",
+      "archive": "mounted_mkdir-notification_failure-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "1634d4ead77eebccc99ffdbd6a53e46434173b4e5b4fbb12d6cbd927329f0fdd",
+      "archive_sha256": "74384311b22dee133ca38e16566400e28d3c363b77d1a9e3ceaf6ddc2a50cfc6"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/test.stderr",
+      "archive": "mounted_mkdir-notification_failure-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01/test.stdout",
+      "archive": "mounted_mkdir-notification_failure-01/test.stdout.gz",
+      "bytes": 1665,
+      "sha256": "0316d9372268689382a3d0da1b148f2a085e73174ae65279d315b90216d0c177",
+      "archive_sha256": "59ec8fe807e53ddec0e2dbf2924346f73da1c7a8e9386e45afa20ee3a3774988"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01-command.json",
+      "archive": "mounted_mkdir-notification_failure-01-command.json.gz",
+      "bytes": 1143,
+      "sha256": "a68f64fb13a689c6ec670b7d235b5f233e2e497788be826398873f98b8c763ca",
+      "archive_sha256": "d7f46344bd5bb863e41776743aa0539aabb819006426c81f5ccfa5399fccc080"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_mkdir-notification_failure-01-driver.log",
+      "archive": "mounted_mkdir-notification_failure-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/owners.jsonl",
+      "archive": "mounted_symlink-kernel-01/owners.jsonl.gz",
+      "bytes": 897,
+      "sha256": "c0ec480a66e30c4221bb2bfa9050425d0c630226911fe1fddbf1852d77dc1636",
+      "archive_sha256": "8411e12ee7574fd3c2573c016cdf3a9c6ef44d6fabca6a2a21e8cd7c6592e750"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/result.json",
+      "archive": "mounted_symlink-kernel-01/result.json.gz",
+      "bytes": 6749,
+      "sha256": "02f15a9b5136e85a5d4c85392eae6563f732b7de116f167981a5bf5357786e1b",
+      "archive_sha256": "0eff284b976fb3cadb793e562fa2acd1f6114eaf541bac44160ac9d3c2e1b225"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/service/fixture-daemon.stderr",
+      "archive": "mounted_symlink-kernel-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/service.stderr",
+      "archive": "mounted_symlink-kernel-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "26fe06a22a505b9892d667b87c47ad3c24d4d4d54f2fd05deafe644d2d971672",
+      "archive_sha256": "5a55f136279a4864fdd29e0902ec1d2aff5de03a66c371a4913e0c4406843776"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/test.stderr",
+      "archive": "mounted_symlink-kernel-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01/test.stdout",
+      "archive": "mounted_symlink-kernel-01/test.stdout.gz",
+      "bytes": 1423,
+      "sha256": "537c15ea2bb38a21aa3445d31abcb2fdd212eb880279419aba064ec68c409e65",
+      "archive_sha256": "6ed5e87dcfcbfba3570d4fc58bb5885db9a4c96933639fd53132442840fc8722"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01-command.json",
+      "archive": "mounted_symlink-kernel-01-command.json.gz",
+      "bytes": 1109,
+      "sha256": "6a242a952df9817be64ee167731758817466012e1ee93dd87f7bb5c31bc6cd9c",
+      "archive_sha256": "0f1dd54163936fe9064ffda6d14901d316afd5e4f504929990148acf8a88494a"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-kernel-01-driver.log",
+      "archive": "mounted_symlink-kernel-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/owners.jsonl",
+      "archive": "mounted_symlink-notification_failure-01/owners.jsonl.gz",
+      "bytes": 939,
+      "sha256": "b534f21d29ff91ec785f2dc58e5f045b9bb3cff4e6a18f2e14033e20af532ffe",
+      "archive_sha256": "5668cfc49b47d5d5312c995a0a9f9c339bfcad933a2154ac508099fd90951d65"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/result.json",
+      "archive": "mounted_symlink-notification_failure-01/result.json.gz",
+      "bytes": 7311,
+      "sha256": "cdae16e173a473e552c53c8ca82acc78d0c27a671481715b19f48e71d0ea53e9",
+      "archive_sha256": "d06e9bb066c9ed4d83a6f8c36a49e7039b0f9319e0805b0d263c9ed39667bfed"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/service/fixture-daemon.stderr",
+      "archive": "mounted_symlink-notification_failure-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/service.stderr",
+      "archive": "mounted_symlink-notification_failure-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "c698a73baa369f1cdd1ad1f6ffa58fe0e3a3130f9f6ef1fbeba2e7e93704aa4f",
+      "archive_sha256": "85cb2e3595ee0de97fa1c4c525c93d161bc73ca28143eb6b316b759c5dea2ac8"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/test.stderr",
+      "archive": "mounted_symlink-notification_failure-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01/test.stdout",
+      "archive": "mounted_symlink-notification_failure-01/test.stdout.gz",
+      "bytes": 1717,
+      "sha256": "962098f80ecf86c53e4d8508fa40895a6c7c85e1f69b8e42d427756f14703722",
+      "archive_sha256": "75f753dae6964e38babca6c5bbc5b620c919bf4da8794e731567ce999960abba"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01-command.json",
+      "archive": "mounted_symlink-notification_failure-01-command.json.gz",
+      "bytes": 1149,
+      "sha256": "79b7ba01829989c21a2d810f4d43919e79a74545d2c2dc9c8717718ef5bae04b",
+      "archive_sha256": "7bd94da77fccd6d8eede8036a3876a4f3ea85233b0b2443e0cb97ce143c872fc"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-notification_failure-01-driver.log",
+      "archive": "mounted_symlink-notification_failure-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/owners.jsonl",
+      "archive": "mounted_symlink-permit-01/owners.jsonl.gz",
+      "bytes": 897,
+      "sha256": "4c43c65bb6d46d78fbf7b3b0169ae9e8fa6f3c36bfd3a93c82eb0c5bf949c245",
+      "archive_sha256": "843ab3fd94a5a11ce4544a079e2efbdc029d3e81cee0ba3e655e10cac30082c9"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/result.json",
+      "archive": "mounted_symlink-permit-01/result.json.gz",
+      "bytes": 6663,
+      "sha256": "c5e18c551aa5166eb1446f8aba4911fb7f5a90647cdd4c7fa9cee34a90e8453e",
+      "archive_sha256": "b64f6245e85a261b2b03bfc415ffa317436cf824f1c7d13e6d39c19ddb2e8adf"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/service/fixture-daemon.stderr",
+      "archive": "mounted_symlink-permit-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/service.stderr",
+      "archive": "mounted_symlink-permit-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "a99f709ea1650a69343d76377cea318f40dbe1aeaacebe3bbb1524e59712eeae",
+      "archive_sha256": "378fb7f249a22447f393944f9450293e7fb88217406d5fc80d24ddbe12b0177c"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/test.stderr",
+      "archive": "mounted_symlink-permit-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01/test.stdout",
+      "archive": "mounted_symlink-permit-01/test.stdout.gz",
+      "bytes": 1236,
+      "sha256": "8d7106af998c959a8aed608ea694f31cde7e467e24fbfc9adb2b8a120bd13809",
+      "archive_sha256": "1629e0c6ed6dff076f9ea4f5d25692c18b4637b2d23e147e8a55d65a151b7507"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01-command.json",
+      "archive": "mounted_symlink-permit-01-command.json.gz",
+      "bytes": 1109,
+      "sha256": "e05999bc76d8b8b7fefa64997163fb0fdaae7a53cb6d8804be1392ed56cfd2d7",
+      "archive_sha256": "2d706eb5b6543128bff838f8bf4528d6f4a3f572c8a47f13ab2558becbd0acb1"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-permit-01-driver.log",
+      "archive": "mounted_symlink-permit-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/owners.jsonl",
+      "archive": "mounted_symlink-visibility_successor-01/owners.jsonl.gz",
+      "bytes": 936,
+      "sha256": "f24da2e11149abd40ca4777273e9274e0c7dbfe73a2bb4c8004ed4b43bfe7722",
+      "archive_sha256": "07ca47ea0cc74a90ced479cd63c19361441da63effed8c42f29d213ec12c9732"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/result.json",
+      "archive": "mounted_symlink-visibility_successor-01/result.json.gz",
+      "bytes": 6722,
+      "sha256": "9f222792d59081f2f53ded7b61d908da42c8f9c6013b1b7b077c9e1aed0a56d3",
+      "archive_sha256": "de923b1fdaa90738552338a34a79ffaf7ae4ddec99cdcb8ddd77709332d38d1d"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/service/fixture-daemon.stderr",
+      "archive": "mounted_symlink-visibility_successor-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/service.stderr",
+      "archive": "mounted_symlink-visibility_successor-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "3d3754c059066c76247bebe12f8f8a6557a89b8d43dd38244dba6892f2c43ef9",
+      "archive_sha256": "167fcdc8e8bf03524f1a1cbd69e0ff59896d984efc3f0c69b421a0e77702a636"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/test.stderr",
+      "archive": "mounted_symlink-visibility_successor-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01/test.stdout",
+      "archive": "mounted_symlink-visibility_successor-01/test.stdout.gz",
+      "bytes": 1142,
+      "sha256": "2af81d0d8ab2af6a31e05505507804092031d5498e15b444f8fb40c72bc8a213",
+      "archive_sha256": "b3f6f42cba2c6826653eef1589c6427e55b4f329444cb82bdf50697c9b553bec"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01-command.json",
+      "archive": "mounted_symlink-visibility_successor-01-command.json.gz",
+      "bytes": 1151,
+      "sha256": "23f79add5cb7d7fd147d04082b0cbf5d66ccf49b0600dffc7cfcf64ca3ef8d99",
+      "archive_sha256": "c9535328686059fababb0de4ae1c63cc724147e7a0aeb75484e4645ff2b67925"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/mounted_symlink-visibility_successor-01-driver.log",
+      "archive": "mounted_symlink-visibility_successor-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/plan-01.json",
+      "archive": "plan-01.json.gz",
+      "bytes": 1504,
+      "sha256": "d13ac9f006a4b05f17832956abe75858aa30a1525b73b5492200f83fed5d35ea",
+      "archive_sha256": "69a4e1b8ff70f4397415d263eea5bf90bfa2fa3c28dfa10103731f6951c0959a"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/regenerate_inventory.py",
+      "archive": "regenerate_inventory.py.gz",
+      "bytes": 8315,
+      "sha256": "0656b76f97f1e36ca74439f5202055ffbc83758b52f0975fdb0792fa6ad66336",
+      "archive_sha256": "1a54c024a321e8cddc4502166a20eea36f4eaf549872f25cd7e673c4f4415e0a"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/run-checks.py",
+      "archive": "run-checks.py.gz",
+      "bytes": 1330,
+      "sha256": "c387420cddf292fba6837632f85b14547d15f6741903a86bfbad3bf7c6e35d14",
+      "archive_sha256": "8a40a46cc7829620b5d48dcb3a8ae950185fa9df03b36c192fd2fdbf66dda200"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/run-selections.py",
+      "archive": "run-selections.py.gz",
+      "bytes": 1968,
+      "sha256": "7eecbf3cd95233391eabf2a3a4135c9c747c7d24371594fa6a1cbdbe7c71f668",
+      "archive_sha256": "1be04628f0c32c350e29c97054e954488a228820be6299845ea2a5982074e04f"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/source-freeze-01.json",
+      "archive": "source-freeze-01.json.gz",
+      "bytes": 34017,
+      "sha256": "4a3e95446b2b9e86209cca6493d07182b95488b62284be6bc7ab706e76d7927e",
+      "archive_sha256": "147e96717126910a5b1ed98327e73f61b017112058c24b176b0c0db2115a5b04"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/source-freeze-02.json",
+      "archive": "source-freeze-02.json.gz",
+      "bytes": 63274,
+      "sha256": "7b193d2f68a5f0e07d5bbaf6ade8ab4f0ec6592ec89f82e8b9f9c50503002c78",
+      "archive_sha256": "fe77cfc86cc98bf460134b764b0b1f6fe48772af5a2be21ed1d561ee876b4c5e"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/source-review.json",
+      "archive": "source-review.json.gz",
+      "bytes": 1266,
+      "sha256": "ff7a569ca0ca103821579509b0984f5d8e94c019fba02cfe569203165eeafa2a",
+      "archive_sha256": "75db6dbdeb4b05a6787a89f83fa6cd7eb3011dfeaf8cda8945c8107399506902"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/owners.jsonl",
+      "archive": "symlink-refusals-01/owners.jsonl.gz",
+      "bytes": 898,
+      "sha256": "a4e35982d5ce7be0420d1043c337de482200042d95cc5eae9a648f39f75f2ea1",
+      "archive_sha256": "84a4ca29af51a49a4f5ff9d923effcaa62c0375f0f546eca16faa60ad1d628a1"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/result.json",
+      "archive": "symlink-refusals-01/result.json.gz",
+      "bytes": 6783,
+      "sha256": "42f4c784f4245c60e13d14c3c30d83e30781a1ea7d9278b098fe56c821d649d5",
+      "archive_sha256": "0575b1874c09628f95e9135e21c7e84c9d713585971226326ae0379137870b7a"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/service/fixture-daemon.stderr",
+      "archive": "symlink-refusals-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/service.stderr",
+      "archive": "symlink-refusals-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "190fadc8040a89a57b9fee15ac0ff4eca22a9766abe12e7b37541ad22ec11726",
+      "archive_sha256": "fab8bcfdf0f72eaf9a674842af1f7a165c0f75625dfb3986f0caf545417d3417"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/test.stderr",
+      "archive": "symlink-refusals-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01/test.stdout",
+      "archive": "symlink-refusals-01/test.stdout.gz",
+      "bytes": 1156,
+      "sha256": "214539dde560f53011774e9758d152c0f6e3dbd583dc0691d8d82ebcd9678e25",
+      "archive_sha256": "75883e957f3bb30485fc5a06127b68830abd814f713e7d377c2c517ef60d4197"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01-command.json",
+      "archive": "symlink-refusals-01-command.json.gz",
+      "bytes": 1083,
+      "sha256": "3e40c804fbb42e0c923c0e9aa29f08f93f18aeff146751b081867f2057cb850b",
+      "archive_sha256": "a6dccf7195b4a66d931a3caaac30d024c5ad64c20b08e8bf2b92087018a0a224"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/symlink-refusals-01-driver.log",
+      "archive": "symlink-refusals-01-driver.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/mounted-symlink/test-binaries-01.json",
+      "archive": "test-binaries-01.json.gz",
+      "bytes": 1652,
+      "sha256": "9a0d3782716de052772dea3a5a7b17003beaea69a0a77c9fc4426b797c2ece83",
+      "archive_sha256": "d5455fcb55c62668160c291bb58cb6cd81163574a1f098519634ed825de11307"
+    }
+  ]
+}

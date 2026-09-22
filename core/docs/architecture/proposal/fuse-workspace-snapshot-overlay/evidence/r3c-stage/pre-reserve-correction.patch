@@ -1,0 +1,2046 @@
+diff --git a/core/crates/layerfs-fuse/src/replies.rs b/core/crates/layerfs-fuse/src/replies.rs
+--- a/core/crates/layerfs-fuse/src/replies.rs
++++ b/core/crates/layerfs-fuse/src/replies.rs
+@@ -36,7 +36,7 @@
+             ServiceCode::Deadline => Errno::ETIMEDOUT,
+             _ => Errno::EIO,
+         },
+-        WorkspaceError::Io => Errno::EIO,
++        WorkspaceError::Io | WorkspaceError::Stage(_) => Errno::EIO,
+     }
+ }
+ 
+diff --git a/core/crates/layerfs-workspace/src/backing/metadata.rs b/core/crates/layerfs-workspace/src/backing/metadata.rs
+--- a/core/crates/layerfs-workspace/src/backing/metadata.rs
++++ b/core/crates/layerfs-workspace/src/backing/metadata.rs
+@@ -48,13 +48,14 @@
+     pub ledger_identities: Vec<(u64, u64)>,
+     pub pages: usize,
+     pub allocated: u64,
+-    pub escrow: u64,
+     pub blocked: bool,
+     pub complete: bool,
+     pub unrecoverable: bool,
+ }
+ pub struct RootOwner {
+     pub arena: Arc<Arena>,
++    pub parent: Option<Arc<RootOwner>>,
++    pub fund: Option<Arc<ProgressFund>>,
+     pub state: Mutex<RootState>,
+     pub _charge: MetadataCharge,
+ }
+@@ -64,6 +65,7 @@
+     pub slot_pending: Option<PageRef>,
+     pub edge_progress: Option<(PageRef, usize)>,
+     pub reserved: u64,
++    pub completion_generation: Option<u64>,
+     pub pending: Option<Pending>,
+     pub custodies: Vec<PageRef>,
+     pub cleanup: Vec<super::ownership::CleanupFrame>,
+@@ -154,7 +156,6 @@
+                 ledger_identities: Vec::new(),
+                 pages: 0,
+                 allocated: 0,
+-                escrow: 0,
+                 blocked: false,
+                 complete: true,
+                 unrecoverable: false,
+@@ -222,6 +223,9 @@
+     pub fn candidate(
+         self: &Arc<Self>,
+         arena: &Arc<Arena>,
++        generation: u64,
++        needs_completion: bool,
++        parent: Option<Arc<RootOwner>>,
+     ) -> Result<Arc<RootOwner>, WorkspaceError> {
+         let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+         for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
+@@ -254,17 +258,20 @@
+         if a.blocked {
+             return Err(WorkspaceError::Busy);
+         }
+-        let reservation = ESCROW + if a.escrow == 0 { ESCROW } else { 0 };
++        let reservation = ESCROW + if needs_completion { ESCROW } else { 0 };
+         drop(a);
+         self.reserve(reservation)?;
+         let owner = Arc::new(RootOwner {
+             arena: arena.clone(),
++            parent,
++            fund: None,
+             state: Mutex::new(RootState {
+                 root: PageRef::NULL,
+                 temporary,
+                 slot_pending: None,
+                 edge_progress: None,
+                 reserved: reservation,
++                completion_generation: needs_completion.then_some(generation),
+                 pending: None,
+                 custodies,
+                 cleanup,
+@@ -273,6 +280,74 @@
+         });
+         roots.push(owner.clone());
+         Ok(owner)
++    }
++    pub fn result_roots(
++        self: &Arc<Self>,
++        arena: &Arc<Arena>,
++        fund: &Arc<ProgressFund>,
++    ) -> Result<[Arc<RootOwner>; 2], WorkspaceError> {
++        let make = || -> Result<Arc<RootOwner>, WorkspaceError> {
++            let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
++            Ok(Arc::new(RootOwner {
++                arena: arena.clone(),
++                parent: None,
++                fund: Some(fund.clone()),
++                state: Mutex::new(RootState {
++                    root: PageRef::NULL,
++                    temporary: super::metadata_index::vector(128)?,
++                    slot_pending: None,
++                    edge_progress: None,
++                    reserved: 0,
++                    completion_generation: None,
++                    pending: None,
++                    custodies: super::metadata_index::vector(1)?,
++                    cleanup: super::metadata_index::vector(12)?,
++                }),
++                _charge: charge,
++            }))
++        };
++        let first = make()?;
++        let second = make()?;
++        let mut roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
++        if roots.len() + 2 > MAX_ROOTS {
++            return Err(WorkspaceError::Capacity);
++        }
++        if roots.capacity() < roots.len() + 2 {
++            let count = roots
++                .capacity()
++                .saturating_mul(2)
++                .max(roots.len() + 2)
++                .min(MAX_ROOTS);
++            let mut charge = self.memory(count * size_of::<Arc<RootOwner>>())?;
++            let mut next = super::metadata_index::vector(count)?;
++            resize_memory(&mut charge, next.capacity() * size_of::<Arc<RootOwner>>())?;
++            next.append(&mut roots);
++            drop(std::mem::replace(&mut *roots, next));
++            *self.root_charge.lock().map_err(|_| WorkspaceError::Io)? = charge;
++        }
++        roots.push(first.clone());
++        roots.push(second.clone());
++        Ok([first, second])
++    }
++    pub fn remove_empty_result_roots(
++        &self,
++        roots: &[Arc<RootOwner>; 2],
++    ) -> Result<(), WorkspaceError> {
++        for root in roots {
++            let state = root.state.lock().map_err(|_| WorkspaceError::Io)?;
++            if state.root != PageRef::NULL
++                || state.reserved != 0
++                || state.pending.is_some()
++                || !state.temporary.is_empty()
++            {
++                return Err(WorkspaceError::Busy);
++            }
++        }
++        self.roots
++            .lock()
++            .map_err(|_| WorkspaceError::Io)?
++            .retain(|root| !roots.iter().any(|r| Arc::ptr_eq(root, r)));
++        Ok(())
+     }
+     pub fn status(&self) -> Result<MetadataStatus, WorkspaceError> {
+         let roots = self.roots.lock().map_err(|_| WorkspaceError::Io)?;
+@@ -353,9 +428,7 @@
+         for arena in arenas.iter() {
+             let mut pending = false;
+             let mut known = true;
+-            let mut retained = false;
+             for root in roots.iter().filter(|r| Arc::ptr_eq(&r.arena, arena)) {
+-                retained = true;
+                 let r = root.state.lock().map_err(|_| WorkspaceError::Io)?;
+                 if let Some(p) = &r.pending {
+                     pending = true;
+@@ -365,10 +438,6 @@
+             let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+             a.blocked = a.unrecoverable || pending;
+             a.complete = known && (a.complete || !a.unrecoverable);
+-            if !retained && a.escrow > 0 {
+-                self.release(0, a.escrow)?;
+-                a.escrow = 0;
+-            }
+             complete &= a.complete;
+             stopped |= a.blocked;
+         }
+@@ -428,9 +497,130 @@
+     *charge.lock().map_err(|_| WorkspaceError::Io)? = next_charge;
+     Ok(())
+ }
++pub struct ProgressFund {
++    pub host: Weak<MetadataHost>,
++    available: Mutex<u64>,
++    generation: Mutex<Option<u64>>,
++    _charge: MetadataCharge,
++}
++impl ProgressFund {
++    pub fn new(host: &Arc<MetadataHost>) -> Result<Arc<Self>, WorkspaceError> {
++        Ok(Arc::new(Self {
++            host: Arc::downgrade(host),
++            available: Mutex::new(0),
++            generation: Mutex::new(None),
++            _charge: host.memory(256)?,
++        }))
++    }
++    pub fn install(&self, reserve: CompletionReserve) -> Result<(), WorkspaceError> {
++        let mut generation = self.generation.lock().map_err(|_| WorkspaceError::Io)?;
++        if generation.is_some() {
++            return Err(WorkspaceError::Io);
++        }
++        *generation = Some(reserve.generation);
++        *self.available.lock().map_err(|_| WorkspaceError::Io)? = reserve.bytes;
++        Ok(())
++    }
++    pub fn take(&self, bytes: u64) -> Result<(), WorkspaceError> {
++        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
++        *available = available
++            .checked_sub(bytes)
++            .ok_or(WorkspaceError::Capacity)?;
++        Ok(())
++    }
++    pub fn give(&self, bytes: u64) -> Result<(), WorkspaceError> {
++        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
++        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
++        Ok(())
++    }
++    pub fn recycle(&self, bytes: u64) -> Result<(), WorkspaceError> {
++        let host = self.host.upgrade().ok_or(WorkspaceError::Closed)?;
++        let mut available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
++        let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
++        state.allocated = state
++            .allocated
++            .checked_sub(bytes)
++            .ok_or(WorkspaceError::Io)?;
++        state.metadata_allocated = state
++            .metadata_allocated
++            .checked_sub(bytes)
++            .ok_or(WorkspaceError::Io)?;
++        state.reserved = state
++            .reserved
++            .checked_add(bytes)
++            .ok_or(WorkspaceError::Io)?;
++        state.metadata_reserved = state
++            .metadata_reserved
++            .checked_add(bytes)
++            .ok_or(WorkspaceError::Io)?;
++        *available = available.checked_add(bytes).ok_or(WorkspaceError::Io)?;
++        Ok(())
++    }
++}
++impl Drop for ProgressFund {
++    fn drop(&mut self) {
++        if let (Some(host), Ok(available)) = (self.host.upgrade(), self.available.get_mut()) {
++            let _ = host.release(0, *available);
++        }
++    }
++}
++pub struct CompletionReserve {
++    pub generation: u64,
++    pub bytes: u64,
++}
+ impl RootOwner {
+     pub fn root(&self) -> Result<PageRef, WorkspaceError> {
+         Ok(self.state.lock().map_err(|_| WorkspaceError::Io)?.root)
++    }
++    pub fn reserve_result_update(&self) -> Result<(), WorkspaceError> {
++        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
++        if state.root != PageRef::NULL
++            || state.reserved != 0
++            || state.pending.is_some()
++            || !state.temporary.is_empty()
++            || !state.cleanup.is_empty()
++        {
++            return Err(WorkspaceError::Busy);
++        }
++        let bytes = 8 * 4096;
++        self.fund.as_ref().ok_or(WorkspaceError::Io)?.take(bytes)?;
++        state.reserved = bytes;
++        Ok(())
++    }
++    pub fn release_bytes(&self, allocated: u64, reserved: u64) -> Result<(), WorkspaceError> {
++        if let Some(fund) = &self.fund {
++            if allocated > 0 {
++                fund.recycle(allocated)?;
++            }
++            if reserved > 0 {
++                fund.give(reserved)?;
++            }
++            Ok(())
++        } else {
++            self.arena
++                .host
++                .upgrade()
++                .ok_or(WorkspaceError::Closed)?
++                .release(allocated, reserved)
++        }
++    }
++    pub fn take_completion(
++        &self,
++        generation: u64,
++    ) -> Result<Option<CompletionReserve>, WorkspaceError> {
++        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
++        let Some(owner) = state.completion_generation else {
++            return Ok(None);
++        };
++        if owner != generation || state.reserved != ESCROW {
++            return Err(WorkspaceError::Io);
++        }
++        state.completion_generation = None;
++        state.reserved = 0;
++        Ok(Some(CompletionReserve {
++            generation,
++            bytes: ESCROW,
++        }))
+     }
+     pub fn seal(
+         &self,
+@@ -476,19 +666,19 @@
+         }
+         let host = self.arena.host.upgrade().ok_or(WorkspaceError::Closed)?;
+         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+-        let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+-        if a.escrow == 0 {
+-            if s.reserved < ESCROW {
+-                return Err(WorkspaceError::Io);
+-            }
+-            a.escrow = ESCROW;
+-            s.reserved -= ESCROW;
+-        }
+-        let reserve = s.reserved;
+-        s.reserved = 0;
+-        drop(a);
++        let retained = if s.completion_generation.is_some() {
++            ESCROW
++        } else {
++            0
++        };
++        let reserve = s.reserved.checked_sub(retained).ok_or(WorkspaceError::Io)?;
++        s.reserved = retained;
+         drop(s);
+-        host.release(0, reserve)
++        if let Some(fund) = &self.fund {
++            fund.give(reserve)
++        } else {
++            host.release(0, reserve)
++        }
+     }
+ }
+ impl Workspace {
+diff --git a/core/crates/layerfs-workspace/src/backing/metadata_index.rs b/core/crates/layerfs-workspace/src/backing/metadata_index.rs
+--- a/core/crates/layerfs-workspace/src/backing/metadata_index.rs
++++ b/core/crates/layerfs-workspace/src/backing/metadata_index.rs
+@@ -31,7 +31,9 @@
+                 cell.value(),
+             )?
+             .custody
+-        } else if cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1] {
++        } else if (cell.key_len == 9 && cell.key()[0] == b'R' && cell.value_len == 80)
++            || (cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1])
++        {
+             PageRef::NULL
+         } else {
+             return Err(WorkspaceError::Io);
+@@ -379,3 +381,65 @@
+         Ok(pages)
+     }
+ }
++impl Arena {
++    /// Bounded successor lookup, without retaining a vector of frontier records.
++    pub fn next(
++        &self,
++        root: PageRef,
++        lower: &[u8],
++        exclusive: bool,
++        window: &mut Window,
++        deadline: Instant,
++    ) -> Result<Option<Cell>, WorkspaceError> {
++        if root == PageRef::NULL {
++            return Ok(None);
++        }
++        self.next_in(root, None, lower, exclusive, window, deadline)
++    }
++    fn next_in(
++        &self,
++        root: PageRef,
++        parent: Option<(u8, &[u8])>,
++        lower: &[u8],
++        exclusive: bool,
++        window: &mut Window,
++        deadline: Instant,
++    ) -> Result<Option<Cell>, WorkspaceError> {
++        let page = self.load(root, window, deadline)?;
++        if parent.is_some_and(|(n, key)| {
++            n != page.level
++                || page.body() < MIN_BODY
++                || page.cells.last().is_none_or(|last| last.key() != key)
++        }) {
++            return Err(WorkspaceError::Io);
++        }
++        if page.level == 0 {
++            return Ok(page.cells.into_iter().find(|cell| {
++                if exclusive {
++                    cell.key() > lower
++                } else {
++                    cell.key() >= lower
++                }
++            }));
++        }
++        for cell in page.cells.iter().filter(|cell| {
++            if exclusive {
++                cell.key() > lower
++            } else {
++                cell.key() >= lower
++            }
++        }) {
++            if let Some(found) = self.next_in(
++                PageRef::parse(cell.value())?,
++                Some((page.level - 1, cell.key())),
++                lower,
++                exclusive,
++                window,
++                deadline,
++            )? {
++                return Ok(Some(found));
++            }
++        }
++        Ok(None)
++    }
++}
+diff --git a/core/crates/layerfs-workspace/src/backing/metadata_pages.rs b/core/crates/layerfs-workspace/src/backing/metadata_pages.rs
+--- a/core/crates/layerfs-workspace/src/backing/metadata_pages.rs
++++ b/core/crates/layerfs-workspace/src/backing/metadata_pages.rs
+@@ -187,3 +187,8 @@
+     key[9..].copy_from_slice(&inode.to_be_bytes());
+     key
+ }
++pub fn result_key(inode: u64) -> [u8; 9] {
++    let mut key = [b'R'; 9];
++    key[1..].copy_from_slice(&inode.to_be_bytes());
++    key
++}
+diff --git a/core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs b/core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs
+--- a/core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs
++++ b/core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs
+@@ -125,7 +125,7 @@
+                     .map_err(|error| self.failure(BackingPhase::Cleanup, error.kind()))?;
+                 }
+             }
+-            arena.host()?.release(PAGE as u64, 0)?;
++            self.release_bytes(PAGE as u64, 0)?;
+             {
+                 let mut a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+                 a.pages -= 1;
+@@ -211,8 +211,7 @@
+                         .map_err(|error| self.failure(BackingPhase::Cleanup, error.kind()))?;
+                     }
+                 }
+-                let host = self.arena.host()?;
+-                host.release(pending.allocated.unwrap_or(0), pending.reservation)?;
++                self.release_bytes(pending.allocated.unwrap_or(0), pending.reservation)?;
+                 let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
+                 a.allocated -= pending.allocated.unwrap_or(0);
+                 drop(a);
+@@ -337,7 +336,7 @@
+             s.reserved = 0;
+             reserve
+         };
+-        self.arena.host()?.release(0, reserve)?;
++        self.release_bytes(0, reserve)?;
+         Ok(())
+     }
+ }
+diff --git a/core/crates/layerfs-workspace/src/backing/ownership.rs b/core/crates/layerfs-workspace/src/backing/ownership.rs
+--- a/core/crates/layerfs-workspace/src/backing/ownership.rs
++++ b/core/crates/layerfs-workspace/src/backing/ownership.rs
+@@ -567,8 +567,6 @@
+             s.allocated -= PAGE as u64;
+         }
+         let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+-        self.host()?.release(0, s.escrow)?;
+-        s.escrow = 0;
+         self.host()?
+             .slots
+             .fetch_sub((s.next - 1) as usize, Ordering::AcqRel);
+@@ -594,7 +592,7 @@
+             created_segments: s.temporary.len() as u32
+                 + u32::from(s.pending.as_ref().is_some_and(|p| p.identity.is_some())),
+             allocated_bytes: a.allocated,
+-            reserved_bytes: s.reserved + a.escrow,
++            reserved_bytes: s.reserved,
+             cleanup_failed: phase == BackingPhase::Cleanup,
+             accounting_complete: a.complete,
+             kind,
+diff --git a/core/crates/layerfs-workspace/src/commit/lower.rs b/core/crates/layerfs-workspace/src/commit/lower.rs
+new file mode 100644
+--- /dev/null
++++ b/core/crates/layerfs-workspace/src/commit/lower.rs
+@@ -0,0 +1,262 @@
++//! Captured frontier traversal and the bounded wire representation of one request.
++use crate::{
++    backing::{
++        metadata_index::vector,
++        metadata_pages::{self, Cell},
++    },
++    overlay::{
++        pieces::{get, Inode},
++        snapshot::Submission,
++    },
++    *,
++};
++use layerfs_bridge::contract::{Edit, InodeChange};
++use std::time::Instant;
++pub struct FilePlan {
++    pub inode: Inode,
++    pub edits: Vec<Edit>,
++}
++impl Workspace {
++    pub(crate) fn next_dirty(
++        &self,
++        submission: &Submission,
++        after: u64,
++        deadline: Instant,
++    ) -> Result<Option<(u64, Inode)>, WorkspaceError> {
++        let captured = submission.capture()?;
++        let host = self
++            .host
++            .metadata
++            .as_ref()
++            .ok_or(WorkspaceError::Unsupported)?;
++        let _view = host.writer()?;
++        let mut lease = host.payloads.window(1, 3)?;
++        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
++        let key = metadata_pages::dirty_key(captured.generation, after);
++        let found =
++            captured
++                .root
++                .arena
++                .next(captured.root.root()?, &key, after != 0, window, deadline)?;
++        let Some(cell) = found else { return Ok(None) };
++        if cell.key().len() != 17 || cell.key()[..9] != key[..9] {
++            return Ok(None);
++        }
++        if cell.value() != [1] {
++            return Err(WorkspaceError::Io);
++        }
++        let serial = get(cell.key(), 9)?;
++        if serial <= after {
++            return Err(WorkspaceError::Io);
++        }
++        let record = captured
++            .root
++            .arena
++            .find(
++                captured.root.root()?,
++                &metadata_pages::inode_key(serial),
++                window,
++                deadline,
++            )?
++            .ok_or(WorkspaceError::Io)?;
++        let inode = Inode::parse(record.value())?;
++        if inode.generation != captured.generation
++            || inode.revision > captured.revision
++            || inode.captured
++        {
++            return Err(WorkspaceError::Io);
++        }
++        Ok(Some((serial, inode)))
++    }
++    pub(crate) fn lower_file(
++        &self,
++        submission: &Submission,
++        inode: Inode,
++        deadline: Instant,
++    ) -> Result<FilePlan, WorkspaceError> {
++        let captured = submission.capture()?;
++        let host = self
++            .host
++            .metadata
++            .as_ref()
++            .ok_or(WorkspaceError::Unsupported)?;
++        let _view = host.writer()?;
++        let mut lease = host.payloads.window(1, 3)?;
++        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
++        let pieces = captured.root.arena.pieces(
++            inode.pieces,
++            inode.count,
++            inode.length,
++            window,
++            deadline,
++        )?;
++        let mut edits = vector(256)?;
++        let mut base = 0u64;
++        let mut replacement = 0u64;
++        let mut total = 0u64;
++        let mut delta = 0i128;
++        for piece in pieces {
++            if piece.payload != 0 {
++                replacement = replacement
++                    .checked_add(piece.length)
++                    .ok_or(WorkspaceError::Capacity)?;
++                total = total
++                    .checked_add(piece.length)
++                    .ok_or(WorkspaceError::Capacity)?;
++            } else {
++                if piece.offset < base || piece.offset + piece.length > inode.base_length {
++                    return Err(WorkspaceError::Io);
++                }
++                push_edit(&mut edits, base, piece.offset, replacement, &mut delta)?;
++                base = piece.offset + piece.length;
++                replacement = 0;
++            }
++        }
++        push_edit(&mut edits, base, inode.base_length, replacement, &mut delta)?;
++        if edits.len() != usize::from(inode.edits)
++            || total != inode.replacement
++            || total > 8 * 1024 * 1024
++            || i128::from(inode.base_length) + delta != i128::from(inode.length)
++        {
++            return Err(WorkspaceError::Io);
++        }
++        Ok(FilePlan { inode, edits })
++    }
++    pub(crate) fn persist_saved(
++        &self,
++        submission: &Submission,
++        deadline: Instant,
++    ) -> Result<(), WorkspaceError> {
++        let (entry, old) = {
++            let state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
++            (state.pending.ok_or(WorkspaceError::Io)?, state.result_slot)
++        };
++        let metadata = entry.metadata.ok_or(WorkspaceError::Io)?;
++        let next = old.map_or(0, |slot| 1 - slot);
++        let target = &submission.results[next];
++        let host = self
++            .host
++            .metadata
++            .as_ref()
++            .ok_or(WorkspaceError::Unsupported)?;
++        let _writer = host.writer()?;
++        let mut lease = host.payloads.window(3, 4)?;
++        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
++        target.reserve_result_update()?;
++        let mut value = [0; 80];
++        value[..8].copy_from_slice(&entry.revision.to_be_bytes());
++        value[8..16].copy_from_slice(&entry.length.to_be_bytes());
++        value[16..48].copy_from_slice(&entry.content);
++        value[48..].copy_from_slice(&metadata);
++        let mut update = vector(1)?;
++        update.push(Cell::new(
++            &metadata_pages::result_key(entry.serial),
++            &value,
++        )?);
++        let root = target.update(submission.result_ref()?, update, window, deadline)?;
++        target.seal(root, window, deadline)?;
++        {
++            let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
++            state.result_slot = Some(next);
++            state.pending = None;
++        }
++        if let Some(old) = old {
++            let mut report = MetadataCleanupReport::default();
++            submission.results[old].reclaim(window, deadline, &mut report)?;
++        }
++        Ok(())
++    }
++    pub(crate) fn prepared_inodes(
++        &self,
++        submission: &Submission,
++        deadline: Instant,
++    ) -> Result<Vec<InodeChange>, WorkspaceError> {
++        let captured = submission.capture()?;
++        let root = submission.result_root()?.ok_or(WorkspaceError::Io)?;
++        let host = self
++            .host
++            .metadata
++            .as_ref()
++            .ok_or(WorkspaceError::Unsupported)?;
++        let _view = host.writer()?;
++        let mut lease = host.payloads.window(1, 3)?;
++        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
++        let mut inodes = vector(captured.count)?;
++        let mut after = 0;
++        while let Some(cell) = root.arena.next(
++            root.root()?,
++            &metadata_pages::result_key(after),
++            after != 0,
++            window,
++            deadline,
++        )? {
++            if cell.key().len() != 9
++                || cell.key()[0] != b'R'
++                || cell.value_len != 80
++                || inodes.len() == captured.count
++            {
++                return Err(WorkspaceError::Io);
++            }
++            let serial = get(cell.key(), 1)?;
++            if serial <= after {
++                return Err(WorkspaceError::Io);
++            }
++            let value = cell.value();
++            let original = captured
++                .root
++                .arena
++                .find(
++                    captured.root.root()?,
++                    &metadata_pages::inode_key(serial),
++                    window,
++                    deadline,
++                )?
++                .ok_or(WorkspaceError::Io)?;
++            let inode = Inode::parse(original.value())?;
++            if get(value, 0)? != inode.revision
++                || get(value, 8)? != inode.length
++                || inode.generation != captured.generation
++            {
++                return Err(WorkspaceError::Io);
++            }
++            inodes.push(InodeChange {
++                serial,
++                kind: 1,
++                content: value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
++                metadata: value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
++            });
++            after = serial;
++        }
++        if inodes.len() != captured.count {
++            return Err(WorkspaceError::Io);
++        }
++        Ok(inodes)
++    }
++}
++
++fn push_edit(
++    edits: &mut Vec<Edit>,
++    base: u64,
++    end: u64,
++    replacement: u64,
++    delta: &mut i128,
++) -> Result<(), WorkspaceError> {
++    if end < base {
++        return Err(WorkspaceError::Io);
++    }
++    if end == base && replacement == 0 {
++        return Ok(());
++    }
++    if edits.len() == 256 {
++        return Err(WorkspaceError::Capacity);
++    }
++    let start = u64::try_from(i128::from(base) + *delta).map_err(|_| WorkspaceError::Io)?;
++    let stop = u64::try_from(i128::from(end) + *delta).map_err(|_| WorkspaceError::Io)?;
++    edits.push(Edit {
++        start,
++        end: stop,
++        replacement,
++    });
++    *delta += i128::from(replacement) - i128::from(end - base);
++    Ok(())
++}
+diff --git a/core/crates/layerfs-workspace/src/commit/mod.rs b/core/crates/layerfs-workspace/src/commit/mod.rs
+new file mode 100644
+--- /dev/null
++++ b/core/crates/layerfs-workspace/src/commit/mod.rs
+@@ -0,0 +1,3 @@
++mod lower;
++mod save;
++mod source;
+diff --git a/core/crates/layerfs-workspace/src/commit/save.rs b/core/crates/layerfs-workspace/src/commit/save.rs
+new file mode 100644
+--- /dev/null
++++ b/core/crates/layerfs-workspace/src/commit/save.rs
+@@ -0,0 +1,204 @@
++//! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
++use super::source::ReplacementSource;
++use crate::{
++    overlay::snapshot::{SavedInode, Submission},
++    *,
++};
++use layerfs_bridge::contract::{
++    HistoryCommand, HistoryResult, Operation, PreparedChanges, Response, StageWire,
++    HISTORY_RESULT_BYTES, MAX_OPERATION_MS,
++};
++use std::time::Instant;
++impl Workspace {
++    pub fn stage(&self, deadline: Instant) -> Result<StageSelector, WorkspaceError> {
++        if self.inner.access != WorkspaceAccess::LocalEdit {
++            return Err(WorkspaceError::ReadOnly);
++        }
++        let remaining = deadline
++            .checked_duration_since(Instant::now())
++            .ok_or(WorkspaceError::Deadline)?;
++        if remaining.as_millis() == 0 || remaining.as_millis() > u128::from(MAX_OPERATION_MS) {
++            return Err(WorkspaceError::InvalidInput);
++        }
++        let _operation = self.begin(false, deadline)?;
++        let submission = self.capture_stage(deadline)?;
++        match self.stage_captured(&submission, deadline) {
++            Ok(selector) => Ok(selector),
++            Err(error) => Err(submission.fail(error)),
++        }
++    }
++    fn stage_captured(
++        &self,
++        submission: &Submission,
++        deadline: Instant,
++    ) -> Result<StageSelector, WorkspaceError> {
++        let captured = submission.capture()?;
++        let mut after = 0;
++        let mut count = 0;
++        submission.phase(StagePhase::LocalBookkeeping, None)?;
++        while let Some((serial, inode)) = self.next_dirty(submission, after, deadline)? {
++            if count == captured.count {
++                return Err(WorkspaceError::Io);
++            }
++            submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
++            let plan = self.lower_file(submission, inode, deadline)?;
++            let content = if plan.edits.is_empty() {
++                inode.base
++            } else {
++                submission.phase(StagePhase::FileSave, Some(serial))?;
++                let mut source =
++                    ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
++                let response = self.deliver(
++                    captured.generation,
++                    Operation::EditFile {
++                        root: inode.base,
++                        base_length: inode.base_length,
++                        edits: plan.edits,
++                    },
++                    &mut source,
++                    0,
++                    &mut std::io::sink(),
++                    deadline,
++                );
++                if let Some(failure) = source.failure.take() {
++                    submission
++                        .state
++                        .lock()
++                        .map_err(|_| WorkspaceError::Io)?
++                        .source_failure = Some(failure);
++                }
++                let Response::Saved { root, length, .. } = response? else {
++                    return Err(WorkspaceError::InvalidInput);
++                };
++                if length != inode.length || !source.complete() {
++                    return Err(WorkspaceError::InvalidInput);
++                }
++                submission
++                    .state
++                    .lock()
++                    .map_err(|_| WorkspaceError::Io)?
++                    .status
++                    .saved_files += 1;
++                root
++            };
++            {
++                let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
++                state.pending = Some(SavedInode {
++                    serial,
++                    revision: inode.revision,
++                    length: inode.length,
++                    content,
++                    metadata: None,
++                });
++            }
++            submission.phase(StagePhase::MetadataSave, Some(serial))?;
++            let response = self.deliver(
++                captured.generation,
++                Operation::UpdatePortableMetadata {
++                    base: inode.metadata,
++                    kind: 1,
++                    mode: inode.mode,
++                    mtime_seconds: inode.seconds,
++                    mtime_nanoseconds: inode.nanos,
++                },
++                &mut &[][..],
++                0,
++                &mut std::io::sink(),
++                deadline,
++            )?;
++            response.validate_metadata_saved()?;
++            let Response::MetadataSaved {
++                base,
++                kind,
++                mode,
++                mtime_seconds,
++                mtime_nanoseconds,
++                metadata,
++                ..
++            } = response
++            else {
++                return Err(WorkspaceError::InvalidInput);
++            };
++            if base != inode.metadata
++                || kind != 1
++                || mode != inode.mode
++                || mtime_seconds != inode.seconds
++                || mtime_nanoseconds != inode.nanos
++            {
++                return Err(WorkspaceError::InvalidInput);
++            }
++            {
++                let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
++                state.pending.as_mut().ok_or(WorkspaceError::Io)?.metadata = Some(metadata);
++                state.status.saved_metadata += 1;
++            }
++            submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
++            self.persist_saved(submission, deadline)?;
++            submission.phase(StagePhase::LocalBookkeeping, None)?;
++            after = serial;
++            count += 1;
++        }
++        if count != captured.count {
++            return Err(WorkspaceError::Io);
++        }
++        let inodes = self.prepared_inodes(submission, deadline)?;
++        let context = &captured.context;
++        let changes = PreparedChanges {
++            workspace: self.inner.incarnation,
++            branch: context.branch.branch,
++            expected_head: context.branch.head_commit,
++            expected_base: context.branch.base_layer,
++            generation: captured.generation,
++            base: context.effective_root,
++            scope: context.scope,
++            root_serial: context.root_serial.ok_or(WorkspaceError::Io)?,
++            directories: Vec::new(),
++            inodes,
++        };
++        submission.phase(StagePhase::StageChanges, None)?;
++        let response = self.deliver(
++            captured.generation,
++            Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
++            &mut &[][..],
++            HISTORY_RESULT_BYTES as u64,
++            &mut std::io::sink(),
++            deadline,
++        )?;
++        let Response::History(result) = response else {
++            return Err(WorkspaceError::InvalidInput);
++        };
++        let HistoryResult::Stage(stage) = *result else {
++            return Err(WorkspaceError::InvalidInput);
++        };
++        submission
++            .observed_stage
++            .set(stage.clone())
++            .map_err(|_| WorkspaceError::Io)?;
++        validate_stage(submission, self.inner.incarnation, &stage)?;
++        submission.acknowledged(stage)
++    }
++}
++fn validate_stage(
++    submission: &Submission,
++    incarnation: [u8; 32],
++    stage: &StageWire,
++) -> Result<(), WorkspaceError> {
++    let captured = submission.capture()?;
++    let context = &captured.context;
++    if stage.workspace != incarnation
++        || stage.token == 0
++        || stage.stack != context.branch.stack
++        || stage.branch != context.branch.branch
++        || stage.expected_head != context.branch.head_commit
++        || stage.expected_base != context.branch.base_layer
++        || stage.expected_root != context.effective_root
++        || stage.construction_base_root != context.effective_root
++        || stage.intended_commit_base != context.branch.base_layer
++        || stage.profile != context.profile
++        || stage.scope != context.scope
++        || stage.generation != captured.generation
++    {
++        return Err(WorkspaceError::InvalidInput);
++    }
++    Ok(())
++}
+diff --git a/core/crates/layerfs-workspace/src/commit/source.rs b/core/crates/layerfs-workspace/src/commit/source.rs
+new file mode 100644
+--- /dev/null
++++ b/core/crates/layerfs-workspace/src/commit/source.rs
+@@ -0,0 +1,137 @@
++//! The existing bridge Source contract over captured replacement spans.
++use crate::{
++    backing::{metadata::RootOwner, reader::PayloadReader},
++    overlay::pieces::Inode,
++    *,
++};
++use layerfs_bridge::contract::Source;
++use std::{
++    io,
++    sync::{
++        atomic::{AtomicBool, Ordering},
++        Arc,
++    },
++    time::Instant,
++};
++pub struct ReplacementSource {
++    workspace: Workspace,
++    root: Arc<RootOwner>,
++    inode: Inode,
++    position: u64,
++    emitted: u64,
++    reader: Option<PayloadReader>,
++    left: u64,
++    pub failure: Option<WorkspaceError>,
++}
++impl ReplacementSource {
++    pub fn new(workspace: Workspace, root: Arc<RootOwner>, inode: Inode) -> Self {
++        Self {
++            workspace,
++            root,
++            inode,
++            position: 0,
++            emitted: 0,
++            reader: None,
++            left: 0,
++            failure: None,
++        }
++    }
++    pub fn complete(&self) -> bool {
++        self.emitted == self.inode.replacement
++    }
++    fn pull(
++        &mut self,
++        out: &mut [u8],
++        deadline: Instant,
++        cancel: &AtomicBool,
++    ) -> Result<usize, WorkspaceError> {
++        crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
++        if cancel.load(Ordering::Acquire) {
++            return Err(WorkspaceError::Busy);
++        }
++        if out.is_empty() {
++            return Ok(0);
++        }
++        loop {
++            if let Some(reader) = &mut self.reader {
++                let limit = out.len().min(self.left as usize);
++                let count =
++                    Source::read(reader, &mut out[..limit], deadline, cancel).map_err(|error| {
++                        error
++                            .get_ref()
++                            .and_then(|inner| inner.downcast_ref::<BackingFailure>())
++                            .map_or(WorkspaceError::Io, |failure| {
++                                WorkspaceError::Backing(failure.clone())
++                            })
++                    })?;
++                if count == 0 {
++                    return Err(WorkspaceError::Io);
++                }
++                self.left -= count as u64;
++                self.emitted += count as u64;
++                if self.left == 0 {
++                    self.reader = None;
++                }
++                return Ok(count);
++            }
++            if self.position == self.inode.length {
++                if !self.complete() {
++                    return Err(WorkspaceError::Io);
++                }
++                return Ok(0);
++            }
++            let piece = {
++                let host = self
++                    .workspace
++                    .host
++                    .metadata
++                    .as_ref()
++                    .ok_or(WorkspaceError::Unsupported)?;
++                let _view = host.writer()?;
++                let mut window = host.payloads.window(1, 3)?;
++                self.root.arena.piece_at(
++                    self.inode.pieces,
++                    self.position,
++                    window.window.as_mut().ok_or(WorkspaceError::Io)?,
++                    deadline,
++                )?
++            };
++            if piece.start != self.position {
++                return Err(WorkspaceError::Io);
++            }
++            self.position = self
++                .position
++                .checked_add(piece.length)
++                .filter(|position| *position <= self.inode.length)
++                .ok_or(WorkspaceError::Io)?;
++            if piece.payload == 0 {
++                continue;
++            }
++            let payload = self.root.arena.payload(piece.payload, piece.custody)?;
++            self.left = piece.length;
++            self.reader = Some(payload.reader(piece.offset..piece.offset + piece.length)?);
++        }
++    }
++}
++impl Source for ReplacementSource {
++    fn read(
++        &mut self,
++        out: &mut [u8],
++        deadline: Instant,
++        cancel: &AtomicBool,
++    ) -> io::Result<usize> {
++        match self.pull(out, deadline, cancel) {
++            Ok(count) => Ok(count),
++            Err(error) => {
++                self.failure = Some(error.clone());
++                let kind = match &error {
++                    WorkspaceError::Backing(failure) => failure.kind,
++                    WorkspaceError::Deadline => io::ErrorKind::TimedOut,
++                    WorkspaceError::Busy => io::ErrorKind::WouldBlock,
++                    _ => io::ErrorKind::Other,
++                };
++                Err(io::Error::new(kind, error))
++            }
++        }
++    }
++}
+diff --git a/core/crates/layerfs-workspace/src/filesystem/read.rs b/core/crates/layerfs-workspace/src/filesystem/read.rs
+--- a/core/crates/layerfs-workspace/src/filesystem/read.rs
++++ b/core/crates/layerfs-workspace/src/filesystem/read.rs
+@@ -29,7 +29,7 @@
+         } else {
+             (attr.size - offset).min(size as u64) as usize
+         };
+-        let operation = self.begin(length > 0, deadline)?;
++        let mut operation = self.begin(false, deadline)?;
+         let charge = self.host.budget.reserve(length)?;
+         let mut bytes = Vec::new();
+         bytes
+@@ -43,9 +43,11 @@
+                     inode,
+                     offset,
+                     &mut bytes,
++                    &mut operation,
+                     deadline,
+                 )?;
+             } else {
++                operation.remote()?;
+                 let mut output = Cursor::new(bytes.as_mut_slice());
+                 let response = self.call(
+                     Operation::ReadFile {
+@@ -122,6 +124,7 @@
+         inode: crate::overlay::pieces::Inode,
+         offset: u64,
+         bytes: &mut [u8],
++        operation: &mut crate::runtime::state::OperationGuard,
+         deadline: Instant,
+     ) -> Result<(), WorkspaceError> {
+         use layerfs_bridge::contract::Source;
+@@ -150,7 +153,32 @@
+             };
+             let skip = position - piece.start;
+             let count = (piece.length - skip).min((bytes.len() - completed) as u64) as usize;
+-            if piece.payload == 0 {
++            if piece.payload == 0 && inode.captured {
++                let captured = crate::overlay::pieces::CapturedBase::parse(inode.base)?;
++                let parent = root.parent.as_ref().ok_or(WorkspaceError::Io)?;
++                if parent.root()? != captured.root {
++                    return Err(WorkspaceError::Io);
++                }
++                let inherited = self
++                    .overlay_inode(captured.inode, Some(parent), deadline)?
++                    .ok_or(WorkspaceError::Io)?;
++                if inherited.captured
++                    || inherited.generation != captured.generation
++                    || inherited.revision != captured.revision
++                    || inherited.length != inode.base_length
++                {
++                    return Err(WorkspaceError::Io);
++                }
++                self.read_overlay(
++                    parent,
++                    inherited,
++                    piece.offset + skip,
++                    &mut bytes[completed..completed + count],
++                    operation,
++                    deadline,
++                )?;
++            } else if piece.payload == 0 {
++                operation.remote()?;
+                 let mut output = Cursor::new(&mut bytes[completed..completed + count]);
+                 let response = self.call(
+                     Operation::ReadFile {
+diff --git a/core/crates/layerfs-workspace/src/filesystem/write.rs b/core/crates/layerfs-workspace/src/filesystem/write.rs
+--- a/core/crates/layerfs-workspace/src/filesystem/write.rs
++++ b/core/crates/layerfs-workspace/src/filesystem/write.rs
+@@ -5,7 +5,7 @@
+         metadata_index::vector,
+         metadata_pages::{self, Cell, PageRef},
+     },
+-    overlay::pieces::{self, Inode, Piece},
++    overlay::pieces::{self, CapturedBase, Inode, Piece},
+     *,
+ };
+ use layerfs_bridge::contract::{Inspect, Operation, Root, MAX_FILE};
+@@ -65,6 +65,7 @@
+                 return Ok((node.original, node.content, node.metadata));
+             }
+         }
++        let _remote = self.begin(true, deadline)?;
+         let mut parent = self.inner.root;
+         let mut bytes = vector(4096)?;
+         let parts = path.as_ref().split(|b| *b == b'/');
+@@ -115,7 +116,7 @@
+             return Err(WorkspaceError::ReadOnly);
+         }
+         let deadline = Self::callback_deadline(deadline);
+-        let _operation = self.begin(true, deadline)?;
++        let _operation = self.begin(false, deadline)?;
+         if edit.replacement.record.directory.incarnation != self.inner.incarnation
+             || !Arc::ptr_eq(
+                 &edit.replacement.host,
+@@ -135,8 +136,8 @@
+             .metadata
+             .as_ref()
+             .ok_or(WorkspaceError::Unsupported)?;
++        let (original, content, metadata) = self.edit_original(path, deadline)?;
+         let _writer = host.writer()?;
+-        let (original, content, metadata) = self.edit_original(path, deadline)?;
+         if original.kind == NodeKind::Directory {
+             return Err(WorkspaceError::IsDirectory);
+         }
+@@ -144,10 +145,17 @@
+             return Err(WorkspaceError::WrongKind);
+         }
+         super::namespace::check_access(original, self.inner.root.uid, 2)?;
+-        let (expected_revision, generation, dirty, old_root) = {
++        let (expected_revision, generation, dirty, old_root, needs_completion, frozen) = {
+             let s = self.state()?;
+             self.available(&s)?;
+-            (s.revision, s.generation, s.dirty_inodes, s.overlay.clone())
++            (
++                s.revision,
++                s.generation,
++                s.dirty_inodes,
++                s.overlay.clone(),
++                s.completion.is_none(),
++                s.submission.clone(),
++            )
+         };
+         let arena = self
+             .inner
+@@ -180,10 +188,41 @@
+         if length > MAX_FILE {
+             return Err(WorkspaceError::Capacity);
+         }
+-        if old.is_none() && dirty == 128 {
++        let already_dirty = old.is_some_and(|inode| inode.generation == generation);
++        if !already_dirty && dirty == 128 {
+             return Err(WorkspaceError::Capacity);
+         }
+-        let old_pieces = if old.is_some() {
++        let parent = frozen
++            .as_ref()
++            .map(|submission| submission.capture().map(|g| g.root.clone()))
++            .transpose()?;
++        let inherited_capture = match (&old, &frozen) {
++            (Some(inode), Some(submission)) => inode.generation == submission.capture()?.generation,
++            _ => false,
++        };
++        let old_pieces = if inherited_capture {
++            let frozen = frozen.as_ref().ok_or(WorkspaceError::Io)?.capture()?;
++            inode.base = CapturedBase {
++                root: frozen.root.root()?,
++                inode: original.serial,
++                generation: frozen.generation,
++                revision: inode.revision,
++            }
++            .bytes();
++            inode.captured = true;
++            inode.base_length = inode.length;
++            let mut pieces = vector(1024)?;
++            if inode.length > 0 {
++                pieces.push(Piece {
++                    start: 0,
++                    length: inode.length,
++                    offset: 0,
++                    payload: 0,
++                    custody: PageRef::NULL,
++                });
++            }
++            pieces
++        } else if old.is_some() {
+             arena.pieces(inode.pieces, inode.count, inode.length, window, deadline)?
+         } else {
+             let mut pieces = vector(1024)?;
+@@ -237,7 +276,7 @@
+         inode.edits = edits;
+         inode.replacement = replacement_bytes;
+         inode.count = pieces.len() as u16;
+-        let candidate = host.candidate(arena)?;
++        let candidate = host.candidate(arena, generation, needs_completion, parent)?;
+         if !edit.replacement.is_empty() {
+             replacement.custody = arena.custody(&candidate, &edit.replacement, window, deadline)?;
+             for p in &mut pieces {
+@@ -282,9 +321,18 @@
+         {
+             return Err(WorkspaceError::Busy);
+         }
++        if state.completion.is_none() != needs_completion {
++            return Err(WorkspaceError::Busy);
++        }
++        if needs_completion {
++            state.completion = candidate.take_completion(generation)?;
++            if state.completion.is_none() {
++                return Err(WorkspaceError::Io);
++            }
++        }
+         state.overlay = Some(candidate);
+         state.revision = revision;
+-        if old.is_none() {
++        if !already_dirty {
+             state.dirty_inodes += 1;
+         }
+         for node in &mut state.nodes {
+diff --git a/core/crates/layerfs-workspace/src/lib.rs b/core/crates/layerfs-workspace/src/lib.rs
+--- a/core/crates/layerfs-workspace/src/lib.rs
++++ b/core/crates/layerfs-workspace/src/lib.rs
+@@ -3,6 +3,7 @@
+ //! Transport and the Linux FUSE projection are assembled by their own libraries.
+ #![forbid(unsafe_code)]
+ mod backing;
++mod commit;
+ mod filesystem;
+ mod overlay;
+ mod runtime;
+diff --git a/core/crates/layerfs-workspace/src/overlay/mod.rs b/core/crates/layerfs-workspace/src/overlay/mod.rs
+--- a/core/crates/layerfs-workspace/src/overlay/mod.rs
++++ b/core/crates/layerfs-workspace/src/overlay/mod.rs
+@@ -1 +1,2 @@
+ pub(crate) mod pieces;
++pub(crate) mod snapshot;
+diff --git a/core/crates/layerfs-workspace/src/overlay/pieces.rs b/core/crates/layerfs-workspace/src/overlay/pieces.rs
+--- a/core/crates/layerfs-workspace/src/overlay/pieces.rs
++++ b/core/crates/layerfs-workspace/src/overlay/pieces.rs
+@@ -42,6 +42,7 @@
+ }
+ #[derive(Clone, Copy)]
+ pub struct Inode {
++    pub captured: bool,
+     pub revision: u64,
+     pub length: u64,
+     pub base_length: u64,
+@@ -59,6 +60,7 @@
+ impl Inode {
+     pub fn initial(attr: NodeAttributes, base: Root, metadata: Root) -> Self {
+         Self {
++            captured: false,
+             revision: 0,
+             length: attr.size,
+             base_length: attr.size,
+@@ -76,6 +78,7 @@
+     }
+     pub fn value(self) -> [u8; 160] {
+         let mut b = [0; 160];
++        b[24] = u8::from(self.captured);
+         for (at, value) in [
+             (0, self.revision),
+             (8, self.length),
+@@ -96,10 +99,11 @@
+         b
+     }
+     pub fn parse(b: &[u8]) -> Result<Self, WorkspaceError> {
+-        if b.len() != 160 || b[24..32].iter().chain(&b[140..]).any(|v| *v != 0) {
++        if b.len() != 160 || b[24] > 1 || b[25..32].iter().chain(&b[140..]).any(|v| *v != 0) {
+             return Err(WorkspaceError::Io);
+         }
+         let i = Self {
++            captured: b[24] == 1,
+             revision: get(b, 0)?,
+             length: get(b, 8)?,
+             base_length: get(b, 16)?,
+@@ -128,6 +132,9 @@
+         {
+             return Err(WorkspaceError::Io);
+         }
++        if i.captured {
++            CapturedBase::parse(i.base)?;
++        }
+         Ok(i)
+     }
+     pub fn attributes(self, mut a: NodeAttributes) -> NodeAttributes {
+@@ -233,3 +240,37 @@
+     }
+     Ok((new, edits, bytes))
+ }
++
++#[derive(Clone, Copy)]
++pub struct CapturedBase {
++    pub root: PageRef,
++    pub inode: u64,
++    pub generation: u64,
++    pub revision: u64,
++}
++impl CapturedBase {
++    pub fn bytes(self) -> Root {
++        let mut bytes = [0; 32];
++        bytes[..8].copy_from_slice(&self.root.bytes());
++        bytes[8..16].copy_from_slice(&self.inode.to_be_bytes());
++        bytes[16..24].copy_from_slice(&self.generation.to_be_bytes());
++        bytes[24..].copy_from_slice(&self.revision.to_be_bytes());
++        bytes
++    }
++    pub fn parse(bytes: Root) -> Result<Self, WorkspaceError> {
++        let value = Self {
++            root: PageRef::parse(&bytes[..8])?,
++            inode: get(&bytes, 8)?,
++            generation: get(&bytes, 16)?,
++            revision: get(&bytes, 24)?,
++        };
++        if value.root == PageRef::NULL
++            || value.inode == 0
++            || value.generation == 0
++            || value.revision == 0
++        {
++            return Err(WorkspaceError::Io);
++        }
++        Ok(value)
++    }
++}
+diff --git a/core/crates/layerfs-workspace/src/overlay/snapshot.rs b/core/crates/layerfs-workspace/src/overlay/snapshot.rs
+new file mode 100644
+--- /dev/null
++++ b/core/crates/layerfs-workspace/src/overlay/snapshot.rs
+@@ -0,0 +1,306 @@
++//! Private capture consumed by the production staging operation.
++use crate::{
++    backing::{
++        metadata::{MetadataCharge, MetadataHost, ProgressFund, RootOwner, ESCROW},
++        metadata_pages::PageRef,
++    },
++    *,
++};
++use layerfs_bridge::contract::{BranchSnapshotWire, StageObservation, StageWire};
++use std::{
++    sync::{
++        atomic::{AtomicBool, Ordering},
++        Arc, Mutex, OnceLock,
++    },
++    time::Instant,
++};
++pub(crate) struct StageIdentity {
++    pub stage: OnceLock<StageWire>,
++    _charge: MetadataCharge,
++}
++pub(crate) struct Captured {
++    pub root: Arc<RootOwner>,
++    pub context: Arc<BranchSnapshotWire>,
++    pub generation: u64,
++    pub revision: u64,
++    pub count: usize,
++}
++pub(crate) type SavedInode = InodeSaveObservation;
++pub(crate) struct SubmissionState {
++    pub status: SubmissionStatus,
++    pub result_slot: Option<usize>,
++    pub pending: Option<SavedInode>,
++    pub source_failure: Option<WorkspaceError>,
++}
++pub(crate) struct Submission {
++    pub captured: OnceLock<Captured>,
++    pub identity: Arc<StageIdentity>,
++    pub state: Mutex<SubmissionState>,
++    pub results: [Arc<RootOwner>; 2],
++    pub fund: Arc<ProgressFund>,
++    pub failure: OnceLock<Arc<StageFailure>>,
++    pub observed_stage: OnceLock<StageWire>,
++    failure_charge: Mutex<Option<MetadataCharge>>,
++    _permit: FrozenPermit,
++    _charge: MetadataCharge,
++}
++struct FrozenPermit(Arc<AtomicBool>);
++impl Drop for FrozenPermit {
++    fn drop(&mut self) {
++        self.0.store(false, Ordering::Release);
++    }
++}
++impl Submission {
++    fn reserve(
++        workspace: &Workspace,
++        host: &Arc<MetadataHost>,
++    ) -> Result<Arc<Self>, WorkspaceError> {
++        workspace
++            .host
++            .frozen
++            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
++            .map_err(|_| WorkspaceError::Busy)?;
++        let permit = FrozenPermit(workspace.host.frozen.clone());
++        let charge = host.memory(32768)?;
++        let failure_charge = host.memory(4096)?;
++        let identity = Arc::new(StageIdentity {
++            stage: OnceLock::new(),
++            _charge: host.memory(1024)?,
++        });
++        let fund = ProgressFund::new(host)?;
++        let results = host.result_roots(
++            workspace
++                .inner
++                .arena
++                .as_ref()
++                .ok_or(WorkspaceError::Unsupported)?,
++            &fund,
++        )?;
++        Ok(Arc::new(Self {
++            captured: OnceLock::new(),
++            identity,
++            state: Mutex::new(SubmissionState {
++                status: SubmissionStatus {
++                    generation: 0,
++                    captured_revision: 0,
++                    dirty_inodes: 0,
++                    phase: StagePhase::Captured,
++                    inode: None,
++                    saved_files: 0,
++                    saved_metadata: 0,
++                    stage_token: None,
++                    candidate_root: None,
++                    failure: None,
++                    failure_phase: None,
++                },
++                result_slot: None,
++                pending: None,
++                source_failure: None,
++            }),
++            results,
++            fund,
++            failure: OnceLock::new(),
++            observed_stage: OnceLock::new(),
++            failure_charge: Mutex::new(Some(failure_charge)),
++            _permit: permit,
++            _charge: charge,
++        }))
++    }
++    pub fn capture(&self) -> Result<&Captured, WorkspaceError> {
++        self.captured.get().ok_or(WorkspaceError::Io)
++    }
++    pub fn status(&self) -> Result<SubmissionStatus, WorkspaceError> {
++        Ok(self.state.lock().map_err(|_| WorkspaceError::Io)?.status)
++    }
++    pub fn phase(&self, phase: StagePhase, inode: Option<u64>) -> Result<(), WorkspaceError> {
++        let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
++        s.status.phase = phase;
++        s.status.inode = inode;
++        Ok(())
++    }
++    pub fn fail(&self, cause: WorkspaceError) -> WorkspaceError {
++        let Ok(captured) = self.capture() else {
++            return cause;
++        };
++        let (phase, source_failure, pending) = self
++            .state
++            .lock()
++            .map_or((StagePhase::LocalBookkeeping, None, None), |s| {
++                (s.status.phase, s.source_failure.clone(), s.pending)
++            });
++        let (unknown, mut observed) = match &cause {
++            WorkspaceError::Service(failure) => {
++                let observed = failure
++                    .history
++                    .as_ref()
++                    .and_then(|history| match &history.stage {
++                        StageObservation::Retained(stage)
++                        | StageObservation::AcknowledgedUnknown(stage) => Some((**stage).clone()),
++                        _ => None,
++                    });
++                let uncertain = failure.unknown
++                    || failure.history.as_ref().is_some_and(|history| {
++                        matches!(history.stage, StageObservation::AcknowledgedUnknown(_))
++                    });
++                (uncertain, observed)
++            }
++            WorkspaceError::Backing(failure) => (!failure.accounting_complete, None),
++            _ => (false, None),
++        };
++        if observed.is_none() {
++            observed = self.observed_stage.get().cloned();
++        }
++        let known_stage = self.identity.stage.get().map(|_| StageSelector {
++            identity: self.identity.clone(),
++        });
++        let disposition = if known_stage.is_some() {
++            StageFailureDisposition::KnownStageLocalFailure
++        } else if unknown {
++            StageFailureDisposition::Unknown
++        } else {
++            StageFailureDisposition::KnownBeforeStage
++        };
++        let Ok(mut reserved) = self.failure_charge.lock() else {
++            return cause;
++        };
++        let Some(charge) = reserved.take() else {
++            return cause;
++        };
++        drop(reserved);
++        let failure = Arc::new(StageFailure {
++            generation: captured.generation,
++            phase,
++            disposition,
++            cause,
++            observed_stage: observed,
++            known_stage,
++            source_failure,
++            pending,
++            _charge: charge,
++        });
++        let _ = self.failure.set(failure.clone());
++        if let Ok(mut state) = self.state.lock() {
++            state.status.phase = StagePhase::Failed;
++            state.status.failure_phase = Some(phase);
++            state.status.failure = Some(disposition);
++            if let Some(stage) = self.identity.stage.get() {
++                state.status.stage_token = Some(stage.token);
++                state.status.candidate_root = Some(stage.candidate_root);
++            }
++        }
++        WorkspaceError::Stage(failure)
++    }
++    pub fn acknowledged(&self, stage: StageWire) -> Result<StageSelector, WorkspaceError> {
++        self.identity
++            .stage
++            .set(stage)
++            .map_err(|_| WorkspaceError::Io)?;
++        let result = self.identity.stage.get().ok_or(WorkspaceError::Io)?;
++        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
++        state.status.phase = StagePhase::Staged;
++        state.status.inode = None;
++        state.status.stage_token = Some(result.token);
++        state.status.candidate_root = Some(result.candidate_root);
++        Ok(StageSelector {
++            identity: self.identity.clone(),
++        })
++    }
++    pub fn result_root(&self) -> Result<Option<&Arc<RootOwner>>, WorkspaceError> {
++        let slot = self
++            .state
++            .lock()
++            .map_err(|_| WorkspaceError::Io)?
++            .result_slot;
++        Ok(slot.map(|slot| &self.results[slot]))
++    }
++    pub fn result_ref(&self) -> Result<PageRef, WorkspaceError> {
++        self.result_root()?
++            .map_or(Ok(PageRef::NULL), |root| root.root())
++    }
++}
++impl Workspace {
++    pub(crate) fn capture_stage(
++        &self,
++        deadline: Instant,
++    ) -> Result<Arc<Submission>, WorkspaceError> {
++        if self.inner.access != WorkspaceAccess::LocalEdit {
++            return Err(WorkspaceError::ReadOnly);
++        }
++        {
++            let state = self.state()?;
++            self.available(&state)?;
++            if state.submission.is_some() {
++                return Err(WorkspaceError::Busy);
++            }
++            if state.dirty_inodes == 0 {
++                return Err(WorkspaceError::InvalidInput);
++            }
++        }
++        let host = self
++            .host
++            .metadata
++            .as_ref()
++            .ok_or(WorkspaceError::Unsupported)?;
++        let submission = Submission::reserve(self, host)?;
++        let result = (|| -> Result<(), WorkspaceError> {
++            crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
++            let mut state = self.state()?;
++            self.available(&state)?;
++            if state.submission.is_some() {
++                return Err(WorkspaceError::Busy);
++            }
++            if state.dirty_inodes == 0 {
++                return Err(WorkspaceError::InvalidInput);
++            }
++            let generation = state.generation;
++            let next = generation
++                .checked_add(1)
++                .filter(|g| *g <= i64::MAX as u64)
++                .ok_or(WorkspaceError::Capacity)?;
++            let revision = state.revision;
++            let next_revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
++            let root = state.overlay.clone().ok_or(WorkspaceError::Io)?;
++            let context = self
++                .inner
++                .branch
++                .clone()
++                .ok_or(WorkspaceError::Unsupported)?;
++            let completion = state.completion.as_ref().ok_or(WorkspaceError::Io)?;
++            if completion.generation != generation || completion.bytes != ESCROW {
++                return Err(WorkspaceError::Io);
++            }
++            let count = state.dirty_inodes;
++            {
++                let mut s = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
++                s.status.generation = generation;
++                s.status.captured_revision = revision;
++                s.status.dirty_inodes = count;
++            }
++            let completion = state.completion.take().ok_or(WorkspaceError::Io)?;
++            submission.fund.install(completion)?;
++            if submission
++                .captured
++                .set(Captured {
++                    root,
++                    context,
++                    generation,
++                    revision,
++                    count,
++                })
++                .is_err()
++            {
++                unreachable!("one capture per reserved submission")
++            }
++            state.generation = next;
++            state.revision = next_revision;
++            state.dirty_inodes = 0;
++            state.submission = Some(submission.clone());
++            Ok(())
++        })();
++        if let Err(error) = result {
++            host.remove_empty_result_roots(&submission.results)?;
++            return Err(error);
++        }
++        Ok(submission)
++    }
++}
+diff --git a/core/crates/layerfs-workspace/src/runtime/host.rs b/core/crates/layerfs-workspace/src/runtime/host.rs
+--- a/core/crates/layerfs-workspace/src/runtime/host.rs
++++ b/core/crates/layerfs-workspace/src/runtime/host.rs
+@@ -9,7 +9,7 @@
+     *,
+ };
+ use layerfs_bridge::contract::{
+-    HistoryQuery, HistoryResult, Inspect, Operation, Request, Response,
++    HistoryQuery, HistoryResult, Inspect, Operation, Request, Response, Source,
+ };
+ use std::{
+     fs,
+@@ -31,6 +31,7 @@
+     pub config: WorkspaceConfig,
+     pub budget: Arc<Budget>,
+     pub remote: AtomicBool,
++    pub frozen: Arc<AtomicBool>,
+     pub deliver: OperationDelivery,
+     pub request_id: AtomicU64,
+     pub registry: Mutex<Registry>,
+@@ -157,6 +158,7 @@
+                 config,
+                 budget,
+                 remote: AtomicBool::new(false),
++                frozen: Arc::new(AtomicBool::new(false)),
+                 deliver,
+                 request_id: AtomicU64::new(1),
+                 registry: Mutex::new(registry),
+@@ -330,7 +332,7 @@
+                 store: options.store,
+                 base,
+                 access: options.access,
+-                _branch: branch_snapshot,
++                branch: branch_snapshot.map(Arc::new),
+                 arena,
+                 root: attr,
+                 mount_path: path.clone().into_boxed_path().into_path_buf(),
+@@ -340,6 +342,8 @@
+                 state: Mutex::new(State {
+                     nodes,
+                     overlay: None,
++                    completion: None,
++                    submission: None,
+                     generation: 1,
+                     revision: 0,
+                     dirty_inodes: 0,
+@@ -392,6 +396,17 @@
+         output: &mut dyn Write,
+         deadline: Instant,
+     ) -> Result<Response, WorkspaceError> {
++        self.call_input((store, 0), operation, &mut &[][..], bytes, output, deadline)
++    }
++    pub fn call_input(
++        &self,
++        target: (u32, u64),
++        operation: Operation,
++        input: &mut dyn Source,
++        bytes: u64,
++        output: &mut dyn Write,
++        deadline: Instant,
++    ) -> Result<Response, WorkspaceError> {
+         let remaining = deadline
+             .checked_duration_since(Instant::now())
+             .ok_or(WorkspaceError::Deadline)?;
+@@ -404,22 +419,25 @@
+             .request_id
+             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |id| id.checked_add(1))
+             .map_err(|_| WorkspaceError::Capacity)?;
+-        let profile = if matches!(operation, Operation::HistoryQuery(_)) {
++        let profile = if matches!(
++            operation,
++            Operation::HistoryQuery(_) | Operation::HistoryCommand(_)
++        ) {
+             2
+         } else {
+             1
+         };
+         let request = Request {
+             id,
+-            generation: 0,
+-            store,
++            generation: target.1,
++            store: target.0,
+             profile,
+             deadline_ms,
+             response_bytes: bytes,
+             operation,
+         };
+         request.validate()?;
+-        (self.deliver)(&request, &mut &[][..], output, deadline).map_err(WorkspaceError::Service)
++        (self.deliver)(&request, input, output, deadline).map_err(WorkspaceError::Service)
+     }
+ }
+ pub(crate) fn validate_id(id: &str) -> Result<(), WorkspaceError> {
+diff --git a/core/crates/layerfs-workspace/src/runtime/lifecycle.rs b/core/crates/layerfs-workspace/src/runtime/lifecycle.rs
+--- a/core/crates/layerfs-workspace/src/runtime/lifecycle.rs
++++ b/core/crates/layerfs-workspace/src/runtime/lifecycle.rs
+@@ -29,7 +29,13 @@
+     }
+     pub fn status(&self) -> Result<WorkspaceStatus, WorkspaceError> {
+         let state = self.state()?;
++        let submission = state
++            .submission
++            .as_ref()
++            .map(|submission| submission.status())
++            .transpose()?;
+         Ok(WorkspaceStatus {
++            submission,
+             generation: state.generation,
+             revision: state.revision,
+             dirty_inodes: state.dirty_inodes,
+@@ -58,7 +64,8 @@
+             if state.closed {
+                 return Err(WorkspaceError::Closed);
+             }
+-            if state.dirty_inodes > 0
++            if state.submission.is_some()
++                || state.dirty_inodes > 0
+                 || state.mounted
+                 || state.active > 0
+                 || !state.handles.is_empty()
+diff --git a/core/crates/layerfs-workspace/src/runtime/state.rs b/core/crates/layerfs-workspace/src/runtime/state.rs
+--- a/core/crates/layerfs-workspace/src/runtime/state.rs
++++ b/core/crates/layerfs-workspace/src/runtime/state.rs
+@@ -28,7 +28,7 @@
+     pub store: u32,
+     pub base: Root,
+     pub access: WorkspaceAccess,
+-    pub _branch: Option<layerfs_bridge::contract::BranchSnapshotWire>,
++    pub branch: Option<Arc<layerfs_bridge::contract::BranchSnapshotWire>>,
+     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
+     pub root: NodeAttributes,
+     pub mount_path: PathBuf,
+@@ -40,6 +40,8 @@
+ pub(crate) struct State {
+     pub nodes: Vec<Node>,
+     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
++    pub completion: Option<crate::backing::metadata::CompletionReserve>,
++    pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
+     pub generation: u64,
+     pub revision: u64,
+     pub dirty_inodes: usize,
+@@ -209,6 +211,25 @@
+         self.host
+             .call(self.inner.store, operation, bytes, output, deadline)
+     }
++    pub(crate) fn deliver(
++        &self,
++        generation: u64,
++        operation: Operation,
++        input: &mut dyn layerfs_bridge::contract::Source,
++        bytes: u64,
++        output: &mut dyn Write,
++        deadline: Instant,
++    ) -> Result<Response, WorkspaceError> {
++        let _remote = self.begin(true, deadline)?;
++        self.host.call_input(
++            (self.inner.store, generation),
++            operation,
++            input,
++            bytes,
++            output,
++            deadline,
++        )
++    }
+     pub(crate) fn callback_deadline(deadline: Instant) -> Instant {
+         deadline.min(Instant::now() + Duration::from_secs(10))
+     }
+@@ -278,12 +299,33 @@
+         Ok(())
+     }
+ }
++impl OperationGuard {
++    pub fn remote(&mut self) -> Result<(), WorkspaceError> {
++        if self.remote {
++            return Ok(());
++        }
++        self.workspace
++            .host
++            .remote
++            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
++            .map_err(|_| WorkspaceError::Busy)?;
++        if let Err(error) = self._charge.resize(CALL_SCRATCH) {
++            self.workspace.host.remote.store(false, Ordering::Release);
++            return Err(error);
++        }
++        self.remote = true;
++        Ok(())
++    }
++}
+ impl Drop for OperationGuard {
+     fn drop(&mut self) {
+         if let Ok(mut state) = self.workspace.inner.state.lock() {
+             state.active -= 1;
+         }
+         if self.remote {
++            self._charge
++                .resize(0)
++                .expect("shrinking a call reservation cannot fail");
+             self.workspace.host.remote.store(false, Ordering::Release);
+         }
+     }
+diff --git a/core/crates/layerfs-workspace/src/types.rs b/core/crates/layerfs-workspace/src/types.rs
+--- a/core/crates/layerfs-workspace/src/types.rs
++++ b/core/crates/layerfs-workspace/src/types.rs
+@@ -75,6 +75,7 @@
+     Io,
+     Service(Failure),
+     Backing(BackingFailure),
++    Stage(Arc<StageFailure>),
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -150,6 +151,7 @@
+ 
+ #[derive(Clone, Copy, Debug)]
+ pub struct WorkspaceStatus {
++    pub submission: Option<SubmissionStatus>,
+     pub generation: u64,
+     pub revision: u64,
+     pub dirty_inodes: usize,
+@@ -260,3 +262,102 @@
+     pub accounting_complete: bool,
+     pub admission_stopped: bool,
+ }
++
++/// One local capture and its exact service staging operation.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum StagePhase {
++    Captured,
++    FileSave,
++    MetadataSave,
++    StageChanges,
++    Staged,
++    Failed,
++    LocalBookkeeping,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum StageFailureDisposition {
++    KnownBeforeStage,
++    Unknown,
++    KnownStageLocalFailure,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct SubmissionStatus {
++    pub generation: u64,
++    pub captured_revision: u64,
++    pub dirty_inodes: usize,
++    pub phase: StagePhase,
++    pub inode: Option<u64>,
++    pub saved_files: u16,
++    pub saved_metadata: u16,
++    pub stage_token: Option<u64>,
++    pub candidate_root: Option<Root>,
++    pub failure: Option<StageFailureDisposition>,
++    pub failure_phase: Option<StagePhase>,
++}
++#[derive(Clone)]
++pub struct StageSelector {
++    pub(crate) identity: Arc<crate::overlay::snapshot::StageIdentity>,
++}
++impl StageSelector {
++    /// A service acknowledgement associated with this Workspace capture.
++    pub fn stage(&self) -> &layerfs_bridge::contract::StageWire {
++        self.identity
++            .stage
++            .get()
++            .expect("selectors follow a known stage acknowledgement")
++    }
++}
++impl std::fmt::Debug for StageSelector {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("StageSelector")
++            .field("stage", self.stage())
++            .finish()
++    }
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct InodeSaveObservation {
++    pub serial: u64,
++    pub revision: u64,
++    pub length: u64,
++    pub content: Root,
++    pub metadata: Option<Root>,
++}
++pub struct StageFailure {
++    pub generation: u64,
++    pub phase: StagePhase,
++    pub disposition: StageFailureDisposition,
++    pub cause: WorkspaceError,
++    pub observed_stage: Option<layerfs_bridge::contract::StageWire>,
++    pub known_stage: Option<StageSelector>,
++    pub source_failure: Option<WorkspaceError>,
++    pub pending: Option<InodeSaveObservation>,
++    pub(crate) _charge: crate::backing::metadata::MetadataCharge,
++}
++impl std::fmt::Debug for StageFailure {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("StageFailure")
++            .field("generation", &self.generation)
++            .field("phase", &self.phase)
++            .field("disposition", &self.disposition)
++            .field("cause", &self.cause)
++            .field("observed_stage", &self.observed_stage)
++            .field("known_stage", &self.known_stage)
++            .field("source_failure", &self.source_failure)
++            .field("pending", &self.pending)
++            .finish()
++    }
++}
++impl PartialEq for StageFailure {
++    fn eq(&self, other: &Self) -> bool {
++        self.generation == other.generation
++            && self.phase == other.phase
++            && self.disposition == other.disposition
++            && self.cause == other.cause
++            && self.observed_stage == other.observed_stage
++            && self.source_failure == other.source_failure
++            && self.pending == other.pending
++            && self.known_stage.as_ref().map(StageSelector::stage)
++                == other.known_stage.as_ref().map(StageSelector::stage)
++    }
++}
++impl Eq for StageFailure {}

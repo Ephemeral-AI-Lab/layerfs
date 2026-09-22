@@ -1,0 +1,8 @@
+{
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/edd3a4c0a8af9a02922ca558a7a96e838cfa33f75a6ac30de97c294e5c2901eb/host",
+  "host_binary_sha256": {
+    "layerfs-daemon": "b84d232c979576f9b3d29a22c74000946abae41d0c1e4133de59f4b6f352f42d",
+    "layerfs-service": "e1a7e34844c68b5a83bb0f6a42be0a6f3f9cff66b7cff9268fcb7f4dfc245cf9",
+    "examples/public_key": "e786a3d5b2cf890d060d36d27191e64ebe06ad357d411156a5d6601ff38eb647"
+  }
+}

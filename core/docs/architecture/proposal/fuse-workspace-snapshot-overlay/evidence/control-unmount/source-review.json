@@ -1,0 +1,17 @@
+{
+  "scope": "read-only implementation review; no runtime inference",
+  "findings": [],
+  "product_files_sha256": {
+    "core/crates/layerfs-daemon/src/config.rs": "1f32e2b4e1b4cbd1a5cefdad964ebd08934628da39884c4e9a0554ba85b3c3fc",
+    "core/crates/layerfs-daemon/src/control.rs": "8333da39d4a6981d85020a36b1b6bd88e48d633f56b8a0a61bb19d1b428addae",
+    "core/crates/layerfs-daemon/src/run.rs": "d664025893528012c5f192c13972b3e00bbb7794b77085c9782532eeecb50a12",
+    "core/crates/layerfs-service/src/owner.rs": "7f7d60c8a64cb70d77a243fb226f3204d6d79b6e211c84961dc98c8772e0c82c",
+    "core/crates/layerfs-service/src/operation/dispatch.rs": "fb23962452debc1e35ea67edabdb867ac7e15a41022e1e78b670104090e67a26"
+  },
+  "decisions": [
+    "Entered native failures use typed Retained result, distinct from pre-admission Failure",
+    "Reserve100ms inside original deadline; no syscall-preemption guarantee",
+    "Final stop check under retained mount owner is admission linearization point",
+    "Signal cleanup joins control first and keeps process on incomplete cleanup until another explicit signal"
+  ]
+}

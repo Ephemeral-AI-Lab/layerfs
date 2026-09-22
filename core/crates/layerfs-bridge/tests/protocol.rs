@@ -5,7 +5,7 @@ struct Fragment<'a>(&'a [u8]);
 impl Read for Fragment<'_> {
     fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
         let n = b.len().min(1);
-        self.0.read(&mut b[..n])
+        std::io::Read::read(&mut self.0, &mut b[..n])
     }
 }
 #[test]
@@ -89,6 +89,10 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
             }],
         },
         Operation::UpdatePreparedFilesystem {
+            directory_metadata: Vec::new(),
+            new_directories: Vec::new(),
+            new_file_serials: Vec::new(),
+            new_symlink_serials: Vec::new(),
             base: [1; 32],
             scope: [2; 32],
             root_serial: 1,

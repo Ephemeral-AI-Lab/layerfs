@@ -1,0 +1,9 @@
+{
+  "basis": "Both helpers were unchanged from each receipt source commit; supplementary identities do not alter the receipts.",
+  "helpers": {
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "28deac2696ae890ef65eb5e070cb0afc917b39a5e388391034de34b9622c1559"
+  },
+  "public_key_example_sha256": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4",
+  "effective_build_flags": "Repository .cargo/config.toml, RUSTFLAGS and CARGO_ENCODED_RUSTFLAGS unset; Rust 1.85.1 locked."
+}

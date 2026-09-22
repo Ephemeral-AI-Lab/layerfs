@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::local_range_edit_corruption ... LOCAL_EDIT_CORRUPTION files=2 retained_allocated=28672
+LOCAL_EDIT_CHECK corrupt-live-page-refuses-without-dropping-owned-state PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.02s
+

@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "checked_utc": "2026-09-21T18:38:18.278025+00:00",
+  "basis": "Full pre/post read-only app launch path set, regular-file SHA256, mode, mtime_ns and symlink target comparison",
+  "manifest_sha256": "a6a447a5ef5fe01d8d28e3e1a382ae293c54f503adf60d22f1c950e19b5368cb",
+  "entries": 28742,
+  "runtime_state": "fresh offline-home-03 outside app"
+}

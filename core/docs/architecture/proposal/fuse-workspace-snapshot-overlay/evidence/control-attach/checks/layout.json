@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/usr/bin/dwarfdump",
+    "--regex",
+    "--name=^(Lifecycle|Slot|Selected|AttachOptions|Target|ArcInner<layerfs_daemon::lifecycle::Lifecycle>)$",
+    "--show-parents",
+    "--parent-recurse-depth=3",
+    "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c/layerfs-daemon"
+  ],
+  "exit_code": 0,
+  "binary_sha256": "832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c",
+  "claim": "compiler object layout only; allocator overhead, completeheap, RSS/cgroup not measured",
+  "bytes": {
+    "prior_owner_arc": 128,
+    "current_lifecycle_arc": 312,
+    "Lifecycle": 296,
+    "Slot": 176,
+    "Selected": 72,
+    "AttachOptions": 104,
+    "control_Target": 16
+  },
+  "fixed_arc_delta": 184,
+  "owned_names": "profile.id and current selected.id; each validated length <=63 bytes; heap capacities were not dynamically measured and are not replaced with length estimates",
+  "transient": "one prior closed selection during one attempted Attach, cloned AttachOptions and response identities; native Workspace allocations remain charged; startup failure Lifecycle stack-owned",
+  "additional_worker_capacity": 0,
+  "additional_queue_capacity": 0,
+  "additional_mount_fd_capacity": 0
+}

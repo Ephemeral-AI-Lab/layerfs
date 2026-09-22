@@ -9,7 +9,7 @@
 //! suboperation is refused before any mutation, and a reply is matched against
 //! the request that produced it rather than being interpreted on its own.
 
-use super::Root;
+use super::{Code, Failure, Root};
 
 /// Operation profile of every history request and reply.
 pub const HISTORY_PROFILE: u16 = 2;
@@ -45,17 +45,21 @@ pub const MANIFEST_TARGET_BYTES: usize = 4096;
 /// The permission bit one opcode requires.
 ///
 /// The mapping is total and explicit rather than a shift of an unchecked
-/// opcode, so an unknown opcode has no bit at all instead of an arbitrary one.
+/// opcode, so unknown and daemon-control opcodes have no Store permission bit.
 /// A legacy grant mask of 31 therefore grants neither history opcode.
+/// Mask 0x04 grants file or symlink content construction, including in legacy masks.
 pub const fn permission_bit(opcode: u8) -> Option<u8> {
     match opcode {
         1 => Some(1 << 0),
         2 => Some(1 << 1),
-        3 => Some(1 << 2),
+        3 | super::CONSTRUCT_SYMLINK_OPCODE => Some(1 << 2),
         4 => Some(1 << 3),
         5 => Some(1 << 4),
         QUERY_OPCODE => Some(1 << 5),
         COMMAND_OPCODE => Some(1 << 6),
+        super::UPDATE_PORTABLE_METADATA_OPCODE | super::CONSTRUCT_PORTABLE_METADATA_OPCODE => {
+            Some(1 << 7)
+        }
         _ => None,
     }
 }
@@ -174,6 +178,16 @@ pub struct PreparedChanges {
     pub directories: Vec<super::DirectoryChange>,
     /// Typed final inode values.
     pub inodes: Vec<super::InodeChange>,
+    /// New directory declarations; their serials obey the scope allocator contract.
+    pub new_directories: Vec<super::DirectoryMetadata>,
+    /// Portable patches to existing directories, preserving their other attributes.
+    pub directory_metadata: Vec<super::DirectoryMetadata>,
+    /// Fresh regular-file identities, a sorted subset of kind-1 `inodes` rows.
+    /// The caller's scope allocator must never reuse an exposed serial.
+    pub new_file_serials: Vec<u64>,
+    /// Fresh symlink identities, a sorted subset of kind-3 `inodes` rows.
+    /// The caller's scope allocator must never reuse an exposed serial.
+    pub new_symlink_serials: Vec<u64>,
 }
 
 /// One pathless manifest entry of a bounded namespace initialization.
@@ -521,4 +535,46 @@ pub struct StackCreatedWire {
     pub stack: StackWire,
     pub root: Root,
     pub root_serial: u64,
+}
+
+pub(crate) fn tag(bytes: &[u8], expected: u8) -> Result<(), Failure> {
+    if bytes.first() != Some(&expected) {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+pub(crate) fn serial(value: u64) -> Result<(), Failure> {
+    if value == 0 || value > i64::MAX as u64 {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+
+pub(crate) fn check_commit(record: &CommitWire) -> Result<(), Failure> {
+    tag(&record.commit, 0x12)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.base_layer, 0x32)?;
+    if let Some(parent) = record.parent {
+        tag(&parent, 0x12)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn check_stage(record: &StageWire) -> Result<(), Failure> {
+    if record.workspace == [0; 32]
+        || record.generation > i64::MAX as u64
+        || record.construction_base_root != record.expected_root
+        || record.intended_commit_base != record.expected_base
+    {
+        return Err(Code::InvalidInput.into());
+    }
+    serial(record.token)?;
+    tag(&record.stack, 0x31)?;
+    tag(&record.branch, 0x11)?;
+    tag(&record.expected_base, 0x32)?;
+    tag(&record.intended_commit_base, 0x32)?;
+    if let Some(head) = record.expected_head {
+        tag(&head, 0x12)?;
+    }
+    Ok(())
 }

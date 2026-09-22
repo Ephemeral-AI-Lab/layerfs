@@ -1,0 +1,33 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py", line 437, in main
+    execute(args,report)
+    ~~~~~~~^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py", line 368, in execute
+    EXTRA_CASE(args.case, report, operation_client, controller, name, control_port, port,
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               keys['daemon'], public['service'], expiry)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py", line 91, in execute
+    report['before_read'] = mounted_read(name)
+                            ~~~~~~~~~~~~^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py", line 59, in mounted_read
+    return json.loads(driver.mount.checked(['docker', 'exec', name, 'python3', '-c', code], text=True).stdout)
+                      ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/mounted_read.py", line 26, in checked
+    return subprocess.run(command, check=True, capture_output=True, timeout=30, **kwargs)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['docker', 'exec', 'layerfs-unmount-ee209ed6c789', 'python3', '-c', "import errno,hashlib,json,os,stat\nfrom pathlib import Path\np=Path('/layerfs/workspace/read')\nrows=[line for line in Path('/proc/self/mountinfo').read_text().splitlines()\n      if line.split()[4]==str(p)]\nassert len(rows)==1 and ' - fuse.layerfs layerfs ' in rows[0], rows\nexpected=bytes(range(251))*2301\nactual=(p/'data.bin').read_bytes()\ns=(p/'data.bin').stat()\nassert actual==expected and s.st_size==len(expected) and stat.S_IMODE(s.st_mode)==0o644\nassert (p/'alias').stat().st_ino==s.st_ino and os.readlink(p/'link')=='data.bin'\ntry: os.open(p/'data.bin',os.O_WRONLY)\nexcept OSError as error: assert error.errno==errno.EROFS, error\nelse: raise AssertionError('RO profile admitted write')\nprint(json.dumps({'inode':s.st_ino,'bytes':s.st_size,'mode':stat.S_IMODE(s.st_mode),\n                  'mtime_ns':s.st_mtime_ns,'sha256':hashlib.sha256(actual).hexdigest(),\n                  'root_inode':p.stat().st_ino,'readonly':True}))\n"]' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_mount.py", line 219, in <module>
+    driver.main()
+    ~~~~~~~~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/crates/layerfs-daemon/tests/control_unmount.py", line 442, in main
+    report['failure_stdout'] = error.stdout.decode(errors='replace')
+                               ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'str' object has no attribute 'decode'. Did you mean: 'encode'?

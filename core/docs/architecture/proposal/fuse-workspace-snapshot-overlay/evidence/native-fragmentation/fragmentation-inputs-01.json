@@ -1,0 +1,29 @@
+{
+  "parent": "c4f965357381870b3784e3423e75783496c0b7c7",
+  "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584",
+  "source_archive_sha256": "80e0dc144a26b95d8f822a63c53e816d3128f47208b2ecf4c16ed6bdebcb22bf",
+  "pending_write_removed": true,
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "stream_fragmentation_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/082998855000982f937463495ab809d867667195ca94cd0f068913310ac240b7/stream_fragmentation-test",
+  "stream_fragmentation_sha256": "082998855000982f937463495ab809d867667195ca94cd0f068913310ac240b7",
+  "stage_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/d608f07ae0760bf2e2307d70535c06a84be6500b9a3f0ae1fbb9f1ece8e5c0c7/stage-test",
+  "stage_sha256": "d608f07ae0760bf2e2307d70535c06a84be6500b9a3f0ae1fbb9f1ece8e5c0c7",
+  "composite_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/a17c06e041e325bedf378caeef248490418ae5dc864846fb4075fe2324e48e72/composite-test",
+  "composite_sha256": "a17c06e041e325bedf378caeef248490418ae5dc864846fb4075fe2324e48e72",
+  "commit_staged_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/dedc4a17b19f5fa9629aa452a6401253d03959b64a302300e2ebe4b3e0fd2328/commit_staged-test",
+  "commit_staged_sha256": "dedc4a17b19f5fa9629aa452a6401253d03959b64a302300e2ebe4b3e0fd2328",
+  "maintenance_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/a824b5562e228a97a2c5991cda52845e23834084e7302a7f5e60403d0dc5f5d5/maintenance-test",
+  "maintenance_sha256": "a824b5562e228a97a2c5991cda52845e23834084e7302a7f5e60403d0dc5f5d5",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/ada3bce6dd51c2ca8f2fa9b3b5416466546b479d208bd7f407f82995a14a11b0/host",
+  "host_binary_sha256": {
+    "layerfs-service": "72e7af38e695c9646b212ac3de6165ac9c77fd5d7c0bdf928889ffa571ee6805",
+    "layerfs-daemon": "e41fd49df56a3d07fea11d39b51c9b18d5fb49cd41b0b5e80c8977b533efed1e",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/9b13c50c704aec6042ca3d7a3de0ca61d822378f5934fec1790f7db7a33fd946/layerfs-daemon",
+  "linux_daemon_sha256": "9b13c50c704aec6042ca3d7a3de0ca61d822378f5934fec1790f7db7a33fd946",
+  "stream_fragmentation.rs_sha256": "ac8164d34fae7ec2a2fbe1a45bf07cb1a6728cdf844d73dcddee88fff3533246",
+  "fragmented_saved_root.py_sha256": "2d40d48b9b82601e428eb99a9829c809acdbb7dc77ad4f41dc67377ef09350da"
+}

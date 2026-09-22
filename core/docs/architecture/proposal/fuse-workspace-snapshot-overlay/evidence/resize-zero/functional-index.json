@@ -1,0 +1,366 @@
+{
+  "parent": "573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5",
+  "performance_claim": false,
+  "selections": [
+    {
+      "receipt": "resize-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.765004625020083,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 7.2184805830183905,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7430772500229068,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7873821670073085,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7017758750007488,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-overwritten_zero-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8813415420008823,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7285771660099272,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-consumed_stage-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8120686670008581,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-cycles-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.9127151250140741,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8789166669885162,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 16.721279791003326,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8754940410144627,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8348215000005439,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8326443749829195,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8248565829999279,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8279153330076952,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0644105840183329,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-selectors-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8281147909874562,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-commit_staged-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9617069169762544,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-clean-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.867053499998292,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-clean_successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8698186670080759,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8382428750046529,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 11.26578320801491,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7760620409972034,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8512105830013752,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7846732499892823,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7196073749801144,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8293916250113398,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8433736249862704,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.79531758298981,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0174825419962872,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9510939170140773,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-composite-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3367921250173822,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-aggregate-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7259470410062931,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-corruption-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6955459589953534,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 28.90548979199957,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-inode_frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.811628124996787,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-large_base-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.721451541990973,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-ledger_collider-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7070369580178522,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-ledger_write_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6977518750063609,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8128473329998087,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-metadata_quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8248537500039674,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-native_shape-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7879937920079101,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.016570417006733,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-edit-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6575113750004675,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 25.149335916998098,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-payload-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.001427125011105,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7936494579771534,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 9.62630566698499,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8177772079943679,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8359395420120563,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-lowering-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8449356250057463,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-metadata_denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7946797079930548,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8281738749938086,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.5832957080274355,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9453452079906128,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-regression-stage-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3068716250127181,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-semantics-01/result.json",
+      "status": "FAIL",
+      "wall_seconds": 3.335965749982279,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-semantics-02/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9576557499822229,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    },
+    {
+      "receipt": "resize-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8748706670012325,
+      "product_inputs_sha256": "a03cd4e97e6ca387ff89ca5f910f6bb0347c47f90fff051d8320a9ea7bd0ed88"
+    }
+  ]
+}

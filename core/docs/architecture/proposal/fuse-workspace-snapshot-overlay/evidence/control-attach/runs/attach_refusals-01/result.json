@@ -1,0 +1,121 @@
+{
+  "status": "FAIL",
+  "mode": "functional-authenticated-attach",
+  "case": "attach_refusals",
+  "checks": [],
+  "source": "3e92fe277a0379fd85f158b858085af3ecb2e2d5",
+  "product_inputs_sha256": "67a94d08f5455010f84423f65c0714543461fd25b6020d2f38e85d916db9e7d2",
+  "hard_budget_seconds": 60,
+  "lifecycle_wire_max_ms": 5000,
+  "terminal_reserve_ms": 100,
+  "signal_attempt_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "driver_sha256": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+  "entrypoint_sha256": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+  "status_driver_sha256": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+  "mount_driver_sha256": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+  "control_mount_driver_sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+  "caller_dependencies_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+    "core/crates/layerfs-daemon/tests/control_attach.py": "9f3b7279239903b64beb22c7f8caa651c54309521f82cb866ed0cf933ce79c0d",
+    "core/crates/layerfs-daemon/tests/control_mount.py": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+    "core/crates/layerfs-daemon/tests/control_status.py": "dc421295b9fe1fe6b0ff4aa901142a186d4b65dadb104a2629e1a96d6985cf3c",
+    "core/crates/layerfs-daemon/tests/control_unmount.py": "a5815bcb3a6f6825b332cfc44e0bd5721ab6722c295cc499f27c93e95b8e243a",
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "1fbb8da5ace57366c90521f6344b2e8c64a9f18560305c863542e8f175fcb503",
+    "core/crates/layerfs-workspace/tests/payload_route.py": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+    "core/crates/layerfs-workspace/tests/stage_route.py": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4"
+  },
+  "linux_binary_sha256": "832a5c4e284d344fd878ab61b91bb770883c101addddc56af6324ea3797e3d4c",
+  "host_binary_sha256": {
+    "layerfs-service": "6093ac3f9ff4f030fcf2d6a5b16bde390e0c8c436847f53752d89c68b6ce0bff",
+    "layerfs-daemon": "671eab212e1e8468ed43ca2a9be79b370030c5f418d0a84a508b4309e3a86589",
+    "examples/public_key": "5cbd8906c8d2d88d2934663b5cf5cd39ae99bbdd5a32d6013bd54db7706f182d"
+  },
+  "not_run": [
+    "writable daemon startup/edit/Commit controls",
+    "remote Attach with retained acquired native mount/backing/arena resources",
+    "deterministic signal overlap inside remote Attach I/O",
+    "namespace/npm/R6",
+    "hard RSS/cgroup/performance qualification"
+  ],
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "f80d246d4f3c",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs",
+    "build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-attach/runs/attach_refusals-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target-linux",
+    "concurrent_work": [],
+    "observation": "snapshot before functional driver; no quiet-host/performance claim"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+    "receipt_sha256": "70f5b40df419506a650bc546ccbfa3e0a8b8f2d1fc1f5d39293e5699369d2fb4",
+    "clone_method": "independent-byte-copy",
+    "closed_master_sha256": {
+      "store.sqlite": "903a50b09be126cad1ffba7738b3833d513f8ecab2b6eb3a326dd08e7ab259bc",
+      "history.sqlite": "167aac87e7b629790a0b06e97f686c8ecad55890b1f9f05548fadcae7b2f64fb"
+    },
+    "history": "read-only reopened fixture; no write authority",
+    "cache_claim": null
+  },
+  "service_pid": 26480,
+  "runtime_nano_cpus": 2000000000,
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "initial": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": true,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1421436
+  },
+  "shutdown_workspace_names": [
+    "read",
+    "next",
+    "third"
+  ],
+  "attach_profile": "selector only; daemon startup Store/base/owner/ReadOnly profile retained",
+  "previous_closed": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": false,
+    "stopping": true,
+    "closed": true,
+    "active_operations": 0,
+    "nodes": 0,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 24888
+  },
+  "invalid_selectors": [
+    {
+      "case": "path-escape",
+      "boundary": "public headless decode rejected before native request delivery",
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n"
+    },
+    {
+      "case": "empty-name",
+      "boundary": "public headless decode rejected before native request delivery",
+      "stderr": "Error: InvalidInput unknown=false cleanup=None history=None\n"
+    }
+  ],
+  "forced_daemon_cleanup": true,
+  "failure": "AssertionError('Error: Capacity unknown=false cleanup=None history=None\\n')",
+  "command_wall_seconds": 1.2703692080003748
+}

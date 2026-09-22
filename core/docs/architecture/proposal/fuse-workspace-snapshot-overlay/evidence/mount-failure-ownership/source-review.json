@@ -1,0 +1,17 @@
+{
+  "source_parent": "3c227266b6740cb9c50f63f0ba27a38d1b8b9a00",
+  "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d",
+  "reviewers": [
+    "parent: FUSE owner transfer and explicit unmount",
+    "epoch_read_review: daemon original-deadline startup custody",
+    "workspace_boundary_review: exact cached fuser ownership/INIT semantics"
+  ],
+  "findings_resolved": [
+    "partial mount errors previously discarded native owner",
+    "failed outer worker spawn dropped captured Session",
+    "post-start mount timeout renewed cleanup budget",
+    "startup cleanup failure previously exited without retaining owner"
+  ],
+  "dependency_qualification": "Session::new performs handshake before return; reply sender logs send errors. Upstream constructor error/drop may attempt its own unmount; upstream internal event-loop spawn failure may not join earlier detached loops. Conservatively retain cleanup failure; no provider patch or fake native capability.",
+  "actual_routes": "functional-index.json"
+}

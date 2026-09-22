@@ -1,0 +1,26 @@
+{
+  "parent": "dab1751312adecdc57d073145582a9a702449744",
+  "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304",
+  "method": "mounted_read.product_inputs: SHA256 sorted relative path + NUL + raw SHA256(file); root .cargo/config.toml, core Cargo.toml/lock, package Cargo.toml and src/sql files",
+  "source_archive_sha256": "c2cebef962c03e25634e3ccfa8f518c20dc34206d7bf4bb5ce54f65a5dcdd56e",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/fc65744cd48a4175312df07f17705f93d4b0e98a475240c40d38d0a780c569ea/layerfs-daemon",
+  "linux_daemon_sha256": "fc65744cd48a4175312df07f17705f93d4b0e98a475240c40d38d0a780c569ea",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/762aff5e06fb82f7e2e6737918f7ba8711973a137372d39dbc270c9bbbf03668/host",
+  "host_binary_sha256": {
+    "layerfs-service": "2f65a4f498f3abe01f1b3ff1b9a5b2a0f268fa73354e4bc70d9d643cf2a60e37",
+    "layerfs-daemon": "f4150ec855457518a84ffe59238aff18e910c6f2b8e8f4fdebd4f65e7e58331c",
+    "examples/public_key": "079b751b33cf9d514022236069399285137f4c99f6d8dd77aa934f496b068d3d"
+  },
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "tool_image_id": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "core/crates/layerfs-daemon/tests/control_close.py_sha256": "f9afb3749cf9d81f5be880bc7e3afc062787ddcb00f9839fe4ab7016a6befb1c",
+  "core/crates/layerfs-daemon/tests/control_unmount.py_sha256": "580c504fda98e27bf11cd2472277ba8dc0a66def983200687e9fd08673550748",
+  "core/crates/layerfs-daemon/tests/control_status.py_sha256": "0ac4f3b85685ade1a009bcd113b47efa4cb8f127701e0a7b973736be78ba2476",
+  "core/crates/layerfs-daemon/tests/mounted_read.py_sha256": "28deac2696ae890ef65eb5e070cb0afc917b39a5e388391034de34b9622c1559",
+  "core/crates/layerfs-daemon/tests/history_route.py_sha256": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+  "core/crates/layerfs-workspace/tests/stage_route.py_sha256": "a85b48d0502a4cd68608e11885c9360f6a1055bd0affa9a245a7c928a46f5211",
+  "core/crates/layerfs-bridge/tests/workspace_close_clean.rs_sha256": "74ad1a18595d3c434883377e390b1a992dc3cc94158ced6d49e5a0e8c7319309",
+  "core/crates/layerfs-bridge/tests/workspace_unmount.rs_sha256": "747cb995cdd758b8c67db8bc2f9c28e45e92d7bfdac08516aa80164e605da381"
+}

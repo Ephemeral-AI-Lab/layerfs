@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::open_successor ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 3, revision: 6, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 1994730 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 20480, reserved_bytes: 0, payloads: 1, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 2, reusable_pages: 4, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 12288, reserved_bytes: 0, working_bytes: 8424, accounting_complete: true, admission_stopped: false }
+OPEN_CHECK truncating-open-during-save-keeps-G-and-commits-D1-empty-file PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.15s
+

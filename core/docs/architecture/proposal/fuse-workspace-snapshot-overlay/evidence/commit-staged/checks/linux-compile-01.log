@@ -1,0 +1,9 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.86s
+  Executable unittests src/lib.rs (core/target-linux/debug/deps/layerfs_workspace-0a94ea12d420f2c7)
+  Executable tests/commit_staged.rs (core/target-linux/debug/deps/commit_staged-5bbdd79f5c246742)
+  Executable tests/local_edit.rs (core/target-linux/debug/deps/local_edit-08e9964648118ea0)
+  Executable tests/payload.rs (core/target-linux/debug/deps/payload-b8eeb13092377c67)
+  Executable tests/readable.rs (core/target-linux/debug/deps/readable-67227df299004cdf)
+  Executable tests/stage.rs (core/target-linux/debug/deps/stage-d07f247be8978535)

@@ -7,6 +7,7 @@ ENTRY_STARTED_NS = time.monotonic_ns()
 
 import argparse
 import fcntl
+import contextlib
 import hashlib
 import json
 import math
@@ -27,6 +28,7 @@ REPO = BENCH.parent.parent
 sys.path.insert(0, str(HERE))
 import runtime
 import cold
+import isolation
 
 HOST_FAMILIES = ("payload_create_read", "dedup_workspace_reuse", "dedup_cross_file", "dedup_cdc_locality",
                  "edit_length_preserving", "edit_length_changing", "edit_canonical_chunk_count",
@@ -469,7 +471,7 @@ def resolve_selection(args, deadline):
     return selection
 
 
-HOST_ROOT = REPO / "benchmark-results/host-store"
+HOST_ROOT = isolation.HOST_ROOT
 
 
 def _host_acquire(args, selection, deadline):
@@ -1216,12 +1218,20 @@ def main(argv=None):
         import storage_smoke
         return storage_smoke.main(argv)
     if argv[:1] == ["--prune-builds"] or argv[:1] == ["--prune-images"] or argv in (["--build-image"], ["--build-host"], ["--build-storage-smoke-image"]):
-        lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
-        with lock_path.open("a") as lock:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as error:
-                raise RuntimeError("another benchmark owns the measurement lock") from error
+        # Pruning deletes state a running lane in *this* worktree may be about to
+        # read, so it takes this worktree's own lock. A build takes none (owner
+        # direction, 2026-09-21): it writes only this worktree's target directory,
+        # and two worktrees no longer exclude each other for it.
+        takes_lock = argv[:1] in (["--prune-builds"], ["--prune-images"])
+        with contextlib.ExitStack() as stack:
+            if takes_lock:
+                lock = stack.enter_context(isolation.worktree_lock_path().open("a"))
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError as error:
+                    raise RuntimeError(
+                        "another run in this worktree owns the measurement lock"
+                    ) from error
             if argv[:1] == ["--prune-images"]:
                 pruning = argparse.ArgumentParser(description="Retain recent benchmark images whose immutable binary archive is complete")
                 pruning.add_argument("--prune-images", nargs="?", type=int, default=DEFAULT_RETAINED_SEALED_BUILDS,
@@ -1251,6 +1261,9 @@ def main(argv=None):
                 else:
                     build_target = incremental_build_target()
                     build_target.mkdir(parents=True, exist_ok=True)
+                # Both branches write inside this worktree; a target directory that
+                # escapes it would be shared build state with a sibling worktree.
+                isolation.assert_target_owned(build_target)
                 try:
                     result = runtime.run(["cargo", "+1.85.1", "build", "--locked", "--release", "-j" + values["LAYERFS_HOST_BUILD_JOBS"], "-p", "fs-benchmark-pro", "--bin", "fs-benchmark-pro", "--target-dir", str(build_target)],
                         deadline=runtime.Deadline.after(900), cwd=REPO, output_limit=1024**2, stream_output=True)
@@ -1305,13 +1318,17 @@ def main(argv=None):
         parser.error("use the family verify.sh or verify-selected.py for bounded verification")
     if args.prepare_only and (args.perf_fast or args.perf_samples is not None):
         parser.error("preparation-only cannot also select a performance mode")
-    # ponytail: one process lock serializes this benchmark; no concurrent resource-sensitive samples.
-    lock_path = Path(os.environ.get("TMPDIR", "/tmp")) / "layerfs-infra-measurement.lock"
+    # One lock per worktree (owner direction, 2026-09-21): two runs in this
+    # worktree still never overlap, because they share the host store, the prepared
+    # masters and the image archive. A run in another worktree is not excluded and
+    # does not exclude this one; the interference it causes is recorded, not
+    # prevented.
+    lock_path = isolation.worktree_lock_path()
     with lock_path.open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            parser.error("another benchmark owns the measurement lock")
+            parser.error("another run in this worktree owns the measurement lock")
         selection = resolve_selection(args, time.monotonic() + 20)
         if args.list:
             print(json.dumps(selection, sort_keys=True))

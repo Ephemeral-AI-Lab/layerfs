@@ -1,0 +1,182 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.11s
+     Running unittests src/lib.rs (core/target-linux/debug/deps/layerfs_workspace-0a94ea12d420f2c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coherence.rs (core/target-linux/debug/deps/coherence-ad51c5dcde149c46)
+
+running 8 tests
+test linux::coherence_completion ... ignored, requires native service; projection-completion API subset without a kernel mount
+test linux::coherence_deadline ... ignored, requires actual deadline expiry in the public completion binding; no kernel timing claim
+test linux::coherence_exec ... ignored, requires executable-mode fixture and actual Linux ELF/script execution
+test linux::coherence_native_save ... ignored, requires actual C2-save observer and mounted SDK mutation progress
+test linux::coherence_notify_failure ... ignored, requires native thread-local seccomp denial of real notifier writev
+test linux::coherence_read_race ... ignored, requires actual mounted old read held at its native delivery
+test linux::coherence_truncate_failure ... ignored, requires native notifier failure after atomic truncating-open publication
+test linux::coherence_visibility ... ignored, requires actual privileged Linux FUSE and native service
+
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_staged.rs (core/target-linux/debug/deps/commit_staged-5bbdd79f5c246742)
+
+running 12 tests
+test linux::commit_consumed_stage ... ignored, requires explicit external stage consumption through C5
+test linux::commit_cycles ... ignored, requires live fixture; repeated roots remain accounted and bounded
+test linux::commit_denied ... ignored, requires second authenticated peer with no history-command grant
+test linux::commit_frontier ... ignored, requires wide fixture; 104 exact successor associations
+test linux::commit_head_moved ... ignored, requires independent Branch writer after Stage acknowledgement
+test linux::commit_headroom ... ignored, requires ordinary disk quota occupied before CommitStaged
+test linux::commit_lost_result ... ignored, requires opaque native result-loss proxy on CommitStaged only
+test linux::commit_reconcile_failure ... ignored, requires native private-file failure after actual C5 acknowledgement
+test linux::commit_remote_admission ... ignored, requires real native canonical-read admission held by another call
+test linux::commit_repeated ... ignored, requires commit_staged_route.py live native service
+test linux::commit_selectors ... ignored, requires commit_staged_route.py live native service
+test linux::commit_successor ... ignored, requires actual C5 commit reply gate; not an S-11 save proof
+
+test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/composite.rs (core/target-linux/debug/deps/composite-0ef5ab976f64fe8e)
+
+running 14 tests
+test linux::composite_clean ... ignored, requires composite_route.py live native service
+test linux::composite_clean_successor ... ignored, requires actual clean C5 acknowledgement gate
+test linux::composite_denied ... ignored, requires native authenticated composite denial
+test linux::composite_frontier ... ignored, requires full 104-inode fixture and 25-second composite deadline
+test linux::composite_head_moved ... ignored, requires independent Branch advance before empty composite command
+test linux::composite_lost_result ... ignored, requires opaque native composite-terminal loss proxy
+test linux::composite_metadata_only ... ignored, requires existing portable metadata save route
+test linux::composite_native_save ... ignored, requires native SQLite RESERVED lock observation
+test linux::composite_reconcile_failure ... ignored, requires actual C5 success then native private-file failure
+test linux::composite_refusals ... ignored, requires native backing and exact clean admission
+test linux::composite_remote_admission ... ignored, requires an actual native read held across pre-admission
+test linux::composite_repeated ... ignored, requires composite_route.py live native service
+test linux::composite_successor ... ignored, requires first file delivery hold and real composite command
+test linux::composite_unknown_save ... ignored, requires loss during actual native C2 save
+
+test result: ok. 0 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/local_edit.rs (core/target-linux/debug/deps/local_edit-08e9964648118ea0)
+
+running 13 tests
+test linux::local_range_edit_aggregate ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_corruption ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_frontier ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_inode_frontier ... ignored, requires all 104 existing regular inodes in the closed R1 fixture
+test linux::local_range_edit_large_base ... ignored, requires the prepared 64MiB immutable-base fixture and actual native service
+test linux::local_range_edit_ledger_collider ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_ledger_write_failure ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_metadata_failure ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_metadata_quota ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_native_shape ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_refusals ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_semantics ... ignored, requires the actual service and Linux ext4 driver
+test logical_edit_paths_cannot_escape_the_workspace ... ok
+
+test result: ok. 1 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/maintenance.rs (core/target-linux/debug/deps/maintenance-c473c05e450fb247)
+
+running 6 tests
+test linux::maintenance_cross_workspace ... ignored, requires maintenance_route.py native Linux ext4 fixture
+test linux::maintenance_frozen ... ignored, requires maintenance_route.py native Linux ext4 fixture
+test linux::maintenance_metadata_failure ... ignored, requires maintenance_route.py native Linux ext4 fixture
+test linux::maintenance_mutation_churn ... ignored, requires maintenance_route.py native Linux ext4 fixture
+test linux::maintenance_payload_churn ... ignored, requires maintenance_route.py native Linux ext4 fixture
+test linux::maintenance_payload_failure ... ignored, requires maintenance_route.py native Linux ext4 fixture
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/open.rs (core/target-linux/debug/deps/open-4abb72bc37999bb5)
+
+running 8 tests
+test linux::open_capacity ... ignored, requires full handle admission followed by actual truncate and Commit
+test linux::open_deadline ... ignored, requires real deadline expiry before stale refresh completes
+test linux::open_forget ... ignored, requires real stale-canonical refresh held after pending handle reservation
+test linux::open_last_slot ... ignored, requires two real callers contending for the final handle slot
+test linux::open_metadata_failure ... ignored, requires native file-size failure during truncate preparation
+test linux::open_modes ... ignored, requires open_route.py native fixture
+test linux::open_permissions ... ignored, requires open_route.py native permission fixture
+test linux::open_successor ... ignored, requires captured G delivery held while truncating open publishes D1
+
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/payload.rs (core/target-linux/debug/deps/payload-b8eeb13092377c67)
+
+running 1 test
+test linux::linux_owned_payload_contract ... ignored, requires owned ext4 mounts; run tests/payload_route.py
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/readable.rs (core/target-linux/debug/deps/readable-67227df299004cdf)
+
+running 9 tests
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test failed_close_keeps_its_registry_count_until_cleanup_succeeds ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test registry_grows_on_demand_and_keeps_retained_capacity_charged ... ok
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/resize.rs (core/target-linux/debug/deps/resize-373449b7784d95b3)
+
+running 9 tests
+test linux::resize_envelope ... ignored, requires exact zero-source envelope and real Commit
+test linux::resize_frontier ... ignored, requires full104-inode fixture and25-second Commit deadline
+test linux::resize_metadata_failure ... ignored, requires actual native private metadata allocation failure
+test linux::resize_metadata_only ... ignored, requires same-length portable metadata save
+test linux::resize_native_save ... ignored, requires observed actual C2 save and local resize progress
+test linux::resize_overwritten_zero ... ignored, requires overwriting a zero span before its captured root arrives
+test linux::resize_refusals ... ignored, requires native quota and exact identity refusals
+test linux::resize_semantics ... ignored, requires resize_route.py live native service
+test linux::resize_successor ... ignored, requires G lowering hold and exact D1 truncation/zero recipe
+
+test result: ok. 0 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stage.rs (core/target-linux/debug/deps/stage-d07f247be8978535)
+
+running 10 tests
+test linux::stage_completion_failure ... ignored, requires stage_route.py ignoring XFSZ for actual native failure
+test linux::stage_frontier ... ignored, requires stage_route.py wide live fixture
+test linux::stage_head_moved ... ignored, requires stage_route.py and an independent Branch writer
+test linux::stage_headroom ... ignored, requires stage_route.py with ordinary quota occupied
+test linux::stage_lowering ... ignored, requires stage_route.py and native service
+test linux::stage_metadata_denied ... ignored, requires stage_route.py with metadata grant denied
+test linux::stage_metadata_only ... ignored, requires stage_route.py live metadata-only save
+test linux::stage_native_save ... ignored, requires stage_route.py native SQLite save observation
+test linux::stage_semantics ... ignored, requires stage_route.py and a live native service
+test linux::stage_unknown_save ... ignored, requires stage_route.py native SQLite save loss
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/write.rs (core/target-linux/debug/deps/write-4f23ba597e9ec02c)
+
+running 12 tests
+test linux::write_append ... ignored, requires write_route.py native append fixture
+test linux::write_deadline ... ignored, requires expired deadline during real canonical refresh
+test linux::write_envelope ... ignored, requires write_route.py exact8MiB combined input fixture
+test linux::write_frontier ... ignored, requires write_route.py full256-edit frontier selection
+test linux::write_metadata_failure ... ignored, requires native private-file allocation failure
+test linux::write_native_save ... ignored, requires observed real C2 save with live write/append progress
+test linux::write_pending ... ignored, requires a real pending truncating-open handle
+test linux::write_positional ... ignored, requires write_route.py native fixture
+test linux::write_quota ... ignored, requires native candidate-quota refusal
+test linux::write_released ... ignored, requires real canonical refresh held while handle is released
+test linux::write_successor ... ignored, requires frozen delivery and live handle writes
+test linux::write_zero_rights ... ignored, requires write_route.py native handle rights fixture
+
+test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

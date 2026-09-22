@@ -1,0 +1,15 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.16s
+  Executable unittests src/lib.rs (core/target-linux/debug/deps/layerfs_workspace-35307c769999cf07)
+  Executable tests/payload.rs (core/target-linux/debug/deps/payload-13cfd80947f077b5)
+  Executable tests/readable.rs (core/target-linux/debug/deps/readable-fc200e08c74dc893)
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.07s
+info: downloading component 'clippy'
+info: installing component 'clippy'
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.30s

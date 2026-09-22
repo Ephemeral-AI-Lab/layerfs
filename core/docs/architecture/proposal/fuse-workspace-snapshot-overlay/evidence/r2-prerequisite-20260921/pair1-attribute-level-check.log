@@ -1,0 +1,44 @@
+   Compiling cc v1.4.5
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-telemetry)
+   Compiling blake3 v1.8.5
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-content)
+    Finished `test` profile [optimized + debuginfo] target(s) in 7.98s
+     Running tests/filesystem_attributes.rs (core/target/debug/deps/filesystem_attributes-c3beface54fc1aee)
+
+running 12 tests
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test values_are_extent_only_at_every_size ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... FAILED
+test an_inode_attribute_tree_is_read_through_a_path ... FAILED
+
+failures:
+
+---- every_attribute_descent_rejects_same_or_skipped_child_levels stdout ----
+
+thread 'every_attribute_descent_rejects_same_or_skipped_child_levels' panicked at crates/layerfs-content/tests/filesystem_attributes.rs:767:5:
+assertion `left == right` failed
+  left: 4
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- an_inode_attribute_tree_is_read_through_a_path stdout ----
+
+thread 'an_inode_attribute_tree_is_read_through_a_path' panicked at crates/layerfs-content/tests/filesystem_attributes.rs:643:18:
+expected the key bound to refuse, got Err(InvalidRecord("attribute child level"))
+
+
+failures:
+    an_inode_attribute_tree_is_read_through_a_path
+    every_attribute_descent_rejects_same_or_skipped_child_levels
+
+test result: FAILED. 10 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-content --test filesystem_attributes`

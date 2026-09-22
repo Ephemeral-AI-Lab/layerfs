@@ -1,0 +1,47 @@
+{
+  "first_parent": "3e5d6a66a9f4e4df4a8a19087e63909a18046c6d",
+  "final_staged_tree": "e593d368057163bc46487ab04f4151bf4397989d",
+  "after": {
+    "combined": 108781,
+    "root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-mount/loc/final-staged",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-bridge": 4390,
+          "layerfs-content": 12549,
+          "layerfs-daemon": 892,
+          "layerfs-fuse": 1062,
+          "layerfs-history": 2722,
+          "layerfs-service": 2033,
+          "layerfs-storage": 7676,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 9783
+        },
+        "files": 241,
+        "lines": 43364
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "production_loc": "108693 -> 108781 (delta +88)",
+  "core": "43276 -> 43364 (delta +88)",
+  "reference": "65417 -> 65417 (delta +0)",
+  "commit": "8639c6bda9e5911c3d434e659380d99b0bcf8d88",
+  "committed_tree": "e593d368057163bc46487ab04f4151bf4397989d",
+  "confirmation": "exact final staged and committed trees match"
+}

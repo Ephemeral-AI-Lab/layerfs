@@ -1,0 +1,30 @@
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-service)
+error: clamp-like pattern without using clamp function
+   --> crates/layerfs-workspace/src/backing/payload.rs:313:28
+    |
+313 |               let capacity = state
+    |  ____________________________^
+314 | |                 .records
+315 | |                 .capacity()
+316 | |                 .saturating_mul(2)
+317 | |                 .max(1)
+318 | |                 .min(MAX_PAYLOADS);
+    | |__________________________________^
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+    = note: `-D clippy::manual-clamp` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_clamp)]`
+help: replace with clamp
+    |
+313 ~             let capacity = state
+314 +                 .records
+315 +                 .capacity()
+316 ~                 .saturating_mul(2).clamp(1, MAX_PAYLOADS);
+    |
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `layerfs-workspace` (lib test) due to 1 previous error

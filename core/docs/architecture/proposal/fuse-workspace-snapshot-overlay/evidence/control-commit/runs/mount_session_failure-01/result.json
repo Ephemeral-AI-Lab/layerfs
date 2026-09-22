@@ -1,0 +1,155 @@
+{
+  "status": "PASS",
+  "mode": "functional-authenticated-mount",
+  "case": "mount_session_failure",
+  "checks": [
+    {
+      "id": "entered-Session-failure-retains-owner-until-explicit-Unmount",
+      "status": "PASS"
+    }
+  ],
+  "source": "74e6fbd2d23cb7519ea63c275f42283ce3c79d17",
+  "product_inputs_sha256": "25774a7949ce2628e98a928589d3061a9fe485ce86fd300f615e156787a2c5bb",
+  "hard_budget_seconds": 60,
+  "lifecycle_wire_max_ms": 5000,
+  "terminal_reserve_ms": 100,
+  "signal_attempt_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "driver_sha256": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+  "entrypoint_sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+  "status_driver_sha256": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+  "mount_driver_sha256": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+  "control_mount_driver_sha256": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+  "caller_dependencies_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/shared/isolation.py": "a060189aeaf804f7ff8998827d09f52266bcde3741cc796211e398932a395426",
+    "core/crates/layerfs-daemon/tests/control_commit_wire.py": "751f0076a5bea39c16149ed36531b5bb35bff59984181854b8172f721de3f862",
+    "core/crates/layerfs-daemon/tests/control_mount.py": "6368db1060a31009fc5ad885d1289e450eda671ad4ffe78cafc13d9f5a536b75",
+    "core/crates/layerfs-daemon/tests/control_status.py": "ed3b0430677ec9d2013768fa61ff1a38a6cc87747f90b0a3d25abbb837166f1e",
+    "core/crates/layerfs-daemon/tests/control_unmount.py": "47c3a91c847c7802d4f827a9ef38b613b3c71a82f767926bc67a2c5df9c4f37a",
+    "core/crates/layerfs-daemon/tests/history_route.py": "bdbf45da4a2410a7034bec4b111e16ce19c824b17bef321bd8ec8caf8803e69f",
+    "core/crates/layerfs-daemon/tests/mounted_read.py": "3d1797da4ab258521f4bac54a1be15c886a0afedcfbd2347eb6600f3fe2c498f",
+    "core/crates/layerfs-workspace/tests/payload_route.py": "b1c96b9922ad843e12afd292ce2c8101fe2aafe2cc2ed461e7c9fdc0fbadf213",
+    "core/crates/layerfs-workspace/tests/stage_route.py": "99e6b1ce37595f64a75ee0bc9c754d14706872a7029d84aba04ecdf8f00dead4"
+  },
+  "linux_binary_sha256": "89de894f1a20736f5d7f304082b86a6d14238ca17436bb3b8c0af3ecf9bfcc71",
+  "host_binary_sha256": {
+    "layerfs-service": "e1a7e34844c68b5a83bb0f6a42be0a6f3f9cff66b7cff9268fcb7f4dfc245cf9",
+    "layerfs-daemon": "b84d232c979576f9b3d29a22c74000946abae41d0c1e4133de59f4b6f352f42d",
+    "examples/public_key": "e786a3d5b2cf890d060d36d27191e64ebe06ad357d411156a5d6601ff38eb647"
+  },
+  "not_run": [
+    "remote Attach and writable daemon startup/edit/Commit controls",
+    "remote Mount binding/worker/post-INIT-deadline failure subsets",
+    "deterministic signal overlap inside actual remote Mount I/O",
+    "namespace/npm/R6",
+    "hard RSS/cgroup/performance qualification"
+  ],
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "f80d246d4f3c",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs",
+    "build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/control-commit/runs/mount_session_failure-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target-linux",
+    "concurrent_work": [],
+    "observation": "snapshot before functional driver; no quiet-host/performance claim"
+  },
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+    "receipt_sha256": "70f5b40df419506a650bc546ccbfa3e0a8b8f2d1fc1f5d39293e5699369d2fb4",
+    "clone_method": "independent-byte-copy",
+    "closed_master_sha256": {
+      "store.sqlite": "903a50b09be126cad1ffba7738b3833d513f8ecab2b6eb3a326dd08e7ab259bc",
+      "history.sqlite": "167aac87e7b629790a0b06e97f686c8ecad55890b1f9f05548fadcae7b2f64fb"
+    },
+    "history": "read-only reopened fixture; no write authority",
+    "cache_claim": null
+  },
+  "service_pid": 33041,
+  "runtime_nano_cpus": 2000000000,
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "initial": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": true,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1421436
+  },
+  "unmounted": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": false,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1421124
+  },
+  "retained": {
+    "kind": "mount",
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "outcome": "Retained",
+    "code": 10
+  },
+  "during": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": true,
+    "stopping": true,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1421404
+  },
+  "refusal": {
+    "kind": "failure",
+    "code": 13,
+    "unknown": 0,
+    "cleanup": 0
+  },
+  "cleaned": {
+    "workspace": "read",
+    "incarnation": "7171717171717171717171717171717171717171717171717171717171717171",
+    "mounted": false,
+    "stopping": false,
+    "closed": false,
+    "active_operations": 0,
+    "nodes": 1,
+    "handles": 0,
+    "cookies": 0,
+    "consumer_accounted_bytes": 1421124
+  },
+  "read": {
+    "inode": 3,
+    "bytes": 577551,
+    "mode": 420,
+    "mtime_ns": -876543211,
+    "sha256": "27c107fd4f53113eefe69f6c610c1a51a03ec8a243ebdab32caeaeb0a158a548",
+    "root_inode": 1,
+    "readonly": true
+  },
+  "external_fault": "Renamed only the empty owned mount leaf before Session construction; explicit Unmount checked absence before restoring it",
+  "remote_files_unchanged": true,
+  "cleanup": "PASS: normal daemon shutdown checked closed Workspace; owned runtime and volume removed",
+  "command_wall_seconds": 1.949983082999097
+}

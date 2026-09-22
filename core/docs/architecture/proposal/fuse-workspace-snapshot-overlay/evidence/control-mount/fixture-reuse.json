@@ -1,0 +1,26 @@
+{
+  "method": "independent buffered byte copy; no APFS clone/hard links",
+  "purpose": "reuse closed read-only prepared fixture outside functional selections",
+  "cache_claim": null,
+  "reused_verification_claim": false,
+  "copied": [
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/mounted-07/result.json",
+      "owned_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/result.json",
+      "sha256": "70f5b40df419506a650bc546ccbfa3e0a8b8f2d1fc1f5d39293e5699369d2fb4",
+      "bytes": 3672
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/mounted-07/service/store.sqlite",
+      "owned_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/service/store.sqlite",
+      "sha256": "903a50b09be126cad1ffba7738b3833d513f8ecab2b6eb3a326dd08e7ab259bc",
+      "bytes": 106496
+    },
+    {
+      "source": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/mounted-07/service/history.sqlite",
+      "owned_path": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/fixtures/mounted-07/service/history.sqlite",
+      "sha256": "167aac87e7b629790a0b06e97f686c8ecad55890b1f9f05548fadcae7b2f64fb",
+      "bytes": 86016
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "container": "layerfs-stage-2a9242489f2b4cc5",
+  "volume": "layerfs-stage-2a9242489f2b4cc5-data",
+  "processes_before_cleanup": "UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD\nroot                11532               11509               0                   11:57               ?                   00:00:00            sleep infinity\n",
+  "reason": "Test declared owner1001 while execution/root directories were owned by root; existing attach owner check correctly refused. Corrected external runtime uses actual UID/GID1001 and matching owned root. Product unchanged.",
+  "no_clean_Workspace_close_claim": true
+}

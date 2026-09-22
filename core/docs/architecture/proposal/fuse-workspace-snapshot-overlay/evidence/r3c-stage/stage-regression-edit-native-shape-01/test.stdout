@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::local_range_edit_native_shape ... LOCAL_EDIT_CHECK native-truncation-and-growth-invalidate-allocation-observation PASS
+LOCAL_EDIT_NATIVE_SHAPE metadata=MetadataStatus { allocated_pages: 6, reusable_pages: 3, roots: 3, external_roots: 3, allocated_bytes: 40960, reserved_bytes: 2555904, working_bytes: 6776, accounting_complete: false, admission_stopped: true } backing=BackingStatus { quota_bytes: 134217728, allocated_bytes: 73728, reserved_bytes: 2555904, payloads: 4, retained_payloads: 3, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: true, accounting_complete: false } observed_file_blocks=73728
+LOCAL_EDIT_CHECK healthy-cleanup-preserves-other-arena-incompleteness PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.10s
+

@@ -133,8 +133,13 @@ the report.
    the fix is applied once, and the covering commands then run once. A change
    that needs a second verification pass to be believable was not verified the
    first time.
-5. Respect the measurement lock: never overlap resource-sensitive work, never
-   interrupt another owner's run.
+5. Respect the measurement lock — it is **per worktree** (owner direction,
+   2026-09-21): builds and measurements in different worktrees do not exclude each
+   other, two runs in one worktree still never overlap, and no build may take a
+   Cargo target directory outside its own worktree. A build that overlaps a timed
+   phase is recorded as declared interference on the row rather than prevented;
+   see [`measurement-isolation.md`](docs/roadmap/0.1/0.1.7/measurement-isolation.md).
+   Never interrupt another owner's run.
 6. Record it: append an entry to the active ledger
    (`docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md` and its
    successors) with exact numbers, limits, the arithmetic, the identities, the

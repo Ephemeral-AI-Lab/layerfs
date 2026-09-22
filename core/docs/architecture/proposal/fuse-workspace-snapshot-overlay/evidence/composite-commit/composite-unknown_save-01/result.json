@@ -1,0 +1,111 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-composite-commit",
+  "case": "unknown_save",
+  "checks": [
+    {
+      "id": "composite-prerequisite-loss-retains-G-D1-and-source-outcome",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "S-15",
+    "H-07",
+    "H-09"
+  ],
+  "requirement_scope": "Composite Commit SDK subsets; no writable mount, namespace, npm or R6 completion",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "explicit failed-state and DiscardStage disposition",
+    "mounted writes",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "full read/directory in-flight and capture/prepared-mutation schedules"
+  ],
+  "source": "6702e31e629ada5e78981b6854e36721e619e65b",
+  "product_inputs_sha256": "b6acbb4ef773fdaec17dd9922a47ec6a92ccb6f5e91ca963ba5f857d8953ee12",
+  "driver_sha256": "07ce85b248f6aea25a378fb131b78f7847971b5775e2bde74771a4425fdb2f3e",
+  "test_source_sha256": "e9031369e4654a894dffd86dda0417c3e0295dfab296bb086c71097849969f02",
+  "entrypoint_sha256": "6b018d3515c7569446919347c9a8f1f14789c5f1d6dfb3c805277034e8ffc494",
+  "helper_source_sha256": "77323daa166d0c48fbb0be6f79b4f97eea129e96bd749b2510cc4a7793bb6605",
+  "test_binary_sha256": "83c832a66cc766325dfd3cc93540a2f908dd2b687c2a93def8be5535bcd67db4",
+  "binaries": {
+    "layerfs-service": "7ab341c004a0abaebe32f23daf2351f2d6c35171bf662f643820461c053e9636",
+    "layerfs-daemon": "ad453d7be7ffd8988c44b5516658bfb2cc4e31bb9da7d222ddf4059994d85e26",
+    "examples/public_key": "29f9fb3a0b53a2c71ccda429276820f5b003008974f53e0a09622783f5d751b4"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "922ace202173",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence",
+    "build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+      "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/binary-archive/83c832a66cc766325dfd3cc93540a2f908dd2b687c2a93def8be5535bcd67db4/composite-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/composite-unknown_save-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": [
+      {
+        "pid": 33229,
+        "kind": "measurement",
+        "command": "/bin/zsh -c cd /tmp/rca209 && cp sample.sqlite s_new.sqlite 2>/dev/null; cp /tmp/rca209/sample.sqlite /tmp/rca209/s_new.sqlite 2>/dev/null; sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/co"
+      },
+      {
+        "pid": 33232,
+        "kind": "measurement",
+        "command": "sqlite3 /Users/yifanxu/Ephemeral-AI-Lab/layerfs-190-scope/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content --list"
+      }
+    ]
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/target/pair1-evidence/large-edit-master-01/result.json",
+    "receipt_sha256": "6632361ed27f5405cf188434abaf8c89f064795ebb8f3838fa25298f90757d6d",
+    "closed_store_sha256": "51f5f5027a9974c19827fa28cda9a6a64f5a55d4827ec39eddf5cab49e5370c9",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "root_serial": 1,
+    "file_serial": 2,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::composite_unknown_save",
+  "native_save_observation": {
+    "boundary": "EditFile call active; service owns SQLite RESERVED byte before and after SIGSTOP",
+    "observer": "read-only F_GETLK at (1<<30)+1 length 1; no lock acquired",
+    "service_pid": 78670,
+    "observed_pid": 78670,
+    "stopped_pid": 78670,
+    "lock_observer_sha256": "ed1258c9a133bffe82c46f8d0e7146bea3beb4085ae86e879e874f4ef8a797d1",
+    "wait_seconds": 0.526985959004378,
+    "not_a_claim": "upload pause, terminal withholding, measured save latency or two-save overlap",
+    "local_progress_while_stopped_seconds": 0.007521499996073544,
+    "live_progress_before_resume_or_loss": true
+  },
+  "expected_service_loss": "SIGKILL at observed active C2 write transaction after local D1 progress",
+  "test_exit": 0,
+  "observations": [
+    "COMMIT_FAILURE CommitFailure { generation: 1, phase: Preparing, disposition: Unknown, cause: Stage(StageFailure { generation: 1, phase: FileSave, disposition: Unknown, cause: Service(Failure { code: Unknown, unknown: true, cleanup: None, history: None }), observed_stage: None, known_stage: None, source_failure: None, pending: None }), stage: None, observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None }"
+  ],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": -9,
+  "command_wall_seconds": 1.315843832999235
+}

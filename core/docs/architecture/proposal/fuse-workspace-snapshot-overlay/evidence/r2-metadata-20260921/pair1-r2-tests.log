@@ -1,0 +1,62 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-service)
+error[E0308]: mismatched types
+    --> crates/layerfs-service/tests/history.rs:2418:9
+     |
+2418 |         (*root.as_bytes(), *opaque.as_bytes())
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<_, _>`, found `([u8; 32], [u8; 32])`
+     |
+     = note: expected enum `Result<_, _>`
+               found tuple `([u8; 32], [u8; 32])`
+help: try wrapping the expression in a variant of `Result`
+     |
+2418 |         Ok((*root.as_bytes(), *opaque.as_bytes()))
+     |         +++                                      +
+2418 |         Err((*root.as_bytes(), *opaque.as_bytes()))
+     |         ++++                                      +
+
+error[E0308]: mismatched types
+    --> crates/layerfs-service/tests/history.rs:2388:5
+     |
+2382 |   fn metadata_with_generic_keys(store: &Store) -> (Root, Root) {
+     |                                                   ------------ expected `([u8; 32], [u8; 32])` because of return type
+...
+2388 | /     Timing::disabled("seed-metadata", |scope| {
+2389 | |         let mut save = store.begin_save(scope.child("begin")).unwrap();
+2390 | |         let provider = StoreProvider::new(store);
+2391 | |         let mut handoff = SaveHandoff::new(&mut save);
+...    |
+2419 | |     })
+2420 | |     .0
+     | |______^ expected `([u8; 32], [u8; 32])`, found `Result<_, _>`
+     |
+     = note: expected tuple `([u8; 32], [u8; 32])`
+                 found enum `Result<_, _>`
+help: consider using `Result::expect` to unwrap the `Result<_, _>` value, panicking if the value is a `Result::Err`
+     |
+2420 |     .0.expect("REASON")
+     |       +++++++++++++++++
+
+error[E0061]: this method takes 2 arguments but 1 argument was supplied
+    --> crates/layerfs-service/tests/history.rs:2662:11
+     |
+2662 |     store.set_max_concurrent_writes(1).unwrap();
+     |           ^^^^^^^^^^^^^^^^^^^^^^^^^--- argument #2 of type `TimingScope<'_>` is missing
+     |
+note: method defined here
+    --> /Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-storage/src/cas/store.rs:306:12
+     |
+306  |     pub fn set_max_concurrent_writes(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+help: provide the argument
+     |
+2662 |     store.set_max_concurrent_writes(1, /* TimingScope<'_> */).unwrap();
+     |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some errors have detailed explanations: E0061, E0308.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `layerfs-service` (test "history") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...

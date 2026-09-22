@@ -83,17 +83,40 @@ class BuildReuseTests(unittest.TestCase):
                 with patch.dict(os.environ, {'CARGO_BUILD_JOBS': value}), self.assertRaises(ValueError):
                     runner.host_build_jobs()
 
-    def test_image_archive_stays_under_runner_lock(self):
+    def test_a_build_takes_no_measurement_lock(self):
+        """Owner direction, 2026-09-21: a build never excludes another worktree.
+
+        The retired machine-global file stays free while a build runs, and the
+        build does not take this worktree's lock either: only pruning does, because
+        pruning deletes state a running lane in this worktree may be about to read.
+        """
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'TMPDIR': folder}):
+            worktree_lock = Path(folder) / 'worktree-measurement.lock'
+
             def archive(tag):
-                with (Path(folder) / 'layerfs-infra-measurement.lock').open('a') as lock:
-                    with self.assertRaises(BlockingIOError):
-                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                for path in (Path(folder) / 'layerfs-infra-measurement.lock', worktree_lock):
+                    with path.open('a') as handle:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with patch.object(runner, 'source_build_args', return_value={'LAYERFS_SOURCE_SEAL': 'a' * 64}), \
+                    patch.object(runner.isolation, 'worktree_lock_path', return_value=worktree_lock), \
                     patch.object(runner.runtime, 'build_image', return_value=SimpleNamespace(returncode=0)), \
                     patch.object(runner, 'archive_image', side_effect=archive) as archived:
                 self.assertEqual(runner.main(['--build-image']), 0)
                 archived.assert_called_once()
+
+    def test_pruning_keeps_the_worktree_lock(self):
+        """Pruning still excludes a concurrent run *in this worktree*."""
+        with tempfile.TemporaryDirectory() as folder:
+            worktree_lock = Path(folder) / 'worktree-measurement.lock'
+
+            def prune(keep, apply):
+                with worktree_lock.open('a') as handle:
+                    with self.assertRaises(BlockingIOError):
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return {'kept': [], 'removed': []}
+            with patch.object(runner.isolation, 'worktree_lock_path', return_value=worktree_lock), \
+                    patch.object(runner, 'prune_build_caches', side_effect=prune):
+                self.assertEqual(runner.main(['--prune-builds', '2']), 0)
 
     def test_changed_source_cannot_publish_a_qualified_image(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'TMPDIR': folder}), \

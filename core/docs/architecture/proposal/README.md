@@ -154,10 +154,11 @@ is retained as research with the later owner direction appended.
 
 | Document | Pair | State |
 | --- | --- | --- |
-| [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | **initialized** — decisions open |
+| [`FUSE / Workspace / snapshot overlay`](fuse-workspace-snapshot-overlay/README.md) | 1 | detailed proposal and implementation handoff: separate FUSE/Workspace libraries, overlay capture and history integration; no mounted qualification |
+| [`01-projection-and-runtime.md`](01-projection-and-runtime.md) | 1 | entry point to the detailed Workspace/FUSE proposal packet |
 | [`02-init-commit-and-concurrency.md`](02-init-commit-and-concurrency.md) | 2 | historical operational/concurrency exploration; current spec linked at entry |
 | [`03-history.md`](03-history.md) | 2 | current history overview and implementation handoff |
-| [`commit-history/implementation.md`](commit-history/implementation.md) | 2 | concrete operations, schema, file/LOC plan, diagrams and acceptance; implementation NOT_RUN |
+| [`commit-history/implementation.md`](commit-history/implementation.md) | 2 | operations, schema, file/LOC plan and acceptance; implementation/remediation status and qualification limits linked at entry |
 | [`04-boundary-and-trust.md`](04-boundary-and-trust.md) | 3 | **initialized** — decisions open |
 | [`service-daemon-transport/`](service-daemon-transport/README.md) | 3 foundation; later 1 integration | detailed architecture, layout, operations and resource proposal — implementation/qualification open |
 

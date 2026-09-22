@@ -1,0 +1,201 @@
+[
+  {
+    "selection": "stage-completion-failure-01",
+    "status": "PASS",
+    "wall_seconds": 1.1238946670055157,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_FAILURE StageFailure { generation: 1, phase: LocalBookkeeping, disposition: KnownBeforeStage, cause: Backing(BackingFailure { phase: Allocate, payload: 0, declared_bytes: 32768, completed_bytes: 0, created_segments: 1, allocated_bytes: 12288, reserved_bytes: 28672, cleanup_failed: false, accounting_complete: true, kind: FileTooLarge }), observed_stage: None, known_stage: None, source_failure: None, pending: Some(InodeSaveObservation { serial: 2, revision: 1, length: 67108864, content: [156, 144, 130, 27, 253, 191, 178, 238, 187, 158, 48, 90, 168, 213, 175, 30, 239, 38, 121, 215, 58, 52, 95, 168, 160, 89, 128, 223, 202, 30, 11, 113], metadata: Some([152, 3, 226, 213, 14, 28, 50, 116, 240, 69, 231, 247, 37, 196, 193, 11, 148, 228, 214, 108, 0, 155, 147, 251, 93, 3, 81, 159, 39, 163, 202, 79]) }) }",
+      "STAGE_RESOURCE BackingStatus { quota_bytes: 67108864, allocated_bytes: 20480, reserved_bytes: 847872, payloads: 1, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: true, accounting_complete: true } MetadataStatus { allocated_pages: 2, reusable_pages: 0, roots: 3, external_roots: 3, allocated_bytes: 12288, reserved_bytes: 847872, working_bytes: 43992, accounting_complete: true, admission_stopped: true }"
+    ]
+  },
+  {
+    "selection": "stage-frontier-01",
+    "status": "PASS",
+    "wall_seconds": 13.520256874995539,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 104, dirty_inodes: 104, phase: Staged, inode: None, saved_files: 104, saved_metadata: 104, stage_token: Some(2), candidate_root: Some([15, 140, 252, 198, 170, 152, 48, 96, 242, 197, 180, 233, 42, 179, 234, 234, 162, 161, 161, 206, 30, 218, 198, 93, 74, 58, 155, 81, 70, 163, 224, 158]), failure: None, failure_phase: None }), generation: 2, revision: 105, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2057765 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 1355776, reserved_bytes: 831488, payloads: 104, retained_payloads: 104, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 119, reusable_pages: 2, roots: 3, external_roots: 3, allocated_bytes: 503808, reserved_bytes: 831488, working_bytes: 44048, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-head-moved-01",
+    "status": "PASS",
+    "wall_seconds": 1.3120572499901755,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_FAILURE StageFailure { generation: 1, phase: StageChanges, disposition: KnownBeforeStage, cause: Service(Failure { code: HeadMoved, unknown: false, cleanup: None, history: Some(HistoryFailure { conflict: Some(BranchMoved { expected_head: Some([18, 225, 18, 6, 89, 153, 205, 79, 249, 77, 31, 180, 188, 154, 82, 60, 71, 47, 62, 197, 95, 110, 145, 241, 8, 19, 126, 162, 85, 182, 51, 40, 57]), actual_head: Some([18, 250, 44, 219, 5, 12, 55, 198, 150, 168, 218, 97, 107, 251, 168, 39, 175, 246, 33, 164, 71, 140, 110, 163, 181, 5, 39, 142, 172, 45, 35, 39, 191]), expected_base: [50, 216, 24, 81, 69, 130, 72, 24, 138, 191, 106, 63, 250, 32, 164, 23, 212, 20, 30, 183, 64, 230, 202, 227, 127, 55, 105, 150, 35, 50, 224, 94, 82], actual_base: [50, 216, 24, 81, 69, 130, 72, 24, 138, 191, 106, 63, 250, 32, 164, 23, 212, 20, 30, 183, 64, 230, 202, 227, 127, 55, 105, 150, 35, 50, 224, 94, 82] }), stage: Unobserved }) }), observed_stage: None, known_stage: None, source_failure: None, pending: None }"
+    ]
+  },
+  {
+    "selection": "stage-headroom-01",
+    "status": "PASS",
+    "wall_seconds": 4.125176292000106,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_HEADROOM before=BackingStatus { quota_bytes: 2097152, allocated_bytes: 20480, reserved_bytes: 851968, payloads: 1, retained_payloads: 1, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } full=BackingStatus { quota_bytes: 2097152, allocated_bytes: 1245184, reserved_bytes: 851968, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } after=BackingStatus { quota_bytes: 2097152, allocated_bytes: 1249280, reserved_bytes: 847872, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } unrelated_owned_bytes=1216512",
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 1, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([218, 111, 210, 7, 145, 19, 95, 225, 140, 189, 164, 139, 44, 164, 114, 208, 51, 224, 60, 79, 92, 209, 122, 246, 93, 5, 30, 0, 152, 172, 216, 101]), failure: None, failure_phase: None }), generation: 2, revision: 2, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2028141 } BackingStatus { quota_bytes: 2097152, allocated_bytes: 1249280, reserved_bytes: 847872, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 0, roots: 3, external_roots: 3, allocated_bytes: 16384, reserved_bytes: 847872, working_bytes: 43992, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-lowering-01",
+    "status": "PASS",
+    "wall_seconds": 1.0784060830046656,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 3, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 1, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([241, 42, 204, 20, 109, 184, 26, 172, 182, 75, 8, 90, 100, 182, 71, 228, 132, 231, 104, 116, 221, 11, 149, 98, 72, 141, 182, 134, 128, 189, 148, 245]), failure: None, failure_phase: None }), generation: 2, revision: 4, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2031869 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 49152, reserved_bytes: 847872, payloads: 3, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 7, reusable_pages: 0, roots: 5, external_roots: 3, allocated_bytes: 32768, reserved_bytes: 847872, working_bytes: 47424, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-metadata-denied-01",
+    "status": "PASS",
+    "wall_seconds": 1.0584589170030085,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_FAILURE StageFailure { generation: 1, phase: MetadataSave, disposition: KnownBeforeStage, cause: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None }), observed_stage: None, known_stage: None, source_failure: None, pending: Some(InodeSaveObservation { serial: 2, revision: 1, length: 67108864, content: [156, 144, 130, 27, 253, 191, 178, 238, 187, 158, 48, 90, 168, 213, 175, 30, 239, 38, 121, 215, 58, 52, 95, 168, 160, 89, 128, 223, 202, 30, 11, 113], metadata: None }) }"
+    ]
+  },
+  {
+    "selection": "stage-metadata-only-01",
+    "status": "PASS",
+    "wall_seconds": 1.0411997080082074,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 0, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([120, 238, 12, 125, 6, 126, 162, 160, 132, 182, 47, 76, 167, 97, 3, 168, 207, 28, 193, 32, 63, 102, 49, 18, 177, 53, 55, 227, 195, 114, 10, 20]), failure: None, failure_phase: None }), generation: 2, revision: 2, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2027853 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 16384, reserved_bytes: 847872, payloads: 1, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 3, reusable_pages: 0, roots: 3, external_roots: 3, allocated_bytes: 16384, reserved_bytes: 847872, working_bytes: 43992, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-native-save-01",
+    "status": "PASS",
+    "wall_seconds": 2.1904864590032957,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 1, dirty_inodes: 1, phase: Staged, inode: None, saved_files: 1, saved_metadata: 1, stage_token: Some(2), candidate_root: Some([186, 188, 123, 39, 12, 234, 252, 121, 241, 183, 186, 115, 214, 185, 40, 67, 250, 217, 114, 77, 121, 129, 134, 89, 69, 25, 57, 79, 183, 57, 42, 81]), failure: None, failure_phase: None }), generation: 2, revision: 3, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 2029861 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 4243456, reserved_bytes: 1699840, payloads: 2, retained_payloads: 2, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 5, reusable_pages: 0, roots: 4, external_roots: 4, allocated_bytes: 24576, reserved_bytes: 1699840, working_bytes: 45712, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-regression-edit-aggregate-01",
+    "status": "PASS",
+    "wall_seconds": 0.9259305410087109,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-corruption-01",
+    "status": "PASS",
+    "wall_seconds": 0.8875680829951307,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-frontier-01",
+    "status": "PASS",
+    "wall_seconds": 40.47260762499354,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-inode-frontier-01",
+    "status": "PASS",
+    "wall_seconds": 5.069466874992941,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-large-base-01",
+    "status": "PASS",
+    "wall_seconds": 0.921348042000318,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-ledger-collider-01",
+    "status": "PASS",
+    "wall_seconds": 0.9255673330044374,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-ledger-write-failure-01",
+    "status": "PASS",
+    "wall_seconds": 0.8807121659920085,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-metadata-failure-01",
+    "status": "PASS",
+    "wall_seconds": 1.0477005420107162,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-metadata-quota-01",
+    "status": "PASS",
+    "wall_seconds": 1.050366583003779,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-native-shape-01",
+    "status": "PASS",
+    "wall_seconds": 0.9378235420008423,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-refusals-01",
+    "status": "PASS",
+    "wall_seconds": 1.29288937500678,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-edit-semantics-01",
+    "status": "PASS",
+    "wall_seconds": 2.1313484170095762,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-payload-01",
+    "status": "PASS",
+    "wall_seconds": 1.210599625002942,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-regression-status-01",
+    "status": "PASS",
+    "wall_seconds": 25.01910379099718,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": []
+  },
+  {
+    "selection": "stage-semantics-01",
+    "status": "PASS",
+    "wall_seconds": 4.36280145800265,
+    "product_inputs_sha256": "a600dc4684dc0545639936c21a00d0ab38319d9f3b517df197f7c9d08ba48ce1",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 2, dirty_inodes: 2, phase: Staged, inode: None, saved_files: 2, saved_metadata: 2, stage_token: Some(2), candidate_root: Some([153, 253, 47, 140, 166, 86, 246, 225, 233, 125, 63, 17, 68, 222, 41, 252, 91, 209, 129, 93, 108, 250, 120, 232, 185, 73, 154, 182, 10, 200, 185, 88]), failure: None, failure_phase: None }), generation: 2, revision: 5, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 3, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 3475819 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 81920, reserved_bytes: 1679360, payloads: 5, retained_payloads: 5, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 8, reusable_pages: 3, roots: 5, external_roots: 5, allocated_bytes: 40960, reserved_bytes: 1679360, working_bytes: 47880, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-semantics-02",
+    "status": "PASS",
+    "wall_seconds": 1.2310480839951197,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_RESOURCE WorkspaceStatus { submission: Some(SubmissionStatus { generation: 1, captured_revision: 2, dirty_inodes: 2, phase: Staged, inode: None, saved_files: 2, saved_metadata: 2, stage_token: Some(2), candidate_root: Some([217, 66, 42, 236, 116, 134, 84, 220, 243, 83, 150, 252, 44, 158, 115, 40, 220, 172, 224, 200, 163, 147, 110, 191, 155, 237, 76, 210, 179, 150, 148, 30]), failure: None, failure_phase: None }), generation: 2, revision: 5, dirty_inodes: 1, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 3, handles: 1, projection_handles: 0, cookies: 0, accounted_bytes: 3475819 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 81920, reserved_bytes: 2551808, payloads: 5, retained_payloads: 5, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 8, reusable_pages: 3, roots: 5, external_roots: 5, allocated_bytes: 40960, reserved_bytes: 2551808, working_bytes: 47880, accounting_complete: true, admission_stopped: false }"
+    ]
+  },
+  {
+    "selection": "stage-unknown-save-01",
+    "status": "PASS",
+    "wall_seconds": 1.7777883329981705,
+    "product_inputs_sha256": "2529e50a9dac4047ef45492b7295ef58e3859c0708c5ee5391e973086c0692bf",
+    "observations_from_original_stdout": [
+      "STAGE_FAILURE StageFailure { generation: 1, phase: FileSave, disposition: Unknown, cause: Service(Failure { code: Unknown, unknown: true, cleanup: None, history: None }), observed_stage: None, known_stage: None, source_failure: None, pending: None }"
+    ]
+  }
+]

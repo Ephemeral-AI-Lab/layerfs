@@ -1,0 +1,56 @@
+{
+  "status": "FAIL",
+  "mode": "functional-mounted-proof",
+  "performance_claim": false,
+  "checks": [
+    {
+      "id": "R-03",
+      "route": "wrong-root-role",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: InvalidInput, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "missing-root",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: MissingObject, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-03",
+      "route": "unauthorized-store",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    },
+    {
+      "id": "R-11",
+      "route": "unauthorized-inspect",
+      "status": "PASS",
+      "error": "Error: Service(Failure { code: Denied, unknown: false, cleanup: None, history: None })\n"
+    }
+  ],
+  "source": "646fcd5e5027ca8bea361c4a44ffc491ed8e7b05",
+  "dirty_diff_sha256": "7dd556606700b99b72ad1a9e878221186232ebeccefac7b3dbe25dad836ff962",
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "limits": {
+    "callback_seconds": 10,
+    "working_bytes": 8388608,
+    "max_workspaces": 2
+  },
+  "not_run": [
+    "R1-C authenticated daemon control",
+    "W/snapshot/Commit/npm",
+    "R6 matched performance",
+    "hard RSS/cgroup bound"
+  ],
+  "root": "ff064b7094183de6f63feb6d8c1737cf7f0ab06ede7c2438b1dbc716a4d353c9",
+  "branch": "1161616161616161616161616161616161",
+  "root_serial": 2,
+  "executable_sha256": "dfd1b0241759344063bd5052622d90910c53084234a26f19527d150da3e43d4b",
+  "linux_binary_sha256": "1f69b15477040f514840970292de978d0d05fdf0b0de6d804bf1f965f8b8e2cd",
+  "host_binary_sha256": "8b1e5090e6d11e2ceb907c8ec6474452ef219763c0d7cf283fa0b184a9e47357",
+  "failure": "CalledProcessError(1, ['docker', 'exec', '-i', 'layerfs-pair1-read-59414', 'python3'])",
+  "failure_stdout": "",
+  "failure_stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 70, in <module>\n  File \"/usr/lib/python3.11/subprocess.py\", line 548, in run\n    with Popen(*popenargs, **kwargs) as process:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.11/subprocess.py\", line 1024, in __init__\n    self._execute_child(args, executable, preexec_fn, close_fds,\n  File \"/usr/lib/python3.11/subprocess.py\", line 1901, in _execute_child\n    raise child_exception_type(errno_num, err_msg, err_filename)\nOSError: [Errno 95] Operation not supported: '/layerfs/workspace/read/tool'\n",
+  "command_wall_seconds": 13.765498124994338,
+  "hard_budget_seconds": 60
+}

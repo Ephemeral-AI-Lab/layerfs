@@ -1,0 +1,9 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 4.38s
+  Executable unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-66e5e7c121c634b6)
+  Executable tests/commit_staged.rs (core/target/debug/deps/commit_staged-3cde09b431377ee6)
+  Executable tests/local_edit.rs (core/target/debug/deps/local_edit-cfc15f926c5dc6c4)
+  Executable tests/payload.rs (core/target/debug/deps/payload-6e6e45f88f20a0dc)
+  Executable tests/readable.rs (core/target/debug/deps/readable-8ebeb84f50fae68f)
+  Executable tests/stage.rs (core/target/debug/deps/stage-0ad33830fda39059)

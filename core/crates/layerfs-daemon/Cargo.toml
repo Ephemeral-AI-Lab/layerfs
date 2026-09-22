@@ -1,6 +1,6 @@
 [package]
 name="layerfs-daemon"
-description="Bounded headless native bridge client"
+description="Native bridge and Linux Workspace mount assembly"
 version.workspace=true
 edition.workspace=true
 rust-version.workspace=true
@@ -8,3 +8,6 @@ license.workspace=true
 [dependencies]
 layerfs-bridge={path="../layerfs-bridge"}
 layerfs-telemetry={path="../layerfs-telemetry",features=["native"]}
+layerfs-workspace={path="../layerfs-workspace"}
+layerfs-fuse={path="../layerfs-fuse"}
+nix={version="=0.31.3",features=["signal"]}

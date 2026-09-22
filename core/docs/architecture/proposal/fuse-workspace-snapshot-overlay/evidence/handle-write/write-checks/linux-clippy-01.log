@@ -1,0 +1,19 @@
+    Checking layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Checking layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/work/core/crates/layerfs-daemon)
+error: the loop variable `i` is used to index `bytes`
+   --> crates/layerfs-workspace/tests/write.rs:357:18
+    |
+357 |         for i in 0..514 {
+    |                  ^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+357 |         for (i, <item>) in bytes.iter().enumerate().take(514) {
+    |             ~~~~~~~~~~~    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+error: could not compile `layerfs-workspace` (test "write") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

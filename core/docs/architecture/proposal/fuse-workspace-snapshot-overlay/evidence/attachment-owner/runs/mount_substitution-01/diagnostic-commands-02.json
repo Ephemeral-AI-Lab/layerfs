@@ -1,0 +1,33 @@
+[
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "--format",
+      "{{.Id}} {{.HostConfig.NanoCpus}} {{.Image}}",
+      "layerfs-edit-2955ea8aeecf4164"
+    ],
+    "exit_code": 0
+  },
+  {
+    "argv": [
+      "docker",
+      "inspect",
+      "--format",
+      "{{json .Mounts}}",
+      "layerfs-edit-2955ea8aeecf4164"
+    ],
+    "exit_code": 0
+  },
+  {
+    "argv": [
+      "docker",
+      "exec",
+      "layerfs-edit-2955ea8aeecf4164",
+      "sh",
+      "-c",
+      "for p in /proc/25/task/*; do echo \"$p\"; cat \"$p/comm\" \"$p/syscall\" \"$p/stack\"; done; ls -l /proc/25/fd"
+    ],
+    "exit_code": 0
+  }
+]

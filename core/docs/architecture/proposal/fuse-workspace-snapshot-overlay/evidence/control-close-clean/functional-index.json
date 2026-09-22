@@ -1,0 +1,121 @@
+{
+  "rows": [
+    {
+      "case": "close_authority",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.9676920839992817,
+      "receipt": "control-close-close_authority-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "close_cleanup_failure",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.1601791249995586,
+      "receipt": "control-close-close_cleanup_failure-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "close_loss",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.1094577909971122,
+      "receipt": "control-close-close_loss-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "close_mounted",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0446793340088334,
+      "receipt": "control-close-close_mounted-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "close_success",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 2.779631374985911,
+      "receipt": "control-close-close_success-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "authority",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.7936398340098094,
+      "receipt": "control-close-regression-unmount-authority-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "expiry",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 10.368823291995795,
+      "receipt": "control-close-regression-unmount-expiry-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "loss",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.090825124992989,
+      "receipt": "control-close-regression-unmount-loss-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "partial_input",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.341870458010817,
+      "receipt": "control-close-regression-unmount-partial_input-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "shutdown_retained",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 11.07028366700979,
+      "receipt": "control-close-regression-unmount-shutdown_retained-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "signal",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0226764999970328,
+      "receipt": "control-close-regression-unmount-signal-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "success",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0141277499787975,
+      "receipt": "control-close-regression-unmount-success-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    },
+    {
+      "case": "timeout",
+      "route": "actual authenticated daemon control with Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.4280749589961488,
+      "receipt": "control-close-regression-unmount-timeout-01/result.json",
+      "product_inputs_sha256": "e3201c7c956df6a832857172631f46f8d007961488f75ac26e597e57a3672304"
+    }
+  ],
+  "summary": {
+    "PASS": 13,
+    "FAIL": 0
+  },
+  "performance_claim": false,
+  "not_run": [
+    "dirty/staged CloseClean through currently read-only daemon startup",
+    "deterministic signal overlap inside actual CloseClean I/O",
+    "remote Attach/Mount, writable startup/edit/Commit controls",
+    "namespace/new-inode/larger-input/npm and R6",
+    "RSS/cgroup qualification"
+  ],
+  "prior_evidence": "Round27 Status and round26 writable proofs remain pinned to their own source; not relabeled as this build"
+}

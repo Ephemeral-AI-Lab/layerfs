@@ -1,0 +1,11 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-bridge)
+error[E0559]: variant `layerfs_bridge::contract::Response::Saved` has no field named `representation`
+  --> crates/layerfs-bridge/tests/stream_fragmentation.rs:77:25
+   |
+77 |                         representation: 1,
+   |                         ^^^^^^^^^^^^^^ `layerfs_bridge::contract::Response::Saved` does not have this field
+   |
+   = note: available fields are: `inserted`, `reused`
+
+For more information about this error, try `rustc --explain E0559`.
+error: could not compile `layerfs-bridge` (test "stream_fragmentation") due to 1 previous error

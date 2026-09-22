@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "container": "layerfs-stage-b14e6481f9394e8f",
+  "volume": "layerfs-stage-b14e6481f9394e8f-data",
+  "processes_before_cleanup": "UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD\nroot                73261               73237               0                   10:32               ?                   00:00:00            sleep infinity\n",
+  "reason": "test oracle required canonical remote bytes while its own C5 reply gate held the Q0 remote slot; source/read.rs remote() correctly refused Busy",
+  "no_clean_Workspace_close_claim": true
+}

@@ -1,0 +1,28 @@
+{
+  "parent": "0d220870175abb6e3f162cb164dba7c49bc98f9d",
+  "product_inputs_sha256": "6c3fff5bf08b7273eed005500579351c319b1f5a01f83a0359bfb77738b7a75f",
+  "host_binaries": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/499e777545d57fd244e915d90d4e72e464993569f917ebfbce4a70842545892e/host",
+  "host_binary_sha256": {
+    "layerfs-daemon": "64f4d47944493826fe723df90241724a22ffad9a3be4520bdccf23c1a23d09dd",
+    "layerfs-service": "81c85c01cb19609586d5f05f35740b33927e9efbe8fd6a506e4982a218dfc605",
+    "examples/public_key": "7066cc5b062cee48ef8747b3edbbda994e481476eaf6a38b765c9bd259685d73"
+  },
+  "test_binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/a623945e6abd02330f2c5c1eb82653338090c2fd220539e8637df114c74bf1c6/attachment-test",
+  "test_binary_sha256": "a623945e6abd02330f2c5c1eb82653338090c2fd220539e8637df114c74bf1c6",
+  "linux_daemon_binary": "/Users/yifanxu/.codex/worktrees/795c/layerfs/core/target/pair1-evidence/binary-archive/6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4/layerfs-daemon",
+  "linux_daemon_sha256": "6284fdd351dbfe7350e2760a02e03c4e6c97589e6351ee2034d433fdb0b422d4",
+  "tool_image_id": "sha256:afa02fb391d3dec196c399131c3d3fe4f34b0e8d7352339220f664bf91eae408",
+  "runtime_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "compiler": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "build_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "build_mode": "incremental owned targets; whole workspace locked bins/examples and tests",
+  "cargo_build_jobs": 2,
+  "docker_cpus": 2,
+  "construction_workers": 1,
+  "dependency_reuse": "existing read-only Cargo registry and exact unchanged tool/runtime image IDs; no regenerated fixture",
+  "source_state": "uncommitted source after parent, exact product input seal recorded",
+  "tests/attachment.rs_sha256": "9136cc2190124b7836a4b07ac64a3808ad9f1f78a5e88afdd5eb793883e84ead",
+  "tests/attachment_route.py_sha256": "5e26852f0e2b373a7e6b3f677406596400de408aef1d438e8417e81fe9e25126",
+  "tests/local_edit_route.py_sha256": "eedccb73c8137f19962af2706151c85859c42cc5f40055aa567da5e2376958d4",
+  "tests/support/native_workspace.rs_sha256": "8503ce5c94e6af65c19fef42037f0810dabb33ec466b876b9266c9cbbb47464c"
+}

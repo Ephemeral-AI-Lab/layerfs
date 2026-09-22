@@ -1,0 +1,89 @@
+   Compiling layerfs-workspace v0.1.6 (/work/core/crates/layerfs-workspace)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.67s
+     Running unittests src/lib.rs (core/target-linux/debug/deps/layerfs_workspace-0a94ea12d420f2c7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_staged.rs (core/target-linux/debug/deps/commit_staged-5bbdd79f5c246742)
+
+running 12 tests
+test linux::commit_consumed_stage ... ignored, requires explicit external stage consumption through C5
+test linux::commit_cycles ... ignored, requires live fixture; repeated roots remain accounted and bounded
+test linux::commit_denied ... ignored, requires second authenticated peer with no history-command grant
+test linux::commit_frontier ... ignored, requires wide fixture; 104 exact successor associations
+test linux::commit_head_moved ... ignored, requires independent Branch writer after Stage acknowledgement
+test linux::commit_headroom ... ignored, requires ordinary disk quota occupied before CommitStaged
+test linux::commit_lost_result ... ignored, requires opaque native result-loss proxy on CommitStaged only
+test linux::commit_reconcile_failure ... ignored, requires native private-file failure after actual C5 acknowledgement
+test linux::commit_remote_admission ... ignored, requires real native canonical-read admission held by another call
+test linux::commit_repeated ... ignored, requires commit_staged_route.py live native service
+test linux::commit_selectors ... ignored, requires commit_staged_route.py live native service
+test linux::commit_successor ... ignored, requires actual C5 commit reply gate; not an S-11 save proof
+
+test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/local_edit.rs (core/target-linux/debug/deps/local_edit-08e9964648118ea0)
+
+running 13 tests
+test linux::local_range_edit_aggregate ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_corruption ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_frontier ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_inode_frontier ... ignored, requires all 104 existing regular inodes in the closed R1 fixture
+test linux::local_range_edit_large_base ... ignored, requires the prepared 64MiB immutable-base fixture and actual native service
+test linux::local_range_edit_ledger_collider ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_ledger_write_failure ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_metadata_failure ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_metadata_quota ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_native_shape ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_refusals ... ignored, requires the actual service and Linux ext4 driver
+test linux::local_range_edit_semantics ... ignored, requires the actual service and Linux ext4 driver
+test logical_edit_paths_cannot_escape_the_workspace ... ok
+
+test result: ok. 1 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/payload.rs (core/target-linux/debug/deps/payload-b8eeb13092377c67)
+
+running 1 test
+test linux::linux_owned_payload_contract ... ignored, requires owned ext4 mounts; run tests/payload_route.py
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/readable.rs (core/target-linux/debug/deps/readable-67227df299004cdf)
+
+running 9 tests
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test failed_close_keeps_its_registry_count_until_cleanup_succeeds ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test registry_grows_on_demand_and_keeps_retained_capacity_charged ... ok
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stage.rs (core/target-linux/debug/deps/stage-d07f247be8978535)
+
+running 10 tests
+test linux::stage_completion_failure ... ignored, requires stage_route.py ignoring XFSZ for actual native failure
+test linux::stage_frontier ... ignored, requires stage_route.py wide live fixture
+test linux::stage_head_moved ... ignored, requires stage_route.py and an independent Branch writer
+test linux::stage_headroom ... ignored, requires stage_route.py with ordinary quota occupied
+test linux::stage_lowering ... ignored, requires stage_route.py and native service
+test linux::stage_metadata_denied ... ignored, requires stage_route.py with metadata grant denied
+test linux::stage_metadata_only ... ignored, requires stage_route.py live metadata-only save
+test linux::stage_native_save ... ignored, requires stage_route.py native SQLite save observation
+test linux::stage_semantics ... ignored, requires stage_route.py and a live native service
+test linux::stage_unknown_save ... ignored, requires stage_route.py native SQLite save loss
+
+test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

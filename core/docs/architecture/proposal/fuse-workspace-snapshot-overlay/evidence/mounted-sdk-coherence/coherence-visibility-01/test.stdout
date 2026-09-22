@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::coherence_visibility ... FAILED
+
+failures:
+
+failures:
+    linux::coherence_visibility
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+

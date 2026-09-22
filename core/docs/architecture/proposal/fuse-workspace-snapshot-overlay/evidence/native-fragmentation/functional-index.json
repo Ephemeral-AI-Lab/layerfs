@@ -1,0 +1,102 @@
+{
+  "parent": "c4f965357381870b3784e3423e75783496c0b7c7",
+  "performance_claim": false,
+  "selections": [
+    {
+      "receipt": "fragmentation-regression-commit_staged-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8114139579993207,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-commit_staged-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8691767079872079,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-clean-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8578144590137526,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 10.746618917008163,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8352674159978051,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6631949590228032,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.004885792004643,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-composite-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9201544999959879,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 24.997700292005902,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-stage-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 9.534508292010287,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-stage-lowering-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8826256660104264,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-stage-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.615790540992748,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-regression-stage-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.2966033330012579,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "fragmentation-retained-root-before-01/result.json",
+      "status": "DIAGNOSTIC_CONFIRMED",
+      "wall_seconds": null,
+      "product_inputs_sha256": "3428c8b2f0cb6a5c0547362d9c62cd06dcf634f2bd4272041603a1616d055bc8"
+    },
+    {
+      "receipt": "fragmentation-strict-root-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.9808890410058666,
+      "product_inputs_sha256": "e61a74254ee6fb80befa06948081d70a085749e63f5c600c640031a7034d2584"
+    },
+    {
+      "receipt": "write-frontier-01/result.json",
+      "status": "FAIL",
+      "wall_seconds": 25.86965558398515,
+      "product_inputs_sha256": "3428c8b2f0cb6a5c0547362d9c62cd06dcf634f2bd4272041603a1616d055bc8"
+    }
+  ]
+}

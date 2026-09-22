@@ -1,0 +1,547 @@
+[
+  {
+    "source": "core/target/pair1-evidence/stage-completion-failure-01/result.json",
+    "copy": "stage-completion-failure-01/result.json",
+    "sha256": "f16f1d5ba9311212dd1f37d8f053a11ac03cee545f64150ac935e942eab3dd72"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-completion-failure-01/service/fixture-daemon.stderr",
+    "copy": "stage-completion-failure-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-completion-failure-01/service.stderr",
+    "copy": "stage-completion-failure-01/service.stderr",
+    "sha256": "e76fa6d16efe9ad9b5885dae4de2c164905341c78f1fa86c310edca0546dea29"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-completion-failure-01/test.stderr",
+    "copy": "stage-completion-failure-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-completion-failure-01/test.stdout",
+    "copy": "stage-completion-failure-01/test.stdout",
+    "sha256": "36d797d7f9cf3268814fda4ffc0ad3ce84d72941a8b1fb135d2ebe84d3b6bfea"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-frontier-01/result.json",
+    "copy": "stage-frontier-01/result.json",
+    "sha256": "19ccf73679f6c7f9082eb2176603296e56270c7563180b1824b3474e73d6fdc1"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-frontier-01/service/fixture-daemon.stderr",
+    "copy": "stage-frontier-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-frontier-01/service.stderr",
+    "copy": "stage-frontier-01/service.stderr",
+    "sha256": "04bd5c52abb3a3bdefab6c2118f0c323c6460569f26fd583053a8c8c59ac0d23"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-frontier-01/test.stderr",
+    "copy": "stage-frontier-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-frontier-01/test.stdout",
+    "copy": "stage-frontier-01/test.stdout",
+    "sha256": "54f5d7aebd780551423b70e7a23cbceca2c3d7115c0853bddf54903395615ae5"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-head-moved-01/result.json",
+    "copy": "stage-head-moved-01/result.json",
+    "sha256": "ce5f84feaca503d4f9dcc18ed9a81fabba9de000b512632a1f584c860dc5f165"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-head-moved-01/service/fixture-daemon.stderr",
+    "copy": "stage-head-moved-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-head-moved-01/service.stderr",
+    "copy": "stage-head-moved-01/service.stderr",
+    "sha256": "adbebb67aed388763bb8cd524860e1f7632cb674864d076fc5ad667f66877c27"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-head-moved-01/test.stderr",
+    "copy": "stage-head-moved-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-head-moved-01/test.stdout",
+    "copy": "stage-head-moved-01/test.stdout",
+    "sha256": "2daa0c8ca40e36b60fb122b8d4a1ccd24ec8b825e994f65b64b306eecc724b63"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-headroom-01/result.json",
+    "copy": "stage-headroom-01/result.json",
+    "sha256": "5bf9c3e922ab21aa0095d85946d84e736f68e1d7bfd2d887a0cace9c42d40d1d"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-headroom-01/service/fixture-daemon.stderr",
+    "copy": "stage-headroom-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-headroom-01/service.stderr",
+    "copy": "stage-headroom-01/service.stderr",
+    "sha256": "6d14e64e23ee260e9f9cabaff70a2d14ee976bfb4f52fc3a9270466f8751dcd7"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-headroom-01/test.stderr",
+    "copy": "stage-headroom-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-headroom-01/test.stdout",
+    "copy": "stage-headroom-01/test.stdout",
+    "sha256": "fb09fb25f213a11ee6c1d9b176c7047379e042fff69c30435c36d4acca696986"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-lowering-01/result.json",
+    "copy": "stage-lowering-01/result.json",
+    "sha256": "d612b80b48eba1da19f2bb671617ef5f88b0d073a57a90d0283d1d85c608d005"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-lowering-01/service/fixture-daemon.stderr",
+    "copy": "stage-lowering-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-lowering-01/service.stderr",
+    "copy": "stage-lowering-01/service.stderr",
+    "sha256": "9c6fbc0899f23a71049c5e1acd802aec41952b50f51cebca6a6b549a63a0f8b0"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-lowering-01/test.stderr",
+    "copy": "stage-lowering-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-lowering-01/test.stdout",
+    "copy": "stage-lowering-01/test.stdout",
+    "sha256": "4548815e3e4ebb8b5adc27af2088b1e14392c006254b319f444353c9fa5aa439"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-denied-01/result.json",
+    "copy": "stage-metadata-denied-01/result.json",
+    "sha256": "e0fe4545ef64b9d298537c85869068d0ad81083b06882f0f86d62cc9bf3b2c06"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-denied-01/service/fixture-daemon.stderr",
+    "copy": "stage-metadata-denied-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-denied-01/service.stderr",
+    "copy": "stage-metadata-denied-01/service.stderr",
+    "sha256": "d44ae914749e3f914d458a4945c00e90cfd1a07f40f71fdbcd8f9b6adfa1b5cf"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-denied-01/test.stderr",
+    "copy": "stage-metadata-denied-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-denied-01/test.stdout",
+    "copy": "stage-metadata-denied-01/test.stdout",
+    "sha256": "1987191632754f5daf08e910810cfffe4d4e989cb25047ae2dd2ef06cc6d0c35"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-only-01/result.json",
+    "copy": "stage-metadata-only-01/result.json",
+    "sha256": "bf12df5ca975159faff22383f1b0a4064ebdfd326e8fd6ec680b74078d3cdf12"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-only-01/service/fixture-daemon.stderr",
+    "copy": "stage-metadata-only-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-only-01/service.stderr",
+    "copy": "stage-metadata-only-01/service.stderr",
+    "sha256": "51496db4a8920085d98cf2f991f4b5fa4e80ac0c194e41e71975a37978adb56a"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-only-01/test.stderr",
+    "copy": "stage-metadata-only-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-metadata-only-01/test.stdout",
+    "copy": "stage-metadata-only-01/test.stdout",
+    "sha256": "12aeeecb7591f96553a58b17cafd2cf7329fe2182062d68578a8092687c31eb8"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-native-save-01/result.json",
+    "copy": "stage-native-save-01/result.json",
+    "sha256": "c11a183ea37be0f339611c7dc5d64b82e5c8b31b9c2513917229db27596ed07f"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-native-save-01/service/fixture-daemon.stderr",
+    "copy": "stage-native-save-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-native-save-01/service.stderr",
+    "copy": "stage-native-save-01/service.stderr",
+    "sha256": "14262c0a95e211a3ad8117ac246cf58261e373199fe3c8c04c8987718abd709c"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-native-save-01/test.stderr",
+    "copy": "stage-native-save-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-native-save-01/test.stdout",
+    "copy": "stage-native-save-01/test.stdout",
+    "sha256": "40670eacfe7ef5bc973af65be9e5121d781146861ecd7a300b0f836be58a2716"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-aggregate-01/result.json",
+    "copy": "stage-regression-edit-aggregate-01/result.json",
+    "sha256": "19c595768b46c8bda59e1871b8a82d5d138f13e6b0868ccaa7f7c6580e7ffb9e"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-aggregate-01/service.stderr",
+    "copy": "stage-regression-edit-aggregate-01/service.stderr",
+    "sha256": "69c567ed78e83d1a2af3dfc5d71011e04f9f1bfd6a8e0b9298a53b679776ae7f"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-aggregate-01/test.stderr",
+    "copy": "stage-regression-edit-aggregate-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-aggregate-01/test.stdout",
+    "copy": "stage-regression-edit-aggregate-01/test.stdout",
+    "sha256": "425fc1066e54047133a654d2bb7e048d6c7932f84c7bdc467355e45c57a7d25f"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-corruption-01/result.json",
+    "copy": "stage-regression-edit-corruption-01/result.json",
+    "sha256": "ab12b52bb0c4c79ba0a9d1ef723221f60b89165cc1d9cb2e9f21e421eb3b7ec1"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-corruption-01/service.stderr",
+    "copy": "stage-regression-edit-corruption-01/service.stderr",
+    "sha256": "42e0a5888b36785f5ab01316a02c3169bafb96f9066172a360be4e226a823beb"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-corruption-01/test.stderr",
+    "copy": "stage-regression-edit-corruption-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-corruption-01/test.stdout",
+    "copy": "stage-regression-edit-corruption-01/test.stdout",
+    "sha256": "3889825ef904943ada6c892cf999d1b0ba71e3d99b1d2c5f49b9721b27041c47"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-frontier-01/result.json",
+    "copy": "stage-regression-edit-frontier-01/result.json",
+    "sha256": "9c8d2b8ba2d1348960c098a9a972213ec31eda6c3549bc7d946935b660487ce9"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-frontier-01/service.stderr",
+    "copy": "stage-regression-edit-frontier-01/service.stderr",
+    "sha256": "5ab52cd9ae49e185080959146a564807ae3fdb2bd82867f7c77060be06d54e13"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-frontier-01/test.stderr",
+    "copy": "stage-regression-edit-frontier-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-frontier-01/test.stdout",
+    "copy": "stage-regression-edit-frontier-01/test.stdout",
+    "sha256": "aa0775f7110d09135c35b9e32588fbc61de353d85c12ee00d0fa59703d52d742"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-inode-frontier-01/result.json",
+    "copy": "stage-regression-edit-inode-frontier-01/result.json",
+    "sha256": "d1a652b2d34ae4bf3674d8e0570c1047b8bd5986ad6972cb7e84064b762a51a8"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-inode-frontier-01/service.stderr",
+    "copy": "stage-regression-edit-inode-frontier-01/service.stderr",
+    "sha256": "e7f10cbe6a47299554a992d037ff86143e3ac5761c89325f36bcaf6bbca2fc68"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-inode-frontier-01/test.stderr",
+    "copy": "stage-regression-edit-inode-frontier-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-inode-frontier-01/test.stdout",
+    "copy": "stage-regression-edit-inode-frontier-01/test.stdout",
+    "sha256": "68fbe88f75d89ed2d0fe73892d1773a78fff0f5d8fc8ccba341e79b13472510c"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-large-base-01/result.json",
+    "copy": "stage-regression-edit-large-base-01/result.json",
+    "sha256": "8b56eafa769de0f105fed5f2f0e837f5426ef40b57888845ca7a6d75ad2193fe"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-large-base-01/service.stderr",
+    "copy": "stage-regression-edit-large-base-01/service.stderr",
+    "sha256": "629ed0217df558e7aded06a8ad4567b63b349a11a1a5956922a8918c775a82bf"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-large-base-01/test.stderr",
+    "copy": "stage-regression-edit-large-base-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-large-base-01/test.stdout",
+    "copy": "stage-regression-edit-large-base-01/test.stdout",
+    "sha256": "ca2b241a1f14ec81d5be9ec5eea5dd735cfed20fd1019ee2d04ba7ab53a3ddce"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-collider-01/result.json",
+    "copy": "stage-regression-edit-ledger-collider-01/result.json",
+    "sha256": "8d2c7aa6565aaf574ca0f6dc4c090ac7761d5e68f3c5f57c836278f5ca487701"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-collider-01/service.stderr",
+    "copy": "stage-regression-edit-ledger-collider-01/service.stderr",
+    "sha256": "cdbfb3214ee72ce1d2e02b31839400c703217d5960bfd349d738b8d15e974cb3"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-collider-01/test.stderr",
+    "copy": "stage-regression-edit-ledger-collider-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-collider-01/test.stdout",
+    "copy": "stage-regression-edit-ledger-collider-01/test.stdout",
+    "sha256": "09791897399e5984a5fb148ad1996ff4d0ec0e9eab216f17cfd2ed87841bacf5"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-write-failure-01/result.json",
+    "copy": "stage-regression-edit-ledger-write-failure-01/result.json",
+    "sha256": "1502f1b808eac9166c41fd924488e371840f7dce9196a3f305d50cc49a0684bf"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-write-failure-01/service.stderr",
+    "copy": "stage-regression-edit-ledger-write-failure-01/service.stderr",
+    "sha256": "936ed54e7d4309cabbfeb41aa062fdb05cb274630775de470a74b316babd9ce0"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-write-failure-01/test.stderr",
+    "copy": "stage-regression-edit-ledger-write-failure-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-ledger-write-failure-01/test.stdout",
+    "copy": "stage-regression-edit-ledger-write-failure-01/test.stdout",
+    "sha256": "ff1543ef1d74c7353323f9c8c56d1bd2226abfb81a4bcd28bc44b9d12ae30dd5"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-failure-01/result.json",
+    "copy": "stage-regression-edit-metadata-failure-01/result.json",
+    "sha256": "e5c4b14b088a3a7cac096d22a654f455700939f533f7ee690a042bd08aadab98"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-failure-01/service.stderr",
+    "copy": "stage-regression-edit-metadata-failure-01/service.stderr",
+    "sha256": "55ff5a032ddcff229315c463e7cd0817980e08f52a0086848f4c12618042bada"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-failure-01/test.stderr",
+    "copy": "stage-regression-edit-metadata-failure-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-failure-01/test.stdout",
+    "copy": "stage-regression-edit-metadata-failure-01/test.stdout",
+    "sha256": "39853e7ca37422af24027ad3a549f79fbd99b20c45e846d1a28acc208e311b1e"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-quota-01/result.json",
+    "copy": "stage-regression-edit-metadata-quota-01/result.json",
+    "sha256": "6b231e07beaaba50fbf333110e53ef3e66a1d5b96da4d5544407db4ce02b3330"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-quota-01/service.stderr",
+    "copy": "stage-regression-edit-metadata-quota-01/service.stderr",
+    "sha256": "90253095a41762881af75c0b789e0e6e7b4e03b7c3aa8990319aa2b150d2e6a8"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-quota-01/test.stderr",
+    "copy": "stage-regression-edit-metadata-quota-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-metadata-quota-01/test.stdout",
+    "copy": "stage-regression-edit-metadata-quota-01/test.stdout",
+    "sha256": "ff349b42ed265c5f1a367d7216a75afe207f5fe9abf0e917a97eb21894d0c535"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-native-shape-01/result.json",
+    "copy": "stage-regression-edit-native-shape-01/result.json",
+    "sha256": "805c7c8b5a53410eef27a3a65a0493aabf41f9bfd96d2295b04eadbc0f1353a4"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-native-shape-01/service.stderr",
+    "copy": "stage-regression-edit-native-shape-01/service.stderr",
+    "sha256": "9cdb937d3b167620f606ba8e5153f93664df6badcce2beb3e88f3f328214eed2"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-native-shape-01/test.stderr",
+    "copy": "stage-regression-edit-native-shape-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-native-shape-01/test.stdout",
+    "copy": "stage-regression-edit-native-shape-01/test.stdout",
+    "sha256": "6a290fc13397c58160287228000fac96a526633ce9a92c48e1ae80bfad587597"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-refusals-01/result.json",
+    "copy": "stage-regression-edit-refusals-01/result.json",
+    "sha256": "d4dda16e2db857bd30958cee0b91888a38af5e1030d16536c7c4646c27bb850e"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-refusals-01/service.stderr",
+    "copy": "stage-regression-edit-refusals-01/service.stderr",
+    "sha256": "2be03603fb4a822481520b42e3f8b40b6011b6e904182f851b13c1161731fb6f"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-refusals-01/test.stderr",
+    "copy": "stage-regression-edit-refusals-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-refusals-01/test.stdout",
+    "copy": "stage-regression-edit-refusals-01/test.stdout",
+    "sha256": "7cfca0806ee705f9fc1aa7cd41b129e403f457998072e7908982314952047360"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-semantics-01/result.json",
+    "copy": "stage-regression-edit-semantics-01/result.json",
+    "sha256": "3d9bdc7bbb331ecde2ee61985391854981ce4668d27fe58d036eb799f439e582"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-semantics-01/service.stderr",
+    "copy": "stage-regression-edit-semantics-01/service.stderr",
+    "sha256": "6c57834d0fc44b637c171ef84d0c262ef22a6adc593e7054c6e901527a0af80c"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-semantics-01/test.stderr",
+    "copy": "stage-regression-edit-semantics-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-edit-semantics-01/test.stdout",
+    "copy": "stage-regression-edit-semantics-01/test.stdout",
+    "sha256": "fd03537d2196c4eb2d60cb35851319eae97ae56f85c1ebd95db4838069b6ca89"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-payload-01/result.json",
+    "copy": "stage-regression-payload-01/result.json",
+    "sha256": "e73a0af2fa7e94160d862a2f08f2b44749334b70ac72d751bd101a789853b292"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-payload-01/test.stderr",
+    "copy": "stage-regression-payload-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-payload-01/test.stdout",
+    "copy": "stage-regression-payload-01/test.stdout",
+    "sha256": "d1509766561bff5b673bf88e9fbc8d06c547d8d0fc44a8880ba2b6ce4fc4a816"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-status-01/daemon.stderr",
+    "copy": "stage-regression-status-01/daemon.stderr",
+    "sha256": "5f65fe93e553135292b12a6fdf3a5debf9016f2e80bcd1cc5cbe3cba84928d7a"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-status-01/result.json",
+    "copy": "stage-regression-status-01/result.json",
+    "sha256": "96274a7468d4f93129213f3a549c54b81eacb9d9d0b818d58aaaecf8c313e596"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-regression-status-01/service.stderr",
+    "copy": "stage-regression-status-01/service.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-01/result.json",
+    "copy": "stage-semantics-01/result.json",
+    "sha256": "59618457343c4cd4fed53d1072418dd7e62696b2995160f7c48d3e3b3ffc68ea"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-01/service/fixture-daemon.stderr",
+    "copy": "stage-semantics-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-01/service.stderr",
+    "copy": "stage-semantics-01/service.stderr",
+    "sha256": "9411cb64a03cff84d5ef09caee5ee3da97de63d16006d5562c45fa345a4b958d"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-01/test.stderr",
+    "copy": "stage-semantics-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-01/test.stdout",
+    "copy": "stage-semantics-01/test.stdout",
+    "sha256": "e7abe17d9a32ba902241fc6f30ba8f17799a99d1d2f908a92e6ddb6017cd8802"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-02/result.json",
+    "copy": "stage-semantics-02/result.json",
+    "sha256": "f73294942b83693ab78e1ca7d2b34de51060ca05b06d2d9f2e7ec9051606d313"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-02/service/fixture-daemon.stderr",
+    "copy": "stage-semantics-02/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-02/service.stderr",
+    "copy": "stage-semantics-02/service.stderr",
+    "sha256": "2827ee7c27a61faf5a25d135be7d652684f9b32595562d40d51489abc45dd44c"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-02/test.stderr",
+    "copy": "stage-semantics-02/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-semantics-02/test.stdout",
+    "copy": "stage-semantics-02/test.stdout",
+    "sha256": "f4b59c90cd58b6f0079e23cdeb3a09fadba42103224516067347dc7f449ca66d"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-unknown-save-01/result.json",
+    "copy": "stage-unknown-save-01/result.json",
+    "sha256": "690790db1765ad1368d400589c936683dd83db1e6494fce5f9ddb1d492239cbf"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-unknown-save-01/service/fixture-daemon.stderr",
+    "copy": "stage-unknown-save-01/service/fixture-daemon.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-unknown-save-01/service.stderr",
+    "copy": "stage-unknown-save-01/service.stderr",
+    "sha256": "e4e73dd1d164144c47919ee6ca9fad059bb91b4e4194334e1617dd1709e72cb4"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-unknown-save-01/test.stderr",
+    "copy": "stage-unknown-save-01/test.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "core/target/pair1-evidence/stage-unknown-save-01/test.stdout",
+    "copy": "stage-unknown-save-01/test.stdout",
+    "sha256": "42ed11fd5fa6a34aea68d25ebd74c944ebbc3f3be9c3a07b21c33b4829ac7fe0"
+  }
+]

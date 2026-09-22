@@ -1,0 +1,420 @@
+{
+  "parent": "a5bdc9f1e7e0fa4815ae356a7c5d783315fac649",
+  "performance_claim": false,
+  "selections": [
+    {
+      "receipt": "open-capacity-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8924474579980597,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-deadline-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0285672080062795,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-forget-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8896226669894531,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-last_slot-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7899782079912256,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7525215000205208,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-modes-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7710718330054078,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-permissions-01/result.json",
+      "status": "FAIL",
+      "wall_seconds": 3.453754457994364,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-permissions-02/result.json",
+      "status": "FAIL",
+      "wall_seconds": 0.635823624994373,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-permissions-03/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8200077500077896,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-consumed_stage-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8244330410088878,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-cycles-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.8457009999838192,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8530705409939401,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 16.02670520800166,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8590473329822998,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8257238329970278,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8153234169876669,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8403247499954887,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8104410840023775,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0851937090046704,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-selectors-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8294081250205636,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-commit_staged-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9491859159898013,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-clean-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8667086249915883,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-clean_successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8558301250159275,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8285595829947852,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 11.023008541000308,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7550623749848455,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-lost_result-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8085595000011381,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7854744579817634,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.6933502919855528,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-reconcile_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.789889250008855,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.825146749994019,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-remote_admission-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7551000420062337,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-repeated-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0024634170113131,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9378277079958934,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-composite-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.298511665983824,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-aggregate-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7374826250015758,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-corruption-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6802050000114832,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 28.69998145799036,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-inode_frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.783938125008717,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-large_base-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7618499999807682,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-ledger_collider-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.6951827080047224,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-ledger_write_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7189638330019079,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8170460420078598,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-metadata_quota-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7937009159941226,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-native_shape-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7597319170017727,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9791739999782294,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-edit-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.5312399590038694,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-mounted-status-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 24.802500916004647,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-payload-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0606762089882977,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-envelope-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.734636415989371,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 6.922552834003,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-metadata_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7488813329837285,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8017812499892898,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.7109856250172015,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-overwritten_zero-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8749448329908773,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-refusals-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7694470419955906,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9219154159945901,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-resize-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9128325420024339,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-completion_failure-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.778813083015848,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-frontier-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 9.494009874993935,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-head_moved-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8128469999937806,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-headroom-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8340279170079157,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-lowering-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8157472079910804,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-metadata_denied-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.7782541669730563,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-metadata_only-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8678431249863934,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-native_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.5758037919877097,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-semantics-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.9484285420039669,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-regression-stage-unknown_save-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3171992499846965,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    },
+    {
+      "receipt": "open-successor-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 0.8690095829952043,
+      "product_inputs_sha256": "af880d5b99b33fccadeb41ef35f82ab2e8be6880f61756648be497d52c347d31"
+    }
+  ]
+}

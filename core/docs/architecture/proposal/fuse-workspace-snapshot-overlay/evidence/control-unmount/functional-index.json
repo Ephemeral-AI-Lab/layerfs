@@ -1,0 +1,85 @@
+{
+  "parent": "451a1f6bdda00482a528659489c8e4d053677e01",
+  "product_inputs_sha256": "8d74caf369eaa1f104e761f2bb4f51b406b5da655cb8934d87c841717421ef68",
+  "pass_count": 9,
+  "failure_count": 0,
+  "receipts": [
+    {
+      "receipt": "control-unmount-authority-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 2.0012615000014193,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-expiry-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 10.026888249994954,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-loss-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.1006822919880506,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-partial_input-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.3904577079811133,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-shutdown_retained-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 11.100452666985802,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-signal-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.0873551669938024,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-status-regression-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 24.88243612498627,
+      "scope": "functional-control-status"
+    },
+    {
+      "receipt": "control-unmount-success-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 3.1382127910037525,
+      "scope": "functional-authenticated-unmount"
+    },
+    {
+      "receipt": "control-unmount-timeout-01/result.json",
+      "status": "PASS",
+      "wall_seconds": 1.4206194580183364,
+      "scope": "functional-authenticated-unmount"
+    }
+  ],
+  "not_run": [
+    {
+      "id": "R1C-WIDER-CONTROLS",
+      "status": "NOT_RUN",
+      "reason": "Attach/CloseClean and writable startup/SDK edit/Commit controls remain separate operations."
+    },
+    {
+      "id": "R4-WRITABLE-REGRESSIONS",
+      "status": "NOT_RUN",
+      "reason": "Workspace/FUSE source unchanged in this control round; their prior actual writable receipts remain pinned to451a1f6 rather than relabeled current."
+    },
+    {
+      "id": "R5-NPM",
+      "status": "NOT_RUN",
+      "reason": "Namespace/new-inode/larger-input and declared target prerequisites."
+    },
+    {
+      "id": "R6",
+      "status": "NOT_RUN",
+      "reason": "No matched performance or RSS/cgroup qualification."
+    }
+  ],
+  "performance_claim": false
+}

@@ -1,0 +1,12 @@
+{
+  "local_links": "PASS",
+  "documents": [
+    "core/docs/architecture/14-service-runtime.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/32-control-mount.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/31-source-map-and-loc.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/33-cancelled-pipe.md",
+    "core/docs/architecture/proposal/fuse-workspace-snapshot-overlay/README.md"
+  ],
+  "source_inventory": "all241 core and193 reference production files, recursive P/L/N verified",
+  "new_status": "implemented actual route; not release/performance qualification"
+}

@@ -1,0 +1,11 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/pair1-readable-mount/layerfs/core/crates/layerfs-daemon)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.86s
+     Running tests/configuration.rs (core/target/debug/deps/configuration-b493654e471a39e0)
+
+running 2 tests
+test control_configuration_is_explicit_separate_and_bounded ... ok
+test mount_startup_rejects_invalid_inputs_before_connecting ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s

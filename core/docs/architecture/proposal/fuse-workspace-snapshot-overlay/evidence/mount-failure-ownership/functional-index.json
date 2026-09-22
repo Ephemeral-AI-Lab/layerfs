@@ -1,0 +1,219 @@
+{
+  "rows": [
+    {
+      "case": "admission",
+      "mode": "functional-native-mount-failure",
+      "route": "native admission/mount-syscall refusal; no successful mount",
+      "status": "FAIL",
+      "command_wall_seconds": 0.5112085420114454,
+      "receipt": "mount-failure-admission-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "admission",
+      "mode": "functional-native-mount-failure",
+      "route": "native admission/mount-syscall refusal; no successful mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.6947523340058979,
+      "receipt": "mount-failure-admission-02/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "held_init",
+      "mode": "functional-daemon-retained-startup",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 11.134311041008914,
+      "receipt": "mount-failure-daemon-startup-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "deadline",
+      "mode": "functional-native-mount-failure",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 4.330188125022687,
+      "receipt": "mount-failure-deadline-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "close_authority",
+      "mode": "functional-authenticated-close-clean",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.969009249994997,
+      "receipt": "mount-failure-regression-close-close_authority-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "close_cleanup_failure",
+      "mode": "functional-authenticated-close-clean",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0407497079868335,
+      "receipt": "mount-failure-regression-close-close_cleanup_failure-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "close_loss",
+      "mode": "functional-authenticated-close-clean",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0848680830094963,
+      "receipt": "mount-failure-regression-close-close_loss-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "close_mounted",
+      "mode": "functional-authenticated-close-clean",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.9565872079983819,
+      "receipt": "mount-failure-regression-close-close_mounted-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "close_success",
+      "mode": "functional-authenticated-close-clean",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.9697378749842755,
+      "receipt": "mount-failure-regression-close-close_success-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "notify_failure",
+      "mode": "functional-mounted-sdk-coherence",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.7438510000065435,
+      "receipt": "mount-failure-regression-coherence-notify_failure-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "visibility",
+      "mode": "functional-mounted-sdk-coherence",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.8988580420264043,
+      "receipt": "mount-failure-regression-coherence-visibility-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "authority",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.9431932909938041,
+      "receipt": "mount-failure-regression-unmount-authority-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "expiry",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 10.496120040974347,
+      "receipt": "mount-failure-regression-unmount-expiry-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "loss",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.123908790992573,
+      "receipt": "mount-failure-regression-unmount-loss-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "partial_input",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.1885034579900093,
+      "receipt": "mount-failure-regression-unmount-partial_input-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "shutdown_retained",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 11.096920667012455,
+      "receipt": "mount-failure-regression-unmount-shutdown_retained-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "signal",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.0328395839896984,
+      "receipt": "mount-failure-regression-unmount-signal-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "success",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.2449177080125082,
+      "receipt": "mount-failure-regression-unmount-success-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "timeout",
+      "mode": "functional-authenticated-unmount",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 1.4094579159864224,
+      "receipt": "mount-failure-regression-unmount-timeout-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "session",
+      "mode": "functional-native-mount-failure",
+      "route": "native admission/mount-syscall refusal; no successful mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.7201233340019826,
+      "receipt": "mount-failure-session-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "success",
+      "mode": "functional-native-mount-failure",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.7164923750096932,
+      "receipt": "mount-failure-success-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    },
+    {
+      "case": "worker",
+      "mode": "functional-native-mount-failure",
+      "route": "contains actual Linux FUSE mount",
+      "status": "PASS",
+      "command_wall_seconds": 0.7209903329785448,
+      "receipt": "mount-failure-worker-01/result.json",
+      "product_inputs_sha256": "375c2076db5299d601c7b8e18042a7831eeaa51e54911b1b11fb5f18610ead3d"
+    }
+  ],
+  "summary": {
+    "PASS": 21,
+    "FAIL": 1,
+    "passing_selections_with_actual_mount": 19,
+    "passing_native_refusal_subsets": 2
+  },
+  "retained_failure": "admission01 oracle expected attaching mismatched root directory UID to succeed; current native Host rejects it before FUSE. Corrected oracle in inputs02, admission02 passes. Original output retained; external cleanup separately recorded. No product change.",
+  "not_run": [
+    "invalidation-binding failure with actual kernel mount",
+    "constructor-internal dependency cleanup failure and native detach failure",
+    "Control::start thread-spawn failure through actual daemon",
+    "post-worker deadline cut distinct from tested post-INIT deadline",
+    "remote Mount/Attach and writable daemon controls",
+    "new-inode/namespace/larger-input/npm and R6",
+    "RSS/cgroup and syscall preemption qualification"
+  ],
+  "performance_claim": false
+}

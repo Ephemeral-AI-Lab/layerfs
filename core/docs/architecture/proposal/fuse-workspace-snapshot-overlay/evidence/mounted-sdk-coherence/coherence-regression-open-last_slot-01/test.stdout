@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::open_last_slot ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 2, revision: 3, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 0, projection_handles: 0, projection_replies: 0, coherence: None, cookies: 0, accounted_bytes: 1994146 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 12288, reserved_bytes: 0, payloads: 0, retained_payloads: 0, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 2, reusable_pages: 0, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 12288, reserved_bytes: 0, working_bytes: 8120, accounting_complete: true, admission_stopped: false }
+OPEN_CHECK last-handle-slot-admits-one-truncating-open-without-id-reuse PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.07s
+

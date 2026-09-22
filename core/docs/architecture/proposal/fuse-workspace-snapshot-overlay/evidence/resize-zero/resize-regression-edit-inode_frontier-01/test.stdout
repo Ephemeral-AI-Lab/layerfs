@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::local_range_edit_inode_frontier ... LOCAL_EDIT_CHECK all-104-existing-inodes-survive-global-index-splits PASS
+LOCAL_EDIT_RESOURCE inode-frontier-end workspace=WorkspaceStatus { submission: None, generation: 1, revision: 104, dirty_inodes: 104, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 105, handles: 0, projection_handles: 0, cookies: 0, accounted_bytes: 2018848 } backing=BackingStatus { quota_bytes: 134217728, allocated_bytes: 1335296, reserved_bytes: 851968, payloads: 104, retained_payloads: 104, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } metadata=MetadataStatus { allocated_pages: 114, reusable_pages: 23, reserved_slots: 0, roots: 1, external_roots: 1, allocated_bytes: 483328, reserved_bytes: 851968, working_bytes: 2688, accounting_complete: true, admission_stopped: false } native_file_allocated=1335296 process_fds_at_boundary=6 fd_scope=includes_proc_enumeration_not_peak
+LOCAL_EDIT_CHECK disk-dirty-frontier-matches-all-104-public-edits PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 3.12s
+

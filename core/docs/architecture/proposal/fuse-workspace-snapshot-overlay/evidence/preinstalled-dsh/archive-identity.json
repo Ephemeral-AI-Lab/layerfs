@@ -1,0 +1,9 @@
+{
+  "path": "prepared-app.tar",
+  "sha256": "694eb0421c021a162c6a87f0d19208f477c0b4c064f89c787c6f0058c3d4d0b7",
+  "bytes": 274698240,
+  "verified_entries": 28742,
+  "status": "PASS",
+  "matches_file_manifest": true,
+  "scope": "prepared input only; not workload/performance/cold-cache qualification"
+}

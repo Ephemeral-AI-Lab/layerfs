@@ -1,0 +1,22 @@
+{
+  "basis": "upstream Linux v6.12 source reasoning, distinct from actual Linux6.12.76-linuxkit mounted proofs",
+  "source_sha256": {
+    "include/linux/fs.h": "ae3453df09a8817660470524eaf868c5ed4ba67efbac84bd37755674e6c7e3bf",
+    "fs/fuse/file.c": "e86d3dd66cf86c46a4ffbeeac0192a6d085144e3a5da7bde50902393503e3f8c",
+    "fs/fuse/dir.c": "dd63ee54675b1fc7035c3ddacd45cc454f6c82ead4d6aedb83bce642417b3334",
+    "fs/fuse/inode.c": "1d1789f5ec9bb517a658a23bc764ec4425b2e8a3bb4f640e6d69235462357bad",
+    "mm/filemap.c": "4be6a84e9dc9489698cec673a1980906e4bbab75d8afd9a90524b6508923fbd4"
+  },
+  "reviewed_product_sha256": {
+    "core/crates/layerfs-fuse/src/adapter.rs": "0a08b5d3ba774bd02ed42433dd974dfd89db61940e6c6d07140c35a17c2dd164",
+    "core/crates/layerfs-fuse/src/mount.rs": "2fc061b3492006536f38fbadeac22b0000328121aac0cd9910dd89b05f21a35c",
+    "core/crates/layerfs-workspace/src/runtime/coherence.rs": "5220b84b3ab39f6b191871ab468e70229132bb1ef75091f91f7de562ffdc5f60",
+    "core/crates/layerfs-workspace/src/filesystem/write.rs": "e647f67145a6c30c18379dc769c20f866cdaaee64969f6bc68fdd34bb3d3281d"
+  },
+  "findings": [
+    "F_SETFL O_APPEND correction implemented and mounted-tested",
+    "Direct WRITE pre-invalidation only; post-publication notifier selected outside State/writer locks, one observation slot remains",
+    "Reply-send attempt is observable; kernel post-completion is not",
+    "RWF and SDK-size cached-read limits remain explicitly unqualified"
+  ]
+}

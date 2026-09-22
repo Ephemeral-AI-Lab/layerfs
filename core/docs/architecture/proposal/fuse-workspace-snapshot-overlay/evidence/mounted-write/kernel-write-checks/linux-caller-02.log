@@ -1,0 +1,3 @@
+   Compiling layerfs-fuse v0.1.6 (/work/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.67s
+  Executable tests/kernel_write.rs (core/target-linux/debug/deps/kernel_write-c68f89fade4870bc)

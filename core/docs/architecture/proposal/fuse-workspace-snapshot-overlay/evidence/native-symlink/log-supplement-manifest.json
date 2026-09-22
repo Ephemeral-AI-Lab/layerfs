@@ -1,0 +1,285 @@
+{
+  "method": "Append-only supplement for stdout/stderr suffixes omitted by original archive filter; includes service/fixture logs; no original receipt rewritten",
+  "files": [
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/service/fixture-daemon.stderr",
+      "archive": "create-semantics-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/service.stderr",
+      "archive": "create-semantics-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "cf7f9c55ab4bb66689286fc5b8359496455aec11af23f9a835d26bb83cd02fab",
+      "archive_sha256": "3eb95f0fa193fe56fe4a22f56103d518a631377b13089f355ce026462438b8ff"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/test.stderr",
+      "archive": "create-semantics-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-semantics-01/test.stdout",
+      "archive": "create-semantics-01/test.stdout.gz",
+      "bytes": 1135,
+      "sha256": "10e2df20462fa1040de63aa8fbcd2243839a41b98cf595fc3e98e4cd81e92954",
+      "archive_sha256": "6d53aed31e9ebc748dcd0daf06ce29ad329e44b6f9db830dd14c74b46f7a76a2"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/service/fixture-daemon.stderr",
+      "archive": "create-successor-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/service.stderr",
+      "archive": "create-successor-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "3d9e507df3c7aaeebb98edc73164b3e59fccb8ebd843158bcea59b41f106c591",
+      "archive_sha256": "4226341a3b6923d48ebe56b2577ae68eed0835bcf744ca9086aca27d26c4289b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/test.stderr",
+      "archive": "create-successor-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/create-successor-01/test.stdout",
+      "archive": "create-successor-01/test.stdout.gz",
+      "bytes": 1130,
+      "sha256": "372c1f3d8560043bccef1836d5328600507234e3d2113966099f518c8e711632",
+      "archive_sha256": "b7e231847ef09b2fc7e676c4d15318933bb3980d2a9d00b44b00af6f91ff9fd0"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/service/fixture-daemon.stderr",
+      "archive": "mkdir-successor-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/service.stderr",
+      "archive": "mkdir-successor-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "3f2acb231ce1fa25359ad45e115b90389cfd73ba46060dc0c42e7d96163cb05f",
+      "archive_sha256": "134adde5a252770cb7574eaaae42cf83a95f895f5d91de14bf8a0d11ae5f3a7c"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/test.stderr",
+      "archive": "mkdir-successor-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/mkdir-successor-01/test.stdout",
+      "archive": "mkdir-successor-01/test.stdout.gz",
+      "bytes": 1018,
+      "sha256": "a5c15b87202d086b95abf698f2cc1bb3810218cf9fc938dd2b5e5aeb3cf302e9",
+      "archive_sha256": "928c18da44aa9fb8a7e5056024fd505f378e2ac32fdac57005331095de28b6db"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01/service/fixture-daemon.stderr",
+      "archive": "symlink-backing_failure-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01/service.stderr",
+      "archive": "symlink-backing_failure-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "67e652a17799d748d14785e29eb45d6ef930dafccc2076823e275bfe9b7be9ad",
+      "archive_sha256": "a4d39522cf9ef5f4318ebcde69206bf10e564b3bd6a21cae8836068ea85e56e1"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01/test.stderr",
+      "archive": "symlink-backing_failure-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-backing_failure-01/test.stdout",
+      "archive": "symlink-backing_failure-01/test.stdout.gz",
+      "bytes": 1846,
+      "sha256": "3d0b1437badf7566161411b07765668e2d3d5e968bf06bf92821299e999fc04e",
+      "archive_sha256": "bd363383e58ff50fc1e0e22be7d1d97d273d5c033583be32f8bbc63f92cf0150"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/service/fixture-daemon.stderr",
+      "archive": "symlink-capacity-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/service.stderr",
+      "archive": "symlink-capacity-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "6ba6199606dc0d1fe5e6697237263f3b6a31f0576aabb105d46669619b6a3258",
+      "archive_sha256": "3926e3982c2b38062fbe91505080149c2dce6110ed23ff104f312f0a268e1ac0"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/test.stderr",
+      "archive": "symlink-capacity-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-capacity-01/test.stdout",
+      "archive": "symlink-capacity-01/test.stdout.gz",
+      "bytes": 1336,
+      "sha256": "dab55318a330ac95dbd058c0dc5d3b25e84beeee229f9e72c633b123190b37b2",
+      "archive_sha256": "ad5568f59c7f152cd04c1ff9fb0a907e3450502701c35200274c882912a52870"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/service/fixture-daemon.stderr",
+      "archive": "symlink-refusals-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/service.stderr",
+      "archive": "symlink-refusals-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "b717059adabb4aa8f7c3a3bc2f2e1faebe5312401908e937d3c0779f39e741e7",
+      "archive_sha256": "155e1af22080180dcfaed7e7ef01274098362d137f10b1e06c898e2ea144bf0e"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/test.stderr",
+      "archive": "symlink-refusals-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-refusals-01/test.stdout",
+      "archive": "symlink-refusals-01/test.stdout.gz",
+      "bytes": 1145,
+      "sha256": "89d6ec03d767e37408e23622cfbfc4033e9bfaf31c97b4e229369f8b96f8d7a0",
+      "archive_sha256": "1c9d4d41b520b0808c2b04c8ef42b0c8d8834d2b3ab007f31d09e810ba9d9916"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/service/fixture-daemon.stderr",
+      "archive": "symlink-reserve_denied-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/service.stderr",
+      "archive": "symlink-reserve_denied-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "352d78c27b98415a8720b4b5bcd2ac25bcc839e879fb93bcd135c05893fa4bdc",
+      "archive_sha256": "ea66792835a8b4d42df8340a7447753df8116ee8fd2d5e0037dccdeae5e91c7f"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/test.stderr",
+      "archive": "symlink-reserve_denied-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_denied-01/test.stdout",
+      "archive": "symlink-reserve_denied-01/test.stdout.gz",
+      "bytes": 1277,
+      "sha256": "8ee0366625f88ad8252bd82001842ac3a24f5ee5bca824d9299f2e172936d05f",
+      "archive_sha256": "1cd2d617aa0604188d13732bdfb5a01ca6a1ea609b28ba4734e6be8f32730a2b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/service/fixture-daemon.stderr",
+      "archive": "symlink-reserve_unknown-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/service.stderr",
+      "archive": "symlink-reserve_unknown-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "bde52443279c0254ddee6f3a01fe4953dfa0e006535311bcfa8c63b5ee586db0",
+      "archive_sha256": "cd3061018ef9c38d619716bec64ab0ea4662e563371d280d14ec9ad276a7003e"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/test.stderr",
+      "archive": "symlink-reserve_unknown-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-reserve_unknown-01/test.stdout",
+      "archive": "symlink-reserve_unknown-01/test.stdout.gz",
+      "bytes": 1285,
+      "sha256": "16046392fa05fa49692946803e004792cadf25fac0e62882412ff76c542c6b8b",
+      "archive_sha256": "333ec7e7652bc51d06c0603a6ac95fbc01c0c19cbbe9b925e2a4097ff145cd66"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/service/fixture-daemon.stderr",
+      "archive": "symlink-semantics-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/service.stderr",
+      "archive": "symlink-semantics-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "9e5587d70b40e582f0b64bddabf7e1366076f981a8eefd47962305b55637dcf7",
+      "archive_sha256": "f6bb46339b89786360e9615aca2704ca2d2f1e516c4b043d50ed14c42d01e9b3"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/test.stderr",
+      "archive": "symlink-semantics-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-semantics-01/test.stdout",
+      "archive": "symlink-semantics-01/test.stdout.gz",
+      "bytes": 1137,
+      "sha256": "424941a35565dad2d585db7dceb724007e14773ee2eb1ad96df352b35407894d",
+      "archive_sha256": "d29f63e3ef5fa7cb1e7b9bd250d6b62c7e3ea9142993b0653c29820285f1283b"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/service/fixture-daemon.stderr",
+      "archive": "symlink-successor-01/service/fixture-daemon.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/service.stderr",
+      "archive": "symlink-successor-01/service.stderr.gz",
+      "bytes": 36,
+      "sha256": "8cb3fe2e851b869f3c2a91312f1d50d1a0f784f13bb535b1dbb00a1280b21cd1",
+      "archive_sha256": "baf33f2e714997a5f83a99a024c2a9d63cde97ea6a525c96308542098fa0aa5a"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/test.stderr",
+      "archive": "symlink-successor-01/test.stderr.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "source": "core/target/pair1-evidence/native-symlink/symlink-successor-01/test.stdout",
+      "archive": "symlink-successor-01/test.stdout.gz",
+      "bytes": 1127,
+      "sha256": "4a24d498113aca298be9596d76cf28bfca4c138b39102db4220f3a9c2f82a1c2",
+      "archive_sha256": "b101e1b903c1008f9f4fb14b27b59b37f69d857b172350bc53cfc07308701a08"
+    }
+  ]
+}

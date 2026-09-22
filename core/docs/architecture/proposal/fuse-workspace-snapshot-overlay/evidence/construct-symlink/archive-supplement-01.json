@@ -1,0 +1,453 @@
+{
+  "purpose": "Append omitted client/fixture stderr under Service output subdirectories; no original receipt, source identity or result changed",
+  "files": [
+    {
+      "path": "construct-01/service/fixture-daemon.stderr.gz",
+      "source": "construct-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-001.stderr.gz",
+      "source": "construct-01/service/principal-1/client-001.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-002.stderr.gz",
+      "source": "construct-01/service/principal-1/client-002.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-003.stderr.gz",
+      "source": "construct-01/service/principal-1/client-003.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-004.stderr.gz",
+      "source": "construct-01/service/principal-1/client-004.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-005.stderr.gz",
+      "source": "construct-01/service/principal-1/client-005.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-006.stderr.gz",
+      "source": "construct-01/service/principal-1/client-006.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-007.stderr.gz",
+      "source": "construct-01/service/principal-1/client-007.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-008.stderr.gz",
+      "source": "construct-01/service/principal-1/client-008.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-009.stderr.gz",
+      "source": "construct-01/service/principal-1/client-009.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-010.stderr.gz",
+      "source": "construct-01/service/principal-1/client-010.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-011.stderr.gz",
+      "source": "construct-01/service/principal-1/client-011.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-012.stderr.gz",
+      "source": "construct-01/service/principal-1/client-012.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-013.stderr.gz",
+      "source": "construct-01/service/principal-1/client-013.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-014.stderr.gz",
+      "source": "construct-01/service/principal-1/client-014.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-015.stderr.gz",
+      "source": "construct-01/service/principal-1/client-015.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-016.stderr.gz",
+      "source": "construct-01/service/principal-1/client-016.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-017.stderr.gz",
+      "source": "construct-01/service/principal-1/client-017.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-018.stderr.gz",
+      "source": "construct-01/service/principal-1/client-018.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-019.stderr.gz",
+      "source": "construct-01/service/principal-1/client-019.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-020.stderr.gz",
+      "source": "construct-01/service/principal-1/client-020.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-021.stderr.gz",
+      "source": "construct-01/service/principal-1/client-021.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-022.stderr.gz",
+      "source": "construct-01/service/principal-1/client-022.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-023.stderr.gz",
+      "source": "construct-01/service/principal-1/client-023.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-024.stderr.gz",
+      "source": "construct-01/service/principal-1/client-024.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-025.stderr.gz",
+      "source": "construct-01/service/principal-1/client-025.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-026.stderr.gz",
+      "source": "construct-01/service/principal-1/client-026.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-027.stderr.gz",
+      "source": "construct-01/service/principal-1/client-027.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-028.stderr.gz",
+      "source": "construct-01/service/principal-1/client-028.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-029.stderr.gz",
+      "source": "construct-01/service/principal-1/client-029.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-1/client-030.stderr.gz",
+      "source": "construct-01/service/principal-1/client-030.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-001.stderr.gz",
+      "source": "construct-01/service/principal-2/client-001.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-002.stderr.gz",
+      "source": "construct-01/service/principal-2/client-002.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-003.stderr.gz",
+      "source": "construct-01/service/principal-2/client-003.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-004.stderr.gz",
+      "source": "construct-01/service/principal-2/client-004.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-005.stderr.gz",
+      "source": "construct-01/service/principal-2/client-005.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-006.stderr.gz",
+      "source": "construct-01/service/principal-2/client-006.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-007.stderr.gz",
+      "source": "construct-01/service/principal-2/client-007.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-008.stderr.gz",
+      "source": "construct-01/service/principal-2/client-008.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-009.stderr.gz",
+      "source": "construct-01/service/principal-2/client-009.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-2/client-010.stderr.gz",
+      "source": "construct-01/service/principal-2/client-010.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "construct-01/service/principal-3/client-001.stderr.gz",
+      "source": "construct-01/service/principal-3/client-001.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/fixture-daemon.stderr.gz",
+      "source": "refusals-01/service/fixture-daemon.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-001.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-001.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-002.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-002.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-003.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-003.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-004.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-004.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-005.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-005.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-006.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-006.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-007.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-007.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-008.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-008.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-009.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-009.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-010.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-010.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-011.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-011.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-012.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-012.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-013.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-013.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-014.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-014.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-1/client-015.stderr.gz",
+      "source": "refusals-01/service/principal-1/client-015.stderr",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compressed_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 0
+    },
+    {
+      "path": "refusals-01/service/principal-2/client-001.stderr.gz",
+      "source": "refusals-01/service/principal-2/client-001.stderr",
+      "source_sha256": "106eff0d21f2acd944086b88e2105fdf1c909a78965d0513551b1ef4ed0a08d9",
+      "compressed_sha256": "2c64a8b77f5139f35e547da954adf748da12e923c4c0cc685ab8d79bd6758be6",
+      "bytes": 60
+    },
+    {
+      "path": "refusals-01/service/principal-2/client-002.stderr.gz",
+      "source": "refusals-01/service/principal-2/client-002.stderr",
+      "source_sha256": "05d1d68e31ea784c89c9d5b6eab3f2a34e55b18a0695e56867b508fe0dba44a1",
+      "compressed_sha256": "6a3cb4981b158bd2e6d51bd57ab83993aff9dc401793847b51b6cb4975db36ea",
+      "bytes": 56
+    },
+    {
+      "path": "refusals-01/service/principal-2/client-003.stderr.gz",
+      "source": "refusals-01/service/principal-2/client-003.stderr",
+      "source_sha256": "b119dac0be6b70425e379ad1d256b61d369c3d2ec2e9128ac2c69091a6672d9e",
+      "compressed_sha256": "580aaf9fab01d451a7f3d6f6eaa91e4a06a918457159d15fe8b86efb82c7865f",
+      "bytes": 54
+    },
+    {
+      "path": "refusals-01/service/principal-2/client-004.stderr.gz",
+      "source": "refusals-01/service/principal-2/client-004.stderr",
+      "source_sha256": "b119dac0be6b70425e379ad1d256b61d369c3d2ec2e9128ac2c69091a6672d9e",
+      "compressed_sha256": "580aaf9fab01d451a7f3d6f6eaa91e4a06a918457159d15fe8b86efb82c7865f",
+      "bytes": 54
+    },
+    {
+      "path": "refusals-01/service/principal-4/client-001.stderr.gz",
+      "source": "refusals-01/service/principal-4/client-001.stderr",
+      "source_sha256": "b119dac0be6b70425e379ad1d256b61d369c3d2ec2e9128ac2c69091a6672d9e",
+      "compressed_sha256": "580aaf9fab01d451a7f3d6f6eaa91e4a06a918457159d15fe8b86efb82c7865f",
+      "bytes": 54
+    },
+    {
+      "path": "refusals-01/service/principal-5/client-001.stderr.gz",
+      "source": "refusals-01/service/principal-5/client-001.stderr",
+      "source_sha256": "b119dac0be6b70425e379ad1d256b61d369c3d2ec2e9128ac2c69091a6672d9e",
+      "compressed_sha256": "580aaf9fab01d451a7f3d6f6eaa91e4a06a918457159d15fe8b86efb82c7865f",
+      "bytes": 54
+    }
+  ]
+}
