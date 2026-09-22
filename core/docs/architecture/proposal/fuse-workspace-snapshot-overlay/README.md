@@ -14,7 +14,17 @@ limits, and verify a small real-daemon workflow with two explicit Commits.
 DSH, scalability expansion, stress and speed/R6 qualification are deferred.
 The historical results below remain unchanged; use51 for the next agent's task.
 
-**Current namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
+**Current namespace implementation state:** [54 — third-round closure handoff](54-issue179-namespace-closure-handoff.md)
+records commits `5e4a89d0a` and `a7356d665`, which raise the registered selections
+that pass from eight of sixteen to sixteen of sixteen: all ten `namespace_route.py`
+cases and all six `mkdir_route.py` cases, with the stage route's ten selections
+re-run as a regression check and the whole-core checks clean. It records the four
+owner rulings that round used, the admission and re-anchor rules it changed, and
+what is still open, including the section 6 real-daemon integration. The earlier
+handoff [53](53-issue179-namespace-completion-handoff.md) remains the record of
+the round that took the count to eight.
+
+**Previous namespace implementation state:** [53 — second-round handoff](53-issue179-namespace-completion-handoff.md)
 records commit `578ef7012`, which raises the registered selections that pass from
 four of sixteen to eight of sixteen: `namespace/setattr`, `mknod`, `link` and
 `rmdir`, and `mkdir/semantics`, `refusals`, `reserve_denied` and
