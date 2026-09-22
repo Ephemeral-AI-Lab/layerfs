@@ -23,7 +23,7 @@ impl RootOwner {
             total += 1;
             if total > 256
                 || cell.key_len > 17
-                || !matches!(cell.key()[0], b'D' | b'I' | b'N' | b'T')
+                || !matches!(cell.key()[0], b'D' | b'E' | b'I' | b'N' | b'T')
                 || previous.as_ref().is_some_and(|old| old.key() >= cell.key())
             {
                 return Err(WorkspaceError::Io);

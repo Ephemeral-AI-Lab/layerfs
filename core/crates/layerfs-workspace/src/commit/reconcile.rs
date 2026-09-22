@@ -29,53 +29,58 @@ impl Current {
         window: &mut Window,
         deadline: Instant,
     ) -> Result<Option<(u64, Dirty)>, WorkspaceError> {
-        let key = metadata_pages::dirty_key(self.generation, after);
-        let Some(cell) =
-            self.root
-                .arena
-                .next(self.root.root()?, &key, after != 0, window, deadline)?
-        else {
-            return Ok(None);
-        };
-        if cell.key_len != 17 || cell.key()[..9] != key[..9] {
-            return Ok(None);
-        }
-        let serial = get(cell.key(), 9)?;
-        if serial <= after || cell.value() != [1] {
-            return Err(WorkspaceError::Io);
-        }
-        if let Some(cell) = self.root.arena.find(
-            self.root.root()?,
-            &metadata_pages::inode_key(serial),
-            window,
-            deadline,
-        )? {
-            let inode = Inode::parse(cell.value())?;
-            if inode.generation != self.generation || inode.revision > self.revision {
+        let mut cursor = after;
+        loop {
+            let key = metadata_pages::dirty_key(self.generation, cursor);
+            let Some(cell) =
+                self.root
+                    .arena
+                    .next(self.root.root()?, &key, cursor != 0, window, deadline)?
+            else {
+                return Ok(None);
+            };
+            if cell.key_len != 17 || cell.key()[..9] != key[..9] {
+                return Ok(None);
+            }
+            let serial = get(cell.key(), 9)?;
+            if serial <= cursor || cell.value() != [1] {
                 return Err(WorkspaceError::Io);
             }
-            if inode.constructs_file() && !prior_inode(submission, serial, window, deadline)? {
-                // This generation created the identity and no name binds it any
-                // more, so it has no canonical identity and no dirty frontier.
-                return Ok(Some((serial, Dirty::Unbound)));
-            }
-            return Ok(Some((serial, Dirty::Inode(inode))));
-        }
-        let cell = self
-            .root
-            .arena
-            .find(
+            if let Some(cell) = self.root.arena.find(
                 self.root.root()?,
-                &metadata_pages::namespace_key(serial),
+                &metadata_pages::inode_key(serial),
                 window,
                 deadline,
-            )?
-            .ok_or(WorkspaceError::Io)?;
-        let directory = Directory::parse(cell.value())?;
-        if directory.generation != self.generation || directory.revision > self.revision {
-            return Err(WorkspaceError::Io);
+            )? {
+                let inode = Inode::parse(cell.value())?;
+                if inode.generation != self.generation || inode.revision > self.revision {
+                    return Err(WorkspaceError::Io);
+                }
+                if inode.constructs_file() && !prior_inode(submission, serial, window, deadline)? {
+                    // This generation created the identity and no name binds it
+                    // any more, so it has no canonical identity and no dirty
+                    // frontier: the successor names nothing for it.
+                    cursor = serial;
+                    continue;
+                }
+                return Ok(Some((serial, Dirty::Inode(inode))));
+            }
+            let cell = self
+                .root
+                .arena
+                .find(
+                    self.root.root()?,
+                    &metadata_pages::namespace_key(serial),
+                    window,
+                    deadline,
+                )?
+                .ok_or(WorkspaceError::Io)?;
+            let directory = Directory::parse(cell.value())?;
+            if directory.generation != self.generation || directory.revision > self.revision {
+                return Err(WorkspaceError::Io);
+            }
+            return Ok(Some((serial, Dirty::Directory(directory))));
         }
-        Ok(Some((serial, Dirty::Directory(directory))))
     }
 }
 /// True when the captured root already declared this identity as an existing
@@ -271,11 +276,6 @@ impl Workspace {
                     }
                     after = serial;
                     seen += 1;
-                    if matches!(inode, Dirty::Unbound) {
-                        // The dropped identity contributes no dirty frontier and
-                        // no record to the canonical successor.
-                        continue;
-                    }
                     match (phase, inode) {
                         (0, _) => {
                             return Ok(Some(Cell::new(
@@ -291,7 +291,6 @@ impl Workspace {
                                 &inode.value(),
                             )?));
                         }
-                        (1, Dirty::Unbound) => continue,
                         (2, Dirty::Directory(directory)) => {
                             let directory = canonical_directory(
                                 submission, serial, directory, canonical, window, deadline,

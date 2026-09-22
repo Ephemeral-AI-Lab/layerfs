@@ -593,14 +593,20 @@ mod linux {
         let top = f.workspace.root().serial;
         // `data.bin` comes from the attached canonical base, so its removal is a
         // tombstone over an inherited binding rather than over a local addition.
+        // The attached fixture already binds `data.bin` and `alias` to one inode,
+        // so the second local name this case adds must be one the base is free of.
         let serial = f
             .workspace
             .lookup(top, b"data.bin", ReferenceScope::Local, deadline())
             .unwrap();
         let alias = f
             .workspace
-            .link(top, b"alias", serial.serial, deadline())
+            .link(top, b"second", serial.serial, deadline())
             .unwrap();
+        assert_eq!(
+            f.workspace.link(top, b"alias", serial.serial, deadline()),
+            Err(WorkspaceError::Exists)
+        );
         f.workspace.unlink(top, b"data.bin", deadline()).unwrap();
         assert_eq!(
             f.workspace
@@ -608,11 +614,15 @@ mod linux {
             Err(WorkspaceError::NotFound)
         );
         let names = listed(&f, top);
-        assert!(!names.contains(&b"data.bin".to_vec()) && names.contains(&b"alias".to_vec()));
+        assert!(
+            !names.contains(&b"data.bin".to_vec())
+                && names.contains(&b"alias".to_vec())
+                && names.contains(&b"second".to_vec())
+        );
         let report = commit(&f);
         let head = committed_root(&report);
         missing(&f, head, b"data.bin");
-        let (saved_alias, _) = saved(&f, head, b"alias");
+        let (saved_alias, _) = saved(&f, head, b"second");
         assert_eq!(saved_alias.serial, serial.serial);
         println!("NAMESPACE_RENAME_BASE base_name_removed=true alias_retained=true");
         f.workspace.forget(serial.serial, 1, ReferenceScope::Local);

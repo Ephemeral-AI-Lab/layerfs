@@ -64,6 +64,11 @@ impl Workspace {
         deadline: Instant,
         origin: MutationOrigin,
     ) -> Result<(), WorkspaceError> {
+        let reference = if origin.projected() {
+            ReferenceScope::Projection
+        } else {
+            ReferenceScope::Local
+        };
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
@@ -143,7 +148,10 @@ impl Workspace {
                 deadline,
             )?
         };
-        let new_dirty = if already_dirty { 1 } else { 2 };
+        // This publication marks the parent dirty and nothing else: a fresh child
+        // already owns its own dirty key, and a canonical child needs none because
+        // the tree is derived from names.
+        let new_dirty = usize::from(!already_dirty);
         let new_directories = usize::from(!already_dirty);
         let name_bytes = 10 + name.len();
         {
@@ -186,9 +194,10 @@ impl Workspace {
         let mut parent_directory =
             old.unwrap_or_else(|| Directory::initial(parent_attr, view.base));
         if reanchor {
-            if let (Some(prior), Some(previous)) =
-                (old, crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref())
-            {
+            if let (Some(prior), Some(previous)) = (
+                old,
+                crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref(),
+            ) {
                 // The delta anchors on the exact earlier root this operation's
                 // candidate is built on. A frozen submission's captured root is
                 // the same root only while no later operation replaced it.
@@ -203,11 +212,14 @@ impl Workspace {
                     generation: prior.generation,
                     revision: prior.revision,
                 });
+                // The inherited pages now live in the referenced version, so this
+                // record keeps exactly what the operation adds. Without an anchor
+                // nothing else would hold those names, so the record keeps them.
+                parent_directory.entries = PageRef::NULL;
+                parent_directory.tombstones = PageRef::NULL;
+                parent_directory.count = 0;
+                parent_directory.bytes = 0;
             }
-            parent_directory.entries = PageRef::NULL;
-            parent_directory.tombstones = PageRef::NULL;
-            parent_directory.count = 0;
-            parent_directory.bytes = 0;
         }
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let time = SystemTime::now()
@@ -224,8 +236,27 @@ impl Workspace {
             needs_completion,
             capture.map(|capture| capture.root.clone()),
         )?;
-        parent_directory.tombstones =
-            directories::remove_name(&candidate, parent_directory, name, window, deadline)?;
+        let (entries, was_local) =
+            directories::drop_entry(&candidate, parent_directory, name, window, deadline)?;
+        parent_directory.entries = entries;
+        // A directory with no origin to inherit from needs no removal record: an
+        // absent binding is already absent. Any other delta must shadow the name
+        // its origin still binds, so the local binding becomes a tombstone.
+        let shadowed = !matches!(parent_directory.origin, Origin::Empty);
+        if was_local {
+            // The record's own byte field tracks its entry page only, so dropping
+            // the binding always shrinks it, whether or not a removal record takes
+            // the name's place in the delta.
+            parent_directory.count = parent_directory.count.saturating_sub(1);
+            parent_directory.bytes = parent_directory.bytes.saturating_sub(name_bytes as u32);
+            if shadowed {
+                parent_directory.tombstones =
+                    directories::remove_name(&candidate, parent_directory, name, window, deadline)?;
+            }
+        } else {
+            parent_directory.tombstones =
+                directories::remove_name(&candidate, parent_directory, name, window, deadline)?;
+        }
         let mut updates = vector(2)?;
         updates.push(Cell::new(
             &metadata_pages::dirty_key(generation, parent),
@@ -260,16 +291,21 @@ impl Workspace {
             .position(|node| node.attr.serial == parent)
             .ok_or(WorkspaceError::Busy)?;
         state.nodes[parent_node].attr = parent_directory.attributes(state.nodes[parent_node].attr);
-        // One name of the child is gone. A regular inode this generation created
-        // that no name binds any more has no canonical identity to save.
-        if child.kind == NodeKind::File {
-            if let Some(index) = state
-                .nodes
-                .iter()
-                .position(|node| node.attr.serial == child.serial)
-            {
+        // One name of the child is gone, and the local lookup reference that name
+        // owned is gone with it. A regular inode this generation created that no
+        // name binds any more has no canonical identity to save.
+        if let Some(index) = state
+            .nodes
+            .iter()
+            .position(|node| node.attr.serial == child.serial)
+        {
+            if child.kind == NodeKind::File {
                 state.nodes[index].names = state.nodes[index].names.saturating_sub(1);
             }
+            let references = state.nodes[index].references(reference);
+            *references = references.saturating_sub(1);
+        }
+        if child.kind == NodeKind::File {
             state.unlinked(child.serial);
         }
         let receipt = MutationReceipt {
@@ -297,8 +333,18 @@ impl Workspace {
         state.revision = next;
         state.dirty_inodes += new_dirty;
         state.dirty_directories += new_directories;
-        state.directory_names += 1;
-        state.directory_bytes += name_bytes;
+        // One row per name row this delta still carries. A name with no origin to
+        // shadow simply leaves the entry page; any other name the origin binds
+        // reappears as its own removal record.
+        if was_local {
+            if !shadowed {
+                state.directory_names = state.directory_names.saturating_sub(1);
+                state.directory_bytes = state.directory_bytes.saturating_sub(name_bytes);
+            }
+        } else {
+            state.directory_names += 1;
+            state.directory_bytes += name_bytes;
+        }
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,

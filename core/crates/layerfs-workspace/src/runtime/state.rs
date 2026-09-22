@@ -67,6 +67,11 @@ pub(crate) struct State {
     /// the service only after the first Commit that names it, so lowering must
     /// declare it exactly once and never re-declare it in a later generation.
     pub declared: Vec<u64>,
+    /// One entry per regular identity this generation created that lost its last
+    /// name. A capture resets the per-generation counters but not this set,
+    /// because lowering runs after the capture and must still recognise the
+    /// identity as unbound. Cleared once the canonical successor is installed.
+    pub unbound: Vec<u64>,
     pub closed: bool,
     pub active: usize,
     pub tables: Option<Charge>,
@@ -217,12 +222,20 @@ impl State {
         }
         Ok(total)
     }
-    /// Registers one regular identity this generation created.
+    /// Registers one regular identity this generation created. An identity that
+    /// had lost every name becomes a counted dirty identity again.
     pub fn created(&mut self, serial: u64) {
+        let mut revived = false;
         if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
+            revived = entry.names == 0;
             entry.names = entry.names.saturating_add(1);
         } else {
             self.fresh.push(FreshName { serial, names: 1 });
+        }
+        if revived {
+            self.dirty_inodes = self.dirty_inodes.saturating_add(1);
+            self.fresh_files = self.fresh_files.saturating_add(1);
+            self.unbound.retain(|bound| *bound != serial);
         }
     }
     /// Registers one directory identity this generation created and has not
@@ -236,21 +249,33 @@ impl State {
     pub fn undeclared(&self, serial: u64) -> bool {
         self.declared.contains(&serial)
     }
-    /// Forgets every declaration the canonical state has now accepted.
+    /// Forgets every declaration the canonical state has now accepted, and every
+    /// identity this generation dropped before lowering reached it.
     pub fn declared_committed(&mut self) {
         self.declared.clear();
+        self.unbound.clear();
     }
-    /// Removes one name; the identity keeps its own live-owner lifetime.
+    /// Removes one name; the identity keeps its own live-owner lifetime. Losing
+    /// the last name of an identity this generation created removes it from the
+    /// captured dirty frontier as well, because lowering then declares nothing
+    /// for it: an unbound fresh identity has no canonical identity to name.
     pub fn unlinked(&mut self, serial: u64) {
+        let mut unbound = false;
         if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
+            unbound = entry.names == 1;
             entry.names = entry.names.saturating_sub(1);
+        }
+        if unbound {
+            self.dirty_inodes = self.dirty_inodes.saturating_sub(1);
+            self.fresh_files = self.fresh_files.saturating_sub(1);
+            if !self.unbound.contains(&serial) {
+                self.unbound.push(serial);
+            }
         }
     }
     /// A regular identity this generation created and no name binds any more.
     pub fn unbound(&self, serial: u64) -> bool {
-        self.fresh
-            .iter()
-            .any(|entry| entry.serial == serial && entry.names == 0)
+        self.unbound.contains(&serial)
     }
     pub fn collect(&mut self, root: u64) {
         self.nodes.retain(|node| {

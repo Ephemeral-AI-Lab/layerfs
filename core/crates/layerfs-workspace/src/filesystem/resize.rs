@@ -147,9 +147,10 @@ impl Workspace {
         if reanchor {
             // This operation changes no binding, so the delta keeps the exact
             // entry and tombstone pages it inherited from its own origin.
-            if let (Some(prior), Some(previous)) =
-                (current, crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref())
-            {
+            if let (Some(prior), Some(previous)) = (
+                current,
+                crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref(),
+            ) {
                 // The delta anchors on the exact earlier root this operation's
                 // candidate is built on; a frozen submission's captured root is
                 // the same root only while nothing replaced it.

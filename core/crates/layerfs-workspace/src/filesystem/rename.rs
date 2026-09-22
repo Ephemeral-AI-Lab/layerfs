@@ -106,11 +106,12 @@ impl Workspace {
         if source_attr.attr.serial == self.inner.root.serial {
             return Err(WorkspaceError::Unsupported);
         }
+        let same_parent = source_parent == destination_parent;
         let destination_attr = self.resolve_child(
             &mut operation,
             &view,
             destination_parent,
-            &parents[1].path.clone(),
+            &parents[if same_parent { 0 } else { 1 }].path.clone(),
             destination,
             deadline,
         );
@@ -159,7 +160,6 @@ impl Workspace {
             // Moving a directory beneath its own descendant would create a cycle.
             return Err(WorkspaceError::InvalidInput);
         }
-        let same_parent = source_parent == destination_parent;
         let (seconds, nanos) = now()?;
         parents[0].mtime = (seconds, nanos);
         parents[0].remove = Some(source.to_vec());
@@ -177,8 +177,9 @@ impl Workspace {
                 source_attr.attr.kind,
             ));
         }
-        let new_dirty = parents.iter().filter(|parent| !parent.dirty).count()
-            + usize::from(destination_attr.is_some() && !same_parent && !parents[1].dirty);
+        // Exactly one dirty key per edited parent this generation has not marked
+        // yet; the publication below writes no other dirty record.
+        let new_dirty = parents.iter().filter(|parent| !parent.dirty).count();
         let name_bytes = 10 + source.len() + 10 + destination.len();
         {
             let state = self.state()?;
@@ -239,6 +240,11 @@ impl Workspace {
         )?;
         let mut updates = vector(6)?;
         let mut changed = 0usize;
+        // Rows this publication adds to the two parents it edits. A locally bound
+        // source trades its entry row for its removal record, and a replaced
+        // destination rewrites a row that already existed, so neither adds one.
+        let mut rows = 0usize;
+        let mut row_bytes = 0usize;
         for parent in &mut parents {
             if parent.remove.is_none() && parent.bind.is_none() {
                 continue;
@@ -263,21 +269,72 @@ impl Workspace {
                         generation: prior.generation,
                         revision: prior.revision,
                     });
+                    // The inherited pages now live in the referenced version, so
+                    // this record keeps exactly what the operation adds. Without an
+                    // anchor nothing else would hold those names, so it keeps them.
+                    parent.directory.entries = PageRef::NULL;
+                    parent.directory.tombstones = PageRef::NULL;
+                    parent.directory.count = 0;
+                    parent.directory.bytes = 0;
                 }
-                parent.directory.entries = PageRef::NULL;
-                parent.directory.tombstones = PageRef::NULL;
-                parent.directory.count = 0;
-                parent.directory.bytes = 0;
             }
             parent.directory.generation = generation;
             parent.directory.revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
             parent.directory.seconds = parent.mtime.0;
             parent.directory.nanos = parent.mtime.1;
             if let Some(name) = &parent.remove {
-                parent.directory.tombstones =
-                    directories::remove_name(&candidate, parent.directory, name, window, deadline)?;
+                let removed = (10 + name.len()) as u32;
+                let (entries, was_local) =
+                    directories::drop_entry(&candidate, parent.directory, name, window, deadline)?;
+                parent.directory.entries = entries;
+                // Only a delta with an origin to shadow keeps a removal record.
+                let shadowed = !matches!(parent.directory.origin, Origin::Empty);
+                if was_local {
+                    parent.directory.count = parent.directory.count.saturating_sub(1);
+                    parent.directory.bytes = parent.directory.bytes.saturating_sub(removed);
+                    if !shadowed {
+                        rows = rows.saturating_sub(1);
+                        row_bytes = row_bytes.saturating_sub(removed as usize);
+                    }
+                } else {
+                    rows += 1;
+                    row_bytes += removed as usize;
+                }
+                if shadowed {
+                    parent.directory.tombstones = directories::remove_name(
+                        &candidate,
+                        parent.directory,
+                        name,
+                        window,
+                        deadline,
+                    )?;
+                }
             }
             if let Some((name, serial, kind)) = &parent.bind {
+                let added = (10 + name.len()) as u32;
+                if !directories::has_entry(
+                    &candidate,
+                    parent.directory.entries,
+                    name,
+                    window,
+                    deadline,
+                )? {
+                    parent.directory.count = parent
+                        .directory
+                        .count
+                        .checked_add(1)
+                        .ok_or(WorkspaceError::Capacity)?;
+                    parent.directory.bytes = parent
+                        .directory
+                        .bytes
+                        .checked_add(added)
+                        .ok_or(WorkspaceError::Capacity)?;
+                    rows += 1;
+                    row_bytes += added as usize;
+                }
+                if parent.directory.count > 128 {
+                    return Err(WorkspaceError::Capacity);
+                }
                 let mut entry = vector(1)?;
                 entry.push(Cell::new(
                     &metadata_pages::entry_key(name)?,
@@ -285,19 +342,6 @@ impl Workspace {
                 )?);
                 parent.directory.entries =
                     candidate.update(parent.directory.entries, entry, window, deadline)?;
-                parent.directory.count = parent
-                    .directory
-                    .count
-                    .checked_add(1)
-                    .ok_or(WorkspaceError::Capacity)?;
-                parent.directory.bytes = parent
-                    .directory
-                    .bytes
-                    .checked_add((10 + name.len()) as u32)
-                    .ok_or(WorkspaceError::Capacity)?;
-                if parent.directory.count > 128 {
-                    return Err(WorkspaceError::Capacity);
-                }
             }
             updates.push(Cell::new(
                 &metadata_pages::dirty_key(generation, parent.serial),
@@ -399,8 +443,8 @@ impl Workspace {
         state.revision = receipt.revision;
         state.dirty_inodes += new_dirty;
         state.dirty_directories += new_dirty;
-        state.directory_names += 2;
-        state.directory_bytes += name_bytes;
+        state.directory_names += rows;
+        state.directory_bytes += row_bytes;
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,

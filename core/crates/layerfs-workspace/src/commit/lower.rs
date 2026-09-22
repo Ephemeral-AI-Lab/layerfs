@@ -17,9 +17,6 @@ type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
     Inode(Inode),
     Directory(Directory),
-    /// A dirty identity this generation created and no name binds any more.
-    /// It has no canonical identity, so lowering emits nothing for it.
-    Unbound,
 }
 pub struct FilePlan {
     pub inode: Inode,
@@ -45,67 +42,79 @@ impl Workspace {
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         // The cursor is the exact key of the last record this walk returned, so
-        // a successor is the next key and never the same serial again.
-        let key = metadata_pages::dirty_key(captured.generation, after);
-        let found =
-            captured
+        // a successor is the next key and never the same serial again. A record
+        // the capture does not count is stepped over rather than returned: an
+        // identity this generation created and no name binds any more is exactly
+        // one of those, and it stays out of everything the captured counters
+        // describe.
+        let mut cursor = after;
+        loop {
+            let key = metadata_pages::dirty_key(captured.generation, cursor);
+            let found = captured.root.arena.next(
+                captured.root.root()?,
+                &key,
+                cursor != 0,
+                window,
+                deadline,
+            )?;
+            let Some(cell) = found else { return Ok(None) };
+            if cell.key().len() != 17 || cell.key()[..9] != key[..9] {
+                return Ok(None);
+            }
+            if cell.value() != [1] {
+                return Err(WorkspaceError::Io);
+            }
+            let serial = get(cell.key(), 9)?;
+            if serial <= cursor {
+                return Err(WorkspaceError::Io);
+            }
+            // A maintained directory owns a namespace record and no inode
+            // record; a regular identity owns an inode record. The namespace
+            // record is checked first so a directory is never mistaken for a file.
+            let directory = captured.root.arena.find(
+                captured.root.root()?,
+                &metadata_pages::namespace_key(serial),
+                window,
+                deadline,
+            )?;
+            if let Some(record) = directory {
+                let directory = Directory::parse(record.value())?;
+                // A maintained delta may still be captured: that origin is the
+                // exact root its entries and tombstones are deltas against, and it
+                // is the same root this capture was taken from.
+                if directory.generation != captured.generation
+                    || directory.revision > captured.revision
+                {
+                    return Err(WorkspaceError::Io);
+                }
+                return Ok(Some((serial, Dirty::Directory(directory))));
+            }
+            let record = captured
                 .root
                 .arena
-                .next(captured.root.root()?, &key, after != 0, window, deadline)?;
-        let Some(cell) = found else { return Ok(None) };
-        if cell.key().len() != 17 || cell.key()[..9] != key[..9] {
-            return Ok(None);
-        }
-        if cell.value() != [1] {
-            return Err(WorkspaceError::Io);
-        }
-        let serial = get(cell.key(), 9)?;
-        if serial <= after {
-            return Err(WorkspaceError::Io);
-        }
-        // A maintained directory owns a namespace record and no inode record;
-        // a regular identity owns an inode record. The namespace record is
-        // checked first so a directory is never mistaken for a file.
-        let directory = captured.root.arena.find(
-            captured.root.root()?,
-            &metadata_pages::namespace_key(serial),
-            window,
-            deadline,
-        )?;
-        if let Some(record) = directory {
-            let directory = Directory::parse(record.value())?;
-            // A maintained delta may still be captured: that origin is the exact
-            // root its entries and tombstones are deltas against, and it is the
-            // same root this capture was taken from.
-            if directory.generation != captured.generation || directory.revision > captured.revision
+                .find(
+                    captured.root.root()?,
+                    &metadata_pages::inode_key(serial),
+                    window,
+                    deadline,
+                )?
+                .ok_or(WorkspaceError::Io)?;
+            let inode = Inode::parse(record.value())?;
+            if inode.generation != captured.generation
+                || inode.revision > captured.revision
+                || inode.captured
             {
                 return Err(WorkspaceError::Io);
             }
-            return Ok(Some((serial, Dirty::Directory(directory))));
+            if inode.constructs_file() && self.state()?.unbound(serial) {
+                // A complete-file construction this generation created that no
+                // name binds any more has no identity to save, so lowering drops
+                // it and the walk moves on.
+                cursor = serial;
+                continue;
+            }
+            return Ok(Some((serial, Dirty::Inode(inode))));
         }
-        let record = captured
-            .root
-            .arena
-            .find(
-                captured.root.root()?,
-                &metadata_pages::inode_key(serial),
-                window,
-                deadline,
-            )?
-            .ok_or(WorkspaceError::Io)?;
-        let inode = Inode::parse(record.value())?;
-        if inode.generation != captured.generation
-            || inode.revision > captured.revision
-            || inode.captured
-        {
-            return Err(WorkspaceError::Io);
-        }
-        if inode.constructs_file() && self.state()?.unbound(serial) {
-            // A complete-file construction this generation created that no name
-            // binds any more has no identity to save, so lowering drops it.
-            return Ok(Some((serial, Dirty::Unbound)));
-        }
-        Ok(Some((serial, Dirty::Inode(inode))))
     }
     pub(crate) fn lower_file(
         &self,

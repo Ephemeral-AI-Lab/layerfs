@@ -268,9 +268,10 @@ impl Workspace {
                 _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
             }
         };
-        // One dirty identity per directory this publication first marks in this
-        // generation: the parent, and the child when it is a new directory.
-        let child_dirty = if directory {
+        // One dirty identity per serial this publication first marks in this
+        // generation: the parent, and the child when it is a new directory or a
+        // link whose target this generation has not marked yet.
+        let child_dirty = if directory || link {
             let host = self
                 .host
                 .metadata
@@ -341,7 +342,7 @@ impl Workspace {
             let state = self.state()?;
             self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
-            if state.nodes.iter().any(|node| node.attr.serial == serial) {
+            if link_serial.is_none() && state.nodes.iter().any(|node| node.attr.serial == serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
             }
             state.completion.is_none()
@@ -353,13 +354,17 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         let mut lease = host.payloads.window(0, 1)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        if let Some(root) = &view.root {
-            for key in [
-                metadata_pages::inode_key(serial),
-                metadata_pages::namespace_key(serial),
-            ] {
-                if arena.find(root.root()?, &key, window, deadline)?.is_some() {
-                    return Err(WorkspaceError::Service(Code::Unknown.into()));
+        // A link reuses the identity its own names already bind, so only a
+        // newly allocated serial must be absent from this overlay.
+        if link_serial.is_none() {
+            if let Some(root) = &view.root {
+                for key in [
+                    metadata_pages::inode_key(serial),
+                    metadata_pages::namespace_key(serial),
+                ] {
+                    if arena.find(root.root()?, &key, window, deadline)?.is_some() {
+                        return Err(WorkspaceError::Service(Code::Unknown.into()));
+                    }
                 }
             }
         }
@@ -372,7 +377,10 @@ impl Workspace {
             // The maintained delta now anchors on the root this generation
             // started from: the frozen capture when one exists, otherwise the
             // exact previous root the record's own revision still names.
-            if let (Some(prior), Some(previous)) = (old, crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref()) {
+            if let (Some(prior), Some(previous)) = (
+                old,
+                crate::backing::metadata::MetadataHost::anchor(view.root.as_ref()).as_ref(),
+            ) {
                 // The delta anchors on the exact earlier root this operation's
                 // candidate is built on, which is the version its own entries and
                 // tombstones were read from. A frozen submission's captured root
@@ -388,31 +396,40 @@ impl Workspace {
                     generation: prior.generation,
                     revision: prior.revision,
                 });
+                // The inherited pages now live in the referenced version, so this
+                // record keeps exactly what the operation adds. Without an anchor
+                // nothing else would hold those names, so the record keeps them.
+                parent_directory.entries = PageRef::NULL;
+                parent_directory.tombstones = PageRef::NULL;
+                parent_directory.count = 0;
+                parent_directory.bytes = 0;
             }
-            parent_directory.entries = PageRef::NULL;
-            parent_directory.tombstones = PageRef::NULL;
-            parent_directory.count = 0;
-            parent_directory.bytes = 0;
         }
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| WorkspaceError::Io)?;
         let seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
-        let child_attr = NodeAttributes {
-            serial,
-            kind,
-            size: if let Creation::Symlink { target, .. } = creation {
-                target.len() as u64
-            } else {
-                0
+        // A hard link adds one name to an inode that already exists, so the new
+        // name reports exactly the shared inode's kind, size and portable
+        // metadata instead of a freshly constructed file's defaults.
+        let child_attr = match target {
+            Some(target) => target,
+            None => NodeAttributes {
+                serial,
+                kind,
+                size: if let Creation::Symlink { target, .. } = creation {
+                    target.len() as u64
+                } else {
+                    0
+                },
+                references: 1,
+                mode: mode & !umask,
+                mtime_seconds: seconds,
+                mtime_nanoseconds: time.subsec_nanos(),
+                uid: self.inner.root.uid,
+                gid: self.inner.root.gid,
             },
-            references: 1,
-            mode: mode & !umask,
-            mtime_seconds: seconds,
-            mtime_nanoseconds: time.subsec_nanos(),
-            uid: self.inner.root.uid,
-            gid: self.inner.root.gid,
         };
         parent_directory.generation = generation;
         parent_directory.revision = next;
@@ -449,12 +466,12 @@ impl Workspace {
         )?);
         if link {
             // One additional name for the existing inode; identity, content and
-            // metadata are unchanged, so no inode record is rewritten here.
-            let target = target.ok_or(WorkspaceError::InvalidInput)?;
-            updates.push(Cell::new(
-                &metadata_pages::dirty_key(generation, target.serial),
-                &[1],
-            )?);
+            // metadata are unchanged, so no inode record is rewritten here. The
+            // loop above already marked the reused serial dirty, because a link's
+            // `serial` is exactly the target it shares.
+            if child_attr.serial != serial {
+                return Err(WorkspaceError::InvalidInput);
+            }
         } else if !directory {
             let mut inode = Inode::initial(child_attr, [0; 32], [0; 32]);
             inode.fresh = true;
@@ -594,13 +611,7 @@ impl Workspace {
                     *node.references(reference) = 0;
                 }
                 None => {
-                    let mut linked = Node::new(
-                        target.ok_or(WorkspaceError::Io)?,
-                        [0; 32],
-                        [0; 32],
-                        &child_path,
-                        parent,
-                    );
+                    let mut linked = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
                     linked.baseline = 0;
                     *linked.references(reference) = 1;
                     linked.names = 1;

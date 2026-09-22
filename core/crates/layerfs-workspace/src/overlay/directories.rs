@@ -237,6 +237,72 @@ pub fn removed(
         )?
         .is_some())
 }
+/// True when this directory's own entry page binds `name` locally.
+pub fn has_entry(
+    owner: &RootOwner,
+    entries: PageRef,
+    name: &[u8],
+    window: &mut Window,
+    deadline: Instant,
+) -> Result<bool, WorkspaceError> {
+    if entries == PageRef::NULL {
+        return Ok(false);
+    }
+    Ok(owner
+        .arena
+        .find(entries, &metadata_pages::entry_key(name)?, window, deadline)?
+        .is_some())
+}
+/// Rebuilds one directory's entry page without `name`, and reports whether the
+/// name was bound locally. A removed name becomes a tombstone instead, because
+/// one name must never own both a binding and its removal: lowering would emit
+/// two records for the same name and refuse the delta.
+pub fn drop_entry(
+    candidate: &RootOwner,
+    directory: Directory,
+    name: &[u8],
+    window: &mut Window,
+    deadline: Instant,
+) -> Result<(PageRef, bool), WorkspaceError> {
+    if !has_entry(candidate, directory.entries, name, window, deadline)? {
+        return Ok((directory.entries, false));
+    }
+    let mut kept: Vec<(Vec<u8>, Vec<u8>)> = crate::backing::metadata_index::vector(128)?;
+    let mut lower = metadata_pages::entry_key(&[])?;
+    // The cursor advances by the cell this walk last visited, which is not the
+    // same as the last cell it kept: the dropped name is visited exactly once.
+    let mut first = true;
+    while let Some(cell) =
+        candidate
+            .arena
+            .next(directory.entries, &lower, !first, window, deadline)?
+    {
+        if kept.len() == 128 || cell.key() <= lower.as_slice() {
+            return Err(WorkspaceError::Capacity);
+        }
+        first = false;
+        if &cell.key()[1..] != name {
+            kept.push((cell.key().to_vec(), cell.value().to_vec()));
+        }
+        lower = cell.key().to_vec();
+    }
+    if kept.is_empty() {
+        return Ok((PageRef::NULL, true));
+    }
+    let mut at = 0;
+    let page = candidate.build_ordered(
+        |_| {
+            let Some((key, value)) = kept.get(at) else {
+                return Ok(None);
+            };
+            at += 1;
+            Ok(Some(Cell::new(key, value)?))
+        },
+        window,
+        deadline,
+    )?;
+    Ok((page, true))
+}
 /// Rebuilds one directory's tombstone page with `name` added. Existing names
 /// stay in key order; the exact added name is the caller's single new removal.
 /// The candidate owner holds this operation's page allowance, so the rebuilt

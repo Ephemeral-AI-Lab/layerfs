@@ -382,6 +382,7 @@ impl WorkspaceHost {
                     projection: None,
                     fresh: Vec::new(),
                     declared: Vec::new(),
+                    unbound: Vec::new(),
                     closed: false,
                     active: 0,
                     tables: Some(tables),
