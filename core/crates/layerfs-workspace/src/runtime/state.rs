@@ -238,6 +238,14 @@ impl State {
             self.unbound.retain(|bound| *bound != serial);
         }
     }
+    /// Registers one more name for an identity this generation created. A base
+    /// identity keeps no live-name count here: its other names are not this
+    /// delta's, so removing one of them never leaves it unbound.
+    pub fn linked(&mut self, serial: u64) {
+        if self.fresh.iter().any(|entry| entry.serial == serial) {
+            self.created(serial);
+        }
+    }
     /// Registers one directory identity this generation created and has not
     /// yet declared to the canonical state.
     pub fn declaring(&mut self, serial: u64) {
@@ -249,10 +257,12 @@ impl State {
     pub fn undeclared(&self, serial: u64) -> bool {
         self.declared.contains(&serial)
     }
-    /// Forgets every declaration the canonical state has now accepted, and every
-    /// identity this generation dropped before lowering reached it.
-    pub fn declared_committed(&mut self) {
-        self.declared.clear();
+    /// Forgets the declarations the canonical state has now accepted, and every
+    /// identity this generation dropped before lowering reached it. A directory
+    /// this Commit did not declare — one a later generation created while the
+    /// submission was in flight — keeps its declaration for the next Commit.
+    pub fn declared_committed(&mut self, accepted: &[u64]) {
+        self.declared.retain(|serial| !accepted.contains(serial));
         self.unbound.clear();
     }
     /// Removes one name; the identity keeps its own live-owner lifetime. Losing

@@ -22,14 +22,23 @@ pub fn vector<T>(capacity: usize) -> Result<Vec<T>, WorkspaceError> {
     Ok(out)
 }
 pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
-    let mut refs = vector(page.cells.len())?;
+    // One cell owns at most two pages: a maintained directory's entry page and
+    // the removal page that shadows the name its origin still binds. Both are
+    // references of the record, so both must be counted here; a page whose only
+    // reference is a record field would otherwise never reach zero and never be
+    // freed.
+    let mut refs = vector(page.cells.len() * 2)?;
     for cell in &page.cells {
         let r = if page.level > 0 {
             PageRef::parse(cell.value())?
         } else if cell.key_len == 9 && cell.key()[0] == b'I' {
             Inode::parse(cell.value())?.pieces
         } else if cell.key_len == 9 && cell.key()[0] == b'N' {
-            Directory::parse(cell.value())?.entries
+            let directory = Directory::parse(cell.value())?;
+            if directory.tombstones != PageRef::NULL {
+                refs.push(directory.tombstones);
+            }
+            directory.entries
         } else if cell.key_len >= 2 && cell.key()[0] == b'E' && cell.value_len == 16 {
             crate::overlay::directories::entry_serial(cell.value())?;
             PageRef::NULL

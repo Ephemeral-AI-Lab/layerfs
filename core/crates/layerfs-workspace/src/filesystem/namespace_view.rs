@@ -163,6 +163,22 @@ impl Workspace {
                     canonical: false,
                 });
             }
+            // A name this generation added for an identity the attached base
+            // still owns has no path the service can resolve: the identity's own
+            // locator answers, and the record supplies its effective attributes.
+            let (original, content, metadata, _) =
+                self.serial_original(serial, deadline, operation)?;
+            if original.kind != inode.kind() {
+                return Err(WorkspaceError::Io);
+            }
+            let attr = inode.attributes(original);
+            return Ok(Resolved {
+                original,
+                attr,
+                content,
+                metadata,
+                canonical: true,
+            });
         }
         if let (Some((serial, _)), Some(directory)) = (binding, local) {
             match directory.origin {
@@ -219,6 +235,7 @@ impl Workspace {
         let (serial, path) = directory;
         let mut names = crate::backing::metadata_index::vector(limit)?;
         let mut base = Some(view.base);
+        let mut delta = None;
         if let Some(owner) = &view.root {
             let host = self
                 .host
@@ -229,6 +246,7 @@ impl Workspace {
             let mut lease = host.payloads.window(1, 3)?;
             let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
             if let Some(directory) = directories::load(owner, serial, window, deadline)? {
+                delta = Some(directory);
                 let mut roots = [
                     directory.entries,
                     crate::backing::metadata_pages::PageRef::NULL,
@@ -276,13 +294,22 @@ impl Workspace {
                 }
             }
         }
-        if let Some(base) = base {
+        let Some(base) = base else {
+            return Ok(names);
+        };
+        // The origin still lists every name it holds, including the ones this
+        // delta removed. A tombstone means absent from the effective namespace,
+        // so the merge drops those names and asks the origin for the next page
+        // instead of returning a short listing: a mounted caller reads a page
+        // that is not full as the end of the directory.
+        let mut cursor = after.to_vec();
+        loop {
             let response = self.inspect_view(
                 operation,
                 base,
                 Inspect::List {
                     path: path.to_vec(),
-                    after: after.to_vec(),
+                    after: cursor.clone(),
                     entries: limit as u16,
                     bytes: 16384,
                 },
@@ -307,7 +334,7 @@ impl Workspace {
             {
                 return Err(WorkspaceError::InvalidInput);
             }
-            let mut previous = after;
+            let mut previous = cursor.as_slice();
             for (name, _) in &entries {
                 if name.as_slice() <= previous {
                     return Err(WorkspaceError::InvalidInput);
@@ -315,6 +342,30 @@ impl Workspace {
                 child_path(path, name)?;
                 previous = name;
             }
+            let full = entries.len() == limit;
+            let mut dropped = false;
+            let entries = match (delta, view.root.as_ref()) {
+                (Some(directory), Some(owner)) => {
+                    let host = self
+                        .host
+                        .metadata
+                        .as_ref()
+                        .ok_or(WorkspaceError::Unsupported)?;
+                    let _view = host.writer()?;
+                    let mut lease = host.payloads.window(1, 3)?;
+                    let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+                    let mut kept = crate::backing::metadata_index::vector(limit)?;
+                    for (name, serial) in entries {
+                        if directories::removed(owner, directory, &name, window, deadline)? {
+                            dropped = true;
+                        } else {
+                            kept.push((name, serial));
+                        }
+                    }
+                    kept
+                }
+                _ => entries,
+            };
             for entry in entries {
                 match names.binary_search_by(|(name, _)| name.cmp(&entry.0)) {
                     Ok(_) => {}
@@ -327,6 +378,15 @@ impl Workspace {
                     Err(_) => {}
                 }
             }
+            let Some(next) = continuation else { break };
+            // One more origin page is read only while this one either removed a
+            // name or was full: a page that added nothing and removed nothing
+            // cannot repeat, because a name this delta already binds is one of
+            // the at most 128 names its own entry page holds.
+            if names.len() == limit || (!dropped && !full) {
+                break;
+            }
+            cursor = next;
         }
         Ok(names)
     }

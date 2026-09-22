@@ -36,6 +36,10 @@ pub(crate) struct SubmissionState {
     pub result_slot: Option<usize>,
     pub pending: Option<SavedInode>,
     pub source_failure: Option<WorkspaceError>,
+    /// Directory serials this submission declared as new, so a completed Commit
+    /// forgets exactly the declarations the canonical state accepted. A directory
+    /// a later generation created is not one of them and stays undeclared.
+    pub declared: Vec<u64>,
 }
 pub(crate) struct Submission {
     pub captured: OnceLock<Captured>,
@@ -104,6 +108,7 @@ impl Submission {
                 result_slot: None,
                 pending: None,
                 source_failure: None,
+                declared: Vec::new(),
             }),
             results,
             fund,

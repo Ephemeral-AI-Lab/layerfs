@@ -518,15 +518,27 @@ impl Workspace {
         let mut state = self
             .state()
             .map_err(|_| WorkspaceError::Coherence(failure(cause)))?;
+        let revision = state.revision;
         let projection = state
             .projection
             .as_mut()
             .ok_or_else(|| WorkspaceError::Coherence(failure(cause)))?;
+        // One mutation can own more than one affected entry: a cross-directory
+        // rename notifies both parents through one pending publication. Every
+        // later entry of that same mutation finds the status its own earlier
+        // entry left behind, which the unchanged revision still names.
+        let mine = revision == receipt.revision
+            && match &projection.status {
+                CoherenceStatus::Ready => true,
+                CoherenceStatus::Failed(previous) => previous.receipt == receipt,
+                _ => false,
+            };
         if projection.status
             != (CoherenceStatus::Pending {
                 receipt,
                 published_handle,
             })
+            && !mine
         {
             return Err(WorkspaceError::Coherence(failure(cause)));
         }

@@ -196,6 +196,16 @@ impl Workspace {
         {
             return Err(WorkspaceError::Io);
         }
+        {
+            // The submission owns the exact declarations this Commit sends, so a
+            // completed Commit forgets those and only those. A directory a later
+            // generation created is not one of them and stays undeclared.
+            let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
+            state.declared.clear();
+            for metadata in &new {
+                state.declared.push(metadata.serial);
+            }
+        }
         Ok((changes, new, patches))
     }
 }

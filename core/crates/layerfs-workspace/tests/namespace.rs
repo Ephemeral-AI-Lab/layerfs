@@ -397,6 +397,7 @@ mod linux {
             "NAMESPACE_UNLINK removed=2 open_orphan_readable=true commit_head_absent=true reclaimed=true"
         );
         f.workspace.close_clean().unwrap();
+        check("native-clean-close");
         check("unlink-removes-one-name-and-keeps-open-orphan-lifetime");
     }
 
@@ -417,6 +418,7 @@ mod linux {
         println!("NAMESPACE_UNLINK_FRESH unbound_fresh_declined=true no_resurrection=true");
         f.workspace.forget(a.serial, 1, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
+        check("native-clean-close");
         check("fresh-create-then-unlink-emits-no-unbound-declaration");
     }
 
@@ -628,6 +630,7 @@ mod linux {
         f.workspace.forget(serial.serial, 1, ReferenceScope::Local);
         f.workspace.forget(alias.serial, 1, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
+        check("native-clean-close");
         check("tombstone-hides-an-inherited-binding");
     }
 

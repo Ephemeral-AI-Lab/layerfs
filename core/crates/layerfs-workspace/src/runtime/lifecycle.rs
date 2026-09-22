@@ -67,8 +67,8 @@ impl Workspace {
     }
     pub fn close_clean_until(&self, deadline: Instant) -> Result<(), WorkspaceError> {
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-        {
-            let state = self.state()?;
+        let retired = {
+            let mut state = self.state()?;
             if state.closed {
                 return Err(WorkspaceError::Closed);
             }
@@ -90,7 +90,13 @@ impl Workspace {
                 }
             }
             self.inner.stopping.store(true, Ordering::Release);
-        }
+            // The live overlay is this Workspace's own reference to arena roots,
+            // exactly like the generations a Commit retires. Closing releases it
+            // before the arena is reclaimed; nothing runs after `stopping` is set,
+            // so a refused teardown has no later operation to mislead.
+            state.overlay.take()
+        };
+        drop(retired);
         if let (Some(host), Some(arena)) = (&self.host.metadata, &self.inner.arena) {
             host.close(arena, deadline)?;
         }

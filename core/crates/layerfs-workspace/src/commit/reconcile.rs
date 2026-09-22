@@ -15,14 +15,69 @@ use crate::{
 };
 use layerfs_bridge::contract::CommitOutcomeWire;
 use std::{sync::Arc, time::Instant};
+/// One record the successor root must carry: a counted dirty identity, or an
+/// identity this generation created that no name binds any more.
+enum Frontier {
+    Counted(Dirty),
+    /// No dirty key and no declaration, but its record still moves to the
+    /// successor root so a live handle and a pinned reader keep reading their
+    /// own version locally instead of asking the service for a name that is gone.
+    Unbound(Inode),
+}
 struct Current {
     root: Arc<RootOwner>,
     generation: u64,
     revision: u64,
     count: usize,
+    /// Serials of identities this generation created that no name binds any
+    /// more, in increasing order.
+    unbound: Vec<u64>,
 }
 impl Current {
+    /// The next record of this phase in serial order. Only the inode phase also
+    /// carries the unbound identities; the dirty-key and namespace phases walk
+    /// exactly the counted frontier, so `count` keeps describing them.
     fn next(
+        &self,
+        submission: &Submission,
+        phase: u8,
+        after: u64,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<Option<(u64, Frontier)>, WorkspaceError> {
+        let counted = self.counted(submission, after, window, deadline)?;
+        let unbound = (phase == 1)
+            .then(|| self.unbound.iter().copied().find(|serial| *serial > after))
+            .flatten();
+        let Some(unbound) = unbound else {
+            return Ok(counted.map(|(serial, dirty)| (serial, Frontier::Counted(dirty))));
+        };
+        if counted
+            .as_ref()
+            .is_some_and(|(serial, _)| *serial < unbound)
+        {
+            return Ok(counted.map(|(serial, dirty)| (serial, Frontier::Counted(dirty))));
+        }
+        let cell = self
+            .root
+            .arena
+            .find(
+                self.root.root()?,
+                &metadata_pages::inode_key(unbound),
+                window,
+                deadline,
+            )?
+            .ok_or(WorkspaceError::Io)?;
+        let inode = Inode::parse(cell.value())?;
+        let captured = submission.capture()?.generation;
+        if (inode.generation != self.generation && inode.generation != captured)
+            || inode.revision > self.revision
+        {
+            return Err(WorkspaceError::Io);
+        }
+        Ok(Some((unbound, Frontier::Unbound(inode))))
+    }
+    fn counted(
         &self,
         submission: &Submission,
         after: u64,
@@ -244,12 +299,16 @@ impl Workspace {
             {
                 return Err(WorkspaceError::Io);
             }
+            let mut unbound = state.unbound.clone();
+            unbound.sort_unstable();
+            unbound.dedup();
             (
                 Current {
                     root: state.overlay.clone().ok_or(WorkspaceError::Io)?,
                     generation: state.generation,
                     revision: state.revision,
                     count: state.dirty_inodes,
+                    unbound,
                 },
                 state.baseline,
             )
@@ -270,13 +329,26 @@ impl Workspace {
         let mut phase = 0;
         let root = attempt.root.build_ordered(
             |window| loop {
-                if let Some((serial, inode)) = current.next(submission, after, window, deadline)? {
+                if let Some((serial, frontier)) =
+                    current.next(submission, phase, after, window, deadline)?
+                {
+                    after = serial;
+                    let dirty = match frontier {
+                        Frontier::Unbound(inode) => {
+                            // Emitted exactly as this generation left it: the
+                            // identity has no canonical version to substitute.
+                            return Ok(Some(Cell::new(
+                                &metadata_pages::inode_key(serial),
+                                &inode.value(),
+                            )?));
+                        }
+                        Frontier::Counted(dirty) => dirty,
+                    };
                     if seen == current.count {
                         return Err(WorkspaceError::Io);
                     }
-                    after = serial;
                     seen += 1;
-                    match (phase, inode) {
+                    match (phase, dirty) {
                         (0, _) => {
                             return Ok(Some(Cell::new(
                                 &metadata_pages::dirty_key(current.generation, serial),
@@ -354,7 +426,13 @@ impl Workspace {
             state.base = canonical;
             state.baseline = next_baseline;
             state.revision = revision;
-            state.declared_committed();
+            let accepted = submission
+                .state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .declared
+                .clone();
+            state.declared_committed(&accepted);
             status.installed_revision = Some(revision);
             // Fixed local bookkeeping is acquired before any publication changes
             // so a poisoned status cannot hide an installed canonical head.

@@ -220,9 +220,12 @@ impl Workspace {
             Err(error) => return Err(error),
         }
         check_access(attr, self.inner.root.uid, 3)?;
-        let target = match creation {
-            Creation::Link { serial, .. } => Some(self.link_target(serial, operation, deadline)?),
-            _ => None,
+        let (target, target_base) = match creation {
+            Creation::Link { serial, .. } => {
+                let (attr, base) = self.link_target(serial, operation, deadline)?;
+                (Some(attr), Some(base))
+            }
+            _ => (None, None),
         };
         let old = self.directory_record(&view, parent, deadline)?;
         let (reanchor, already_dirty) = {
@@ -243,35 +246,14 @@ impl Workspace {
             )?
         };
         let name_bytes = 10 + name.len();
-        let serial = if let Creation::Link { serial, .. } = creation {
-            serial
-        } else {
-            operation.remote()?;
-            let response = self.host.call_input(
-                (self.inner.store, generation),
-                Operation::HistoryCommand(HistoryCommand::ReserveInodes { scope, count: 1 }),
-                &mut &[][..],
-                HISTORY_RESULT_BYTES as u64,
-                &mut std::io::sink(),
-                deadline,
-            );
-            operation.release_remote();
-            match response? {
-                Response::History(result) => match *result {
-                    HistoryResult::Reservation {
-                        scope: actual,
-                        start,
-                        count: 1,
-                    } if actual == scope && start > 0 && start < i64::MAX as u64 => start,
-                    _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
-                },
-                _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
-            }
-        };
         // One dirty identity per serial this publication first marks in this
         // generation: the parent, and the child when it is a new directory or a
-        // link whose target this generation has not marked yet.
-        let child_dirty = if directory || link {
+        // link whose target this generation has not marked yet. A serial this
+        // operation still has to reserve cannot own a key this generation wrote,
+        // so the complete local envelope is known before the reservation is
+        // consumed and a refusal it can see coming leaves the count untouched.
+        let child_dirty = if link {
+            let serial = link_serial.ok_or(WorkspaceError::Io)?;
             let host = self
                 .host
                 .metadata
@@ -304,6 +286,31 @@ impl Workspace {
                 state.directory_bytes + name_bytes,
             )?;
         }
+        let serial = if let Creation::Link { serial, .. } = creation {
+            serial
+        } else {
+            operation.remote()?;
+            let response = self.host.call_input(
+                (self.inner.store, generation),
+                Operation::HistoryCommand(HistoryCommand::ReserveInodes { scope, count: 1 }),
+                &mut &[][..],
+                HISTORY_RESULT_BYTES as u64,
+                &mut std::io::sink(),
+                deadline,
+            );
+            operation.release_remote();
+            match response? {
+                Response::History(result) => match *result {
+                    HistoryResult::Reservation {
+                        scope: actual,
+                        start,
+                        count: 1,
+                    } if actual == scope && start > 0 && start < i64::MAX as u64 => start,
+                    _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
+                },
+                _ => return Err(WorkspaceError::Service(Code::Unknown.into())),
+            }
+        };
         // Even a later race/failure leaves this real reservation consumed.
         self.maintain_backing(deadline)?;
         let payload = if let Creation::Symlink { target, .. } = creation {
@@ -356,8 +363,18 @@ impl Workspace {
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         // A link reuses the identity its own names already bind, so only a
         // newly allocated serial must be absent from this overlay.
-        if link_serial.is_none() {
-            if let Some(root) = &view.root {
+        let mut linked_record = false;
+        if let Some(root) = &view.root {
+            if link_serial.is_some() {
+                linked_record = arena
+                    .find(
+                        root.root()?,
+                        &metadata_pages::inode_key(serial),
+                        window,
+                        deadline,
+                    )?
+                    .is_some();
+            } else {
                 for key in [
                     metadata_pages::inode_key(serial),
                     metadata_pages::namespace_key(serial),
@@ -465,12 +482,41 @@ impl Workspace {
             &parent_directory.value(),
         )?);
         if link {
-            // One additional name for the existing inode; identity, content and
-            // metadata are unchanged, so no inode record is rewritten here. The
-            // loop above already marked the reused serial dirty, because a link's
-            // `serial` is exactly the target it shares.
+            // One additional name for the existing inode. A target this
+            // generation already owns keeps its record untouched; an identity
+            // that still lives in the attached base needs one, because lowering
+            // declares it and a handle must keep reading it after its last name
+            // is gone. That record carries the exact base roots the version was
+            // resolved from, never a path into the base. The loop above already
+            // marked the reused serial dirty, because a link's `serial` is
+            // exactly the target it shares.
             if child_attr.serial != serial {
                 return Err(WorkspaceError::InvalidInput);
+            }
+            if !linked_record {
+                let (original, content, metadata, _) = target_base.ok_or(WorkspaceError::Io)?;
+                let mut inode = Inode::initial(original, content, metadata);
+                inode.generation = generation;
+                inode.revision = next;
+                if inode.length > 0 {
+                    inode.pieces = candidate.build_pieces(
+                        &[Piece {
+                            kind: PieceKind::Base,
+                            start: 0,
+                            length: inode.length,
+                            offset: 0,
+                            payload: 0,
+                            custody: PageRef::NULL,
+                        }],
+                        window,
+                        deadline,
+                    )?;
+                    inode.count = 1;
+                }
+                updates.push(Cell::new(
+                    &metadata_pages::inode_key(serial),
+                    &inode.value(),
+                )?);
             }
         } else if !directory {
             let mut inode = Inode::initial(child_attr, [0; 32], [0; 32]);
@@ -526,7 +572,11 @@ impl Workspace {
         let mut node = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
         node.baseline = 0;
         *node.references(reference) = 1;
-        node.handles = usize::from(file);
+        // A creation opens a handle only when its caller asked for one: a
+        // regular mknod publishes the same identity without consuming a slot,
+        // and a phantom handle would keep the node resident after every real
+        // owner is gone.
+        node.handles = usize::from(open.is_some());
         node.names = 1;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
@@ -618,7 +668,7 @@ impl Workspace {
                     state.nodes.push(linked);
                 }
             }
-            state.created(serial);
+            state.linked(serial);
         } else {
             if file {
                 state.created(serial);

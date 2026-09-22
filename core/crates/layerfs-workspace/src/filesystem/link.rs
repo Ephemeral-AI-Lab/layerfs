@@ -1,5 +1,5 @@
 //! One additional regular-file name for an existing inode.
-use super::create::Creation;
+use super::{create::Creation, original::Original};
 use crate::runtime::state::OperationGuard;
 use crate::{runtime::coherence::MutationOrigin, *};
 use std::time::Instant;
@@ -27,14 +27,15 @@ impl Workspace {
         self.create_child(parent, name, Creation::Link { serial, origin }, deadline)
             .map(|(attr, _)| attr)
     }
-    /// The selected attributes of one hard-link target, refusing a directory, a
-    /// symlink and a serial this delta no longer binds to any live name.
+    /// The selected attributes of one hard-link target plus the exact base
+    /// version they were resolved from, refusing a directory, a symlink and a
+    /// serial this delta no longer binds to any live name.
     pub(super) fn link_target(
         &self,
         serial: u64,
         operation: &mut OperationGuard,
         deadline: Instant,
-    ) -> Result<NodeAttributes, WorkspaceError> {
+    ) -> Result<(NodeAttributes, Original), WorkspaceError> {
         let deadline = Self::callback_deadline(deadline);
         let attr = {
             let state = self.state()?;
@@ -45,10 +46,10 @@ impl Workspace {
             }
             node.attr
         };
-        let (original, _, _, _) = self.serial_original(serial, deadline, operation)?;
-        if original.kind != NodeKind::File || original.serial != serial {
+        let base = self.serial_original(serial, deadline, operation)?;
+        if base.0.kind != NodeKind::File || base.0.serial != serial {
             return Err(WorkspaceError::Unsupported);
         }
-        Ok(attr)
+        Ok((attr, base))
     }
 }
