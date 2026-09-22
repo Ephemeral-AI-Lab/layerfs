@@ -696,16 +696,8 @@ mod linux {
             let (a, handle) = create(&f, &name(index), ordinary());
             if index == 0 {
                 write(&f, handle, 8 * 1024 * 1024 - 1, b"Z");
-                let attrs = f.workspace.getattr(a.serial).unwrap();
-                let before_refusal = status(&f);
-                let payload = f.own(b"x");
-                assert_eq!(
-                    f.workspace
-                        .write_file(handle, 8 * 1024 * 1024, &payload, deadline()),
-                    Err(WorkspaceError::Capacity)
-                );
-                assert_eq!(f.workspace.getattr(a.serial).unwrap(), attrs);
-                assert_eq!(status(&f), before_refusal);
+                // Fresh full construction no longer has the EditFile replay cap.
+                // Keep this historical workload at 8 MiB; fresh_stream covers >8 MiB.
                 for offset in [0, 4 * 1024 * 1024] {
                     assert_eq!(f.read(handle, offset, 32), vec![0; 32]);
                 }
@@ -789,7 +781,7 @@ mod linux {
         assert_eq!(stored.2, 64 * 1024 * 1024);
         assert_eq!(f.native.bytes(stored.1, 0, 4), b"EDIT");
         println!("MKDIR_CAPACITY create_accepted={expected} encoded_bytes={bytes} next_bytes={} name_bytes=255 files={} dirs=1 fresh={} limit=32768 replay_limit=8388608 full_ConstructFile_bytes=8388608 readback=three-declared-windows", bytes + 346, expected + 1, expected);
-        check("exact-fresh-file-wire-frontier-and-eight-MiB-envelope-refuse-atomically");
+        check("exact-fresh-file-wire-frontier-refusal-with-fixed-eight-MiB-sparse-workload");
         close(&f, &[], &[(data.serial, 1)]);
     }
 

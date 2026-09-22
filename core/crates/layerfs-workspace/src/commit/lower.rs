@@ -11,7 +11,7 @@ use crate::{
     },
     *,
 };
-use layerfs_bridge::contract::{Edit, InodeChange};
+use layerfs_bridge::contract::{Edit, InodeChange, MAX_REPLAY};
 use std::time::Instant;
 type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
@@ -101,6 +101,7 @@ impl Workspace {
         if inode.symlink {
             return Err(WorkspaceError::Io);
         }
+        let complete = inode.constructs_file();
         let captured = submission.capture()?;
         let host = self
             .host
@@ -131,7 +132,10 @@ impl Workspace {
                     .checked_add(piece.length)
                     .ok_or(WorkspaceError::Capacity)?;
             } else {
-                if piece.offset < base || piece.offset + piece.length > inode.base_length {
+                if complete
+                    || piece.offset < base
+                    || piece.offset + piece.length > inode.base_length
+                {
                     return Err(WorkspaceError::Io);
                 }
                 push_edit(&mut edits, base, piece.offset, replacement, &mut delta)?;
@@ -142,7 +146,8 @@ impl Workspace {
         push_edit(&mut edits, base, inode.base_length, replacement, &mut delta)?;
         if edits.len() != usize::from(inode.edits)
             || total != inode.replacement
-            || total > 8 * 1024 * 1024
+            || (complete && total != inode.length)
+            || (!complete && total > MAX_REPLAY)
             || i128::from(inode.base_length) + delta != i128::from(inode.length)
         {
             return Err(WorkspaceError::Io);

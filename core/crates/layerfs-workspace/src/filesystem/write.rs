@@ -598,9 +598,16 @@ impl Workspace {
             }
             pieces
         };
-        // Normalize and enforce the shared replay envelope before reserving or touching metadata.
-        let (mut pieces, edits, replacement_bytes) =
-            pieces::splice(&old_pieces, start, end, &replacement, inode.base_length)?;
+        // Capture conversion above selects replay for D1 edits, even if G created
+        // the file. Only an uncaptured fresh file streams complete construction.
+        let (mut pieces, edits, replacement_bytes) = pieces::splice(
+            &old_pieces,
+            start,
+            end,
+            &replacement,
+            inode.base_length,
+            inode.constructs_file(),
+        )?;
         let revision = expected_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;

@@ -415,7 +415,8 @@ From parent `573b4bbd35bdcd5d8fe55c8fc107f8c31cd791c5`,
 adds set_len for existing cached regular inodes through the same mutation and
 Commit owners. The64-byte private piece value gains strict tag2 Zero with no
 payload/custody/offset; reads and Source synthesize only bounded requested spans.
-Zero bytes count toward the existing8 MiB replacement envelope. In-memory Piece
+Zero bytes count toward the8 MiB replay envelope for existing or captured-base
+files; fresh complete construction has the separate profile described below. In-memory Piece
 is48 bytes; the conservative596,448-byte transient accounting remains below the
 existing640 KiB reservation, with unchanged windows, FD and disk reserves.
 No writable mount, shared service operation or reference change is introduced;
@@ -683,8 +684,9 @@ identity uses reserved inode-record byte25, and fresh/captured local originals
 resolve before absent base paths. Fresh content and metadata save through the
 existing ConstructFile/ConstructPortableMetadata operations; captured F IDs enter
 the prepared request, and own-result reconciliation replaces both saved roots
-while preserving D1. The128-row/name,32768-byte prepared request and8-MiB
-replacement bounds are unchanged. [Round43](proposal/fuse-workspace-snapshot-overlay/43-native-create.md)
+while preserving D1. At that checkpoint,128-row/name,32768-byte prepared request
+and8-MiB replacement bounds were unchanged; the fresh streaming extension below
+separates complete construction from existing-file replay. [Round43](proposal/fuse-workspace-snapshot-overlay/43-native-create.md)
 records the exact evidence, including the unresolved capacity gate failure.
 Mounted CREATE and full preinstalled-workload admission remain subsequent work.
 
@@ -778,3 +780,23 @@ canonical paths, preserving exact native4096-byte reads without a truncated kern
 success. Native empty targets remain available for mounted SDK qualification.
 [Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md) records
 sources, selected kernel proofs and exact verification.
+
+The fresh-file streaming extension is based on commit
+`74d4a2ace173d09689b8fbb42953658e94277bab` and frozen product seal
+`ffa9fa10899063601d7520581f7db932644a9c45a34b2123fa895f012320da08`.
+For an inode that is fresh, noncaptured and regular, write normalization admits
+complete retained contents under MAX_FILE instead of the EditFile8-MiB replay
+bound. The sole splice caller chooses this only after any inherited-G conversion.
+Parsing and lowering require empty canonical base, no Base pieces, and the complete
+Local/Zero sum equal to both logical length and replacement count. Existing and
+captured-G edits continue counting Local and Zero bytes against8 MiB. Known G
+completion clears fresh/captured state as it substitutes saved canonical roots.
+
+The existing ReplacementSource streams one Local payload reader or Zero span at
+a time through ConstructFile; no whole-file buffer or new Service operation appears.
+Its chunk bounds are clamped in u64 before conversion to usize to preserve progress
+at the existing4-GiB MAX_FILE on32-bit platforms. Actual32-bit execution is unrun.
+Per-payload8 MiB,128-KiB read/FUSE-write windows,1024 pieces,256 edits, quotas,
+4096 payload records, worker count and deadlines stay unchanged. See
+[Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md) for
+selected actual-file proofs and remaining full-corpus admission prerequisites.

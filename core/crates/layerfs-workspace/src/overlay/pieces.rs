@@ -1,5 +1,5 @@
 use crate::{backing::metadata_pages::PageRef, NodeAttributes, NodeKind, WorkspaceError};
-use layerfs_bridge::contract::{Root, MAX_FILE};
+use layerfs_bridge::contract::{Root, MAX_FILE, MAX_REPLAY};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceKind {
     Base,
@@ -161,7 +161,12 @@ impl Inode {
             || i.nanos >= 1_000_000_000
             || i.count > 1024
             || i.edits > 256
-            || i.replacement > 8 * 1024 * 1024
+            || i.replacement
+                > if i.constructs_file() {
+                    MAX_FILE
+                } else {
+                    MAX_REPLAY
+                }
             || (i.fresh && i.metadata != [0; 32])
         {
             return Err(WorkspaceError::Io);
@@ -183,6 +188,9 @@ impl Inode {
             return Err(WorkspaceError::Io);
         }
         Ok(i)
+    }
+    pub fn constructs_file(self) -> bool {
+        self.fresh && !self.captured && !self.symlink
     }
     pub fn kind(self) -> NodeKind {
         if self.symlink {
@@ -213,7 +221,11 @@ pub fn splice(
     end: u64,
     replacement: &[Piece],
     base_length: u64,
+    complete: bool,
 ) -> Result<(Vec<Piece>, u16, u64), WorkspaceError> {
+    if complete && base_length != 0 {
+        return Err(WorkspaceError::Io);
+    }
     let mut new = crate::backing::metadata_index::vector(1024)?;
     let mut position = 0u64;
     let mut push = |mut p: Piece| -> Result<(), WorkspaceError> {
@@ -285,7 +297,7 @@ pub fn splice(
                 .checked_add(p.length)
                 .ok_or(WorkspaceError::Capacity)?;
         } else {
-            if p.offset < expected || p.offset + p.length > base_length {
+            if complete || p.offset < expected || p.offset + p.length > base_length {
                 return Err(WorkspaceError::Io);
             }
             if p.offset != expected || pending != 0 {
@@ -298,7 +310,10 @@ pub fn splice(
     if expected != base_length || pending != 0 {
         edits = edits.checked_add(1).ok_or(WorkspaceError::Capacity)?;
     }
-    if edits > 256 || bytes > 8 * 1024 * 1024 {
+    if complete && bytes != position {
+        return Err(WorkspaceError::Io);
+    }
+    if edits > 256 || bytes > if complete { MAX_FILE } else { MAX_REPLAY } {
         return Err(WorkspaceError::Capacity);
     }
     Ok((new, edits, bytes))

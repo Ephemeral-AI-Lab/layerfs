@@ -56,7 +56,7 @@ impl ReplacementSource {
         }
         loop {
             if self.zero {
-                let count = out.len().min(MAX_READ_BYTES).min(self.left as usize);
+                let count = self.left.min(out.len().min(MAX_READ_BYTES) as u64) as usize;
                 if count == 0 {
                     return Err(WorkspaceError::Io);
                 }
@@ -67,7 +67,7 @@ impl ReplacementSource {
                 return Ok(count);
             }
             if let Some(reader) = &mut self.reader {
-                let limit = out.len().min(MAX_READ_BYTES).min(self.left as usize);
+                let limit = self.left.min(out.len().min(MAX_READ_BYTES) as u64) as usize;
                 let count =
                     Source::read(reader, &mut out[..limit], deadline, cancel).map_err(|error| {
                         error

@@ -2,6 +2,7 @@
 
 > **Status: implemented and functionally verified in the declared mounted scope.**
 > Implementation parent: `9060c26bcc3e905e031415da20cec54352b94192`.
+> Exact implementation commit: `74d4a2ace173d09689b8fbb42953658e94277bab`; [confirmation](evidence/mounted-symlink/commit-confirmed.json).
 > Frozen product input seal: `e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`.
 
 This round projects the existing native symbolic-link operation through the

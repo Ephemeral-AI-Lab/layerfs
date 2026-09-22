@@ -8,7 +8,7 @@ driver.CASES = {
     'semantics': 'atomic-create-handle-forget-relookup-zero-save-and-existing-next-Commit',
     'flags_permissions': 'creation-fd-rights-mode0400-mode000-and-existing-search-only-parent',
     'successor': 'captured-fresh-file-D1-and-D1-born-file-reconcile-both-saved-roots',
-    'capacity': 'exact-fresh-file-wire-frontier-and-eight-MiB-envelope-refuse-atomically',
+    'capacity': 'exact-fresh-file-wire-frontier-refusal-with-fixed-eight-MiB-sparse-workload',
     'refusals': 'native-create-refusals-preserve-namespace-handles-and-reservations',
     'reserve_denied': 'create-denied-Reserve-no-handle-name-or-replay',
     'reserve_unknown': 'create-unknown-Reserve-consumed-once-no-handle-name-or-replay',

@@ -7,6 +7,12 @@
 > in [08](08-readable-implementation.md). That R1 checkpoint does not qualify writable behavior;
 > later scoped functional proofs are linked below. Performance and durability remain unqualified.
 
+**Budget-stop continuation:** [Round49](49-fresh-file-streaming.md) implements the
+fresh-file streaming prerequisite and passes build/review checks; all its live
+selections are NOT_RUN. The owner requested commit and handoff because the budget
+was exhausted. Continue from [50](50-budget-stop-handoff.md), preserving the current
+prepared inputs, completed evidence and open failures.
+
 **Fresh-file prerequisite:** [portable metadata construction](41-construct-portable-metadata.md)
 is implemented and functionally verified through the existing Service save owner.
 [Prepared fresh regular files](42-prepared-files.md) now verifies the existing
