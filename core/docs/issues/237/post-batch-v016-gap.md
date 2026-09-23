@@ -43,6 +43,8 @@ above compares nonidentical timer scopes and does not partition the gap.
 | Object locator INSERT query shape | [Single-scope CTE pair](sql-bulk-admission-result.md): `insert_objects_ns` 69.379→63.860 ms (−5.519 ms/−7.96%), below the prospective 15% gate; Store +528,384 B. Raw public −200.584 ms mostly tracked variable connection close (−149.704 ms). | Reject. EXPLAIN opcode reduction did not translate to the required measured SQL win. |
 | Exact paged collision lookup | [128-ID candidate pair](collision-lookup-batching.md): public 1,092.106→1,194.798 ms, Store +778,240 B; both readbacks PASS. Timed collision-query wall not exported. | Reject on preregistered speed and Store-size gates. |
 | Larger C2 waves for fewer COMMITs | [Earlier 80→7 trial](bounded-wave-experiment.md): count target met but public time 1.364→1.440 s and sampled RSS rose strongly. | Reject large-buffer version; transaction count alone is not a speed result. |
+| Streamed 4-MiB waves under longer transactions | [Matched pair](streamed-transaction-result.md): file COMMITs 91→10, public 1,193.328→1,113.243 ms raw. Longest lock 261.890 ms, sampled RSS +64,602,112 B, Store apparent +262,144 B. Both readbacks PASS. | Reject: missed frozen ≤9 COMMIT, ≤200-ms lock and ≤16-MiB RSS growth gates. |
+| Pack BLOB physical writes | [Source/evidence feasibility](pack-blob-write-feasibility.md): current format needs preallocated BLOBs for later appends; prior exact-fit saved only 9.085 ms of pack-write wall while growing Store/RSS. | No new 10k pair; no narrow high-impact current-format treatment found. |
 
 The signature, SQL, COMMIT, pack-write and close timers come from **different
 count-only identities**. They overlap in places and cannot be added as a
@@ -52,22 +54,15 @@ connection remains open across Init, while Core normally opens/closes a private
 connection per Save. The native scan's entire 47.525-ms current child is also
 smaller than the 359.706-ms gap, and it is not an old/new matched scan delta.
 
-## Next isolated experiments
+## Remaining investigation
 
-1. **Bounded streaming transaction:** test several 4-MiB preparation waves in
-   one SQLite transaction while keeping canonical buffering small. A 56-MiB
-   segment targets roughly nine file-Save COMMITs. The owner lock would span
-   producer waits; cross-process writers use zero busy timeout, and MEMORY
-   journal/RSS may grow. This is a research tradeoff, not selected product.
-2. **Pack BLOB physical write:** compare the old bounded assembled-BLOB path
-   against Core's reserved zeroblob/incremental writes while keeping all pack
-   payloads inside SQLite BLOBs. Earlier Core pack-write wall was about 79 ms;
-   this cannot alone close the gap without affecting other work.
-3. **Connection reuse integration:** the one-slot result offers a concrete
-   ~84-ms raw treatment but needs a qualified space/RSS decision and full
-   Core checks at any selected source identity. No warm cache from an earlier
-   run may enter a timed arm; every arm creates a fresh Store/process and uses
-   an independent source copy with final zero-resident-payload verification.
+The exact v0.1.6 release needs one **count-only** microstep diagnostic at
+comparable owner/producer boundaries. Its original 750.626-ms public speed arm
+will not be repeated as a new speed sample. The one-slot connection result
+offers a concrete ~84-ms raw treatment but needs a qualified space/RSS decision
+and full Core checks at any selected source identity. No warm cache from an
+earlier run may enter a timed arm; every arm creates a fresh Store/process and
+uses an independent source copy with final zero-resident-payload verification.
 
 All experiments retain the 4,096-byte SQLite page and 128-KiB whole-file
 cutoff. They keep pack payloads in SQLite BLOBs and one C2/SQLite owner.

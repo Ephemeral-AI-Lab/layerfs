@@ -448,6 +448,23 @@ preflight; metadata residency is unqualified.
   speed and geometry gates failed; timed collision wall was not exported.
   Treatment rejected; no root product change.
 
-The 56-MiB streaming transaction and pack-BLOB write feasibility studies are
-separate ongoing research; neither has a public candidate sample in this
-record. No sample above is re-run or pooled to manufacture a speed median.
+No sample above is re-run or pooled to manufacture a speed median.
+
+## Round R18: streamed transaction and pack-path feasibility
+
+The [streamed 4-MiB-wave pair](streamed-transaction-result.md) kept canonical
+pending batches bounded while one SQLite transaction spanned multiple waves.
+Its file-Save COMMITs fell **91→10** (89.01%), and raw public Init fell
+1,193.328→1,113.243 ms. Both separate full readbacks passed, with 0/27,503
+resident source payload pages at final preflight. It missed frozen gates:
+≤9 COMMITs, ≤200-ms longest lock (observed 261.890 ms), and ≤16-MiB sampled
+RSS growth (observed +61.609 MiB). Store apparent grew 262,144 B. The
+candidate is **not adopted**; its long lock and cross-process zero-busy
+conflict remain product risks. Control telemetry was `INCOMPLETE`, candidate
+telemetry PASS but metadata cache unqualified; do not treat raw wall as a
+release-admitted speedup.
+
+The [pack BLOB write review](pack-blob-write-feasibility.md) found no narrow
+current-format mechanism with a credible large enough gain to justify a new
+10k sample. Packs remained inside SQLite BLOBs throughout. The exact-release
+v0.1.6 microstep count diagnostic is the next read-only comparison in progress.

@@ -1,0 +1,10 @@
+{
+  "candidate": {
+    "page_size": 4096,
+    "small_file_threshold_bytes": 131072
+  },
+  "control": {
+    "page_size": 4096,
+    "small_file_threshold_bytes": 131072
+  }
+}
