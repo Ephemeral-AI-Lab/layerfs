@@ -247,7 +247,9 @@ fn retention_expiry_open_reader_and_deletion_failure() {
         c.record_bytes = 1024;
         c.segment_bytes = 1024;
         c.segments = 1;
-        c.expiry = Duration::from_secs(1);
+        // The old segment is backdated to UNIX_EPOCH below; keep the new one
+        // alive through shutdown so the test does not race its own expiry.
+        c.expiry = Duration::from_secs(60);
         c
     };
     let output = Output::start(config()).unwrap();
