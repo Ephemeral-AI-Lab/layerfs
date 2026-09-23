@@ -101,6 +101,16 @@ the report.
 
 ## 3. Running a measurement
 
+**Current Core SDK Init profile:** `core/benchmark/fs-bench-pro` measures
+`init_namespace` with Cargo's default **debug** build only (`--locked`, no
+`--release` or optimization override). Use its `target/debug/examples/`
+driver and verifier. A release-build diagnostic remains historical context,
+not a replacement sample or a speed arm for this SDK selection. Never infer a
+regression by comparing this debug route with an older release-build
+daemon-host row. The SDK selection's mandatory separate verifier is a scoped
+exception to the exploratory performance-only default below; see
+[`core/benchmark/fs-bench-pro/AGENTS.md`](core/benchmark/fs-bench-pro/AGENTS.md).
+
 1. **One sample per case per arm, and do not sample.** No n3, no best-of
    selection, and no second run of an arm to confirm stability, to characterise
    spread, or to replace a number that came out inconveniently. **Sampling is not

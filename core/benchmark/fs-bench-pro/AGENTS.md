@@ -21,6 +21,14 @@ Retain every failed or ineligible attempt in a fresh output directory.
 
 Use a worktree-local Cargo target, prepared masters, Store, scratch and result
 root. Build only needed binaries with `--locked` and record a 30 s build budget.
+**Use the default Cargo debug profile only** for this SDK Init selection:
+`runner.py` must build without `--release`, and the SDK driver and independent
+verifier must come from `target/debug/examples/`. Do not substitute a release
+binary, an optimization flag, or a release diagnostic receipt to improve a row.
+Keep the historical 10k release diagnostic separate from the registered debug
+cases and do not compare debug SDK timings with release daemon-host timings as
+a regression claim. A different profile requires its own frozen selection and
+new receipts; it never relabels these v2 observations.
 The complete performance command has a 15 s budget; the independent verifier
 has a 5 s budget. The two-case cycle has a recommended 30 s budget. Hold the
 nonblocking worktree-local run lock while fixtures and result files are mutable;

@@ -23,6 +23,22 @@ portable metadata and the published root. Its 8.287-s verifier is **outside**
 the registered two-case, 5-s verifier gate; the 10,000 case remains `NOT_RUN`
 in the frozen #236 benchmark selection. No 100,000-file call was made.
 
+The registered runner uses the **debug** profile. The retained resource and
+closed-Store figures for these three debug calls are:
+
+| Case | Driver lifecycle CPU, user + system | SDK driver peak RSS | Store + History apparent bytes |
+| --- | ---: | --- | ---: |
+| 100 | 0.286 + 0.039 = **0.325 CPU s** | Not captured | **7,270,400 B** |
+| 1,000 | 1.030 + 0.094 = **1.124 CPU s** | Not captured | **23,719,936 B** |
+| 10,000 diagnostic | 14.338 + 0.957 = **15.295 CPU s** | Not captured | **334,004,224 B** |
+
+CPU is `getrusage` for the complete SDK driver process lifecycle, including
+worker threads; it is not CPU isolated to the public operation. The SDK route
+did not capture process or phase peak RSS, so no memory number can be recovered
+from these receipts. Storage is closed `store.sqlite` plus `history.sqlite`
+apparent size; each History file is 86,016 B. The 10k pair occupied
+336,166,912 B allocated on disk, including History (`st_blocks * 512`).
+
 Each case used a fresh independent byte copy of its prepared source. The
 whole-input preflight and the last nonfaulting check before SDK-driver launch
 found **zero resident payload pages**: 0/390, 0/2,045 and 0/27,503. The SDK
@@ -86,3 +102,8 @@ and [full readback result](evidence/sdk-release-10k-20260924/verification.json)
 retain the measured identities and limits. Full raw output is under
 `benchmark-results/fs-bench-pro/sdk-release-compare-20260924/`; the temporary
 checkout was removed after collection.
+
+Owner direction on 2026-09-24 is **debug-only** for subsequent active Core SDK
+Init measurements. The release row above is retained as a historical diagnostic
+of the build-profile mismatch; it is not an active benchmark selection or a
+replacement for any debug receipt.
