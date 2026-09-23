@@ -16,8 +16,9 @@ The closed master may be reused only for untimed preparation. Each arm gets a
 new writable byte copy and a fresh Store. Pack payload remains inside SQLite
 BLOBs in **both** products, and both databases must report `page_size=4096`.
 Keep each product's actual format, worker topology and admission algorithm;
-Core's whole-file cutoff remains 128 KiB. Record any different reference
-cutoff rather than silently modifying v0.1.6.
+Core's whole-file cutoff remains 128 KiB. The native v0.1.6 small-content
+cutoff is also `SMALL_LIMIT=131072` bytes; its separate `WHOLE_LIMIT=2 MiB`
+is a physical whole-file-owner maximum, not that cutoff.
 
 The reference product is the peeled `v0.1.6` release commit `44cf74848`;
 the annotated tag object is `dbdf0fed`. Current root `crates/*` production
@@ -96,3 +97,70 @@ execution times. Compare old single Store footprint with Core's content Store
 **plus its separate History catalog**, while also reporting content pack
 geometry separately. SQL/plan findings belong in a companion report with
 source links and raw outputs.
+
+## Frozen arm identities before the first public run
+
+The reference arm is the **unmodified product** from peeled tag commit
+`44cf748486863ab7c21ca47e731bd88e2b9a7b4a`, with benchmark-only
+READY/GO and aggregate trace code in clean isolated worktree
+`/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs` at
+`b0730c70a567f5019ba0435d73bfa9f6a04b4004`. Its `crates/*` tree SHA is
+`dcc4fb6fd01115dcbf91ba02df414e91eb5733be`, equal to the release tag.
+The release `fs-benchmark-pro` executable SHA-256 is
+`604bc5c7b3577fdc78acc531353600d28077bb44d668fee90efe28d51e88bffe`.
+The one-run wrapper SHA-256 is
+`5789a47ef189a465aede5b06b9f20c5f4c685fd32dece2bed4f317c07ab2f604`;
+its Rust benchmark main/infra SHA-256 are
+`0cea9fff3615ff1c66b5ebafc189a336ad6f2d3c0c0babb8f42b32bc55f9dfbc`
+and `4a1145887569dcf26285b12fb8c812605bbcb178587fcfe46e828dfa1d11f9fd`.
+The fixed benchmark seed is
+`9a5998a338a9fc0f35a2c333cad16d550944149f2c8edc8b1d5f897da335edaa`
+and diagnostic nonce `9a5998a338a9fc0f`. Its fresh, absent output is
+`benchmark-results/issue237-v016-v017-head2head-a` inside that worktree;
+the Store is under its `store/` child. The exact wrapper invocation is:
+
+```sh
+python3 benchmark/fs-bench-pro/issue237_v016_reference.py \
+  --master /Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472 \
+  --cold-driver /Users/yifanxu/.codex/worktrees/2776/layerfs/docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py \
+  --binary target/release/fs-benchmark-pro \
+  --out benchmark-results/issue237-v016-v017-head2head-a
+```
+
+The Core arm is the integrated research tree at source commit
+`7f2124ba07e0c2b77a614f3429d454b2fdd57b08` in isolated worktree
+`/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs`. Its only
+dirty paths are three temporary aggregate Service diagnostics:
+`operation/history.rs`, `history_bootstrap.rs`, and `import_native.rs`.
+The instrumented product seal is
+`d9b17e338d61a33a8f907d07e2758b7ac83c9e246212dbef200b59f5a0472d74`,
+the harness seal
+`6d9a3e2eb2a1eea1f3f0df15949d6f3bab103657a824b0a04d34482eff8`,
+and the archived instrumentation diff SHA-256
+`5e3f2cd7560b53d9b84feef572e0596ede40eb17f76b218d39ccbb6091cbe434`.
+The release Service/daemon binary SHA-256 values are
+`c4e22ff40f8f363b4fa305be323ddc10f22ed164d5b1e36f3ed0dab4b3e6d131`
+and `1eb2973d41dd79cdb1d6663c0577fb760373da945ed3c519f2cc255225058a55`.
+Its fresh, absent output is
+`benchmark-results/fs-bench-pro/issue237-v017-head2head-a` inside that
+worktree. The exact public diagnostic invocation is:
+
+```sh
+python3 docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py \
+  --case namespace-10000 --independent-source-copy \
+  --fixed-operation-identity \
+  --out benchmark-results/fs-bench-pro/issue237-v017-head2head-a
+```
+
+The H3 driver SHA-256 is
+`767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4`;
+both arms use its independent byte copier and the same cold backend (SHA-256
+prefix `fef5391e`, full hash in raw receipts). The Core worktree's prepared
+master path is an untimed symlink to the closed root master; H3 dereferences
+it into a distinct writable byte copy before timing. Neither arm reads the
+master in its public operation. Both output paths were absent at this
+protocol amendment. Reference SQL statement-kind counters are traced exactly;
+Core reports exact Save COMMIT/object-INSERT/presence/pack counts, while its
+successful BEGIN count and two History-catalog writes are **source-derived**.
+Other Core SQL statement-kind counts are `NOT_MEASURED`, not estimated from
+EXPLAIN. Worker sums and stage children remain overlapping where noted.
