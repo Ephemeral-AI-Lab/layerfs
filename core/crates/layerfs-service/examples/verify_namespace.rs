@@ -1,5 +1,6 @@
 //! Independent full native-import oracle over public C1, C2 and C5 reads.
 use layerfs_content::{
+    filesystem::attributes::portable::PortableMetadata,
     filesystem::attributes::read::{read_portable, AttributeReadWork},
     inode_leaf::{InodeKind, InodeValue},
     read_all, FilesystemRead, LogicalPath, ObjectId,
@@ -18,6 +19,7 @@ use std::{
 };
 
 const VERIFY_WORKERS: usize = 4;
+type MetadataMemo = Option<((ObjectId, InodeKind), PortableMetadata)>;
 
 #[derive(Clone)]
 struct Expected {
@@ -92,14 +94,23 @@ fn check_metadata(
     wanted: &Expected,
     path: &str,
     work: &mut AttributeReadWork,
+    memo: &mut MetadataMemo,
 ) -> Result<(), String> {
     let kind = match value.kind {
         InodeKind::Directory => 'd',
         InodeKind::RegularFile => 'f',
         InodeKind::Symlink => 's',
     };
-    let portable = read_portable(provider, value.metadata_root, value.kind, work)
-        .map_err(|error| format!("metadata read {path}: {error}"))?;
+    let key = (value.metadata_root, value.kind);
+    let portable = match *memo {
+        Some((previous, portable)) if previous == key => portable,
+        _ => {
+            let portable = read_portable(provider, value.metadata_root, value.kind, work)
+                .map_err(|error| format!("metadata read {path}: {error}"))?;
+            *memo = Some((key, portable));
+            portable
+        }
+    };
     if kind != wanted.kind
         || portable.mode != wanted.mode
         || i128::from(portable.mtime_seconds) * 1_000_000_000
@@ -115,15 +126,16 @@ fn verify_files(
     store: &Store,
     expected: &BTreeMap<String, Expected>,
     jobs: VecDeque<(String, InodeValue)>,
-) -> Result<(u64, u64), String> {
+) -> Result<(u64, u64, u64), String> {
     let queue = Mutex::new(jobs);
     std::thread::scope(|scope| {
         let mut workers = Vec::new();
         for _ in 0..VERIFY_WORKERS {
             let queue = &queue;
-            workers.push(scope.spawn(move || -> Result<(u64, u64), String> {
+            workers.push(scope.spawn(move || -> Result<(u64, u64, u64), String> {
                 let provider = StoreProvider::new(store);
                 let mut attributes = AttributeReadWork::default();
+                let mut memo = None;
                 let mut files = 0u64;
                 let mut bytes = 0u64;
                 loop {
@@ -133,7 +145,7 @@ fn verify_files(
                         .pop_front();
                     let Some((path, value)) = job else { break };
                     let wanted = expected.get(&path).ok_or("unexpected actual path")?;
-                    check_metadata(&provider, value, wanted, &path, &mut attributes)?;
+                    check_metadata(&provider, value, wanted, &path, &mut attributes, &mut memo)?;
                     let mut output = DigestWriter {
                         hash: Sha256::new(),
                         bytes: 0,
@@ -155,16 +167,17 @@ fn verify_files(
                     files += 1;
                     bytes += output.bytes;
                 }
-                Ok((files, bytes))
+                Ok((files, bytes, attributes.read_waves))
             }));
         }
-        let (mut files, mut bytes) = (0u64, 0u64);
+        let (mut files, mut bytes, mut metadata_waves) = (0u64, 0u64, 0u64);
         for worker in workers {
-            let (count, length) = worker.join().map_err(|_| "verifier worker panic")??;
+            let (count, length, waves) = worker.join().map_err(|_| "verifier worker panic")??;
             files += count;
             bytes += length;
+            metadata_waves += waves;
         }
-        Ok((files, bytes))
+        Ok((files, bytes, metadata_waves))
     })
 }
 
@@ -208,12 +221,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pending = VecDeque::from([(String::new(), root_value)]);
     let mut seen = BTreeSet::from([String::new()]);
     let mut attributes = AttributeReadWork::default();
+    let mut memo = None;
     let mut jobs = VecDeque::new();
     let mut directories = 0u64;
     while let Some((path, value)) = pending.pop_front() {
         let wanted = expected.get(&path).ok_or("unexpected actual path")?;
         let logical = LogicalPath::new(&path)?;
-        check_metadata(&provider, value, wanted, &path, &mut attributes)?;
+        check_metadata(&provider, value, wanted, &path, &mut attributes, &mut memo)?;
         if value.kind != InodeKind::Directory {
             return Err(format!("listed non-directory for traversal: {path}").into());
         }
@@ -248,8 +262,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if seen.len() != expected.len() {
         return Err("missing output paths".into());
     }
-    let (files, bytes) = verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
-    println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
-        seen.len(), files, directories, bytes, VERIFY_WORKERS, root, manifest_digest);
+    let (files, bytes, file_metadata_waves) =
+        verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
+    println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
+        seen.len(), files, directories, bytes, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);
     Ok(())
 }

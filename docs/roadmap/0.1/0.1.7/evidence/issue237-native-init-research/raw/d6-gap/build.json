@@ -1,0 +1,53 @@
+{
+  "binaries": {
+    "create_store": {
+      "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/7d7871863c8f8a8ea9f339465e579f6eaa42786ea2b41fc82dee51c547a1620e/create_store",
+      "sha256": "7d7871863c8f8a8ea9f339465e579f6eaa42786ea2b41fc82dee51c547a1620e"
+    },
+    "layerfs-daemon": {
+      "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/882406bd74cbf00b0cdcda0ea44757b718bb923da03c20b1bb531aff594bf3d2/layerfs-daemon",
+      "sha256": "882406bd74cbf00b0cdcda0ea44757b718bb923da03c20b1bb531aff594bf3d2"
+    },
+    "layerfs-service": {
+      "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/71a1230785879a3b7b78d2d347345b90addce5f908aa28e77935bf9ee7a1f95c/layerfs-service",
+      "sha256": "71a1230785879a3b7b78d2d347345b90addce5f908aa28e77935bf9ee7a1f95c"
+    },
+    "public_key": {
+      "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/ec384c102c13f2c60384c4b562f8dc935cdf88446cf27697e5574c661714ff0f/public_key",
+      "sha256": "ec384c102c13f2c60384c4b562f8dc935cdf88446cf27697e5574c661714ff0f"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/18b7ee9361f26c2ef7e3dff7b21390788f38a649c4ac9f3a8935e18aa55bbaff/verify_namespace",
+      "sha256": "18b7ee9361f26c2ef7e3dff7b21390788f38a649c4ac9f3a8935e18aa55bbaff"
+    }
+  },
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-service",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-bridge",
+    "--bin",
+    "layerfs-service",
+    "--bin",
+    "layerfs-daemon",
+    "--example",
+    "public_key",
+    "--example",
+    "create_store",
+    "--example",
+    "verify_namespace"
+  ],
+  "exit_code": 0,
+  "mode": "changed-product",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/2776/layerfs/core/target",
+  "wall_ns": 2076561000
+}

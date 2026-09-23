@@ -104,3 +104,26 @@ upper-bound queries. Then take one cold-source native 10k operation with full
 verifier and report its root, resources and Store geometry. D5 is an
 instrumented diagnostic, not a matched time control; a completion after D6
 proves feasibility but no historical speedup factor.
+
+## D7: full-oracle metadata memo and corrected cold preflight boundary
+
+D6 returned a confirmed 10k C5 root in 7.362191042 s; the 5 s full verifier
+timed out with no child result. Keep that `INCOMPLETE` receipt. The independent
+verifier currently calls `read_portable` for each path, although this fixture's
+file entries share a metadata root and its directories share another. Freeze a
+one-entry `(metadata_root, kind)` cache in each verifier worker and the
+directory walker. Every path still checks kind/mode/mtime, and every file's
+full contents still stream into SHA-256. The 5 s watchdog and four verifier
+workers stay unchanged. Expect fewer repeated metadata read waves, but reject
+the candidate on any missing path, byte, metadata or SHA-256 check.
+
+The research cold wrapper also moves acquisition immediately after prepared
+fixture validation, before the runner starts its complete-command clock; it
+re-hashes every source file against the sealed manifest before invalidating
+pages and takes a separate whole-input nonfaulting residency pass. Record a
+≤1 s preflight-to-timer gap. These edits change verifier/build and research
+harness identity; take one new 10k public operation and one full verifier at
+that identity, retain any timeout or failure, and do not use D6 as a passing
+proof. This remains a debug-build research row because the current Core runner
+does not yet follow #231's frozen release-build requirement. SQLite page size
+stays 4096.

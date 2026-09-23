@@ -2,10 +2,10 @@
 """Run one #231 diagnostic with declared whole-source residency evidence."""
 import argparse
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
+import stat
 import sys
 import time
 
@@ -21,17 +21,36 @@ def cold_source(source, manifest):
     started = time.monotonic_ns()
     result = {"method": cold.METHOD, "self_check": backend.self_check(),
               "source": str(source), "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
-              "files": 0, "bytes": 0, "pages": 0, "resident_pages": 0}
+              "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+              "files": 0, "directories": 0, "bytes": 0, "pages": 0, "resident_pages": 0}
     rows = [line.split("\t") for line in manifest.read_text().splitlines()]
-    files = [(source / row[0], int(row[4])) for row in rows if row[1] == "f"]
-    for path, expected in files:
+    files = []
+    for relative, kind, mode, mtime_ns, size, sha in rows:
+        path = source / relative
+        metadata = path.lstat()
+        if (metadata.st_mode & 0o7777 != int(mode) or metadata.st_mtime_ns != int(mtime_ns)
+                or (kind == "f" and not stat.S_ISREG(metadata.st_mode))
+                or (kind == "d" and not stat.S_ISDIR(metadata.st_mode))):
+            raise ValueError(f"source metadata drift: {path}")
+        if kind == "d":
+            result["directories"] += 1
+            continue
+        if kind != "f" or metadata.st_size != int(size):
+            raise ValueError(f"source file drift: {path}")
+        files.append((path, int(size), int(mtime_ns)))
+        with path.open("rb") as file:
+            digest = hashlib.sha256()
+            for block in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(block)
+            if digest.hexdigest() != sha:
+                raise ValueError(f"source hash drift: {path}")
+            os.fsync(file.fileno())
+            backend.check(file.fileno(), int(size), evict=True)
+    for path, expected, mtime_ns in files:
         with path.open("rb") as file:
             metadata = os.fstat(file.fileno())
-            if metadata.st_size != expected:
-                raise ValueError(f"source size drift: {path}")
-            backend.check(file.fileno(), expected, evict=True)
-    for path, expected in files:
-        with path.open("rb") as file:
+            if metadata.st_size != expected or metadata.st_mtime_ns != mtime_ns:
+                raise ValueError(f"source changed after invalidation: {path}")
             pages, resident = backend.check(file.fileno(), expected)
             result["files"] += 1
             result["bytes"] += expected
@@ -56,20 +75,31 @@ def main():
 
     def prepare(case, root):
         state["fixture"] = original_prepare(case, root)
+        folder = out / "daemon-host/init_namespace" / case.id
+        try:
+            cold_result = cold_source(Path(state["fixture"]["source"]), Path(state["fixture"]["manifest"]))
+        except Exception as error:
+            cold_result = {"status": "INELIGIBLE", "error": repr(error)}
+        (folder / "cold-preflight.json").write_text(json.dumps(cold_result, sort_keys=True, indent=2) + "\n")
+        if (cold_result["status"] != "VERIFIED_COLD" or cold_result["files"] != case.files
+                or cold_result["bytes"] != case.logical_bytes
+                or cold_result["directories"] != case.directories + 1):
+            raise ValueError("source cold preflight failed; no timed call")
+        state["cold"] = cold_result
         return state["fixture"]
 
     def public_import(daemon, case, stack, scope_seed):
-        fixture = state["fixture"]
-        cold_result = cold_source(Path(fixture["source"]), Path(fixture["manifest"]))
+        cold_result = state["cold"]
         folder = out / "daemon-host/init_namespace" / case.id
-        (folder / "cold-preflight.json").write_text(json.dumps(cold_result, sort_keys=True, indent=2) + "\n")
-        if (cold_result["status"] != "VERIFIED_COLD" or cold_result["files"] != case.files
-                or cold_result["bytes"] != case.logical_bytes):
-            raise ValueError("source pages remained resident; no timed call")
+        if time.monotonic_ns() - cold_result["finished_ns"] > cold.MAX_LAUNCH_GAP_NS:
+            (folder / "cold-launch.json").write_text('{"status":"STALE"}\n')
+            raise ValueError("source cold preflight became stale; no timed call")
         result = original_import(daemon, case, stack, scope_seed)
+        gap = result["started_ns"] - cold_result["finished_ns"]
         (folder / "cold-launch.json").write_text(json.dumps({
             "preflight_sha256": hashlib.sha256((folder / "cold-preflight.json").read_bytes()).hexdigest(),
-            "launch_gap_ns": result["started_ns"] - cold_result["finished_ns"],
+            "launch_gap_ns": gap,
+            "status": "VERIFIED_COLD" if gap <= cold.MAX_LAUNCH_GAP_NS else "INELIGIBLE",
         }, sort_keys=True, indent=2) + "\n")
         return result
 

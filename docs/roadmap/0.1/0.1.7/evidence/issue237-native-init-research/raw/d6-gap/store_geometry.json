@@ -1,0 +1,49 @@
+{
+  "object_count": 24683,
+  "objects_by_save": [
+    [
+      1,
+      24364
+    ],
+    [
+      2,
+      11
+    ],
+    [
+      3,
+      308
+    ]
+  ],
+  "ordered_object_ids_sha256": "2f529de9b25e0a30909a8565d26f8b2290b24d0b30c1b4ba855cf7712aadc4b2",
+  "pack_allocated_bytes": 331087872,
+  "pack_count": 1263,
+  "pack_used_bytes": 305975489,
+  "pack_versions": {
+    "12": {
+      "allocated_bytes": 524288,
+      "packs": 2,
+      "used_bytes": 406947
+    },
+    "15": {
+      "allocated_bytes": 293601280,
+      "packs": 1120,
+      "used_bytes": 271020287
+    },
+    "17": {
+      "allocated_bytes": 35651584,
+      "packs": 136,
+      "used_bytes": 33939743
+    },
+    "9": {
+      "allocated_bytes": 1310720,
+      "packs": 5,
+      "used_bytes": 608512
+    }
+  },
+  "source_run": "benchmark-results/fs-bench-pro/issue237-d6-gap-0615c5f4-a",
+  "sqlite_freelist_count": 0,
+  "sqlite_page_count": 81520,
+  "sqlite_page_size": 4096,
+  "store": "benchmark-results/fs-bench-pro/issue237-d6-gap-0615c5f4-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "store_file_bytes": 333905920
+}
