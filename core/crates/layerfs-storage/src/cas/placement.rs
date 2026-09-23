@@ -330,22 +330,11 @@ impl MutationOwner {
 
     pub(super) fn write_pack(&mut self, write: &SelectedWrite) -> StorageResult<()> {
         let whole = Instant::now();
-        // A write adds a directory entry and a body to one pack, so a cache that
-        // holds that pack's bytes is describing a directory with fewer entries
-        // than the pack now has: a read of a group the write added would ask the
-        // old directory for it and be refused with `Integrity("group ordinal")`.
-        // The pooled reader's decoded values survive - an ordinal's value is
-        // written once and never moves, and neither does a body - but its pack
-        // cache does not.
+        // Each flush inserts closed packs. Release this writer's cached pack
+        // bodies after a write to bound retained memory; decoded values survive.
         self.pool_reader.release_packs();
-        // The delta reader's pack cache holds whole pack bytes and is keyed by pack
-        // id, so an append leaves a stale directory behind. Reading a group ordinal
-        // that the append added then asks the *old* directory for it, which has
-        // fewer groups, and `pack::layout::group_view` refuses it with
-        // `Integrity("group ordinal")` -- a stored row that is correct, read
-        // through bytes that are not. Dropping the entry costs one re-read and
-        // cannot be skipped: the pack is append-only, so the cached copy is valid
-        // only until the next append.
+        // Clear the selected pack's delta-reader entry too; it is normally
+        // absent for a new pack, and this keeps the write path's cache bound.
         self.pack_cache.remove(&write.pack_id);
         let started = Instant::now();
         let written = if write.created {
