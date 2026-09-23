@@ -36,6 +36,9 @@ The [exact-source v0.1.6 and promoted C3 side-by-side](c3-v016-exact-source-side
 compares their release routes by stage and closed Store geometry, with a
 separate count-driven merged-C3 diagnostic. It does not qualify a speed
 claim or close the sparse-history gate.
+The [matched t1 memory follow-up](c3-v016-exact-source-memory-result-20260924.md)
+compares the two routes with the same process peak-RSS instrument and
+records SQLite cache and source-inventory reservation evidence.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

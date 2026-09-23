@@ -1,0 +1,74 @@
+{
+  "core": {
+    "system_cpu_ns": 5579379000,
+    "t0_footprint": 3490128,
+    "t0_peak_rss": 4915200,
+    "t0_rss": 4866048,
+    "t0_swaps": 0,
+    "t1_footprint": 116867648,
+    "t1_peak_rss": 154763264,
+    "t1_rss": 145981440,
+    "t1_swaps": 0,
+    "user_cpu_ns": 3926369000
+  },
+  "core_file_save_connection_cache_used": 8767488,
+  "core_incremental_peak": 149848064,
+  "core_to_old_peak_ratio": 1.674822695035461,
+  "delta_core_minus_old": {
+    "system_cpu_ns": 1359196125,
+    "t0_footprint": 819176,
+    "t0_peak_rss": 442368,
+    "t0_rss": 393216,
+    "t0_swaps": 0,
+    "t1_footprint": 64307248,
+    "t1_peak_rss": 62357504,
+    "t1_rss": 53575680,
+    "t1_swaps": 0,
+    "user_cpu_ns": 800772958
+  },
+  "memory_scope": "same getrusage lifetime high-water at t1 immediately after each public call; old t0 resource snapshot precedes READY/GO, Core t0 is immediately pre-call; both t1 values exceed post-setup t0",
+  "old": {
+    "system_cpu_ns": 4220182875,
+    "t0_footprint": 2670952,
+    "t0_peak_rss": 4472832,
+    "t0_rss": 4472832,
+    "t0_swaps": 0,
+    "t1_footprint": 52560400,
+    "t1_peak_rss": 92405760,
+    "t1_rss": 92405760,
+    "t1_swaps": 0,
+    "user_cpu_ns": 3125596042
+  },
+  "old_incremental_peak": 87932928,
+  "old_peak_reduction_fraction_of_core": 0.40292187169172133,
+  "old_sqlite_t1_connection_cache_used": 34604032,
+  "scan": {
+    "entries": 101001,
+    "entry_vec_reserved": 14680064,
+    "job_vec_reserved": 23068672,
+    "jobs": 100000,
+    "name_payload": 705000,
+    "path_payload": 15700000
+  },
+  "sqlite_save_points": [
+    {
+      "cache_size_pragma": "Ok(2000)",
+      "cache_used": 8767488,
+      "save_id": 1,
+      "status": 0
+    },
+    {
+      "cache_size_pragma": "Ok(2000)",
+      "cache_used": 180992,
+      "save_id": 2,
+      "status": 0
+    },
+    {
+      "cache_size_pragma": "Ok(2000)",
+      "cache_used": 8767488,
+      "save_id": 3,
+      "status": 0
+    }
+  ],
+  "status": "DIAGNOSTIC"
+}

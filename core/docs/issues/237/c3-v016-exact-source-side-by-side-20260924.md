@@ -208,6 +208,15 @@ stage is **unresolved**; no like-for-like resource delta is claimed.
 The 0-resident-payload checks describe the start of each call, not
 host cache residency during it.
 
+**Later memory follow-up, 2026-09-24:** the separately frozen
+[matched t1 resource diagnostic](c3-v016-exact-source-memory-result-20260924.md)
+uses the old driver's own `getrusage` and `proc_pid_rusage` probe in a
+new merged-C3 release driver. At public-call return, C3 reached
+154,763,264 B peak RSS, **62,357,504 B above** the retained old t1
+peak. It also records Core's live Save-cache point readings and source
+inventory reservations. This later diagnostic does not relabel either
+one-shot performance row.
+
 Performance admission remains **INELIGIBLE** for both release routes
 because source metadata cache state is unqualified, and these APIs
 are different. The registered #236 **debug** `namespace-100000` row

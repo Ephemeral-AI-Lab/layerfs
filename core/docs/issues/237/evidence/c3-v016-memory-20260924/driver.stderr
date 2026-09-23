@@ -1,0 +1,9 @@
+issue237-memory-scan-v1 entries=101001 entry_vec_reserved=14680064 jobs=100000 job_vec_reserved=23068672 name_payload=705000 path_payload=15700000
+issue237-memory-handoff-v1 batches=2134 objects=111354 opens=100000 read_calls=215104 read_bytes=500000000
+issue237-memory-sqlite-v1 save_id=1 status=0 cache_used=8767488 cache_size_pragma=Ok(2000)
+issue237-memory-save-v1 phase=file inserted=109356 packs=2263 appends=0 commits=292 statements=2798
+issue237-memory-sqlite-v1 save_id=2 status=0 cache_used=180992 cache_size_pragma=Ok(2000)
+issue237-memory-save-v1 phase=prerequisite inserted=11 packs=2 appends=0 commits=4 statements=2
+issue237-memory-sqlite-v1 save_id=3 status=0 cache_used=8767488 cache_size_pragma=Ok(2000)
+issue237-memory-save-v1 phase=tree inserted=3057 packs=23 appends=1985 commits=138 statements=25
+issue237-memory-v1 t0_peak_rss=4915200 t1_peak_rss=154763264 t0_rss=4866048 t1_rss=145981440 t0_footprint=3490128 t1_footprint=116867648 user_cpu_ns=3926369000 system_cpu_ns=5579379000 t0_swaps=0 t1_swaps=0 highwater_status=exact-new-lifetime-high-water
