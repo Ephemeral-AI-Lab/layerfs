@@ -1,0 +1,125 @@
+{
+  "admission_eligible": false,
+  "benchmark_registration": "UNREGISTERED_DIAGNOSTIC",
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/d8dbe6cb3902aab49c1f2d54ca368099fa1bb19a86fa10d1c982eb03719ef00c/benchmark_init",
+      "sha256": "d8dbe6cb3902aab49c1f2d54ca368099fa1bb19a86fa10d1c982eb03719ef00c"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/30e637498bf119dd5a8492d66c948be1535bd54825ac3873cb786ff8d3601681/verify_namespace",
+      "sha256": "30e637498bf119dd5a8492d66c948be1535bd54825ac3873cb786ff8d3601681"
+    }
+  },
+  "build_profile": "release",
+  "cache_contract": "zero-resident-source-payload; inode-and-directory-metadata-unqualified",
+  "case": "namespace-100000",
+  "cleanup_status": "PASS",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/d8dbe6cb3902aab49c1f2d54ca368099fa1bb19a86fa10d1c982eb03719ef00c/benchmark_init",
+    "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/source-copy/namespace-100000/payload",
+    "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/history.sqlite",
+    "namespace-100000"
+  ],
+  "competing_work": [
+    "498 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "500 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "7467 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7470 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7471 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7598 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "7602 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "7608 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "7669 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7673 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7678 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)",
+    "49053 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "driver_watchdog_s": 610,
+  "exit_code": 0,
+  "external_resources": {
+    "peak_rss_bytes": 155860992,
+    "raw_peak_rss": 155860992,
+    "raw_peak_rss_unit": "bytes",
+    "scope": "one-driver-process-lifecycle-including-threads",
+    "source": "wait4 per-child rusage",
+    "system_cpu_s": 5.608315,
+    "user_cpu_s": 3.893942
+  },
+  "fixture": {
+    "case": "namespace-100000",
+    "directories": 1001,
+    "files": 100000,
+    "logical_bytes": 500000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+    "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "preparation_wall_ns": 3059913875,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": true,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload"
+  },
+  "fixture_profile": "core-sdk-init-fixture-v2",
+  "gap_preflight_to_driver_launch_ns": 5350911709,
+  "identity": {
+    "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "96a04c70338d34116c1c66ac04617bb77df368fbcae4e0c1ca29ac04f48e90a3",
+    "product_seal": "5b17c10a6170df9e702d70d28bd3b1f18707ff3a26549dfff1b918e72161922b",
+    "source_commit": "45ca25d849dd739c552830d976cfb6f618abe63b",
+    "source_dirty": false,
+    "source_tree": "3d4d37122a32be1df5f314207a0c171a2b773072"
+  },
+  "perf": {
+    "genesis_layer": "3209b743d627735e00459f836a6d027f3579abf7512f1800deddbe211f1d2822c6",
+    "operation_ns": 5093861709,
+    "project_id": "31f53ac289f7f152d9be81e0932cf8dbcc",
+    "root": "6a28b96758bcb7c93c0bc8cb9232f878f7376ef88a51885b499de35b536a8515",
+    "root_serial": 1,
+    "stack_body": "f53ac289f7f152d9be81e0932cf8dbcc",
+    "status": "COMPLETE"
+  },
+  "performance_status": "INELIGIBLE",
+  "public_api_call_count": 1,
+  "raw_operation_ns": 5093861709,
+  "route": "host-direct-sdk-v2",
+  "sample_count": 1,
+  "schema": "core-fs-bench-pro-sdk-init-100k-release-diagnostic-v1",
+  "scratch": [],
+  "seed": 1,
+  "status": "COMPLETE",
+  "timed_out": false,
+  "verification": {
+    "budget_ns": 600000000000,
+    "child": {
+      "bytes": 500000000,
+      "directories": 1001,
+      "files": 100000,
+      "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+      "metadata_attribute_waves": 5,
+      "paths": 101001,
+      "root": "6a28b96758bcb7c93c0bc8cb9232f878f7376ef88a51885b499de35b536a8515",
+      "status": "PASS",
+      "workers": 4
+    },
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/30e637498bf119dd5a8492d66c948be1535bd54825ac3873cb786ff8d3601681/verify_namespace",
+      "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/history.sqlite",
+      "6a28b96758bcb7c93c0bc8cb9232f878f7376ef88a51885b499de35b536a8515",
+      "f53ac289f7f152d9be81e0932cf8dbcc",
+      "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+      "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "stderr": "LFS237 verifier traversal paths=101001 directories=1001 queued_files=100000 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=0 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=7100 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=32100 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=17900 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=57100 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=42900 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=82100 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=67900 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=107100 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=132100 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=92900 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=117900 metadata_attribute_waves=1\nLFS237 verifier worker files=4000 bytes=157100 metadata_attribute_waves=1\nLFS237 verifier worker files=4500 bytes=182100 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=142900 metadata_attribute_waves=1\nLFS237 verifier worker files=5000 bytes=207100 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=167900 metadata_attribute_waves=1\nLFS237 verifier worker files=5500 bytes=232100 metadata_attribute_waves=1\nLFS237 verifier worker files=4000 bytes=192900 metadata_attribute_waves=1\nLFS237 verifier worker files=6000 bytes=257100 metadata_attribute_waves=1\nLFS237 verifier worker files=4500 bytes=217900 metadata_attribute_waves=1\nLFS237 verifier worker files=6500 bytes=282100 metadata_attribute_waves=1\nLFS237 verifier worker files=7000 bytes=307100 metadata_attribute_waves=1\nLFS237 verifier worker files=5000 bytes=242900 metadata_attribute_waves=1\nLFS237 verifier worker files=7500 bytes=332100 metadata_attribute_waves=1\nLFS237 verifier worker files=5500 bytes=267900 metadata_attribute_waves=1\nLFS237 verifier worker files=8000 bytes=357100 metadata_attribute_waves=1\nLFS237 verifier worker files=8500 bytes=382100 metadata_attribute_waves=1\nLFS237 verifier worker files=6000 bytes=292900 metadata_attribute_waves=1\nLFS237 verifier worker files=9000 bytes=407100 metadata_attribute_waves=1\nLFS237 verifier worker files=6500 bytes=317900 metadata_attribute_waves=1\nLFS237 verifier worker files=9500 bytes=432100 metadata_attribute_waves=1\nLFS237 verifier worker files=7000 bytes=342900 metadata_attribute_waves=1\nLFS237 verifier worker files=7500 bytes=367900 metadata_attribute_waves=1\nLFS237 verifier worker files=10000 bytes=457100 metadata_attribute_waves=1\nLFS237 verifier worker files=8000 bytes=392900 metadata_attribute_waves=1\nLFS237 verifier worker files=8500 bytes=417900 metadata_attribute_waves=1\nLFS237 verifier worker files=10500 bytes=482100 metadata_attribute_waves=1\nLFS237 verifier worker files=9000 bytes=442900 metadata_attribute_waves=1\nLFS237 verifier worker files=11000 bytes=507100 metadata_attribute_waves=1\nLFS237 verifier worker files=9500 bytes=467900 metadata_attribute_waves=1\nLFS237 verifier worker files=10000 bytes=492900 metadata_attribute_waves=1\nLFS237 verifier worker files=10500 bytes=517900 metadata_attribute_waves=1\nLFS237 verifier worker files=11500 bytes=532100 metadata_attribute_waves=1\nLFS237 verifier worker files=11000 bytes=542900 metadata_attribute_waves=1\nLFS237 verifier worker files=12000 bytes=557100 metadata_attribute_waves=1\nLFS237 verifier worker files=11500 bytes=567900 metadata_attribute_waves=1\nLFS237 verifier worker files=12500 bytes=582100 metadata_attribute_waves=1\nLFS237 verifier worker files=12000 bytes=592900 metadata_attribute_waves=1\nLFS237 verifier worker files=13000 bytes=607100 metadata_attribute_waves=1\nLFS237 verifier worker files=12500 bytes=617900 metadata_attribute_waves=1\nLFS237 verifier worker files=13500 bytes=632100 metadata_attribute_waves=1\nLFS237 verifier worker files=13000 bytes=642900 metadata_attribute_waves=1\nLFS237 verifier worker files=14000 bytes=657100 metadata_attribute_waves",
+    "wall_ns": 9174528625
+  },
+  "verifier_watchdog_s": 600,
+  "wall_ns": 6486659333,
+  "watchdog_ns": 610000000000
+}

@@ -1,0 +1,40 @@
+{
+  "freelist_count": 64,
+  "history": {
+    "allocated_bytes": 86016,
+    "apparent_bytes": 86016,
+    "path": "benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/history.sqlite",
+    "sha256": "ee40973e1bb4ac88fc43174c8fa7cc3f9ea8ce65a3f0d302215e8b395935a22b"
+  },
+  "object_rows": 112424,
+  "pack_versions": {
+    "12": {
+      "capacity_bytes": 4065835,
+      "rows": 16,
+      "used_bytes": 4051316
+    },
+    "15": {
+      "capacity_bytes": 203998353,
+      "rows": 943,
+      "used_bytes": 203998353
+    },
+    "17": {
+      "capacity_bytes": 301902766,
+      "rows": 1320,
+      "used_bytes": 301902766
+    },
+    "9": {
+      "capacity_bytes": 1232664,
+      "rows": 18,
+      "used_bytes": 1232664
+    }
+  },
+  "page_count": 126964,
+  "page_size": 4096,
+  "store": {
+    "allocated_bytes": 530120704,
+    "apparent_bytes": 520044544,
+    "path": "benchmark-results/fs-bench-pro/sdk-100k-packspace-c5-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/store.sqlite",
+    "sha256": "b73e630aee4dfb97ba96c79dc15bf4199f86cbe06d9e93f3a3b2de4a3176dec5"
+  }
+}

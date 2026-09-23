@@ -1,0 +1,21 @@
+{
+  "allocated_bytes": 483328,
+  "apparent_bytes": 483328,
+  "freelist_count": 64,
+  "object_rows": 17,
+  "pack_versions": {
+    "12": {
+      "capacity_bytes": 75665,
+      "rows": 17,
+      "used_bytes": 75665
+    },
+    "9": {
+      "capacity_bytes": 71308,
+      "rows": 17,
+      "used_bytes": 71308
+    }
+  },
+  "page_count": 118,
+  "page_size": 4096,
+  "store_sha256": "032b1c54efa4d479c66b4f5e1720528c2f65a5e112329b8b9c04069f2b979522"
+}

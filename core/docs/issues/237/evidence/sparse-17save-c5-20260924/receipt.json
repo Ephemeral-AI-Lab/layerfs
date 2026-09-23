@@ -1,0 +1,14 @@
+{
+  "arm": "c5",
+  "binary_sha256": "18b426fedc67b6c0931bda63ed0e45498aa2ee5e678be4edbec8d26c40020258",
+  "command": "/usr/bin/time -l core/target/release/examples/issue237_sparse_pooled_probe --output benchmark-results/issue237-sparse-c5-17save-20260924-01",
+  "geometry_sha256": "957ee8280a7e0f904d1606ae29db22da5f687aed63c804cda3f99e7b3b232944",
+  "harness_sha256": "0ff00e0b259e2d71020528de0199f6182a496c0d36164a9d588dd5ffc589094f",
+  "product_tree": "cf9d6103ef204f4a386268261a04d8c3a4a3761d",
+  "readback_status": "PASS",
+  "source_commit": "45ca25d849dd739c552830d976cfb6f618abe63b",
+  "source_tree": "3d4d37122a32be1df5f314207a0c171a2b773072",
+  "status": "DIAGNOSTIC",
+  "stdout_sha256": "de2891c6ada47924b519e669dcb63774b9b0f92ac963e20b0652dd3a9ce66879",
+  "time_sha256": "7bdee483ebde35cc5c031055c3b13ee12878aa17ff8d4c8b0fc09b5ec695da96"
+}

@@ -1,0 +1,9 @@
+{
+  "allocated_bytes": 530120704,
+  "apparent_bytes": 520044544,
+  "pack_blob_bytes": 511199618,
+  "pack_rows": 2297,
+  "page_count": 126964,
+  "page_size_bytes": 4096,
+  "status": "PASS"
+}
