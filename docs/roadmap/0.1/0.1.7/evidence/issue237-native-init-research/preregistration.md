@@ -279,3 +279,43 @@ actual source I/O evidence if available, and do not claim a formal cold PASS
 from the purge exit code alone. SQLite pages stay 4,096 B. This H2 method
 changes harness identity; no earlier pair can be relabelled or reused as its
 control. No public H2 sample has yet been taken.
+
+**H2 capability attempt, 2026-09-23:** a standalone `/usr/sbin/purge`
+returned exit 1, `Unable to purge disk buffers: Operation not permitted`;
+`sudo -n /usr/sbin/purge` returned exit 1, `a password is required`. No
+fixture, Store or public timed sample was touched by those commands. The
+purge branch is unavailable on this host under the current permissions and
+must not be silently skipped while calling a run H2. A future arm may use
+`--independent-source-copy` alone to prevent reuse of the previous arm's
+source file identities, with full payload invalidation/recheck; preparation
+can still warm its *own* directory/inode metadata, so such a row remains an
+exploratory diagnostic with metadata cache unqualified. No historical row is
+upgraded by this setup change.
+
+## H3: portable independent source copy; H2 purge retired
+
+Owner correction on 2026-09-23: the optimization and its required execution
+path must be OS-host agnostic. The H2 macOS purge proposal above was a
+failed, nonportable attempt and is **retired**, not an optional path in the
+current research driver. The driver no longer exposes
+`--purge-before-operation`. Product algorithm changes under C1/C2 remain
+portable Rust and SQLite; they do not call a host cache utility.
+
+The prospective `--independent-source-copy` option uses ordinary byte reads
+and writes plus portable metadata copying to make a distinct writable source
+tree for each arm from the sealed master. It is not an APFS clone and creates
+fresh file identities/paths, so a previous arm's source-file cache cannot
+serve this arm's reads. The existing hash/invalidate/whole-input residency
+check is then applied to the new tree before its timed call. That residency
+backend is still host-specific research qualification on this macOS host;
+other hosts must supply an equivalent backend or fail closed. The copy's
+own setup can warm directory/inode metadata, which is not independently
+measured or invalidated here. Accordingly this method does **not** establish
+formal fully cold admission; record it as an exploratory diagnostic with
+the original uncontrolled-cache label. No previous receipt is upgraded.
+
+Future product-policy arms must use the same H3 driver source hash and
+independent-copy option in both arms, fresh Stores, fixed 4-KiB SQLite pages
+and the user's unchanged 128-KiB small-file cutoff. Keep all product work
+inside the original timer; untimed copying prepares only the fixture. No H3
+public sample has yet been taken in this worktree.

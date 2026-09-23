@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import shutil
 import stat
-import subprocess
 import sys
 import time
 
@@ -159,11 +158,7 @@ def main():
                         help="derive one stack and scope seed from the sealed case/manifest")
     parser.add_argument("--independent-source-copy", action="store_true",
                         help="copy prepared source bytes into a fresh per-run directory before preflight")
-    parser.add_argument("--purge-before-operation", action="store_true",
-                        help="purge OS disk cache after source checks and just before the public call")
     args = parser.parse_args()
-    if args.purge_before_operation and not args.independent_source_copy:
-        parser.error("cache purge requires an independent per-run byte copy")
     out = runner.owned(args.out)
     original_prepare = runner.init.prepare
     original_import = runner.init.public_import
@@ -210,34 +205,18 @@ def main():
             identity = state["operation_identity"]
             stack = bytes.fromhex(identity["stack_hex"])
             scope_seed = bytes.fromhex(identity["scope_seed_hex"])
-        launch_boundary = recheck["finished_ns"]
-        if args.purge_before_operation:
-            started = time.monotonic_ns()
-            purge = subprocess.run(["/usr/sbin/purge"], capture_output=True, text=True, check=False)
-            finished = time.monotonic_ns()
-            evidence = {"method": "darwin-purge-after-zero-residency-v1",
-                        "command": ["/usr/sbin/purge"], "exit_code": purge.returncode,
-                        "stdout": purge.stdout, "stderr": purge.stderr,
-                        "wall_ns": finished - started, "finished_ns": finished,
-                        "status": "PASS" if purge.returncode == 0 else "FAIL"}
-            (folder / "cache-purge.json").write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n")
-            if purge.returncode:
-                raise ValueError("OS cache purge failed; no timed call")
-            launch_boundary = finished
         result = original_import(daemon, case, stack, scope_seed)
-        gap = result["started_ns"] - launch_boundary
+        gap = result["started_ns"] - recheck["finished_ns"]
         (folder / "cold-launch.json").write_text(json.dumps({
             "preflight_sha256": hashlib.sha256((folder / "cold-preflight.json").read_bytes()).hexdigest(),
             "recheck_sha256": hashlib.sha256((folder / "cold-recheck.json").read_bytes()).hexdigest(),
             "source_copy_sha256": hashlib.sha256((folder / "source-copy.json").read_bytes()).hexdigest()
                 if args.independent_source_copy else None,
-            "cache_purge_sha256": hashlib.sha256((folder / "cache-purge.json").read_bytes()).hexdigest()
-                if args.purge_before_operation else None,
             "preflight_to_timer_ns": result["started_ns"] - cold_result["finished_ns"],
             "recheck_to_timer_ns": result["started_ns"] - recheck["finished_ns"],
             "launch_gap_ns": gap,
-            "cache_scope": "payload-zero-plus-disk-purge;metadata-residency-unmeasured"
-                if args.purge_before_operation else "payload-zero;metadata-residency-unmeasured",
+            "cache_scope": "independent-source-payload-zero;metadata-residency-unmeasured"
+                if args.independent_source_copy else "payload-zero;metadata-residency-unmeasured",
             "status": "VERIFIED_COLD" if gap <= cold.MAX_LAUNCH_GAP_NS else "INELIGIBLE",
         }, sort_keys=True, indent=2) + "\n")
         return result
