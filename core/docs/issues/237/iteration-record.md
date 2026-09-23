@@ -303,3 +303,34 @@ telemetry ingestion was `INCOMPLETE`; both source payload checks found
 0/27,503 resident pages, metadata was unqualified, and both separate full
 reopened readbacks passed the same root/object IDs, 10,101 paths and 300 MB.
 No arm was repeated and no physical-space threshold was rewritten.
+
+## Round R12: exact v0.1.6 versus Core on one source
+
+The [common-source comparison](v016-v017-common-source-results.md) reran the
+unmodified v0.1.6 release product and current integrated Core once each on
+independent writable copies of the **same 10k/300-MB fixture**. Both final
+pre-call checks found **0/27,503 resident payload pages**; directory/inode
+metadata remained unqualified. Both kept pack BLOBs inside 4-KiB-page
+SQLite databases. v0.1.6's public Init took **0.750625833 s (399.667
+MB/s)**; Core's took **1.380218125 s (217.357 MB/s)**, a raw **0.629592292-s**
+gap. The old row is `DIAGNOSTIC`; Core is `INCOMPLETE` because daemon
+telemetry lost an event. Each separate full reopened readback passed all
+10,000 files and 300 MB; the first old verifier setup failed on an ID-text
+newline before content access and was retained.
+
+The source-aware micro comparison found **75 traced old COMMITs** versus
+**105 exact Core C2 + two source-derived Core C5 COMMITs**. Measured COMMIT
+wall was **223.015 ms** for 74 old diagnostic cohort commits versus
+**226.570 ms** across all Core C2 Saves; scopes differ slightly, but neither
+is near the 630-ms caller gap. Old admission sent **1,203 bounded slabs**;
+Core received **34,562 object/completion messages**. The old pipeline took
+**709.704 ms** and Core's file loop **1,169.934 ms**; their event/wait scopes
+are not identical, so the difference is a batching hypothesis rather than
+an attributed saving. Old object-row INSERT calls numbered **639**, Core
+**1,414**. Read-only [dual-schema EXPLAIN](v016-core-sqlite-head2head.md)
+found primary-key seeks in both, no missing hot content index, and Core's
+extra Save-visibility work. The old single DB was **304,553,984 B** apparent;
+Core content Store plus History was **333,737,984 B**. The next prospective
+Core-only direction is bounded producer slabs while leaving payload in
+SQLite and both 4-KiB pages and the 128-KiB cutoff fixed. No public arm was
+repeated or promoted to fully cold admission.

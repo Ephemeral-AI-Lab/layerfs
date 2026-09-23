@@ -1,0 +1,67 @@
+{
+  "v016/receipt.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/receipt.json",
+    "sha256": "6c657c8f81793e1b699879e0b71917b4d2a21dde5978eb37ce50f998d7aed8ea",
+    "bytes": 3864
+  },
+  "v016/stderr.txt": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/stderr.txt",
+    "sha256": "874a2439e054f88eb3bd629000d5fa0eb21b261777105c9247371b4473c571e6",
+    "bytes": 11490
+  },
+  "v016/identity.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/identity.json",
+    "sha256": "25e28169314f9056f138231d9448dba7ea15355509def7b0b09c55f0e6086189",
+    "bytes": 1131
+  },
+  "core/receipt.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/receipt.json",
+    "sha256": "b9f45c67707c227881b4739d0859e3bd94a4ceccd0e557534b868d052b76bd9d",
+    "bytes": 11451
+  },
+  "core/service.stderr": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/service.stderr",
+    "sha256": "7740ccb6223609b3fc70fe3858bd21a803f88f68349043142b0ed502ca35d6d7",
+    "bytes": 7457
+  },
+  "core/store-geometry.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/store-geometry.json",
+    "sha256": "42f48a37037cdf3e786ac86979b88056d6396a5a8913825b00eed37c87577bb5",
+    "bytes": 1305
+  },
+  "core/history-geometry.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/history-geometry.json",
+    "sha256": "cb346eb102538ada6ae4eb9a6a814930670c491cc0cb3280dd7f040dcc7df6b4",
+    "bytes": 336
+  },
+  "explain_compare.py": {
+    "source": "core/docs/issues/237/evidence/v016-core-sqlite/explain_compare.py",
+    "sha256": "6fddbc6166761396b52cb34ea47da2789d691b8c82e963fafa65afa5057fd862",
+    "bytes": 9748
+  },
+  "plans.json": {
+    "source": "core/docs/issues/237/evidence/v016-core-sqlite/plans.json",
+    "sha256": "ba4f8bdd13e21da567545f6f93b1ef52ff4a0b4701fc3da61796a7e594068b5e",
+    "bytes": 71937
+  },
+  "binary-linkage.txt": {
+    "source": "core/docs/issues/237/evidence/v016-core-sqlite/binary-linkage.txt",
+    "sha256": "9e902e1146edf4fd6a1947fb90220117b966c596bdbc4e44d9740ad347b47ce7",
+    "bytes": 697
+  },
+  "v016/readback-initial-failed.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/readback/receipt.json",
+    "sha256": "9d8ff8b936a371d21cd54557160f2aa4987a3a8eaea7dd578d2e7645fea89926",
+    "bytes": 814
+  },
+  "v016/readback-corrected-pass.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/readback-corrected/receipt.json",
+    "sha256": "db31b2c610d979b4bb7ca015a5141dd4b955f53380c2d0a7a7b2935d91e72a20",
+    "bytes": 1218
+  },
+  "core/readback-separate-pass.json": {
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/core/docs/issues/237/evidence/v017-head2head-core/verification-separate.json",
+    "sha256": "7a9eebff10f29e59f1c6e03651e6a4fa0f9a621e0b81df7eef1518261fe4ac70",
+    "bytes": 1771
+  }
+}

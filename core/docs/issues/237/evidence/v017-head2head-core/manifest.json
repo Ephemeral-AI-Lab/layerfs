@@ -1,0 +1,92 @@
+{
+  "build.json": {
+    "bytes": 2224,
+    "sha256": "85c359d28b12ba160e3366ff670785a9f6e0de7b9fd5a9edfdc9e1d75275a821"
+  },
+  "cold-launch.json": {
+    "bytes": 485,
+    "sha256": "1b6ff6ddbd6bccf5e849f52524721ef07bae0465392d3f125c1bcc85da019237"
+  },
+  "cold-preflight.json": {
+    "bytes": 678,
+    "sha256": "e39cb2262cff3d746012590b47bea5d977e3f1b195eb28bf5e04ff4f2aadb36c"
+  },
+  "cold-recheck.json": {
+    "bytes": 227,
+    "sha256": "f6593c7b7701387b13e489797b3e49bbca7e466f225b72052e37e483285df66e"
+  },
+  "daemon.stderr": {
+    "bytes": 1124,
+    "sha256": "275000b611421f0e73cdf6564c3d59758afe57af2d70c9cae79e28b02d075720"
+  },
+  "history-geometry.json": {
+    "bytes": 336,
+    "sha256": "cb346eb102538ada6ae4eb9a6a814930670c491cc0cb3280dd7f040dcc7df6b4"
+  },
+  "history.sqlite": {
+    "bytes": 86016,
+    "retained_path": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/history.sqlite",
+    "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9"
+  },
+  "instrumentation.diff.gz": {
+    "bytes": 3316,
+    "sha256": "5e3f2cd7560b53d9b84feef572e0596ede40eb17f76b218d39ccbb6091cbe434"
+  },
+  "operation-identity.json": {
+    "bytes": 298,
+    "sha256": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf"
+  },
+  "perf.jsonl": {
+    "bytes": 324,
+    "sha256": "ce00daff06ab190fd99e2e329241c59642949afe4963bb93d3e46baf514243d2"
+  },
+  "receipt.json": {
+    "bytes": 11451,
+    "sha256": "b9f45c67707c227881b4739d0859e3bd94a4ceccd0e557534b868d052b76bd9d"
+  },
+  "report.txt": {
+    "bytes": 568,
+    "sha256": "a0d6936dbb9800ff1a77d9c54e2471062be7520e00b59e003286876aef5d899f"
+  },
+  "run.json": {
+    "bytes": 852,
+    "sha256": "14e14e0d44d3d9c8068774e4a5b0d81b11241ca17d372eaebc2927271a7f7d38"
+  },
+  "service.stderr": {
+    "bytes": 7457,
+    "sha256": "7740ccb6223609b3fc70fe3858bd21a803f88f68349043142b0ed502ca35d6d7"
+  },
+  "source-copy.json": {
+    "bytes": 392,
+    "sha256": "90d0f4e40f6a91f5538ba370534af8a311e666021585ef00f075c76b7115f9bc"
+  },
+  "store-geometry.json": {
+    "bytes": 1305,
+    "sha256": "42f48a37037cdf3e786ac86979b88056d6396a5a8913825b00eed37c87577bb5"
+  },
+  "store.sqlite": {
+    "bytes": 333651968,
+    "retained_path": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+    "sha256": "726497c0748b246d68787461705ef6d3991850bd8012e6ed820dbdc5b0b807fc"
+  },
+  "telemetry.lft1": {
+    "bytes": 3326,
+    "sha256": "85a930dfb672ba34c75680b09630dbae3db9d9d9cb2f48c8a90d856cecbd45f3"
+  },
+  "verification-separate.json": {
+    "bytes": 1771,
+    "sha256": "7a9eebff10f29e59f1c6e03651e6a4fa0f9a621e0b81df7eef1518261fe4ac70"
+  },
+  "verification-separate.stderr": {
+    "bytes": 1435,
+    "sha256": "502a219fdcaf8704f6cdb66fdca5b623293e12f5906e2a0cd4f90b4f86a1f827"
+  },
+  "verification-separate.stdout": {
+    "bytes": 282,
+    "sha256": "ba78691d30882f456dd70a02c24af490d889260af14ae1e810f94751b6fcf43d"
+  },
+  "verification.json": {
+    "bytes": 92,
+    "sha256": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+  }
+}

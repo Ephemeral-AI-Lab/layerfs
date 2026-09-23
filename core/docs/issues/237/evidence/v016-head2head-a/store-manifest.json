@@ -1,0 +1,14 @@
+{
+  "allocated_bytes": 318783488,
+  "apparent_bytes": 304553984,
+  "object_rows": 24683,
+  "pack_blob_bytes": 301646854,
+  "pack_rows": 1693,
+  "page_count": 74354,
+  "page_size": 4096,
+  "readback_attempt_1": "FAIL before content access: typed ID text newline",
+  "readback_attempt_2": "PASS; 10000 files, 300000000 bytes",
+  "schema": "issue237-v016-store-manifest-v1",
+  "sha256": "79c8b732d6450bea6ceeae989e4721cc0fcac0971bebf4eb25e7721ff10631a2",
+  "source_store_path": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/store/store.sqlite"
+}

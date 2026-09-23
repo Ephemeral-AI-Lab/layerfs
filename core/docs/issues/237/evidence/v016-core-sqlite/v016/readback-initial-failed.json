@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/target/release/fs-benchmark-pro",
+    "repository-init",
+    "benchmark-results/issue237-v016-v017-head2head-a/readback",
+    "benchmark-results/issue237-v016-v017-head2head-a/source/payload",
+    "verification",
+    "benchmark-results/issue237-v016-v017-head2head-a/readback/oracle.tsv"
+  ],
+  "complete_wall_ns": 29983416,
+  "exit_code": 1,
+  "layer_id": "326110833efb973c0576a304e4b8107d444fa4862a7af62c7643338e4be2fc65fe",
+  "oracle_sha256": "8f236de7ca9c8f228012b6b0299adda562c4835e31c06852b822cfb6331f61eb",
+  "result": null,
+  "root_id": "e2a6d17b5e9a2a5da59961b4c4bf53e20c3bdf129f6fc99271d6a266750aa410",
+  "source_store_sha256": "79c8b732d6450bea6ceeae989e4721cc0fcac0971bebf4eb25e7721ff10631a2",
+  "status": "FAIL"
+}

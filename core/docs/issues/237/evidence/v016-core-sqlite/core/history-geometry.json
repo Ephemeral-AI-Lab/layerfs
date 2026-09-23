@@ -1,0 +1,9 @@
+{
+  "allocated_bytes": 86016,
+  "file_bytes": 86016,
+  "freelist_count": 0,
+  "page_count": 21,
+  "page_size": 4096,
+  "path": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/history.sqlite",
+  "sqlite_version": "3.51.2"
+}
