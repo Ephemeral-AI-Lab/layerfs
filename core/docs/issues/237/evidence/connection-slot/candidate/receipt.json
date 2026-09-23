@@ -1,0 +1,224 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-10000",
+  "cleanup": {
+    "daemon": "PASS",
+    "service": "PASS",
+    "stderr_recycle": "RETAINED_INCOMPLETE"
+  },
+  "cleanup_wall_ns": 310923458,
+  "competing_work": [
+    "498 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "500 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "7467 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7470 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7471 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7598 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "7602 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "7608 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "7669 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7673 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7678 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)"
+  ],
+  "daemon_namespace": 233132865510436881,
+  "daemon_pid": 56395,
+  "external_resources": {
+    "rss_phase_peak": null,
+    "rss_reason": "rusage peak is lifetime, not phase",
+    "scope": "service-and-daemon-lifecycle",
+    "system_cpu_s": 0.8571840000000001,
+    "user_cpu_s": 1.0073090000000002
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "clone_method": "independent-byte-copy-v1",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/issue237-pipeline-residual/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/manifest.tsv",
+    "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "master_source": "/Users/yifanxu/.codex/worktrees/issue237-pipeline-residual/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload",
+    "preparation_wall_ns": 207898583,
+    "profile": "core-native-import-fixture-v2",
+    "reused": true,
+    "route": "core-native-directory-import-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-pipeline-residual/layerfs/benchmark-results/fs-bench-pro/issue237-connection-candidate-01/source-copy/namespace-10000/payload"
+  },
+  "history_bytes": 86016,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/save/import/scan.rs",
+      " M core/crates/layerfs-storage/src/cas/store.rs",
+      "?? core/docs/issues/237/evidence/pipeline-residual/"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "d56043e8e547bf49e92aa046a7128e49de71fc4c59f29649cabecd5e38a3c7df",
+    "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+    "source_dirty": true
+  },
+  "performance_command_status": "PASS",
+  "performance_command_wall_ns": 2268337958,
+  "performance_gate": "NOT_FROZEN",
+  "placement": {
+    "daemon": "host",
+    "image_id": null,
+    "service": "host"
+  },
+  "raw_operation_ns": 1069652167,
+  "route": "daemon-host",
+  "run_id": "138293d71f904eb89952315a37e01736",
+  "sample_count": 1,
+  "schema": "core-fs-bench-pro-init-v1",
+  "service_namespace": 233132865510436880,
+  "service_pid": 56394,
+  "status": "INCOMPLETE",
+  "store_bytes": 334159872,
+  "store_create_ns": 463124834,
+  "telemetry": {
+    "diagnostics": {
+      "daemon": "",
+      "service": "layerfs-service ready 127.0.0.1:59290\nLFS237 connection_pair finish_call_ns=11460208 release_connection_ns=458 finish_drop_ns=7083 commits=90 sql_ns=150260132 commit_ns=253616785\n"
+    },
+    "errors": [
+      "daemon: telemetry loss"
+    ],
+    "event_counts": {
+      "daemon": 3,
+      "service": 4
+    },
+    "file": "telemetry.lft1",
+    "m2_local_roots": {
+      "daemon": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1463772250,
+          "cpu_shared_ns": [
+            157000,
+            495000
+          ],
+          "elapsed_ns": 1069462417,
+          "first_ns": 301526458,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 103610250,
+          "last_ns": 1401329167,
+          "opened_ns": 394308042,
+          "resource_status": "sampled",
+          "sampled_max_rss": 2211840,
+          "samples": 12
+        }
+      ],
+      "service": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1479990542,
+          "cpu_shared_ns": [
+            931379000,
+            767465000
+          ],
+          "elapsed_ns": 1068892375,
+          "first_ns": 401593875,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 104877542,
+          "last_ns": 1405025250,
+          "opened_ns": 411095708,
+          "resource_status": "sampled",
+          "sampled_max_rss": 66633728,
+          "samples": 11
+        }
+      ]
+    },
+    "m3_service_children": [
+      {
+        "children": [],
+        "elapsed_ns": 2286708,
+        "name": "history.import_begin_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 48126542,
+        "name": "history.import_scan"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 964913542,
+        "name": "history.import_files"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 11445583,
+        "name": "history.import_finish_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 282708,
+        "name": "history.begin_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 410041,
+        "name": "history.prerequisites"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1057792,
+        "name": "history.finish_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 233750,
+        "name": "history.begin_tree_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 29349250,
+        "name": "history.finish_tree_save"
+      }
+    ],
+    "m4_c5_duration_ns": null,
+    "m4_reason": "no dedicated C5 timing child",
+    "operation_counts": {
+      "daemon": 1,
+      "service": 1
+    },
+    "parser": "lft1-ingest-v1",
+    "producers": [
+      {
+        "bytes": 2198,
+        "end": 2198,
+        "lines": 4,
+        "name": "service",
+        "namespace": 233132865510436880,
+        "pid": 56394,
+        "role": 1,
+        "sha256": "33102e38cdb2ddfc40d0bba7026f386c1deda064218b1efba5c594a4d7fb3791",
+        "start": 0
+      },
+      {
+        "bytes": 1128,
+        "end": 3326,
+        "lines": 3,
+        "name": "daemon",
+        "namespace": 233132865510436881,
+        "pid": 56395,
+        "role": 2,
+        "sha256": "94af8d5f961749bdfb36c4fe5e4756511c3aaa86cc13115b5ee18527893f0cfb",
+        "start": 2198
+      }
+    ],
+    "sha256": "1ace61941c4e4ed5ba09bd02e07b012912b2382cdcef22fa844b0ca6e99c715f",
+    "status": "INCOMPLETE"
+  },
+  "verification": {
+    "reason": "fast lane default; use run --verify for full proof",
+    "status": "SKIPPED"
+  },
+  "verification_mode": "skip-default",
+  "wall_ns": 6401520208
+}

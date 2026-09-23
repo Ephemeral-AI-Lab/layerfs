@@ -1,0 +1,21 @@
+{
+  "allocated_bytes": 335609856,
+  "apparent_bytes": 334159872,
+  "distinct_object_ids": 24683,
+  "freelist_count": 0,
+  "object_rows": 24683,
+  "pack_capacity_bytes": 331350016,
+  "pack_rows": 1264,
+  "pack_slack_bytes": 25371890,
+  "pack_used_bytes": 305978126,
+  "pack_versions": {
+    "12": 2,
+    "15": 1121,
+    "17": 136,
+    "9": 5
+  },
+  "page_count": 81582,
+  "page_size": 4096,
+  "sha256": "02ffc012459c2d7b60d0d967848404b7ba1645e4e507a97f34eaa1676054eb5e",
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-pipeline-residual/layerfs/benchmark-results/fs-bench-pro/issue237-connection-candidate-01/daemon-host/init_namespace/namespace-10000/store.sqlite"
+}

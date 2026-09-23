@@ -1,0 +1,3368 @@
+{
+  "path": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/issue237-import-batch-10k-01/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "sha256": "b9c609bd17514eafa427361e94643b6bc432c8fcdee5122ec198c087b5098bb1",
+  "sqlite_version": "3.51.0",
+  "page_size": 4096,
+  "method": "read-only EXPLAIN; statements compiled but not executed",
+  "plans": {
+    "objects_current_1": {
+      "bindings": 6,
+      "query_plan": [
+        [
+          5,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          9,
+          5,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ]
+      ],
+      "opcode_count": 64,
+      "opcodes": {
+        "BeginSubrtn": 1,
+        "Close": 2,
+        "Column": 1,
+        "Copy": 1,
+        "DecrJumpZero": 1,
+        "Explain": 2,
+        "Goto": 3,
+        "Halt": 4,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "Insert": 1,
+        "Integer": 3,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 1,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 2,
+        "Once": 1,
+        "OpenRead": 3,
+        "OpenWrite": 1,
+        "Return": 1,
+        "Rewind": 1,
+        "SCopy": 9,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 6
+      }
+    },
+    "objects_one_scope_1": {
+      "bindings": 6,
+      "query_plan": [
+        [
+          3,
+          0,
+          0,
+          "CO-ROUTINE incoming"
+        ],
+        [
+          4,
+          3,
+          0,
+          "SCAN CONSTANT ROW"
+        ],
+        [
+          14,
+          0,
+          16,
+          "SCAN i"
+        ],
+        [
+          17,
+          0,
+          216,
+          "SCAN r"
+        ]
+      ],
+      "opcode_count": 83,
+      "opcodes": {
+        "Close": 2,
+        "Column": 1,
+        "Copy": 6,
+        "EndCoroutine": 2,
+        "Explain": 4,
+        "FkCounter": 2,
+        "Goto": 5,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 3,
+        "Insert": 1,
+        "Integer": 2,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 1,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 1,
+        "OpenRead": 3,
+        "OpenWrite": 1,
+        "Rewind": 1,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 6,
+        "Yield": 4
+      }
+    },
+    "objects_current_16": {
+      "bindings": 96,
+      "query_plan": [
+        [
+          2,
+          0,
+          0,
+          "SCAN 16 CONSTANT ROWS"
+        ],
+        [
+          11,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          15,
+          11,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          31,
+          0,
+          0,
+          "SCALAR SUBQUERY 3"
+        ],
+        [
+          35,
+          31,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          51,
+          0,
+          0,
+          "SCALAR SUBQUERY 5"
+        ],
+        [
+          55,
+          51,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          71,
+          0,
+          0,
+          "SCALAR SUBQUERY 7"
+        ],
+        [
+          75,
+          71,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          91,
+          0,
+          0,
+          "SCALAR SUBQUERY 9"
+        ],
+        [
+          95,
+          91,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          111,
+          0,
+          0,
+          "SCALAR SUBQUERY 11"
+        ],
+        [
+          115,
+          111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          131,
+          0,
+          0,
+          "SCALAR SUBQUERY 13"
+        ],
+        [
+          135,
+          131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          151,
+          0,
+          0,
+          "SCALAR SUBQUERY 15"
+        ],
+        [
+          155,
+          151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          171,
+          0,
+          0,
+          "SCALAR SUBQUERY 17"
+        ],
+        [
+          175,
+          171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          191,
+          0,
+          0,
+          "SCALAR SUBQUERY 19"
+        ],
+        [
+          195,
+          191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          211,
+          0,
+          0,
+          "SCALAR SUBQUERY 21"
+        ],
+        [
+          215,
+          211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          231,
+          0,
+          0,
+          "SCALAR SUBQUERY 23"
+        ],
+        [
+          235,
+          231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          251,
+          0,
+          0,
+          "SCALAR SUBQUERY 25"
+        ],
+        [
+          255,
+          251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          271,
+          0,
+          0,
+          "SCALAR SUBQUERY 27"
+        ],
+        [
+          275,
+          271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          291,
+          0,
+          0,
+          "SCALAR SUBQUERY 29"
+        ],
+        [
+          295,
+          291,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          311,
+          0,
+          0,
+          "SCALAR SUBQUERY 31"
+        ],
+        [
+          315,
+          311,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ]
+      ],
+      "opcode_count": 377,
+      "opcodes": {
+        "BeginSubrtn": 16,
+        "Close": 2,
+        "Column": 16,
+        "Copy": 16,
+        "DecrJumpZero": 16,
+        "EndCoroutine": 1,
+        "Explain": 33,
+        "FkCounter": 2,
+        "Goto": 4,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 1,
+        "Insert": 1,
+        "Integer": 18,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 16,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 17,
+        "Once": 16,
+        "OpenRead": 18,
+        "OpenWrite": 1,
+        "Return": 16,
+        "Rewind": 16,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 96,
+        "Yield": 17
+      }
+    },
+    "objects_one_scope_16": {
+      "bindings": 96,
+      "query_plan": [
+        [
+          3,
+          0,
+          0,
+          "CO-ROUTINE incoming"
+        ],
+        [
+          4,
+          3,
+          0,
+          "SCAN 16 CONSTANT ROWS"
+        ],
+        [
+          119,
+          0,
+          32,
+          "SCAN i"
+        ],
+        [
+          122,
+          0,
+          216,
+          "SCAN r"
+        ]
+      ],
+      "opcode_count": 188,
+      "opcodes": {
+        "Close": 2,
+        "Column": 1,
+        "Copy": 6,
+        "EndCoroutine": 2,
+        "Explain": 4,
+        "FkCounter": 2,
+        "Goto": 5,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 3,
+        "Insert": 1,
+        "Integer": 2,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 1,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 1,
+        "OpenRead": 3,
+        "OpenWrite": 1,
+        "Rewind": 1,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 96,
+        "Yield": 19
+      }
+    },
+    "objects_current_64": {
+      "bindings": 384,
+      "query_plan": [
+        [
+          2,
+          0,
+          0,
+          "SCAN 64 CONSTANT ROWS"
+        ],
+        [
+          11,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          15,
+          11,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          31,
+          0,
+          0,
+          "SCALAR SUBQUERY 3"
+        ],
+        [
+          35,
+          31,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          51,
+          0,
+          0,
+          "SCALAR SUBQUERY 5"
+        ],
+        [
+          55,
+          51,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          71,
+          0,
+          0,
+          "SCALAR SUBQUERY 7"
+        ],
+        [
+          75,
+          71,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          91,
+          0,
+          0,
+          "SCALAR SUBQUERY 9"
+        ],
+        [
+          95,
+          91,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          111,
+          0,
+          0,
+          "SCALAR SUBQUERY 11"
+        ],
+        [
+          115,
+          111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          131,
+          0,
+          0,
+          "SCALAR SUBQUERY 13"
+        ],
+        [
+          135,
+          131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          151,
+          0,
+          0,
+          "SCALAR SUBQUERY 15"
+        ],
+        [
+          155,
+          151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          171,
+          0,
+          0,
+          "SCALAR SUBQUERY 17"
+        ],
+        [
+          175,
+          171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          191,
+          0,
+          0,
+          "SCALAR SUBQUERY 19"
+        ],
+        [
+          195,
+          191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          211,
+          0,
+          0,
+          "SCALAR SUBQUERY 21"
+        ],
+        [
+          215,
+          211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          231,
+          0,
+          0,
+          "SCALAR SUBQUERY 23"
+        ],
+        [
+          235,
+          231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          251,
+          0,
+          0,
+          "SCALAR SUBQUERY 25"
+        ],
+        [
+          255,
+          251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          271,
+          0,
+          0,
+          "SCALAR SUBQUERY 27"
+        ],
+        [
+          275,
+          271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          291,
+          0,
+          0,
+          "SCALAR SUBQUERY 29"
+        ],
+        [
+          295,
+          291,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          311,
+          0,
+          0,
+          "SCALAR SUBQUERY 31"
+        ],
+        [
+          315,
+          311,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          331,
+          0,
+          0,
+          "SCALAR SUBQUERY 33"
+        ],
+        [
+          335,
+          331,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          351,
+          0,
+          0,
+          "SCALAR SUBQUERY 35"
+        ],
+        [
+          355,
+          351,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          371,
+          0,
+          0,
+          "SCALAR SUBQUERY 37"
+        ],
+        [
+          375,
+          371,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          391,
+          0,
+          0,
+          "SCALAR SUBQUERY 39"
+        ],
+        [
+          395,
+          391,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          411,
+          0,
+          0,
+          "SCALAR SUBQUERY 41"
+        ],
+        [
+          415,
+          411,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          431,
+          0,
+          0,
+          "SCALAR SUBQUERY 43"
+        ],
+        [
+          435,
+          431,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          451,
+          0,
+          0,
+          "SCALAR SUBQUERY 45"
+        ],
+        [
+          455,
+          451,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          471,
+          0,
+          0,
+          "SCALAR SUBQUERY 47"
+        ],
+        [
+          475,
+          471,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          491,
+          0,
+          0,
+          "SCALAR SUBQUERY 49"
+        ],
+        [
+          495,
+          491,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          511,
+          0,
+          0,
+          "SCALAR SUBQUERY 51"
+        ],
+        [
+          515,
+          511,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          531,
+          0,
+          0,
+          "SCALAR SUBQUERY 53"
+        ],
+        [
+          535,
+          531,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          551,
+          0,
+          0,
+          "SCALAR SUBQUERY 55"
+        ],
+        [
+          555,
+          551,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          571,
+          0,
+          0,
+          "SCALAR SUBQUERY 57"
+        ],
+        [
+          575,
+          571,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          591,
+          0,
+          0,
+          "SCALAR SUBQUERY 59"
+        ],
+        [
+          595,
+          591,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          611,
+          0,
+          0,
+          "SCALAR SUBQUERY 61"
+        ],
+        [
+          615,
+          611,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          631,
+          0,
+          0,
+          "SCALAR SUBQUERY 63"
+        ],
+        [
+          635,
+          631,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          651,
+          0,
+          0,
+          "SCALAR SUBQUERY 65"
+        ],
+        [
+          655,
+          651,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          671,
+          0,
+          0,
+          "SCALAR SUBQUERY 67"
+        ],
+        [
+          675,
+          671,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          691,
+          0,
+          0,
+          "SCALAR SUBQUERY 69"
+        ],
+        [
+          695,
+          691,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          711,
+          0,
+          0,
+          "SCALAR SUBQUERY 71"
+        ],
+        [
+          715,
+          711,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          731,
+          0,
+          0,
+          "SCALAR SUBQUERY 73"
+        ],
+        [
+          735,
+          731,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          751,
+          0,
+          0,
+          "SCALAR SUBQUERY 75"
+        ],
+        [
+          755,
+          751,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          771,
+          0,
+          0,
+          "SCALAR SUBQUERY 77"
+        ],
+        [
+          775,
+          771,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          791,
+          0,
+          0,
+          "SCALAR SUBQUERY 79"
+        ],
+        [
+          795,
+          791,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          811,
+          0,
+          0,
+          "SCALAR SUBQUERY 81"
+        ],
+        [
+          815,
+          811,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          831,
+          0,
+          0,
+          "SCALAR SUBQUERY 83"
+        ],
+        [
+          835,
+          831,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          851,
+          0,
+          0,
+          "SCALAR SUBQUERY 85"
+        ],
+        [
+          855,
+          851,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          871,
+          0,
+          0,
+          "SCALAR SUBQUERY 87"
+        ],
+        [
+          875,
+          871,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          891,
+          0,
+          0,
+          "SCALAR SUBQUERY 89"
+        ],
+        [
+          895,
+          891,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          911,
+          0,
+          0,
+          "SCALAR SUBQUERY 91"
+        ],
+        [
+          915,
+          911,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          931,
+          0,
+          0,
+          "SCALAR SUBQUERY 93"
+        ],
+        [
+          935,
+          931,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          951,
+          0,
+          0,
+          "SCALAR SUBQUERY 95"
+        ],
+        [
+          955,
+          951,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          971,
+          0,
+          0,
+          "SCALAR SUBQUERY 97"
+        ],
+        [
+          975,
+          971,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          991,
+          0,
+          0,
+          "SCALAR SUBQUERY 99"
+        ],
+        [
+          995,
+          991,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1011,
+          0,
+          0,
+          "SCALAR SUBQUERY 101"
+        ],
+        [
+          1015,
+          1011,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1031,
+          0,
+          0,
+          "SCALAR SUBQUERY 103"
+        ],
+        [
+          1035,
+          1031,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1051,
+          0,
+          0,
+          "SCALAR SUBQUERY 105"
+        ],
+        [
+          1055,
+          1051,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1071,
+          0,
+          0,
+          "SCALAR SUBQUERY 107"
+        ],
+        [
+          1075,
+          1071,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1091,
+          0,
+          0,
+          "SCALAR SUBQUERY 109"
+        ],
+        [
+          1095,
+          1091,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1111,
+          0,
+          0,
+          "SCALAR SUBQUERY 111"
+        ],
+        [
+          1115,
+          1111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1131,
+          0,
+          0,
+          "SCALAR SUBQUERY 113"
+        ],
+        [
+          1135,
+          1131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1151,
+          0,
+          0,
+          "SCALAR SUBQUERY 115"
+        ],
+        [
+          1155,
+          1151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1171,
+          0,
+          0,
+          "SCALAR SUBQUERY 117"
+        ],
+        [
+          1175,
+          1171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1191,
+          0,
+          0,
+          "SCALAR SUBQUERY 119"
+        ],
+        [
+          1195,
+          1191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1211,
+          0,
+          0,
+          "SCALAR SUBQUERY 121"
+        ],
+        [
+          1215,
+          1211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1231,
+          0,
+          0,
+          "SCALAR SUBQUERY 123"
+        ],
+        [
+          1235,
+          1231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1251,
+          0,
+          0,
+          "SCALAR SUBQUERY 125"
+        ],
+        [
+          1255,
+          1251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1271,
+          0,
+          0,
+          "SCALAR SUBQUERY 127"
+        ],
+        [
+          1275,
+          1271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ]
+      ],
+      "opcode_count": 1337,
+      "opcodes": {
+        "BeginSubrtn": 64,
+        "Close": 2,
+        "Column": 64,
+        "Copy": 64,
+        "DecrJumpZero": 64,
+        "EndCoroutine": 1,
+        "Explain": 129,
+        "FkCounter": 2,
+        "Goto": 4,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 1,
+        "Insert": 1,
+        "Integer": 66,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 64,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 65,
+        "Once": 64,
+        "OpenRead": 66,
+        "OpenWrite": 1,
+        "Return": 64,
+        "Rewind": 64,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 384,
+        "Yield": 65
+      }
+    },
+    "objects_one_scope_64": {
+      "bindings": 384,
+      "query_plan": [
+        [
+          3,
+          0,
+          0,
+          "CO-ROUTINE incoming"
+        ],
+        [
+          4,
+          3,
+          0,
+          "SCAN 64 CONSTANT ROWS"
+        ],
+        [
+          455,
+          0,
+          80,
+          "SCAN i"
+        ],
+        [
+          458,
+          0,
+          216,
+          "SCAN r"
+        ]
+      ],
+      "opcode_count": 524,
+      "opcodes": {
+        "Close": 2,
+        "Column": 1,
+        "Copy": 6,
+        "EndCoroutine": 2,
+        "Explain": 4,
+        "FkCounter": 2,
+        "Goto": 5,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 3,
+        "Insert": 1,
+        "Integer": 2,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 1,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 1,
+        "OpenRead": 3,
+        "OpenWrite": 1,
+        "Rewind": 1,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 384,
+        "Yield": 67
+      }
+    },
+    "objects_current_128": {
+      "bindings": 768,
+      "query_plan": [
+        [
+          2,
+          0,
+          0,
+          "SCAN 128 CONSTANT ROWS"
+        ],
+        [
+          11,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          15,
+          11,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          31,
+          0,
+          0,
+          "SCALAR SUBQUERY 3"
+        ],
+        [
+          35,
+          31,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          51,
+          0,
+          0,
+          "SCALAR SUBQUERY 5"
+        ],
+        [
+          55,
+          51,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          71,
+          0,
+          0,
+          "SCALAR SUBQUERY 7"
+        ],
+        [
+          75,
+          71,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          91,
+          0,
+          0,
+          "SCALAR SUBQUERY 9"
+        ],
+        [
+          95,
+          91,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          111,
+          0,
+          0,
+          "SCALAR SUBQUERY 11"
+        ],
+        [
+          115,
+          111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          131,
+          0,
+          0,
+          "SCALAR SUBQUERY 13"
+        ],
+        [
+          135,
+          131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          151,
+          0,
+          0,
+          "SCALAR SUBQUERY 15"
+        ],
+        [
+          155,
+          151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          171,
+          0,
+          0,
+          "SCALAR SUBQUERY 17"
+        ],
+        [
+          175,
+          171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          191,
+          0,
+          0,
+          "SCALAR SUBQUERY 19"
+        ],
+        [
+          195,
+          191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          211,
+          0,
+          0,
+          "SCALAR SUBQUERY 21"
+        ],
+        [
+          215,
+          211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          231,
+          0,
+          0,
+          "SCALAR SUBQUERY 23"
+        ],
+        [
+          235,
+          231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          251,
+          0,
+          0,
+          "SCALAR SUBQUERY 25"
+        ],
+        [
+          255,
+          251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          271,
+          0,
+          0,
+          "SCALAR SUBQUERY 27"
+        ],
+        [
+          275,
+          271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          291,
+          0,
+          0,
+          "SCALAR SUBQUERY 29"
+        ],
+        [
+          295,
+          291,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          311,
+          0,
+          0,
+          "SCALAR SUBQUERY 31"
+        ],
+        [
+          315,
+          311,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          331,
+          0,
+          0,
+          "SCALAR SUBQUERY 33"
+        ],
+        [
+          335,
+          331,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          351,
+          0,
+          0,
+          "SCALAR SUBQUERY 35"
+        ],
+        [
+          355,
+          351,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          371,
+          0,
+          0,
+          "SCALAR SUBQUERY 37"
+        ],
+        [
+          375,
+          371,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          391,
+          0,
+          0,
+          "SCALAR SUBQUERY 39"
+        ],
+        [
+          395,
+          391,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          411,
+          0,
+          0,
+          "SCALAR SUBQUERY 41"
+        ],
+        [
+          415,
+          411,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          431,
+          0,
+          0,
+          "SCALAR SUBQUERY 43"
+        ],
+        [
+          435,
+          431,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          451,
+          0,
+          0,
+          "SCALAR SUBQUERY 45"
+        ],
+        [
+          455,
+          451,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          471,
+          0,
+          0,
+          "SCALAR SUBQUERY 47"
+        ],
+        [
+          475,
+          471,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          491,
+          0,
+          0,
+          "SCALAR SUBQUERY 49"
+        ],
+        [
+          495,
+          491,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          511,
+          0,
+          0,
+          "SCALAR SUBQUERY 51"
+        ],
+        [
+          515,
+          511,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          531,
+          0,
+          0,
+          "SCALAR SUBQUERY 53"
+        ],
+        [
+          535,
+          531,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          551,
+          0,
+          0,
+          "SCALAR SUBQUERY 55"
+        ],
+        [
+          555,
+          551,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          571,
+          0,
+          0,
+          "SCALAR SUBQUERY 57"
+        ],
+        [
+          575,
+          571,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          591,
+          0,
+          0,
+          "SCALAR SUBQUERY 59"
+        ],
+        [
+          595,
+          591,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          611,
+          0,
+          0,
+          "SCALAR SUBQUERY 61"
+        ],
+        [
+          615,
+          611,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          631,
+          0,
+          0,
+          "SCALAR SUBQUERY 63"
+        ],
+        [
+          635,
+          631,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          651,
+          0,
+          0,
+          "SCALAR SUBQUERY 65"
+        ],
+        [
+          655,
+          651,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          671,
+          0,
+          0,
+          "SCALAR SUBQUERY 67"
+        ],
+        [
+          675,
+          671,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          691,
+          0,
+          0,
+          "SCALAR SUBQUERY 69"
+        ],
+        [
+          695,
+          691,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          711,
+          0,
+          0,
+          "SCALAR SUBQUERY 71"
+        ],
+        [
+          715,
+          711,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          731,
+          0,
+          0,
+          "SCALAR SUBQUERY 73"
+        ],
+        [
+          735,
+          731,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          751,
+          0,
+          0,
+          "SCALAR SUBQUERY 75"
+        ],
+        [
+          755,
+          751,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          771,
+          0,
+          0,
+          "SCALAR SUBQUERY 77"
+        ],
+        [
+          775,
+          771,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          791,
+          0,
+          0,
+          "SCALAR SUBQUERY 79"
+        ],
+        [
+          795,
+          791,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          811,
+          0,
+          0,
+          "SCALAR SUBQUERY 81"
+        ],
+        [
+          815,
+          811,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          831,
+          0,
+          0,
+          "SCALAR SUBQUERY 83"
+        ],
+        [
+          835,
+          831,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          851,
+          0,
+          0,
+          "SCALAR SUBQUERY 85"
+        ],
+        [
+          855,
+          851,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          871,
+          0,
+          0,
+          "SCALAR SUBQUERY 87"
+        ],
+        [
+          875,
+          871,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          891,
+          0,
+          0,
+          "SCALAR SUBQUERY 89"
+        ],
+        [
+          895,
+          891,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          911,
+          0,
+          0,
+          "SCALAR SUBQUERY 91"
+        ],
+        [
+          915,
+          911,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          931,
+          0,
+          0,
+          "SCALAR SUBQUERY 93"
+        ],
+        [
+          935,
+          931,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          951,
+          0,
+          0,
+          "SCALAR SUBQUERY 95"
+        ],
+        [
+          955,
+          951,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          971,
+          0,
+          0,
+          "SCALAR SUBQUERY 97"
+        ],
+        [
+          975,
+          971,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          991,
+          0,
+          0,
+          "SCALAR SUBQUERY 99"
+        ],
+        [
+          995,
+          991,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1011,
+          0,
+          0,
+          "SCALAR SUBQUERY 101"
+        ],
+        [
+          1015,
+          1011,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1031,
+          0,
+          0,
+          "SCALAR SUBQUERY 103"
+        ],
+        [
+          1035,
+          1031,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1051,
+          0,
+          0,
+          "SCALAR SUBQUERY 105"
+        ],
+        [
+          1055,
+          1051,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1071,
+          0,
+          0,
+          "SCALAR SUBQUERY 107"
+        ],
+        [
+          1075,
+          1071,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1091,
+          0,
+          0,
+          "SCALAR SUBQUERY 109"
+        ],
+        [
+          1095,
+          1091,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1111,
+          0,
+          0,
+          "SCALAR SUBQUERY 111"
+        ],
+        [
+          1115,
+          1111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1131,
+          0,
+          0,
+          "SCALAR SUBQUERY 113"
+        ],
+        [
+          1135,
+          1131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1151,
+          0,
+          0,
+          "SCALAR SUBQUERY 115"
+        ],
+        [
+          1155,
+          1151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1171,
+          0,
+          0,
+          "SCALAR SUBQUERY 117"
+        ],
+        [
+          1175,
+          1171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1191,
+          0,
+          0,
+          "SCALAR SUBQUERY 119"
+        ],
+        [
+          1195,
+          1191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1211,
+          0,
+          0,
+          "SCALAR SUBQUERY 121"
+        ],
+        [
+          1215,
+          1211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1231,
+          0,
+          0,
+          "SCALAR SUBQUERY 123"
+        ],
+        [
+          1235,
+          1231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1251,
+          0,
+          0,
+          "SCALAR SUBQUERY 125"
+        ],
+        [
+          1255,
+          1251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1271,
+          0,
+          0,
+          "SCALAR SUBQUERY 127"
+        ],
+        [
+          1275,
+          1271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1291,
+          0,
+          0,
+          "SCALAR SUBQUERY 129"
+        ],
+        [
+          1295,
+          1291,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1311,
+          0,
+          0,
+          "SCALAR SUBQUERY 131"
+        ],
+        [
+          1315,
+          1311,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1331,
+          0,
+          0,
+          "SCALAR SUBQUERY 133"
+        ],
+        [
+          1335,
+          1331,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1351,
+          0,
+          0,
+          "SCALAR SUBQUERY 135"
+        ],
+        [
+          1355,
+          1351,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1371,
+          0,
+          0,
+          "SCALAR SUBQUERY 137"
+        ],
+        [
+          1375,
+          1371,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1391,
+          0,
+          0,
+          "SCALAR SUBQUERY 139"
+        ],
+        [
+          1395,
+          1391,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1411,
+          0,
+          0,
+          "SCALAR SUBQUERY 141"
+        ],
+        [
+          1415,
+          1411,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1431,
+          0,
+          0,
+          "SCALAR SUBQUERY 143"
+        ],
+        [
+          1435,
+          1431,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1451,
+          0,
+          0,
+          "SCALAR SUBQUERY 145"
+        ],
+        [
+          1455,
+          1451,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1471,
+          0,
+          0,
+          "SCALAR SUBQUERY 147"
+        ],
+        [
+          1475,
+          1471,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1491,
+          0,
+          0,
+          "SCALAR SUBQUERY 149"
+        ],
+        [
+          1495,
+          1491,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1511,
+          0,
+          0,
+          "SCALAR SUBQUERY 151"
+        ],
+        [
+          1515,
+          1511,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1531,
+          0,
+          0,
+          "SCALAR SUBQUERY 153"
+        ],
+        [
+          1535,
+          1531,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1551,
+          0,
+          0,
+          "SCALAR SUBQUERY 155"
+        ],
+        [
+          1555,
+          1551,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1571,
+          0,
+          0,
+          "SCALAR SUBQUERY 157"
+        ],
+        [
+          1575,
+          1571,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1591,
+          0,
+          0,
+          "SCALAR SUBQUERY 159"
+        ],
+        [
+          1595,
+          1591,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1611,
+          0,
+          0,
+          "SCALAR SUBQUERY 161"
+        ],
+        [
+          1615,
+          1611,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1631,
+          0,
+          0,
+          "SCALAR SUBQUERY 163"
+        ],
+        [
+          1635,
+          1631,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1651,
+          0,
+          0,
+          "SCALAR SUBQUERY 165"
+        ],
+        [
+          1655,
+          1651,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1671,
+          0,
+          0,
+          "SCALAR SUBQUERY 167"
+        ],
+        [
+          1675,
+          1671,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1691,
+          0,
+          0,
+          "SCALAR SUBQUERY 169"
+        ],
+        [
+          1695,
+          1691,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1711,
+          0,
+          0,
+          "SCALAR SUBQUERY 171"
+        ],
+        [
+          1715,
+          1711,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1731,
+          0,
+          0,
+          "SCALAR SUBQUERY 173"
+        ],
+        [
+          1735,
+          1731,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1751,
+          0,
+          0,
+          "SCALAR SUBQUERY 175"
+        ],
+        [
+          1755,
+          1751,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1771,
+          0,
+          0,
+          "SCALAR SUBQUERY 177"
+        ],
+        [
+          1775,
+          1771,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1791,
+          0,
+          0,
+          "SCALAR SUBQUERY 179"
+        ],
+        [
+          1795,
+          1791,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1811,
+          0,
+          0,
+          "SCALAR SUBQUERY 181"
+        ],
+        [
+          1815,
+          1811,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1831,
+          0,
+          0,
+          "SCALAR SUBQUERY 183"
+        ],
+        [
+          1835,
+          1831,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1851,
+          0,
+          0,
+          "SCALAR SUBQUERY 185"
+        ],
+        [
+          1855,
+          1851,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1871,
+          0,
+          0,
+          "SCALAR SUBQUERY 187"
+        ],
+        [
+          1875,
+          1871,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1891,
+          0,
+          0,
+          "SCALAR SUBQUERY 189"
+        ],
+        [
+          1895,
+          1891,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1911,
+          0,
+          0,
+          "SCALAR SUBQUERY 191"
+        ],
+        [
+          1915,
+          1911,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1931,
+          0,
+          0,
+          "SCALAR SUBQUERY 193"
+        ],
+        [
+          1935,
+          1931,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1951,
+          0,
+          0,
+          "SCALAR SUBQUERY 195"
+        ],
+        [
+          1955,
+          1951,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1971,
+          0,
+          0,
+          "SCALAR SUBQUERY 197"
+        ],
+        [
+          1975,
+          1971,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          1991,
+          0,
+          0,
+          "SCALAR SUBQUERY 199"
+        ],
+        [
+          1995,
+          1991,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2011,
+          0,
+          0,
+          "SCALAR SUBQUERY 201"
+        ],
+        [
+          2015,
+          2011,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2031,
+          0,
+          0,
+          "SCALAR SUBQUERY 203"
+        ],
+        [
+          2035,
+          2031,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2051,
+          0,
+          0,
+          "SCALAR SUBQUERY 205"
+        ],
+        [
+          2055,
+          2051,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2071,
+          0,
+          0,
+          "SCALAR SUBQUERY 207"
+        ],
+        [
+          2075,
+          2071,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2091,
+          0,
+          0,
+          "SCALAR SUBQUERY 209"
+        ],
+        [
+          2095,
+          2091,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2111,
+          0,
+          0,
+          "SCALAR SUBQUERY 211"
+        ],
+        [
+          2115,
+          2111,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2131,
+          0,
+          0,
+          "SCALAR SUBQUERY 213"
+        ],
+        [
+          2135,
+          2131,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2151,
+          0,
+          0,
+          "SCALAR SUBQUERY 215"
+        ],
+        [
+          2155,
+          2151,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2171,
+          0,
+          0,
+          "SCALAR SUBQUERY 217"
+        ],
+        [
+          2175,
+          2171,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2191,
+          0,
+          0,
+          "SCALAR SUBQUERY 219"
+        ],
+        [
+          2195,
+          2191,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2211,
+          0,
+          0,
+          "SCALAR SUBQUERY 221"
+        ],
+        [
+          2215,
+          2211,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2231,
+          0,
+          0,
+          "SCALAR SUBQUERY 223"
+        ],
+        [
+          2235,
+          2231,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2251,
+          0,
+          0,
+          "SCALAR SUBQUERY 225"
+        ],
+        [
+          2255,
+          2251,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2271,
+          0,
+          0,
+          "SCALAR SUBQUERY 227"
+        ],
+        [
+          2275,
+          2271,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2291,
+          0,
+          0,
+          "SCALAR SUBQUERY 229"
+        ],
+        [
+          2295,
+          2291,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2311,
+          0,
+          0,
+          "SCALAR SUBQUERY 231"
+        ],
+        [
+          2315,
+          2311,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2331,
+          0,
+          0,
+          "SCALAR SUBQUERY 233"
+        ],
+        [
+          2335,
+          2331,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2351,
+          0,
+          0,
+          "SCALAR SUBQUERY 235"
+        ],
+        [
+          2355,
+          2351,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2371,
+          0,
+          0,
+          "SCALAR SUBQUERY 237"
+        ],
+        [
+          2375,
+          2371,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2391,
+          0,
+          0,
+          "SCALAR SUBQUERY 239"
+        ],
+        [
+          2395,
+          2391,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2411,
+          0,
+          0,
+          "SCALAR SUBQUERY 241"
+        ],
+        [
+          2415,
+          2411,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2431,
+          0,
+          0,
+          "SCALAR SUBQUERY 243"
+        ],
+        [
+          2435,
+          2431,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2451,
+          0,
+          0,
+          "SCALAR SUBQUERY 245"
+        ],
+        [
+          2455,
+          2451,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2471,
+          0,
+          0,
+          "SCALAR SUBQUERY 247"
+        ],
+        [
+          2475,
+          2471,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2491,
+          0,
+          0,
+          "SCALAR SUBQUERY 249"
+        ],
+        [
+          2495,
+          2491,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2511,
+          0,
+          0,
+          "SCALAR SUBQUERY 251"
+        ],
+        [
+          2515,
+          2511,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2531,
+          0,
+          0,
+          "SCALAR SUBQUERY 253"
+        ],
+        [
+          2535,
+          2531,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          2551,
+          0,
+          0,
+          "SCALAR SUBQUERY 255"
+        ],
+        [
+          2555,
+          2551,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ]
+      ],
+      "opcode_count": 2617,
+      "opcodes": {
+        "BeginSubrtn": 128,
+        "Close": 2,
+        "Column": 128,
+        "Copy": 128,
+        "DecrJumpZero": 128,
+        "EndCoroutine": 1,
+        "Explain": 257,
+        "FkCounter": 2,
+        "Goto": 4,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 1,
+        "Insert": 1,
+        "Integer": 130,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 128,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 129,
+        "Once": 128,
+        "OpenRead": 130,
+        "OpenWrite": 1,
+        "Return": 128,
+        "Rewind": 128,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 768,
+        "Yield": 129
+      }
+    },
+    "objects_one_scope_128": {
+      "bindings": 768,
+      "query_plan": [
+        [
+          3,
+          0,
+          0,
+          "CO-ROUTINE incoming"
+        ],
+        [
+          4,
+          3,
+          0,
+          "SCAN 128 CONSTANT ROWS"
+        ],
+        [
+          903,
+          0,
+          144,
+          "SCAN i"
+        ],
+        [
+          906,
+          0,
+          216,
+          "SCAN r"
+        ]
+      ],
+      "opcode_count": 972,
+      "opcodes": {
+        "Close": 2,
+        "Column": 1,
+        "Copy": 6,
+        "EndCoroutine": 2,
+        "Explain": 4,
+        "FkCounter": 2,
+        "Goto": 5,
+        "Halt": 2,
+        "HaltIfNull": 7,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 3,
+        "Insert": 1,
+        "Integer": 2,
+        "IsNull": 2,
+        "MakeRecord": 1,
+        "MustBeInt": 2,
+        "Next": 1,
+        "NoConflict": 1,
+        "NotExists": 2,
+        "Null": 1,
+        "OpenRead": 3,
+        "OpenWrite": 1,
+        "Rewind": 1,
+        "SCopy": 16,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 768,
+        "Yield": 131
+      }
+    },
+    "pack_zero_blob_1": {
+      "bindings": 2,
+      "query_plan": [
+        [
+          6,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          10,
+          6,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ]
+      ],
+      "opcode_count": 50,
+      "opcodes": {
+        "BeginSubrtn": 1,
+        "Close": 1,
+        "Column": 1,
+        "Copy": 1,
+        "DecrJumpZero": 1,
+        "Explain": 2,
+        "Function": 1,
+        "Goto": 2,
+        "Halt": 3,
+        "HaltIfNull": 2,
+        "IdxInsert": 1,
+        "Init": 1,
+        "Insert": 1,
+        "IntCopy": 2,
+        "Integer": 2,
+        "IsNull": 1,
+        "MakeRecord": 2,
+        "MustBeInt": 2,
+        "NewRowid": 1,
+        "Next": 1,
+        "NotExists": 2,
+        "NotNull": 1,
+        "Null": 1,
+        "Once": 2,
+        "OpenRead": 2,
+        "OpenWrite": 2,
+        "Return": 1,
+        "Rewind": 1,
+        "SCopy": 3,
+        "SoftNull": 1,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 2
+      }
+    },
+    "pack_zero_blob_4": {
+      "bindings": 8,
+      "query_plan": [
+        [
+          2,
+          0,
+          0,
+          "SCAN 4 CONSTANT ROWS"
+        ],
+        [
+          10,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          14,
+          10,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          29,
+          0,
+          0,
+          "SCALAR SUBQUERY 3"
+        ],
+        [
+          33,
+          29,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          48,
+          0,
+          0,
+          "SCALAR SUBQUERY 5"
+        ],
+        [
+          52,
+          48,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          67,
+          0,
+          0,
+          "SCALAR SUBQUERY 7"
+        ],
+        [
+          71,
+          67,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          111,
+          0,
+          215,
+          "SCAN objects"
+        ],
+        [
+          119,
+          0,
+          54,
+          "SEARCH metadata_value_groups USING COVERING INDEX sqlite_autoindex_metadata_value_groups_1 (pack_id=?)"
+        ]
+      ],
+      "opcode_count": 133,
+      "opcodes": {
+        "Affinity": 1,
+        "BeginSubrtn": 4,
+        "Close": 1,
+        "Column": 5,
+        "Copy": 9,
+        "DecrJumpZero": 4,
+        "EndCoroutine": 1,
+        "Explain": 11,
+        "FkCounter": 3,
+        "FkIfZero": 2,
+        "Function": 4,
+        "Goto": 3,
+        "Halt": 2,
+        "HaltIfNull": 2,
+        "IdxGT": 1,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 1,
+        "Insert": 1,
+        "IntCopy": 2,
+        "Integer": 5,
+        "IsNull": 2,
+        "MakeRecord": 2,
+        "MustBeInt": 2,
+        "Ne": 1,
+        "NewRowid": 1,
+        "Next": 6,
+        "NotExists": 2,
+        "NotNull": 1,
+        "Null": 4,
+        "Once": 8,
+        "OpenRead": 7,
+        "OpenWrite": 2,
+        "Return": 4,
+        "Rewind": 5,
+        "SCopy": 4,
+        "SeekGE": 1,
+        "SoftNull": 1,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 8,
+        "Yield": 5
+      }
+    },
+    "pack_zero_blob_16": {
+      "bindings": 32,
+      "query_plan": [
+        [
+          2,
+          0,
+          0,
+          "SCAN 16 CONSTANT ROWS"
+        ],
+        [
+          10,
+          0,
+          0,
+          "SCALAR SUBQUERY 1"
+        ],
+        [
+          14,
+          10,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          29,
+          0,
+          0,
+          "SCALAR SUBQUERY 3"
+        ],
+        [
+          33,
+          29,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          48,
+          0,
+          0,
+          "SCALAR SUBQUERY 5"
+        ],
+        [
+          52,
+          48,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          67,
+          0,
+          0,
+          "SCALAR SUBQUERY 7"
+        ],
+        [
+          71,
+          67,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          86,
+          0,
+          0,
+          "SCALAR SUBQUERY 9"
+        ],
+        [
+          90,
+          86,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          105,
+          0,
+          0,
+          "SCALAR SUBQUERY 11"
+        ],
+        [
+          109,
+          105,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          124,
+          0,
+          0,
+          "SCALAR SUBQUERY 13"
+        ],
+        [
+          128,
+          124,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          143,
+          0,
+          0,
+          "SCALAR SUBQUERY 15"
+        ],
+        [
+          147,
+          143,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          162,
+          0,
+          0,
+          "SCALAR SUBQUERY 17"
+        ],
+        [
+          166,
+          162,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          181,
+          0,
+          0,
+          "SCALAR SUBQUERY 19"
+        ],
+        [
+          185,
+          181,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          200,
+          0,
+          0,
+          "SCALAR SUBQUERY 21"
+        ],
+        [
+          204,
+          200,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          219,
+          0,
+          0,
+          "SCALAR SUBQUERY 23"
+        ],
+        [
+          223,
+          219,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          238,
+          0,
+          0,
+          "SCALAR SUBQUERY 25"
+        ],
+        [
+          242,
+          238,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          257,
+          0,
+          0,
+          "SCALAR SUBQUERY 27"
+        ],
+        [
+          261,
+          257,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          276,
+          0,
+          0,
+          "SCALAR SUBQUERY 29"
+        ],
+        [
+          280,
+          276,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          295,
+          0,
+          0,
+          "SCALAR SUBQUERY 31"
+        ],
+        [
+          299,
+          295,
+          216,
+          "SCAN temp.layerfs_read_scope"
+        ],
+        [
+          339,
+          0,
+          215,
+          "SCAN objects"
+        ],
+        [
+          347,
+          0,
+          54,
+          "SEARCH metadata_value_groups USING COVERING INDEX sqlite_autoindex_metadata_value_groups_1 (pack_id=?)"
+        ]
+      ],
+      "opcode_count": 361,
+      "opcodes": {
+        "Affinity": 1,
+        "BeginSubrtn": 16,
+        "Close": 1,
+        "Column": 17,
+        "Copy": 33,
+        "DecrJumpZero": 16,
+        "EndCoroutine": 1,
+        "Explain": 35,
+        "FkCounter": 3,
+        "FkIfZero": 2,
+        "Function": 16,
+        "Goto": 3,
+        "Halt": 2,
+        "HaltIfNull": 2,
+        "IdxGT": 1,
+        "IdxInsert": 1,
+        "Init": 1,
+        "InitCoroutine": 1,
+        "Insert": 1,
+        "IntCopy": 2,
+        "Integer": 17,
+        "IsNull": 2,
+        "MakeRecord": 2,
+        "MustBeInt": 2,
+        "Ne": 1,
+        "NewRowid": 1,
+        "Next": 18,
+        "NotExists": 2,
+        "NotNull": 1,
+        "Null": 16,
+        "Once": 32,
+        "OpenRead": 19,
+        "OpenWrite": 2,
+        "Return": 16,
+        "Rewind": 17,
+        "SCopy": 4,
+        "SeekGE": 1,
+        "SoftNull": 1,
+        "Transaction": 2,
+        "TypeCheck": 1,
+        "Variable": 32,
+        "Yield": 17
+      }
+    }
+  }
+}

@@ -418,3 +418,36 @@ pages and the Store's small-file cutoff was 131,072 B. The public row is
 remains unqualified and no new matched control was sampled. The raw receipt,
 cold sidecars, build seal and readback are archived under
 [`evidence/import-batch-integrated/`](evidence/import-batch-integrated/).
+
+## Round R17: side-by-side post-batch gap and isolated mechanisms
+
+The [post-batch v0.1.6 table](post-batch-v016-gap.md) records a 359.706-ms raw
+public gap between exact release v0.1.6 and integrated Core ImportBatch on the
+same 10k/300-MB source. The closest broad file-loop/pipeline spans differ by
+225.420 ms; their boundaries are not identical, and arithmetic outside those
+spans is not causal attribution. All retained 10k arms below use fresh
+independent source copies and had 0/27,503 resident payload pages at final
+preflight; metadata residency is unqualified.
+
+- [Signature count diagnostic](signature-owner-diagnostic.md): 9,399 serial
+  calls / 33.747 MB / 96.164 ms, zero delta trials or duplicate FULL-loss
+  scans. Two exact signature variants failed to improve a pure-function
+  one-pass microbenchmark. No product change selected.
+- [Connection lifetime](connection-slot-experiment.md): isolated one-slot
+  Store candidate raw 1,153.709→1,069.652 ms, while file Save connection
+  release fell 66.443 ms→0.000458 ms. Readbacks and IDs matched. Apparent
+  Store grew 507,904 B and sampled RSS 1,507,328 B; both public rows were
+  telemetry `INCOMPLETE`. Candidate remains isolated/unselected.
+- [Single-scope locator CTE](sql-bulk-admission-result.md): pair raw
+  1,320.471→1,119.887 ms, but object-INSERT region improved only 5.519 ms
+  (7.96%, below the prospective 15% gate); 149.704 ms of the raw wall
+  difference tracked connection-close variation. Store grew 528,384 B.
+  Treatment rejected; no root product change.
+- [Paged collision lookup](collision-lookup-batching.md): pair raw
+  1,092.106→1,194.798 ms and Store +778,240 B. Both readbacks passed, but
+  speed and geometry gates failed; timed collision wall was not exported.
+  Treatment rejected; no root product change.
+
+The 56-MiB streaming transaction and pack-BLOB write feasibility studies are
+separate ongoing research; neither has a public candidate sample in this
+record. No sample above is re-run or pooled to manufacture a speed median.

@@ -1,0 +1,20 @@
+{
+  "complete_run_wall_ns": 7940136333,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 7753861125,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-storage/src/cas/placement.rs",
+      "?? core/docs/issues/237/evidence/sql-bulk-admission/",
+      "?? core/docs/issues/237/sql-bulk-admission-prereg.md"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "5a76a5f8dbb6b4a927789180caed11e0ccbd1a9a3767db1650fd6b2627661494",
+    "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

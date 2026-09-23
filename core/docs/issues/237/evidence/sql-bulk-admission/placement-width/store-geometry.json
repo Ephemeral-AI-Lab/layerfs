@@ -1,0 +1,39 @@
+{
+  "path": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-admission-widthdiag-01/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "sha256": "f7e0fca60f2bc8a0f633d1d7056b2125dcd3a4120772c53dbb1c466f4f6708c0",
+  "apparent_bytes": 334438400,
+  "allocated_bytes_stat_blocks": 335609856,
+  "sqlite_version": "3.51.2",
+  "page_size": 4096,
+  "packs_by_save": [
+    [
+      1,
+      1260,
+      330301440
+    ],
+    [
+      2,
+      2,
+      524288
+    ],
+    [
+      3,
+      3,
+      786432
+    ]
+  ],
+  "objects_by_save": [
+    [
+      1,
+      24364
+    ],
+    [
+      2,
+      11
+    ],
+    [
+      3,
+      308
+    ]
+  ]
+}

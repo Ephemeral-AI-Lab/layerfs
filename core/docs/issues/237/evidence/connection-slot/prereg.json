@@ -1,0 +1,28 @@
+{
+  "purpose": "Matched exploratory 10k Init pair for one Store-scoped idle SQLite connection slot",
+  "comparison": "One control and one candidate, same fixture, H3 route, minimal Service finish instrumentation and host window; no repeat or selection",
+  "order": ["control", "candidate"],
+  "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+  "fixture_manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+  "driver_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "instrumentation_diff_sha256": "c0421009f4587c1e6d8dd4330fcc3bc40192944edf3f908b79d4070edbad192c",
+  "cache": "Fresh independent writable byte copy per arm, full source payload hash and invalidation before timer, final whole-input zero-residency check; metadata residency unqualified; fresh process and Store per arm",
+  "verification": "SKIPPED during performance; full reopened readback separately after each arm",
+  "constraints": "4,096-byte SQLite pages, 128-KiB whole-file cutoff, pack bytes in SQLite BLOBs, four existing C1 constructors, one C2 owner",
+  "control": {
+    "worktree": "/Users/yifanxu/.codex/worktrees/issue237-connection-control/layerfs",
+    "product_seal": "928f4a16a3a9ea4e7ed480bb3a1a6555b16cc8fb93264b4cf0a7402dc495e9a8",
+    "service_binary_sha256": "76e66d149ed5852a68c6c14dfe6149ad2021b98c6ea228744cb93afca5c30dfe",
+    "full_diff_sha256": "c0421009f4587c1e6d8dd4330fcc3bc40192944edf3f908b79d4070edbad192c",
+    "output": "benchmark-results/fs-bench-pro/issue237-connection-control-01"
+  },
+  "candidate": {
+    "worktree": "/Users/yifanxu/.codex/worktrees/issue237-pipeline-residual/layerfs",
+    "product_seal": "d56043e8e547bf49e92aa046a7128e49de71fc4c59f29649cabecd5e38a3c7df",
+    "service_binary_sha256": "392c4e5ad11bea2e272f2dbe43b56f5bb2e577acc3b54d2c1f218faffa8a275e",
+    "full_diff_sha256": "dd7f5b20b65c71f180e189c6d41e97fe55d8522cc495095b8541f84674eaf72e",
+    "output": "benchmark-results/fs-bench-pro/issue237-connection-candidate-01"
+  },
+  "command": "python3 docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py --case namespace-10000 --independent-source-copy --fixed-operation-identity --out <arm.output>"
+}

@@ -1,0 +1,84 @@
+{
+  "arms": [
+    {
+      "arm": "control",
+      "command": [
+        "python3",
+        "docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py",
+        "--case",
+        "namespace-10000",
+        "--out",
+        "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-control/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-control-01",
+        "--independent-source-copy",
+        "--fixed-operation-identity"
+      ],
+      "identity": {
+        "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+        "create_store_sha256": "f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c",
+        "dirty_paths": [
+          " M core/crates/layerfs-service/src/save/import/namespace.rs",
+          " M core/crates/layerfs-service/src/save/import/scan.rs"
+        ],
+        "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+        "layerfs-daemon_sha256": "ae3e1847af0b9223e0edd7c8ae6c4ec957424ab3a032c11ddd2ab56770e67c5c",
+        "layerfs-service_sha256": "aa3ed7e646ae16b7489f0c2bd2638f568d2f967fb781dd6a94b04b61b958bc7d",
+        "product_seal": "9a6c95c007aecee8361f70e8aa7f00aca2ccecd3d403f88d24fa1548013057b8",
+        "public_key_sha256": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+        "source_dirty": true,
+        "verify_namespace_sha256": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0"
+      },
+      "output": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-control/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-control-01",
+      "root": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-control/layerfs"
+    },
+    {
+      "arm": "candidate",
+      "command": [
+        "python3",
+        "docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py",
+        "--case",
+        "namespace-10000",
+        "--out",
+        "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-candidate-01",
+        "--independent-source-copy",
+        "--fixed-operation-identity"
+      ],
+      "identity": {
+        "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+        "create_store_sha256": "f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c",
+        "dirty_paths": [
+          " M core/crates/layerfs-service/src/save/import/namespace.rs",
+          " M core/crates/layerfs-service/src/save/import/scan.rs"
+        ],
+        "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+        "layerfs-daemon_sha256": "3c53fc9357eb8d6d97be27784a387c0a3996667eda9ba0b4617cb19dfb0e583e",
+        "layerfs-service_sha256": "ad401cc3c13b4e53b84ca7c74e1bcf5c39a7203a22e372850ab17d113fbe3846",
+        "product_seal": "b3a231baa626bae46365182d01dbaf092aaef6b15347e5881200d3be883579a2",
+        "public_key_sha256": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "source_commit": "0155bc544cd03e3e01e581941c823a7fa167e1a3",
+        "source_dirty": true,
+        "verify_namespace_sha256": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0"
+      },
+      "output": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-candidate-01",
+      "root": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs"
+    }
+  ],
+  "binary_note": "control/candidate daemon binaries differ by build worktree hash despite unchanged daemon source; both exact hashes are pinned; neither binary is substituted",
+  "exploratory_go": "candidate public raw wall at least 20 ms below control, file Save insert_objects_ns at least 15% below control, exact root/IDs/readback, no Store apparent/RSS regression; a one-shot directional result only",
+  "fixture_manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "host_window": "pending root grant",
+  "mechanism": "record C2 SaveOutcome SQL/COMMIT/INSERT/pack counters and profile under identical once-per-Save reporting in both arms",
+  "order": [
+    "control",
+    "candidate"
+  ],
+  "page_size_bytes": 4096,
+  "reporting_diff_sha256": "0abcfa20d2c1140ed9e8a4147d339a600d50dc00dc54c4ae76f55ee709f111dd",
+  "sample_count_per_arm": 1,
+  "schema": "issue237-sql-cte-matched-pair-prereg-v1",
+  "small_file_cutoff_bytes": 131072,
+  "source": "one fresh independent byte copy per arm, full hash/eviction and immediate 0/27503 payload-resident-page recheck",
+  "status": "exploratory, not release admission; metadata cache residency unqualified",
+  "treatment": "same six-column locator rows/128-row chunk/transaction/pack BLOBs; one TEMP scope scan per INSERT SELECT",
+  "verification": "SKIPPED in public timer; separate full reopened readback afterward"
+}

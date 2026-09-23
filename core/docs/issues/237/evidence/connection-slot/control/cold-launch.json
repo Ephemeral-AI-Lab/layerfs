@@ -1,0 +1,10 @@
+{
+  "cache_scope": "independent-source-payload-zero;metadata-residency-unmeasured",
+  "launch_gap_ns": 6197792,
+  "preflight_sha256": "1fd3320421f1053d9c67f7589ba627bc7ab953dcef0d6a8f6ba236eadc1a847d",
+  "preflight_to_timer_ns": 2756515250,
+  "recheck_sha256": "a6cdd148c9202a9557dd2310176f69c1701e3f17329e4145911e3dfac00d290e",
+  "recheck_to_timer_ns": 6197792,
+  "source_copy_sha256": "fbd1e5108ae784b985f5a6ee6270a2db91ed98cdc52c239903e0c53ff2aed8bb",
+  "status": "VERIFIED_COLD"
+}

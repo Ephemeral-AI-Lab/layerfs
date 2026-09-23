@@ -1,0 +1,224 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-10000",
+  "cleanup": {
+    "daemon": "PASS",
+    "service": "PASS",
+    "stderr_recycle": "RETAINED_INCOMPLETE"
+  },
+  "cleanup_wall_ns": 44560458,
+  "competing_work": [
+    "498 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "500 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "7467 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7470 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7471 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7598 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "7602 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "7608 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "7669 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7673 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7678 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)"
+  ],
+  "daemon_namespace": 4123149381836620721,
+  "daemon_pid": 49931,
+  "external_resources": {
+    "rss_phase_peak": null,
+    "rss_reason": "rusage peak is lifetime, not phase",
+    "scope": "service-and-daemon-lifecycle",
+    "system_cpu_s": 0.798208,
+    "user_cpu_s": 0.9839310000000001
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "clone_method": "independent-byte-copy-v1",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/manifest.tsv",
+    "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "master_source": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload",
+    "preparation_wall_ns": 203867875,
+    "profile": "core-native-import-fixture-v2",
+    "reused": true,
+    "route": "core-native-directory-import-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-admission-widthdiag-01/source-copy/namespace-10000/payload"
+  },
+  "history_bytes": 86016,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-storage/src/cas/placement.rs",
+      "?? core/docs/issues/237/evidence/sql-bulk-admission/",
+      "?? core/docs/issues/237/sql-bulk-admission-prereg.md"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "5a76a5f8dbb6b4a927789180caed11e0ccbd1a9a3767db1650fd6b2627661494",
+    "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+    "source_dirty": true
+  },
+  "performance_command_status": "PASS",
+  "performance_command_wall_ns": 2117366625,
+  "performance_gate": "NOT_FROZEN",
+  "placement": {
+    "daemon": "host",
+    "image_id": null,
+    "service": "host"
+  },
+  "raw_operation_ns": 1165772542,
+  "route": "daemon-host",
+  "run_id": "1ac7e17228e44d588c4af18661c13e2b",
+  "sample_count": 1,
+  "schema": "core-fs-bench-pro-init-v1",
+  "service_namespace": 4123149381836620720,
+  "service_pid": 49930,
+  "status": "INCOMPLETE",
+  "store_bytes": 334438400,
+  "store_create_ns": 1272815917,
+  "telemetry": {
+    "diagnostics": {
+      "daemon": "",
+      "service": "layerfs-service ready 127.0.0.1:58248\nLFS237_ADMISSION rows=12 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=14 pack_writes=2 creates=2 appends=0\nLFS237_ADMISSION rows=11 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=11 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=11 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=10 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=10 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=5 pack_writes=1 creates=0 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=11 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=12 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=11 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=12 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=14 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=288 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=144 pack_writes=1 creates=0 appends=1\nLFS237_ADMISSION rows=11 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=2 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=5 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=288 pack_writes=1 creates=0 appends=1\nLFS237_ADMISSION rows=432 pack_writes=1 creates=1 appends=0\nLFS237_ADMISSION rows=144 pack_writes=1 creates=0 appends=1\nLFS237_ADMISSION rows=11 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=11 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=12 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=13 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=14 pack_writes=2 creates=1 appends=1\nLFS237_ADMISSION rows=11 pack_writes=2 creat"
+    },
+    "errors": [
+      "daemon: telemetry loss"
+    ],
+    "event_counts": {
+      "daemon": 3,
+      "service": 4
+    },
+    "file": "telemetry.lft1",
+    "m2_local_roots": {
+      "daemon": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1134210667,
+          "cpu_shared_ns": [
+            345000,
+            722000
+          ],
+          "elapsed_ns": 1132772917,
+          "first_ns": 29334,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 108667125,
+          "last_ns": 1103725459,
+          "opened_ns": 1436625,
+          "resource_status": "sampled",
+          "sampled_max_rss": 2228224,
+          "samples": 12
+        }
+      ],
+      "service": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1584349666,
+          "cpu_shared_ns": [
+            936773000,
+            764777000
+          ],
+          "elapsed_ns": 1132333542,
+          "first_ns": 402301833,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 106441375,
+          "last_ns": 1503294500,
+          "opened_ns": 452012750,
+          "resource_status": "sampled",
+          "sampled_max_rss": 63537152,
+          "samples": 12
+        }
+      ]
+    },
+    "m3_service_children": [
+      {
+        "children": [],
+        "elapsed_ns": 2154042,
+        "name": "history.import_begin_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 46460167,
+        "name": "history.import_scan"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 938173709,
+        "name": "history.import_files"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 8002167,
+        "name": "history.import_finish_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 684417,
+        "name": "history.begin_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 430250,
+        "name": "history.prerequisites"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1319250,
+        "name": "history.finish_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 543125,
+        "name": "history.begin_tree_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 30864917,
+        "name": "history.finish_tree_save"
+      }
+    ],
+    "m4_c5_duration_ns": null,
+    "m4_reason": "no dedicated C5 timing child",
+    "operation_counts": {
+      "daemon": 1,
+      "service": 1
+    },
+    "parser": "lft1-ingest-v1",
+    "producers": [
+      {
+        "bytes": 2200,
+        "end": 2200,
+        "lines": 4,
+        "name": "service",
+        "namespace": 4123149381836620720,
+        "pid": 49930,
+        "role": 1,
+        "sha256": "4bf89037bbbe94f511ad335e1bdf4ca0be9ee5347b830eed0c2d005f75f017ed",
+        "start": 0
+      },
+      {
+        "bytes": 1124,
+        "end": 3324,
+        "lines": 3,
+        "name": "daemon",
+        "namespace": 4123149381836620721,
+        "pid": 49931,
+        "role": 2,
+        "sha256": "3b29f29db3f3126b40cb6dbb52772aa0a52d70520429c00b712c431ccc016ec9",
+        "start": 2200
+      }
+    ],
+    "sha256": "493d242068ff7c57ad23b2336864dfbdc1b282f7cc2588558a797ddc6729523e",
+    "status": "INCOMPLETE"
+  },
+  "verification": {
+    "reason": "fast lane default; use run --verify for full proof",
+    "status": "SKIPPED"
+  },
+  "verification_mode": "skip-default",
+  "wall_ns": 7752550166
+}

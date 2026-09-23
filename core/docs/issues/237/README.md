@@ -13,6 +13,9 @@ release-qualified. The
 [iteration record](iteration-record.md) lists their separate and integrated
 results, failed receipts and open gates.
 
+The [post-ImportBatch v0.1.6 comparison](post-batch-v016-gap.md) tracks the
+remaining raw 359.706-ms 10k gap, stage-scope limits, and isolated treatments.
+
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
 Each invoked case/source identity has one public-operation sample at most, a

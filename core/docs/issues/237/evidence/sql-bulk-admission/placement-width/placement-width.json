@@ -1,0 +1,113 @@
+{
+  "all": {
+    "created_packs_per_call": {
+      "0": 105,
+      "1": 1227,
+      "2": 18
+    },
+    "derived_object_insert_calls_at_128_rows_per_statement": 1406,
+    "locator_rows": 24683,
+    "locator_rows_max": 434,
+    "locator_rows_min": 1,
+    "locator_rows_per_placement_mean": 18.283703703703704,
+    "locator_width_histogram": {
+      "1-8": 117,
+      "17-32": 4,
+      "65-128": 10,
+      "9-16": 1193,
+      ">128": 26
+    },
+    "pack_appends": 1120,
+    "pack_creates": 1263,
+    "pack_writes": 2383,
+    "pack_writes_per_call": {
+      "1": 317,
+      "2": 1033
+    },
+    "placement_calls": 1350
+  },
+  "method": "exact stderr call lines, bounded by closed Store object/pack rows per Save",
+  "page_size": 4096,
+  "saves": {
+    "file": {
+      "closed_store_pack_rows": 1260,
+      "created_packs_per_call": {
+        "0": 104,
+        "1": 1224,
+        "2": 18
+      },
+      "derived_object_insert_calls_at_128_rows_per_statement": 1400,
+      "locator_rows": 24364,
+      "locator_rows_max": 434,
+      "locator_rows_min": 1,
+      "locator_rows_per_placement_mean": 18.101040118870728,
+      "locator_width_histogram": {
+        "1-8": 115,
+        "17-32": 3,
+        "65-128": 10,
+        "9-16": 1193,
+        ">128": 25
+      },
+      "pack_appends": 1119,
+      "pack_creates": 1260,
+      "pack_rows_outside_place_groups_trace": 0,
+      "pack_writes": 2379,
+      "pack_writes_per_call": {
+        "1": 313,
+        "2": 1033
+      },
+      "placement_calls": 1346,
+      "save_id": 1
+    },
+    "prerequisite": {
+      "closed_store_pack_rows": 2,
+      "created_packs_per_call": {
+        "1": 2
+      },
+      "derived_object_insert_calls_at_128_rows_per_statement": 2,
+      "locator_rows": 11,
+      "locator_rows_max": 8,
+      "locator_rows_min": 3,
+      "locator_rows_per_placement_mean": 5.5,
+      "locator_width_histogram": {
+        "1-8": 2
+      },
+      "pack_appends": 0,
+      "pack_creates": 2,
+      "pack_rows_outside_place_groups_trace": 0,
+      "pack_writes": 2,
+      "pack_writes_per_call": {
+        "1": 2
+      },
+      "placement_calls": 2,
+      "save_id": 2
+    },
+    "tree": {
+      "closed_store_pack_rows": 3,
+      "created_packs_per_call": {
+        "0": 1,
+        "1": 1
+      },
+      "derived_object_insert_calls_at_128_rows_per_statement": 4,
+      "locator_rows": 308,
+      "locator_rows_max": 280,
+      "locator_rows_min": 28,
+      "locator_rows_per_placement_mean": 154.0,
+      "locator_width_histogram": {
+        "17-32": 1,
+        ">128": 1
+      },
+      "pack_appends": 1,
+      "pack_creates": 1,
+      "pack_rows_outside_place_groups_trace": 2,
+      "pack_writes": 2,
+      "pack_writes_per_call": {
+        "1": 2
+      },
+      "placement_calls": 2,
+      "save_id": 3
+    }
+  },
+  "schema": "issue237-placement-width-census-v1",
+  "sqlite_version": "3.51.2"
+}
