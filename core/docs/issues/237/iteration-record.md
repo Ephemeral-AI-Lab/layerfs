@@ -403,8 +403,18 @@ The prior one-shot prototype measured **1,400.623 → 1,166.251 ms** and
 **34,562 → 1,202** channel receives. Its control telemetry and binary
 preregistration were incomplete, and metadata cache state was unqualified.
 Those figures remain pinned to the prior candidate identity; they are not
-assigned to this reorganized source. This integration has not taken a new
-10k public timing sample. Its locked Core workspace tests/doctests and
+assigned to this reorganized source. Its locked Core workspace tests/doctests and
 warning-denying Clippy passed, as did formatting, the product boundary guard
 and six tool tests. The issue remains exploratory: channel batching did not
 establish a 90% reduction in C2/SQLite transactions.
+
+One subsequent [integrated-source diagnostic](service-layout-and-import-batch.md#integrated-source-one-10k-diagnostic)
+used clean product commit `bc944fe63` and a fresh independent source copy.
+The public Init was **1,110.332 ms / 270.189 MB/s**, with **0/27,503** resident
+payload pages at the final check, 1.735 ms before timing. Separate reopened
+readback passed for 10,000 files and 300 MB. Both SQLite files used 4,096-B
+pages and the Store's small-file cutoff was 131,072 B. The public row is
+**INCOMPLETE** from Service and daemon telemetry loss; metadata residency
+remains unqualified and no new matched control was sampled. The raw receipt,
+cold sidecars, build seal and readback are archived under
+[`evidence/import-batch-integrated/`](evidence/import-batch-integrated/).

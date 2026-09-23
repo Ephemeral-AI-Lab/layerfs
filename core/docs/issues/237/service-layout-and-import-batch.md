@@ -1,10 +1,10 @@
 # #237 Service layout and import batch integration
 
 > **Status: implemented on `codex/issue237-init-research`, not release-admitted.**
-> This report describes the Service source based on parent
-> `27a0eb6aabb4e0ca44878c5ad47d81077bc41654` and the same-commit
-> architecture update. The timing table below belongs to the earlier isolated
-> prototype at `329325587`; the reorganized source is a new build identity.
+> This report describes Service source commit
+> `bc944fe6347f640b6d4877f69f2d98b464c4d0ad`. The matched timing table
+> below belongs to the earlier isolated prototype at `329325587`; the
+> reorganized source has its own one-shot diagnostic row.
 
 ## Source organization
 
@@ -64,6 +64,49 @@ C2 COMMITs and two C5 write transactions; those counts were not measured in the
 timed candidate. Channel batching has not demonstrated the requested 90% DB
 transaction reduction.
 
+## Integrated source: one 10k diagnostic
+
+The clean integrated source at `bc944fe63` received one performance-only
+10k/300-MB public Init sample. The [prospective record](evidence/import-batch-integrated/prospective.json)
+pins the source, product and harness seals, fixture manifest, output path and
+cold-payload procedure. The [build record](evidence/import-batch-integrated/build.json)
+pins the actual release Service and daemon binaries. No earlier timed arm was
+rerun, and this standalone sample has no new matched per-message control.
+
+| Observation | Integrated ImportBatch source |
+| --- | ---: |
+| Public Init | **1,110.332 ms** |
+| Public throughput, 300 decimal MB | **270.189 MB/s** |
+| File loop | **935.124 ms** |
+| Source scan | **47.525 ms** |
+| Final source payload residency | **0 / 27,503 pages** |
+| Recheck-to-timer gap | **1.735 ms** |
+| Closed Store + History apparent bytes | **334,249,984 B** |
+| Public row | **INCOMPLETE**: Service and daemon telemetry loss |
+| In-timer verification | **SKIPPED** (performance-only) |
+| Separate full reopened readback | **PASS**: 10,101 paths, 10,000 files, 300,000,000 B |
+
+The [raw receipt](evidence/import-batch-integrated/receipt.json),
+[public result](evidence/import-batch-integrated/perf.jsonl),
+[cold preflight](evidence/import-batch-integrated/cold-preflight.json),
+[final residency check](evidence/import-batch-integrated/cold-recheck.json),
+[launch sidecar](evidence/import-batch-integrated/cold-launch.json), and
+[separate readback](evidence/import-batch-integrated/readback.json) retain the
+evidence. The independent source copy is recorded in
+[source-copy.json](evidence/import-batch-integrated/source-copy.json). Store
+and History SQLite pages were both 4,096 B and Store
+`small_file_threshold_bytes` was 131,072 B in the
+[closed DB geometry](evidence/import-batch-integrated/sqlite-geometry.json).
+The reopened root was the same `e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673`
+seen in the prior matched Core pair.
+
+This integrated source's raw time is 55.919 ms below the earlier timed
+prototype's 1,166.251 ms, but the source identity, instrumentation and
+measurement window changed. That arithmetic is **not** a measured refactor
+speedup. The prior matched pair supports only the prototype's exploratory
+channel-batching result. Metadata residency is still unqualified and the
+integrated public row lost telemetry, so neither row is release admission.
+
 ## Current integration checks and remaining work
 
 The reorganized source compiled with `cargo +1.85.1 check --manifest-path
@@ -73,8 +116,7 @@ production Rust/SQL files), and its six tool tests passed. The enlarged native
 import test covers 2,050 tiny files, one 300-KB file and a cross-boundary read.
 `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all` formatted the tree.
 
-No timed 10k result has been taken for the integrated source identity in this
-report. The one-shot prototype established a substantial channel-count reduction;
+The one-shot prototype established a substantial channel-count reduction;
 the remaining work is C2 admission/SQLite cost under a single owner. The earlier
 same-source v0.1.6 cold-payload comparison was 750.626 ms / 399.667 MB/s. The
 historical 518.8 MB/s observation had zero device-read bytes and did not

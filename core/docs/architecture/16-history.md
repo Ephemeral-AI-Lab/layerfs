@@ -38,7 +38,7 @@ Implementation specification and its pre-publication audit:
   for that shared builder's explicit import-provenance argument; the described
   algorithm and measurement identities are unchanged.
 - **#237 Service layout and import batching:** the same-commit Service source
-  based on research parent `27a0eb6aabb4e0ca44878c5ad47d81077bc41654`
+  at `bc944fe6347f640b6d4877f69f2d98b464c4d0ad`
   groups requests under `read/` and `save/`, moves server assembly under
   `server/`, and uses `save/import/batch/` for bounded producer messages. This
   source is a new build identity; the earlier one-shot prototype timings do not

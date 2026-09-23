@@ -1,0 +1,11 @@
+{
+  "binary_sha256": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0",
+  "history_sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9",
+  "returncode": 0,
+  "source_commit": "bc944fe6347f640b6d4877f69f2d98b464c4d0ad",
+  "status": "PASS",
+  "stderr": "LFS237 verifier traversal paths=10101 directories=101 queued_files=10000 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=131052 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=162674 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=162674 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=294052 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=325674 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=325674 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=488674 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=457052 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=651674 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=488674 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=814674 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=651674 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=620006 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=977580 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=814239 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=4444309 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=7747691 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=11184782 metadata_attribute_waves=1\n",
+  "stdout": "{\"status\":\"PASS\",\"paths\":10101,\"files\":10000,\"directories\":101,\"bytes\":300000000,\"workers\":4,\"metadata_attribute_waves\":5,\"root\":\"e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673\",\"manifest_sha256\":\"c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e\"}\n",
+  "store_sha256": "b9c609bd17514eafa427361e94643b6bc432c8fcdee5122ec198c087b5098bb1",
+  "wall_ns": 1784244875
+}

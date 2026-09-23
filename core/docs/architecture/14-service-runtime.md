@@ -23,13 +23,12 @@ The Init ordering-backing correction describes product commit
 `0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
 their separate source bases.
 
-The #237 Service layout and import-batch description below is written against
-the Service source in the same commit as that update, based on research parent
-`27a0eb6aabb4e0ca44878c5ad47d81077bc41654`. It changes source organization
+The #237 Service layout and import-batch description below is pinned to source
+commit `bc944fe6347f640b6d4877f69f2d98b464c4d0ad`. It changes source organization
 and native Init's bounded producer-to-save messages; it does not change the
 bridge wire format, the C2 save owner, or SQLite's physical format. The measured
-prototype and its qualifications are in
-[`#237`](../issues/237/slab-handoff-experiment.md).
+prototype, integrated diagnostic and their qualifications are in
+[`#237`](../issues/237/service-layout-and-import-batch.md).
 
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode

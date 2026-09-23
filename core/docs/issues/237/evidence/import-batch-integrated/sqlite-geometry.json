@@ -1,0 +1,13 @@
+{
+  "history.sqlite": {
+    "apparent_bytes": 86016,
+    "page_count": 21,
+    "page_size": 4096
+  },
+  "store.sqlite": {
+    "apparent_bytes": 334163968,
+    "page_count": 81583,
+    "page_size": 4096,
+    "small_file_threshold_bytes": 131072
+  }
+}
