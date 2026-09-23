@@ -1,0 +1,9 @@
+{
+  "bytes": 500000000,
+  "expected_pages": 126206,
+  "files": 100000,
+  "gap_since_preflight_ns": 5135285750,
+  "invalidated_files": 0,
+  "page_size_bytes": 16384,
+  "resident_pages": 0
+}

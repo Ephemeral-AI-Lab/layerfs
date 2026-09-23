@@ -1,0 +1,22 @@
+{
+  "benchmark_registration": "UNREGISTERED_DIAGNOSTIC",
+  "blocked": null,
+  "cases": [
+    "namespace-100-compact-v3",
+    "namespace-1000-compact-v3"
+  ],
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 128032661042,
+  "identity": {
+    "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "37b3a30e125af6f2dbb7bb474aaf676b05d049c4bf5160f7e13b094e422a2fa7",
+    "product_seal": "1d9d64ee874c4dc3b305c3be5021471b80abf757e0f9309bdba12457f57c5f84",
+    "source_commit": "3eaa6bd36bdc420eb85f4dab0cabbd2ddd19f479",
+    "source_dirty": false,
+    "source_tree": "5e4d41420bd06046f21fbf9ad8874936b7909e1f"
+  },
+  "schema": "core-fs-bench-pro-sdk-run-v2",
+  "selection": "diagnostic-100k"
+}

@@ -1,0 +1,8 @@
+{
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-100000",
+  "functional_status": "NOT_RUN",
+  "reason": "outside the #236 SDK two-case selection; #231 four-tier gate open",
+  "sample_count": 0,
+  "status": "NOT_RUN"
+}

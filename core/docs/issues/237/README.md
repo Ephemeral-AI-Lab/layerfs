@@ -29,8 +29,11 @@ post-merge SDK call and full reopened readback for 100 and 1,000 files, plus
 an explicitly unregistered 10,000-file SDK diagnostic. These SDK observations
 remain separate from the older daemon-host timings.
 The [next-agent SDK 100k handoff](sdk-100k-performance-handoff.md) freezes the
-case and the work required before its first debug SDK diagnostic. The current
-#236 two-case runner still records 100k as `NOT_RUN`.
+case and the work required before its first debug SDK diagnostic. The
+[one-shot 100k result](sdk-100k-result-20260924.md) records a completed
+23.972-s public SDK call and full 101,001-path/500-MB readback at the new
+unregistered diagnostic identity. The #236 two-case selection still records
+100k as `NOT_RUN`.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
@@ -182,12 +185,13 @@ build specification. See [file ingest](file-ingest.md) and
   performance identity. D9's `SKIPPED` proof is explicit; D6/D7's 5 s timeouts
   remain failures. Explore performance separately from verifier repair, as the
   updated `AGENTS.md` guidance says.
-- The Core first-pass runner deliberately leaves `namespace-100000` `NOT_RUN`.
-  Its exact 100,000-file/500 MB source, cold contract, complete command, resource
-  scopes and full oracle need a prospective runner version and one fresh sample.
-  The [100k route handoff](100k-route.md) identifies every hard skip. D10's
-  one-shot research driver did not change that registry or prove readback. The
-  2.7 s historical cold target remains a target, not a waiver or PASS.
+- The #236 two-case selection deliberately leaves `namespace-100000`
+  `NOT_RUN`. A separate [debug SDK diagnostic](sdk-100k-result-20260924.md)
+  completed the exact 100,000-file/500-MB call and full reopened oracle, with
+  source payload pages at zero residency. Metadata cache state is unqualified,
+  the 25.527-s complete command exceeds registered/exploratory performance
+  bounds, and no release admission or 2.7-s cold target PASS follows. The older
+  D10 daemon-host attempt still has no confirmed caller root or readback.
 - Process CPU, sampled RSS, source-page residency, scratch/spool and Store bytes
   are separate domains. The retained RSS samples have no complete phase
   coverage, and no cgroup anonymous/file split exists for this host route.
