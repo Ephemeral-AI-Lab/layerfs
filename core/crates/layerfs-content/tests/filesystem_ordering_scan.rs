@@ -155,3 +155,35 @@ fn a_restarted_scan_returns_the_same_rows_as_a_fresh_one() {
     // A serial no tier holds is absence, not an error.
     assert!(store.find(ROWS + 1).expect("find").is_none());
 }
+
+#[test]
+fn a_sparse_newer_tier_skips_its_gap_and_finds_older_rows() {
+    let temp = TempDir::new("ordering-scan-gap");
+    let mut backing = RecordingBacking::new(temp.path());
+    let mut store = RunStore::new(Some(&mut backing), 4096, 8 * 1024 * 1024);
+    for range in [129..=192, 193..=256] {
+        let pending = range.map(|serial| (serial, row(serial))).collect();
+        store.spill(&pending).expect("older spill");
+    }
+    let mut newer = (1..=128)
+        .map(|serial| (serial, row(serial)))
+        .collect::<BTreeMap<_, _>>();
+    newer.insert(300, row(300));
+    store.spill(&newer).expect("newer spill");
+    assert_eq!(store.live_runs(), 2);
+
+    let before = store.work().rows_read;
+    for serial in 129..=256 {
+        assert_eq!(
+            store.find(serial).unwrap().map(|row| row.serial()),
+            Some(serial)
+        );
+    }
+    assert!(
+        store.work().rows_read - before < 500,
+        "sparse misses must not rescan the low prefix"
+    );
+    assert!(store.find(299).unwrap().is_none());
+    assert_eq!(store.find(300).unwrap().map(|row| row.serial()), Some(300));
+    assert_eq!(store.find(2).unwrap().map(|row| row.serial()), Some(2));
+}

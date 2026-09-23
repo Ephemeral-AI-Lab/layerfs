@@ -77,3 +77,30 @@ request, seed, worker count, deadlines, full verifier and Store policy. Take
 one D4 performance observation. A successful root plus full readback and equal
 physical/semantic Store metrics are required before any public time comparison;
 if D4 still fails, retain it and report only mechanism localization.
+
+## D5: reducer work counters after D4 failed
+
+D4 returned no C5 root and its verifier did not run. Do not repeat that source.
+For one new labelled diagnostic identity, add only milestone output around C1
+directory effects, directory value insertion and each 1,024 remaining inode
+values. At each milestone read the reducer's existing counters: rows touched,
+spilled, run reads/writes, runs and merges. Run the same cold-source 10k public
+request once. This diagnoses whether tiered ordering lookups are superlinear;
+the timer is not another D4 performance sample and no gate admission follows.
+
+## D6: per-tier proven-absence interval
+
+D5 found 9,011,202 run-row reads after 10k directory effects and 13,869,215
+before the value loop finished, against 20,201 and 25,422 touched rows at
+those points. The source's `RunStore::find` restarts a tier scan whenever the
+next ascending serial is below the row that overshot a previous miss. Freeze a
+single C1 change on top of D4: retain one half-open proven-absent serial
+interval per immutable run tier, skip only that tier for a request inside the
+gap, and invalidate it with the tier's existing scan reset. No page-size,
+ordering quota, worker, buffer, pack, SQL or public API change. An external
+two-tier regression must show the newer sparse run's gap still falls through
+to an older matching row while row reads stay bounded, including backward and
+upper-bound queries. Then take one cold-source native 10k operation with full
+verifier and report its root, resources and Store geometry. D5 is an
+instrumented diagnostic, not a matched time control; a completion after D6
+proves feasibility but no historical speedup factor.

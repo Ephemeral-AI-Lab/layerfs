@@ -1,0 +1,44 @@
+diff --git a/core/crates/layerfs-content/src/filesystem/update.rs b/core/crates/layerfs-content/src/filesystem/update.rs
+index 5b096f857..e0adbc563 100644
+--- a/core/crates/layerfs-content/src/filesystem/update.rs
++++ b/core/crates/layerfs-content/src/filesystem/update.rs
+@@ -154,6 +154,7 @@ fn run_body<'b>(
+     phases: &FilesystemPhases<'_>,
+     cleanup_attempted: &mut bool,
+ ) -> ContentResult<FilesystemResult> {
++    let issue237_started = std::time::Instant::now();
+     // A directory this batch leaves with no binding is dead on arrival: its
+     // parent already accounted the binding it lost, so there is no final count to
+     // hold it, no page worth building, and no subtree to walk.
+@@ -301,6 +302,8 @@ fn run_body<'b>(
+         }
+         Ok(())
+     })?;
++    let issue237_work = reducer.work();
++    eprintln!("LFS237 directories elapsed_ns={} touched={} spilled={} run_reads={} run_writes={} runs={} merges={}", issue237_started.elapsed().as_nanos(), issue237_work.rows_touched, issue237_work.rows_spilled, issue237_work.runs.rows_read, issue237_work.runs.rows_written, issue237_work.runs.runs_created, issue237_work.runs.merges);
+     // Keep the reducer's original all-effects-before-values insertion order:
+     // interleaving values with later effects can increase spill quota demands.
+     // Reuse the final parent batch; earlier omitted values are read in bounded
+@@ -343,6 +346,8 @@ fn run_body<'b>(
+             )?;
+         }
+     }
++    let issue237_work = reducer.work();
++    eprintln!("LFS237 contents elapsed_ns={} touched={} spilled={} run_reads={} run_writes={} runs={} merges={}", issue237_started.elapsed().as_nanos(), issue237_work.rows_touched, issue237_work.rows_spilled, issue237_work.runs.rows_read, issue237_work.runs.rows_written, issue237_work.runs.runs_created, issue237_work.runs.merges);
+     // Every other supplied value keeps the content root the caller named, unless
+     // this operation rebuilt that inode's own directory.
+     let mut updates = Vec::with_capacity(input.inodes.len());
+@@ -354,8 +359,12 @@ fn run_body<'b>(
+         }
+         updates.push((update.serial, update.value));
+     }
+-    for (serial, value) in updates {
++    for (index, (serial, value)) in updates.into_iter().enumerate() {
+         reducer.note_value(serial, value)?;
++        if (index + 1) % 1024 == 0 {
++            let work = reducer.work();
++            eprintln!("LFS237 values count={} elapsed_ns={} touched={} spilled={} run_reads={} run_writes={} runs={} merges={}", index + 1, issue237_started.elapsed().as_nanos(), work.rows_touched, work.rows_spilled, work.runs.rows_read, work.runs.rows_written, work.runs.runs_created, work.runs.merges);
++        }
+     }
+     if checked.topology.table.is_some() {
+         // Only an update can release descendants: a new filesystem has no base

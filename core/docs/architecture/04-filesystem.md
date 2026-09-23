@@ -6,6 +6,8 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md). The directory-parent batching and reuse addendum below describes
 the #190 working-tree change over `9f35c49ad62956f131dc2676787f99d69659686e`.
+The #237 unmerged research diff in the same commit as this paragraph starts
+from `1850f497a` and adds one proven-absent interval to each live run scan.
 
 ---
 
@@ -256,6 +258,14 @@ cursor. Clearing every tier's scan on every spill is what made a lookup restart
 from the front of a higher tier's run and re-read the rows its cursor had already
 passed; the ascending-sweep property is what a receipt on this subsystem has to
 show.
+
+For a sparse run, an overshoot proves the half-open interval between the
+requested serial and the next row contains no record in that tier. Its scan
+remembers one such interval, so an ascending request in that gap continues to
+older tiers without rereading the sparse run's low prefix. A backward request
+outside the interval keeps the ordinary restart. Replacing a run clears its
+scan and this interval. This changes neither the row grammar nor the ordering
+memory and disk quotas.
 
 ### 5.6 The operation boundary
 
