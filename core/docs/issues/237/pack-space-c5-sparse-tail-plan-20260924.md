@@ -54,6 +54,29 @@ identities. This is a focused sparse-pack diagnostic, **not** the 17-state
 `history-stride10` operation or a #229 admission result. No previous
 history receipt is relabelled.
 
+The shared example is
+`core/target/release/examples/issue237_sparse_pooled_probe`. From each
+worktree root, use `/usr/bin/time -l` on that release binary with
+`--output benchmark-results/issue237-sparse-ARM-17save-20260924-01`;
+retain its stdout and time/stderr alongside the output before read-only
+geometry. The C3 arm is isolated at source
+`5a25f4cf2ef89f0ee2153c53be7e99725ed91423`, which includes the
+same example without the C5 product edit. The control output and sibling
+stdout/time paths were absent when this selection was made. The exact
+shell form, with `ARM` replaced by `c3` or `c5` once in its respective
+worktree, is:
+
+```sh
+/usr/bin/time -l core/target/release/examples/issue237_sparse_pooled_probe \
+  --output benchmark-results/issue237-sparse-ARM-17save-20260924-01 \
+  > benchmark-results/issue237-sparse-ARM-17save-20260924-01.stdout \
+  2> benchmark-results/issue237-sparse-ARM-17save-20260924-01.time
+```
+
+Pin binary hashes, product tree hashes, exact outputs and artifact hashes
+in the raw receipts. `/usr/bin/time`'s process peak is lifecycle memory,
+not a phase-local peak.
+
 For this diagnostic, C5 must pass full reopened object readback and reduce
 combined allocated Store bytes by **at least 3,000,000 B** against the
 same-policy C3 arm. Report any miss, the freelist and command/CPU/RSS
