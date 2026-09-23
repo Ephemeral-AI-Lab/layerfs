@@ -166,6 +166,9 @@ fn verify_files(
                     }
                     files += 1;
                     bytes += output.bytes;
+                    if files % 500 == 0 {
+                        eprintln!("LFS237 verifier worker files={files} bytes={bytes} metadata_attribute_waves={}", attributes.read_waves);
+                    }
                 }
                 Ok((files, bytes, attributes.read_waves))
             }));
@@ -262,6 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if seen.len() != expected.len() {
         return Err("missing output paths".into());
     }
+    eprintln!("LFS237 verifier traversal paths={} directories={} queued_files={} metadata_attribute_waves={}", seen.len(), directories, jobs.len(), attributes.read_waves);
     let (files, bytes, file_metadata_waves) =
         verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
     println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",

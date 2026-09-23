@@ -127,3 +127,20 @@ that identity, retain any timeout or failure, and do not use D6 as a passing
 proof. This remains a debug-build research row because the current Core runner
 does not yet follow #231's frozen release-build requirement. SQLite page size
 stays 4096.
+
+## D8: restore the frozen release binary profile
+
+D7's enhanced cold preflight found zero resident source pages and the native
+10k call returned a root in 7.456454042 s, but its full verifier timed out
+at 5.005929958 s. Both product and verifier binaries were still `target/debug`.
+The #231 frozen build contract requires `cargo ... --locked --release`. Change
+only the Core runner's build command, binary path and exact-reuse profile key to
+that release profile, and add bounded progress counts to the external verifier
+so a future timeout has a named stage/file count. Keep the same public operation,
+source, 4096-byte SQLite pages, workers, 15 s command and 5 s verifier limits.
+Attempt one release build; if its complete invocation exceeds 30 s, preserve
+`BUILD_SLOW` and run no gate sample. If it passes, take one fresh cold-source
+10k operation and full verifier. Compare debug/release timings only as build
+profile observations, never as a product algorithm speedup, and retain D7's
+timeout. The official runner still labels source cache uncontrolled; the
+research sidecar is not a retrospectively approved admission contract.

@@ -23,7 +23,7 @@ sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 from shared import telemetry  # noqa: E402
 
-BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
+BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked", "--release",
          "-p", "layerfs-service", "-p", "layerfs-daemon", "-p", "layerfs-bridge",
          "--bin", "layerfs-service", "--bin", "layerfs-daemon", "--example", "public_key",
          "--example", "create_store", "--example", "verify_namespace"]
@@ -96,24 +96,27 @@ def identities():
 def build(out, target, identity):
     cache = RESULTS / "build.json"
     prior = json.loads(cache.read_text()) if cache.exists() else None
-    if prior and prior.get("product_seal") == identity["product_seal"] and all(
+    if prior and prior.get("product_seal") == identity["product_seal"] and prior.get("build_profile") == "release" and prior.get("status") == "BUILD_SLOW":
+        return {"mode": "retained-build-slow", "build_profile": "release", "wall_ns": prior["wall_ns"],
+                "status": "BUILD_SLOW", "command": prior["command"]}
+    if prior and prior.get("product_seal") == identity["product_seal"] and prior.get("build_profile") == "release" and prior.get("status") == "PASS" and all(
         Path(path).is_file() and digest(path) == prior["binaries"][name]["sha256"]
         for name, path in ((name, prior["binaries"][name]["path"]) for name in BINARIES)
     ):
-        return {"mode": "exact-binary-reuse", "wall_ns": 0, "status": "PASS", "command": None,
+        return {"mode": "exact-binary-reuse", "build_profile": "release", "wall_ns": 0, "status": "PASS", "command": None,
                 "binaries": prior["binaries"]}
     env = {**os.environ, "CARGO_TARGET_DIR": str(target)}
     started = time.monotonic_ns()
     with (out / "build.log").open("wb") as log:
         result = subprocess.run(BUILD, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
     wall = time.monotonic_ns() - started
-    record = {"mode": "changed-product" if prior else "first-use", "wall_ns": wall,
-              "status": "BUILD_SLOW" if wall > 30_000_000_000 else "PASS" if result.returncode == 0 else "FAIL",
+    record = {"mode": "changed-product" if prior else "first-use", "build_profile": "release", "wall_ns": wall,
+              "status": "FAIL" if result.returncode else "BUILD_SLOW" if wall > 30_000_000_000 else "PASS",
               "exit_code": result.returncode, "command": BUILD, "target": str(target)}
     if result.returncode == 0:
         binaries = {}
         for name in BINARIES:
-            source = target / "debug" / (name if name in ("layerfs-service", "layerfs-daemon") else f"examples/{name}")
+            source = target / "release" / (name if name in ("layerfs-service", "layerfs-daemon") else f"examples/{name}")
             identity_hash = digest(source)
             archive = RESULTS / "binary-archive" / identity_hash / name
             archive.parent.mkdir(parents=True, exist_ok=True)
@@ -122,7 +125,9 @@ def build(out, target, identity):
                 archive.chmod(0o555)
             binaries[name] = {"path": str(archive), "sha256": identity_hash}
         record["binaries"] = binaries
-        write_json(cache, {"product_seal": identity["product_seal"], "binaries": binaries})
+        write_json(cache, {"build_profile": "release", "product_seal": identity["product_seal"],
+                           "status": record["status"], "wall_ns": wall, "command": BUILD,
+                           "binaries": binaries})
     return record
 
 

@@ -1,0 +1,49 @@
+{
+  "object_count": 24683,
+  "objects_by_save": [
+    [
+      1,
+      24364
+    ],
+    [
+      2,
+      11
+    ],
+    [
+      3,
+      308
+    ]
+  ],
+  "ordered_object_ids_sha256": "0b70be6ee8d9829916179e3576060ca58febdc5e79d320645000055fd5d1e1b1",
+  "pack_allocated_bytes": 331350016,
+  "pack_count": 1264,
+  "pack_used_bytes": 305979487,
+  "pack_versions": {
+    "12": {
+      "allocated_bytes": 524288,
+      "packs": 2,
+      "used_bytes": 406947
+    },
+    "15": {
+      "allocated_bytes": 293863424,
+      "packs": 1121,
+      "used_bytes": 271024343
+    },
+    "17": {
+      "allocated_bytes": 35651584,
+      "packs": 136,
+      "used_bytes": 33939743
+    },
+    "9": {
+      "allocated_bytes": 1310720,
+      "packs": 5,
+      "used_bytes": 608454
+    }
+  },
+  "source_run": "benchmark-results/fs-bench-pro/issue237-d7-oracle-858624cbc-a",
+  "sqlite_freelist_count": 0,
+  "sqlite_page_count": 81584,
+  "sqlite_page_size": 4096,
+  "store": "benchmark-results/fs-bench-pro/issue237-d7-oracle-858624cbc-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "store_file_bytes": 334168064
+}
