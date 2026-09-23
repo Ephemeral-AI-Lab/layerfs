@@ -238,6 +238,24 @@ fn every_query_and_command_round_trips() {
 }
 
 #[test]
+fn native_import_declares_progress_response_budget() {
+    let mut value = request(Operation::HistoryCommand(
+        HistoryCommand::ImportNativeDirectory {
+            stack: [0x52; 16],
+            name: b"native".to_vec(),
+            scope_seed: [0x04; 32],
+        },
+    ));
+    value.response_bytes = 0;
+    assert_eq!(encode_request(&value).unwrap_err().code, Code::Capacity);
+    value.response_bytes = u64::from(value.deadline_ms.div_ceil(1_000));
+    let encoded = encode_request(&value).unwrap();
+    assert_eq!(decode_request(value.id, &encoded).unwrap(), value);
+    assert!(value.operation.content_mutation());
+    assert!(!value.operation.metadata_mutation());
+}
+
+#[test]
 fn profile_and_opcode_must_agree() {
     // A history operation on the legacy profile, and a legacy operation on the
     // history profile, are both refused before any mutation.

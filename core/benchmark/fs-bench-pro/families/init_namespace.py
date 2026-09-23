@@ -9,8 +9,8 @@ import stat
 import time
 import uuid
 
-PROFILE = "core-native-import-fixture-v1"
-ROUTE = "core-native-directory-import-v1"
+PROFILE = "core-native-import-fixture-v2"
+ROUTE = "core-native-directory-import-v2"
 MTIME_NS = 1_700_000_000_000_000_000
 CHUNK = 1024 * 1024
 
@@ -66,7 +66,7 @@ def _row(path, kind, mode, size=0, sha="-"):
 def _check_reuse(case: Case, home: Path):
     receipt = json.loads((home / "fixture.json").read_text())
     raw = (home / "manifest.tsv").read_bytes()
-    if receipt["case"] != case.id or receipt["profile"] != PROFILE or hashlib.sha256(raw).hexdigest() != receipt["manifest_sha256"]:
+    if receipt["case"] != case.id or receipt["profile"] != PROFILE or receipt["route"] != ROUTE or hashlib.sha256(raw).hexdigest() != receipt["manifest_sha256"]:
         raise ValueError("prepared fixture seal mismatch")
     expected = {parts[0]: parts for parts in (line.split("\t") for line in raw.decode().splitlines())}
     if len(expected) != case.files + case.directories + 1:
@@ -96,7 +96,7 @@ def _check_reuse(case: Case, home: Path):
 def prepare(case: Case, prepared_root: Path):
     """Create once and seal while writing; reuse checks never read payload bytes."""
     start = time.monotonic_ns()
-    key = hashlib.sha256(f"{PROFILE}|{case.id}|1".encode()).hexdigest()[:16]
+    key = hashlib.sha256(f"{PROFILE}|{ROUTE}|{case.id}|1".encode()).hexdigest()[:16]
     home = prepared_root / f"{case.id}-{key}"
     if home.exists():
         receipt = _check_reuse(case, home)
@@ -135,7 +135,7 @@ def prepare(case: Case, prepared_root: Path):
     os.utime(source, ns=(MTIME_NS, MTIME_NS))
     raw = "".join(rows).encode()
     (partial / "manifest.tsv").write_bytes(raw)
-    receipt = {"case": case.id, "profile": PROFILE, "seed": 1, "files": case.files,
+    receipt = {"case": case.id, "profile": PROFILE, "route": ROUTE, "seed": 1, "files": case.files,
                "directories": case.directories + 1, "logical_bytes": case.logical_bytes,
                "manifest_sha256": hashlib.sha256(raw).hexdigest()}
     (partial / "fixture.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")

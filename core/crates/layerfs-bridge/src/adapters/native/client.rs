@@ -159,6 +159,17 @@ impl Client {
                     }
                     match frame.kind {
                         Kind::ResultData => {
+                            if matches!(
+                                r.operation,
+                                Operation::HistoryCommand(
+                                    HistoryCommand::ImportNativeDirectory { .. }
+                                )
+                            ) {
+                                if frame.bytes != [0] {
+                                    return Err(delivery(r));
+                                }
+                                continue;
+                            }
                             if !matches!(r.operation, Operation::ReadFile { .. }) {
                                 return Err(delivery(r));
                             }

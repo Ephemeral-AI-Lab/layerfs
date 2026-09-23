@@ -32,7 +32,50 @@ use layerfs_content::{AuthenticatedObjects, FileView, ObjectId};
 use layerfs_history::{ManifestEntry, RecordKind};
 use layerfs_storage::{SaveHandoff, Store};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
-use std::time::Instant;
+use std::{
+    io::Write,
+    time::{Duration, Instant},
+};
+
+/// One bounded progress byte on a long native import, separate from result data.
+pub(crate) struct ImportProgress<'a> {
+    deadline: Instant,
+    last: Instant,
+    output: Option<&'a mut dyn Write>,
+}
+impl<'a> ImportProgress<'a> {
+    pub fn disabled(deadline: Instant) -> Self {
+        Self {
+            deadline,
+            last: Instant::now(),
+            output: None,
+        }
+    }
+    pub fn with_output(deadline: Instant, output: &'a mut dyn Write) -> Self {
+        Self {
+            deadline,
+            last: Instant::now(),
+            output: Some(output),
+        }
+    }
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn tick(&mut self) -> Result<(), Failure> {
+        let now = Instant::now();
+        if now >= self.deadline {
+            return Err(Code::Deadline.into());
+        }
+        if now.duration_since(self.last) >= Duration::from_secs(1) {
+            if let Some(output) = self.output.as_deref_mut() {
+                output.write_all(&[0])?;
+                output.flush()?;
+            }
+            self.last = now;
+        }
+        Ok(())
+    }
+}
 
 /// Internal import row. Its parent index is not restricted by the old wire manifest.
 pub(crate) struct PreparedEntry {
@@ -68,7 +111,7 @@ pub(crate) fn build_namespace(
     scope: InodeScope,
     root_serial: u64,
     entries: &[PreparedEntry],
-    deadline: Instant,
+    progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<ObjectId, Failure> {
     let count = u64::try_from(entries.len()).map_err(|_| Code::Capacity)?;
@@ -76,11 +119,9 @@ pub(crate) fn build_namespace(
         .checked_add(count)
         .filter(|end| *end <= i64::MAX as u64)
         .ok_or(Code::Capacity)?;
-    if Instant::now() >= deadline {
-        return Err(Code::Deadline.into());
-    }
+    progress.tick()?;
     let serials: Vec<u64> = (root_serial..last).collect();
-    let (metadata, content_roots) = prerequisites(store, provider, entries, deadline, timer)?;
+    let (metadata, content_roots) = prerequisites(store, provider, entries, progress, timer)?;
     let inodes: Vec<InodeUpdate> = entries
         .iter()
         .enumerate()
@@ -111,9 +152,7 @@ pub(crate) fn build_namespace(
         resources: FilesystemResources::default(),
     };
     input.check().map_err(content)?;
-    if Instant::now() >= deadline {
-        return Err(Code::Deadline.into());
-    }
+    progress.tick()?;
     let mut save = store
         .begin_save(timer.child("history.begin_tree_save"))
         .map_err(storage)?;
@@ -129,11 +168,8 @@ pub(crate) fn build_namespace(
         None => built,
     };
     let built = built.and_then(|value| {
-        if Instant::now() >= deadline {
-            Err(Code::Deadline.into())
-        } else {
-            Ok(value)
-        }
+        progress.tick()?;
+        Ok(value)
     });
     match built {
         Ok(result) => {
@@ -164,7 +200,7 @@ fn prerequisites(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
     entries: &[PreparedEntry],
-    deadline: Instant,
+    progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<(Vec<ObjectId>, Vec<ObjectId>), Failure> {
     let mut save = store
@@ -177,6 +213,7 @@ fn prerequisites(
             let mut metadata = Vec::with_capacity(entries.len());
             let mut content_roots = Vec::with_capacity(entries.len());
             for entry in entries {
+                progress.tick()?;
                 let kind = kind_of(entry.kind);
                 let value = PortableMetadata {
                     mode: entry.mode,
@@ -218,11 +255,8 @@ fn prerequisites(
         }
     };
     let built = built.and_then(|value| {
-        if Instant::now() >= deadline {
-            Err(Code::Deadline.into())
-        } else {
-            Ok(value)
-        }
+        progress.tick()?;
+        Ok(value)
     });
     match built {
         Ok(values) => {

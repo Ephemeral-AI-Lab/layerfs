@@ -204,6 +204,10 @@ pathless manifest no longer has its former 128-entry test cap, but its legacy
 metadata frame and 16-bit parent field remain representational bounds. This addition describes the source
 change in the same commit as this paragraph; prior source pins remain the
 baseline for the unchanged integration route.
+The importer emits checked one-byte progress records during long construction;
+the native client consumes them without treating them as result bytes. This
+keeps the existing five-second no-progress rule while the absolute operation
+deadline remains unchanged.
 
 A read-only explicit-root mount remains possible without Branch creation.
 History-backed mutation needs the Branch context above. The manifest and new

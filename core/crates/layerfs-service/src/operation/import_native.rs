@@ -2,7 +2,7 @@
 //! the public history command; only the configured root is selectable.
 use super::{
     failure::{content, storage},
-    history_bootstrap::PreparedEntry,
+    history_bootstrap::{ImportProgress, PreparedEntry},
 };
 use layerfs_bridge::contract::{Code, Failure, MAX_FILE};
 use layerfs_content::{
@@ -17,7 +17,7 @@ use std::{
     os::unix::{ffi::OsStrExt, fs::MetadataExt},
     path::{Path, PathBuf},
     sync::{mpsc, Mutex},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 const INIT_WORKERS: usize = 4;
@@ -45,7 +45,7 @@ impl FinalizedConsumer for ChannelConsumer {
 pub(crate) fn scan_and_save(
     source: &Path,
     store: &Store,
-    deadline: Instant,
+    progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<Vec<PreparedEntry>, Failure> {
     let root_metadata = fs::symlink_metadata(source)?;
@@ -67,12 +67,11 @@ pub(crate) fn scan_and_save(
         let mut jobs = Vec::new();
         let mut pending = VecDeque::from([(source.to_path_buf(), 0usize)]);
         while let Some((directory, parent)) = pending.pop_front() {
-            if Instant::now() >= deadline {
-                return Err(Code::Deadline.into());
-            }
+            progress.tick()?;
             let mut children = fs::read_dir(&directory)?.collect::<Result<Vec<_>, _>>()?;
             children.sort_by(|a, b| a.file_name().as_bytes().cmp(b.file_name().as_bytes()));
             for child in children {
+                progress.tick()?;
                 let path = child.path();
                 let name = child.file_name().as_bytes().to_vec();
                 PathName::from_bytes(&name).map_err(content)?;
@@ -109,7 +108,7 @@ pub(crate) fn scan_and_save(
     let scanned = scanned.and_then(|(mut entries, jobs)| {
         timer
             .child("history.import_files")
-            .run(|_| save_files(&mut entries, jobs, store, &mut handoff, deadline))?;
+            .run(|_| save_files(&mut entries, jobs, store, &mut handoff, progress))?;
         Ok(entries)
     });
     let retained = handoff.take_failure();
@@ -118,6 +117,10 @@ pub(crate) fn scan_and_save(
         Some(error) => Err(storage(error)),
         None => scanned,
     };
+    let scanned = scanned.and_then(|entries| {
+        progress.tick()?;
+        Ok(entries)
+    });
     match scanned {
         Ok(entries) => {
             save.finish(timer.child("history.import_finish_save"))
@@ -142,12 +145,13 @@ fn save_files(
     jobs: Vec<Job>,
     store: &Store,
     handoff: &mut SaveHandoff<'_>,
-    deadline: Instant,
+    progress: &mut ImportProgress<'_>,
 ) -> Result<(), Failure> {
     let remaining = jobs.len();
     let queue = Mutex::new(VecDeque::from(jobs));
     let policy = store.policy().construction();
     let capacities = policy.capacities();
+    let deadline = progress.deadline();
     std::thread::scope(|workers| -> Result<(), Failure> {
         let (sender, receiver) = mpsc::sync_channel::<Message>(8);
         for _ in 0..INIT_WORKERS {
@@ -166,7 +170,13 @@ fn save_files(
         drop(sender);
         let mut finished = 0;
         while finished < remaining {
-            match receiver.recv().map_err(|_| Code::Io)? {
+            progress.tick()?;
+            let message = match receiver.recv_timeout(Duration::from_millis(500)) {
+                Ok(message) => message,
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => return Err(Code::Io.into()),
+            };
+            match message {
                 Message::Object(object) => handoff.accept(object).map_err(content)?,
                 Message::Done(index, result) => {
                     entries.get_mut(index).ok_or(Code::InvalidInput)?.content = Some(result?);

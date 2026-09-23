@@ -284,6 +284,10 @@ pre-saved-root semantics and is bounded by the legacy request's metadata frame
 and 16-bit parent encoding, without the former 128-entry test cap. Four source
 file workers construct C1 objects and send them through an eight-object bounded
 channel to one C2 save owner; C5 publication follows the saved filesystem root.
+For this long-running command only, the Service can flush one authenticated
+one-byte progress record per second while work advances. The client consumes
+the marker without treating it as result data; the absolute request deadline
+and five-second transport progress limit remain in force.
 This importer change is described against the product source in the same commit
 as this paragraph; the earlier
 source pin above remains the baseline for the rest of this paper.

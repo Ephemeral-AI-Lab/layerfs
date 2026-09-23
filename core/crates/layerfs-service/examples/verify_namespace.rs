@@ -1,7 +1,7 @@
 //! Independent full native-import oracle over public C1, C2 and C5 reads.
 use layerfs_content::{
     filesystem::attributes::read::{read_portable, AttributeReadWork},
-    inode_leaf::InodeKind,
+    inode_leaf::{InodeKind, InodeValue},
     read_all, FilesystemRead, LogicalPath, ObjectId,
 };
 use layerfs_history::{sqlite::open_read_only, HistoryCatalog, LayerStackId};
@@ -14,7 +14,10 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
+    sync::Mutex,
 };
+
+const VERIFY_WORKERS: usize = 4;
 
 #[derive(Clone)]
 struct Expected {
@@ -83,6 +86,88 @@ fn manifest(bytes: &[u8]) -> Result<BTreeMap<String, Expected>, Box<dyn std::err
     Ok(expected)
 }
 
+fn check_metadata(
+    provider: &StoreProvider<'_>,
+    value: InodeValue,
+    wanted: &Expected,
+    path: &str,
+    work: &mut AttributeReadWork,
+) -> Result<(), String> {
+    let kind = match value.kind {
+        InodeKind::Directory => 'd',
+        InodeKind::RegularFile => 'f',
+        InodeKind::Symlink => 's',
+    };
+    let portable = read_portable(provider, value.metadata_root, value.kind, work)
+        .map_err(|error| format!("metadata read {path}: {error}"))?;
+    if kind != wanted.kind
+        || portable.mode != wanted.mode
+        || i128::from(portable.mtime_seconds) * 1_000_000_000
+            + i128::from(portable.mtime_nanoseconds)
+            != wanted.mtime_ns
+    {
+        return Err(format!("metadata mismatch: {path}"));
+    }
+    Ok(())
+}
+
+fn verify_files(
+    store: &Store,
+    expected: &BTreeMap<String, Expected>,
+    jobs: VecDeque<(String, InodeValue)>,
+) -> Result<(u64, u64), String> {
+    let queue = Mutex::new(jobs);
+    std::thread::scope(|scope| {
+        let mut workers = Vec::new();
+        for _ in 0..VERIFY_WORKERS {
+            let queue = &queue;
+            workers.push(scope.spawn(move || -> Result<(u64, u64), String> {
+                let provider = StoreProvider::new(store);
+                let mut attributes = AttributeReadWork::default();
+                let mut files = 0u64;
+                let mut bytes = 0u64;
+                loop {
+                    let job = queue
+                        .lock()
+                        .map_err(|_| "verifier queue poisoned")?
+                        .pop_front();
+                    let Some((path, value)) = job else { break };
+                    let wanted = expected.get(&path).ok_or("unexpected actual path")?;
+                    check_metadata(&provider, value, wanted, &path, &mut attributes)?;
+                    let mut output = DigestWriter {
+                        hash: Sha256::new(),
+                        bytes: 0,
+                    };
+                    Timing::disabled("read", |timer| {
+                        read_all(
+                            &provider,
+                            value.content_root,
+                            &mut output,
+                            timer.child("file"),
+                        )
+                    })
+                    .0
+                    .map_err(|error| format!("file read {path}: {error}"))?;
+                    if output.bytes != wanted.size || hex(&output.hash.finalize()) != wanted.sha256
+                    {
+                        return Err(format!("content mismatch: {path}"));
+                    }
+                    files += 1;
+                    bytes += output.bytes;
+                }
+                Ok((files, bytes))
+            }));
+        }
+        let (mut files, mut bytes) = (0u64, 0u64);
+        for worker in workers {
+            let (count, length) = worker.join().map_err(|_| "verifier worker panic")??;
+            files += count;
+            bytes += length;
+        }
+        Ok((files, bytes))
+    })
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 7 {
@@ -121,78 +206,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let root_value = fs.resolve(&LogicalPath::root())?.value;
     let mut pending = VecDeque::from([(String::new(), root_value)]);
-    let mut seen = BTreeSet::new();
+    let mut seen = BTreeSet::from([String::new()]);
     let mut attributes = AttributeReadWork::default();
-    let mut files = 0u64;
+    let mut jobs = VecDeque::new();
     let mut directories = 0u64;
-    let mut bytes = 0u64;
     while let Some((path, value)) = pending.pop_front() {
-        if !seen.insert(path.clone()) {
-            return Err("duplicate actual path".into());
-        }
         let wanted = expected.get(&path).ok_or("unexpected actual path")?;
         let logical = LogicalPath::new(&path)?;
-        let portable = read_portable(&provider, value.metadata_root, value.kind, &mut attributes)?;
-        let actual_kind = match value.kind {
-            InodeKind::Directory => 'd',
-            InodeKind::RegularFile => 'f',
-            InodeKind::Symlink => 's',
-        };
-        if actual_kind != wanted.kind
-            || portable.mode != wanted.mode
-            || i128::from(portable.mtime_seconds) * 1_000_000_000
-                + i128::from(portable.mtime_nanoseconds)
-                != wanted.mtime_ns
-        {
-            return Err(format!("metadata mismatch: {path}").into());
+        check_metadata(&provider, value, wanted, &path, &mut attributes)?;
+        if value.kind != InodeKind::Directory {
+            return Err(format!("listed non-directory for traversal: {path}").into());
         }
-        if actual_kind == 'd' {
-            directories += 1;
-            let mut after = None;
-            loop {
-                let page = fs.list(&logical, after.as_ref(), 128, 16_384)?;
-                let serials: Vec<_> = page.entries.iter().map(|(_, serial)| *serial).collect();
-                let inodes = fs.lookup_inodes(&serials)?;
-                for ((name, _), inode) in page.entries.into_iter().zip(inodes) {
-                    let child = if path.is_empty() {
-                        name.as_str().to_owned()
-                    } else {
-                        format!("{path}/{}", name.as_str())
-                    };
-                    pending.push_back((child, inode.ok_or("missing listed inode")?));
+        directories += 1;
+        let mut after = None;
+        loop {
+            let page = fs.list(&logical, after.as_ref(), 128, 16_384)?;
+            let serials: Vec<_> = page.entries.iter().map(|(_, serial)| *serial).collect();
+            let inodes = fs.lookup_inodes(&serials)?;
+            for ((name, _), inode) in page.entries.into_iter().zip(inodes) {
+                let child = if path.is_empty() {
+                    name.as_str().to_owned()
+                } else {
+                    format!("{path}/{}", name.as_str())
+                };
+                if !seen.insert(child.clone()) {
+                    return Err(format!("duplicate actual path: {child}").into());
                 }
-                after = page.continuation;
-                if after.is_none() {
-                    break;
+                let value = inode.ok_or("missing listed inode")?;
+                match value.kind {
+                    InodeKind::Directory => pending.push_back((child, value)),
+                    InodeKind::RegularFile => jobs.push_back((child, value)),
+                    InodeKind::Symlink => return Err("unexpected actual symlink".into()),
                 }
             }
-        } else if actual_kind == 'f' {
-            files += 1;
-            let mut output = DigestWriter {
-                hash: Sha256::new(),
-                bytes: 0,
-            };
-            Timing::disabled("read", |scope| {
-                read_all(
-                    &provider,
-                    value.content_root,
-                    &mut output,
-                    scope.child("file"),
-                )
-            })
-            .0?;
-            if output.bytes != wanted.size || hex(&output.hash.finalize()) != wanted.sha256 {
-                return Err(format!("content mismatch: {path}").into());
+            after = page.continuation;
+            if after.is_none() {
+                break;
             }
-            bytes += output.bytes;
-        } else {
-            return Err(format!("unsupported actual symlink: {path}").into());
         }
     }
     if seen.len() != expected.len() {
         return Err("missing output paths".into());
     }
-    println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
-        seen.len(), files, directories, bytes, root, manifest_digest);
+    let (files, bytes) = verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
+    println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
+        seen.len(), files, directories, bytes, VERIFY_WORKERS, root, manifest_digest);
     Ok(())
 }

@@ -223,6 +223,11 @@ productive upload traffic keeps its concurrent response wait alive. A blocked
 socket read may continue waiting when the other direction made progress; this
 does not reconnect, resend frames or replay a mutation. Complete silence remains
 bounded by five seconds, and the overall deadline never extends.
+The public native-directory import sends a checked one-byte `ResultData`
+progress marker at most once per second while it constructs the source tree.
+The native client consumes that marker without delivering logical result bytes;
+it does not reset the absolute request deadline or change the five-second
+no-progress rule. Other operations still reject unexpected `ResultData`.
 Each process shares
 one absolute operation deadline through its layers. Only a remaining duration
 crosses the network, never an Instant. Synchronous

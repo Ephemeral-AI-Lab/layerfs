@@ -363,6 +363,11 @@ impl Request {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
+            Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory { .. }) => {
+                if self.response_bytes < u64::from(self.deadline_ms.div_ceil(1_000)) {
+                    return Err(Code::Capacity.into());
+                }
+            }
             Operation::ConstructSymlink { target } => {
                 if target.len() > SYMLINK_TARGET_BYTES {
                     return Err(Code::Capacity.into());

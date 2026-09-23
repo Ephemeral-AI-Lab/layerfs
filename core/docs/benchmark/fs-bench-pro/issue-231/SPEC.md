@@ -84,10 +84,16 @@ C2, builds the complete filesystem root, then publishes one C5 genesis stack.
 The registered Init path has four file-construction workers and an eight-object
 bounded handoff to the one C2 save owner. Per-file timing detail is grouped into
 aggregate scan, file-construction and prerequisite spans, preserving complete
-timing trees without changing the one caller sample.
+timing trees without changing the one caller sample. The v2 route emits one
+authenticated one-byte `ResultData` progress marker at most once per second
+while source construction and prerequisites advance. The native client checks
+and consumes that marker without counting it as logical result bytes. The
+request declares at least `ceil(deadline_ms / 1000)` response bytes for these
+markers; the transport's five-second no-progress limit and absolute deadline
+stay unchanged. A missing or malformed marker is not synthesized by the driver.
 The reply is the existing `StackCreated` result. The caller timer begins before
 the daemon request frame and ends after decoding that reply. This operation has
-fixture/route identity `core-native-directory-import-v1`; historical case IDs
+fixture/route identity `core-native-directory-import-v2`; historical case IDs
 remain selectors, but no v0.1.6 performance equivalence is inferred from the
 matching counts and bytes. The 100,000 tier is explicitly `NOT_RUN` because it
 is outside this first-pass collection cohort, not because of a product count cap.
@@ -100,7 +106,7 @@ One observed number is not a median or percentile. Do not promote discovery
 receipts later by changing their labels; an admission campaign needs a new
 prospectively frozen identity and fresh sample.
 
-The source fixture profile for this cohort is `core-native-import-fixture-v1`
+The source fixture profile for this cohort is `core-native-import-fixture-v2`
 with seed 1. Paths are `dNNNN/fNNNNNN`, 100 files per directory, with indices
 assigned in order: anchor, empty, tiny, small, medium. The 100/1,000/10,000
 cases use class counts from the legacy registry respectively
@@ -111,7 +117,7 @@ logical bytes after the anchor and these one-byte minima are apportioned with
 weights tiny=1, small=64, medium=1024 by integer floor, then one extra byte
 to the lexicographically earliest paths until the exact case byte total is
 reached. Every content chunk of at most 1 MiB is the SHAKE-256 output of
-`core-native-directory-import-v1|<case>|1|<path>|<chunk-index>` (UTF-8),
+`core-native-directory-import-v2|<case>|1|<path>|<chunk-index>` (UTF-8),
 truncated to that chunk's length. File mode is `0640`, directory mode `0750`,
 and all mtimes are exactly `1700000000` seconds. Fixture generation hashes
 each file while writing it and seals one complete path/metadata/size/SHA-256
@@ -311,8 +317,10 @@ Prepare and seal the expected path/metadata/size/per-file SHA-256 manifest
 before each run. Verification starts a separate process after Init, checks
 the public returned root, reopens the persisted Store/history, walks every
 directory through a public C1 reader and streams every file into SHA-256
-against that sealed manifest. Use one reusable read buffer and bounded
-pagination. Avoid 10,000 per-file daemon/Service round trips if they miss the
+against that sealed manifest. The direct public C1/C2 verifier uses four
+independent read workers, each with one bounded C2 session and SHA-256 state;
+C1 streams contents to those states without a file-sized verifier buffer.
+Directory traversal uses bounded pagination and grouped inode lookups. Avoid 10,000 per-file daemon/Service round trips if they miss the
 5 s budget; the alternative in section 5 is still a real public product read
 path, not raw SQL or expected data passed to the mutator. Declare any mounted
 readback as a separate, bounded coverage witness; do not label sampled mounted

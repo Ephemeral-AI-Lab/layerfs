@@ -29,7 +29,7 @@ use layerfs_history::{
 };
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::{path::Path, time::Instant};
+use std::{io::Write, path::Path, time::Instant};
 
 /// Maps one typed history failure onto its wire class without parsing a message.
 pub(crate) fn failure(error: HistoryError) -> Failure {
@@ -249,6 +249,7 @@ pub(crate) fn command(
     command: &HistoryCommand,
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
+    output: &mut dyn Write,
 ) -> Result<Response, Failure> {
     let result = match command {
         HistoryCommand::InitLayerStack {
@@ -275,13 +276,14 @@ pub(crate) fn command(
                 .map_err(failure)?;
             let profile = layerfs_content::filesystem::profile_id();
             let provider = StoreProvider::new(store);
+            let mut progress = history_bootstrap::ImportProgress::disabled(deadline);
             let root = history_bootstrap::build_namespace(
                 store,
                 &provider,
                 scope,
                 reservation.start,
                 &entries,
-                deadline,
+                &mut progress,
                 timer,
             )?;
             let record = catalog
@@ -308,7 +310,8 @@ pub(crate) fn command(
             let stack = LayerStackId::from_authority(*stack);
             let name = name_of(name)?;
             let scope = scope_for_seed(*scope_seed);
-            let entries = import_native::scan_and_save(source, store, deadline, timer)?;
+            let mut progress = history_bootstrap::ImportProgress::with_output(deadline, output);
+            let entries = import_native::scan_and_save(source, store, &mut progress, timer)?;
             let reservation = catalog
                 .reserve_inodes(&ReserveRequest {
                     scope: scope.object(),
@@ -322,7 +325,7 @@ pub(crate) fn command(
                 scope,
                 reservation.start,
                 &entries,
-                deadline,
+                &mut progress,
                 timer,
             )?;
             let record = catalog

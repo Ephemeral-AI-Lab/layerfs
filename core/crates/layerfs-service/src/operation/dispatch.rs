@@ -45,6 +45,7 @@ pub(crate) fn dispatch(
                 command,
                 deadline,
                 scope,
+                output,
             )
         }
         // A known successful C2 finish is never changed into a claimed abort.
