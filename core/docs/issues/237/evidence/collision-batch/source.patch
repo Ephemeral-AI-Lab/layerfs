@@ -1,0 +1,79 @@
+diff --git a/core/crates/layerfs-storage/src/cas/collision.rs b/core/crates/layerfs-storage/src/cas/collision.rs
+index 9ed011a05..f906290c2 100644
+--- a/core/crates/layerfs-storage/src/cas/collision.rs
++++ b/core/crates/layerfs-storage/src/cas/collision.rs
+@@ -18,39 +18,48 @@ impl MutationOwner {
+             [],
+             |r| Ok((r.get(0)?, r.get(1)?)),
+         )?;
+-        for row in rows {
++        for page in rows.chunks(crate::policy::LOOKUP_PAGE_IDS) {
++            let ids = page.iter().map(|row| row.object_id).collect::<Vec<_>>();
+             let started = std::time::Instant::now();
+-            let candidates = lookup::candidates(&self.connection, &[row.object_id], i64::MAX)?;
++            let candidates = lookup::candidates(&self.connection, &ids, i64::MAX)?;
+             crate::cas::owner::SaveProfile::charge(
+                 &mut self.profile.diag.collision_query_ns,
+                 started,
+             );
+-            if !candidates.iter().any(|(_, save, _)| *save != self.save_id) {
+-                continue;
++            let mut foreign = BTreeMap::<_, Vec<_>>::new();
++            for (location, save, _) in candidates {
++                if save != self.save_id {
++                    foreign
++                        .entry(location.object_id)
++                        .or_default()
++                        .push((location, save));
++                }
+             }
+-            let current = ObjectLocation {
+-                object_id: row.object_id,
+-                role: ObjectRole::from_code(row.role)?,
+-                canonical_length: row.canonical_length,
+-                pack_id: row.pack_id,
+-                group_number: row.group_number,
+-                record_number: row.record_number,
+-            };
+-            let canonical = self.collision_bytes(current)?;
+-            for (existing, save, _) in candidates {
+-                if save == self.save_id {
++            for row in page {
++                let Some(matches) = foreign.get(&row.object_id) else {
+                     continue;
+-                }
+-                if existing.role != current.role
+-                    || existing.canonical_length != current.canonical_length
+-                {
+-                    return Err(StorageError::Collision(row.object_id));
+-                }
+-                ownership::scope(&self.connection, save, i64::MAX)?;
+-                let comparison = self.collision_bytes(existing);
+-                ownership::scope(&self.connection, saved.0, saved.1)?;
+-                if comparison? != canonical {
+-                    return Err(StorageError::Collision(row.object_id));
++                };
++                let current = ObjectLocation {
++                    object_id: row.object_id,
++                    role: ObjectRole::from_code(row.role)?,
++                    canonical_length: row.canonical_length,
++                    pack_id: row.pack_id,
++                    group_number: row.group_number,
++                    record_number: row.record_number,
++                };
++                let canonical = self.collision_bytes(current)?;
++                for (existing, save) in matches {
++                    if existing.role != current.role
++                        || existing.canonical_length != current.canonical_length
++                    {
++                        return Err(StorageError::Collision(row.object_id));
++                    }
++                    ownership::scope(&self.connection, *save, i64::MAX)?;
++                    let comparison = self.collision_bytes(*existing);
++                    ownership::scope(&self.connection, saved.0, saved.1)?;
++                    if comparison? != canonical {
++                        return Err(StorageError::Collision(row.object_id));
++                    }
+                 }
+             }
+         }

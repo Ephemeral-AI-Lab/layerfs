@@ -1,0 +1,18 @@
+{
+  "child": {
+    "bytes": 300000000,
+    "directories": 101,
+    "files": 10000,
+    "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "metadata_attribute_waves": 5,
+    "paths": 10101,
+    "root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+    "status": "PASS",
+    "workers": 4
+  },
+  "exit_code": 0,
+  "mode": "separate-postrun-full-readback",
+  "status": "PASS",
+  "stderr": "LFS237 verifier traversal paths=10101 directories=101 queued_files=10000 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=162348 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=131378 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=162674 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=294378 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=325348 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=325674 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=457378 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=620378 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=488348 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=488674 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=651348 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=814348 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=977121 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=651440 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=783264 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=5814530 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=6540269 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=11021983 metadata_attribute_waves=1\n",
+  "wall_ns": 2173298667
+}
