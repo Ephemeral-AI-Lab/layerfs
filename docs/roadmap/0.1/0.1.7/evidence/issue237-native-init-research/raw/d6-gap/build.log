@@ -1,0 +1,5 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/2776/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/2776/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/2776/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/2776/layerfs/core/crates/layerfs-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.03s

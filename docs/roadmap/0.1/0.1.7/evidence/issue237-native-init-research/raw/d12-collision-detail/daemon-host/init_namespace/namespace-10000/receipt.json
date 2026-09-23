@@ -1,0 +1,222 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-10000",
+  "cleanup": {
+    "daemon": "PASS",
+    "service": "PASS",
+    "stderr_recycle": "RETAINED_INCOMPLETE"
+  },
+  "cleanup_wall_ns": 45967333,
+  "competing_work": [
+    "498 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "500 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "7467 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7470 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7471 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7598 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "7602 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "7608 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "7669 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7673 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7678 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)"
+  ],
+  "daemon_namespace": 2121167525162481907,
+  "daemon_pid": 76862,
+  "external_resources": {
+    "rss_phase_peak": null,
+    "rss_reason": "rusage peak is lifetime, not phase",
+    "scope": "service-and-daemon-lifecycle",
+    "system_cpu_s": 1.102371,
+    "user_cpu_s": 1.11469
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/issue237-c2-detail/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/manifest.tsv",
+    "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "preparation_wall_ns": 1908836666,
+    "profile": "core-native-import-fixture-v2",
+    "reused": false,
+    "route": "core-native-directory-import-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-c2-detail/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload"
+  },
+  "history_bytes": 86016,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/operation/import_native.rs",
+      " M docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d12-instrumentation.diff.gz"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "d14dc873d0ee1dd63d20b3530b0a81c3729485620be1753879f8cf182894667f",
+    "source_commit": "9795e907c2ab0769efe46783855ac4d2b39426e2",
+    "source_dirty": true
+  },
+  "performance_command_status": "PASS",
+  "performance_command_wall_ns": 2809913375,
+  "performance_gate": "NOT_FROZEN",
+  "placement": {
+    "daemon": "host",
+    "image_id": null,
+    "service": "host"
+  },
+  "raw_operation_ns": 1874694666,
+  "route": "daemon-host",
+  "run_id": "99db11da6fc84798be702bbf53c85f76",
+  "sample_count": 1,
+  "schema": "core-fs-bench-pro-init-v1",
+  "service_namespace": 2121167525162481906,
+  "service_pid": 76861,
+  "status": "INCOMPLETE",
+  "store_bytes": 334172160,
+  "store_create_ns": 457081416,
+  "telemetry": {
+    "diagnostics": {
+      "daemon": "",
+      "service": "layerfs-service ready 127.0.0.1:64006\nLFS237 D12 pipeline jobs=10000 logical_bytes=300000000 objects_sent=24562 worker_sum_ns=4449196468 send_sum_ns=2855966291 receiver_wait_ns=393323756 owner_accept_ns=771409469 owner_objects=24562\nLFS237 D12 save inserted=24364 reused=198 packs=1259 appends=6463 pack_bytes=301009905 commits=80 statements=7776 presence=66 resolve_ns=0 full_ns=69841194 delta_ns=0 group_ns=15472521 place_ns=10941971 sql_ns=188689033 commit_ns=227521335 accept_plumbing_ns=769825430 flush_batch_ns=545959332 finish_call_ns=358792750\nLFS237 D12 diag DiagProfile { commit_total_ns: 227510921, begin_ns: 1847670, seal_total_ns: 228797552, offer_total_ns: 410120425, write_pack_total_ns: 123805171, validate_ns: 44849580, collision_query_ns: 43306228, rows_ns: 611551, members_ns: 1488154, accept_plumbing_ns: 769825430, flush_batch_ns: 545959332, wave_ns: 62248665, finish_total_ns: 1015417, publish_ns: 36708, finish_drain_ns: 6974250, finish_drop_ns: 350799625, finish_call_ns: 358792750, insert_objects_ns: 71156755, release_connection_ns: 350785500, release_compression_ns: 2000, release_decompression_ns: 42, release_pool_reader_ns: 833, release_pack_cache_ns: 0, release_candidates_ns: 1375, release_pool_index_ns: 541, release_tails_ns: 5958, probe_ns: 40644510 }\n"
+    },
+    "errors": [
+      "daemon: telemetry loss"
+    ],
+    "event_counts": {
+      "daemon": 3,
+      "service": 5
+    },
+    "file": "telemetry.lft1",
+    "m2_local_roots": {
+      "daemon": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1841725833,
+          "cpu_shared_ns": [
+            422000,
+            891000
+          ],
+          "elapsed_ns": 1840521959,
+          "first_ns": 37958,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 107466958,
+          "last_ns": 1805234666,
+          "opened_ns": 1202750,
+          "resource_status": "sampled",
+          "sampled_max_rss": 2228224,
+          "samples": 19
+        }
+      ],
+      "service": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 2283445584,
+          "cpu_shared_ns": [
+            1064592000,
+            1053058000
+          ],
+          "elapsed_ns": 1840231459,
+          "first_ns": 405577167,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 104476917,
+          "last_ns": 2207580209,
+          "opened_ns": 443211709,
+          "resource_status": "sampled",
+          "sampled_max_rss": 61767680,
+          "samples": 19
+        }
+      ]
+    },
+    "m3_service_children": [
+      {
+        "children": [],
+        "elapsed_ns": 2144916,
+        "name": "history.import_begin_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 43896666,
+        "name": "history.import_scan"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1168447833,
+        "name": "history.import_files"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 7991333,
+        "name": "history.import_finish_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 791167,
+        "name": "history.begin_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 432541,
+        "name": "history.prerequisites"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1279000,
+        "name": "history.finish_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 542542,
+        "name": "history.begin_tree_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 30266417,
+        "name": "history.finish_tree_save"
+      }
+    ],
+    "m4_c5_duration_ns": null,
+    "m4_reason": "no dedicated C5 timing child",
+    "operation_counts": {
+      "daemon": 1,
+      "service": 1
+    },
+    "parser": "lft1-ingest-v1",
+    "producers": [
+      {
+        "bytes": 2542,
+        "end": 2542,
+        "lines": 5,
+        "name": "service",
+        "namespace": 2121167525162481906,
+        "pid": 76861,
+        "role": 1,
+        "sha256": "3081409dd187969aecac97e8753a4fc8e87c355461741f39b720927eeacd9842",
+        "start": 0
+      },
+      {
+        "bytes": 1125,
+        "end": 3667,
+        "lines": 3,
+        "name": "daemon",
+        "namespace": 2121167525162481907,
+        "pid": 76862,
+        "role": 2,
+        "sha256": "147e91dbca411be9d06419f235ac4ee3f40176c4eb69a19eaeeebd7582eeecab",
+        "start": 2542
+      }
+    ],
+    "sha256": "5a9693ef6697994083fb81b13d042fcaffab98e2e349abd2c5e47d98571fea09",
+    "status": "INCOMPLETE"
+  },
+  "verification": {
+    "reason": "fast lane default; use run --verify for full proof",
+    "status": "SKIPPED"
+  },
+  "verification_mode": "skip-default",
+  "wall_ns": 6847252375
+}

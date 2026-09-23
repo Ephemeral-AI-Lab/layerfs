@@ -12,8 +12,9 @@ use crate::cas::owner::{MutationOwner, SaveProfile};
 
 use crate::cas::dependencies::Availability;
 use crate::error::{StorageError, StorageResult};
-use crate::pack::layout::{PackLane, HEADER_LEN};
+use crate::pack::layout::{EncodedGroup, PackLane, HEADER_LEN};
 use crate::pack::{build_group, SelectedWrite};
+use crate::policy::{BATCH_OBJECT_LIMIT, PACK_LIMIT};
 use crate::sqlite::write::{self, ObjectRow};
 use std::time::Instant;
 
@@ -52,6 +53,28 @@ impl PendingGroup {
     }
 }
 
+struct QueuedGroup {
+    group: EncodedGroup,
+    members: Vec<PendingMember>,
+}
+
+/// Sealed groups waiting inside one wave; never retained across its COMMIT.
+#[derive(Default)]
+pub(super) struct QueuedGroups {
+    lane: Option<PackLane>,
+    groups: Vec<QueuedGroup>,
+    body_bytes: usize,
+    rows: usize,
+}
+
+impl QueuedGroups {
+    fn holds(&self, id: ObjectId) -> bool {
+        self.groups
+            .iter()
+            .any(|group| group.members.iter().any(|member| member.object_id == id))
+    }
+}
+
 impl MutationOwner {
     /// True when this owner accepted `id` into an unfinished group.
     ///
@@ -62,6 +85,7 @@ impl MutationOwner {
         self.groups
             .iter()
             .any(|group| group.members.iter().any(|member| member.object_id == id))
+            || self.queued.holds(id)
     }
 
     /// Bytes retained by the open pack tails of every lane.
@@ -97,12 +121,24 @@ impl MutationOwner {
                 }
             }
         }
-        if lanes.is_empty() {
-            return Ok(());
-        }
         let mut availability = Availability::default();
         for lane in lanes {
             self.seal_group(lane, &mut availability)?;
+        }
+        if ids.iter().any(|id| self.queued.holds(*id)) {
+            self.flush_queued_groups(&mut availability)?;
+        }
+        Ok(())
+    }
+
+    /// Make a queued predecessor visible before representation selection reads it.
+    pub(super) fn flush_queued_if_contains(
+        &mut self,
+        ids: &[ObjectId],
+        availability: &mut Availability,
+    ) -> StorageResult<()> {
+        if ids.iter().any(|id| self.queued.holds(*id)) {
+            self.flush_queued_groups(availability)?;
         }
         Ok(())
     }
@@ -129,55 +165,132 @@ impl MutationOwner {
                 return Err(error);
             }
         };
+        if self.wave_held
+            && matches!(
+                lane,
+                PackLane::Ordinary | PackLane::Native | PackLane::WholeFile
+            )
+            && group.body_size(lane)? <= PACK_LIMIT
+            && pending.members.len() <= BATCH_OBJECT_LIMIT
+        {
+            self.queue_group(lane, group, pending, availability)?;
+            SaveProfile::charge(&mut self.profile.diag.seal_total_ns, whole);
+            return Ok(());
+        }
+        self.flush_queued_groups(availability)?;
+        self.place_groups(
+            lane,
+            vec![QueuedGroup {
+                group,
+                members: pending.members,
+            }],
+            availability,
+        )?;
+        SaveProfile::charge(&mut self.profile.diag.seal_total_ns, whole);
+        Ok(())
+    }
+
+    fn queue_group(
+        &mut self,
+        lane: PackLane,
+        group: EncodedGroup,
+        pending: PendingGroup,
+        availability: &mut Availability,
+    ) -> StorageResult<()> {
+        let bytes = group.body_size(lane)?;
+        let rows = pending.members.len();
+        if self.queued.lane.is_some_and(|active| active != lane)
+            || self.queued.body_bytes.saturating_add(bytes) > PACK_LIMIT
+            || self.queued.rows.saturating_add(rows) > BATCH_OBJECT_LIMIT
+        {
+            self.flush_queued_groups(availability)?;
+        }
+        self.queued.lane = Some(lane);
+        self.queued.body_bytes += bytes;
+        self.queued.rows += rows;
+        self.queued.groups.push(QueuedGroup {
+            group,
+            members: pending.members,
+        });
+        Ok(())
+    }
+
+    /// Place a bounded run of groups before any read, reuse, wave validation or COMMIT.
+    pub(super) fn flush_queued_groups(
+        &mut self,
+        availability: &mut Availability,
+    ) -> StorageResult<()> {
+        let Some(lane) = self.queued.lane else {
+            return Ok(());
+        };
+        if !self.wave_held {
+            return Err(StorageError::Integrity("queued groups crossed wave"));
+        }
+        let queued = std::mem::take(&mut self.queued);
+        let started = Instant::now();
+        self.place_groups(lane, queued.groups, availability)?;
+        SaveProfile::charge(&mut self.profile.diag.seal_total_ns, started);
+        Ok(())
+    }
+
+    fn place_groups(
+        &mut self,
+        lane: PackLane,
+        groups: Vec<QueuedGroup>,
+        availability: &mut Availability,
+    ) -> StorageResult<()> {
         let arbitration = std::sync::Arc::clone(&self.arbitration);
         let _guard = crate::sqlite::ownership::lock_unless_held(&arbitration, self.wave_held)?;
         if !self.transaction_open {
             self.begin_write()?;
         }
+        let (encoded, members): (Vec<_>, Vec<_>) = groups
+            .into_iter()
+            .map(|group| (group.group, group.members))
+            .unzip();
         let started = Instant::now();
-        let writes = self.placement[index].select_many(lane, vec![group], &mut self.next_pack_id);
+        let writes =
+            self.placement[lane.index()].select_many(lane, encoded, &mut self.next_pack_id);
         SaveProfile::charge(&mut self.profile.place_ns, started);
         let writes = writes?;
-        let write = writes
-            .first()
-            .ok_or(StorageError::Integrity("placement produced no write"))?;
-        let placed = write
-            .placed
-            .first()
-            .copied()
-            .ok_or(StorageError::Integrity("placement produced no group"))?;
-        if placed.records != pending.members.len() {
-            return Err(StorageError::Integrity("placed record count"));
-        }
-        // Ordinary groups obey the preparation byte bound. A pre-existing
-        // singleton representation can own one larger canonical object, bounded
-        // by CANONICAL_LIMIT and SINGLETON_PACK_LIMIT, never a group of them.
-        if pending.members.len() as u64 + 4 > self.capacities.transaction_rows {
+        let row_count = members.iter().map(Vec::len).sum::<usize>();
+        if row_count as u64 + 4 > self.capacities.transaction_rows {
             return Err(StorageError::CapacityExceeded {
                 what: "transaction rows",
                 limit: self.capacities.transaction_rows,
-                actual: pending.members.len() as u64 + 4,
+                actual: row_count as u64 + 4,
             });
         }
-        self.write_pack(write)?;
-        // The group's rows are inserted together: one statement per chunk the
-        // engine's own limits allow, not one statement per row (P2-2). The same
-        // rows, in the same order, with the same counters charged.
-        let started = Instant::now();
-        let rows: Vec<ObjectRow> = pending
-            .members
-            .iter()
-            .enumerate()
-            .map(|(record_number, member)| ObjectRow {
-                object_id: member.object_id,
-                role: member.role.code(),
-                canonical_length: member.canonical_length,
-                pack_id: write.pack_id,
-                group_number: placed.group_number,
-                record_number,
-            })
-            .collect();
-        SaveProfile::charge(&mut self.profile.diag.rows_ns, started);
+        let mut rows = Vec::with_capacity(row_count);
+        let mut counted = Vec::with_capacity(row_count);
+        let mut member_groups = members.into_iter();
+        for write in &writes {
+            self.write_pack(write)?;
+            let started = Instant::now();
+            for placed in &write.placed {
+                let members = member_groups
+                    .next()
+                    .ok_or(StorageError::Integrity("placed group count"))?;
+                if placed.records != members.len() {
+                    return Err(StorageError::Integrity("placed record count"));
+                }
+                for (record_number, member) in members.into_iter().enumerate() {
+                    rows.push(ObjectRow {
+                        object_id: member.object_id,
+                        role: member.role.code(),
+                        canonical_length: member.canonical_length,
+                        pack_id: write.pack_id,
+                        group_number: placed.group_number,
+                        record_number,
+                    });
+                    counted.push(member);
+                }
+            }
+            SaveProfile::charge(&mut self.profile.diag.rows_ns, started);
+        }
+        if member_groups.next().is_some() {
+            return Err(StorageError::Integrity("placed group count"));
+        }
         let started = Instant::now();
         let statements = write::insert_objects(&self.connection, &rows);
         SaveProfile::charge(&mut self.profile.sql_ns, started);
@@ -198,24 +311,20 @@ impl MutationOwner {
         }
         self.counters.statements = self.counters.statements.saturating_add(statements);
         let started = Instant::now();
-        for member in &pending.members {
+        for member in counted {
             if member.base_object_id.is_some() {
                 self.counters.prefix_records += 1;
             } else {
                 self.counters.full_records += 1;
             }
             availability.inserted(member.object_id);
-            // The wave's membership snapshot predates this seal, so the row just
-            // written is recorded for the rest of the wave; see `sealed_rows`.
             self.sealed_rows.push(member.object_id);
             self.counters.inserted += 1;
             self.transaction.rows += 1;
             self.transaction.bytes += member.canonical_length as u64;
         }
         SaveProfile::charge(&mut self.profile.diag.members_ns, started);
-        pending.clear();
         self.maybe_commit()?;
-        SaveProfile::charge(&mut self.profile.diag.seal_total_ns, whole);
         Ok(())
     }
 

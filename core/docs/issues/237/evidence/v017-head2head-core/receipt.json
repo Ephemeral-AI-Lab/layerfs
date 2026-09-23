@@ -1,0 +1,224 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-10000",
+  "cleanup": {
+    "daemon": "PASS",
+    "service": "PASS",
+    "stderr_recycle": "RETAINED_INCOMPLETE"
+  },
+  "cleanup_wall_ns": 37188375,
+  "competing_work": [
+    "498 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "500 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "7467 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7470 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7471 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "7598 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "7602 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "7608 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "7669 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7673 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "7678 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)"
+  ],
+  "daemon_namespace": 2106831509652420679,
+  "daemon_pid": 27148,
+  "external_resources": {
+    "rss_phase_peak": null,
+    "rss_reason": "rusage peak is lifetime, not phase",
+    "scope": "service-and-daemon-lifecycle",
+    "system_cpu_s": 0.864606,
+    "user_cpu_s": 1.015206
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "clone_method": "independent-byte-copy-v1",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/manifest.tsv",
+    "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "master_source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload",
+    "preparation_wall_ns": 208729375,
+    "profile": "core-native-import-fixture-v2",
+    "reused": true,
+    "route": "core-native-directory-import-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/source-copy/namespace-10000/payload"
+  },
+  "history_bytes": 86016,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/operation/history.rs",
+      " M core/crates/layerfs-service/src/operation/history_bootstrap.rs",
+      " M core/crates/layerfs-service/src/operation/import_native.rs"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "d9b17e338d61a33a8f907d07e2758b7ac83c9e246212dbef200b59f5a0472d74",
+    "source_commit": "7f2124ba07e0c2b77a614f3429d454b2fdd57b08",
+    "source_dirty": true
+  },
+  "performance_command_status": "PASS",
+  "performance_command_wall_ns": 2318692459,
+  "performance_gate": "NOT_FROZEN",
+  "placement": {
+    "daemon": "host",
+    "image_id": null,
+    "service": "host"
+  },
+  "raw_operation_ns": 1380218125,
+  "route": "daemon-host",
+  "run_id": "311439953dc749d6bd40df402708e37e",
+  "sample_count": 1,
+  "schema": "core-fs-bench-pro-init-v1",
+  "service_namespace": 2106831509652420678,
+  "service_pid": 27147,
+  "status": "INCOMPLETE",
+  "store_bytes": 333651968,
+  "store_create_ns": 1345133000,
+  "telemetry": {
+    "diagnostics": {
+      "daemon": "",
+      "service": "layerfs-service ready 127.0.0.1:64023\nLFS237 integrated pipeline jobs=10000 logical_bytes=300000000 source_read_calls=29952 source_read_bytes=300000000 source_read_ns=1129334721 objects_sent=24562 worker_construct_sum_ns=4420194964 object_send_sum_ns=2593985371 done_send_sum_ns=255916400 receiver_wait_calls=34562 receiver_wait_ns=445970804 owner_accept_ns=720450294 owner_objects=24562\nLFS237 integrated save inserted=24364 reused=198 packs=1257 appends=1037 pack_bytes=300879140 commits=80 statements=1408 presence=67 resolve_ns=0 full_ns=70621407 delta_ns=0 group_ns=12279067 place_ns=10684603 sql_ns=138887229 commit_ns=223729665 accept_plumbing_ns=718886799 flush_batch_ns=495184710 finish_call_ns=77262417\nLFS237 integrated diag DiagProfile { commit_total_ns: 223719838, begin_ns: 1922839, seal_total_ns: 329106685, offer_total_ns: 348649011, write_pack_total_ns: 78919545, validate_ns: 45524753, collision_query_ns: 43921249, rows_ns: 501675, members_ns: 1588191, accept_plumbing_ns: 718886799, flush_batch_ns: 495184710, wave_ns: 65078337, finish_total_ns: 938333, publish_ns: 36541, finish_drain_ns: 3466166, finish_drop_ns: 72854333, finish_call_ns: 77262417, insert_objects_ns: 65525741, release_connection_ns: 72838375, release_compression_ns: 1417, release_decompression_ns: 0, release_pool_reader_ns: 667, release_pack_cache_ns: 250, release_candidates_ns: 917, release_pool_index_ns: 1208, release_tails_ns: 6376, probe_ns: 39652786 }\nLFS237 head2head prerequisite_save SaveOutcome { reused: 3, inserted: 11, packs_created: 2, pack_bytes_written: 654, pack_appends: 0, commits: 4, full_records: 11, prefix_records: 0, statements: 2, presence_queries: 1, delta: DeltaCounters { prepared_full: 3, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 3, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }, chain: ChainCounters { objects: 0, edges: 0, encoded_bytes: 0, canonical_bytes: 0, max_depth: 0, group_decodes: 0, pooled: PoolReadCounters { leaf_requests: 0, chain_edges: 0, physical_record_calls: 0, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 0, value_group_decodes: 0, pack_fetches: 0, pack_bytes: 0 } }, pool: PoolCounters { leaves: 0, reused_values: 0, new_values: 0, groups: 0, delta_leaves: 0, full_leaves: 0, trials: 0, work_exceeded: 0 }, profile: SaveProfile { resolve: ResolveProfile { eligible_ns: 0, acquire_ns: 0, cost_ns: 0, reuse_ns: 0, pooled_ns: 0 }, full_ns: 30209, delta_ns: 0, group_ns: 20250, place_ns: 3042, sql_ns: 249748, commit_ns: 535209, diag: DiagProfile { commit_total_ns: 517832, begin_ns: 43292, seal_total_ns: 882125, offer_total_ns: 37999, write_pack_total_ns: 148792, validate_ns: 55416, collision_query_ns: 42837, rows_ns: 584, members_ns: 1208, accept_plumbing_ns: 1626, flush_batch_ns: 228958, wave_ns: 165125, finish_total_ns: 967458, publish_ns: 28042, finish_drain_ns: 231084, finish_drop_ns: 221667, finish_call_ns: 1422625, insert_objects_ns: 115333, release_connection_ns: 219416, release_compression_ns: 167, release_decompression_ns: 42, release_pool_reader_ns: 333, release_pack_cache_ns: 42, release_candidates_ns: 416, release_pool_index_ns: 84, release_tails_ns: 417, probe_ns: 82 }, reuse_repeat: 0, stored_records: 3 } }\nLFS237 head2head namespace_construct_ns=8811541\nLFS237 head2head tree_save SaveOutcome { reused: 0, inserted: 308, packs_created: 3, pack_bytes_written: 485038, pack_appends: 200, commits: 21, full_records: 308, prefix_records: 0, statements: 4, presence_queries: 1, delta: DeltaCounters { prepared_full: 0, trials: 0, prefix_selected: 0, full_losses: 0, no_candidate: 0, absent_candidates: 0, ineligible_candidates: 0, work_exceeded: 0 }, chain: ChainCounters { objects: 0, edges: 0, encoded_bytes: 0, canonical_bytes: 0, max_depth: 0, group_decodes: 0, pooled: PoolReadCounters { leaf_requests: 0, chain_edges: 0, physical_record_calls: 0, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 0, value_group_decodes: 0, pack_fetches: 0, pack_bytes: 0 } }, pool: PoolCounters { leaves: 202, reused_val"
+    },
+    "errors": [
+      "daemon: telemetry loss"
+    ],
+    "event_counts": {
+      "daemon": 3,
+      "service": 4
+    },
+    "file": "telemetry.lft1",
+    "m2_local_roots": {
+      "daemon": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1342581833,
+          "cpu_shared_ns": [
+            359000,
+            784000
+          ],
+          "elapsed_ns": 1341357667,
+          "first_ns": 37833,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 103501250,
+          "last_ns": 1302450625,
+          "opened_ns": 1222833,
+          "resource_status": "sampled",
+          "sampled_max_rss": 2228224,
+          "samples": 14
+        }
+      ],
+      "service": [
+        {
+          "boundary_covered": false,
+          "clock": "local-monitor",
+          "closed_ns": 1790322875,
+          "cpu_shared_ns": [
+            967597000,
+            829099000
+          ],
+          "elapsed_ns": 1340912584,
+          "first_ns": 405023500,
+          "gaps": 0,
+          "label": "HistoryCommand",
+          "largest_gap_ns": 104499250,
+          "last_ns": 1700538083,
+          "opened_ns": 449407041,
+          "resource_status": "sampled",
+          "sampled_max_rss": 59195392,
+          "samples": 14
+        }
+      ]
+    },
+    "m3_service_children": [
+      {
+        "children": [],
+        "elapsed_ns": 2081250,
+        "name": "history.import_begin_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 45427416,
+        "name": "history.import_scan"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1169934333,
+        "name": "history.import_files"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 4406167,
+        "name": "history.import_finish_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 766208,
+        "name": "history.begin_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 398792,
+        "name": "history.prerequisites"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 1200375,
+        "name": "history.finish_prerequisite_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 577708,
+        "name": "history.begin_tree_save"
+      },
+      {
+        "children": [],
+        "elapsed_ns": 29684375,
+        "name": "history.finish_tree_save"
+      }
+    ],
+    "m4_c5_duration_ns": null,
+    "m4_reason": "no dedicated C5 timing child",
+    "operation_counts": {
+      "daemon": 1,
+      "service": 1
+    },
+    "parser": "lft1-ingest-v1",
+    "producers": [
+      {
+        "bytes": 2202,
+        "end": 2202,
+        "lines": 4,
+        "name": "service",
+        "namespace": 2106831509652420678,
+        "pid": 27147,
+        "role": 1,
+        "sha256": "7b64b15c48a3b9e71aaae7d44421f89a682b1602fc6210764889bab4f8d3ef08",
+        "start": 0
+      },
+      {
+        "bytes": 1124,
+        "end": 3326,
+        "lines": 3,
+        "name": "daemon",
+        "namespace": 2106831509652420679,
+        "pid": 27148,
+        "role": 2,
+        "sha256": "275000b611421f0e73cdf6564c3d59758afe57af2d70c9cae79e28b02d075720",
+        "start": 2202
+      }
+    ],
+    "sha256": "85a930dfb672ba34c75680b09630dbae3db9d9d9cb2f48c8a90d856cecbd45f3",
+    "status": "INCOMPLETE"
+  },
+  "verification": {
+    "reason": "fast lane default; use run --verify for full proof",
+    "status": "SKIPPED"
+  },
+  "verification_mode": "skip-default",
+  "wall_ns": 7317115916
+}

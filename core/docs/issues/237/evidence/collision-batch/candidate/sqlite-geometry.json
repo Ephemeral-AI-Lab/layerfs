@@ -1,0 +1,23 @@
+{
+  "history.sqlite": {
+    "allocated_bytes": 86016,
+    "apparent_bytes": 86016,
+    "freelist_count": 0,
+    "page_count": 21,
+    "page_size": 4096,
+    "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9"
+  },
+  "store.sqlite": {
+    "allocated_bytes": 335609856,
+    "apparent_bytes": 334159872,
+    "freelist_count": 0,
+    "objects": 24683,
+    "pack_blob_capacity_bytes": 331350016,
+    "packs": 1264,
+    "page_count": 81582,
+    "page_size": 4096,
+    "saves": 3,
+    "sha256": "11c91eaf790178c0652a516d2f3a9e5c716569b86683aaa1b0f657e02fb6064f",
+    "small_file_threshold_bytes": 131072
+  }
+}

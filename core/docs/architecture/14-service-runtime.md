@@ -43,6 +43,17 @@ Init call; the Service continues to own source validation, C1/C2/C5 work and
 genesis publication. It does not make the separate full verifier an SDK
 operation or qualify a cold-cache performance claim.
 
+The #237 Service layout and import-batch description below is pinned to source
+commit `bc944fe6347f640b6d4877f69f2d98b464c4d0ad`. It changes source organization
+and native Init's bounded producer-to-save messages; it does not change the
+bridge wire format, the C2 save owner, or SQLite's physical format. The measured
+prototype, integrated diagnostic and their qualifications are in
+[`#237`](../issues/237/service-layout-and-import-batch.md).
+The merged source keeps the SDK's request-scoped Project Init in `project.rs`
+and routes it through the reorganized `service.rs` admission and dispatch path.
+The #237 daemon-host timings remain historical; the SDK Init benchmark has a
+different operation surface and its own evidence.
+
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
 on accepted sockets. Socket option sizes are not admission criteria. The failed
@@ -105,6 +116,15 @@ No request carries a native Store path or independent construction capacities.
 `VerifiedPeer` belongs to the portable bridge contract and only trusted native
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
+
+The Service source follows the same request flow: `service.rs` owns admission
+and dispatch; `read/` holds content and catalog queries; `save/` holds content
+and catalog mutations plus shared filesystem construction. `save/import/` owns
+native scanning and namespace construction, with bounded producer messages in
+`save/import/batch/`. `server/` contains process configuration and socket
+serving. `project.rs` exposes request-scoped Project Init to the SDK.
+`records.rs` converts catalog identities and wire records. The
+`lib.rs` and `mod.rs` files only declare or export these modules.
 
 A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. File
 construction uses exact-length streaming; edits acquire at most 8 MiB of separate
@@ -175,7 +195,7 @@ less than one billion. The kind is the caller's typed construction context; an
 attribute root does not by itself prove membership in a particular inode.
 
 The existing mutation owner validates empty input, takes one writer permit and
-opens one C2 save. `operation/metadata.rs` reads the existing typed fields through
+opens one C2 save. `save/metadata.rs` reads the existing typed fields through
 C1, applies the two sorted portable patches and preserves every generic value
 root through the existing streaming patch builder. No full attribute map, object
 RPC, new storage implementation or arbitrary generic mutation operation is added.

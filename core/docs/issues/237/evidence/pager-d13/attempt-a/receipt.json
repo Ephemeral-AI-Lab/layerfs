@@ -1,0 +1,35 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-10000",
+  "cleanup": {},
+  "error": "ValueError('prepared fixture metadata mismatch')",
+  "history_bytes": null,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-storage/src/cas/store.rs",
+      " M core/docs/issues/237/pager-10k-prereg.md",
+      " M docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d13-pager-instrumentation.diff.gz"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "b9164f0d6bf829c576ce6c2dfe1cf7bd633f3899a572350114055b4037ceaf0a",
+    "source_commit": "52b7531c9717a5a869b49875441aa84cb72613c3",
+    "source_dirty": true
+  },
+  "performance_command_status": "NOT_RUN",
+  "performance_gate": "NOT_FROZEN",
+  "placement": {
+    "daemon": "host",
+    "image_id": null,
+    "service": "host"
+  },
+  "route": "daemon-host",
+  "sample_count": 0,
+  "schema": "core-fs-bench-pro-init-v1",
+  "status": "NOT_RUN",
+  "store_bytes": null,
+  "verification_mode": "skip-default",
+  "wall_ns": 7959875
+}

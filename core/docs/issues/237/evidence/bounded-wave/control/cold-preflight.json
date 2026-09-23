@@ -1,0 +1,18 @@
+{
+  "bytes": 300000000,
+  "directories": 101,
+  "files": 10000,
+  "finished_ns": 129042682849375,
+  "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "method": "darwin-shared-mmap-invalidate-mincore-v1",
+  "pages": 27503,
+  "resident_pages": 0,
+  "script_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "self_check": {
+    "cold_pages_remaining": 0,
+    "warm_pages_detected": 32
+  },
+  "source": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-bounded-wave-control/source-copy/namespace-10000/payload",
+  "status": "VERIFIED_COLD",
+  "wall_ns": 1110676000
+}

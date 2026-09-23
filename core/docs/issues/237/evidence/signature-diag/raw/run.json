@@ -1,0 +1,24 @@
+{
+  "complete_run_wall_ns": 8243965417,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 8080823584,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/save/import/namespace.rs",
+      " M core/crates/layerfs-service/src/save/import/scan.rs",
+      " M core/crates/layerfs-storage/src/cas/owner.rs",
+      " M core/crates/layerfs-storage/src/cas/selection.rs",
+      " M core/crates/layerfs-storage/src/encoding/delta/select.rs",
+      "?? core/docs/issues/237/evidence/signature-diag/",
+      "?? core/docs/issues/237/signature-owner-diagnostic.md"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "e99c1dbc25153c7502c51310bd850aecc03d22f822e2d16b1872c01c94234129",
+    "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

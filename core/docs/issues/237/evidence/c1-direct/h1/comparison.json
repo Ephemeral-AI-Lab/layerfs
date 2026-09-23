@@ -1,0 +1,135 @@
+{
+  "candidate_only_ids": [],
+  "candidate_root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+  "command_ns": [
+    2084575625,
+    1837776500
+  ],
+  "control_only_ids": [],
+  "control_root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+  "full_verification_child": [
+    {
+      "bytes": 300000000,
+      "directories": 101,
+      "files": 10000,
+      "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+      "metadata_attribute_waves": 5,
+      "paths": 10101,
+      "root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+      "status": "PASS",
+      "workers": 4
+    },
+    {
+      "bytes": 300000000,
+      "directories": 101,
+      "files": 10000,
+      "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+      "metadata_attribute_waves": 5,
+      "paths": 10101,
+      "root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+      "status": "PASS",
+      "workers": 4
+    }
+  ],
+  "full_verification_status": [
+    "PASS",
+    "PASS"
+  ],
+  "full_verification_wall_ns": [
+    3030435584,
+    3182914458
+  ],
+  "object_ids_equal": true,
+  "object_ids_intersection": 24683,
+  "objects_by_save": [
+    {
+      "1": 24364,
+      "2": 11,
+      "3": 308
+    },
+    {
+      "1": 24364,
+      "2": 11,
+      "3": 308
+    }
+  ],
+  "operation_identity_equal": true,
+  "operation_ns": [
+    1615643334,
+    1381173500
+  ],
+  "pack_capacity_bytes": [
+    331087872,
+    331087872
+  ],
+  "pack_used_bytes": [
+    305973797,
+    305973738
+  ],
+  "packs_by_save": [
+    {
+      "1": {
+        "capacity": 329777152,
+        "count": 1258,
+        "used": 305475785
+      },
+      "2": {
+        "capacity": 524288,
+        "count": 2,
+        "used": 8814
+      },
+      "3": {
+        "capacity": 786432,
+        "count": 3,
+        "used": 489198
+      }
+    },
+    {
+      "1": {
+        "capacity": 329777152,
+        "count": 1258,
+        "used": 305475726
+      },
+      "2": {
+        "capacity": 524288,
+        "count": 2,
+        "used": 8814
+      },
+      "3": {
+        "capacity": 786432,
+        "count": 3,
+        "used": 489198
+      }
+    }
+  ],
+  "page_size": [
+    4096,
+    4096
+  ],
+  "receipt_status": [
+    "INCOMPLETE",
+    "INELIGIBLE"
+  ],
+  "recheck_to_timer_ns": [
+    1606125,
+    956791
+  ],
+  "root_equal": true,
+  "root_in_both_stores": true,
+  "source_payload_resident_pages": [
+    0,
+    0
+  ],
+  "store_allocated_bytes": [
+    346107904,
+    335491072
+  ],
+  "store_file_bytes": [
+    333910016,
+    333910016
+  ],
+  "telemetry_status": [
+    "INCOMPLETE",
+    "PASS"
+  ]
+}

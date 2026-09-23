@@ -131,6 +131,7 @@ fn flush_wave(owner: &mut MutationOwner, objects: Vec<FinalizedObject>) -> Stora
             }
         }
     }
+    owner.flush_queued_groups(&mut availability)?;
     // One collision check for every row this wave wrote, inside the transaction
     // that wrote them.
     let rows = std::mem::take(&mut owner.wave_rows);

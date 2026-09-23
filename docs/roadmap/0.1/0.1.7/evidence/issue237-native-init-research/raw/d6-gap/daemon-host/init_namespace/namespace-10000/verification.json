@@ -1,0 +1,17 @@
+{
+  "budget_ns": 5000000000,
+  "child": null,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/binary-archive/18b7ee9361f26c2ef7e3dff7b21390788f38a649c4ac9f3a8935e18aa55bbaff/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/issue237-d6-gap-0615c5f4-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/issue237-d6-gap-0615c5f4-a/daemon-host/init_namespace/namespace-10000/history.sqlite",
+    "9d91b4b2ecef9c5ed0526a214770b4e3e212736a97355861df54ad0ad2edaaf2",
+    "4d524501c8450f2ef9b361102273bb9c",
+    "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/manifest.tsv",
+    "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e"
+  ],
+  "exit_code": null,
+  "status": "TIMEOUT",
+  "stderr": "",
+  "wall_ns": 5004584958
+}

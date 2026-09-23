@@ -1,0 +1,21 @@
+{
+  "binary_sha256": "66f2e18f8e62b04bc3b0ce620550aaae682b7529cc9d35309a5fa9f874a9cd82",
+  "cache_profile": "independent-source-payload-zero;metadata-residency-unmeasured",
+  "cold_driver_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue237-v016-micro/layerfs/target/release/fs-benchmark-pro",
+    "namespace-init-diagnostic-core-fixture",
+    "benchmark-results/issue237-v016-micro-count-only-a/store",
+    "benchmark-results/issue237-v016-micro-count-only-a/source/payload",
+    "namespace-10000",
+    "1",
+    "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+    "independent-source-payload-zero;metadata-residency-unmeasured"
+  ],
+  "diagnostic_nonce": "9a5998a338a9fc0f",
+  "harness_sha256": "5789a47ef189a465aede5b06b9f20c5f4c685fd32dece2bed4f317c07ab2f604",
+  "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "seed_hex": "9a5998a338a9fc0f35a2c333cad16d550944149f2c8edc8b1d5f897da335edaa",
+  "tag_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "verification": "SKIPPED"
+}

@@ -1,0 +1,24 @@
+{
+  "cache": "independent writable source copy; invalidate and check all source payload pages before timer; metadata residency unqualified",
+  "case": "namespace-10000",
+  "command": [
+    "python3",
+    "docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py",
+    "--case",
+    "namespace-10000",
+    "--independent-source-copy",
+    "--fixed-operation-identity",
+    "--out",
+    "benchmark-results/fs-bench-pro/issue237-import-batch-10k-01"
+  ],
+  "comparison": "standalone new source identity; prior prototype/control rows are historical, not matched controls",
+  "driver_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+  "logical_bytes": 300000000,
+  "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "output": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/issue237-import-batch-10k-01",
+  "product_seal": "445f3c63745017c6436ba7f89a8416269e635b1feac842969ca6c9389d4448fd",
+  "purpose": "one new integrated ImportBatch 10k performance-only diagnostic",
+  "source_commit": "bc944fe6347f640b6d4877f69f2d98b464c4d0ad",
+  "verification": "performance only; no in-timer verifier"
+}

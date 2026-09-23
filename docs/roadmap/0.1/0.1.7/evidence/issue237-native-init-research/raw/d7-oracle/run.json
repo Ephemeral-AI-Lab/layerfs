@@ -1,0 +1,16 @@
+{
+  "complete_run_wall_ns": 14859754959,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 14269565333,
+  "full_verification_requested": true,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [],
+    "harness_seal": "78dde6dd794cd391353fe01506a9ea16983e6ef4ed8c2c66d5fe7c1581a4dda4",
+    "product_seal": "e94de577879baabdd564773dcf1d941517b97eeba84eb24f56e568ad05d1d59a",
+    "source_commit": "858624cbc36966373e6172a946bc893ce68bef99",
+    "source_dirty": false
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

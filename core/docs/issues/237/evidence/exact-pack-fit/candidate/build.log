@@ -1,0 +1,3 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/core/crates/layerfs-service)
+    Finished `release` profile [optimized] target(s) in 3.13s

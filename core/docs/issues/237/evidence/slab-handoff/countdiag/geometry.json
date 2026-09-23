@@ -1,0 +1,21 @@
+{
+  "allocated_bytes": 335609856,
+  "apparent_bytes": 333381632,
+  "distinct_object_ids": 24683,
+  "freelist_count": 0,
+  "object_rows": 24683,
+  "pack_capacity_bytes": 330563584,
+  "pack_rows": 1261,
+  "pack_slack_bytes": 24598256,
+  "pack_used_bytes": 305965328,
+  "pack_versions": {
+    "12": 2,
+    "15": 1119,
+    "17": 136,
+    "9": 4
+  },
+  "page_count": 81392,
+  "page_size": 4096,
+  "sha256": "758f2ae3ab47fb5f40762d97b2d23b5a0c063e9600df5c985274aa3ec23cab02",
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/issue237-slab-countdiag-01/daemon-host/init_namespace/namespace-10000/store.sqlite"
+}

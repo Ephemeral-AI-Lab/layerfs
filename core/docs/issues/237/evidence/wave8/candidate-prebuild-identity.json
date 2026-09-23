@@ -1,0 +1,10 @@
+{
+  "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+  "dirty_paths": [
+    " M core/crates/layerfs-service/src/operation/import_native.rs"
+  ],
+  "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+  "product_seal": "bc33b6c30eca6874d481577079a7190020b4f7c78aae971adba9d5bcc1bea808",
+  "source_commit": "7850dbe528d1e8de799f1e2c343e92f2b85fb8ee",
+  "source_dirty": true
+}

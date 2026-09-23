@@ -1,0 +1,30 @@
+{
+  "candidate": {
+    "history.sqlite": {
+      "allocated_bytes_stat_blocks": 86016,
+      "apparent_bytes": 86016,
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-candidate-01/daemon-host/init_namespace/namespace-10000/history.sqlite",
+      "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9"
+    },
+    "store.sqlite": {
+      "allocated_bytes_stat_blocks": 335609856,
+      "apparent_bytes": 333914112,
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-candidate-01/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "sha256": "195711774dff00e15d343752df19ad663214c751fcf76408e320dfb919dd8a4a"
+    }
+  },
+  "control": {
+    "history.sqlite": {
+      "allocated_bytes_stat_blocks": 86016,
+      "apparent_bytes": 86016,
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-control/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-control-01/daemon-host/init_namespace/namespace-10000/history.sqlite",
+      "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9"
+    },
+    "store.sqlite": {
+      "allocated_bytes_stat_blocks": 335609856,
+      "apparent_bytes": 333385728,
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-control/layerfs/benchmark-results/fs-bench-pro/issue237-sql-cte-control-01/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "sha256": "f50cf563d1dff02e10a8d274f160a5b2740d6380d83e4fa47700ddce14c7eaed"
+    }
+  }
+}

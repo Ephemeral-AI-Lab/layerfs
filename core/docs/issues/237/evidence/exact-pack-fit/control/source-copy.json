@@ -1,0 +1,6 @@
+{
+  "master": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload",
+  "method": "independent-byte-copy-v1",
+  "source": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-control/source-copy/namespace-10000/payload",
+  "wall_ns": 1909846000
+}

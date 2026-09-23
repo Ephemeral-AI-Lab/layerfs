@@ -1,0 +1,21 @@
+{
+  "schema": "issue237-sql-placement-infrastructure-failure-v1",
+  "attempted_command": [
+    "/usr/bin/python3",
+    "docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py",
+    "--case",
+    "namespace-10000",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue237-sql-bulk-admission/layerfs/benchmark-results/fs-bench-pro/issue237-sql-admission-widthdiag-01",
+    "--independent-source-copy",
+    "--fixed-operation-identity"
+  ],
+  "interpreter": "Python 3.9.6",
+  "exit_code": 1,
+  "failure": "TypeError: unsupported operand type(s) for |: types.GenericAlias and NoneType, while importing shared.telemetry",
+  "fixture_copy_started": false,
+  "build_started": false,
+  "public_operation_started": false,
+  "output_path_created": false,
+  "correction": "use repository python3 (Python 3.14.3); first actual diagnostic may use frozen fresh output path"
+}

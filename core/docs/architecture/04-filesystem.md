@@ -6,6 +6,12 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md). The directory-parent batching and reuse addendum below describes
 the #190 working-tree change over `9f35c49ad62956f131dc2676787f99d69659686e`.
+The #237 unmerged research diff in the same commit as this paragraph starts
+from `1850f497a` and adds one proven-absent interval to each live run scan.
+The #237 direct fresh-build change in this research tree starts from
+`3c2c8d793` and is described below with its same-commit source edit. Its
+fixed-identity proof is in [`c1-fixed-identity.md`](../issues/237/c1-fixed-identity.md);
+this branch has not been merged or release-qualified.
 
 ---
 
@@ -206,6 +212,14 @@ Base records are read **at the end**, in bounded waves
 them**. An inode whose count is unchanged and whose value was not supplied produces
 **no row at all**.
 
+For a build with no base, the already sorted declared-new serials index one
+checked binding count apiece. The final typed values go directly to the same
+sorted inode writer, without ordering runs or a second reducer pass. The
+count array is charged against the existing ordering-byte ceiling, and a new
+inode without a binding still fails. Updates with a base keep the reference
+reducer and its spill, fault and cleanup behavior. The earlier sparse-run gap
+fix remains in that update path.
+
 Run storage is caller-supplied through `OrderingBacking`, with one concrete local
 implementation over real files. The completion contract is explicit and is the
 kind of thing a qualification pass has to check:
@@ -256,6 +270,14 @@ cursor. Clearing every tier's scan on every spill is what made a lookup restart
 from the front of a higher tier's run and re-read the rows its cursor had already
 passed; the ascending-sweep property is what a receipt on this subsystem has to
 show.
+
+For a sparse run, an overshoot proves the half-open interval between the
+requested serial and the next row contains no record in that tier. Its scan
+remembers one such interval, so an ascending request in that gap continues to
+older tiers without rereading the sparse run's low prefix. A backward request
+outside the interval keeps the ordinary restart. Replacing a run clears its
+scan and this interval. This changes neither the row grammar nor the ordering
+memory and disk quotas.
 
 ### 5.6 The operation boundary
 

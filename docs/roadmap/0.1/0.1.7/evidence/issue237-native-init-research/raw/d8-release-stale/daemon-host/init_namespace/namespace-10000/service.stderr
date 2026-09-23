@@ -1,0 +1,3 @@
+LFT1 {"v":1,"namespace":3898739438919604303,"run":"fa09782d7a6447dca6ee07f5245085c7","pid":67013,"role":1,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":101000,"incarnation":2901211428187,"user_ns":3781000,"source":"getrusage+libproc","probe_ns":10750,"selected":3,"system_ns":7373000,"rss":3883008}
+layerfs-service ready 127.0.0.1:59183
+LFT1 {"v":1,"kind":"run-summary","run":"fa09782d7a6447dca6ee07f5245085c7","pid":67013,"role":1,"namespace":3898739438919604303,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}

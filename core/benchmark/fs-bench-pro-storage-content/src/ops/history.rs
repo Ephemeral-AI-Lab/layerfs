@@ -1096,21 +1096,6 @@ impl<'a> Sampler<'a> {
         }
     }
 
-    /// The oracle indices this state's sample names.
-    ///
-    /// Evenly spread across the state's path order, `max(1, ceil(len / budget))`
-    /// apart, so a state smaller than the budget is verified whole and a large one
-    /// is sampled across its whole extent. The rule is a function of the oracle
-    /// alone, so the same Store and the same corpus always sample the same paths.
-    fn sample_indices(&self) -> Vec<usize> {
-        let units = self.oracle.len();
-        if units == 0 {
-            return Vec::new();
-        }
-        let stride = units.div_ceil(self.budget.max(1)).max(1);
-        (0..units).step_by(stride).collect()
-    }
-
     fn run(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
         let mut read = FilesystemRead::new(self.reader, root)
             .map_err(|error| OpError::Product(format!("root {root:?}: {error:?}")))?;
@@ -1122,10 +1107,13 @@ impl<'a> Sampler<'a> {
         if resolved.value.kind != InodeKind::Directory {
             return Err(OpError::Io("the state's root is not a directory".to_string()));
         }
-        for index in self.sample_indices() {
-            let Some((path, entry)) = self.oracle.iter().nth(index) else {
+        // Preserve the declared evenly spaced indices without restarting a
+        // BTreeMap iterator for every path in a full-oracle diagnostic.
+        let stride = self.oracle.len().div_ceil(self.budget.max(1)).max(1);
+        for (index, (path, entry)) in self.oracle.iter().enumerate() {
+            if index % stride != 0 {
                 continue;
-            };
+            }
             let path = path.clone();
             let entry = *entry;
             let logical = match LogicalPath::from_bytes(&path) {
@@ -2746,4 +2734,3 @@ fn unmeasured(error: &OpError, mut gates: Vec<Gate>) -> OpOutcome {
     ));
     OpOutcome { gates, notes: Vec::new() }
 }
-

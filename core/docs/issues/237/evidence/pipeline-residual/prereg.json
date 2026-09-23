@@ -1,0 +1,16 @@
+{
+  "purpose": "Single count-only native Init residual diagnostic; no speed claim",
+  "case": "namespace-10000",
+  "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+  "product_seal": "f4d7198dc3e9bac9426a34616519b2a6f6ddda56b00e90eccd2226d01834e43b",
+  "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+  "service_binary_sha256": "2b6d2014c946fa7d717d1ac2e2d6586c08db0ae802dd8e1623af872fd0b3ad2d",
+  "diagnostic_diff_sha256": "3f2e588980678364a89f2f9325c178fc97bf6d002f0706c5ac314886de5a1f8c",
+  "driver_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "fixture_manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "source_setup": "Symlink to sealed prepared master only before run; driver makes a fresh independent byte copy and verifies zero source payload residency immediately before timed operation",
+  "cache_qualification": "Payload checked; metadata residency unqualified",
+  "verification": "SKIPPED performance-only diagnostic",
+  "output": "benchmark-results/fs-bench-pro/issue237-pipeline-residual-01",
+  "command": "python3 docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py --case namespace-10000 --independent-source-copy --fixed-operation-identity --out benchmark-results/fs-bench-pro/issue237-pipeline-residual-01"
+}

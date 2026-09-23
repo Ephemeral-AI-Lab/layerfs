@@ -1,0 +1,6 @@
+{
+  "master": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-100-compact-v3-5e9a1f13cc5fab51/payload",
+  "method": "independent-byte-copy-v1",
+  "source": "/Users/yifanxu/.codex/worktrees/2776/layerfs/benchmark-results/fs-bench-pro/issue237-accepted-scale-100-20260923-01/source-copy/namespace-100-compact-v3/payload",
+  "wall_ns": 20005084
+}

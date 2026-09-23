@@ -1,0 +1,2 @@
+LFT1 {"v":1,"namespace":3898739438919604304,"run":"fa09782d7a6447dca6ee07f5245085c7","pid":67016,"role":2,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":49542,"incarnation":2901223354945,"user_ns":2827000,"source":"getrusage+libproc","probe_ns":7916,"selected":3,"system_ns":5471000,"rss":1916928}
+LFT1 {"v":1,"kind":"run-summary","run":"fa09782d7a6447dca6ee07f5245085c7","pid":67016,"role":2,"namespace":3898739438919604304,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}

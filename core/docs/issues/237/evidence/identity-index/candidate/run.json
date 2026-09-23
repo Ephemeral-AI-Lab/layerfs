@@ -1,0 +1,23 @@
+{
+  "complete_run_wall_ns": 7022968250,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 6902417916,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-storage/src/cas/lifecycle.rs",
+      " M core/crates/layerfs-storage/src/cas/owner.rs",
+      " M core/crates/layerfs-storage/src/cas/placement.rs",
+      " M core/crates/layerfs-storage/src/cas/save.rs",
+      " M core/crates/layerfs-storage/src/cas/selection.rs",
+      "?? core/docs/issues/237/evidence/identity-index/"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "69b47b8d08276c5fe5aa311ee74d30397d13e86e31a1f88f8527106206b92f2e",
+    "source_commit": "07e8abd8b7f6f1e825b86637224313f6f481d1f5",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

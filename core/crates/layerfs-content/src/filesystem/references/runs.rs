@@ -350,6 +350,12 @@ impl<'r, 'b> RunStore<'r, 'b> {
             }
             let buffer_bytes = self.merge_buffer;
             let scan = self.scans[index].get_or_insert_with(|| LookupScan::new(buffer_bytes));
+            if scan
+                .gap
+                .is_some_and(|(start, end)| start <= serial && serial < end)
+            {
+                continue;
+            }
             // A request the cursor has already passed needs this run from the
             // front: the rows in between were never compared with it. A request
             // at or beyond the cursor continues the tier's scan where it
@@ -370,6 +376,7 @@ impl<'r, 'b> RunStore<'r, 'b> {
                     // This row was not compared with the request: leave it at the
                     // cursor so a later request still sees it.
                     scan.reader.rewind();
+                    scan.gap = Some((serial, row.serial()));
                     resume = Some(row.serial());
                     break;
                 }
@@ -569,6 +576,8 @@ struct LookupScan {
     /// Smallest serial the cursor may still answer. `None` means the row at
     /// the cursor was not read, so nothing below the cursor is safe.
     resume: Option<u64>,
+    /// Serials proved absent between a missed request and the next run row.
+    gap: Option<(u64, u64)>,
 }
 
 impl LookupScan {
@@ -577,6 +586,7 @@ impl LookupScan {
         Self {
             reader: RunScan::new(buffer_bytes),
             resume: None,
+            gap: None,
         }
     }
 }

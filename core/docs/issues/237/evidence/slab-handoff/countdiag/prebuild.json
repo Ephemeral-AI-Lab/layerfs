@@ -1,0 +1,55 @@
+{
+  "binaries": {
+    "create_store": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/binary-archive/f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c/create_store",
+      "sha256": "f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c"
+    },
+    "layerfs-daemon": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/binary-archive/fd5b6ed0b3eb815f7a6b6f8493bf4186ce22f59cd2f41e11cfec4eadff68900e/layerfs-daemon",
+      "sha256": "fd5b6ed0b3eb815f7a6b6f8493bf4186ce22f59cd2f41e11cfec4eadff68900e"
+    },
+    "layerfs-service": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/binary-archive/147054975abd324345e6bce697faf072e96e7a8f52359d1a990e3add569aa2a0/layerfs-service",
+      "sha256": "147054975abd324345e6bce697faf072e96e7a8f52359d1a990e3add569aa2a0"
+    },
+    "public_key": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/binary-archive/f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1/public_key",
+      "sha256": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/benchmark-results/fs-bench-pro/binary-archive/a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0/verify_namespace",
+      "sha256": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0"
+    }
+  },
+  "build_profile": "release",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--release",
+    "-p",
+    "layerfs-service",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-bridge",
+    "--bin",
+    "layerfs-service",
+    "--bin",
+    "layerfs-daemon",
+    "--example",
+    "public_key",
+    "--example",
+    "create_store",
+    "--example",
+    "verify_namespace"
+  ],
+  "exit_code": 0,
+  "mode": "changed-product",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/issue237-slab-handoff/layerfs/core/target",
+  "wall_ns": 2604128750
+}

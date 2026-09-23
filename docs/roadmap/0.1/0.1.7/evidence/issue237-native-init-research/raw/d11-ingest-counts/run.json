@@ -1,0 +1,19 @@
+{
+  "complete_run_wall_ns": 7441804333,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 5305629875,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/operation/import_native.rs",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d11-instrumentation.diff"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "65b1fedba5336541f53d753ba2a0f26c9a60037bf035aad0a3ef1d619d93c09d",
+    "source_commit": "ad8e6532133b0c1263bff217567765bfee32de1a",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

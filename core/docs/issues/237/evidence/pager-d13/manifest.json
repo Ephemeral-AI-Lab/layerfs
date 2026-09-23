@@ -1,0 +1,83 @@
+{
+  "files": {
+    "attempt-a/build.json": {
+      "bytes": 1694,
+      "sha256": "851d7667e89128be40f2213f0a33bfa24d001881b69f88b00229f54d5ef741b4"
+    },
+    "attempt-a/receipt.json": {
+      "bytes": 1300,
+      "sha256": "bfa8a08120f16d36b45c8dab1da8e88b526e487e169a504baf20390d882f9569"
+    },
+    "attempt-a/report.txt": {
+      "bytes": 468,
+      "sha256": "c1f254c2316cc0a746e2fa0c6cb2652fa315733fc1d4471161b004829f447c7e"
+    },
+    "attempt-a/run.json": {
+      "bytes": 947,
+      "sha256": "091a2fc133513c9320f8915cba62257ad6c639c5c90163770e12bf97f7015332"
+    },
+    "attempt-b/build.json": {
+      "bytes": 1694,
+      "sha256": "851d7667e89128be40f2213f0a33bfa24d001881b69f88b00229f54d5ef741b4"
+    },
+    "attempt-b/cold-launch.json": {
+      "bytes": 277,
+      "sha256": "5bcbd01ffb84426b33918fe612142a024661c0ca64ae6ef9a86119c92a421082"
+    },
+    "attempt-b/cold-preflight.json": {
+      "bytes": 661,
+      "sha256": "52828a59512c1151128f2beecf80d614b9d12d3bc08c32c12237f8cea13d0ad2"
+    },
+    "attempt-b/cold-recheck.json": {
+      "bytes": 227,
+      "sha256": "7ac5c9235a45e55db569ea8d52f7dc36f4cfc72f5a41d1fa85134b7da333edd1"
+    },
+    "attempt-b/geometry.json": {
+      "bytes": 1300,
+      "sha256": "f40100de3f9de07918e873c636f5c0015575d4d3977023b5aa75a9c81e1c9763"
+    },
+    "attempt-b/operation-identity.json": {
+      "bytes": 298,
+      "sha256": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf"
+    },
+    "attempt-b/perf.jsonl": {
+      "bytes": 324,
+      "sha256": "fdfea050fdae61fc2af3324a8519de9faf4ed191a254cc52f2a84c5e3e2c689b"
+    },
+    "attempt-b/receipt.json": {
+      "bytes": 8265,
+      "sha256": "919d832e6d6e0730bd930eba16ef12eb596ab08de690abd11052543fe23de724"
+    },
+    "attempt-b/report.txt": {
+      "bytes": 547,
+      "sha256": "b9f101610bfaf346265d469b7de7eb3dc67cc82f923da46d2950ac57c87f87fd"
+    },
+    "attempt-b/run.json": {
+      "bytes": 952,
+      "sha256": "95acb607aa1f13a31cf9a11eeb40726a6a8a90f695441badc4b5032fb9e28a44"
+    },
+    "attempt-b/telemetry.lft1": {
+      "bytes": 3655,
+      "sha256": "2902cb2968da648c4235045cd6362994609093fdfa26539d4d28ec675b5e921d"
+    },
+    "attempt-b/verification.json": {
+      "bytes": 92,
+      "sha256": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+    },
+    "setup-repair-cold.json": {
+      "bytes": 606,
+      "sha256": "2ef32492d3614aa2036a6b4a5977df81e6db76a26e5ad895326e1b9259ad19c9"
+    }
+  },
+  "instrumentation_diff_gz": {
+    "bytes": 1965,
+    "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d13-pager-instrumentation.diff.gz",
+    "sha256": "87757d135071f62d5f4b80eecfe137bc1461c0e406f7606115acb2bb5a8607d1"
+  },
+  "retained_store": {
+    "bytes": 334168064,
+    "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/issue237-pager-d13-cold-b/daemon-host/init_namespace/namespace-10000/store.sqlite",
+    "sha256": "8fd57614351aafd68a9ada91239faabf62ff51c2e6d39004da62e2f0c8720284"
+  },
+  "schema": "issue237-pager-d13-evidence-v1"
+}

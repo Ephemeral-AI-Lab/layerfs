@@ -1,0 +1,20 @@
+{
+  "complete_run_wall_ns": 7889012833,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 7770950208,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/save/import/batch/mod.rs",
+      " M core/crates/layerfs-service/src/save/import/batch/producer.rs",
+      " M core/crates/layerfs-service/src/save/import/scan.rs"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "f4d7198dc3e9bac9426a34616519b2a6f6ddda56b00e90eccd2226d01834e43b",
+    "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

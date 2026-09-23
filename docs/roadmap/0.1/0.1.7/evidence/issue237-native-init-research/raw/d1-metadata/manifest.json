@@ -1,0 +1,81 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 2093,
+      "sha256": "a467118e11547719db9287e8dc461eb9879fede3cf738a42bb2fc539aa4f655d"
+    },
+    "build.log": {
+      "bytes": 183,
+      "sha256": "2b10e492e439aa7bf4c926b7bcf7bd09ea8abdacd8180486e42e4d76d83f7ad8"
+    },
+    "daemon-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "bytes": 113,
+      "sha256": "90a5029f6eac7dfa991ca6135fd6ca597d7deeda8b70d896b3a58926ddff1684"
+    },
+    "daemon-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "bytes": 114,
+      "sha256": "c269fb2077ac27db650bf41629f8123b37509c37905a997c880c9bf3490a2a53"
+    },
+    "daemon-host/init_namespace/namespace-10000/cold-launch.json": {
+      "bytes": 121,
+      "sha256": "1ab72c2be073b34ab3ccf8d2041479fa20bcb4a2588939c43c55639b2e264cd2"
+    },
+    "daemon-host/init_namespace/namespace-10000/cold-preflight.json": {
+      "bytes": 541,
+      "sha256": "54e3cccf234f03145c9f55fefbe40a0bf82f0c09cc74f9d7556d0232d05d857a"
+    },
+    "daemon-host/init_namespace/namespace-10000/daemon.stderr": {
+      "bytes": 5510,
+      "sha256": "c1cc5502bbdcb8c7b44e8dfd23dfaaa499c9b11cc9d18e0b4d3142c133d870a9"
+    },
+    "daemon-host/init_namespace/namespace-10000/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "2f0cfbb4093a65478b5466ea5f4915f5291f8fa6cab3f397f4a2ce2072d4a2b8"
+    },
+    "daemon-host/init_namespace/namespace-10000/perf.jsonl": {
+      "bytes": 249,
+      "sha256": "8de306866d432203e78cbda154ff23841c9141e3fa22c2078c9e9a36b352ce7b"
+    },
+    "daemon-host/init_namespace/namespace-10000/receipt.json": {
+      "bytes": 5530,
+      "sha256": "42679374b0aae59ec10e8547d2710e9759da7d7cecbd9e2c61b76e7cca5b2051"
+    },
+    "daemon-host/init_namespace/namespace-10000/service.stderr": {
+      "bytes": 5167,
+      "sha256": "49d77f3ae1c696cab0308b36f283f05ed404ece294da38a9c708052b035c11ec"
+    },
+    "daemon-host/init_namespace/namespace-10000/store.ordering-58114-0/layerfs-ordering-00000007.run": {
+      "bytes": 969696,
+      "sha256": "3a41d258317817283daea8aca1592efe4f2fb36e6d6451954e63476004895a3f"
+    },
+    "daemon-host/init_namespace/namespace-10000/store.ordering-58114-0/layerfs-ordering-00000010.run": {
+      "bytes": 786432,
+      "sha256": "053af35766d386c14ab049a3e5d5cd341070cae849322c0160db3f6af6debab8"
+    },
+    "daemon-host/init_namespace/namespace-10000/store.sqlite": {
+      "bytes": 333365248,
+      "sha256": "b29136dcb8bf2254c5b38b18e6b1d5906b872d99daa3f93b11813f33fbe98ecd"
+    },
+    "daemon-host/init_namespace/namespace-10000/telemetry.lft1": {
+      "bytes": 10520,
+      "sha256": "bca2d3a913db7acfb6573fc83dd85d4153f15087838d310a39755c4820aac6c4"
+    },
+    "daemon-host/init_namespace/namespace-10000/verification.json": {
+      "bytes": 85,
+      "sha256": "dcbdf8f018d9107d4e1f1b815ba300db50440c7e891e5b9aa976e86325932f78"
+    },
+    "daemon-host/init_namespace/namespace-100000/receipt.json": {
+      "bytes": 154,
+      "sha256": "c83d38da81fad4ecb45709635e62d22058398e35c48fc2432e1b76b27866cc81"
+    },
+    "report.txt": {
+      "bytes": 564,
+      "sha256": "be0aaf7f2b9860d11dbf34b80fb991566dfdc46258bbbd58eabf4c796a926b6a"
+    },
+    "run.json": {
+      "bytes": 639,
+      "sha256": "bba032996b1bb65d20f8698f514f7c6b79ee4d8db3076115ca0c7104a730a5d9"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

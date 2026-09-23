@@ -1,0 +1,12 @@
+Command: rustc +1.85.1 --edition=2021 -C opt-level=3 -o benchmark-results/fs-bench-pro/signature-microbench core/docs/issues/237/evidence/signature-diag/signature_microbench.rs
+Command: benchmark-results/fs-bench-pro/signature-microbench
+Status: PASS (equality assertions and one pass per implementation)
+files=9399 bytes=33747000
+reference ns=95648417 checksum=071605232cffc20c
+recurrence ns=96579459 checksum=071605232cffc20c
+pipelined ns=95897750 checksum=071605232cffc20c
+
+An initial compile command omitted --edition=2021, so Rust used the standalone
+default edition and rejected the filter closure's array IntoIterator item type.
+Recompilation with the product's 2021 edition passed. No benchmark executable
+ran before the successful compile, and the one-pass result above was not rerun.

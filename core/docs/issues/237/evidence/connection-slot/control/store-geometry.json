@@ -1,0 +1,21 @@
+{
+  "allocated_bytes": 335609856,
+  "apparent_bytes": 333651968,
+  "distinct_object_ids": 24683,
+  "freelist_count": 0,
+  "object_rows": 24683,
+  "pack_capacity_bytes": 330825728,
+  "pack_rows": 1262,
+  "pack_slack_bytes": 24856280,
+  "pack_used_bytes": 305969448,
+  "pack_versions": {
+    "12": 2,
+    "15": 1120,
+    "17": 136,
+    "9": 4
+  },
+  "page_count": 81458,
+  "page_size": 4096,
+  "sha256": "cc875fcd9b28d07d41b279e66b3142315fdd7a52b3abb3c56c3e22d0066d65ab",
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-connection-control/layerfs/benchmark-results/fs-bench-pro/issue237-connection-control-01/daemon-host/init_namespace/namespace-10000/store.sqlite"
+}

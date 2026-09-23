@@ -1,0 +1,59 @@
+{
+  "arms": {
+    "candidate": {
+      "binaries": {
+        "create_store": "4817e04a5b972dcb1dc4ff98fcaa567ff1f4188dfbb18418c3a1b535c7f7a401",
+        "layerfs-daemon": "84cbf1c3536ac1815d39e51b653a126dc0db1932fa92eb702fd034094137f50a",
+        "layerfs-service": "51912a1a189671fbfa1f5d5b8c0c1b0b11c842f604b73173713a6f2440d5c53a",
+        "public_key": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "verify_namespace": "472108a62974d8b7a1c7fd352bd4b79fdcfd1021c3a45d811881220ecc248914"
+      },
+      "build_mode": "first-use",
+      "build_status": "PASS",
+      "build_wall_ns": 7362878333,
+      "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+      "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+      "output": "/Users/yifanxu/.codex/worktrees/issue237-collision-filter/layerfs/benchmark-results/fs-bench-pro/issue237-collision-candidate-10k-20260923-a",
+      "product_seal": "df8b50cb396b64f8557fe38fadeb4187e11bc226d8b8e42fa3895cc4b294f2c1",
+      "source_commit": "8e3e03520f9dc52d6f5e5b3cb769a26163f25a28",
+      "worktree": "/Users/yifanxu/.codex/worktrees/issue237-collision-filter/layerfs"
+    },
+    "control": {
+      "binaries": {
+        "create_store": "f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c",
+        "layerfs-daemon": "40c21a4cfa47fb276274dadfa49f787d5bbf99e43036cb70a94fb692ee7f837e",
+        "layerfs-service": "f9a9779f09f25f3ccbd8a1be634493fe6e65f14d703ffdeeaaa545a0ddf03226",
+        "public_key": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "verify_namespace": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0"
+      },
+      "build_mode": "first-use",
+      "build_status": "PASS",
+      "build_wall_ns": 14641017375,
+      "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+      "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+      "output": "/Users/yifanxu/.codex/worktrees/issue237-collision-control/layerfs/benchmark-results/fs-bench-pro/issue237-collision-control-10k-20260923-a",
+      "product_seal": "445f3c63745017c6436ba7f89a8416269e635b1feac842969ca6c9389d4448fd",
+      "source_commit": "970854f2ccbf82bb12f47840d081c7a882e388fd",
+      "worktree": "/Users/yifanxu/.codex/worktrees/issue237-collision-control/layerfs"
+    }
+  },
+  "cache_contract": "independent-byte-copy-v1; payload residency 0/27503 at final recheck per arm; metadata residency unqualified",
+  "case": "namespace-10000",
+  "command": "python3 docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py --case namespace-10000 --independent-source-copy --fixed-operation-identity --out ARM_OUTPUT",
+  "fixture_manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "logical_bytes": 300000000,
+  "operation_identity": "sha256-fixture-case-v1",
+  "samples_per_arm": 1,
+  "schema": "issue237-collision-pair-prereg-v1",
+  "status": "PROSPECTIVE",
+  "thresholds": {
+    "adoption": "all thresholds plus no material failure; metadata unqualified means exploratory even if adopted",
+    "integrity": "same exact root and 10000-file/300000000-byte separate readback; 4096-byte SQLite pages; 131072-byte cutoff; exact Store geometry and object count equal across arms",
+    "mechanism": "candidate collision_query_ns at least 15 ms lower than control",
+    "public": "candidate public time at least 10 ms lower than control",
+    "source_cold": "both final source payload checks zero resident; otherwise INELIGIBLE",
+    "space": "no apparent or allocated Store growth; no sampled RSS growth beyond 8 MiB"
+  },
+  "timer": "public native Init request",
+  "verification": "SKIPPED inside performance; one separate full reopened readback per arm"
+}

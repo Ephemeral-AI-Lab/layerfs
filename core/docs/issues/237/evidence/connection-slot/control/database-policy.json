@@ -1,0 +1,15 @@
+{
+  "history": {
+    "apparent_bytes": 86016,
+    "page_count": 21,
+    "page_size": 4096,
+    "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9"
+  },
+  "store": {
+    "apparent_bytes": 333651968,
+    "page_count": 81458,
+    "page_size": 4096,
+    "sha256": "cc875fcd9b28d07d41b279e66b3142315fdd7a52b3abb3c56c3e22d0066d65ab",
+    "small_file_threshold_bytes": 131072
+  }
+}

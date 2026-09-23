@@ -1,0 +1,49 @@
+{
+  "object_count": 24683,
+  "objects_by_save": [
+    [
+      1,
+      24364
+    ],
+    [
+      2,
+      11
+    ],
+    [
+      3,
+      308
+    ]
+  ],
+  "ordered_object_ids_sha256": "b1c424c30a1a332b1146ffb8cea48fe4eefbe443b82da31eaab64e94384deb57",
+  "pack_allocated_bytes": 330825728,
+  "pack_count": 1262,
+  "pack_used_bytes": 305969596,
+  "pack_versions": {
+    "12": {
+      "allocated_bytes": 524288,
+      "packs": 2,
+      "used_bytes": 406947
+    },
+    "15": {
+      "allocated_bytes": 293339136,
+      "packs": 1119,
+      "used_bytes": 271016119
+    },
+    "17": {
+      "allocated_bytes": 35651584,
+      "packs": 136,
+      "used_bytes": 33939743
+    },
+    "9": {
+      "allocated_bytes": 1310720,
+      "packs": 5,
+      "used_bytes": 606787
+    }
+  },
+  "source_run": "benchmark-results/fs-bench-pro/issue237-d11-ingest-counts-dirty-a",
+  "sqlite_freelist_count": 0,
+  "sqlite_page_count": 81459,
+  "sqlite_page_size": 4096,
+  "store": "benchmark-results/fs-bench-pro/issue237-d11-ingest-counts-dirty-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "store_file_bytes": 333656064
+}

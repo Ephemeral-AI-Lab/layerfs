@@ -1,0 +1,48 @@
+# #237 C1 native Init scaling: run lookup across a serial gap
+
+> **Status:** Research; informative and not a product contract.
+> Source pin `1850f497a5b898561c753bddbf780472250add50`. The counts below are a deterministic model of the pinned source and fixture, **not** performance samples or a claim of a passing Init. No product or harness edit was made for this analysis.
+
+## Route and count inputs
+
+The native scan visits the root, then its named directories, then their files by breadth-first traversal. It sorts each directory's children before assigning entry indices ([scan](../../../crates/layerfs-service/src/operation/import_native.rs#L59-L105)). `build_namespace` assigns consecutive serials to those entries, supplies all of them as sorted inode values and new IDs, and uses the default C1 resources ([construction](../../../crates/layerfs-service/src/operation/history_bootstrap.rs#L124-L167)). The frozen 10k fixture has 100 directories and 10,000 files; its 100k definition has 1,000 directories and 100,000 files ([case definitions](../../../benchmark/fs-bench-pro/families/init_namespace.py#L28-L37)). Thus the respective inode counts are **10,101** and **101,001**, including the root.
+
+The Service builds directory changes by parent serial, sorted by name ([grouping](../../../crates/layerfs-service/src/operation/history_bootstrap.rs#L370-L402)). For these fixtures, all root child directories are consecutive, followed by each directory's 100 consecutive files. C1 therefore registers all values in serial order, observes binding additions in ascending serial order, supplies rebuilt directory values in ascending order, then supplies every non-directory inode value *again* in ascending order ([operation](../../../crates/layerfs-content/src/filesystem/update.rs#L170-L180), [bindings](../../../crates/layerfs-content/src/filesystem/update.rs#L184-L303), [later values](../../../crates/layerfs-content/src/filesystem/update.rs#L304-L359), [initial registration](../../../crates/layerfs-content/src/filesystem/update.rs#L469-L488)). For `base=None`, no zero-count release walk runs ([guard](../../../crates/layerfs-content/src/filesystem/update.rs#L360-L386)). Final rows stream through the sorted inode builder ([finish](../../../crates/layerfs-content/src/filesystem/update.rs#L387-L419)).
+
+The default pending limit is 4,096 records, each spill row is 96 bytes, the merge buffer is 16 KiB, and the declared ordering ceiling is 64 MiB ([resources](../../../crates/layerfs-content/src/filesystem/input.rs#L54-L78), [row grammar](../../../crates/layerfs-content/src/filesystem/references/record.rs#L25-L26), [run defaults](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L36-L41)). `ReferenceReducer::entry` looks in the runs before it spills a full pending map, then inserts the requested row ([entry](../../../crates/layerfs-content/src/filesystem/references/reduce.rs#L233-L263)). Spills choose the first free binary tier and merge lower occupied tiers, preserving a logarithmic number of live runs ([spill](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L223-L323)).
+
+## The concrete rewind
+
+At 10,101 inodes, initial value registration spills 8,192 rows in two 4,096-row batches and leaves serials 8,193–10,101 pending: `floor((N-1)/4096) = 2`, `N - 2*4096 = 1,909`. After binding serials 2–2,188, pending holds 1,909 high rows plus 2,187 low rows. The next request, serial 2,189, finds its old row and then spills that mixed map. The fresh level-0 run spans serials 2–10,101 but contains **no row for 2,189–8,192**. These numbers follow directly from the `entry` order and the `spill` threshold cited above.
+
+For a missing serial in that hole, `RunStore::find` scans the newer tier until it sees row 8,193, rewinds one row and sets `resume = 8,193`. Its next ascending request is still below 8,193, so it restarts that same run from offset zero ([find](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L326-L389)). The first 4,096 misses after this spill alone each decode the 2,187-row low prefix plus the overshoot row: **4,096 × 2,188 = 8,962,048 row returns**. The older tier may then answer the serial correctly, but it cannot undo the new tier's work. A restart also invalidates the retained read buffer ([scan restart](../../../crates/layerfs-content/src/filesystem/references/merge.rs#L81-L99)), so this is repeated file-backed `read_at` work as well as repeated row decoding ([buffer fill](../../../crates/layerfs-content/src/filesystem/references/merge.rs#L113-L135)). With the default buffer, each full low-prefix scan needs at least `ceil(2,188 / floor(16,384/96)) = 13` fills, or **at least 53,248 `read_at` calls** for just that first gap. This is a source-derived lower bound, not measured I/O.
+
+This is not an unconditional `O(N²)` theorem for the fixed 4,096-row default. The immediate gap mechanism costs `O(G × P)` for `G` missing requests and a repeatedly scanned prefix of `P` rows; `P ≤ 4,096` in the first 10k example. If the pending ceiling grows with `N`, the same source admits quadratic work. At the fixed ceiling, the factor remains large enough to dominate Init, and subsequent mixed spills create further gaps. Binary-tier merging itself is `O(N log(N/4096))` row work and is not the source of the repeated-prefix term.
+
+## Deterministic count model
+
+I modeled the exact ascending call sequence above with 4,096 pending slots and the source's binary-tier spill/merge rules. Each tier's search uses the source's `resume` and rewind behavior; the counted unit is a `RunScan::next` row return, which is the unit incremented by `find` in [`rows_read`](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L363-L385). The model intentionally excludes merger reads and final sequential stream reads. It makes no wall-time prediction.
+
+| Native shape | Lookup requests | Current modeled lookup row returns | Current modeled restarts | With one proven-absent interval per tier: lookup row returns | Spill + merge output rows, same in both |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 10,101 inodes | 30,302 | 18,484,823 | 10,103 | 33,331 | 63,349 |
+| 101,001 inodes | 303,002 | 1,375,401,339 | 86,021 | 353,971 | 1,748,891 |
+
+For 10k, current modeled lookup returns split into 8,978,434 during binding effects, 101 during directory-value replacement, and 9,506,288 during the second file-value pass. The root agent's separate D5 count-driven diagnostic reported 9,011,202 `runs.rows_read` immediately after directory effects. The **32,768-row** difference from 8,978,434 is exactly the model's cumulative merge input rows to that point. At 5,120 second-pass file values, the model predicts **13,828,255 lookup returns + 40,960 merge input rows = 13,869,215 `runs.rows_read`**, exactly the second D5 observation. These two count matches corroborate the source mechanism without using another performance sample. The 100k row remains model-only; the registered #231 runner marks that case `NOT_RUN` ([selection](../../../benchmark/fs-bench-pro/families/init_namespace.py#L36-L37)).
+
+## Smallest bounded change to test
+
+Use the existing retained scan. Add one `Option<(u64, u64)>` to `LookupScan`, representing an interval `[requested, first_larger_row)` proven absent in **that immutable run**. In `find`, after the range check and scan creation, skip this tier if the request is in its interval; continue to older tiers. When a scan finds a row larger than the request, store the interval immediately after `rewind()`. The tier's existing scan reset drops the interval whenever a spill replaces its run ([reset](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L116-L138)). No canonical format, Store policy, worker count, ordering ceiling or output changes.
+
+```rust
+// LookupScan: gap: Option<(u64, u64)>, initialized to None.
+if scan.gap.is_some_and(|(low, high)| low <= serial && serial < high) {
+    continue; // absent in this tier; an older tier may hold it
+}
+// In the row.serial() > serial branch, after scan.reader.rewind():
+scan.gap = Some((serial, row.serial()));
+```
+
+Correctness edges: the lower endpoint is absent, the upper endpoint is a real row and must be searched, and a backward request below the lower endpoint keeps the existing restart. A later hit does not invalidate the interval because the run is immutable. Replacing the run invalidates it through the existing scan reset. The extra state is constant per live tier, at most 32 tuples ([tier bound](../../../crates/layerfs-content/src/filesystem/references/runs.rs#L40-L41)), and there is no new allocation or spill. An external C1 test should put a low prefix and high tail in a newer tier, leave the gap's rows in an older tier, assert those rows still resolve correctly, and assert run-read growth remains linear across an ascending gap. Existing scan tests cover dense ascending and backward requests but not this hole ([current coverage](../../../crates/layerfs-content/tests/filesystem_ordering_scan.rs#L60-L156)).
+
+This targets the shared lookup root cause on native `base=None` Init. The second non-directory `note_value` pass also revisits 10,000/100,000 supplied values, but removing it requires a separate semantics and quota proof; the gap cache directly removes the measured scaling hazard without changing reducer insertion order. Prove the candidate with one count-driven C1 diagnostic, then one prospectively declared matched public Init control/treatment with full root/readback, CPU, memory and Store footprint checks; retain any failed row. The #229 sparse-pack lane remains a separate gate.

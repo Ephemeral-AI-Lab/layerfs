@@ -1,0 +1,2955 @@
+{
+  "v0.1.6": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue237-v016-comparison/layerfs/benchmark-results/issue237-v016-v017-head2head-a/store/store.sqlite",
+    "bytes": 304553984,
+    "allocated_bytes_stat_blocks": 318783488,
+    "sha256": "79c8b732d6450bea6ceeae989e4721cc0fcac0971bebf4eb25e7721ff10631a2",
+    "sqlite_version": "3.51.0",
+    "reopened_read_only_pragmas": {
+      "application_id": 1279677260,
+      "user_version": 10,
+      "page_size": 4096,
+      "page_count": 74354,
+      "freelist_count": 0,
+      "cache_size": 2000,
+      "cache_spill": 20000,
+      "mmap_size": 0
+    },
+    "counts": {
+      "branches": 0,
+      "commits": 0,
+      "layer_stacks": 1,
+      "layers": 1,
+      "metadata_value_groups": 65,
+      "object_packs": 1693,
+      "objects": 24683,
+      "scope_allocator": 1,
+      "workspace_stages": 0
+    },
+    "indexes": [
+      [
+        "branch_identity",
+        "branches",
+        "CREATE UNIQUE INDEX branch_identity\n    ON branches(layer_stack_id, branch_id)"
+      ],
+      [
+        "branch_names",
+        "branches",
+        "CREATE UNIQUE INDEX branch_names\n    ON branches(layer_stack_id, name)"
+      ],
+      [
+        "layer_identity",
+        "layers",
+        "CREATE UNIQUE INDEX layer_identity\n    ON layers(layer_stack_id, layer_id)"
+      ],
+      [
+        "layer_stack_names",
+        "layer_stacks",
+        "CREATE UNIQUE INDEX layer_stack_names\n    ON layer_stacks(name)"
+      ],
+      [
+        "layers_child",
+        "layers",
+        "CREATE UNIQUE INDEX layers_child\n    ON layers(layer_stack_id, parent_layer_id)\n    WHERE parent_layer_id IS NOT NULL"
+      ],
+      [
+        "layers_genesis",
+        "layers",
+        "CREATE UNIQUE INDEX layers_genesis\n    ON layers(layer_stack_id)\n    WHERE parent_layer_id IS NULL"
+      ],
+      [
+        "layers_source",
+        "layers",
+        "CREATE UNIQUE INDEX layers_source\n    ON layers(source_branch_id, source_commit_id)\n    WHERE source_branch_id IS NOT NULL"
+      ],
+      [
+        "sqlite_autoindex_metadata_value_groups_1",
+        "metadata_value_groups",
+        null
+      ]
+    ],
+    "btree_cells_and_bytes": [
+      [
+        "branch_identity",
+        0,
+        4096
+      ],
+      [
+        "branch_names",
+        0,
+        4096
+      ],
+      [
+        "branches",
+        0,
+        4096
+      ],
+      [
+        "commits",
+        0,
+        4096
+      ],
+      [
+        "layer_identity",
+        1,
+        4096
+      ],
+      [
+        "layer_stack_names",
+        1,
+        4096
+      ],
+      [
+        "layer_stacks",
+        1,
+        4096
+      ],
+      [
+        "layers",
+        1,
+        4096
+      ],
+      [
+        "layers_child",
+        0,
+        4096
+      ],
+      [
+        "layers_genesis",
+        1,
+        4096
+      ],
+      [
+        "layers_source",
+        0,
+        4096
+      ],
+      [
+        "metadata_value_groups",
+        65,
+        4096
+      ],
+      [
+        "object_packs",
+        2768,
+        303198208
+      ],
+      [
+        "objects",
+        24683,
+        1282048
+      ],
+      [
+        "scope_allocator",
+        1,
+        4096
+      ],
+      [
+        "sqlite_autoindex_metadata_value_groups_1",
+        65,
+        4096
+      ],
+      [
+        "sqlite_schema",
+        18,
+        12288
+      ],
+      [
+        "workspace_stages",
+        0,
+        4096
+      ]
+    ],
+    "pack_capacity_bytes": 301646854,
+    "sample_pack": {
+      "pack_id": 1,
+      "save_id": null,
+      "bytes": 230207
+    },
+    "plans": {
+      "object_lookup_1": {
+        "sql": "SELECT canonical_length,pack_id,group_number,record_number FROM objects WHERE object_id=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            39,
+            "SEARCH objects USING PRIMARY KEY (object_id=?)"
+          ]
+        ],
+        "opcode_count": 15,
+        "opcodes": {
+          "Column": 4,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "IsNull": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "object_insert_1": {
+        "sql": "INSERT INTO objects(object_id,canonical_length,pack_id,group_number,record_number) VALUES (?,?,?,?,?)",
+        "bindings": 5,
+        "plan": [],
+        "opcode_count": 37,
+        "opcodes": {
+          "Close": 1,
+          "Goto": 2,
+          "Halt": 3,
+          "HaltIfNull": 5,
+          "IdxInsert": 1,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 1,
+          "MakeRecord": 1,
+          "MustBeInt": 1,
+          "NoConflict": 1,
+          "NotExists": 1,
+          "Null": 1,
+          "OpenRead": 1,
+          "OpenWrite": 1,
+          "SCopy": 6,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 5
+        }
+      },
+      "object_lookup_128": {
+        "sql": "SELECT object_id,canonical_length,pack_id,group_number,record_number FROM objects WHERE object_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "bindings": 128,
+        "plan": [
+          [
+            2,
+            0,
+            115,
+            "SEARCH objects USING PRIMARY KEY (object_id=?)"
+          ]
+        ],
+        "opcode_count": 407,
+        "opcodes": {
+          "BeginSubrtn": 1,
+          "Column": 6,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "IdxInsert": 128,
+          "Init": 1,
+          "IsNull": 1,
+          "MakeRecord": 128,
+          "Next": 1,
+          "NullRow": 1,
+          "Once": 1,
+          "OpenEphemeral": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "Return": 1,
+          "Rewind": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 128
+        }
+      },
+      "object_insert_128": {
+        "sql": "INSERT INTO objects(object_id,canonical_length,pack_id,group_number,record_number) VALUES (?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?),(?,?,?,?,?)",
+        "bindings": 640,
+        "plan": [
+          [
+            771,
+            0,
+            0,
+            "SCAN 128-ROW VALUES CLAUSE"
+          ],
+          [
+            800,
+            0,
+            215,
+            "SCAN workspace_stages"
+          ],
+          [
+            808,
+            0,
+            216,
+            "SCAN layers"
+          ],
+          [
+            816,
+            0,
+            216,
+            "SCAN commits"
+          ]
+        ],
+        "opcode_count": 829,
+        "opcodes": {
+          "Close": 1,
+          "Column": 3,
+          "EndCoroutine": 1,
+          "Explain": 4,
+          "FkCounter": 4,
+          "FkIfZero": 3,
+          "Goto": 3,
+          "Halt": 2,
+          "HaltIfNull": 5,
+          "IdxInsert": 1,
+          "Init": 1,
+          "InitCoroutine": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 1,
+          "MakeRecord": 1,
+          "MustBeInt": 1,
+          "Ne": 3,
+          "Next": 3,
+          "NoConflict": 1,
+          "NotExists": 1,
+          "Null": 1,
+          "OpenRead": 4,
+          "OpenWrite": 1,
+          "Rewind": 3,
+          "SCopy": 6,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 640,
+          "Yield": 129
+        }
+      },
+      "pack_insert": {
+        "sql": "INSERT INTO object_packs(pack_id,data) VALUES(?,?)",
+        "bindings": 2,
+        "plan": [],
+        "opcode_count": 18,
+        "opcodes": {
+          "Goto": 1,
+          "Halt": 2,
+          "HaltIfNull": 1,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 1,
+          "MakeRecord": 1,
+          "MustBeInt": 1,
+          "NewRowid": 1,
+          "NotExists": 1,
+          "NotNull": 1,
+          "OpenWrite": 1,
+          "SoftNull": 1,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 2
+        }
+      },
+      "pack_append_update": {
+        "sql": "UPDATE object_packs SET data=?2 WHERE pack_id=?1",
+        "bindings": 2,
+        "plan": [
+          [
+            4,
+            0,
+            33,
+            "SEARCH object_packs USING INTEGER PRIMARY KEY (rowid=?)"
+          ]
+        ],
+        "opcode_count": 20,
+        "opcodes": {
+          "Delete": 1,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "HaltIfNull": 1,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 1,
+          "IsNull": 1,
+          "MakeRecord": 1,
+          "Noop": 1,
+          "Null": 2,
+          "OpenWrite": 1,
+          "Rowid": 1,
+          "SeekRowid": 1,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 2
+        }
+      },
+      "pack_read": {
+        "sql": "SELECT data FROM object_packs WHERE pack_id=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            33,
+            "SEARCH object_packs USING INTEGER PRIMARY KEY (rowid=?)"
+          ]
+        ],
+        "opcode_count": 10,
+        "opcodes": {
+          "Column": 1,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "Init": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "SeekRowid": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "stack_lookup": {
+        "sql": "SELECT layer_stack_id,name,head_layer_id FROM layer_stacks WHERE layer_stack_id=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            39,
+            "SEARCH layer_stacks USING PRIMARY KEY (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 14,
+        "opcodes": {
+          "Column": 3,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "IsNull": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "stack_name_lookup": {
+        "sql": "SELECT layer_stack_id,name,head_layer_id FROM layer_stacks WHERE name=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            3,
+            0,
+            39,
+            "SEARCH layer_stacks USING INDEX layer_stack_names (name=?)"
+          ]
+        ],
+        "opcode_count": 18,
+        "opcodes": {
+          "Affinity": 1,
+          "Column": 4,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "IsNull": 1,
+          "NotFound": 1,
+          "OpenRead": 2,
+          "ResultRow": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "stack_insert": {
+        "sql": "INSERT INTO layer_stacks(layer_stack_id,name,head_layer_id) VALUES(?1,?2,?3)",
+        "bindings": 3,
+        "plan": [
+          [
+            35,
+            0,
+            62,
+            "SEARCH layers USING INDEX layer_identity (layer_stack_id=?)"
+          ],
+          [
+            46,
+            0,
+            62,
+            "SEARCH branches USING INDEX branch_names (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 61,
+        "opcodes": {
+          "Affinity": 1,
+          "Close": 1,
+          "Column": 2,
+          "Copy": 2,
+          "Explain": 2,
+          "FkCounter": 3,
+          "FkIfZero": 2,
+          "Found": 1,
+          "Goto": 1,
+          "Halt": 3,
+          "HaltIfNull": 3,
+          "IdxGT": 2,
+          "IdxInsert": 2,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 4,
+          "MakeRecord": 2,
+          "Next": 2,
+          "NoConflict": 2,
+          "NotFound": 2,
+          "Null": 1,
+          "OpenRead": 5,
+          "OpenWrite": 2,
+          "SCopy": 5,
+          "SeekGE": 2,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 3
+        }
+      },
+      "layer_insert": {
+        "sql": "INSERT INTO layers(layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id) VALUES(?1,?2,?3,?4,?5,?6)",
+        "bindings": 6,
+        "plan": [
+          [
+            99,
+            0,
+            39,
+            "SEARCH layer_stacks USING PRIMARY KEY (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 119,
+        "opcodes": {
+          "Affinity": 5,
+          "Close": 5,
+          "Column": 1,
+          "Copy": 7,
+          "Explain": 1,
+          "FkCounter": 3,
+          "FkIfZero": 1,
+          "Found": 5,
+          "Goto": 2,
+          "Halt": 9,
+          "HaltIfNull": 3,
+          "IdxGT": 1,
+          "IdxInsert": 5,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 13,
+          "MakeRecord": 5,
+          "Ne": 3,
+          "NoConflict": 5,
+          "NotNull": 1,
+          "Null": 4,
+          "OpenRead": 6,
+          "OpenWrite": 5,
+          "SCopy": 16,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 6
+        }
+      },
+      "commit": {
+        "sql": "COMMIT",
+        "bindings": 0,
+        "plan": [],
+        "opcode_count": 4,
+        "opcodes": {
+          "AutoCommit": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "Init": 1
+        }
+      }
+    }
+  },
+  "Core": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+    "bytes": 333651968,
+    "allocated_bytes_stat_blocks": 335609856,
+    "sha256": "726497c0748b246d68787461705ef6d3991850bd8012e6ed820dbdc5b0b807fc",
+    "sqlite_version": "3.51.0",
+    "reopened_read_only_pragmas": {
+      "application_id": 1279677261,
+      "user_version": 10,
+      "page_size": 4096,
+      "page_count": 81458,
+      "freelist_count": 0,
+      "cache_size": 2000,
+      "cache_spill": 20000,
+      "mmap_size": 0
+    },
+    "counts": {
+      "content_signatures": 8192,
+      "metadata_value_groups": 201,
+      "object_packs": 1262,
+      "objects": 24683,
+      "saves": 3,
+      "store_policy": 1
+    },
+    "indexes": [
+      [
+        "packs_save",
+        "object_packs",
+        "CREATE INDEX packs_save ON object_packs(save_id, pack_id)"
+      ],
+      [
+        "signatures_save",
+        "content_signatures",
+        "CREATE INDEX signatures_save ON content_signatures(save_id, slot)"
+      ],
+      [
+        "sqlite_autoindex_metadata_value_groups_1",
+        "metadata_value_groups",
+        null
+      ],
+      [
+        "sqlite_autoindex_saves_1",
+        "saves",
+        null
+      ],
+      [
+        "sqlite_autoindex_saves_2",
+        "saves",
+        null
+      ]
+    ],
+    "btree_cells_and_bytes": [
+      [
+        "content_signatures",
+        8347,
+        643072
+      ],
+      [
+        "metadata_value_groups",
+        203,
+        16384
+      ],
+      [
+        "object_packs",
+        1419,
+        331476992
+      ],
+      [
+        "objects",
+        24683,
+        1351680
+      ],
+      [
+        "packs_save",
+        1262,
+        20480
+      ],
+      [
+        "saves",
+        3,
+        4096
+      ],
+      [
+        "signatures_save",
+        8192,
+        106496
+      ],
+      [
+        "sqlite_autoindex_metadata_value_groups_1",
+        201,
+        4096
+      ],
+      [
+        "sqlite_autoindex_saves_1",
+        3,
+        4096
+      ],
+      [
+        "sqlite_autoindex_saves_2",
+        3,
+        4096
+      ],
+      [
+        "sqlite_schema",
+        13,
+        12288
+      ],
+      [
+        "sqlite_sequence",
+        1,
+        4096
+      ],
+      [
+        "store_policy",
+        1,
+        4096
+      ]
+    ],
+    "pack_capacity_bytes": 330825728,
+    "sample_pack": {
+      "pack_id": 1,
+      "save_id": 1,
+      "bytes": 262144
+    },
+    "plans": {
+      "object_lookup_1": {
+        "sql": "SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,(o.save_id=r.save_id OR s.publication<=r.publication) FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE o.object_id IN (?) AND o.pack_id<=?",
+        "bindings": 2,
+        "plan": [
+          [
+            4,
+            0,
+            56,
+            "SEARCH o USING PRIMARY KEY (object_id=?)"
+          ],
+          [
+            11,
+            0,
+            45,
+            "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)"
+          ],
+          [
+            14,
+            0,
+            216,
+            "SCAN r"
+          ]
+        ],
+        "opcode_count": 42,
+        "opcodes": {
+          "Column": 13,
+          "Eq": 1,
+          "Explain": 3,
+          "Goto": 1,
+          "Gt": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "Integer": 2,
+          "IsNull": 1,
+          "Le": 1,
+          "Next": 2,
+          "OpenRead": 3,
+          "Or": 1,
+          "ResultRow": 1,
+          "Rewind": 1,
+          "SeekGE": 1,
+          "SeekRowid": 1,
+          "Transaction": 2,
+          "Variable": 2,
+          "ZeroOrNull": 2
+        }
+      },
+      "object_insert_1": {
+        "sql": "INSERT INTO objects(object_id,object_role,canonical_length,pack_id,group_number,record_number,save_id) VALUES (?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope))",
+        "bindings": 6,
+        "plan": [
+          [
+            5,
+            0,
+            0,
+            "SCALAR SUBQUERY 1"
+          ],
+          [
+            9,
+            5,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ]
+        ],
+        "opcode_count": 64,
+        "opcodes": {
+          "BeginSubrtn": 1,
+          "Close": 2,
+          "Column": 1,
+          "Copy": 1,
+          "DecrJumpZero": 1,
+          "Explain": 2,
+          "Goto": 3,
+          "Halt": 4,
+          "HaltIfNull": 7,
+          "IdxInsert": 1,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 3,
+          "IsNull": 2,
+          "MakeRecord": 1,
+          "MustBeInt": 2,
+          "Next": 1,
+          "NoConflict": 1,
+          "NotExists": 2,
+          "Null": 2,
+          "Once": 1,
+          "OpenRead": 3,
+          "OpenWrite": 1,
+          "Return": 1,
+          "Rewind": 1,
+          "SCopy": 9,
+          "Transaction": 2,
+          "TypeCheck": 1,
+          "Variable": 6
+        }
+      },
+      "object_lookup_128": {
+        "sql": "SELECT o.object_id,o.object_role,o.canonical_length,o.pack_id,o.group_number,o.record_number,o.save_id,(o.save_id=r.save_id OR s.publication<=r.publication) FROM objects o JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE o.object_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) AND o.pack_id<=?",
+        "bindings": 129,
+        "plan": [
+          [
+            4,
+            0,
+            126,
+            "SEARCH o USING PRIMARY KEY (object_id=?)"
+          ],
+          [
+            401,
+            0,
+            45,
+            "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)"
+          ],
+          [
+            404,
+            0,
+            216,
+            "SCAN r"
+          ]
+        ],
+        "opcode_count": 433,
+        "opcodes": {
+          "BeginSubrtn": 1,
+          "Column": 14,
+          "Eq": 1,
+          "Explain": 3,
+          "Goto": 1,
+          "Gt": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "IdxInsert": 128,
+          "Init": 1,
+          "Integer": 2,
+          "IsNull": 1,
+          "Le": 1,
+          "MakeRecord": 128,
+          "Next": 3,
+          "NullRow": 1,
+          "Once": 1,
+          "OpenEphemeral": 1,
+          "OpenRead": 3,
+          "Or": 1,
+          "ResultRow": 1,
+          "Return": 1,
+          "Rewind": 2,
+          "SeekGE": 1,
+          "SeekRowid": 1,
+          "Transaction": 2,
+          "Variable": 129,
+          "ZeroOrNull": 2
+        }
+      },
+      "object_insert_128": {
+        "sql": "INSERT INTO objects(object_id,object_role,canonical_length,pack_id,group_number,record_number,save_id) VALUES (?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope)),(?,?,?,?,?,?,(SELECT save_id FROM temp.layerfs_read_scope))",
+        "bindings": 768,
+        "plan": [
+          [
+            2,
+            0,
+            0,
+            "SCAN 128 CONSTANT ROWS"
+          ],
+          [
+            11,
+            0,
+            0,
+            "SCALAR SUBQUERY 1"
+          ],
+          [
+            15,
+            11,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            31,
+            0,
+            0,
+            "SCALAR SUBQUERY 3"
+          ],
+          [
+            35,
+            31,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            51,
+            0,
+            0,
+            "SCALAR SUBQUERY 5"
+          ],
+          [
+            55,
+            51,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            71,
+            0,
+            0,
+            "SCALAR SUBQUERY 7"
+          ],
+          [
+            75,
+            71,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            91,
+            0,
+            0,
+            "SCALAR SUBQUERY 9"
+          ],
+          [
+            95,
+            91,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            111,
+            0,
+            0,
+            "SCALAR SUBQUERY 11"
+          ],
+          [
+            115,
+            111,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            131,
+            0,
+            0,
+            "SCALAR SUBQUERY 13"
+          ],
+          [
+            135,
+            131,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            151,
+            0,
+            0,
+            "SCALAR SUBQUERY 15"
+          ],
+          [
+            155,
+            151,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            171,
+            0,
+            0,
+            "SCALAR SUBQUERY 17"
+          ],
+          [
+            175,
+            171,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            191,
+            0,
+            0,
+            "SCALAR SUBQUERY 19"
+          ],
+          [
+            195,
+            191,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            211,
+            0,
+            0,
+            "SCALAR SUBQUERY 21"
+          ],
+          [
+            215,
+            211,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            231,
+            0,
+            0,
+            "SCALAR SUBQUERY 23"
+          ],
+          [
+            235,
+            231,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            251,
+            0,
+            0,
+            "SCALAR SUBQUERY 25"
+          ],
+          [
+            255,
+            251,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            271,
+            0,
+            0,
+            "SCALAR SUBQUERY 27"
+          ],
+          [
+            275,
+            271,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            291,
+            0,
+            0,
+            "SCALAR SUBQUERY 29"
+          ],
+          [
+            295,
+            291,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            311,
+            0,
+            0,
+            "SCALAR SUBQUERY 31"
+          ],
+          [
+            315,
+            311,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            331,
+            0,
+            0,
+            "SCALAR SUBQUERY 33"
+          ],
+          [
+            335,
+            331,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            351,
+            0,
+            0,
+            "SCALAR SUBQUERY 35"
+          ],
+          [
+            355,
+            351,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            371,
+            0,
+            0,
+            "SCALAR SUBQUERY 37"
+          ],
+          [
+            375,
+            371,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            391,
+            0,
+            0,
+            "SCALAR SUBQUERY 39"
+          ],
+          [
+            395,
+            391,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            411,
+            0,
+            0,
+            "SCALAR SUBQUERY 41"
+          ],
+          [
+            415,
+            411,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            431,
+            0,
+            0,
+            "SCALAR SUBQUERY 43"
+          ],
+          [
+            435,
+            431,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            451,
+            0,
+            0,
+            "SCALAR SUBQUERY 45"
+          ],
+          [
+            455,
+            451,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            471,
+            0,
+            0,
+            "SCALAR SUBQUERY 47"
+          ],
+          [
+            475,
+            471,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            491,
+            0,
+            0,
+            "SCALAR SUBQUERY 49"
+          ],
+          [
+            495,
+            491,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            511,
+            0,
+            0,
+            "SCALAR SUBQUERY 51"
+          ],
+          [
+            515,
+            511,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            531,
+            0,
+            0,
+            "SCALAR SUBQUERY 53"
+          ],
+          [
+            535,
+            531,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            551,
+            0,
+            0,
+            "SCALAR SUBQUERY 55"
+          ],
+          [
+            555,
+            551,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            571,
+            0,
+            0,
+            "SCALAR SUBQUERY 57"
+          ],
+          [
+            575,
+            571,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            591,
+            0,
+            0,
+            "SCALAR SUBQUERY 59"
+          ],
+          [
+            595,
+            591,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            611,
+            0,
+            0,
+            "SCALAR SUBQUERY 61"
+          ],
+          [
+            615,
+            611,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            631,
+            0,
+            0,
+            "SCALAR SUBQUERY 63"
+          ],
+          [
+            635,
+            631,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            651,
+            0,
+            0,
+            "SCALAR SUBQUERY 65"
+          ],
+          [
+            655,
+            651,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            671,
+            0,
+            0,
+            "SCALAR SUBQUERY 67"
+          ],
+          [
+            675,
+            671,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            691,
+            0,
+            0,
+            "SCALAR SUBQUERY 69"
+          ],
+          [
+            695,
+            691,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            711,
+            0,
+            0,
+            "SCALAR SUBQUERY 71"
+          ],
+          [
+            715,
+            711,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            731,
+            0,
+            0,
+            "SCALAR SUBQUERY 73"
+          ],
+          [
+            735,
+            731,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            751,
+            0,
+            0,
+            "SCALAR SUBQUERY 75"
+          ],
+          [
+            755,
+            751,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            771,
+            0,
+            0,
+            "SCALAR SUBQUERY 77"
+          ],
+          [
+            775,
+            771,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            791,
+            0,
+            0,
+            "SCALAR SUBQUERY 79"
+          ],
+          [
+            795,
+            791,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            811,
+            0,
+            0,
+            "SCALAR SUBQUERY 81"
+          ],
+          [
+            815,
+            811,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            831,
+            0,
+            0,
+            "SCALAR SUBQUERY 83"
+          ],
+          [
+            835,
+            831,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            851,
+            0,
+            0,
+            "SCALAR SUBQUERY 85"
+          ],
+          [
+            855,
+            851,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            871,
+            0,
+            0,
+            "SCALAR SUBQUERY 87"
+          ],
+          [
+            875,
+            871,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            891,
+            0,
+            0,
+            "SCALAR SUBQUERY 89"
+          ],
+          [
+            895,
+            891,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            911,
+            0,
+            0,
+            "SCALAR SUBQUERY 91"
+          ],
+          [
+            915,
+            911,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            931,
+            0,
+            0,
+            "SCALAR SUBQUERY 93"
+          ],
+          [
+            935,
+            931,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            951,
+            0,
+            0,
+            "SCALAR SUBQUERY 95"
+          ],
+          [
+            955,
+            951,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            971,
+            0,
+            0,
+            "SCALAR SUBQUERY 97"
+          ],
+          [
+            975,
+            971,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            991,
+            0,
+            0,
+            "SCALAR SUBQUERY 99"
+          ],
+          [
+            995,
+            991,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1011,
+            0,
+            0,
+            "SCALAR SUBQUERY 101"
+          ],
+          [
+            1015,
+            1011,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1031,
+            0,
+            0,
+            "SCALAR SUBQUERY 103"
+          ],
+          [
+            1035,
+            1031,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1051,
+            0,
+            0,
+            "SCALAR SUBQUERY 105"
+          ],
+          [
+            1055,
+            1051,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1071,
+            0,
+            0,
+            "SCALAR SUBQUERY 107"
+          ],
+          [
+            1075,
+            1071,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1091,
+            0,
+            0,
+            "SCALAR SUBQUERY 109"
+          ],
+          [
+            1095,
+            1091,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1111,
+            0,
+            0,
+            "SCALAR SUBQUERY 111"
+          ],
+          [
+            1115,
+            1111,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1131,
+            0,
+            0,
+            "SCALAR SUBQUERY 113"
+          ],
+          [
+            1135,
+            1131,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1151,
+            0,
+            0,
+            "SCALAR SUBQUERY 115"
+          ],
+          [
+            1155,
+            1151,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1171,
+            0,
+            0,
+            "SCALAR SUBQUERY 117"
+          ],
+          [
+            1175,
+            1171,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1191,
+            0,
+            0,
+            "SCALAR SUBQUERY 119"
+          ],
+          [
+            1195,
+            1191,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1211,
+            0,
+            0,
+            "SCALAR SUBQUERY 121"
+          ],
+          [
+            1215,
+            1211,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1231,
+            0,
+            0,
+            "SCALAR SUBQUERY 123"
+          ],
+          [
+            1235,
+            1231,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1251,
+            0,
+            0,
+            "SCALAR SUBQUERY 125"
+          ],
+          [
+            1255,
+            1251,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1271,
+            0,
+            0,
+            "SCALAR SUBQUERY 127"
+          ],
+          [
+            1275,
+            1271,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1291,
+            0,
+            0,
+            "SCALAR SUBQUERY 129"
+          ],
+          [
+            1295,
+            1291,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1311,
+            0,
+            0,
+            "SCALAR SUBQUERY 131"
+          ],
+          [
+            1315,
+            1311,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1331,
+            0,
+            0,
+            "SCALAR SUBQUERY 133"
+          ],
+          [
+            1335,
+            1331,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1351,
+            0,
+            0,
+            "SCALAR SUBQUERY 135"
+          ],
+          [
+            1355,
+            1351,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1371,
+            0,
+            0,
+            "SCALAR SUBQUERY 137"
+          ],
+          [
+            1375,
+            1371,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1391,
+            0,
+            0,
+            "SCALAR SUBQUERY 139"
+          ],
+          [
+            1395,
+            1391,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1411,
+            0,
+            0,
+            "SCALAR SUBQUERY 141"
+          ],
+          [
+            1415,
+            1411,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1431,
+            0,
+            0,
+            "SCALAR SUBQUERY 143"
+          ],
+          [
+            1435,
+            1431,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1451,
+            0,
+            0,
+            "SCALAR SUBQUERY 145"
+          ],
+          [
+            1455,
+            1451,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1471,
+            0,
+            0,
+            "SCALAR SUBQUERY 147"
+          ],
+          [
+            1475,
+            1471,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1491,
+            0,
+            0,
+            "SCALAR SUBQUERY 149"
+          ],
+          [
+            1495,
+            1491,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1511,
+            0,
+            0,
+            "SCALAR SUBQUERY 151"
+          ],
+          [
+            1515,
+            1511,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1531,
+            0,
+            0,
+            "SCALAR SUBQUERY 153"
+          ],
+          [
+            1535,
+            1531,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1551,
+            0,
+            0,
+            "SCALAR SUBQUERY 155"
+          ],
+          [
+            1555,
+            1551,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1571,
+            0,
+            0,
+            "SCALAR SUBQUERY 157"
+          ],
+          [
+            1575,
+            1571,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1591,
+            0,
+            0,
+            "SCALAR SUBQUERY 159"
+          ],
+          [
+            1595,
+            1591,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1611,
+            0,
+            0,
+            "SCALAR SUBQUERY 161"
+          ],
+          [
+            1615,
+            1611,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1631,
+            0,
+            0,
+            "SCALAR SUBQUERY 163"
+          ],
+          [
+            1635,
+            1631,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1651,
+            0,
+            0,
+            "SCALAR SUBQUERY 165"
+          ],
+          [
+            1655,
+            1651,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1671,
+            0,
+            0,
+            "SCALAR SUBQUERY 167"
+          ],
+          [
+            1675,
+            1671,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1691,
+            0,
+            0,
+            "SCALAR SUBQUERY 169"
+          ],
+          [
+            1695,
+            1691,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1711,
+            0,
+            0,
+            "SCALAR SUBQUERY 171"
+          ],
+          [
+            1715,
+            1711,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1731,
+            0,
+            0,
+            "SCALAR SUBQUERY 173"
+          ],
+          [
+            1735,
+            1731,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1751,
+            0,
+            0,
+            "SCALAR SUBQUERY 175"
+          ],
+          [
+            1755,
+            1751,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1771,
+            0,
+            0,
+            "SCALAR SUBQUERY 177"
+          ],
+          [
+            1775,
+            1771,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1791,
+            0,
+            0,
+            "SCALAR SUBQUERY 179"
+          ],
+          [
+            1795,
+            1791,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1811,
+            0,
+            0,
+            "SCALAR SUBQUERY 181"
+          ],
+          [
+            1815,
+            1811,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1831,
+            0,
+            0,
+            "SCALAR SUBQUERY 183"
+          ],
+          [
+            1835,
+            1831,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1851,
+            0,
+            0,
+            "SCALAR SUBQUERY 185"
+          ],
+          [
+            1855,
+            1851,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1871,
+            0,
+            0,
+            "SCALAR SUBQUERY 187"
+          ],
+          [
+            1875,
+            1871,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1891,
+            0,
+            0,
+            "SCALAR SUBQUERY 189"
+          ],
+          [
+            1895,
+            1891,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1911,
+            0,
+            0,
+            "SCALAR SUBQUERY 191"
+          ],
+          [
+            1915,
+            1911,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1931,
+            0,
+            0,
+            "SCALAR SUBQUERY 193"
+          ],
+          [
+            1935,
+            1931,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1951,
+            0,
+            0,
+            "SCALAR SUBQUERY 195"
+          ],
+          [
+            1955,
+            1951,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1971,
+            0,
+            0,
+            "SCALAR SUBQUERY 197"
+          ],
+          [
+            1975,
+            1971,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            1991,
+            0,
+            0,
+            "SCALAR SUBQUERY 199"
+          ],
+          [
+            1995,
+            1991,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2011,
+            0,
+            0,
+            "SCALAR SUBQUERY 201"
+          ],
+          [
+            2015,
+            2011,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2031,
+            0,
+            0,
+            "SCALAR SUBQUERY 203"
+          ],
+          [
+            2035,
+            2031,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2051,
+            0,
+            0,
+            "SCALAR SUBQUERY 205"
+          ],
+          [
+            2055,
+            2051,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2071,
+            0,
+            0,
+            "SCALAR SUBQUERY 207"
+          ],
+          [
+            2075,
+            2071,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2091,
+            0,
+            0,
+            "SCALAR SUBQUERY 209"
+          ],
+          [
+            2095,
+            2091,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2111,
+            0,
+            0,
+            "SCALAR SUBQUERY 211"
+          ],
+          [
+            2115,
+            2111,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2131,
+            0,
+            0,
+            "SCALAR SUBQUERY 213"
+          ],
+          [
+            2135,
+            2131,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2151,
+            0,
+            0,
+            "SCALAR SUBQUERY 215"
+          ],
+          [
+            2155,
+            2151,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2171,
+            0,
+            0,
+            "SCALAR SUBQUERY 217"
+          ],
+          [
+            2175,
+            2171,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2191,
+            0,
+            0,
+            "SCALAR SUBQUERY 219"
+          ],
+          [
+            2195,
+            2191,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2211,
+            0,
+            0,
+            "SCALAR SUBQUERY 221"
+          ],
+          [
+            2215,
+            2211,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2231,
+            0,
+            0,
+            "SCALAR SUBQUERY 223"
+          ],
+          [
+            2235,
+            2231,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2251,
+            0,
+            0,
+            "SCALAR SUBQUERY 225"
+          ],
+          [
+            2255,
+            2251,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2271,
+            0,
+            0,
+            "SCALAR SUBQUERY 227"
+          ],
+          [
+            2275,
+            2271,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2291,
+            0,
+            0,
+            "SCALAR SUBQUERY 229"
+          ],
+          [
+            2295,
+            2291,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2311,
+            0,
+            0,
+            "SCALAR SUBQUERY 231"
+          ],
+          [
+            2315,
+            2311,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2331,
+            0,
+            0,
+            "SCALAR SUBQUERY 233"
+          ],
+          [
+            2335,
+            2331,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2351,
+            0,
+            0,
+            "SCALAR SUBQUERY 235"
+          ],
+          [
+            2355,
+            2351,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2371,
+            0,
+            0,
+            "SCALAR SUBQUERY 237"
+          ],
+          [
+            2375,
+            2371,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2391,
+            0,
+            0,
+            "SCALAR SUBQUERY 239"
+          ],
+          [
+            2395,
+            2391,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2411,
+            0,
+            0,
+            "SCALAR SUBQUERY 241"
+          ],
+          [
+            2415,
+            2411,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2431,
+            0,
+            0,
+            "SCALAR SUBQUERY 243"
+          ],
+          [
+            2435,
+            2431,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2451,
+            0,
+            0,
+            "SCALAR SUBQUERY 245"
+          ],
+          [
+            2455,
+            2451,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2471,
+            0,
+            0,
+            "SCALAR SUBQUERY 247"
+          ],
+          [
+            2475,
+            2471,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2491,
+            0,
+            0,
+            "SCALAR SUBQUERY 249"
+          ],
+          [
+            2495,
+            2491,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2511,
+            0,
+            0,
+            "SCALAR SUBQUERY 251"
+          ],
+          [
+            2515,
+            2511,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2531,
+            0,
+            0,
+            "SCALAR SUBQUERY 253"
+          ],
+          [
+            2535,
+            2531,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            2551,
+            0,
+            0,
+            "SCALAR SUBQUERY 255"
+          ],
+          [
+            2555,
+            2551,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ]
+        ],
+        "opcode_count": 2617,
+        "opcodes": {
+          "BeginSubrtn": 128,
+          "Close": 2,
+          "Column": 128,
+          "Copy": 128,
+          "DecrJumpZero": 128,
+          "EndCoroutine": 1,
+          "Explain": 257,
+          "FkCounter": 2,
+          "Goto": 4,
+          "Halt": 2,
+          "HaltIfNull": 7,
+          "IdxInsert": 1,
+          "Init": 1,
+          "InitCoroutine": 1,
+          "Insert": 1,
+          "Integer": 130,
+          "IsNull": 2,
+          "MakeRecord": 1,
+          "MustBeInt": 2,
+          "Next": 128,
+          "NoConflict": 1,
+          "NotExists": 2,
+          "Null": 129,
+          "Once": 128,
+          "OpenRead": 130,
+          "OpenWrite": 1,
+          "Return": 128,
+          "Rewind": 128,
+          "SCopy": 16,
+          "Transaction": 2,
+          "TypeCheck": 1,
+          "Variable": 768,
+          "Yield": 129
+        }
+      },
+      "pack_insert": {
+        "sql": "INSERT INTO object_packs(pack_id,data,save_id) VALUES(?1,zeroblob(?2),(SELECT save_id FROM temp.layerfs_read_scope))",
+        "bindings": 2,
+        "plan": [
+          [
+            6,
+            0,
+            0,
+            "SCALAR SUBQUERY 1"
+          ],
+          [
+            10,
+            6,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ]
+        ],
+        "opcode_count": 50,
+        "opcodes": {
+          "BeginSubrtn": 1,
+          "Close": 1,
+          "Column": 1,
+          "Copy": 1,
+          "DecrJumpZero": 1,
+          "Explain": 2,
+          "Function": 1,
+          "Goto": 2,
+          "Halt": 3,
+          "HaltIfNull": 2,
+          "IdxInsert": 1,
+          "Init": 1,
+          "Insert": 1,
+          "IntCopy": 2,
+          "Integer": 2,
+          "IsNull": 1,
+          "MakeRecord": 2,
+          "MustBeInt": 2,
+          "NewRowid": 1,
+          "Next": 1,
+          "NotExists": 2,
+          "NotNull": 1,
+          "Null": 1,
+          "Once": 2,
+          "OpenRead": 2,
+          "OpenWrite": 2,
+          "Return": 1,
+          "Rewind": 1,
+          "SCopy": 3,
+          "SoftNull": 1,
+          "Transaction": 2,
+          "TypeCheck": 1,
+          "Variable": 2
+        }
+      },
+      "pack_append_ownership": {
+        "sql": "SELECT pack_id FROM object_packs WHERE pack_id=?1 AND save_id=(SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS(SELECT 1 FROM saves WHERE saves.save_id=object_packs.save_id AND publication IS NULL)",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            33,
+            "SEARCH object_packs USING INTEGER PRIMARY KEY (rowid=?)"
+          ],
+          [
+            8,
+            0,
+            0,
+            "SCALAR SUBQUERY 1"
+          ],
+          [
+            12,
+            8,
+            216,
+            "SCAN temp.layerfs_read_scope"
+          ],
+          [
+            20,
+            0,
+            0,
+            "CORRELATED SCALAR SUBQUERY 2"
+          ],
+          [
+            24,
+            20,
+            33,
+            "SEARCH saves USING INTEGER PRIMARY KEY (rowid=?)"
+          ]
+        ],
+        "opcode_count": 39,
+        "opcodes": {
+          "BeginSubrtn": 2,
+          "Column": 4,
+          "DecrJumpZero": 2,
+          "Explain": 5,
+          "Goto": 1,
+          "Halt": 1,
+          "IfNot": 1,
+          "Init": 1,
+          "Integer": 4,
+          "Ne": 1,
+          "Next": 1,
+          "NotNull": 1,
+          "Null": 1,
+          "Once": 1,
+          "OpenRead": 3,
+          "ResultRow": 1,
+          "Return": 2,
+          "Rewind": 1,
+          "Rowid": 1,
+          "SeekRowid": 2,
+          "Transaction": 2,
+          "Variable": 1
+        }
+      },
+      "pack_read": {
+        "sql": "SELECT p.data FROM object_packs p JOIN saves s USING(save_id),temp.layerfs_read_scope r WHERE p.pack_id=?1 AND length(p.data) BETWEEN 32 AND ?2 AND (p.save_id=r.save_id OR s.publication<=r.publication)",
+        "bindings": 2,
+        "plan": [
+          [
+            4,
+            0,
+            45,
+            "SEARCH p USING INTEGER PRIMARY KEY (rowid=?)"
+          ],
+          [
+            11,
+            0,
+            45,
+            "SEARCH s USING INTEGER PRIMARY KEY (rowid=?)"
+          ],
+          [
+            14,
+            0,
+            216,
+            "SCAN r"
+          ]
+        ],
+        "opcode_count": 31,
+        "opcodes": {
+          "Column": 7,
+          "Eq": 1,
+          "Explain": 3,
+          "Function": 1,
+          "Goto": 1,
+          "Gt": 2,
+          "Halt": 1,
+          "Init": 1,
+          "Integer": 1,
+          "Lt": 1,
+          "Next": 1,
+          "OpenRead": 3,
+          "ResultRow": 1,
+          "Rewind": 1,
+          "SeekRowid": 2,
+          "Transaction": 2,
+          "Variable": 2
+        }
+      },
+      "commit": {
+        "sql": "COMMIT",
+        "bindings": 0,
+        "plan": [],
+        "opcode_count": 4,
+        "opcodes": {
+          "AutoCommit": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "Init": 1
+        }
+      }
+    }
+  },
+  "Core History": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue237-v017-micro/layerfs/benchmark-results/fs-bench-pro/issue237-v017-head2head-a/daemon-host/init_namespace/namespace-10000/history.sqlite",
+    "bytes": 86016,
+    "allocated_bytes_stat_blocks": 86016,
+    "sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9",
+    "sqlite_version": "3.51.0",
+    "reopened_read_only_pragmas": {
+      "application_id": 1279677256,
+      "user_version": 1,
+      "page_size": 4096,
+      "page_count": 21,
+      "freelist_count": 0
+    },
+    "counts": {
+      "branches": 0,
+      "commits": 0,
+      "history_meta": 1,
+      "layer_stacks": 1,
+      "layers": 1,
+      "scope_allocator": 1,
+      "workspace_stages": 0
+    },
+    "indexes": [
+      [
+        "branch_identity",
+        "branches",
+        "CREATE UNIQUE INDEX branch_identity ON branches(layer_stack_id, branch_id)"
+      ],
+      [
+        "branch_names",
+        "branches",
+        "CREATE UNIQUE INDEX branch_names ON branches(layer_stack_id, name)"
+      ],
+      [
+        "commit_identity",
+        "commits",
+        "CREATE UNIQUE INDEX commit_identity ON commits(layer_stack_id, commit_id)"
+      ],
+      [
+        "layer_identity",
+        "layers",
+        "CREATE UNIQUE INDEX layer_identity ON layers(layer_stack_id, layer_id)"
+      ],
+      [
+        "layer_stack_names",
+        "layer_stacks",
+        "CREATE UNIQUE INDEX layer_stack_names ON layer_stacks(name)"
+      ],
+      [
+        "layers_child",
+        "layers",
+        "CREATE UNIQUE INDEX layers_child ON layers(layer_stack_id, parent_layer_id)\n    WHERE parent_layer_id IS NOT NULL"
+      ],
+      [
+        "layers_genesis",
+        "layers",
+        "CREATE UNIQUE INDEX layers_genesis ON layers(layer_stack_id) WHERE parent_layer_id IS NULL"
+      ],
+      [
+        "layers_source",
+        "layers",
+        "CREATE UNIQUE INDEX layers_source ON layers(source_branch_id, source_commit_id)\n    WHERE source_branch_id IS NOT NULL"
+      ],
+      [
+        "stage_branches",
+        "workspace_stages",
+        "CREATE INDEX stage_branches ON workspace_stages(layer_stack_id, branch_id, stage_token)"
+      ],
+      [
+        "stage_tokens",
+        "workspace_stages",
+        "CREATE UNIQUE INDEX stage_tokens ON workspace_stages(stage_token)"
+      ]
+    ],
+    "btree_cells_and_bytes": [
+      [
+        "branch_identity",
+        0,
+        4096
+      ],
+      [
+        "branch_names",
+        0,
+        4096
+      ],
+      [
+        "branches",
+        0,
+        4096
+      ],
+      [
+        "commit_identity",
+        0,
+        4096
+      ],
+      [
+        "commits",
+        0,
+        4096
+      ],
+      [
+        "history_meta",
+        1,
+        4096
+      ],
+      [
+        "layer_identity",
+        1,
+        4096
+      ],
+      [
+        "layer_stack_names",
+        1,
+        4096
+      ],
+      [
+        "layer_stacks",
+        1,
+        4096
+      ],
+      [
+        "layers",
+        1,
+        4096
+      ],
+      [
+        "layers_child",
+        0,
+        4096
+      ],
+      [
+        "layers_genesis",
+        1,
+        4096
+      ],
+      [
+        "layers_source",
+        0,
+        4096
+      ],
+      [
+        "scope_allocator",
+        1,
+        4096
+      ],
+      [
+        "sqlite_schema",
+        19,
+        16384
+      ],
+      [
+        "stage_branches",
+        0,
+        4096
+      ],
+      [
+        "stage_tokens",
+        0,
+        4096
+      ],
+      [
+        "workspace_stages",
+        0,
+        4096
+      ]
+    ],
+    "plans": {
+      "stack_lookup": {
+        "sql": "SELECT layer_stack_id,name,scope_id,profile_id,head_layer_id FROM layer_stacks WHERE layer_stack_id=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            39,
+            "SEARCH layer_stacks USING PRIMARY KEY (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 16,
+        "opcodes": {
+          "Column": 5,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "IsNull": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "stack_name_lookup": {
+        "sql": "SELECT 1 FROM layer_stacks WHERE name=?1",
+        "bindings": 1,
+        "plan": [
+          [
+            2,
+            0,
+            39,
+            "SEARCH layer_stacks USING COVERING INDEX layer_stack_names (name=?)"
+          ]
+        ],
+        "opcode_count": 13,
+        "opcodes": {
+          "Affinity": 1,
+          "Explain": 1,
+          "Goto": 1,
+          "Halt": 1,
+          "IdxGT": 1,
+          "Init": 1,
+          "Integer": 1,
+          "IsNull": 1,
+          "OpenRead": 1,
+          "ResultRow": 1,
+          "SeekGE": 1,
+          "Transaction": 1,
+          "Variable": 1
+        }
+      },
+      "stack_insert": {
+        "sql": "INSERT INTO layer_stacks(layer_stack_id,name,scope_id,profile_id,head_layer_id) VALUES(?1,?2,?3,?4,?5)",
+        "bindings": 5,
+        "plan": [
+          [
+            41,
+            0,
+            62,
+            "SEARCH branches USING INDEX branch_names (layer_stack_id=?)"
+          ],
+          [
+            52,
+            0,
+            62,
+            "SEARCH layers USING INDEX layer_identity (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 67,
+        "opcodes": {
+          "Affinity": 1,
+          "Close": 1,
+          "Column": 2,
+          "Copy": 2,
+          "Explain": 2,
+          "FkCounter": 3,
+          "FkIfZero": 2,
+          "Found": 1,
+          "Goto": 1,
+          "Halt": 3,
+          "HaltIfNull": 5,
+          "IdxGT": 2,
+          "IdxInsert": 2,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 4,
+          "MakeRecord": 2,
+          "Next": 2,
+          "NoConflict": 2,
+          "NotFound": 2,
+          "Null": 1,
+          "OpenRead": 5,
+          "OpenWrite": 2,
+          "SCopy": 7,
+          "SeekGE": 2,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 5
+        }
+      },
+      "layer_insert": {
+        "sql": "INSERT INTO layers(layer_id,layer_stack_id,parent_layer_id,root_id,source_branch_id,source_commit_id) VALUES(?1,?2,?3,?4,?5,?6)",
+        "bindings": 6,
+        "plan": [
+          [
+            95,
+            0,
+            62,
+            "SEARCH workspace_stages USING INDEX stage_branches (layer_stack_id=?)"
+          ],
+          [
+            108,
+            0,
+            62,
+            "SEARCH workspace_stages USING INDEX stage_branches (layer_stack_id=?)"
+          ],
+          [
+            121,
+            0,
+            62,
+            "SEARCH branches USING INDEX branch_names (layer_stack_id=?)"
+          ],
+          [
+            134,
+            0,
+            62,
+            "SEARCH commits USING INDEX commit_identity (layer_stack_id=?)"
+          ],
+          [
+            147,
+            0,
+            46,
+            "SEARCH layers USING INDEX layers_child (layer_stack_id=? AND parent_layer_id=?)"
+          ],
+          [
+            160,
+            0,
+            39,
+            "SEARCH layer_stacks USING PRIMARY KEY (layer_stack_id=?)"
+          ]
+        ],
+        "opcode_count": 180,
+        "opcodes": {
+          "Affinity": 4,
+          "Close": 4,
+          "Column": 10,
+          "Copy": 9,
+          "Explain": 6,
+          "FkCounter": 10,
+          "FkIfZero": 6,
+          "Found": 4,
+          "Goto": 2,
+          "Halt": 6,
+          "HaltIfNull": 3,
+          "IdxGT": 6,
+          "IdxInsert": 5,
+          "Init": 1,
+          "Insert": 1,
+          "Integer": 2,
+          "IsNull": 19,
+          "MakeRecord": 5,
+          "Ne": 7,
+          "Next": 5,
+          "NoConflict": 5,
+          "NotFound": 5,
+          "NotNull": 1,
+          "Null": 4,
+          "OpenRead": 15,
+          "OpenWrite": 5,
+          "SCopy": 16,
+          "SeekGE": 6,
+          "Transaction": 1,
+          "TypeCheck": 1,
+          "Variable": 6
+        }
+      }
+    }
+  }
+}

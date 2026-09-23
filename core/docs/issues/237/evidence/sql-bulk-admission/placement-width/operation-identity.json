@@ -1,0 +1,7 @@
+{
+  "case": "namespace-10000",
+  "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "method": "sha256-fixture-case-v1",
+  "scope_seed_hex": "3afa1d39bd5ede7b5a0a40d71e50160dde8e897fa9865929300cb01b95bbdd18",
+  "stack_hex": "1b88dfdc2ffd3c6c0b0ac0ec4c064284"
+}

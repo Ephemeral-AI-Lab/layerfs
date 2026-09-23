@@ -359,9 +359,14 @@ fn native_directory_import_exceeds_bootstrap_and_reads_bytes() {
     std::fs::create_dir(&source).unwrap();
     let directory = source.join("data");
     std::fs::create_dir(&directory).unwrap();
-    for index in 0..130 {
+    // More than four workers can hold at 512 completions each.
+    for index in 0..2050 {
         std::fs::write(directory.join(format!("f{index:03}")), [index as u8]).unwrap();
     }
+    let large = (0..300_000)
+        .map(|index| (index % 251) as u8)
+        .collect::<Vec<_>>();
+    std::fs::write(directory.join("large"), &large).unwrap();
     fixture.service.set_import_root(&source).unwrap();
     let created = call(
         &fixture.service,
@@ -406,12 +411,52 @@ fn native_directory_import_exceeds_bootstrap_and_reads_bytes() {
         .0
         .is_ok());
     assert_eq!(output, [129]);
+    let (_, kind, content, _) = stat_roots(stat(
+        &fixture.service,
+        &fixture.peer,
+        4,
+        root,
+        b"data/large",
+    ));
+    assert_eq!(kind, 1);
+    let mut output = Vec::new();
+    assert!(fixture
+        .service
+        .handle(
+            &fixture.peer,
+            &Request {
+                id: 5,
+                generation: 1,
+                store: 1,
+                profile: 1,
+                deadline_ms: 60_000,
+                response_bytes: 32,
+                operation: Operation::ReadFile {
+                    root: content,
+                    start: 262_136,
+                    end: 262_168,
+                },
+            },
+            &mut Cursor::new(Vec::new()),
+            &mut output,
+        )
+        .0
+        .is_ok());
+    assert_eq!(output, large[262_136..262_168]);
+    let (_, kind, _, _) = stat_roots(stat(
+        &fixture.service,
+        &fixture.peer,
+        6,
+        root,
+        b"data/f2049",
+    ));
+    assert_eq!(kind, 1);
 
     std::os::unix::fs::symlink(directory.join("f000"), source.join("zz-link")).unwrap();
     let failure = call(
         &fixture.service,
         &fixture.peer,
-        4,
+        7,
         Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
             stack: [0x72; 16],
             name: b"refused".to_vec(),

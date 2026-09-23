@@ -104,9 +104,16 @@ What the harness already enforces, and where an agent must not fight it:
   row is `INCOMPLETE` — not `PASS` and not `FAIL`. Bounded process heap never
   excuses file-size-proportional spool or cgroup page-cache growth.
 - Per-sample checklist: one sample per case/arm; fresh `--output`; declare the
-  cache stance; pin every identity; verify separately with those identities; and
-  append the exact numbers, limits, arithmetic and reproduction command to the
-  active ledger, including every non-passing line.
+  cache stance; pin every identity; and append the exact numbers, limits,
+  arithmetic and reproduction command to the active ledger, including every
+  non-passing line. Exploratory selections default to performance only and
+  remain diagnostic until an exact-identity separate verification is required
+  for the final gate. Never add verifier wall to a performance comparison.
+- Keep iteration focused on the measured case and count-driven cause. Record
+  verifier defects or timeouts without repairing each one during performance
+  exploration, unless they block the run, invalidate its receipt, or block the
+  proof required for the current decision. The final qualification still needs
+  the separately bounded verifier; `SKIPPED` or failed proof never means PASS.
 - **Do not sample.** No repeat of an arm to confirm stability, characterise spread
   or replace an inconvenient number, and no iterative verify/test loop. Diagnose an
   anomaly from the receipts already taken, or with a labelled diagnostic that
