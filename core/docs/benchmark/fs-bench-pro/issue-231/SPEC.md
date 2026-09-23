@@ -71,6 +71,22 @@ or hide multiple acknowledged Init operations behind one timer. Name any new
 operation/schema and changed case identity before implementation. If that
 route is still absent, emit `NOT_RUN`, not a time from an easier surrogate.
 
+The first-pass public operation is `HistoryCommand::ImportNativeDirectory`
+(history-command metadata tag 9, no request body). Its wire fields are a
+16-byte authority stack body, bounded stack name, and 32-byte scope seed. The
+authorized Service reads the exact operator-configured `LAYERFS_IMPORT_ROOT`
+directory; the client cannot choose a host path. The Service refuses absent or
+non-directory configuration, symlinks, unsupported file types, invalid portable
+names/metadata, and more than 16,384 total entries including root. It scans and
+reads source bytes **during this one request**, saves C1 file objects through
+C2, builds the complete filesystem root, then publishes one C5 genesis stack.
+The reply is the existing `StackCreated` result. The caller timer begins before
+the daemon request frame and ends after decoding that reply. This operation has
+fixture/route identity `core-native-directory-import-v1`; historical case IDs
+remain selectors, but no v0.1.6 performance equivalence is inferred from the
+matching counts and bytes. The 100,000 tier exceeds this first-pass bound and
+is explicitly `NOT_RUN`.
+
 The first three times are a **discovery cohort**: no new v0.1.7 latency target
 or v0.1.6 speedup is approved here. Freeze correctness, resource, cache and
 operation boundaries before collection; record `admission_eligible=false` and
