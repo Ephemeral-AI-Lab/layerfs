@@ -120,3 +120,63 @@ The next prospective product-policy experiment tests an 8-MiB rather than
 512-object cap and 4-KiB SQLite pages. Its outcome is not recorded yet. A
 separate fresh sparse-history control/candidate guard is also in preparation
 because neither dense 10k Store establishes #229 compactness.
+
+## Round R4: policy tradeoff and cache preconditioning limit
+
+- **8-MiB wave policy:** one isolated control/candidate pair used identical
+  count-only Service instrumentation. File-Save commits fell **80 → 55**;
+  pack appends **1,170 → 1,102**; object INSERT statements **1,464 →
+  1,435**. The raw public call fell **1.281196166 → 1.234139583 s**,
+  while Store apparent bytes rose **782,336 B**, pack capacity **786,432 B**
+  and sampled Service RSS **11,927,552 B**. Both payload rechecks found
+  **0/27,503 resident pages** and page size stayed 4 KiB. Candidate source
+  path reused the earlier prepared workspace, so directory/inode metadata
+  could have remained warm from the control; the 47.057-ms raw difference is
+  **not a validated cold causal gain**. Control telemetry was INCOMPLETE,
+  verifier SKIPPED, full readback and #229 NOT_RUN. The policy remains
+  isolated, with the diagnostic hook restored; see [wave8 report](wave8-experiment.md).
+- **Cutoff proposal cancelled:** a proposed 128→512 KiB whole-file cutoff
+  change was stopped at the owner's explicit direction to keep **128 KiB**.
+  No product edit or timed arm of that policy was kept. Work pivoted to a
+  more aggressive C2 transaction design, under a separate preregistration.
+- **Nonportable OS purge proposal retired:** `/usr/sbin/purge` failed with
+  `Operation not permitted`; noninteractive sudo required a password. The
+  owner then required OS-host-agnostic product changes. The purge flag was
+  removed from the research driver; no public sample was involved. The
+  driver can make an independent writable byte copy per arm before full
+  payload rehash/eviction,
+  preventing source-file cache reuse from a previous arm. It cannot clear or
+  independently qualify metadata warmed by that arm's own setup on this
+  host. Future such timings remain exploratory and the official cache label
+  stays uncontrolled. See the [H2 failure and portable H3 correction](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md#h3-portable-independent-source-copy-h2-purge-retired).
+- **Sparse-history guard:** one fresh control and one C2 candidate both
+  stopped `INCOMPLETE` on `Integrity("dependency encoded work")` before a
+  state root. Each partial 4-KiB-page Store had 1,556 objects, 25 packs,
+  6,742,016 B apparent/allocated and 4,875,831 B pack slack; all published
+  objects reopened/authenticated with equal canonical digest. This is only
+  partial-store parity; the complete #229 sparse-history space/readback gate
+  remains **OPEN**. See [retained failure report](sparse-c2-guard.md).
+
+## Round R5: primary transaction-count hypothesis
+
+The owner's new priority is reducing the roughly **80 file-Save SQLite
+commits by at least 90%**, to **8 or fewer**, while keeping the 128-KiB file
+cutoff and 4-KiB SQLite pages fixed. Source review rejected the first
+Save-wide-transaction sketch: it would release Store arbitration while an
+SQLite write transaction remained open, making other writers fail at the
+zero busy timeout. No code or timed arm of that sketch was committed.
+
+The prospective experiment instead enlarges one **bounded preparation
+unit** to roughly 50–64 MiB and at least 4,096 objects, then seals the
+remaining pack lanes and publishes the result in one final bounded
+transaction. Every transaction commits before arbitration is released; the
+final transaction must flush queued groups and validate collision candidates
+before publication. The C2 queued-group buffer stays separately bounded at
+512 locator rows.
+This may trade much higher peak memory and longer writer lock holds for
+fewer commits; rollback and multiwriter behavior must be tested and any
+failure retained. The product change must be OS-host agnostic. The pair
+will use fresh independent source byte copies and zero-resident payload
+checks, but remains exploratory because metadata warmed by setup is not
+qualified. No timed transaction treatment or result has been taken yet;
+do not infer a wall-time gain from the 227-ms historical COMMIT bucket.

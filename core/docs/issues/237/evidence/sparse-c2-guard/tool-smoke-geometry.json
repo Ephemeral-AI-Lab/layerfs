@@ -1,0 +1,18 @@
+{
+  "allocated_bytes": 323584,
+  "apparent_bytes": 323584,
+  "distinct_object_ids": 1,
+  "freelist_count": 0,
+  "object_rows": 1,
+  "pack_capacity_bytes": 262144,
+  "pack_rows": 1,
+  "pack_slack_bytes": 260087,
+  "pack_used_bytes": 2057,
+  "pack_versions": {
+    "17": 1
+  },
+  "page_count": 79,
+  "page_size": 4096,
+  "sha256": "01fed8d938aabc4dacf71e12e3957fe690e5a9f034d66f8d6b42b499b0f5bbe2",
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-sparse-c2/layerfs/benchmark-results/fs-bench-pro-storage-content/issue237-sparse-c2-tool-smoke/sample.sqlite"
+}

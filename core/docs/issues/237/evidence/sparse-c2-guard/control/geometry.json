@@ -1,0 +1,21 @@
+{
+  "allocated_bytes": 6742016,
+  "apparent_bytes": 6742016,
+  "distinct_object_ids": 1556,
+  "freelist_count": 0,
+  "object_rows": 1556,
+  "pack_capacity_bytes": 6553600,
+  "pack_rows": 25,
+  "pack_slack_bytes": 4875831,
+  "pack_used_bytes": 1677769,
+  "pack_versions": {
+    "12": 6,
+    "15": 5,
+    "17": 8,
+    "9": 6
+  },
+  "page_count": 1646,
+  "page_size": 4096,
+  "sha256": "e0807fee8822668111771df4d4ee250047562bd4e8d741014c2e157bf24aef55",
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-sparse-c2/layerfs/benchmark-results/fs-bench-pro-storage-content/issue237-sparse-c2-control/sample.sqlite"
+}

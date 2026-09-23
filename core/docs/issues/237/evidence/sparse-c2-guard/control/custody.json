@@ -1,0 +1,44 @@
+{
+  "arm": "control",
+  "binary_sha256": "ac581fd92f81b33cc3acfd3cf44a19c34e68511355af47c726750def5dfe7798",
+  "cache_contract": "sparse-space-diagnostic; corpus cache uncontrolled; no speed claim",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue237-sparse-c2/layerfs/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "--case",
+    "history-stride1",
+    "--phase",
+    "perf",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue237-sparse-c2/layerfs/benchmark-results/fs-bench-pro-storage-content/issue237-sparse-c2-control",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data"
+  ],
+  "complete_command_wall_s": 3.5930277919978835,
+  "corpus_manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue237-sparse-c2/layerfs",
+  "environment_fixed": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "7",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0"
+  },
+  "environment_unset": [
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS",
+    "LAYERFS_HISTORY_DECLARED_ONLY",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES",
+    "LAYERFS_HISTORY_FALLBACK_CANDIDATES",
+    "LAYERFS_HISTORY_PHASES"
+  ],
+  "exit_code": 0,
+  "source_commit": "a209149de65f676445407cca87afdc7979e4248f",
+  "source_sha256": {
+    "core/benchmark/fs-bench-pro-storage-content/src/ops/history.rs": "0f12389cb452220ffb762c3dbb491c9b41d1f9fd2039f60e73e23619f9c43066",
+    "core/crates/layerfs-storage/src/cas/lifecycle.rs": "303671783a63b57ce54f149bb1217f4e3aa93b946dc8481a4544b17662df8736",
+    "core/crates/layerfs-storage/src/cas/owner.rs": "79aa90d7fbaa8ccd0b14c3113144f6853d149afdd65af700522270d844dd8894",
+    "core/crates/layerfs-storage/src/cas/placement.rs": "fac4245e327efab5dd28aee595c57f62abb36d6549d6fbeef8e0d4a8d99c78b6",
+    "core/crates/layerfs-storage/src/cas/save.rs": "61ccf3f4ce8f30a3763904cff95a8b57628fbbdb45ac51c91dd8b613d3858b06",
+    "core/crates/layerfs-storage/src/cas/selection.rs": "da03f12afb7fafdf855bcc29ba3bbbbbc9b23d849d3b6ce7ef2ede2745a6473d",
+    "core/docs/issues/237/evidence/sparse-c2-guard/run_arm.py": "49480bcc5a8bf1d571354eccdb106cec7b32ebafa5d4cc35dd07da7523cd1920"
+  }
+}
