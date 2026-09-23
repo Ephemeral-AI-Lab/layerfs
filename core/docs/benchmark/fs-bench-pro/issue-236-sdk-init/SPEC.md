@@ -82,3 +82,22 @@ and cannot inherit an earlier result.
 MCP/CLI, Workspace lifecycle, exec, the 10,000/100,000 tiers and the four-tier
 #231 gate are outside this two-case SDK selection. No historical receipt is
 rewritten or relabeled.
+
+## v2 amendment: SDK-owned host setup
+
+The v1 receipts at source `811ad517e7e21b8a20b978bb06d39a579135ac91`
+remain immutable. Before any new sample, v2 moves fresh Store/history and
+local authorization setup from the Rust benchmark example into the reusable
+`layerfs_sdk::Host::create` constructor. The example imports only `layerfs-sdk`,
+borrows its `Client`, and still times exactly one `Client::init_project` call.
+The independent verifier remains outside the timer and deliberately reads
+through public C1/C2/C5 APIs. Python prepares source bytes, launches the SDK
+example, and records evidence; it never performs backend Init work.
+
+This route is `host-direct-sdk-v2`, fixture profile
+`core-sdk-init-fixture-v2`, scenario version 2 and receipt schema
+`core-fs-bench-pro-sdk-init-v2`. The two case shapes, seed, one-sample rule,
+15 s command, 5 s verifier, 30 s build, cache contract and status rules above
+are unchanged. The v2 SHAKE route changes source bytes and manifest digests.
+V1 and v2 numbers are separate observations and are not pooled or compared as
+a treatment pair.
