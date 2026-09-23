@@ -17,6 +17,15 @@ import runner  # noqa: E402
 import cold  # noqa: E402
 
 
+def fixed_operation_identity(case, manifest_sha256):
+    """Pin only the public stack and scope; transport/session keys stay fresh."""
+    seed = b"layerfs-issue237-fixed-operation-v1\0" + case.encode() + bytes.fromhex(manifest_sha256)
+    return {"method": "sha256-fixture-case-v1", "case": case,
+            "manifest_sha256": manifest_sha256,
+            "stack_hex": hashlib.sha256(seed + b"/stack").digest()[:16].hex(),
+            "scope_seed_hex": hashlib.sha256(seed + b"/scope").hexdigest()}
+
+
 def cold_source(source, manifest):
     backend = cold.Residency()
     started = time.monotonic_ns()
@@ -129,6 +138,8 @@ def main():
     parser.add_argument("--case", choices=("namespace-1000-compact-v3", "namespace-10000", "namespace-100000"), required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--fixed-operation-identity", action="store_true",
+                        help="derive one stack and scope seed from the sealed case/manifest")
     args = parser.parse_args()
     out = runner.owned(args.out)
     original_prepare = runner.init.prepare
@@ -148,6 +159,10 @@ def main():
                 or cold_result["directories"] != case.directories + 1):
             raise ValueError("source cold preflight failed; no timed call")
         state["cold"] = cold_result
+        if args.fixed_operation_identity:
+            identity = fixed_operation_identity(case.id, state["fixture"]["manifest_sha256"])
+            state["operation_identity"] = identity
+            (folder / "operation-identity.json").write_text(json.dumps(identity, sort_keys=True, indent=2) + "\n")
         return state["fixture"]
 
     def public_import(daemon, case, stack, scope_seed):
@@ -162,6 +177,10 @@ def main():
                 or recheck["bytes"] != case.logical_bytes
                 or time.monotonic_ns() - recheck["finished_ns"] > cold.MAX_LAUNCH_GAP_NS):
             raise ValueError("source residency recheck failed; no timed call")
+        if args.fixed_operation_identity:
+            identity = state["operation_identity"]
+            stack = bytes.fromhex(identity["stack_hex"])
+            scope_seed = bytes.fromhex(identity["scope_seed_hex"])
         result = original_import(daemon, case, stack, scope_seed)
         gap = result["started_ns"] - recheck["finished_ns"]
         (folder / "cold-launch.json").write_text(json.dumps({

@@ -221,3 +221,26 @@ large enough to investigate, but nested `validate_ns` and one measurement do
 not themselves prove a speedup. D11 and D12 are different instrumented source
 identities and are not compared as a treatment pair. SQLite stays at 4096-byte
 pages.
+
+## H1: fixed public operation identity for future matched proof
+
+The prior C1 direct pair used the Core runner's fresh random stack and scope
+seed on each arm, so its exact-root comparison was ineligible even though its
+24,682 non-root object IDs overlapped. Before any new C1/C2/pager pair, the
+research-only `cold_diagnostic.py --fixed-operation-identity` option will
+derive one 16-byte stack and 32-byte scope seed from the sealed fixture
+manifest digest and case ID with domain-separated SHA-256. The resulting
+`operation-identity.json` records both exact byte strings and the method.
+Only these public command fields are fixed; authorization/session keys,
+namespaces and fresh Store paths remain independent. The option does no source
+payload read, prewarming or Store work and leaves the public timer boundary
+unchanged. Both arms of a pair must use the same driver source hash, option,
+case, fixture manifest and identity sidecar; a harness change invalidates the
+pair. The default without the option retains the runner's random identities.
+
+This is a **new harness identity**, not permission to remeasure or replace a
+past arm. Use it to prove exact canonical roots, then perform full readback and
+Store geometry checks separately from performance. The existing source-page
+preflight/recheck still applies to each arm; zero resident payload pages do
+not certify cold directory/inode metadata. SQLite database pages remain
+4,096 bytes. No public sample under H1 has yet been taken in this worktree.
