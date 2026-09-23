@@ -81,3 +81,42 @@ dependency-aware admission candidate has one control/candidate timing pair
 under analysis; its physical Store/readback outcome will be appended before
 any adoption decision. Source metadata cache remains unqualified for every
 reported run, and no prior receipt is promoted or rewritten.
+
+## Round R3: bounded C2 admission and integrated pair
+
+- **Isolated C2 pair:** one control at `d98cca6fe` returned in
+  **1.597006084 s** and one bounded-group candidate at product source
+  `60ced47d1` in **1.468407708 s** (raw −0.128598376 s, −8.05%). Both
+  used the same fixed stack/scope and fixture manifest, fresh 4-KiB-page
+  Stores and independently found **0/27,503 resident source payload pages**
+  immediately before timing. Exact roots and the complete object-ID digest
+  matched; both full reopened verifiers passed 10,101 paths and 300 MB.
+  The candidate Store file and pack capacity fell by **249,856 B** and
+  **262,144 B**, with allocated bytes unchanged. Its closed Store had nine
+  more physical groups but one fewer pack; actual pack-write and SQL INSERT
+  call counts were **NOT_MEASURED**. The control's daemon lost one telemetry
+  event (`INCOMPLETE`); the candidate retained the runner's uncontrolled-cache
+  `INELIGIBLE` label. No #229 sparse-history proof followed from this dense
+  row. Source/tests/architecture were adopted into this research branch at
+  `a5f484b14`; see [C2 report](c2-admission-experiment.md).
+- **Integrated C1 versus C1+C2:** preregistered [pair](combined-c1-c2.md)
+  used this worktree's C1-only control source `181973312` and combined
+  candidate source `a5f484b14`, each once with fixed public IDs and fresh
+  Stores. Caller times were **1.310979458 → 1.252324750 s**, a raw
+  **0.058654708 s / 4.474%** reduction. Both source rechecks were
+  **0/27,503 resident payload pages**, exact root and all 24,683 object IDs
+  matched, full reopened verifiers passed, and SQLite pages were 4,096 B.
+  Both daemon telemetry ingests were **INCOMPLETE**, so there is no admission
+  PASS or selected replacement sample. Candidate apparent Store bytes were
+  **16,384 B lower** and pack capacity equal, but declared pack used bytes
+  were **160 B higher**; the preregistered strict no-worse condition on each
+  space field therefore missed despite a smaller Store file. #229 remains
+  unrun at this combined identity. The best raw public observation is now
+  **1.252324750 s (239.554 MB/s)**, still **0.674080 s** above the
+  historical 518.8-MB/s time; its metadata cache state is unqualified.
+
+The next prospective product-policy experiment tests an 8-MiB rather than
+4-MiB C2 wave/transaction byte cap on a separate branch, retaining the
+512-object cap and 4-KiB SQLite pages. Its outcome is not recorded yet. A
+separate fresh sparse-history control/candidate guard is also in preparation
+because neither dense 10k Store establishes #229 compactness.
