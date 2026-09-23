@@ -1182,14 +1182,17 @@ fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
             .collect::<Vec<_>>(),
         vec![0, 1, 2]
     );
-    let capacity: usize = connection
+    let capacity: i64 = connection
         .query_row(
             "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
             [locations[0].0],
             |row| row.get(0),
         )
         .expect("open pack capacity");
-    assert_eq!(capacity, layerfs_storage::policy::PACK_LIMIT);
+    assert_eq!(
+        usize::try_from(capacity).unwrap(),
+        layerfs_storage::policy::PACK_LIMIT
+    );
     let (read, _) = read_objects(&reopened, &ids).expect("reopened pooled leaves");
     for (id, bytes) in ids.into_iter().zip(read) {
         assert_eq!(ObjectId::for_bytes(&bytes), id);

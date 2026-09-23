@@ -1,0 +1,6 @@
+{
+  "master": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload",
+  "method": "independent-byte-copy-v1",
+  "source": "benchmark-results/issue237-v016-exact-100k-20260924-01/source/payload",
+  "wall_ns": 21688311167
+}
