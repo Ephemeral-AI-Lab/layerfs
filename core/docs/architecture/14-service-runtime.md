@@ -34,6 +34,15 @@ root. Invalid sources are refused before the import call; name collisions are
 refused by C5 publication. Workspace lifecycle and exec remain unsupported.
 This route has no benchmark qualification from older daemon-host receipts.
 
+The SDK-owned host setup extension is based on source commit
+`611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`
+owns fresh Store/history creation, credential parsing and the local Service
+grant, then lends an ordinary `Client` for `init_project`. Benchmark drivers
+need no direct backend package imports. Host setup remains outside the timed
+Init call; the Service continues to own source validation, C1/C2/C5 work and
+genesis publication. It does not make the separate full verifier an SDK
+operation or qualify a cold-cache performance claim.
+
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
 on accepted sockets. Socket option sizes are not admission criteria. The failed

@@ -20,6 +20,7 @@ core/                                  existing Cargo workspace and lockfile
       Cargo.toml
       src/lib.rs
       src/client.rs
+      src/host.rs                       owns fresh local Store/history setup
       tests/
     mcp/README.md                       future adapter; no MCP package yet
     cli/README.md                       future adapter; no CLI package yet
@@ -34,7 +35,10 @@ production LOC counter and product-boundary guard to include
 existing [Core agent rules](../../AGENTS.md) still apply.
 
 `layerfs-api-core` owns the shared project result and error vocabulary.
-`layerfs-sdk` owns the ergonomic client; the Service owns source binding.
+`layerfs-sdk` owns the ergonomic client and fresh host authority setup through
+`Host::create`; the Service owns request-scoped source binding. A host process
+can borrow `host.client()` and then call `init_project(name, path)` with only
+those two operation inputs.
 The host Service continues to own Init/C1/C2/C5 composition; the Linux daemon
 continues to own mounted Workspace lifecycle. Future MCP and CLI adapters call
 the SDK instead of reimplementing operation or error rules. If the first slice

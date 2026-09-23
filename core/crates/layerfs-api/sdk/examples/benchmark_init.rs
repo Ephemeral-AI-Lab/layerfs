@@ -1,11 +1,6 @@
 //! Host-direct benchmark driver for one real public SDK project Init.
-use layerfs_bridge::adapters::native::{connection::VerifiedPeer, pipe::key};
-use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
-use layerfs_sdk::{Client, Error};
-use layerfs_service::{Grant, Service, StoreAccess};
-use layerfs_storage::Store;
-use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
-use std::{fmt::Write as _, path::Path, sync::Arc, time::Instant};
+use layerfs_sdk::{Error, Host};
+use std::{fmt::Write as _, path::Path, time::Instant};
 
 fn hex(bytes: &[u8]) -> String {
     let mut text = String::with_capacity(bytes.len() * 2);
@@ -20,35 +15,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 5 {
         return Err("source store history project-name required".into());
     }
-    let private = key(&std::env::var("LAYERFS_PRIVATE_KEY")?)?;
-    let cursor_key = key(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?;
-    let peer = VerifiedPeer::from_private(&private)?;
-    let store = Timing::disabled("create", |scope| {
-        Store::create(&args[2], Store::default_policy(), scope.child("store"))
-    })
-    .0?;
-    let history: Arc<dyn HistoryCatalog> = Arc::new(sqlite::create(
+    let host = Host::create(
+        Path::new(&args[2]),
         Path::new(&args[3]),
-        &HistoryCatalogConfig {
-            binding_key: b"layerfs-bench-pro".to_vec(),
-            incarnation: 1,
-            cursor_key,
-        },
-    )?);
-    let service = Service::new(
-        vec![StoreAccess {
-            id: 1,
-            store,
-            history: Some(history),
-            grants: vec![Grant {
-                public_key: *peer.public_key(),
-                operations: 127,
-                expires_unix: u64::MAX,
-            }],
-        }],
-        OperationRecorder::disabled(),
+        b"layerfs-bench-pro",
+        &std::env::var("LAYERFS_PRIVATE_KEY")?,
+        &std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?,
     )?;
-    let client = Client::new(&service, &peer, 1);
+    let client = host.client();
     let start = Instant::now();
     let result = client.init_project(&args[4], Path::new(&args[1]));
     let operation_ns = start.elapsed().as_nanos();

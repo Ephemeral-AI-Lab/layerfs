@@ -22,6 +22,11 @@ class Substrate(unittest.TestCase):
             run.assert_called_once_with(case, "fresh")
         self.assertEqual(runner.BINARIES, ("benchmark_init", "verify_namespace"))
         self.assertFalse(hasattr(runner.init, "_route"))
+        driver = (runner.CORE / "crates/layerfs-api/sdk/examples/benchmark_init.rs").read_text()
+        self.assertIn("client.init_project(", driver)
+        self.assertIn("Host::create(", driver)
+        for backend in ("layerfs_bridge", "layerfs_history", "layerfs_service", "layerfs_storage"):
+            self.assertNotIn(f"use {backend}", driver)
 
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:

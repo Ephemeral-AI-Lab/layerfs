@@ -20,7 +20,7 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 
-CONTRACT_COMMIT = "ecd6bf4dec1b00634637f66b4e5267b0aff5a6cb"
+CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
 BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
@@ -162,8 +162,8 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
 def case_run(out, case, binaries, identity):
     folder = out / "sdk-host" / "init_namespace" / case.id
     folder.mkdir(parents=True)
-    receipt = {"schema": "core-fs-bench-pro-sdk-init-v1", "case": case.id,
-               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 1,
+    receipt = {"schema": "core-fs-bench-pro-sdk-init-v2", "case": case.id,
+               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 2,
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "operation_contract_id": "sdk-init-project-host-v1",
                "operation_surface": "layerfs-sdk", "operation_entrypoint": "Client::init_project",
@@ -317,7 +317,7 @@ def run(selection, out):
                 for case in cases:
                     case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
-    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v1", "selection": selection,
+    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v2", "selection": selection,
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})

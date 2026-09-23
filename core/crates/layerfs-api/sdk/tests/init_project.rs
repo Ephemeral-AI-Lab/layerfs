@@ -1,7 +1,7 @@
 //! Public SDK import proofs with independent Store/history reads.
 use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig, LayerStackId};
-use layerfs_sdk::{Client, Error, Project};
+use layerfs_sdk::{Client, Error, Host, Project};
 use layerfs_service::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
 use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
@@ -330,6 +330,24 @@ fn hex(bytes: &[u8]) -> String {
         write!(&mut text, "{byte:02x}").unwrap();
     }
     text
+}
+
+#[test]
+fn host_setup_exposes_the_same_sdk_init() {
+    let root = proof_root();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("one"), b"A").unwrap();
+    let host = Host::create(
+        &root.join("store.sqlite"),
+        &root.join("history.sqlite"),
+        BINDING,
+        &hex(&[0x44; 32]),
+        &hex(&CURSOR_KEY),
+    )
+    .unwrap();
+    let project = host.client().init_project("host-project", &source).unwrap();
+    assert_eq!((project.id[0], project.genesis_layer[0]), (0x31, 0x32));
 }
 
 #[test]

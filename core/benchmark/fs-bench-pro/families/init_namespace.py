@@ -9,8 +9,8 @@ import subprocess
 import time
 import uuid
 
-PROFILE = "core-sdk-init-fixture-v1"
-ROUTE = "host-direct-sdk-v1"
+PROFILE = "core-sdk-init-fixture-v2"
+ROUTE = "host-direct-sdk-v2"
 MTIME_NS = 1_700_000_000_000_000_000
 CHUNK = 1024 * 1024
 

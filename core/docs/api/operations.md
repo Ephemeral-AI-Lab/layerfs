@@ -14,6 +14,8 @@ path. The backend validates the source, allocates identities, builds file
 content and portable metadata through C1, saves through C2, and publishes one
 C5 genesis LayerStack. The result contains the project/LayerStack ID, genesis
 Layer ID, root ID and root serial. It creates no Branch or Workspace.
+For a fresh local authority, `layerfs_sdk::Host::create` owns Store/history
+setup and lends `host.client()`; the Init call still takes only name and path.
 
 The implementation reuses the production native-directory importer. The
 current [command](../../crates/layerfs-bridge/src/contract/history.rs) is
