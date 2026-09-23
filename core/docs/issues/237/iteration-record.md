@@ -1,0 +1,47 @@
+# #237: 10k Init iteration record
+
+> **Status:** Research; informative and not a product contract. Append new
+> attempts without replacing old outcomes. One observation is never a median.
+
+## Contract for this round
+
+The measured operation is the public native `namespace-10000` Init of
+**10,000 files / 300,000,000 total logical bytes**, including its 100 MB
+anchor. SQLite database pages stay **4,096 B**. A prepared source workspace may
+be reused for setup, while every timed arm gets a fresh Store and source data
+pages invalidated and checked at zero residency immediately before its call.
+No source bytes from a previous run may serve the timer. The current sidecars
+do **not** independently establish cold directory/inode metadata; rows retain
+the runner's uncontrolled-cache admission label. Performance exploration
+skips the separate verifier, preserves failures, and never counts verification
+wall in throughput. No public sample is repeated merely to pick a better time.
+
+## Evidence carried into this round
+
+| Attempt | Evidence and result | What it established / did not establish |
+| --- | --- | --- |
+| D1–D5 | [Raw attempts and preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md) | Debug control and small Service changes did not return a root. D5 counted the C1 sparse-run rewind; those failed rows remain visible. |
+| D6–D7 | [Issue summary](README.md#what-was-measured) | The per-tier C1 gap fix first returned a 10k root, but both full verifier attempts timed out at 5 s. Debug numbers are not compared as release algorithm gains. |
+| D8 | [Release build attempt](README.md#what-was-measured) | Build passed; cold preflight was stale by launch, so there was no public sample. |
+| D9 | [Receipt](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/daemon-host/init_namespace/namespace-10000/receipt.json) | Release public Init **1.590847 s**, root/cleanup/telemetry complete, source payload **0/27,503 resident pages** at immediate recheck, verifier SKIPPED. Admission remains diagnostic. |
+| C1 direct prototype | [Pair, diff and failed gates](c1-direct-prototype.md) | One isolated pair **1.563611 → 1.317539 s** (15.7% lower); root and whole-Store equality gate failed because the runner randomized scope/stack and file-save packing varied. Four ordering-resource tests failed under the new fresh-build path. This source is not adopted. |
+| D11 | [File-ingest count diagnostic](README.md#what-was-measured) | 24,562 owner accepts totaled **0.785607 s** and receiver wait **0.357453 s** inside a **1.146653 s** file child. Thread totals overlap; no algorithmic speed gain follows. |
+| D12 | [Incomplete collision detail](c2-detail-diagnostic.md) | Collision queries totaled **43.306 ms**, below the preregistered 50 ms threshold for a batch-query treatment. Connection release was **350.786 ms** on this one row but not stable against D11. Daemon telemetry dropped one event; row INCOMPLETE. |
+| Smaller prefix reserve | [Synthetic diagnostic](prefix-probe-experiment.md) | A 4 KiB initial reserve was **0.446 ms slower** than the existing 128 KiB reserve over the 10k size census and breached its capacity bound. No public treatment followed. |
+| Simple C2 group queue | [Feasibility rejection](c2-grouping-prototype.md) | Delayed placement would hide locators needed by same-save reuse, delta bases and reads. No unsafe prototype or timed arm followed. |
+| SQLite plan audit | [Version-matched EXPLAIN](sqlite-explain.md) | Hot lookups use primary-key seeks; there is no missing-index scan. Fresh-connection cache profile differs from v0.1.6, but timed-owner spill counters are missing. |
+
+## Active experiments
+
+| Track | Prospective difference and proof needed | Current status |
+| --- | --- | --- |
+| C1 direct | Fix ordering-test coverage, freeze identical stack/scope in both public arms, check exact root/object set, full reopened readback and 4 KiB Store geometry. Preserve the old failed timing pair. | In progress in isolated `issue237-c1-direct-prototype` worktree; no new result recorded here yet. |
+| C2 bounded admission | Design dependency-aware group publication with bounded encoded bytes and locator rows; test same-save reuse, delta bases, reads, abort/commit and #229 space before interpreting any speed. | In progress in isolated `issue237-c2-admission` worktree; no candidate result recorded here yet. |
+| Timed Save pager | Measure cache use, misses, writes and spills on the actual file-Save connection. Only if pressure is observed, compare a 32 MiB/spill policy to the default in a separate cold-source pair, reporting RSS and Store space. | In progress in isolated `issue237-pager` worktree; no pager result recorded here yet. |
+
+The [v0.1.6/Core comparison](architecture-v016-v017.md) and
+[518.8 MB/s budget](target-518.md) explain why the old 578 ms row is not a
+cold-source baseline. The fastest separate C1 candidate still needs
+**0.739294 s** less public time to reach that number. Current work does not
+establish that the target is attainable; any new receipt, failure or rejected
+hypothesis will be appended with its exact identity and causal evidence.
