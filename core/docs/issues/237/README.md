@@ -42,6 +42,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D8 release build](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d8-release-stale/daemon-host/init_namespace/namespace-10000/receipt.json) | `59a85bea`, `--release` build | no sample | Build PASS in 17.544 s; cold preflight became stale during startup. Retained NOT_RUN. |
 | [D9 release fast lane](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/daemon-host/init_namespace/namespace-10000/receipt.json) | `2a66f84d`, release binaries, immediate whole-source mincore recheck | **1.591 s** | Confirmed C5 root, 2.018 s command, telemetry/cleanup PASS; verifier **SKIPPED**, diagnostic only. |
 | [D10 100k research](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d10-release-100k/daemon-host/init_namespace/namespace-100000/receipt.json) | `a6d1d563`, one-shot release driver around the official hard skip | 10.011 s | Daemon returned `Unknown` with no confirmed root; Service later reported 11.021 s success and one LayerStack. Command 15.395 s, telemetry INCOMPLETE, cleanup FAIL; verifier NOT_RUN. No further 100k work is planned in this 10k-focused round. |
+| [D11 ingest counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d11-ingest-counts/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, temporary release instrumentation, then restored | 1.493 s | Root and telemetry/cleanup PASS, verifier SKIPPED; count-driven diagnostic only, no time comparison. |
 
 D9 reused exactly sealed release binaries from D8. Its source was rehashed and
 invalidated outside the command; both the first check and the immediately
@@ -60,6 +61,19 @@ the caller consumed 0.341234 s. Keeping that other work fixed would require
 the file span to fall to 0.087338 s, a 93.0% cut. A file-only change cannot
 credibly clear the target without also reducing C1/other work. This is a
 bound from one observed row, not a prediction that the target is impossible.
+
+D11 split a separate 1.147 s file span into **0.786 s** of single-owner C2
+`accept` calls and **0.357 s** of receiver wait. The four producers accumulated
+**2.880 s of channel send time** and **4.319 s of file-construction wall**;
+these are overlapping per-thread totals and must not be added to the receiver
+wall. The completed save inserted 24,364 objects, reused 198, made 1,257
+packs/6,439 appends, issued 7,750 object-row statements and 79 commits.
+Its disjoint profile charged 0.192 s to SQL and 0.227 s to transaction cadence.
+The 24,364 file-save object IDs exactly match D9's, although physical pack
+placement varies slightly with producer scheduling. This localizes serial C2
+work; it does not establish a treatment speedup. The temporary
+[instrumentation diff](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d11-instrumentation.diff.gz)
+is retained and absent from the current product tree.
 
 ## Improvements and failed ideas
 
@@ -117,7 +131,7 @@ build specification. See [file ingest](file-ingest.md) and
   content bytes, timers and cache identities; none is a matched speed pair.
 
 The current 10k research directions are the
-[file-ingest count diagnostic](file-ingest-10k-next.md), a
+[C2/file-ingest mechanism](file-ingest-10k-next.md), a
 [bounded direct C1 build hypothesis](c1-10k-next.md), and the
 [700 MB/s boundary map](throughput-10k.md). No production optimization from
 this branch is merged.
