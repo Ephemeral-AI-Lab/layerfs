@@ -244,3 +244,38 @@ Store geometry checks separately from performance. The existing source-page
 preflight/recheck still applies to each arm; zero resident payload pages do
 not certify cold directory/inode metadata. SQLite database pages remain
 4,096 bytes. No public sample under H1 has yet been taken in this worktree.
+
+## H2: independent source bytes and post-check OS cache purge
+
+The H1 and earlier pairs invalidated and rechecked all **source payload**
+pages, but each candidate reused the same prepared source path as its control.
+The directory-entry/inode cache could therefore have retained state from the
+earlier arm. The owner explicitly forbids warm cache from previous runs for
+the timed operation. Those prior raw time differences stay recorded but are
+not promoted to fully cold causal gains.
+
+For a future distinct product-policy pair, the research driver may use BOTH
+`--independent-source-copy` and `--purge-before-operation`. The first makes a
+new writable **byte copy**, not an APFS clone, at a fresh per-run source path
+from the sealed prepared master; `copytree` restores file and directory mode
+and mtime. This is untimed fixture preparation, recorded in
+`source-copy.json`. The existing full source hash/invalidation and whole-input
+nonfaulting mincore check then require zero resident payload pages on that
+copy. The second calls macOS `/usr/sbin/purge` **after** those checks and
+immediately before the public request. It records exit status and wall in
+`cache-purge.json`; a nonzero exit refuses the timed call. The wrapper does
+not touch a source path between successful purge and public request, and
+records both recheck-to-timer and purge-to-timer gaps. Both arms must use the
+same script hash, copy/purge flags, fixture manifest and fresh Store method.
+
+The cache-purge call is outside the product timer but inside the complete
+command wall; it is declared preconditioning, not product work removed from
+the measured operation. Its host-wide effects require a serialized timing
+window. Darwin `purge` approximates an empty disk buffer cache, but there is
+no independent directory/inode residency probe in this driver; the sidecar
+therefore still says metadata residency is unmeasured and does not upgrade
+the Core runner's `source-cache-uncontrolled-v1` admission label. Report
+actual source I/O evidence if available, and do not claim a formal cold PASS
+from the purge exit code alone. SQLite pages stay 4,096 B. This H2 method
+changes harness identity; no earlier pair can be relabelled or reused as its
+control. No public H2 sample has yet been taken.
