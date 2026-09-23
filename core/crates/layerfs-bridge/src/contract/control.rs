@@ -24,6 +24,24 @@ pub const WORKSPACE_ATTACH_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ATTACH_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_ATTACH_RESULT_BYTES: usize = 100;
 pub const WORKSPACE_ATTACHMENT_RESULT_BYTES: usize = 103;
+pub const SANDBOX_HELLO_OPCODE: u8 = 17;
+pub const WORKSPACE_OPEN_OPCODE: u8 = 18;
+pub const WORKSPACE_OPEN_REQUEST_BYTES: usize = 244;
+pub const WORKSPACE_OPEN_MAX_MS: u32 = 15_000;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SandboxHelloWire {
+    pub sandbox: [u8; 16],
+    pub instance: Root,
+}
+impl SandboxHelloWire {
+    pub fn validate(&self) -> Result<(), Failure> {
+        if self.sandbox == [0; 16] || self.instance == [0; 32] {
+            return Err(Code::InvalidInput.into());
+        }
+        Ok(())
+    }
+}
 
 /// Attachment can retain any native or upstream failure classification.
 /// This does not widen the existing Mount/Unmount/CloseClean outcome profile.

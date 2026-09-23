@@ -10,4 +10,4 @@ layerfs-bridge={path="../layerfs-bridge"}
 layerfs-telemetry={path="../layerfs-telemetry",features=["native"]}
 layerfs-workspace={path="../layerfs-workspace"}
 layerfs-fuse={path="../layerfs-fuse"}
-nix={version="=0.31.3",features=["signal"]}
+nix={version="=0.31.3",features=["signal","process","fs"]}

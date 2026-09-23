@@ -133,6 +133,8 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         Operation::WorkspaceUnmount { .. } => Encoder::bounded(WORKSPACE_UNMOUNT_REQUEST_BYTES),
         Operation::WorkspaceMount { .. } => Encoder::bounded(WORKSPACE_MOUNT_REQUEST_BYTES),
         Operation::WorkspaceAttach { .. } => Encoder::bounded(WORKSPACE_ATTACH_REQUEST_BYTES),
+        Operation::WorkspaceOpen { .. } => Encoder::bounded(WORKSPACE_OPEN_REQUEST_BYTES),
+        Operation::WorkspaceExec { .. } => Encoder::bounded(WORKSPACE_EXEC_REQUEST_BYTES),
         Operation::WorkspaceCommit { .. } => Encoder::bounded(WORKSPACE_COMMIT_REQUEST_BYTES),
         Operation::WorkspaceCloseClean { .. } => {
             Encoder::bounded(WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES)
@@ -256,6 +258,34 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         } => {
             e.blob(workspace)?;
             e.put(incarnation)?;
+        }
+        Operation::SandboxHello => {}
+        Operation::WorkspaceOpen {
+            workspace,
+            incarnation,
+            instance,
+            project,
+            branch,
+            commit,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.put(instance)?;
+            e.put(project)?;
+            e.put(branch)?;
+            e.u8(u8::from(commit.is_some()))?;
+            if let Some(commit) = commit {
+                e.put(commit)?;
+            }
+        }
+        Operation::WorkspaceExec {
+            workspace,
+            incarnation,
+            command,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(command)?;
         }
         Operation::UpdatePortableMetadata {
             base,
@@ -777,6 +807,34 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         WORKSPACE_COMMIT_OPCODE => Operation::WorkspaceCommit {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
+        },
+        SANDBOX_HELLO_OPCODE => Operation::SandboxHello,
+        WORKSPACE_OPEN_OPCODE => Operation::WorkspaceOpen {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            instance: d.root()?,
+            project: d
+                .take(STACK_BYTES)?
+                .try_into()
+                .map_err(|_| Code::InvalidInput)?,
+            branch: d
+                .take(BRANCH_BYTES)?
+                .try_into()
+                .map_err(|_| Code::InvalidInput)?,
+            commit: match d.u8()? {
+                0 => None,
+                1 => Some(
+                    d.take(COMMIT_BYTES)?
+                        .try_into()
+                        .map_err(|_| Code::InvalidInput)?,
+                ),
+                _ => return Err(Code::InvalidInput.into()),
+            },
+        },
+        WORKSPACE_EXEC_OPCODE => Operation::WorkspaceExec {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            command: d.blob(4096)?,
         },
         UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
             base: d.root()?,

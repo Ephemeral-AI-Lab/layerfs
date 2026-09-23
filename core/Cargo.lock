@@ -535,16 +535,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-service"
+name = "layerfs-sandbox"
 version = "0.1.6"
 dependencies = [
+ "layerfs-api-core",
  "layerfs-bridge",
- "layerfs-content",
- "layerfs-history",
- "layerfs-storage",
- "layerfs-telemetry",
- "nix",
- "sha2",
 ]
 
 [[package]]
@@ -554,9 +549,23 @@ dependencies = [
  "layerfs-api-core",
  "layerfs-bridge",
  "layerfs-history",
+ "layerfs-sandbox",
  "layerfs-service",
  "layerfs-storage",
  "layerfs-telemetry",
+ "sha2",
+]
+
+[[package]]
+name = "layerfs-service"
+version = "0.1.6"
+dependencies = [
+ "layerfs-bridge",
+ "layerfs-content",
+ "layerfs-history",
+ "layerfs-storage",
+ "layerfs-telemetry",
+ "nix",
  "sha2",
 ]
 

@@ -169,6 +169,9 @@ impl Service {
                     | Operation::WorkspaceCommit { .. }
                     | Operation::WorkspaceAttach { .. }
                     | Operation::WorkspaceMount { .. }
+                    | Operation::WorkspaceOpen { .. }
+                    | Operation::WorkspaceExec { .. }
+                    | Operation::SandboxHello
             ) {
                 return Err(Code::Unsupported.into());
             }
@@ -235,7 +238,10 @@ pub(crate) fn dispatch(
         | Operation::WorkspaceCloseClean { .. }
         | Operation::WorkspaceCommit { .. }
         | Operation::WorkspaceAttach { .. }
-        | Operation::WorkspaceMount { .. } => Err(Code::Unsupported.into()),
+        | Operation::WorkspaceMount { .. }
+        | Operation::WorkspaceOpen { .. }
+        | Operation::WorkspaceExec { .. }
+        | Operation::SandboxHello => Err(Code::Unsupported.into()),
         Operation::HistoryQuery(query) => {
             end_input(input)?;
             read::catalog::query(catalog.ok_or(Code::Unsupported)?, query, store)

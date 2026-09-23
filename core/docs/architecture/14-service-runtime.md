@@ -31,8 +31,40 @@ that Service directly. The Service generates a stack body and scope seed for
 each call, runs its normal authorization and writer admission, and returns the
 published genesis record. The native daemon request retains its startup-bound
 root. Invalid sources are refused before the import call; name collisions are
-refused by C5 publication. Workspace lifecycle and exec remain unsupported.
+refused by C5 publication. The later agent SDK implementation below adds
+Workspace lifecycle and Exec through the distinct daemon control authority.
 This route has no benchmark qualification from older daemon-host receipts.
+
+The follow-on agent route is described against worktree base
+`13773c5896c30c19047bdfabced4aa25efb27034` plus the product changes in
+this commit. `ProjectApi::init` retains the host-direct Service import;
+`layerfs-sdk::Client::init_project` remains a compatibility delegation.
+`layerfs-sandbox` owns one concrete Docker deployment profile and an in-memory
+Sandbox ID to daemon registry. Each created container starts its daemon idle,
+reports an assigned Sandbox ID and fresh daemon instance over authenticated
+control, and receives no Workspace at creation. The owner checks that identity
+at creation and each routing lookup. Workspace IDs route through an owner
+binding to one Sandbox ID, daemon instance and Workspace incarnation. An owner
+process restart loses the in-memory registry and requires external lifecycle
+reconciliation; there is no persistent sandbox directory in this revision.
+The fixed deployment profile uses two CPUs, 512 MiB memory/swap, 64 PIDs,
+a read-only image root with a 16 MiB `/tmp`, `/dev/fuse` and `SYS_ADMIN`, and
+a separate writable Workspace volume. The image digest must contain both the
+daemon binary and `/bin/sh`; readiness checks the authenticated daemon and shell.
+
+Control profile 3 adds Hello (opcode 17), selected Workspace Open (18), and
+Exec (19) to the existing authenticated codec. Open carries a Project ID,
+Branch ID, optional exact Commit ID and expected daemon instance; the daemon
+rejects an instance mismatch before attaching, resolves and checks the
+selected history before writable attachment, and mounts the resulting FUSE
+Workspace. Entered failed or uncertain attachment retains custody and never silently
+changes the Branch. Exec runs `/bin/sh -c` in the mounted directory, caps each
+output stream at 8,192 bytes, returns truncation flags and exit status, and
+kills its process group at its 30-second deadline. Exec never publishes; only
+the existing explicit Workspace Commit operation does. Unmount detaches FUSE
+but keeps dirty Workspace ownership. A daemon instance change invalidates old
+Workspace bindings; a Sandbox ID alone grants no control authority. These
+operations have no benchmark receipt or performance qualification here.
 
 The SDK-owned host setup extension is based on source commit
 `611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`

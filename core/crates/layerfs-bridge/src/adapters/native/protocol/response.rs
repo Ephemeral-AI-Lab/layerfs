@@ -1,4 +1,5 @@
 //! Closed terminal result encoding.
+use super::execution::*;
 use super::metadata::{put_optional, take_optional};
 use super::{control::*, workspace_commit::*};
 use super::{Decoder, Encoder};
@@ -7,6 +8,8 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
     let mut e = match r {
         Response::History(_) => Encoder::bounded(HISTORY_RESULT_BYTES),
         Response::WorkspaceStatus(_) => Encoder::bounded(WORKSPACE_STATUS_RESULT_BYTES),
+        Response::SandboxHello(_) => Encoder::bounded(64),
+        Response::WorkspaceExec(_) => Encoder::bounded(WORKSPACE_EXEC_RESULT_BYTES),
         Response::WorkspaceUnmount(_) => Encoder::bounded(WORKSPACE_UNMOUNT_RESULT_BYTES),
         Response::WorkspaceMount(_) => Encoder::bounded(WORKSPACE_MOUNT_RESULT_BYTES),
         Response::WorkspaceAttach(_) => Encoder::bounded(WORKSPACE_ATTACH_RESULT_BYTES),
@@ -126,6 +129,16 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::WorkspaceStatus(status) => {
             e.u8(10)?;
             put_status(&mut e, status)?;
+        }
+        Response::SandboxHello(hello) => {
+            hello.validate()?;
+            e.u8(20)?;
+            e.put(&hello.sandbox)?;
+            e.put(&hello.instance)?;
+        }
+        Response::WorkspaceExec(result) => {
+            e.u8(21)?;
+            put_exec(&mut e, result)?;
         }
         Response::WorkspaceUnmount(result)
         | Response::WorkspaceCloseClean(result)
@@ -659,9 +672,17 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             inserted: d.u64()?,
             reused: d.u64()?,
         },
+        20 => Response::SandboxHello(SandboxHelloWire {
+            sandbox: d.take(16)?.try_into().map_err(|_| Code::InvalidInput)?,
+            instance: d.root()?,
+        }),
+        21 => Response::WorkspaceExec(Box::new(take_exec(&mut d)?)),
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
+    if let Response::SandboxHello(hello) = &r {
+        hello.validate()?;
+    }
     if let Response::History(result) = &r {
         check_result(result)?;
     }

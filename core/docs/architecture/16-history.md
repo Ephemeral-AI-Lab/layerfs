@@ -23,6 +23,9 @@ Implementation specification and its pre-publication audit:
   `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
 - **Init ordering-backing correction:** product commit
   `0042a909ac3f16a5041aa51d76f96522a58352c8`.
+- **Agent selected-Commit Workspace attachment:** worktree base
+  `13773c5896c30c19047bdfabced4aa25efb27034` plus the product changes in
+  this commit. Earlier evidence and source pins retain their original identity.
 - **#237 unmerged research prototype:** the same-commit `history_bootstrap.rs`
   diff based on `e6e528c3f830db07bffc8643cc0d18db8abf10b7` reuses the
   preceding entry's metadata root only when kind, mode and mtime are equal.
@@ -195,6 +198,13 @@ a Branch forked from the Layer it produced, or an explicit future rebase.
 
 Forking from a historical Commit uses **that Commit's** base Layer, never the
 source Branch's current base.
+
+The agent Workspace mount resolves a supplied Commit through the Branch's
+bounded `CommitHistory` ancestry query before attachment. It checks Project
+ownership and uses that Commit's exact root and base Layer for the writable
+Workspace. The live Branch is unchanged. Staging later compares the captured
+head and base with the live Branch, so an edit from an older Commit is refused
+with the existing `HeadMoved` conflict rather than replacing newer history.
 
 ## 16.5 Admission, multi-writer and continuity
 

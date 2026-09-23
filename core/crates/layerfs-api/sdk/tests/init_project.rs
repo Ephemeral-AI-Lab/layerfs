@@ -297,7 +297,6 @@ fn public_sdk_imports_fresh_100_and_1000_file_fixtures() {
             .unwrap();
         assert_eq!(project.id[0], 0x31);
         assert_eq!(project.genesis_layer[0], 0x32);
-        assert_eq!(project.mount_workspace().unwrap_err(), Error::Unsupported);
         drop(writer);
 
         let history = sqlite::open_read_only(&history_path, BINDING, CURSOR_KEY).unwrap();

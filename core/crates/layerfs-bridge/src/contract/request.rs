@@ -3,12 +3,10 @@ use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
     HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES,
-    PAGE_RECORDS, QUERY_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
-    WORKSPACE_ATTACH_MAX_MS, WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_MAX_MS,
-    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_MAX_MS, WORKSPACE_COMMIT_OPCODE,
-    WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE, WORKSPACE_STATUS_MAX_MS,
-    WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS,
-    WORKSPACE_UNMOUNT_OPCODE,
+    PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
+    WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
+    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
+    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -127,6 +125,23 @@ pub enum Operation {
         workspace: Vec<u8>,
         incarnation: Root,
     },
+    /// Authenticated control readiness and daemon identity, independent of a Workspace.
+    SandboxHello,
+    /// Attach and mount the exact selected Project/Branch/Commit in an idle daemon.
+    WorkspaceOpen {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        instance: Root,
+        project: [u8; STACK_BYTES],
+        branch: [u8; BRANCH_BYTES],
+        commit: Option<[u8; COMMIT_BYTES]>,
+    },
+    /// Execute one shell command in the selected mounted Workspace.
+    WorkspaceExec {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        command: Vec<u8>,
+    },
     /// Saves an updated attribute tree; does not attach it to an inode or Branch.
     UpdatePortableMetadata {
         base: Root,
@@ -208,6 +223,9 @@ impl Operation {
             Self::WorkspaceMount { .. } => WORKSPACE_MOUNT_OPCODE,
             Self::WorkspaceAttach { .. } => WORKSPACE_ATTACH_OPCODE,
             Self::WorkspaceCommit { .. } => WORKSPACE_COMMIT_OPCODE,
+            Self::SandboxHello => SANDBOX_HELLO_OPCODE,
+            Self::WorkspaceOpen { .. } => WORKSPACE_OPEN_OPCODE,
+            Self::WorkspaceExec { .. } => WORKSPACE_EXEC_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
             Self::ConstructPortableMetadata { .. } => CONSTRUCT_PORTABLE_METADATA_OPCODE,
         }
@@ -228,6 +246,9 @@ impl Operation {
             Self::WorkspaceMount { .. } => "WorkspaceMount",
             Self::WorkspaceAttach { .. } => "WorkspaceAttach",
             Self::WorkspaceCommit { .. } => "WorkspaceCommit",
+            Self::SandboxHello => "SandboxHello",
+            Self::WorkspaceOpen { .. } => "WorkspaceOpen",
+            Self::WorkspaceExec { .. } => "WorkspaceExec",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
             Self::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
         }
@@ -238,7 +259,8 @@ impl Operation {
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::HistoryQuery(_)
-            | Self::WorkspaceStatus { .. } => true,
+            | Self::WorkspaceStatus { .. }
+            | Self::SandboxHello => true,
             Self::ConstructFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
@@ -250,6 +272,8 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -277,6 +301,9 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
+            | Self::SandboxHello
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -309,6 +336,9 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
+            | Self::SandboxHello
             | Self::ConstructFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
@@ -351,6 +381,9 @@ impl Request {
             | Operation::WorkspaceMount { .. }
             | Operation::WorkspaceAttach { .. }
             | Operation::WorkspaceCommit { .. } => WORKSPACE_STATUS_PROFILE,
+            Operation::SandboxHello
+            | Operation::WorkspaceOpen { .. }
+            | Operation::WorkspaceExec { .. } => WORKSPACE_STATUS_PROFILE,
             _ => 1,
         };
         if self.profile != profile {
@@ -393,47 +426,15 @@ impl Request {
                     return Err(invalid());
                 }
             }
-            Operation::WorkspaceStatus {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceUnmount {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceCloseClean {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceMount {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceAttach {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceCommit {
-                workspace,
-                incarnation,
-            } => {
-                super::control::check_workspace_identity(workspace, incarnation)?;
-                let maximum = match self.operation {
-                    Operation::WorkspaceUnmount { .. } => WORKSPACE_UNMOUNT_MAX_MS,
-                    Operation::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_MAX_MS,
-                    Operation::WorkspaceMount { .. } => WORKSPACE_MOUNT_MAX_MS,
-                    Operation::WorkspaceAttach { .. } => WORKSPACE_ATTACH_MAX_MS,
-                    Operation::WorkspaceCommit { .. } => WORKSPACE_COMMIT_MAX_MS,
-                    _ => WORKSPACE_STATUS_MAX_MS,
-                };
-                if self.store != 0
-                    || self.generation != 0
-                    || self.response_bytes != 0
-                    || self.deadline_ms > maximum
-                {
-                    return Err(invalid());
-                }
-            }
+            Operation::SandboxHello
+            | Operation::WorkspaceStatus { .. }
+            | Operation::WorkspaceUnmount { .. }
+            | Operation::WorkspaceCloseClean { .. }
+            | Operation::WorkspaceMount { .. }
+            | Operation::WorkspaceAttach { .. }
+            | Operation::WorkspaceCommit { .. }
+            | Operation::WorkspaceOpen { .. }
+            | Operation::WorkspaceExec { .. } => super::workspace_request::validate(self)?,
             Operation::ReadFile { start, end, .. } => {
                 if start > end || end - start > self.response_bytes {
                     return Err(invalid());

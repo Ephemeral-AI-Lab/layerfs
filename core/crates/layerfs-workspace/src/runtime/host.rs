@@ -195,7 +195,8 @@ impl WorkspaceHost {
     ) -> Result<Workspace, WorkspaceError> {
         validate_id(&options.id)?;
         if options.access == WorkspaceAccess::LocalEdit
-            && (!matches!(options.base, Base::Branch(_)) || self.inner.metadata.is_none())
+            && (!matches!(options.base, Base::Branch(_) | Base::BranchAt { .. })
+                || self.inner.metadata.is_none())
         {
             return Err(WorkspaceError::Unsupported);
         }
@@ -280,7 +281,7 @@ impl WorkspaceHost {
             let _remote = Remote(&self.inner.remote);
             let (base, expected_serial, branch_snapshot) = match &options.base {
                 Base::Root(root) => (*root, None, None),
-                Base::Branch(branch) => {
+                Base::Branch(branch) | Base::BranchAt { branch, .. } => {
                     let result = self.inner.call(
                         options.store,
                         Operation::HistoryQuery(HistoryQuery::GetBranch { branch: *branch }),
@@ -291,13 +292,71 @@ impl WorkspaceHost {
                     let Response::History(result) = result else {
                         return Err(WorkspaceError::InvalidInput);
                     };
-                    let HistoryResult::BranchSnapshot(snapshot) = *result else {
+                    let HistoryResult::BranchSnapshot(mut snapshot) = *result else {
                         return Err(WorkspaceError::InvalidInput);
                     };
                     if snapshot.branch.branch.as_slice() != branch.as_slice()
                         || snapshot.root_serial.is_none()
                     {
                         return Err(WorkspaceError::InvalidInput);
+                    }
+                    if let Base::BranchAt {
+                        project, commit, ..
+                    } = &options.base
+                    {
+                        if snapshot.branch.stack != *project {
+                            return Err(WorkspaceError::InvalidInput);
+                        }
+                        if let Some(selected_id) = commit {
+                            let response = self.inner.call(
+                                options.store,
+                                Operation::HistoryQuery(HistoryQuery::CommitHistory {
+                                    branch: *branch,
+                                    start: Some(*selected_id),
+                                    cursor: Vec::new(),
+                                    limit: 1,
+                                }),
+                                16384,
+                                &mut std::io::sink(),
+                                deadline,
+                            )?;
+                            let Response::History(result) = response else {
+                                return Err(WorkspaceError::InvalidInput);
+                            };
+                            let HistoryResult::Commits { records, .. } = *result else {
+                                return Err(WorkspaceError::InvalidInput);
+                            };
+                            let selected = records.first().ok_or(WorkspaceError::InvalidInput)?;
+                            if selected.commit != *selected_id || selected.stack != *project {
+                                return Err(WorkspaceError::InvalidInput);
+                            }
+                            if selected.base_layer != snapshot.branch.base_layer {
+                                let response = self.inner.call(
+                                    options.store,
+                                    Operation::HistoryQuery(HistoryQuery::GetLayer {
+                                        layer: selected.base_layer,
+                                    }),
+                                    16384,
+                                    &mut std::io::sink(),
+                                    deadline,
+                                )?;
+                                let Response::History(result) = response else {
+                                    return Err(WorkspaceError::InvalidInput);
+                                };
+                                let HistoryResult::Layer(layer) = *result else {
+                                    return Err(WorkspaceError::InvalidInput);
+                                };
+                                if layer.layer != selected.base_layer || layer.stack != *project {
+                                    return Err(WorkspaceError::InvalidInput);
+                                }
+                                snapshot.base_root = layer.root;
+                                snapshot.branch.base_layer = layer.layer;
+                            }
+                            snapshot.branch.head_commit = Some(selected.commit);
+                            snapshot.head_root = Some(selected.root);
+                            snapshot.effective_root = selected.root;
+                            snapshot.root_serial = None;
+                        }
                     }
                     (
                         snapshot.effective_root,
@@ -344,6 +403,12 @@ impl WorkspaceHost {
                 .map_err(|_| WorkspaceError::Capacity)?;
             nodes.push(Node::new(attr, content, metadata, &[], attr.serial));
             let branch = branch_snapshot
+                .map(|mut snapshot| {
+                    if snapshot.root_serial.is_none() {
+                        snapshot.root_serial = Some(attr.serial);
+                    }
+                    snapshot
+                })
                 .map(|snapshot| BranchContext::new(snapshot, &self.inner.budget).map(Arc::new))
                 .transpose()?;
             if let (Some(host), Some(directory)) = (&self.inner.payloads, &directory) {

@@ -1,0 +1,11 @@
+[package]
+name = "layerfs-sandbox"
+description = "Concrete host Docker owner for agent sandboxes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-api-core = { path = "../layerfs-api/core" }
+layerfs-bridge = { path = "../layerfs-bridge" }

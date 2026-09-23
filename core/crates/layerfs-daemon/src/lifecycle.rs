@@ -6,7 +6,7 @@ use layerfs_bridge::contract::{
 };
 use layerfs_fuse::{MountError, MountFailure, MountHandle};
 use layerfs_workspace::{
-    AttachOptions, Attachment, AttachmentCleanupProgress, Workspace, WorkspaceAccess,
+    AttachOptions, Attachment, AttachmentCleanupProgress, Base, Workspace, WorkspaceAccess,
     WorkspaceError, WorkspaceHost,
 };
 use std::{io, sync::Mutex, time::Instant};
@@ -31,6 +31,17 @@ pub(crate) struct Selected {
 }
 
 impl Lifecycle {
+    pub fn new_idle(host: WorkspaceHost, profile: AttachOptions) -> Self {
+        Self {
+            host,
+            profile,
+            slot: Mutex::new(Slot {
+                selected: None,
+                mount: None,
+            }),
+        }
+    }
+
     pub fn new(
         host: WorkspaceHost,
         profile: AttachOptions,
@@ -74,6 +85,34 @@ impl Lifecycle {
         let mut options = self.profile.clone();
         options.id = id.into();
         options.incarnation = incarnation;
+        self.attach_with_options(slot, workspace, incarnation, options, deadline)
+    }
+
+    pub fn attach_selected(
+        &self,
+        slot: &mut Slot,
+        workspace: &[u8],
+        incarnation: [u8; 32],
+        base: Base,
+        deadline: Instant,
+    ) -> Result<Response, Failure> {
+        let id = std::str::from_utf8(workspace).map_err(|_| Code::InvalidInput)?;
+        let mut options = self.profile.clone();
+        options.id = id.into();
+        options.incarnation = incarnation;
+        options.base = base;
+        self.attach_with_options(slot, workspace, incarnation, options, deadline)
+    }
+
+    fn attach_with_options(
+        &self,
+        slot: &mut Slot,
+        workspace: &[u8],
+        incarnation: [u8; 32],
+        options: AttachOptions,
+        deadline: Instant,
+    ) -> Result<Response, Failure> {
+        let id = std::str::from_utf8(workspace).map_err(|_| Code::InvalidInput)?;
         let mut result = Box::new(WorkspaceAttachWire {
             workspace: workspace.into(),
             incarnation,

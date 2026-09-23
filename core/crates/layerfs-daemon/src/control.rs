@@ -31,6 +31,7 @@ struct Session {
 struct Target {
     lifecycle: Arc<Lifecycle>,
     stopping: Arc<AtomicBool>,
+    identity: Option<layerfs_bridge::contract::SandboxHelloWire>,
 }
 
 pub(crate) struct Control {
@@ -50,6 +51,7 @@ impl Control {
         let target = Target {
             lifecycle,
             stopping: Arc::clone(&stopping),
+            identity: config.identity.clone(),
         };
         let worker = thread::Builder::new()
             .name("layerfs-control".into())
@@ -175,6 +177,19 @@ fn dispatch(
         return Err(Code::Deadline.into());
     }
     let (requested_workspace, requested_incarnation, operation) = match &request.operation {
+        Operation::SandboxHello => {
+            authorized(grants, peer, 64)?;
+            if input.read(&mut [0u8; 1])? != 0 {
+                return Err(Code::InvalidInput.into());
+            }
+            authorized(grants, peer, 64)?;
+            if target.stopping.load(Ordering::Acquire) {
+                return Err(Code::Busy.into());
+            }
+            return Ok(Response::SandboxHello(
+                target.identity.clone().ok_or(Code::Unsupported)?,
+            ));
+        }
         Operation::WorkspaceStatus {
             workspace,
             incarnation,
@@ -199,6 +214,16 @@ fn dispatch(
             workspace,
             incarnation,
         } => (workspace, incarnation, 32),
+        Operation::WorkspaceOpen {
+            workspace,
+            incarnation,
+            ..
+        } => (workspace, incarnation, 16),
+        Operation::WorkspaceExec {
+            workspace,
+            incarnation,
+            ..
+        } => (workspace, incarnation, 128),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -210,6 +235,11 @@ fn dispatch(
         return Err(Code::Deadline.into());
     }
     authorized(grants, peer, operation)?;
+    if let Operation::WorkspaceOpen { instance, .. } = &request.operation {
+        if target.identity.as_ref().map(|identity| identity.instance) != Some(*instance) {
+            return Err(Code::Denied.into());
+        }
+    }
     if target.stopping.load(Ordering::Acquire) {
         return Err(Code::Busy.into());
     }
@@ -267,6 +297,61 @@ fn dispatch(
     }
     if target.stopping.load(Ordering::Acquire) {
         return Err(Code::Busy.into());
+    }
+    if let Operation::WorkspaceOpen {
+        project,
+        branch,
+        commit,
+        ..
+    } = &request.operation
+    {
+        let attached = target.lifecycle.attach_selected(
+            &mut slot,
+            requested_workspace,
+            *requested_incarnation,
+            layerfs_workspace::Base::BranchAt {
+                project: *project,
+                branch: *branch,
+                commit: *commit,
+            },
+            native_deadline,
+        )?;
+        let Response::WorkspaceAttach(mut result) = attached else {
+            return Err(Code::Integrity.into());
+        };
+        if result.outcome == layerfs_bridge::contract::WorkspaceAttachOutcome::Completed {
+            let workspace = slot
+                .selected
+                .as_ref()
+                .and_then(|s| s.workspace.as_ref())
+                .ok_or(Code::Io)?;
+            match crate::lifecycle::mount(workspace, native_deadline) {
+                Ok(mount) => slot.mount = Some(mount),
+                Err(mut failure) => {
+                    slot.mount = failure.retained.take();
+                    result.outcome = layerfs_bridge::contract::WorkspaceAttachOutcome::Retained(
+                        mount_failure_code(&failure.cause),
+                    );
+                }
+            }
+        }
+        return Ok(Response::WorkspaceAttach(result));
+    }
+    if let Operation::WorkspaceExec { command, .. } = &request.operation {
+        if slot.mount.is_none() {
+            return Err(Code::Busy.into());
+        }
+        let workspace = slot
+            .selected
+            .as_ref()
+            .and_then(|s| s.workspace.as_ref())
+            .ok_or(Code::Busy)?;
+        return crate::execution::execute(
+            workspace,
+            requested_incarnation,
+            command,
+            native_deadline,
+        );
     }
     if operation == 16 {
         return target.lifecycle.attach(

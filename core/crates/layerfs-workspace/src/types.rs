@@ -108,6 +108,11 @@ pub struct WorkspaceConfig {
 pub enum Base {
     Root(Root),
     Branch([u8; 17]),
+    BranchAt {
+        project: [u8; 17],
+        branch: [u8; 17],
+        commit: Option<[u8; 33]>,
+    },
 }
 #[derive(Clone, Debug)]
 pub struct AttachOptions {

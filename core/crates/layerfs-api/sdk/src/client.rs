@@ -1,4 +1,5 @@
 //! One configured host authority; the operation itself has only name and path.
+use crate::project::ProjectApi;
 use layerfs_api_core::{Error, Project};
 use layerfs_bridge::adapters::native::connection::VerifiedPeer;
 use layerfs_service::Service;
@@ -22,14 +23,6 @@ impl<'a> Client<'a> {
 
     /// Import one host-visible directory and return its published genesis.
     pub fn init_project(&self, project_name: &str, path: &Path) -> Result<Project, Error> {
-        let created = self
-            .service
-            .init_project(self.peer, self.store, project_name, path)?;
-        Ok(Project {
-            id: created.stack.stack,
-            genesis_layer: created.stack.head_layer,
-            root: created.root,
-            root_serial: created.root_serial,
-        })
+        ProjectApi::new(self.service, self.peer, self.store).init(project_name, path)
     }
 }

@@ -415,6 +415,35 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
                 && result.validate().is_ok()
                 && bytes == 0
         }
+        (Operation::SandboxHello, Response::SandboxHello(hello)) => {
+            hello.validate().is_ok() && bytes == 0
+        }
+        (
+            Operation::WorkspaceOpen {
+                workspace,
+                incarnation,
+                ..
+            },
+            Response::WorkspaceAttach(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceExec {
+                workspace,
+                incarnation,
+                ..
+            },
+            Response::WorkspaceExec(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
         (
             Operation::WorkspaceCommit {
                 workspace,
