@@ -10,6 +10,8 @@ the four-tier #231 gate. The only fixed database page size used here is 4 KiB.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
+The [append-only iteration record](iteration-record.md) tracks successful,
+failed and active approaches with their evidence.
 Each invoked case/source identity has one public-operation sample at most, a
 fresh output directory, and retained failures. The research
 [cold driver](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py)
