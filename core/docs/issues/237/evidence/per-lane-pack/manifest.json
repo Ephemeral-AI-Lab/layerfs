@@ -1,0 +1,32 @@
+{
+  "active_product_commit": "3e321080a",
+  "adjacent_profile_instrumented_product_seal": "25293a2fc42e0101bbb9165fc495f9d742587f486e0d5d413cdcd282a81deaf9",
+  "adjacent_profile_source_commit": "a9f8b7de4bd5c7451b52a1037dfac1ffce450ced",
+  "artifacts_sha256": {
+    "adjacent-4mib-profile-receipt.json": "ea440afa20651333fd891f7f5daf1fffc5a76104cb7994c4c092b1878895c20e",
+    "rejected-per-lane-prototype.diff.gz": "9d930360e426a997ba2cc9e3e4abb9079954b8cb82054f8f812eae9a1f98f1b7",
+    "untimed-shared-counts.diff.gz": "584498bdab68632b5e509a94483f2d30c9167e3c5e102d375c6afa9ae220f606"
+  },
+  "focused_attempts": [
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test c2_bulk_admission --test multi_writer --test pack_watermark --test persistence_failure --test storage_limits",
+      "exit_code": 101,
+      "failed_assertion": "pack_appends expected 0, observed 2; final open tails append after wave",
+      "first_target_failed": 1,
+      "first_target_passed": 4,
+      "kind": "initial_synthetic_test",
+      "later_targets": "NOT_RUN"
+    },
+    {
+      "command": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-storage --test c2_bulk_admission",
+      "complete_wall_seconds": 2.452952792,
+      "exit_code": 0,
+      "failed": 0,
+      "kind": "corrected_synthetic_test",
+      "passed": 5
+    }
+  ],
+  "status": "NO_PUBLIC_SAMPLE",
+  "uncommitted_prototype_based_on": "38f482a38",
+  "untimed_control_instrument_commit": "743ca5a1e"
+}

@@ -252,3 +252,19 @@ About 260 ms of owner work remains outside the seven disjoint Save profile
 buckets, and connection release cost **62.64 ms** inside the public call.
 Those are localization targets, not attributed savings. The diagnostic's
 temporary instrumentation was archived and removed from product source.
+
+## Round R9: per-lane queue feasibility stopped before timing
+
+An isolated [per-lane queue proposal](per-lane-pack-experiment.md) attempted to
+remove incidental lane-switch flushes while preserving the seven-commit
+64-MiB wave policy. It was preregistered but **no public control/candidate
+pair ran**. Its synthetic first check failed an overstrong zero-append
+assertion: two final open lane tails still append after the preparation wave.
+The corrected focused check passed 5/5; other focused targets and 10k readback
+were `NOT_RUN`. The adjacent R8 **4-MiB** profile's 118 lane-switch drains
+among 1,347 suggested low leverage, but is not a measured ceiling on the
+**64-MiB** source or a failure of the planned 50% matched append gate. The
+prototype diff and first failure are retained; active product in the isolated
+worktree was restored to its measured seven-commit baseline. A distinct
+[exact pack-fit proposal](wave-wide-pack-proposal.md) remains unbuilt and
+untimed; it needs current seven-commit append/flush counts before selection.
