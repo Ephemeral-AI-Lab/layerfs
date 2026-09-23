@@ -1,0 +1,320 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "uncontrolled OS/source cache; no cold or warm claim",
+  "functional_status": "PASS",
+  "identity": {
+    "cache_contract": "uncontrolled OS/source cache; diagnostic only",
+    "harness_source_sha256": "71f207d0386ac5cd611c8287364137988d56d87efd089b858655617820b21589",
+    "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+    "image_base_digest": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "image_id": "sha256:e08b4efc6d4ea1be3e8df2fbeaccd60581ecaeb0551c1a440c9fd538ecf2e961",
+    "reporter_sha256": "0e25046f97aac90f42e1732ccbe870096c26695314234e77b900ece1f278f5d5",
+    "sample_count": 1,
+    "sdk_test_binary_sha256": "a43fa05226e327772d9f68ede70c13ef10336f4786c7d7dbfac3e02b77cf86a5",
+    "source_commit": "00e7374ff1e6d86d176aab90379bf040a3cf036f",
+    "source_status": "",
+    "source_tree": "2fde58b5ef6ddd667c0df925f52388afa3ab0e29",
+    "telemetry_run": 156951695818288523120894955530240606768
+  },
+  "kind": "functional-sdk-telemetry-diagnostic",
+  "performance_admission": "INELIGIBLE",
+  "phases": [
+    {
+      "daemon_process": null,
+      "name": "create",
+      "sdk_host_process": {
+        "closed_ns": 303017708,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          4412000,
+          8646000
+        ],
+        "elapsed_ns": 285573750,
+        "first_sample_ns": 11312208,
+        "gaps": 0,
+        "largest_gap_ns": 12437291,
+        "last_sample_ns": 300449083,
+        "opened_ns": 17440916,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 25853952,
+        "samples": 30,
+        "scope": "process-shared",
+        "source": "getrusage+libproc",
+        "success": true
+      }
+    },
+    {
+      "daemon_process": {
+        "closed_ns": 155221666,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          10000000,
+          10000000
+        ],
+        "elapsed_ns": 28912792,
+        "first_sample_ns": 121533666,
+        "gaps": 0,
+        "largest_gap_ns": 10769542,
+        "last_sample_ns": 151079708,
+        "opened_ns": 126303083,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 14536704,
+        "samples": 4,
+        "scope": "process-shared",
+        "source": "procfs+sysconf",
+        "success": true
+      },
+      "name": "mount",
+      "owner_lookup": {
+        "hello": {
+          "closed_ns": 313057541,
+          "concurrency": 3,
+          "cpu_shared_ns": [
+            233000,
+            304000
+          ],
+          "elapsed_ns": 10008167,
+          "first_sample_ns": 300449083,
+          "gaps": 0,
+          "largest_gap_ns": 10824792,
+          "last_sample_ns": 311273875,
+          "opened_ns": 303048458,
+          "resource_status": "sampled",
+          "sampled_max_rss_bytes": 25870336,
+          "samples": 2,
+          "scope": "process-shared",
+          "source": "getrusage+libproc",
+          "success": true
+        }
+      },
+      "sdk_host_process": {
+        "closed_ns": 342876500,
+        "concurrency": 3,
+        "cpu_shared_ns": [
+          2779000,
+          2589000
+        ],
+        "elapsed_ns": 39830667,
+        "first_sample_ns": 300449083,
+        "gaps": 0,
+        "largest_gap_ns": 10824792,
+        "last_sample_ns": 341854416,
+        "opened_ns": 303043958,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 26869760,
+        "samples": 5,
+        "scope": "process-shared",
+        "source": "getrusage+libproc",
+        "success": true
+      }
+    },
+    {
+      "daemon_process": {
+        "closed_ns": 200597208,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          20000000,
+          0
+        ],
+        "elapsed_ns": 30681667,
+        "first_sample_ns": 160331375,
+        "gaps": 0,
+        "largest_gap_ns": 10802375,
+        "last_sample_ns": 200584417,
+        "opened_ns": 169909166,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 38223872,
+        "samples": 5,
+        "scope": "process-shared",
+        "source": "procfs+sysconf",
+        "success": true
+      },
+      "name": "exec",
+      "owner_lookup": {
+        "hello": {
+          "closed_ns": 356810833,
+          "concurrency": 3,
+          "cpu_shared_ns": [
+            239000,
+            305000
+          ],
+          "elapsed_ns": 13909125,
+          "first_sample_ns": 341854416,
+          "gaps": 0,
+          "largest_gap_ns": 10215125,
+          "last_sample_ns": 352069541,
+          "opened_ns": 342900250,
+          "resource_status": "sampled",
+          "sampled_max_rss_bytes": 26869760,
+          "samples": 2,
+          "scope": "process-shared",
+          "source": "getrusage+libproc",
+          "success": true
+        }
+      },
+      "sdk_host_process": {
+        "closed_ns": 388319875,
+        "concurrency": 3,
+        "cpu_shared_ns": [
+          1985000,
+          2177000
+        ],
+        "elapsed_ns": 45422250,
+        "first_sample_ns": 341854416,
+        "gaps": 0,
+        "largest_gap_ns": 12102042,
+        "last_sample_ns": 382433375,
+        "opened_ns": 342896000,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 26935296,
+        "samples": 5,
+        "scope": "process-shared",
+        "source": "getrusage+libproc",
+        "success": true
+      }
+    },
+    {
+      "daemon_process": {
+        "closed_ns": 272796167,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          20000000,
+          10000000
+        ],
+        "elapsed_ns": 57282583,
+        "first_sample_ns": 211417125,
+        "gaps": 0,
+        "largest_gap_ns": 10994750,
+        "last_sample_ns": 270582917,
+        "opened_ns": 215503917,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 38617088,
+        "samples": 7,
+        "scope": "process-shared",
+        "source": "procfs+sysconf",
+        "success": true
+      },
+      "name": "commit",
+      "owner_lookup": {
+        "hello": {
+          "closed_ns": 402396291,
+          "concurrency": 3,
+          "cpu_shared_ns": [
+            222000,
+            260000
+          ],
+          "elapsed_ns": 14061416,
+          "first_sample_ns": 382433375,
+          "gaps": 0,
+          "largest_gap_ns": 9469625,
+          "last_sample_ns": 401088166,
+          "opened_ns": 388334208,
+          "resource_status": "sampled",
+          "sampled_max_rss_bytes": 26935296,
+          "samples": 3,
+          "scope": "process-shared",
+          "source": "getrusage+libproc",
+          "success": true
+        }
+      },
+      "sdk_host_process": {
+        "closed_ns": 460579541,
+        "concurrency": 3,
+        "cpu_shared_ns": [
+          10830000,
+          9204000
+        ],
+        "elapsed_ns": 72246666,
+        "first_sample_ns": 382433375,
+        "gaps": 0,
+        "largest_gap_ns": 11697875,
+        "last_sample_ns": 460492291,
+        "opened_ns": 388331000,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 32227328,
+        "samples": 9,
+        "scope": "process-shared",
+        "source": "getrusage+libproc",
+        "success": true
+      }
+    },
+    {
+      "daemon_process": {
+        "closed_ns": 284659375,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "elapsed_ns": 2254458,
+        "first_sample_ns": 280318167,
+        "gaps": 0,
+        "largest_gap_ns": 0,
+        "last_sample_ns": 280318167,
+        "opened_ns": 282399583,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 38617088,
+        "samples": 1,
+        "scope": "process-shared",
+        "source": "procfs+sysconf",
+        "success": true
+      },
+      "name": "unmount",
+      "owner_lookup": {
+        "hello": {
+          "closed_ns": 468915791,
+          "concurrency": 1,
+          "cpu_shared_ns": null,
+          "elapsed_ns": 8314958,
+          "first_sample_ns": 460492291,
+          "gaps": 0,
+          "largest_gap_ns": 0,
+          "last_sample_ns": 460492291,
+          "opened_ns": 460598875,
+          "resource_status": "sampled",
+          "sampled_max_rss_bytes": 32227328,
+          "samples": 1,
+          "scope": "process-shared",
+          "source": "getrusage+libproc",
+          "success": true
+        }
+      },
+      "sdk_host_process": {
+        "closed_ns": 472258458,
+        "concurrency": 1,
+        "cpu_shared_ns": null,
+        "elapsed_ns": 11662000,
+        "first_sample_ns": 460492291,
+        "gaps": 0,
+        "largest_gap_ns": 0,
+        "last_sample_ns": 460492291,
+        "opened_ns": 460594208,
+        "resource_status": "sampled",
+        "sampled_max_rss_bytes": 32227328,
+        "samples": 1,
+        "scope": "process-shared",
+        "source": "getrusage+libproc",
+        "success": true
+      }
+    }
+  ],
+  "public_call_sum_ns": 454735333,
+  "resource_scope": "LayerFS process-shared sampled CPU/RSS only: host SDK and Service share one process; daemon is separate; Exec child and Docker/container cgroup are excluded",
+  "route_host_process": {
+    "closed_ns": 472274458,
+    "concurrency": 3,
+    "cpu_shared_ns": [
+      20006000,
+      22616000
+    ],
+    "elapsed_ns": 454833291,
+    "first_sample_ns": 11312208,
+    "gaps": 0,
+    "largest_gap_ns": 12437291,
+    "last_sample_ns": 460492291,
+    "opened_ns": 17438041,
+    "resource_status": "sampled",
+    "sampled_max_rss_bytes": 32227328,
+    "samples": 46,
+    "scope": "process-shared",
+    "source": "getrusage+libproc",
+    "success": true
+  }
+}
