@@ -62,6 +62,32 @@ def cold_source(source, manifest):
     return result
 
 
+def recheck_source(source, manifest):
+    backend = cold.Residency()
+    started = time.monotonic_ns()
+    result = {"method": cold.METHOD, "files": 0, "bytes": 0,
+              "pages": 0, "resident_pages": 0}
+    for row in (line.split("\t") for line in manifest.read_text().splitlines()):
+        if row[1] != "f":
+            continue
+        path = source / row[0]
+        with path.open("rb") as file:
+            metadata = os.fstat(file.fileno())
+            if (not stat.S_ISREG(metadata.st_mode) or metadata.st_size != int(row[4])
+                    or metadata.st_mtime_ns != int(row[3])
+                    or metadata.st_mode & 0o7777 != int(row[2])):
+                raise ValueError(f"source changed after cold preflight: {path}")
+            pages, resident = backend.check(file.fileno(), metadata.st_size)
+            result["files"] += 1
+            result["bytes"] += metadata.st_size
+            result["pages"] += pages
+            result["resident_pages"] += resident
+    result["finished_ns"] = time.monotonic_ns()
+    result["wall_ns"] = result["finished_ns"] - started
+    result["status"] = "VERIFIED_COLD" if not result["resident_pages"] else "INELIGIBLE"
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", choices=("namespace-1000-compact-v3", "namespace-10000"), required=True)
@@ -91,13 +117,21 @@ def main():
     def public_import(daemon, case, stack, scope_seed):
         cold_result = state["cold"]
         folder = out / "daemon-host/init_namespace" / case.id
-        if time.monotonic_ns() - cold_result["finished_ns"] > cold.MAX_LAUNCH_GAP_NS:
-            (folder / "cold-launch.json").write_text('{"status":"STALE"}\n')
-            raise ValueError("source cold preflight became stale; no timed call")
+        try:
+            recheck = recheck_source(Path(state["fixture"]["source"]), Path(state["fixture"]["manifest"]))
+        except Exception as error:
+            recheck = {"status": "INELIGIBLE", "error": repr(error)}
+        (folder / "cold-recheck.json").write_text(json.dumps(recheck, sort_keys=True, indent=2) + "\n")
+        if (recheck["status"] != "VERIFIED_COLD" or recheck["files"] != case.files
+                or recheck["bytes"] != case.logical_bytes
+                or time.monotonic_ns() - recheck["finished_ns"] > cold.MAX_LAUNCH_GAP_NS):
+            raise ValueError("source residency recheck failed; no timed call")
         result = original_import(daemon, case, stack, scope_seed)
-        gap = result["started_ns"] - cold_result["finished_ns"]
+        gap = result["started_ns"] - recheck["finished_ns"]
         (folder / "cold-launch.json").write_text(json.dumps({
             "preflight_sha256": hashlib.sha256((folder / "cold-preflight.json").read_bytes()).hexdigest(),
+            "recheck_sha256": hashlib.sha256((folder / "cold-recheck.json").read_bytes()).hexdigest(),
+            "preflight_to_timer_ns": result["started_ns"] - cold_result["finished_ns"],
             "launch_gap_ns": gap,
             "status": "VERIFIED_COLD" if gap <= cold.MAX_LAUNCH_GAP_NS else "INELIGIBLE",
         }, sort_keys=True, indent=2) + "\n")

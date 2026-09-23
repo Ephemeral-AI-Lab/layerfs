@@ -144,3 +144,18 @@ Attempt one release build; if its complete invocation exceeds 30 s, preserve
 profile observations, never as a product algorithm speedup, and retain D7's
 timeout. The official runner still labels source cache uncontrolled; the
 research sidecar is not a retrospectively approved admission contract.
+
+## D9: release fast lane with immediate residency recheck
+
+D8's release build passed in 17.543971458 s, but its cold preflight became
+stale during process startup; the wrapper refused the call with zero samples.
+Keep that `NOT_RUN` receipt. Preserve full source hash/eviction outside the
+complete-command clock, then add a separate **nonfaulting whole-input mincore
+check immediately before the caller timer**. It checks every file's size/mtime
+and counts resident pages without priming any payload. The command clock will
+conservatively include this check; report its wall separately. Require zero
+resident pages and a ≤1 s recheck-to-timer gap. Use the exact release binaries
+sealed by D8, same product/fixture/worker/PageSize=4096 and unchanged 15 s
+limits. Take one fresh `namespace-10000` sample with verifier **SKIPPED** for
+fast iteration. Do not count verifier cost in performance, do not promote this
+diagnostic to #231 admission, and retain any failed row.
