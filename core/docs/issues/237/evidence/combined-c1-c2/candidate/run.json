@@ -1,0 +1,18 @@
+{
+  "complete_run_wall_ns": 10238350541,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 7102575416,
+  "full_verification_requested": true,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      "?? core/docs/issues/237/evidence/combined-c1-c2/"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "4e7fb0b03934bb50c4745098162227d1c498fdf94369f98619326c17e9017bce",
+    "source_commit": "a5f484b148259286d7e2b9f872d74a707bdd12d4",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

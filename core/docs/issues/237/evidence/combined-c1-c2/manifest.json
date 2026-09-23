@@ -1,0 +1,51 @@
+{
+  "arms": {
+    "candidate": {
+      "files_sha256": {
+        "build.json": "6335948976234e9aea1f2138fefbeeb5b1146fb1856453ec2817d046a32ff21f",
+        "cold-launch.json": "10546c3df30c2c6fc009c915c02aecad7bf9059de5e8f97d110f705a44140b3a",
+        "cold-preflight.json": "944ea5dec534c4be497842ec324e429a0f6ce71712dfaf0244c80b97a657a01b",
+        "cold-recheck.json": "f4863dab803831d79576721e9dcb0e3d82c77d4505565e77448951918a8adad1",
+        "daemon.stderr": "ab8592cd1fb6bb53cf4486d2d24831f0e217a3dde755428bf498918b292d67ca",
+        "manifest.json": "e753dcc3b4fb5201f33115fbfc336610e25e13166efc8724871a74783a81749a",
+        "operation-identity.json": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf",
+        "perf.jsonl": "270b49ceac1adf222ce92476321ebe346c781638978da4557890f60b87f8f6d2",
+        "receipt.json": "364077bcdd39dad64cbff181a6edd7a4c61b8d544e40ce3239703a531e19907b",
+        "report.txt": "326b1667f0159b7fadb5eaa1153564f7f7b56b3171e27f9a2f5c851c4817c22e",
+        "run.json": "e183df6eeb72ef51ba4d67936ecf76350a7dd87b12784c3554bc22f5409c3881",
+        "service.stderr": "8d8599a46cd5f52ee494776c2ab251d5d042c1f03177921c6dfb4cd890d159ca",
+        "telemetry.lft1": "5cb31a090b3f436a957780edaa123fc97bb466817a66fbff99574be4b74a16dc",
+        "verification.json": "044497d992240d25c621b95552b53600335f1e78c44af8319f81986c074e25b4",
+        "verifier.stderr": "734e9dbcb531ead7249c8b7aed66db0dee5bf253f1784cbc3a35a78f944c9e38",
+        "verifier.stdout": "ba78691d30882f456dd70a02c24af490d889260af14ae1e810f94751b6fcf43d"
+      },
+      "output": "benchmark-results/fs-bench-pro/issue237-r2-c1-c2-candidate",
+      "store_bytes": 333897728,
+      "store_sha256": "a2990119bd7fca25011f067b1f19bc410eb6716ac6b53540468241bb58715b48"
+    },
+    "control": {
+      "files_sha256": {
+        "build.json": "1203dd6a720d7f2ef8a05f3e9533b4aead64a39dc3e6c19159d8f341f19fd79c",
+        "cold-launch.json": "a58080d41c5c47ca413cc27686fe755fef3fc6aeba2f47d44d029f236d6960aa",
+        "cold-preflight.json": "5f7271d165c89bebbe1ab688d0c54f4d47e3f794e0026e9af54f829a46c668b1",
+        "cold-recheck.json": "23884b7afcad48d7bf0a44b4b9281370956216ca293b07a769fd86254337f98b",
+        "daemon.stderr": "d8e05030502c60e417184861dde85a4a5de3eba96fd11510c7e244c0aa6da778",
+        "manifest.json": "0ef2833ccfbf985dbb3c42f1366451e0db7e6caf9700dc1001c86df4edf7fae1",
+        "operation-identity.json": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf",
+        "perf.jsonl": "692222705b235f7888068f183da42ec083532aa97e970b1dcedf7f6a33f15be5",
+        "receipt.json": "3e9e6f598ff61f5221b55a7b70912b53880df6857a8cfb06fb468a3a98c0d5fb",
+        "report.txt": "96d3c87b7539176d2cbb5658dcaf6aa873ab1d1c1464415dfca50534f8e2a8d2",
+        "run.json": "cea9868bad6767d37e0bb301563fce3d982c6f22fa4d17b9d38e91b340217a96",
+        "service.stderr": "809d9267019dd92ba9d7a00977276e71d6faa26ffe71bdf368e71af218b338d9",
+        "telemetry.lft1": "2104e41296a05f2b7204e098dbded5dc07965890f251e30199a6fa963f418259",
+        "verification.json": "8c4986f5d7fc0d8a1860ac6caebd42d091a12a0c0d1283746f4415e610e113d3",
+        "verifier.stderr": "f2e69b9ba67e1c14572929376acf230756a938e926a5b9a443687b074eb42b78",
+        "verifier.stdout": "ba78691d30882f456dd70a02c24af490d889260af14ae1e810f94751b6fcf43d"
+      },
+      "output": "benchmark-results/fs-bench-pro/issue237-r2-c1-control",
+      "store_bytes": 333914112,
+      "store_sha256": "5a2c099dbffada2936957757bd44dbe9bcc1d04331906bcd8b2bd8f4efdf4ac8"
+    }
+  },
+  "schema": "issue237-combined-c1-c2-evidence-v1"
+}
