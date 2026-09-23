@@ -1,0 +1,10 @@
+{
+  "declared_used_bytes": 510615715,
+  "exact_length_rows": 17,
+  "freelist_count": 0,
+  "pack_blob_bytes": 545160862,
+  "pack_rows": 2082,
+  "page_count": 135104,
+  "page_size_bytes": 4096,
+  "reserved_tail_bytes": 34545147
+}
