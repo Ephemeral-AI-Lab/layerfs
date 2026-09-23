@@ -24,14 +24,6 @@ pub const MAXIMUM_CURSOR_BYTES: usize = 160;
 /// is `Capacity`, never an empty result: an over-budget walk is unproven, and
 /// reporting absence for it would be a false negative.
 pub const MAXIMUM_LINEAGE_ROWS: u64 = 4096;
-/// Largest entries one namespace manifest may declare, including its root.
-pub const MAXIMUM_MANIFEST_ENTRIES: usize = 128;
-/// Largest count one inode reservation may request.
-///
-/// A reservation is consumed on success even when the serials go unused, so the
-/// declared bound is also the largest range one request can burn. A larger batch
-/// is a later explicit service extension, not an unbounded default.
-pub const MAXIMUM_INODE_RESERVATION: u64 = 65_536;
 
 /// One LayerStack: a named linear Layer publication timeline.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -458,7 +450,7 @@ impl NamespaceManifest {
     /// and no target. Every other entry names a strictly earlier parent, so the
     /// manifest is acyclic and every entry is reachable from the root.
     pub fn check(&self) -> HistoryResult<()> {
-        if self.entries.is_empty() || self.entries.len() > MAXIMUM_MANIFEST_ENTRIES {
+        if self.entries.is_empty() {
             return Err(HistoryError::InvalidInput("manifest size"));
         }
         let root = &self.entries[0];
@@ -514,16 +506,11 @@ impl NamespaceManifest {
                 }
             }
         }
-        let mut seen: Vec<(u16, &[u8])> = Vec::with_capacity(self.entries.len());
+        let mut seen = std::collections::BTreeSet::new();
         for entry in self.entries.iter().skip(1) {
-            let name: &[u8] = &entry.name;
-            if seen
-                .iter()
-                .any(|(parent, existing)| *parent == entry.parent && *existing == name)
-            {
+            if !seen.insert((entry.parent, entry.name.as_slice())) {
                 return Err(HistoryError::InvalidInput("manifest duplicate name"));
             }
-            seen.push((entry.parent, name));
         }
         Ok(())
     }

@@ -11,12 +11,14 @@ use layerfs_storage::Store;
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{
     io::{Read, Write},
+    path::Path,
     time::Instant,
 };
 
 pub(crate) fn dispatch(
     store: &Store,
     catalog: Option<&dyn HistoryCatalog>,
+    import_root: Option<&Path>,
     r: &Request,
     input: &mut dyn Read,
     output: &mut dyn Write,
@@ -39,6 +41,7 @@ pub(crate) fn dispatch(
             history::command(
                 catalog.ok_or(Code::Unsupported)?,
                 store,
+                import_root,
                 command,
                 deadline,
                 scope,

@@ -8,6 +8,12 @@
 > to be argued with, not to be built against. See
 > [§11.1](#111-status-of-this-paper--read-this-first) for exactly which parts are
 > settled and what would finalize the rest.
+>
+> **Current implementation note:** the Service's public
+> `ImportNativeDirectory` scans an operator-owned source, constructs file objects
+> with four workers and one bounded C2 handoff, then builds and publishes one
+> complete genesis root. The phased import proposal below is not the product
+> algorithm and has not been measured as such.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
@@ -137,14 +143,11 @@ Build the directory structure with no files in it.
         │
         ├── check_build_reachability: ONE walk from the root,
         │     ONE counter, charging EVERY stated binding
-        │     ⇒ the whole skeleton must state ≤ 4,096 bindings
+        │     ⇒ no independent count cap for a base-less build
         │
         └── FilesystemRootId ──► save.accept(root object)
 
-   if the skeleton states more than 4,096 bindings:
-        build a ≤4,096 skeleton, then attach further directories with
-        update_filesystem. Each attach walks only the newly-bound
-        subtree — cheap, because those directories are still empty.
+   A native-directory import may build the complete skeleton in one call.
 ```
 
 Every list is **strictly ascending** and unique: `directories` by parent serial,
@@ -263,7 +266,7 @@ how close a batch came; §11.11 records what is not yet measured.
 
 | Phase | Limit | Value | Bites? |
 | --- | --- | ---: | --- |
-| A | `MAXIMUM_WALK_ENTRIES` | 4,096 bindings/call | **yes, by design** |
+| A | supplied binding vector | no independent entry-count cap | work scales with input |
 | A | subtree of any bound directory | 4,096 entries | no — directories are empty |
 | B, C | `BATCH_OBJECT_LIMIT` | 512 objects | yes — drains waves |
 | B, C | `BATCH_CANONICAL_BYTES_LIMIT` | 512 KiB | **usually binds first** |

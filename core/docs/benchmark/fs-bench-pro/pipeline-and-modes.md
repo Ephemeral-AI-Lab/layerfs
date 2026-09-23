@@ -205,20 +205,30 @@ v0.1.6 public native Init
        v
   shared object admission -> Store SQLite objects + LayerStack metadata
 
-v0.1.7 current InitLayerStack
+v0.1.7 pathless InitLayerStack
 
-  native directory --X--> no public native bulk importer
+  native directory --X--> pathless bootstrap
 
   file roots saved by earlier operations
        |
        v
-  one pathless manifest (at most 128 entries including root; 32 KiB metadata)
+  one pathless manifest (16-bit count/parent; 32 KiB metadata)
        |
        v
   C1 prerequisites -> C2 save -> C1 filesystem tree -> C2 save
        |
        v
   C5 LayerStack record in the separately configured history catalog
+
+v0.1.7 public ImportNativeDirectory
+
+  operator-configured native directory
+       |
+       v
+  Service scan/read -> four C1 file workers -> bounded C2 save
+       |
+       v
+  complete C1 filesystem root -> C2 save -> C5 genesis publication
 ```
 
 The pathless bootstrap once had a **128-entry test cap**. That arbitrary cap is

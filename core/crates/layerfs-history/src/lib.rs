@@ -39,6 +39,5 @@ pub use records::{
     CommitRecord, CommitStagedOutcome, CommitStagedRequest, DiscardOutcome, DiscardRequest,
     ForkRequest, ForkSource, LayerHistoryRequest, LayerRecord, LayerStackRecord, ManifestEntry,
     NamespaceManifest, Page, PageResult, RecordKind, Reservation, ReserveRequest,
-    StackInitialization, StageRecord, StageRequest, MAXIMUM_INODE_RESERVATION,
-    MAXIMUM_PAGE_RECORDS,
+    StackInitialization, StageRecord, StageRequest, MAXIMUM_PAGE_RECORDS,
 };

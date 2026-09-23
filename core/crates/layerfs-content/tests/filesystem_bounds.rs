@@ -740,13 +740,10 @@ fn merge_inputs_and_output_are_covered_by_the_declared_ceiling() {
 }
 
 #[test]
-fn the_cycle_check_work_limit_is_reachable_and_reported() {
-    // The effective-cycle walk is bounded by a declared entry limit, and the
-    // limit is a work bound rather than a property of the tree: it also bounds
-    // how large one build may state a directory to be. Both sides of it are
-    // pinned here, and the entries each walk examined are charged to the
-    // operation. A directory over the limit is refused with the limit's own
-    // message, never reported as a cycle.
+fn a_build_has_no_independent_cycle_walk_limit() {
+    // A base-less build walks only its supplied bindings. The existing-tree
+    // cycle walk still has its separate work limit, but this build has no
+    // arbitrary count refusal and charges every supplied entry.
     let limit = layerfs_content::filesystem::validate::MAXIMUM_CYCLE_CHECK_ENTRIES;
     let scope = layerfs_content::filesystem::scope_for_seed([0x6d; 32]);
     let temp = TempDir::new("bounds-cycle-limit");
@@ -790,12 +787,7 @@ fn the_cycle_check_work_limit_is_reachable_and_reported() {
         "the walk's entries are charged to the build: {:?}",
         built.counters.validation
     );
-    // The tight boundary, in the bindings the walk charges: a build stating
-    // exactly the ceiling is accepted and charges every stated entry, and one
-    // more is the first refusal. (The round-2 review first reported this as
-    // "4,095 accepted / 4,096 refused" counting only the files inside the
-    // built directory; two independent round-4 probes and this case pin the
-    // walk's own counting instead.)
+    // The old boundary is still charged as work, and a larger build succeeds.
     let at_limit = build_wide(
         limit,
         layerfs_content::filesystem::scope_for_seed([0x6f; 32]),
@@ -806,31 +798,14 @@ fn the_cycle_check_work_limit_is_reachable_and_reported() {
         "the accepted boundary build charges exactly the ceiling's entries: {:?}",
         at_limit.counters.validation
     );
-    let first_refused = build_wide(
+    let beyond = build_wide(
         limit + 1,
         layerfs_content::filesystem::scope_for_seed([0x70; 32]),
-    );
-    assert!(
-        matches!(
-            first_refused,
-            Err(layerfs_content::ContentError::InvalidRecord(
-                "cycle check work limit"
-            ))
-        ),
-        "one binding over the ceiling is the first refusal: {first_refused:?}"
-    );
-    let outcome = build_wide(
-        limit + 512,
-        layerfs_content::filesystem::scope_for_seed([0x6e; 32]),
-    );
-    assert!(
-        matches!(
-            outcome,
-            Err(layerfs_content::ContentError::InvalidRecord(
-                "cycle check work limit"
-            ))
-        ),
-        "a directory over the entry limit is refused by that limit: {outcome:?}"
+    )
+    .expect("one binding over the former limit builds");
+    assert_eq!(
+        beyond.counters.validation.entries_examined,
+        (limit + 1) as u64
     );
     let _ = backing.cleanup_failed();
 }

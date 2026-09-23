@@ -29,10 +29,37 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, FileView, ObjectId};
-use layerfs_history::{ManifestEntry, NamespaceManifest, RecordKind};
+use layerfs_history::{ManifestEntry, RecordKind};
 use layerfs_storage::{SaveHandoff, Store};
-use layerfs_telemetry::timer::{Active, TimingScope};
+use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 use std::time::Instant;
+
+/// Internal import row. Its parent index is not restricted by the old wire manifest.
+pub(crate) struct PreparedEntry {
+    pub parent: usize,
+    pub name: Vec<u8>,
+    pub kind: RecordKind,
+    pub mode: u32,
+    pub mtime_seconds: i64,
+    pub mtime_nanoseconds: u32,
+    pub content: Option<ObjectId>,
+    pub target: Option<Vec<u8>>,
+}
+
+impl From<&ManifestEntry> for PreparedEntry {
+    fn from(entry: &ManifestEntry) -> Self {
+        Self {
+            parent: usize::from(entry.parent),
+            name: entry.name.clone(),
+            kind: entry.kind,
+            mode: entry.mode,
+            mtime_seconds: entry.mtime_seconds,
+            mtime_nanoseconds: entry.mtime_nanoseconds,
+            content: entry.content,
+            target: entry.target.clone(),
+        }
+    }
+}
 
 /// Builds and saves one bounded logical namespace, returning its published root.
 pub(crate) fn build_namespace(
@@ -40,12 +67,11 @@ pub(crate) fn build_namespace(
     provider: &dyn AuthenticatedObjects,
     scope: InodeScope,
     root_serial: u64,
-    manifest: &NamespaceManifest,
+    entries: &[PreparedEntry],
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
 ) -> Result<ObjectId, Failure> {
-    manifest.check().map_err(|_| Code::InvalidInput)?;
-    let count = u64::try_from(manifest.entries.len()).map_err(|_| Code::Capacity)?;
+    let count = u64::try_from(entries.len()).map_err(|_| Code::Capacity)?;
     let last = root_serial
         .checked_add(count)
         .filter(|end| *end <= i64::MAX as u64)
@@ -54,10 +80,8 @@ pub(crate) fn build_namespace(
         return Err(Code::Deadline.into());
     }
     let serials: Vec<u64> = (root_serial..last).collect();
-    let (metadata, content_roots) =
-        prerequisites(store, provider, &manifest.entries, deadline, timer)?;
-    let inodes: Vec<InodeUpdate> = manifest
-        .entries
+    let (metadata, content_roots) = prerequisites(store, provider, entries, deadline, timer)?;
+    let inodes: Vec<InodeUpdate> = entries
         .iter()
         .enumerate()
         .map(|(index, entry)| {
@@ -76,7 +100,7 @@ pub(crate) fn build_namespace(
             })
         })
         .collect::<Result<_, Failure>>()?;
-    let directories = directory_updates(&manifest.entries, &serials)?;
+    let directories = directory_updates(entries, &serials)?;
     let input = FilesystemInput {
         base: None,
         scope,
@@ -139,7 +163,7 @@ pub(crate) fn build_namespace(
 fn prerequisites(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
-    entries: &[ManifestEntry],
+    entries: &[PreparedEntry],
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
 ) -> Result<(Vec<ObjectId>, Vec<ObjectId>), Failure> {
@@ -148,7 +172,7 @@ fn prerequisites(
         .map_err(storage)?;
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = (|| {
+        let result = timer.child("history.prerequisites").run(|_| {
             let mut objects = FilesystemObjects::new(provider, &mut handoff);
             let mut metadata = Vec::with_capacity(entries.len());
             let mut content_roots = Vec::with_capacity(entries.len());
@@ -169,8 +193,11 @@ fn prerequisites(
                     .map_err(content)?,
                     RecordKind::RegularFile => {
                         let root = entry.content.ok_or(Code::InvalidInput)?;
-                        let view = FileView::open(provider, root, timer.child("history.role"))
-                            .map_err(content)?;
+                        let view = Timing::disabled("history.role", |scope| {
+                            FileView::open(provider, root, scope.child("file"))
+                        })
+                        .0
+                        .map_err(content)?;
                         if view.logical_len() > MAX_FILE {
                             return Err(Code::Capacity.into());
                         }
@@ -182,7 +209,7 @@ fn prerequisites(
                 content_roots.push(content_root);
             }
             Ok((metadata, content_roots))
-        })();
+        });
         let retained = handoff.take_failure();
         drop(handoff);
         match retained {
@@ -251,7 +278,7 @@ pub(crate) fn build_metadata(
 /// states, so an unstated root would be dropped from the inode table; the empty
 /// statement is also what gives the one-directory namespace its real empty page.
 fn directory_updates(
-    entries: &[ManifestEntry],
+    entries: &[PreparedEntry],
     serials: &[u64],
 ) -> Result<Vec<DirectoryUpdate>, Failure> {
     let mut bindings = std::collections::BTreeMap::new();
@@ -262,7 +289,7 @@ fn directory_updates(
     }
     for (index, entry) in entries.iter().enumerate().skip(1) {
         let name = PathName::from_bytes(&entry.name).map_err(content)?;
-        let parent = serials[usize::from(entry.parent)];
+        let parent = serials[entry.parent];
         bindings
             .get_mut(&parent)
             .ok_or(Code::InvalidInput)?

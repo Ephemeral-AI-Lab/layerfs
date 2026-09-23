@@ -63,7 +63,7 @@ preconditioning are outside it and reported separately. Init may use its
 registered multi-worker construction path; Commit/capture/snapshot keep one
 construction worker.
 
-There is **no equivalent public import in core today**. #231 owns specifying
+At this specification's baseline, there was **no equivalent public import in core**. #231 owns specifying
 and implementing it before any row above can be measured as Init. Stream or
 batch bounded input through the real Service/C1/C2/C5 route; do not pre-save
 file roots, send a pathless 128-entry bootstrap, issue 10,000 mounted creates,
@@ -81,6 +81,10 @@ names/metadata. It has no default file or entry-count ceiling; allocation and
 inode-serial representability remain checked. It scans and
 reads source bytes **during this one request**, saves C1 file objects through
 C2, builds the complete filesystem root, then publishes one C5 genesis stack.
+The registered Init path has four file-construction workers and an eight-object
+bounded handoff to the one C2 save owner. Per-file timing detail is grouped into
+aggregate scan, file-construction and prerequisite spans, preserving complete
+timing trees without changing the one caller sample.
 The reply is the existing `StackCreated` result. The caller timer begins before
 the daemon request frame and ends after decoding that reply. This operation has
 fixture/route identity `core-native-directory-import-v1`; historical case IDs

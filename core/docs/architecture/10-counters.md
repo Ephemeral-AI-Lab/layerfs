@@ -251,7 +251,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `BATCH_CANONICAL_BYTES_LIMIT` | 512 KiB | usually binds first: 512 average objects ≈ 512 KiB only at ~1 KiB each |
 | `TRANSACTION_ROW_LIMIT` | 8,191 | one transaction spans many waves |
 | `TRANSACTION_CANONICAL_BYTES_LIMIT` | 4 MiB − 1 | `2²²−1`, an encoding ceiling, not a round number |
-| `MAXIMUM_WALK_ENTRIES` | 4,096 | charged **per walk**, not per operation |
+| `MAXIMUM_WALK_ENTRIES` | 4,096 | charged per existing-tree cycle walk; base-less build reachability walks its supplied bindings without this cap |
 | `READ_WAVE_OBJECTS` | 32 | mapping read waves; ≤ 1 MiB payloads |
 | `EDIT_DEFERRED_LIMIT` | 8 MiB − 1 | binds by failing the operation, never by dropping state |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB | released wholesale; costs reads, never correctness |

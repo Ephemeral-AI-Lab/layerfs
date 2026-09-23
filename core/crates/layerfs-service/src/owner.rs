@@ -14,6 +14,7 @@ use layerfs_storage::Store;
 use layerfs_telemetry::operation::{Diagnostic, OperationRecorder};
 use std::{
     io::{Read, Write},
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -60,6 +61,7 @@ fn admit(counter: &AtomicUsize, limit: usize) -> Result<Permit<'_>, Failure> {
 }
 pub struct Service {
     stores: Vec<StoreAccess>,
+    import_root: Option<PathBuf>,
     /// Writer budgets, index-aligned with `stores`.
     writers: Vec<WriteBudget>,
     readers: AtomicUsize,
@@ -95,10 +97,20 @@ impl Service {
         }
         Ok(Self {
             stores,
+            import_root: None,
             writers,
             readers: AtomicUsize::new(0),
             recorder,
         })
+    }
+    /// Operator-owned source directory for one public native import request.
+    pub fn set_import_root(&mut self, root: &Path) -> Result<(), Failure> {
+        let metadata = std::fs::symlink_metadata(root)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(Code::InvalidInput.into());
+        }
+        self.import_root = Some(root.canonicalize()?);
+        Ok(())
     }
     /// Direct and remote calls enter this exact authorization/admission/operation body.
     /// Input must terminate only at its validated boundary. No output byte is final
@@ -175,6 +187,7 @@ impl Service {
             dispatch(
                 &store.store,
                 store.history.as_deref(),
+                self.import_root.as_deref(),
                 r,
                 input,
                 output,

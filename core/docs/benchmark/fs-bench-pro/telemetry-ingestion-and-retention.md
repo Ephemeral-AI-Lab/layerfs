@@ -2,8 +2,9 @@
 
 > **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
 
-This is the proposed benchmark treatment of the existing `layerfs-telemetry`
-output. The new #230 runner and this ingestion path are not implemented yet.
+This is the first-pass benchmark treatment of the existing `layerfs-telemetry`
+output. The #235 runner implements `forward` ingestion; admission remains
+conditional on the per-run zero-loss and custody checks below.
 The [selection and metric rules](parameters-and-telemetry.md) still govern what
 a row may claim. This page defines how an agent reads the records and when
 temporary telemetry output can be removed.

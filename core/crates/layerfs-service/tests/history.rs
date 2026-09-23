@@ -353,6 +353,76 @@ fn file_identity(path: &Path) -> (u64, u64) {
 }
 
 #[test]
+fn native_directory_import_exceeds_bootstrap_and_reads_bytes() {
+    let mut fixture = fixture("native-import", ALL);
+    let source = fixture._temp.0.join("source");
+    std::fs::create_dir(&source).unwrap();
+    let directory = source.join("data");
+    std::fs::create_dir(&directory).unwrap();
+    for index in 0..130 {
+        std::fs::write(directory.join(format!("f{index:03}")), [index as u8]).unwrap();
+    }
+    fixture.service.set_import_root(&source).unwrap();
+    let created = call(
+        &fixture.service,
+        &fixture.peer,
+        1,
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
+            stack: [0x70; 16],
+            name: b"native".to_vec(),
+            scope_seed: [0x71; 32],
+        }),
+    )
+    .unwrap();
+    let root = match result(created) {
+        HistoryResult::StackCreated(value) => value.root,
+        other => panic!("expected imported stack: {other:?}"),
+    };
+    let (_, kind, content, _) =
+        stat_roots(stat(&fixture.service, &fixture.peer, 2, root, b"data/f129"));
+    assert_eq!(kind, 1);
+    let request = Request {
+        id: 3,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: 60_000,
+        response_bytes: 1,
+        operation: Operation::ReadFile {
+            root: content,
+            start: 0,
+            end: 1,
+        },
+    };
+    let mut output = Vec::new();
+    assert!(fixture
+        .service
+        .handle(
+            &fixture.peer,
+            &request,
+            &mut Cursor::new(Vec::new()),
+            &mut output
+        )
+        .0
+        .is_ok());
+    assert_eq!(output, [129]);
+
+    std::os::unix::fs::symlink(directory.join("f000"), source.join("zz-link")).unwrap();
+    let failure = call(
+        &fixture.service,
+        &fixture.peer,
+        4,
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
+            stack: [0x72; 16],
+            name: b"refused".to_vec(),
+            scope_seed: [0x73; 32],
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(failure.code, Code::Unsupported);
+}
+
+#[test]
 fn legacy_mask_grants_no_history() {
     let fixture = fixture("legacy", LEGACY);
     let failure = call(

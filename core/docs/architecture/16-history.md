@@ -265,11 +265,25 @@ membership is validated on every suboperation.
 Dispatch is exhaustive and semantic. `Operation::read_only`,
 `content_mutation` and `metadata_mutation` are separate exhaustive matches, and
 the old `opcode >= 3` mutation test is gone. A `HistoryQuery` is read-only, a
-`InitLayerStack`, `StageChanges` and composite `Commit` write content; `Fork`,
+`InitLayerStack`, `ImportNativeDirectory`, `StageChanges` and composite `Commit` write content; `Fork`,
 `CommitStaged`, `AddLayer`, `DiscardStage` and `ReserveInodes` mutate metadata
 only. Metadata commands never start a C2 save. HELLO/framing version stays separate from the operation
 profile; an unknown profile/suboperation combination is refused before any
 mutation, and there is no automatic downgrade or resend.
+
+`ImportNativeDirectory` is history-command metadata tag 9. The authorized
+Service reads only its operator-configured `LAYERFS_IMPORT_ROOT`; the client
+cannot supply a host path. The operation scans names and reads file bytes before
+its C1/C2 saves and C5 genesis publication return `StackCreated`. It accepts
+regular files and directories, refuses symlinks and special files, and has no
+default file or entry-count ceiling. The pathless `InitLayerStack` retains its
+pre-saved-root semantics and is bounded by the legacy request's metadata frame
+and 16-bit parent encoding, without the former 128-entry test cap. Four source
+file workers construct C1 objects and send them through an eight-object bounded
+channel to one C2 save owner; C5 publication follows the saved filesystem root.
+This importer change is described against the product source in the same commit
+as this paragraph; the earlier
+source pin above remains the baseline for the rest of this paper.
 
 The daemon's generic framed relay selects history failure encoding from its
 validated request profile; it has no second history parser. Legacy failures stay

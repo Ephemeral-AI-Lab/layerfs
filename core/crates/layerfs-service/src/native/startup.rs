@@ -78,12 +78,8 @@ pub fn run() -> Result<(), Failure> {
             .map_err(|_| Code::InvalidInput)?,
     )?;
     listener.set_nonblocking(true)?;
-    layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
-        "layerfs-service ready {}\n",
-        listener.local_addr()?
-    ));
     let runtime = super::config::telemetry(1);
-    let service = Arc::new(Service::new(
+    let mut service = Service::new(
         vec![StoreAccess {
             id: 1,
             store,
@@ -91,8 +87,16 @@ pub fn run() -> Result<(), Failure> {
             history: super::config::history()?,
         }],
         runtime.recorder(),
-    )?);
+    )?;
+    if let Some(root) = std::env::var_os("LAYERFS_IMPORT_ROOT") {
+        service.set_import_root(std::path::Path::new(&root))?;
+    }
+    let service = Arc::new(service);
     let peers = Arc::new(peers);
+    layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
+        "layerfs-service ready {}\n",
+        listener.local_addr()?
+    ));
     let stdin = io::stdin();
     let mut sessions: Vec<Session> = Vec::with_capacity(sessions_capacity);
     let result = (|| {

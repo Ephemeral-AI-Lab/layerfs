@@ -1,7 +1,7 @@
 # v0.1.7 fs-bench-pro migration
 
-> **Status:** Proposal only. No new runner contract, measurement, or performance
-> result is approved by this document.
+> **Status:** The #235 first-pass runner is implemented; broader migration and
+> performance admission remain proposed. This page approves no numeric result.
 
 Tracking: [v0.1.7 migration issue #230](https://github.com/Ephemeral-AI-Lab/layerfs/issues/230).
 The [shared substrate #235](https://github.com/Ephemeral-AI-Lab/layerfs/issues/235)

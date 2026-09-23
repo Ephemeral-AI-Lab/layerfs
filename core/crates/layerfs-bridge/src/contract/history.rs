@@ -37,8 +37,8 @@ pub const PAGE_RECORDS: u16 = 128;
 pub const HISTORY_RESULT_BYTES: usize = 16 * 1024;
 /// Widest profile-2 failure: prefix/version, Branch conflict and full retained stage.
 pub const HISTORY_FAILURE_BYTES: usize = 482;
-/// Largest entries one init manifest declares, including its root.
-pub const MANIFEST_ENTRIES: usize = 128;
+/// Entry-count field capacity of the legacy pathless manifest wire format.
+pub const MANIFEST_ENTRIES: usize = u16::MAX as usize;
 /// Largest bytes of one symlink target inside a manifest.
 pub const MANIFEST_TARGET_BYTES: usize = 4096;
 
@@ -224,6 +224,12 @@ pub enum HistoryCommand {
         scope_seed: Root,
         /// Bounded logical namespace to build.
         manifest: Vec<ManifestEntry>,
+    },
+    /// Imports the Service's operator-configured native directory as one genesis stack.
+    ImportNativeDirectory {
+        stack: [u8; 16],
+        name: Vec<u8>,
+        scope_seed: Root,
     },
     /// Creates one Branch sharing the selected ancestry.
     Fork {

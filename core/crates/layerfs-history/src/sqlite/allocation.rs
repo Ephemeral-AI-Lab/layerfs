@@ -14,7 +14,7 @@
 
 use crate::error::{HistoryError, HistoryResult};
 use crate::identity::CatalogId;
-use crate::records::{Reservation, ReserveRequest, MAXIMUM_INODE_RESERVATION};
+use crate::records::{Reservation, ReserveRequest};
 use rusqlite::Transaction;
 
 use super::rows::{cell, one, sql, unsigned};
@@ -34,7 +34,7 @@ pub(crate) fn reserve_inodes(
     catalog: CatalogId,
     request: &ReserveRequest,
 ) -> HistoryResult<Reservation> {
-    if request.count == 0 || request.count > MAXIMUM_INODE_RESERVATION {
+    if request.count == 0 {
         return Err(HistoryError::InvalidInput("inode reservation"));
     }
     let existing = one(

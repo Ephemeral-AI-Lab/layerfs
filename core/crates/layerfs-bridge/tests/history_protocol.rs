@@ -323,7 +323,7 @@ fn identity_widths_and_tags_are_checked() {
         }),
         Operation::HistoryCommand(HistoryCommand::ReserveInodes {
             scope: [0x03; 32],
-            count: 65_537,
+            count: i64::MAX as u64 + 1,
         }),
     ];
     for operation in cases {
@@ -378,7 +378,7 @@ fn page_and_count_bounds_are_checked() {
     let mut too_many = manifest();
     let root = too_many[0].clone();
     too_many = vec![root];
-    for index in 0..MANIFEST_ENTRIES {
+    for index in 0..1_500 {
         too_many.push(ManifestEntry {
             parent: 0,
             name: format!("n{index}").into_bytes(),
@@ -390,7 +390,13 @@ fn page_and_count_bounds_are_checked() {
             target: Vec::new(),
         });
     }
-    assert_eq!(too_many.len(), MANIFEST_ENTRIES + 1);
+    assert_eq!(too_many.len(), 1_501);
+    round_trip(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        stack: [0x51; 16],
+        name: b"main".to_vec(),
+        scope_seed: [0x02; 32],
+        manifest: too_many[..130].to_vec(),
+    }));
     assert_eq!(
         encode_request_with_budget(
             &request(Operation::HistoryCommand(HistoryCommand::InitLayerStack {

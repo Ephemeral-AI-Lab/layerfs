@@ -265,6 +265,7 @@ impl Operation {
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
+                | HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
             ) => true,
@@ -317,6 +318,7 @@ impl Operation {
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::InitLayerStack { .. }
+                | HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
             ) => false,
@@ -814,16 +816,11 @@ fn check_manifest(entries: &[ManifestEntry]) -> Result<(), Failure> {
             }
         }
     }
-    let mut seen: Vec<(u16, &[u8])> = Vec::with_capacity(entries.len());
+    let mut seen = std::collections::BTreeSet::new();
     for entry in entries.iter().skip(1) {
-        let name: &[u8] = &entry.name;
-        if seen
-            .iter()
-            .any(|(parent, existing)| *parent == entry.parent && *existing == name)
-        {
+        if !seen.insert((entry.parent, entry.name.as_slice())) {
             return Err(Code::InvalidInput.into());
         }
-        seen.push((entry.parent, name));
     }
     Ok(())
 }
@@ -834,6 +831,7 @@ fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {
             check_name(name)?;
             check_manifest(manifest)
         }
+        HistoryCommand::ImportNativeDirectory { name, .. } => check_name(name),
         HistoryCommand::Fork {
             stack,
             name,
@@ -880,7 +878,7 @@ fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {
             if *count == 0 {
                 return Err(Code::InvalidInput.into());
             }
-            if *count > 65_536 {
+            if *count > i64::MAX as u64 {
                 return Err(Code::Capacity.into());
             }
             Ok(())
