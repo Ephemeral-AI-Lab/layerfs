@@ -330,11 +330,12 @@ impl MutationOwner {
 
     pub(super) fn write_pack(&mut self, write: &SelectedWrite) -> StorageResult<()> {
         let whole = Instant::now();
-        // Each flush inserts closed packs. Release this writer's cached pack
-        // bodies after a write to bound retained memory; decoded values survive.
+        // Pooled placement may append to its open pack; release cached bodies
+        // before a write so its later group directory is read afresh. Decoded
+        // values survive because an ordinal's value never moves.
         self.pool_reader.release_packs();
-        // Clear the selected pack's delta-reader entry too; it is normally
-        // absent for a new pack, and this keeps the write path's cache bound.
+        // Clear the selected pack's delta-reader entry too. Payload lanes
+        // normally create a new pack here; pooled appends may reuse an ID.
         self.pack_cache.remove(&write.pack_id);
         let started = Instant::now();
         let written = if write.created {

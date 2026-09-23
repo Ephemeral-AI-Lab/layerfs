@@ -5,8 +5,8 @@
 //! otherwise starts a new pack. A write is an **increment** - the directory
 //! entries and the bodies of the groups it places, and nothing else - because the
 //! directory region is reserved by the format and a body's offset never depends
-//! on how many groups precede it (`pack::layout`). Each flush closes its final
-//! pack, so a later flush starts a new one rather than appending to a written row.
+//! on how many groups precede it (`pack::layout`). Other lanes close at each
+//! flush; pooled metadata keeps one bounded open pack for later in-place appends.
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::{body_bytes, control_area, directory_entries};
@@ -108,8 +108,8 @@ impl LanePlacement {
     /// Places `groups`, deciding append or new pack for each one in order.
     ///
     /// Every pack that receives a group in this call produces exactly one write,
-    /// assembled once, after the last group that landed in it. The final pack is
-    /// closed before returning, leaving no cross-call open tail.
+    /// assembled once, after the last group that landed in it. Only pooled
+    /// metadata retains its final pack across calls.
     pub fn select_many(
         &mut self,
         lane: PackLane,
@@ -201,10 +201,13 @@ impl LanePlacement {
                 records,
             });
         }
+        let keep_open = lane == PackLane::PooledMetadata;
         if let Some(entry) = pending {
-            writes.push(self.increment(lane, entry, true)?);
+            writes.push(self.increment(lane, entry, !keep_open)?);
         }
-        self.open = None;
+        if !keep_open {
+            self.open = None;
+        }
         Ok(writes)
     }
 
@@ -238,8 +241,8 @@ impl LanePlacement {
             .ok_or(StorageError::Integrity("pack directory"))?;
         let control = control_area(lane, group_count, used)?;
         // A pack created and closed in this selection has not reached SQLite
-        // yet and cannot receive another append. An earlier-written row keeps
-        // its original capacity if one is ever passed through this path.
+        // yet and cannot receive another append. An earlier-written pooled row
+        // keeps its original capacity for in-place appends.
         let capacity = if closing && entry.created {
             used
         } else {

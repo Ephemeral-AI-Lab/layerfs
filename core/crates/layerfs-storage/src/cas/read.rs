@@ -228,8 +228,8 @@ pub struct ReadSession {
     /// ceiling before the cache is consulted, so a body cached under an older,
     /// higher ceiling can never answer a location this wave must not see. A
     /// **writing** owner keeps its own reader instead and releases cached pack
-    /// bodies after each write (`cas::placement::MutationOwner::write_pack`) to
-    /// bound retained memory.
+    /// bodies after each write (`cas::placement::MutationOwner::write_pack`):
+    /// its pooled lane may append to the one open pack.
     pool: PoolReader,
 }
 

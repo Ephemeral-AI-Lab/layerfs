@@ -58,9 +58,9 @@ impl PoolReader {
 
     /// Releases every cached pack body.
     ///
-    /// Placement now closes a pack before its first INSERT. Releasing bodies
-    /// after a write bounds this writer's retained pack bytes, while decoded
-    /// values survive: an ordinal's value is written once and never moves.
+    /// Pooled placement can append to its one open pack, so a retained body
+    /// may have a stale group directory after a write. Decoded values survive:
+    /// an ordinal's value is written once and never moves.
     pub fn release_packs(&mut self) {
         self.packs.clear();
     }

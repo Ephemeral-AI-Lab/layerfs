@@ -1125,9 +1125,9 @@ fn the_pooled_value_cache_releases_at_its_declared_bound() {
     );
 }
 
-/// Separate pooled placement flushes close their packs and retain exact readback.
+/// Pooled flushes reuse one open pack, including across same-Save reads.
 #[test]
-fn pooled_groups_in_separate_flushes_use_distinct_packs() {
+fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
     let dir = TempDir::new("pool-pack-release");
     let path = dir.store_path("pool");
     let store = create_store(&path);
@@ -1141,8 +1141,10 @@ fn pooled_groups_in_separate_flushes_use_distinct_packs() {
     let ids: Vec<_> = objects.iter().map(FinalizedObject::id).collect();
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("begin"))?;
-        for object in objects {
+        for (object, id) in objects.into_iter().zip(ids.iter()) {
             operation.accept(object)?;
+            let values = operation.read_batch(&[*id], scope.child("same-save-read"))?;
+            assert_eq!(ObjectId::for_bytes(&values[0]), *id);
         }
         operation.finish(scope.child("finish"))
     })
@@ -1152,24 +1154,42 @@ fn pooled_groups_in_separate_flushes_use_distinct_packs() {
     let reopened = open_store(&path);
     let connection =
         layerfs_storage::sqlite::connection::open(&path, false).expect("scoped connection");
-    let packs: Vec<i64> = {
+    let locations: Vec<(i64, i64)> = {
         let mut statement = connection
-            .prepare("SELECT pack_id FROM metadata_value_groups ORDER BY first_ordinal")
+            .prepare(
+                "SELECT pack_id, group_number FROM metadata_value_groups ORDER BY first_ordinal",
+            )
             .expect("catalogue query");
         let rows = statement
-            .query_map([], |row| row.get::<_, i64>(0))
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
             .expect("catalogue rows");
-        rows.map(|row| row.expect("pack id")).collect()
+        rows.map(|row| row.expect("pack location")).collect()
     };
-    assert_eq!(packs.len(), 3, "three groups were written");
+    assert_eq!(locations.len(), 3, "three groups were written");
     assert_eq!(
-        packs
+        locations
             .iter()
-            .copied()
+            .map(|location| location.0)
             .collect::<std::collections::BTreeSet<_>>()
             .len(),
-        3
+        1,
+        "separate pooled flushes share a pack"
     );
+    assert_eq!(
+        locations
+            .iter()
+            .map(|location| location.1)
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    let capacity: usize = connection
+        .query_row(
+            "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
+            [locations[0].0],
+            |row| row.get(0),
+        )
+        .expect("open pack capacity");
+    assert_eq!(capacity, layerfs_storage::policy::PACK_LIMIT);
     let (read, _) = read_objects(&reopened, &ids).expect("reopened pooled leaves");
     for (id, bytes) in ids.into_iter().zip(read) {
         assert_eq!(ObjectId::for_bytes(&bytes), id);

@@ -20,9 +20,10 @@ The #237 bounded multi-group admission amendment in §18.4.2 describes the
 product source in **this document's commit**, which also changes
 `cas/placement.rs`, `cas/save.rs` and `cas/selection.rs`. Earlier sections retain
 their historical source pins where they describe older behavior.
-The #237 pack-space C1 amendment in §18.4.3 likewise describes the product
-source at `bbb0281bc`. The C2 amendment in §18.4.4 describes the product
-source in this document's commit; earlier section pins stay historical.
+The #237 pack-space C1 amendment in §18.4.3 describes product source at
+`bbb0281bc`, and C2 in §18.4.4 describes source at `2ba19aad8`.
+The selective pooled-lane amendment in §18.4.5 describes product source in
+this document's commit; earlier section pins stay historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -345,7 +346,7 @@ still open. The #236 benchmark selection and historical receipts are unchanged.
 
 ### 18.4.4 Close the selected tail at every flush (#237)
 
-The C2 treatment closes the last pack of each `select_many` call too, and
+The historical C2 treatment closes the last pack of each `select_many` call too, and
 releases its open placement state before another call. A later group always
 starts a new pack rather than appending to an already inserted row. Because
 every pack has its final length **before its first SQLite INSERT**, its
@@ -362,6 +363,25 @@ offset the saved BLOB tails. The [prospective C2 rule](../issues/237/pack-space-
 requires measured Store apparent/allocated bytes, pack count, full reopened
 readback, time and RSS before accepting it. Existing larger-capacity packs
 remain readable. The #229 sparse-history guard remains a separate requirement.
+
+### 18.4.5 Reuse the pooled lane's open pack (#237)
+
+The C3 treatment retains C2's exact-length close for Ordinary, Native and
+WholeFile packs, which carried almost all of the original reserved tail.
+PooledMetadata keeps one open pack across placement calls and uses the
+existing incremental append path. A newly created pooled row therefore
+reserves 256 KiB; later groups in that lane write their directory entry,
+body and control area into that row before the corresponding catalogue row
+is inserted. Same-Save reads still seal and see the accepted values. A full
+pooled pack is displaced and the next pack takes a new ID.
+
+The C2 100k run created one pooled pack for each of 2,001 groups, adding
+8,178,200 B of headers and fixed directories compared with the previous
+16-pack grouping. C3 recovers that grouping without a format change or an
+extra body queue; the expected saving is a prospective calculation in the
+[C3 plan](../issues/237/pack-space-c3-plan-20260924.md). The closed Store,
+resource cost, readback and sparse-history result determine whether it is
+accepted. The retained C2 receipt is not relabelled.
 
 ---
 
