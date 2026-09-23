@@ -34,6 +34,9 @@ Implementation specification and its pre-publication audit:
   `FileView::open` only for native file roots constructed, length-checked and
   saved by that very import call. Pathless bootstrap still opens each supplied
   root. The #237 evidence records whether this shortens a completed operation.
+- **Research source pin advance:** `048dc7245` adds only a Clippy expectation
+  for that shared builder's explicit import-provenance argument; the described
+  algorithm and measurement identities are unchanged.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
