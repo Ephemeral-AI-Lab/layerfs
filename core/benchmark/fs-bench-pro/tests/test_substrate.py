@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -51,11 +52,18 @@ class Substrate(unittest.TestCase):
                 with redirect_stdout(io.StringIO()):
                     runner.main()
             run.assert_called_once_with("diagnostic-100k", "fresh")
+            run.reset_mock()
+            with patch.object(sys, "argv", ["runner.py", "run", "--diagnostic-100k-release", "--out", "fresh"]):
+                with redirect_stdout(io.StringIO()):
+                    runner.main()
+            run.assert_called_once_with("diagnostic-100k-release", "fresh")
             with patch.object(sys, "argv", ["runner.py", "run", "--case", "namespace-100000", "--out", "fresh"]):
                 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                     with self.assertRaises(SystemExit):
                         runner.main()
             run.assert_called_once()
+        self.assertNotIn("--release", runner.BUILD)
+        self.assertIn("--release", runner.BUILD_RELEASE)
 
     def test_payload_residency_refuses_warmed_source(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -78,8 +86,28 @@ class Substrate(unittest.TestCase):
             self.assertEqual(child["exit_code"], 0)
             self.assertGreater(child["external_resources"]["peak_rss_bytes"], 0)
             runner.fill_not_run(root, "diagnostic-100k")
+            runner.fill_not_run(root, "diagnostic-100k-release")
             frozen = root / "sdk-host/init_namespace/namespace-100000/receipt.json"
             self.assertEqual(runner.json.loads(frozen.read_text())["status"], "NOT_RUN")
+
+    def test_release_build_archives_release_examples(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output, target = root / "output", root / "target"
+            output.mkdir()
+            for profile in ("debug", "release"):
+                home = target / profile / "examples"
+                home.mkdir(parents=True)
+                for name in runner.BINARIES:
+                    (home / name).write_bytes(profile.encode() + name.encode())
+            with patch.object(runner, "RESULTS", root), patch.object(
+                runner.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ) as call:
+                result = runner.build(output, target, {"product_seal": "fixed"}, release=True)
+            self.assertEqual(result["profile"], "release")
+            self.assertIn("--release", call.call_args.args[0])
+            for name in runner.BINARIES:
+                self.assertEqual(Path(result["binaries"][name]["path"]).read_bytes(), b"release" + name.encode())
 
     def test_worktree_locks_are_local(self):
         with tempfile.TemporaryDirectory() as directory:

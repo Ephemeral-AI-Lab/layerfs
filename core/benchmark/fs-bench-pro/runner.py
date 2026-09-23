@@ -28,6 +28,7 @@ CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
 BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
+BUILD_RELEASE = BUILD[:3] + ["--release"] + BUILD[3:]
 BINARIES = ("benchmark_init", "verify_namespace")
 
 
@@ -90,19 +91,21 @@ def identities():
             "contract_commit": CONTRACT_COMMIT}
 
 
-def build(out, target, identity):
-    cache = RESULTS / "sdk-build.json"
+def build(out, target, identity, *, release=False):
+    cache = RESULTS / ("sdk-build-release.json" if release else "sdk-build.json")
+    command = BUILD_RELEASE if release else BUILD
+    profile = "release" if release else "debug"
     prior = json.loads(cache.read_text()) if cache.exists() else None
-    if prior and prior.get("product_seal") == identity["product_seal"] and all(
+    if prior and prior.get("profile") == profile and prior.get("product_seal") == identity["product_seal"] and all(
         Path(prior["binaries"][name]["path"]).is_file() and
         digest(prior["binaries"][name]["path"]) == prior["binaries"][name]["sha256"]
         for name in BINARIES
     ):
         return {"status": "PASS", "mode": "exact-binary-reuse", "wall_ns": 0,
-                "command": None, "binaries": prior["binaries"]}
+                "command": None, "profile": profile, "binaries": prior["binaries"]}
     started = time.monotonic_ns()
     with (out / "build.log").open("wb") as log:
-        process = subprocess.run(BUILD, cwd=ROOT,
+        process = subprocess.run(command, cwd=ROOT,
                                  env={**os.environ, "CARGO_TARGET_DIR": str(target)},
                                  stdout=log, stderr=subprocess.STDOUT)
     wall = time.monotonic_ns() - started
@@ -110,11 +113,11 @@ def build(out, target, identity):
               "mode": "changed-product" if prior else "first-use", "wall_ns": wall,
               "budget_ns": 30_000_000_000, "exit_code": process.returncode,
               "compiled_units": (out / "build.log").read_text(errors="replace").count("Compiling "),
-              "command": BUILD, "target": str(target)}
+              "command": command, "profile": profile, "target": str(target)}
     if process.returncode == 0:
         binaries = {}
         for name in BINARIES:
-            source = target / "debug/examples" / name
+            source = target / profile / "examples" / name
             binary_sha = digest(source)
             archive = RESULTS / "binary-archive" / binary_sha / name
             archive.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +127,8 @@ def build(out, target, identity):
             binaries[name] = {"path": str(archive), "sha256": binary_sha}
         record["binaries"] = binaries
         if record["status"] == "PASS":
-            write_json(cache, {"product_seal": identity["product_seal"], "binaries": binaries})
+            write_json(cache, {"product_seal": identity["product_seal"], "profile": profile,
+                               "binaries": binaries})
     return record
 
 
@@ -268,12 +272,14 @@ def sqlite_geometry(path, *, packs=False):
     return record
 
 
-def diagnostic_100k(out, binaries, identity):
+def diagnostic_100k(out, binaries, identity, *, release=False):
     case = init.CASES["namespace-100000"]
-    folder = out / "sdk-host" / "diagnostic-100k" / case.id
+    folder = out / "sdk-host" / ("diagnostic-100k-release" if release else "diagnostic-100k") / case.id
     folder.mkdir(parents=True)
-    receipt = {"schema": "core-fs-bench-pro-sdk-init-100k-diagnostic-v1",
+    receipt = {"schema": ("core-fs-bench-pro-sdk-init-100k-release-diagnostic-v1" if release
+                          else "core-fs-bench-pro-sdk-init-100k-diagnostic-v1"),
                "benchmark_registration": "UNREGISTERED_DIAGNOSTIC", "case": case.id,
+               "build_profile": "release" if release else "debug",
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "identity": identity, "binaries": binaries, "sample_count": 0,
                "public_api_call_count": 0, "admission_eligible": False,
@@ -431,12 +437,13 @@ def report(run):
                     f"{row.get('performance_command_wall_ns')}\t"
                     f"{row.get('verification', {}).get('wall_ns')}\t"
                     f"{row.get('functional_status')}\t{row['status']}\t{row['cache_contract']}")
-    diagnostic = run / "sdk-host/diagnostic-100k/namespace-100000/receipt.json"
-    if diagnostic.exists():
-        row = json.loads(diagnostic.read_text())
-        rows.append(f"diagnostic-100k/{row['case']}\t{row['sample_count']}\t{row.get('raw_operation_ns')}\t"
-                    f"{row.get('wall_ns')}\t{row.get('verification', {}).get('wall_ns')}\t"
-                    f"{row['status']}\t{row['performance_status']}\t{row['cache_contract']}")
+    for name in ("diagnostic-100k", "diagnostic-100k-release"):
+        diagnostic = run / "sdk-host" / name / "namespace-100000/receipt.json"
+        if diagnostic.exists():
+            row = json.loads(diagnostic.read_text())
+            rows.append(f"{name}/{row['case']}\t{row['sample_count']}\t{row.get('raw_operation_ns')}\t"
+                        f"{row.get('wall_ns')}\t{row.get('verification', {}).get('wall_ns')}\t"
+                        f"{row['status']}\t{row['performance_status']}\t{row['cache_contract']}")
     return ("case\tsamples\toperation_ns\tcommand_ns\tverification_ns\tfunctional\t"
             "performance\tcache\n" + "\n".join(rows) + "\n")
 
@@ -469,17 +476,19 @@ def verify_run(run):
                 raise ValueError("raw SDK timing mismatch")
             if json.loads((folder / "verification.json").read_text()) != receipt["verification"]:
                 raise ValueError("SDK verification receipt mismatch")
-    diagnostic = run / "sdk-host/diagnostic-100k/namespace-100000"
-    if diagnostic.exists():
-        receipt = json.loads((diagnostic / "receipt.json").read_text())
-        if receipt["schema"] != "core-fs-bench-pro-sdk-init-100k-diagnostic-v1" or receipt["sample_count"] not in (0, 1):
-            raise ValueError("invalid diagnostic identity or cardinality")
-        if receipt["sample_count"] == 1:
-            lines = (diagnostic / "perf.jsonl").read_text().splitlines()
-            if len(lines) != 1 or json.loads(lines[0])["operation_ns"] != receipt["raw_operation_ns"]:
-                raise ValueError("diagnostic raw timing mismatch")
-            if json.loads((diagnostic / "verification.json").read_text()) != receipt["verification"]:
-                raise ValueError("diagnostic verification receipt mismatch")
+    for name, schema in (("diagnostic-100k", "core-fs-bench-pro-sdk-init-100k-diagnostic-v1"),
+                         ("diagnostic-100k-release", "core-fs-bench-pro-sdk-init-100k-release-diagnostic-v1")):
+        diagnostic = run / "sdk-host" / name / "namespace-100000"
+        if diagnostic.exists():
+            receipt = json.loads((diagnostic / "receipt.json").read_text())
+            if receipt["schema"] != schema or receipt["sample_count"] not in (0, 1):
+                raise ValueError("invalid diagnostic identity or cardinality")
+            if receipt["sample_count"] == 1:
+                lines = (diagnostic / "perf.jsonl").read_text().splitlines()
+                if len(lines) != 1 or json.loads(lines[0])["operation_ns"] != receipt["raw_operation_ns"]:
+                    raise ValueError("diagnostic raw timing mismatch")
+                if json.loads((diagnostic / "verification.json").read_text()) != receipt["verification"]:
+                    raise ValueError("diagnostic verification receipt mismatch")
     return "PASS"
 
 
@@ -503,7 +512,7 @@ def run(selection, out):
         raise ValueError("commit the SDK route before collecting benchmark samples")
     target = target_path()
     out.mkdir(parents=True)
-    build_receipt = build(out, target, identity)
+    build_receipt = build(out, target, identity, release=selection == "diagnostic-100k-release")
     write_json(out / "build.json", build_receipt)
     cycle_started = time.monotonic_ns()
     blocked = build_receipt["status"] if build_receipt["status"] != "PASS" else None
@@ -515,18 +524,19 @@ def run(selection, out):
             except BlockingIOError:
                 blocked = "same-worktree run active"
             if blocked is None:
-                if selection == "diagnostic-100k":
-                    diagnostic_100k(out, build_receipt["binaries"], identity)
+                if selection in ("diagnostic-100k", "diagnostic-100k-release"):
+                    diagnostic_100k(out, build_receipt["binaries"], identity,
+                                    release=selection == "diagnostic-100k-release")
                 else:
                     cases = [init.CASES[selection]] if selection in init.CASES else [init.CASES[name] for name in init.SELECTED]
                     for case in cases:
                         case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v2", "selection": selection,
-        "benchmark_registration": "UNREGISTERED_DIAGNOSTIC" if selection == "diagnostic-100k" else "REGISTERED_V2",
+        "benchmark_registration": "UNREGISTERED_DIAGNOSTIC" if selection.startswith("diagnostic-") else "REGISTERED_V2",
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
-        "family_cycle_budget_ns": 30_000_000_000})
+        "family_cycle_budget_ns": None if selection.startswith("diagnostic-") else 30_000_000_000})
     (out / "report.txt").write_text(report(out))
     manifest_run(out)
     return out
@@ -541,6 +551,7 @@ def main():
     selector.add_argument("--case")
     selector.add_argument("--family", choices=["init_namespace"])
     selector.add_argument("--diagnostic-100k", action="store_true")
+    selector.add_argument("--diagnostic-100k-release", action="store_true")
     run_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
@@ -550,8 +561,9 @@ def main():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
     elif args.command == "run":
-        selection = "diagnostic-100k" if args.diagnostic_100k else args.case or args.family
-        if selection not in (*init.SELECTED, "init_namespace", "diagnostic-100k"):
+        selection = ("diagnostic-100k-release" if args.diagnostic_100k_release else
+                     "diagnostic-100k" if args.diagnostic_100k else args.case or args.family)
+        if selection not in (*init.SELECTED, "init_namespace", "diagnostic-100k", "diagnostic-100k-release"):
             parser.error("unknown or deferred SDK case")
         print(run(selection, args.out))
     elif args.command == "verify":
