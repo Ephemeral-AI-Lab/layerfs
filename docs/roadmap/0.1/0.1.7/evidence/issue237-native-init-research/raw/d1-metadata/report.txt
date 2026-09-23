@@ -1,0 +1,5 @@
+case	files	logical_bytes	status	samples	operation_ns	command_ns	cache	eligible	verification	telemetry	cleanup
+namespace-100-compact-v3	100	5000000	NOT_RUN	0	None	None	not-run	False	None	None	None
+namespace-1000-compact-v3	1000	20000000	NOT_RUN	0	None	None	not-run	False	None	None	None
+namespace-10000	10000	300000000	FAIL	1	13003821625	17357320333	source-cache-uncontrolled-v1	False	NOT_RUN	INCOMPLETE	{'daemon': 'FAIL', 'service': 'FAIL', 'stderr_recycle': 'RETAINED_INCOMPLETE'}
+namespace-100000	100000	500000000	NOT_RUN	0	None	None	not-run	False	None	None	None

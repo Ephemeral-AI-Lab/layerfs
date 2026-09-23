@@ -1,0 +1,22 @@
+{
+  "complete_run_wall_ns": 19537454416,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 17416549709,
+  "full_verification_requested": true,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-content/src/filesystem/update.rs",
+      " M core/crates/layerfs-service/src/operation/history_bootstrap.rs",
+      " M core/crates/layerfs-service/src/operation/import_native.rs",
+      " M docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md",
+      "?? docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/d3-instrumentation.diff"
+    ],
+    "harness_seal": "78dde6dd794cd391353fe01506a9ea16983e6ef4ed8c2c66d5fe7c1581a4dda4",
+    "product_seal": "53a8fee2ecf3dbaa035dfb3e3af2c84ea8dece047e0f73f4a934b58206b67c6f",
+    "source_commit": "561aaf940d6cdf0365ec28f122b8bfb8f136fead",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}
