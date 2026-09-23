@@ -1,0 +1,20 @@
+{
+  "complete_run_wall_ns": 5069340625,
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 4951702208,
+  "full_verification_requested": false,
+  "identity": {
+    "cargo_lock_sha256": "cedd3b27d78d3dd9d5db1aa4d6d5a8036e308fbce09f5d8db645174d5e2296b9",
+    "dirty_paths": [
+      " M core/crates/layerfs-content/src/filesystem/update.rs",
+      "?? core/docs/issues/237/c1-direct-prototype.md",
+      "?? core/docs/issues/237/evidence/"
+    ],
+    "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+    "product_seal": "086df9cf44aec9d990635ed333a3bbb0971235d77560caaeb9a55832eba92a59",
+    "source_commit": "a6d1d563f98b40755c43684a0449c74d39d894ff",
+    "source_dirty": true
+  },
+  "schema": "core-fs-bench-pro-run-v1",
+  "selection": "namespace-10000"
+}

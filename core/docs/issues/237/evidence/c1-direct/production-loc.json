@@ -1,0 +1,16 @@
+{
+  "changed_file_after": 536,
+  "changed_file_before": 454,
+  "combined_after": 116994,
+  "combined_before": 116912,
+  "core_after": 51577,
+  "core_before": 51495,
+  "delta": 82,
+  "method": "tools/production_loc.py (same version at HEAD), count nonblank noncomment first-party src Rust and shipped runtime SQL; exclude inline test code, external tests, examples, tools and docs. Changed production path counted from git show HEAD:path and git show :path; all other product paths identical in staged tree.",
+  "parent": "a6d1d563f98b40755c43684a0449c74d39d894ff",
+  "production_paths_changed": [
+    "core/crates/layerfs-content/src/filesystem/update.rs"
+  ],
+  "reference_after": 65417,
+  "reference_before": 65417
+}

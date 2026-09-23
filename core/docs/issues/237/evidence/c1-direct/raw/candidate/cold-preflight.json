@@ -1,0 +1,18 @@
+{
+  "bytes": 300000000,
+  "directories": 101,
+  "files": 10000,
+  "finished_ns": 122209908127583,
+  "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "method": "darwin-shared-mmap-invalidate-mincore-v1",
+  "pages": 27503,
+  "resident_pages": 0,
+  "script_sha256": "03e9a7c122bbf00a39270ae45985fed74b4dda3f1a4730430e4ee8270951b077",
+  "self_check": {
+    "cold_pages_remaining": 0,
+    "warm_pages_detected": 32
+  },
+  "source": "/Users/yifanxu/.codex/worktrees/issue237-c1-direct-prototype/layerfs/benchmark-results/fs-bench-pro/prepared/namespace-10000-9f0c701648528472/payload",
+  "status": "VERIFIED_COLD",
+  "wall_ns": 1128812333
+}

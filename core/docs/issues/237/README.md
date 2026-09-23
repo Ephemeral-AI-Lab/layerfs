@@ -48,6 +48,15 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D10 100k research](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d10-release-100k/daemon-host/init_namespace/namespace-100000/receipt.json) | `a6d1d563`, one-shot release driver around the official hard skip | 10.011 s | Daemon returned `Unknown` with no confirmed root; Service later reported 11.021 s success and one LayerStack. Command 15.395 s, telemetry INCOMPLETE, cleanup FAIL; verifier NOT_RUN. No further 100k work is planned in this 10k-focused round. |
 | [D11 ingest counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d11-ingest-counts/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, temporary release instrumentation, then restored | 1.493 s | Root and telemetry/cleanup PASS, verifier SKIPPED; count-driven diagnostic only, no time comparison. |
 
+A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
+used one release 10k control/candidate pair in its own worktree: **1.564 →
+1.318 s** public Init (**191.9 → 227.7 MB/s**, 15.7% less time). Each arm's
+source payload had zero resident pages at preflight and immediate recheck. The
+runner randomized stack/scope identities, so the preregistered exact-root and
+whole-Store equality gate **failed**; the candidate also left four existing
+ordering-resource assertions failing. Its source remains unmerged. Neither
+arm qualifies as a fully cold or independently verified PASS.
+
 D9 reused exactly sealed release binaries from D8. Its source was rehashed and
 invalidated outside the command; both the first check and the immediately
 preceding nonfaulting check found **0 resident pages out of 27,503** across all

@@ -1,0 +1,58 @@
+{
+  "allocated_bytes": 335609856,
+  "file_bytes": 334401536,
+  "objects": 24683,
+  "objects_by_save": {
+    "1": 24364,
+    "2": 11,
+    "3": 308
+  },
+  "ordered_object_ids_sha256": "68e16643aceaa98c2c0bac5bdd3e772a1f1309fbed3d37562ea0f39f8ec84063",
+  "pack_capacity_bytes": 331612160,
+  "pack_count": 1265,
+  "pack_spare_bytes": 25630144,
+  "pack_used_bytes": 305982016,
+  "pack_versions": {
+    "9": {
+      "capacity": 1310720,
+      "count": 5,
+      "used": 606791
+    },
+    "12": {
+      "capacity": 524288,
+      "count": 2,
+      "used": 406947
+    },
+    "15": {
+      "capacity": 294125568,
+      "count": 1122,
+      "used": 271028535
+    },
+    "17": {
+      "capacity": 35651584,
+      "count": 136,
+      "used": 33939743
+    }
+  },
+  "packs_by_save": {
+    "1": {
+      "capacity": 330301440,
+      "count": 1260,
+      "used": 305484007
+    },
+    "2": {
+      "capacity": 524288,
+      "count": 2,
+      "used": 8814
+    },
+    "3": {
+      "capacity": 786432,
+      "count": 3,
+      "used": 489195
+    }
+  },
+  "sqlite_freelist_count": 0,
+  "sqlite_page_count": 81641,
+  "sqlite_page_size": 4096,
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-c1-direct-prototype/layerfs/benchmark-results/fs-bench-pro/issue237-c1-candidate-direct-a6d1/daemon-host/init_namespace/namespace-10000/store.sqlite"
+}
