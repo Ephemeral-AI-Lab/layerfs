@@ -268,3 +268,23 @@ prototype diff and first failure are retained; active product in the isolated
 worktree was restored to its measured seven-commit baseline. A distinct
 [exact pack-fit proposal](wave-wide-pack-proposal.md) remains unbuilt and
 untimed; it needs current seven-commit append/flush counts before selection.
+
+## Round R10: actual seven-commit pack and pager counts
+
+One new [count-driven diagnostic](seven-commit-pack-count-diagnostic.md) on
+the isolated 64-MiB-wave algorithm recorded **7 file-Save COMMITs / 5 waves**,
+**1,259 pack creations and 1,024 appends**, and 1,320 queue drains (1,190
+capacity, 124 lane switch, six boundary). Pack-write calls totaled
+**95.690 ms**, the disjoint SQL bucket **148.078 ms**, and COMMIT
+**271.961 ms**. The actual Save connection reported **zero cache spills**
+over five successful wave readings, with 82,483 SQLite page-write events
+and a largest boundary cache-used reading of 8,767,488 B. These are pager
+events and boundary samples, not device bytes or an exact memory peak.
+
+The one H3 run had **0/27,503 resident source payload pages** at preflight
+and immediate recheck; it remains a `DIAGNOSTIC` with metadata cache
+unqualified and verifier `SKIPPED`. Its **1.429113 s** caller is not a
+replacement sample for the earlier seven-commit treatment. Temporary pager
+FFI was archived and removed. The exact 1,024 appends motivate a distinct
+prospective pack-fit experiment, but no avoidable fraction or speed gain has
+yet been measured.

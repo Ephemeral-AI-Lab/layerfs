@@ -62,6 +62,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [External pack segments](segment-store-feasibility.md) | Format feasibility only | no sample | A naive sidecar breaks rollback across committed waves; a safe variant needs immutable per-transaction segments, schema/read/cleanup changes and bundle-aware measurement. |
 | [Integrated hot-path profile](integrated-hot-profile.md) | One current C1+C2 count diagnostic | 1.352 s | 80 file-Save commits; 232 ms COMMIT, 140 ms SQL, 725 ms owner accept and 442 ms receiver wait. Queue drains were mostly byte-bound. Metadata cache unqualified; verifier SKIPPED. |
 | [Per-lane queue feasibility](per-lane-pack-experiment.md) | Untimed source/count review and synthetic check | no public pair | Adjacent 4-MiB diagnostic found only 118 lane-switch drains among 1,347; 64-MiB matched append and speed gates remain NOT_RUN. [Exact pack-fit follow-up](wave-wide-pack-proposal.md) is unbuilt. |
+| [Seven-commit pack/pager counts](seven-commit-pack-count-diagnostic.md) | One 64-MiB-wave count diagnostic | 1.429 s diagnostic | 1,024 pack appends, 1,190 capacity-driven drains and **zero actual-owner cache spills**; 0 resident payload pages, metadata unqualified, verifier SKIPPED. Not a speed arm. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →

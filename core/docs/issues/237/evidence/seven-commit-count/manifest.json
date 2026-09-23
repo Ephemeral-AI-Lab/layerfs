@@ -1,0 +1,30 @@
+{
+  "copied_files_sha256": {
+    "build.json": "d723f48df6a73d59c1b2c11b56145eb056506194b7447427e00cc30455bb8e75",
+    "build.log": "536fe7ce4d6d07bb85dadf59663abdb8ddbb30bdb102404b976b5d55a62a86ab",
+    "cold-launch.json": "b1142954d062a9dad2ff0e6b06da4a57ab9514acc2accc2cfd92a05454528e74",
+    "cold-preflight.json": "adc484fbebd0cdc8fe2f15bbb98e56cdc47bca38d7f5b8a3fc8a005d4ad8f2b9",
+    "cold-recheck.json": "87bcc8a5a868f131c8a5a3cec403f12959334ea3caea581381d9605d143fe062",
+    "geometry.json": "9c25804ee3dfdc9fcd1e9c0c91530289c5e9d6c4e2371820d6ae2de5d7b2c781",
+    "operation-identity.json": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf",
+    "pager-temporary.diff.gz": "0417b1ca4016510b8d3f7a0b703fe95bb70db12876daa376664e74673b28425d",
+    "perf.jsonl": "1a420ba319716166a056809e06292d5cbcd66ad3e5706824c9e8f42d1997ea62",
+    "receipt.json": "a86cd006f73e153f0746c4a2de1165bbc2c4b549fbc473b50ef96b2b3a455784",
+    "report.txt": "fb3a21283d6382e294f19b8691eaadbcdc166aad4c4d3bef326b596353507e35",
+    "run.json": "19939fd2a269347f4c47e2e6daf575a28f49545c60a88ca3dfe36198859ba216",
+    "source-copy.json": "33d59ecb06db3027f098cb961ef5738524cb26738b914df7ca617c890e1166bf",
+    "telemetry.lft1": "d0e2e3d3e8c99f8fc310af4a6365cda90ddc72dea08d7be224468ad7003acb1b",
+    "verification.json": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+  },
+  "dirty_product_seal": "0c9a42c61e59ffc8eb64354cd6ce58d9dff16e4b7f502ed3f7cb751f981ed98b",
+  "driver_sha256": "767292e7b5bfc9a06291239b471247a79474b91ce2ca0db8fc9092807e2c09a4",
+  "fixture_manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+  "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+  "history_path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-sevencommit-pack-count-a/daemon-host/init_namespace/namespace-10000/history.sqlite",
+  "history_sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9",
+  "pager_diff_sha256": "0417b1ca4016510b8d3f7a0b703fe95bb70db12876daa376664e74673b28425d",
+  "source_commit": "4854465cd3785913133ad2a8d0813e9cfdc66e73",
+  "status": "ONE_COUNT_DIAGNOSTIC",
+  "store_path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-sevencommit-pack-count-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "store_sha256": "c8539f72d090caae95872c333f6b04e01763890cf047e1efce081d14f9062e81"
+}
