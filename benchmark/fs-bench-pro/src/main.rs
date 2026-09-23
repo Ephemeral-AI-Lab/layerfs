@@ -808,6 +808,25 @@ fn run() -> AnyResult<()> {
             &fixture_digest.to_string_lossy(),
             &fixture_cache_profile.to_string_lossy(),
             None,
+            false,
+        ),
+        [
+            command,
+            root,
+            fixture,
+            scenario,
+            iteration,
+            fixture_digest,
+            fixture_cache_profile,
+        ] if command == "namespace-init-diagnostic-core-fixture" => namespace_init_diagnostic(
+            Path::new(root),
+            Path::new(fixture),
+            namespace_scenario(&scenario.to_string_lossy())?,
+            iteration.to_string_lossy().parse()?,
+            &fixture_digest.to_string_lossy(),
+            &fixture_cache_profile.to_string_lossy(),
+            None,
+            true,
         ),
         [
             command,
@@ -2941,17 +2960,22 @@ fn namespace_init_diagnostic(
     fixture_digest: &str,
     fixture_cache_profile: &str,
     container: Option<&ContainerId>,
+    shared_core_fixture: bool,
 ) -> AnyResult<()> {
     if iteration == 0
         || !fixture.is_dir()
         || !valid_digest(fixture_digest)
-        || !matches!(
-            fixture_cache_profile,
-            "generated-first-sample-uncontrolled"
-                | "generated-subsequent-sample-uncontrolled"
-                | "reused-first-sample-uncontrolled"
-                | "reused-subsequent-sample-uncontrolled"
-        )
+        || if shared_core_fixture {
+            fixture_cache_profile != "independent-source-payload-zero;metadata-residency-unmeasured"
+        } else {
+            !matches!(
+                fixture_cache_profile,
+                "generated-first-sample-uncontrolled"
+                    | "generated-subsequent-sample-uncontrolled"
+                    | "reused-first-sample-uncontrolled"
+                    | "reused-subsequent-sample-uncontrolled"
+            )
+        }
     {
         return Err("namespace init-only diagnostic arguments".into());
     }
@@ -2975,14 +2999,45 @@ fn namespace_init_diagnostic(
         .map(|_| store.physical_storage_receipt());
     let sqlite_resources_before = sqlite_resource_snapshot(&store, true)?;
     let initialization_resources_before = process_resource_snapshot()?;
+    if shared_core_fixture {
+        eprintln!("issue237-reference-ready-v1");
+        std::io::stderr().flush()?;
+        let mut go = String::new();
+        std::io::stdin().read_line(&mut go)?;
+        if go != "GO\n" {
+            return Err("issue237 reference GO barrier".into());
+        }
+        layerfs_layerstack_store::reset_sql_trace();
+    }
+    let t0_unix_ns = shared_core_fixture
+        .then(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH))
+        .transpose()?
+        .map(|time| time.as_nanos());
     let t0 = Instant::now();
     let initialized = client.initialize_layerstack(
         EntityName::new(format!("{}-{iteration}-init-diagnostic", scenario.id))?,
         LayerStackInitialization::Directory(fixture.to_owned()),
     )?;
     let t1 = Instant::now();
+    if let Some(t0_unix_ns) = t0_unix_ns {
+        eprintln!("issue237-reference-t0-v1 unix_ns={t0_unix_ns}");
+    }
     let initialization_resources_after = process_resource_snapshot()?;
+    let trace = shared_core_fixture.then(layerfs_layerstack_store::sql_trace);
     let sqlite_resources_after = sqlite_resource_snapshot(&store, false)?;
+    if let Some(trace) = trace {
+        let mut shapes = std::collections::BTreeMap::new();
+        for sql in &trace {
+            *shapes.entry(issue237_sql_shape(sql)).or_insert(0_u64) += 1;
+        }
+        for (shape, count) in shapes {
+            eprintln!("issue237-reference-sql-v1 shape={shape} count={count}");
+        }
+        eprintln!(
+            "issue237-reference-sql-v1 shape=total count={}",
+            trace.len()
+        );
+    }
     if let Some(before) = physical_before {
         eprintln!(
             "layerfs-initialization-diagnostic-physical-v1 receipt={:?}",
@@ -3043,8 +3098,8 @@ fn namespace_init_diagnostic(
         "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":false,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
-        scenario.fixture_profile,
-        workload_source::NAMESPACE_DIGEST_PROFILE,
+        if shared_core_fixture { "core-native-import-fixture-v2" } else { scenario.fixture_profile },
+        if shared_core_fixture { "sha256-manifest-tsv-v1" } else { workload_source::NAMESPACE_DIGEST_PROFILE },
         workload_source::NAMESPACE_EDIT_CONTRACT,
         workload_source::NAMESPACE_INIT_DIAGNOSTIC_PROFILE,
         fixture_cache_profile,
@@ -3124,6 +3179,39 @@ fn namespace_init_diagnostic(
         initialization_resources_after.threads,
     );
     Ok(())
+}
+
+fn issue237_sql_shape(sql: &str) -> &'static str {
+    let sql = sql.trim_start().to_ascii_uppercase();
+    if sql.starts_with("BEGIN") {
+        "begin"
+    } else if sql.starts_with("COMMIT") {
+        "commit"
+    } else if sql.starts_with("ROLLBACK") {
+        "rollback"
+    } else if sql.starts_with("INSERT INTO OBJECT_PACKS") {
+        "pack_insert"
+    } else if sql.starts_with("UPDATE OBJECT_PACKS") {
+        "pack_append"
+    } else if sql.starts_with("INSERT INTO OBJECTS") {
+        "object_insert"
+    } else if sql.starts_with("SELECT") && sql.contains("FROM OBJECT_PACKS") {
+        "pack_select"
+    } else if sql.starts_with("SELECT") && sql.contains("FROM OBJECTS") {
+        "object_select"
+    } else if sql.starts_with("SELECT") {
+        "other_select"
+    } else if sql.starts_with("INSERT") {
+        "other_insert"
+    } else if sql.starts_with("UPDATE") {
+        "other_update"
+    } else if sql.starts_with("DELETE") {
+        "delete"
+    } else if sql.starts_with("PRAGMA") {
+        "pragma"
+    } else {
+        "other"
+    }
 }
 
 fn sdk_edit_registry(family: &str) -> AnyResult<Vec<workload_source::sdk_edit_common::Scenario>> {
@@ -4985,6 +5073,20 @@ fn elapsed_ns(start: Instant) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn issue237_sql_trace_classifies_pack_writes_and_transactions() {
+        assert_eq!(issue237_sql_shape("BEGIN IMMEDIATE"), "begin");
+        assert_eq!(issue237_sql_shape("COMMIT"), "commit");
+        assert_eq!(
+            issue237_sql_shape("INSERT INTO object_packs(pack_id,data) VALUES (?,?)"),
+            "pack_insert"
+        );
+        assert_eq!(
+            issue237_sql_shape("UPDATE object_packs SET data=?2 WHERE pack_id=?1"),
+            "pack_append"
+        );
+    }
 
     #[test]
     fn bounded_rss_observation_retains_first_and_latest_without_aborting() {

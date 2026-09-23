@@ -519,6 +519,7 @@ fn run_selected(
                 &field(&fixture, "fixture_digest")?,
                 profile,
                 Some(&ContainerId(container.into())),
+                false,
             )
         } else {
             namespace_verify_case(
