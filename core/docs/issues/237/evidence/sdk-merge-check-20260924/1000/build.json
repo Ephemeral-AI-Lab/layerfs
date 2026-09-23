@@ -1,0 +1,16 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/binary-archive/6ec006d3e59fb8fb36f7e7cba1fdce6405e7ab8b7d6b3d945d98f53f266591ea/benchmark_init",
+      "sha256": "6ec006d3e59fb8fb36f7e7cba1fdce6405e7ab8b7d6b3d945d98f53f266591ea"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/binary-archive/b7a9555856537e614037cc18d7aa3adcb452066e1c4b58ca554889e6f49dfa9b/verify_namespace",
+      "sha256": "b7a9555856537e614037cc18d7aa3adcb452066e1c4b58ca554889e6f49dfa9b"
+    }
+  },
+  "command": null,
+  "mode": "exact-binary-reuse",
+  "status": "PASS",
+  "wall_ns": 0
+}

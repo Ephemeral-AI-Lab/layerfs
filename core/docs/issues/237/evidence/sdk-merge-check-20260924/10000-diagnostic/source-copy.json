@@ -1,0 +1,6 @@
+{
+  "master": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/payload",
+  "method": "independent-byte-copy-v1",
+  "source": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-10000-diagnostic-20260924-01/source-copy/namespace-10000/payload",
+  "wall_ns": 1840661917
+}

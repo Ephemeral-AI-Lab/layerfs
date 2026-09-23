@@ -24,6 +24,10 @@ The [accepted-checkpoint scale run](accepted-scale-results.md) records one new
 100, 1,000 and 10,000-file performance-only sample with time, SQLite storage,
 child-process CPU and sampled RSS, while retaining the earlier 1.110-s 10k
 observation separately.
+The [SDK merge functionality check](sdk-merge-check-20260924.md) records one
+post-merge SDK call and full reopened readback for 100 and 1,000 files, plus
+an explicitly unregistered 10,000-file SDK diagnostic. These SDK observations
+remain separate from the older daemon-host timings.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

@@ -1,0 +1,10 @@
+{
+  "bytes": 300000000,
+  "files": 10000,
+  "finished_ns": 174192749493416,
+  "method": "darwin-shared-mmap-invalidate-mincore-v1",
+  "pages": 27503,
+  "resident_pages": 0,
+  "status": "VERIFIED_COLD",
+  "wall_ns": 397420333
+}

@@ -1,0 +1,18 @@
+{
+  "child": {
+    "bytes": 300000000,
+    "directories": 101,
+    "files": 10000,
+    "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+    "metadata_attribute_waves": 5,
+    "paths": 10101,
+    "root": "15f5186a2b86a9fd8d7f53bafcebec22aeea34837f98efabc03160a6aff33957",
+    "status": "PASS",
+    "workers": 4
+  },
+  "exit_code": 0,
+  "scope": "unregistered functional diagnostic, outside operation timer",
+  "status": "PASS",
+  "timeout_s": 30,
+  "wall_ns": 8287476666
+}

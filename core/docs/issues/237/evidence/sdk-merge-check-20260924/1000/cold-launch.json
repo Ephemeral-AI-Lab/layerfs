@@ -1,0 +1,6 @@
+{
+  "boundary": "before driver launch; SDK timer starts after Host::create",
+  "cache_scope": "independent-source-payload-zero;metadata-residency-unmeasured",
+  "recheck_to_subprocess_call_ns": 310625,
+  "status": "VERIFIED_COLD"
+}

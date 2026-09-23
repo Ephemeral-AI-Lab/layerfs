@@ -1,0 +1,88 @@
+{
+  "benchmark_registration": "UNREGISTERED_DIAGNOSTIC",
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/binary-archive/6ec006d3e59fb8fb36f7e7cba1fdce6405e7ab8b7d6b3d945d98f53f266591ea/benchmark_init",
+      "sha256": "6ec006d3e59fb8fb36f7e7cba1fdce6405e7ab8b7d6b3d945d98f53f266591ea"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/binary-archive/b7a9555856537e614037cc18d7aa3adcb452066e1c4b58ca554889e6f49dfa9b/verify_namespace",
+      "sha256": "b7a9555856537e614037cc18d7aa3adcb452066e1c4b58ca554889e6f49dfa9b"
+    }
+  },
+  "case": "namespace-10000",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/binary-archive/6ec006d3e59fb8fb36f7e7cba1fdce6405e7ab8b7d6b3d945d98f53f266591ea/benchmark_init",
+    "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-10000-diagnostic-20260924-01/source-copy/namespace-10000/payload",
+    "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-10000-diagnostic-20260924-01/sdk-host/init_namespace/namespace-10000/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-10000-diagnostic-20260924-01/sdk-host/init_namespace/namespace-10000/history.sqlite",
+    "namespace-10000"
+  ],
+  "command_wall_ns": 6154255334,
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "external_cpu": {
+    "scope": "SDK driver process lifecycle",
+    "system_s": 0.9567419999999999,
+    "user_s": 14.33788
+  },
+  "fixture": {
+    "case": "namespace-10000",
+    "clone_method": "independent-byte-copy-v1",
+    "directories": 101,
+    "files": 10000,
+    "logical_bytes": 300000000,
+    "manifest": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/manifest.tsv",
+    "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+    "master_source": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-10000-edd2a0ddbfc8fab0/payload",
+    "preparation_wall_ns": 1888267959,
+    "profile": "core-sdk-init-fixture-v2",
+    "reused": false,
+    "route": "host-direct-sdk-v2",
+    "seed": 1,
+    "source": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-10000-diagnostic-20260924-01/source-copy/namespace-10000/payload"
+  },
+  "functional_status": "PASS",
+  "history_bytes": 86016,
+  "identity": {
+    "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "a330f6b1d432b0df1c1f376a7a120f61dbf65628a9dfac7d42e0a10dfffa8bd5",
+    "product_seal": "1d9d64ee874c4dc3b305c3be5021471b80abf757e0f9309bdba12457f57c5f84",
+    "source_commit": "ac946c7d3be45d0c468bff5d508a1bc4fa3f26b1",
+    "source_dirty": false,
+    "source_tree": "ce6b87cf189feb507c8b8c77435dfc4c451101ca"
+  },
+  "perf": {
+    "genesis_layer": "32234510a6386b01b09b6683c3a55c07871a9d14df8c800c9f1ea2f55765526410",
+    "operation_ns": 6139827667,
+    "project_id": "31314d5d25bf0eb9667dae7ec2ff94a3c8",
+    "root": "15f5186a2b86a9fd8d7f53bafcebec22aeea34837f98efabc03160a6aff33957",
+    "root_serial": 1,
+    "stack_body": "314d5d25bf0eb9667dae7ec2ff94a3c8",
+    "status": "COMPLETE"
+  },
+  "performance_status": "INELIGIBLE",
+  "sample_count": 1,
+  "schema": "issue237-sdk-10k-functional-diagnostic-v1",
+  "store_bytes": 333918208,
+  "verification": {
+    "child": {
+      "bytes": 300000000,
+      "directories": 101,
+      "files": 10000,
+      "manifest_sha256": "878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab",
+      "metadata_attribute_waves": 5,
+      "paths": 10101,
+      "root": "15f5186a2b86a9fd8d7f53bafcebec22aeea34837f98efabc03160a6aff33957",
+      "status": "PASS",
+      "workers": 4
+    },
+    "exit_code": 0,
+    "scope": "unregistered functional diagnostic, outside operation timer",
+    "status": "PASS",
+    "timeout_s": 30,
+    "wall_ns": 8287476666
+  }
+}

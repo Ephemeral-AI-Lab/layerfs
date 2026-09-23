@@ -1,0 +1,18 @@
+{
+  "bytes": 20000000,
+  "directories": 11,
+  "files": 1000,
+  "finished_ns": 174172956834416,
+  "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+  "method": "darwin-shared-mmap-invalidate-mincore-v1",
+  "pages": 2045,
+  "resident_pages": 0,
+  "script_sha256": "a730c67107ecfbb11f3cf91e260e5b9b34438e41accec665b95953d6d275ddfe",
+  "self_check": {
+    "cold_pages_remaining": 0,
+    "warm_pages_detected": 32
+  },
+  "source": "/Users/yifanxu/.codex/worktrees/sdk-merge-check/layerfs/benchmark-results/fs-bench-pro/sdk-merge-1000-20260924-01/source-copy/namespace-1000-compact-v3/payload",
+  "status": "VERIFIED_COLD",
+  "wall_ns": 92133000
+}
