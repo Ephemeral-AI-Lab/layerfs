@@ -334,3 +334,30 @@ Core content Store plus History was **333,737,984 B**. The next prospective
 Core-only direction is bounded producer slabs while leaving payload in
 SQLite and both 4-KiB pages and the 128-KiB cutoff fixed. No public arm was
 repeated or promoted to fully cold admission.
+
+## Round R13: external segment direction canceled
+
+Before the owner's instruction that packs remain in SQLite, an isolated
+schema-11 segment prototype ran one BLOB control and one segment candidate
+on fresh 10k Stores. The raw callers were **1.773005209 → 1.168286875 s**,
+but candidate telemetry was `INCOMPLETE`, metadata cache residency was
+unqualified, and independent full readback was `NOT_RUN`. The owner then
+stopped the external-pack direction. The [retained cancellation record](segment-direction-stopped.md)
+keeps small receipts and sidecars; no segment source is adopted or compared
+as an eligible speed arm. All further work keeps packs inside SQLite.
+
+## Round R14: exact pack-fit buffering inside SQLite
+
+An isolated [one-pair exact pack-fit treatment](exact-pack-fit-experiment.md)
+kept the seven-COMMIT, 64-MiB-wave policy and SQLite BLOB packs. It reduced
+file-Save pack appends **1,054 → 21 (−98.01%)** with seven COMMITs in each
+arm, but increased the candidate Store **528,384 B apparent**, added two
+packs and increased sampled Service RSS **16,891,904 B**. Both independent
+full 10k/300-MB readbacks passed and source payload checks were 0/27,503
+resident pages. The raw caller fell **1.517590917 → 1.482207834 s**;
+however, the control had genuine concurrent LayerFS processes from another
+worktree and incomplete telemetry, while candidate metadata cache remained
+unqualified. No causal speed gain is claimed. The preregistered no-worse
+space/RSS conditions failed, so the product source remains isolated and
+unadopted. Three old visibility tests also retained a stale early-commit
+premise under the 64-MiB wave; they were not repaired during this experiment.

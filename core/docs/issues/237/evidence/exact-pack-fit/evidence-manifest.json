@@ -1,0 +1,213 @@
+{
+  "arms": {
+    "candidate": {
+      "copied_files": [
+        "candidate/receipt.json",
+        "candidate/perf.jsonl",
+        "candidate/cold-preflight.json",
+        "candidate/cold-recheck.json",
+        "candidate/cold-launch.json",
+        "candidate/source-copy.json",
+        "candidate/operation-identity.json",
+        "candidate/independent-readback.json",
+        "candidate/independent-readback.stdout",
+        "candidate/independent-readback.stderr",
+        "candidate/geometry.json",
+        "candidate/telemetry.lft1",
+        "candidate/verification.json",
+        "candidate/build.json",
+        "candidate/build.log",
+        "candidate/run.json",
+        "candidate/report.txt"
+      ],
+      "private_history": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-candidate/daemon-host/init_namespace/namespace-10000/history.sqlite",
+      "private_history_sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9",
+      "private_runner_manifest": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-candidate/manifest.json",
+      "private_runner_manifest_sha256": "b5d12bea697927077d4b8b79871913ba959977d7b5fa710be348076f757328a3",
+      "private_store": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-candidate/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "private_store_sha256": "3f5be01541ebf055c4b2b2e953a32a7182dc7113fbbd3099d242cf294b676620",
+      "run": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-candidate"
+    },
+    "control": {
+      "copied_files": [
+        "control/receipt.json",
+        "control/perf.jsonl",
+        "control/cold-preflight.json",
+        "control/cold-recheck.json",
+        "control/cold-launch.json",
+        "control/source-copy.json",
+        "control/operation-identity.json",
+        "control/independent-readback.json",
+        "control/independent-readback.stdout",
+        "control/independent-readback.stderr",
+        "control/geometry.json",
+        "control/telemetry.lft1",
+        "control/verification.json",
+        "control/service.stderr",
+        "control/daemon.stderr",
+        "control/build.json",
+        "control/build.log",
+        "control/run.json",
+        "control/report.txt"
+      ],
+      "private_history": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-control/daemon-host/init_namespace/namespace-10000/history.sqlite",
+      "private_history_sha256": "9a908de0b3b26caa25db8ca40ff5204f9e475b53e9b301a378eefa5e4bd1fcb9",
+      "private_runner_manifest": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-control/manifest.json",
+      "private_runner_manifest_sha256": "c7b02825dc1a58d58bfbee00ef4f3028f0c96a2363869b456664aa2e43491654",
+      "private_store": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-control/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "private_store_sha256": "f9a6b5f420d756a433c61f4f8da84743cb37e1d91333a62020dd14ad86d10675",
+      "run": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/issue237-h3-exact-pack-control"
+    }
+  },
+  "files": {
+    "candidate-source-and-tests.diff.gz": {
+      "bytes": 7432,
+      "sha256": "a69a2424af37736a3fcdba411f0b0617f387ad77aab2be22d58e28116f8eca31"
+    },
+    "candidate/build.json": {
+      "bytes": 2225,
+      "sha256": "8ce8e9654b6ce171f4ac6e3a1b55ca066134ee49bb8d6d9050c92da3159ac598"
+    },
+    "candidate/build.log": {
+      "bytes": 312,
+      "sha256": "d0c5a4e6eb515bde0c64baae08422bc9b7cd07ca2adfbc11b589cbb53cca7b7f"
+    },
+    "candidate/cold-launch.json": {
+      "bytes": 485,
+      "sha256": "faf261c26aec5ef119984b906b2003a36da01678dc55c2182e969d91520e1b00"
+    },
+    "candidate/cold-preflight.json": {
+      "bytes": 684,
+      "sha256": "1192c5761a4f0402672d16b611cb74f844c5ca333de9ff672585dcf446d8bf06"
+    },
+    "candidate/cold-recheck.json": {
+      "bytes": 227,
+      "sha256": "749e61c51166b412f3b91e4513cdde08f893dbfccbb531af49bcb3f93ef3fb98"
+    },
+    "candidate/geometry.json": {
+      "bytes": 1311,
+      "sha256": "306b27d59afd19c9f7f351d08366d78f1a806a6a8aa1dd20451ccd86181fe085"
+    },
+    "candidate/independent-readback.json": {
+      "bytes": 2760,
+      "sha256": "e7fd9cde29efd557c2cef5d4c256c1568d0876e4eb2dfb94bb98e015ecdfe6d1"
+    },
+    "candidate/independent-readback.stderr": {
+      "bytes": 1509,
+      "sha256": "6fde99b5bf76140c6d6c9d57db3a6f416863641eb97c05c934e35f7641358f76"
+    },
+    "candidate/independent-readback.stdout": {
+      "bytes": 282,
+      "sha256": "ba78691d30882f456dd70a02c24af490d889260af14ae1e810f94751b6fcf43d"
+    },
+    "candidate/operation-identity.json": {
+      "bytes": 298,
+      "sha256": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf"
+    },
+    "candidate/perf.jsonl": {
+      "bytes": 324,
+      "sha256": "08dfb2fff3b3a2b3c07d58089b0cbdd23e6848632b1946626fad057b97fe8f79"
+    },
+    "candidate/receipt.json": {
+      "bytes": 7549,
+      "sha256": "bfe37c9f12fc60b8cfe178b9ec031e2d34eadca9b8009e9ef86280e097897d1d"
+    },
+    "candidate/report.txt": {
+      "bytes": 547,
+      "sha256": "ee465e6c52f736ea321b647d3558556047d25115a78075be4dcd31ea261db9cb"
+    },
+    "candidate/run.json": {
+      "bytes": 638,
+      "sha256": "19475b624de64a960c7967ef5aec2c49626358683360e1327a6df138db338df6"
+    },
+    "candidate/source-copy.json": {
+      "bytes": 397,
+      "sha256": "8cb9cc904c618f6d65dc999afb4cfdaf710f2d2851b5ee31a85bd5b92c4a2435"
+    },
+    "candidate/telemetry.lft1": {
+      "bytes": 3663,
+      "sha256": "c1cc1adcba1081e75ae9bea26253bd226fe8328c4b0b3f8b4afcd6904ec2d047"
+    },
+    "candidate/verification.json": {
+      "bytes": 92,
+      "sha256": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+    },
+    "control/build.json": {
+      "bytes": 2224,
+      "sha256": "a8d954b7329e4c0914e7b5ac4a0ab76558aaf859cd23d6221c66dadf666ba9ef"
+    },
+    "control/build.log": {
+      "bytes": 62,
+      "sha256": "64d0cbd4b7e4c6329fde55978dd3d261407b55f34c21add0feebf7e0575ee531"
+    },
+    "control/cold-launch.json": {
+      "bytes": 485,
+      "sha256": "bf51247346e37d2726fbbd0f049cb680a4fbb3bc669d605c3a5ae0563374dc65"
+    },
+    "control/cold-preflight.json": {
+      "bytes": 682,
+      "sha256": "8f8bd893952ee4635cd283d6652788b870226fc6eb4b38fcbb7c3794ba4fb945"
+    },
+    "control/cold-recheck.json": {
+      "bytes": 227,
+      "sha256": "4f81dd9dee47287a3eb03304372b382d49df5804e9016e6450833cd10985d8b2"
+    },
+    "control/daemon.stderr": {
+      "bytes": 1456,
+      "sha256": "9c757fb8a34c8cf226f31aa4adb935bdab8ce74401c5fd304755a8fa813f17ea"
+    },
+    "control/geometry.json": {
+      "bytes": 1309,
+      "sha256": "2ec8230c5a2ab6c6a3c20e791051ca19db1e7f7589fc672a881a2d83fa73ce27"
+    },
+    "control/independent-readback.json": {
+      "bytes": 2684,
+      "sha256": "fe328251aa8f33ec3c9fb0419e5d02788910e9883d0b25ddf7d4d4af8197aa6a"
+    },
+    "control/independent-readback.stderr": {
+      "bytes": 1434,
+      "sha256": "05dbb8ecf9ca86020ac79eacd575f49fb72b17960a9d03e46c0469da3c6462f8"
+    },
+    "control/independent-readback.stdout": {
+      "bytes": 282,
+      "sha256": "ba78691d30882f456dd70a02c24af490d889260af14ae1e810f94751b6fcf43d"
+    },
+    "control/operation-identity.json": {
+      "bytes": 298,
+      "sha256": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf"
+    },
+    "control/perf.jsonl": {
+      "bytes": 324,
+      "sha256": "35f5bad53ae6bbc73e36ba1ac70b8fec77778337f3b6b17a32e7924eb46637b5"
+    },
+    "control/receipt.json": {
+      "bytes": 8009,
+      "sha256": "0491a1e455c35f6c6e32c712c499168b8624de956b9ead1d4cec33ad2c1047c4"
+    },
+    "control/report.txt": {
+      "bytes": 568,
+      "sha256": "24e40448970bda25410d018d86da75a7ed040202223aaa2bc3b680dca1d3c3f4"
+    },
+    "control/run.json": {
+      "bytes": 638,
+      "sha256": "125c065b062828d55c2b8e27652695a7ba9308a71b90a3f90cdf061435d08547"
+    },
+    "control/service.stderr": {
+      "bytes": 2320,
+      "sha256": "b1c6c6e269a9442292de556f35b94c225859599293367cea0cfea99b0d21e4c5"
+    },
+    "control/source-copy.json": {
+      "bytes": 395,
+      "sha256": "fc716e0c346d7c612c17bb76941d5cb1dba3bcd274491ef8e5497067fab76832"
+    },
+    "control/telemetry.lft1": {
+      "bytes": 3335,
+      "sha256": "bf48561fa6344da86823a98399362548c35f25238273f1c5b5286c774bdbc357"
+    },
+    "control/verification.json": {
+      "bytes": 92,
+      "sha256": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+    }
+  },
+  "schema": "issue237-exact-pack-fit-evidence-v1"
+}
