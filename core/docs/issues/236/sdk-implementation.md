@@ -52,7 +52,10 @@ as a side effect of `mount`.
 The agent obtains `sandbox_id` from `sandbox.create`, `sandbox.list`, or task
 context. The thin SDK sandbox calls delegate to the host sandbox owner. Before
 `mount`, the SDK performs one checked owner lookup for the daemon
-endpoint/key/instance. Core currently has no sandbox directory. Reuse the
+endpoint/key/instance. The checked lookup returns the authenticated control
+session after Hello, so Mount uses that session for Open with the next request
+ID. Later Workspace calls follow the same checked route. Core currently has no
+sandbox directory. Reuse the
 caller's sandbox service if it exists; otherwise the host executor needs one
 concrete ID-to-daemon registry. Do not add a generic manager trait or make the
 storage/history Service own containers.
@@ -71,8 +74,8 @@ sequenceDiagram
     SDK-->>Agent: sandbox_id
     Agent->>SDK: mount(sandbox_id, project, branch, commit_id?)
     SDK->>Owner: lookup(sandbox_id)
-    Owner-->>SDK: endpoint, key, instance
-    SDK->>Daemon: authenticated attach and mount
+    Owner-->>SDK: checked instance + authenticated session
+    SDK->>Daemon: attach and mount on that session
     Daemon-->>SDK: workspace_id, incarnation
     SDK->>Owner: bind workspace_id to sandbox_id and instance
     SDK-->>Agent: workspace_id

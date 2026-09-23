@@ -18,6 +18,15 @@ pub(crate) fn hello(
     server: &[u8; 32],
     id: SandboxId,
 ) -> Result<SandboxHelloWire, Failure> {
+    hello_session(endpoint, private, server, id).map(|(hello, _)| hello)
+}
+
+pub(crate) fn hello_session(
+    endpoint: SocketAddr,
+    private: &[u8; 32],
+    server: &[u8; 32],
+    id: SandboxId,
+) -> Result<(SandboxHelloWire, Client), Failure> {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut client = Client::new(connect_until(endpoint, 1, private, server, deadline)?)?;
     let request = Request {
@@ -36,7 +45,7 @@ pub(crate) fn hello(
     if hello.sandbox != id.0 {
         return Err(Code::Denied.into());
     }
-    Ok(hello)
+    Ok((hello, client))
 }
 
 pub(crate) fn wait(

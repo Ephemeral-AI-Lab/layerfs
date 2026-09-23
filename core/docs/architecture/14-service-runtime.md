@@ -47,6 +47,12 @@ at creation and each routing lookup. Workspace IDs route through an owner
 binding to one Sandbox ID, daemon instance and Workspace incarnation. An owner
 process restart loses the in-memory registry and requires external lifecycle
 reconciliation; there is no persistent sandbox directory in this revision.
+The control-session refinement after source commit
+`f61f575f4c5355fefdde347e68294329bc28545c` retains the authenticated
+connection used by checked `SandboxHello` and sends the Workspace operation as
+the next request on that connection. The owner still resolves the current Docker
+port on every lookup and checks the daemon instance before mutation; the SDK no
+longer opens a second control connection for the same call.
 The fixed deployment profile uses two CPUs, 512 MiB memory/swap, 64 PIDs,
 a read-only image root with a 16 MiB `/tmp`, `/dev/fuse` and `SYS_ADMIN`, and
 a separate writable Workspace volume. The image digest must contain both the

@@ -1,7 +1,10 @@
 use crate::{docker, readiness};
 use layerfs_api_core::{SandboxId, SandboxInfo, SandboxStatus, WorkspaceId};
-use layerfs_bridge::contract::{Code, Failure};
-use std::{collections::BTreeMap, fs::File, io::Read, net::SocketAddr, sync::Mutex};
+use layerfs_bridge::{
+    adapters::native::client::Client,
+    contract::{Code, Failure},
+};
+use std::{collections::BTreeMap, fs::File, io::Read, sync::Mutex};
 
 #[derive(Clone)]
 pub struct OwnerConfig {
@@ -19,10 +22,6 @@ pub struct OwnerConfig {
 pub struct Binding {
     pub sandbox: SandboxId,
     pub instance: [u8; 32],
-    pub endpoint: SocketAddr,
-    pub selector: u32,
-    pub private: [u8; 32],
-    pub server: [u8; 32],
 }
 
 #[derive(Clone)]
@@ -212,7 +211,7 @@ impl SandboxOwner {
             .collect()
     }
 
-    pub fn lookup(&self, id: SandboxId) -> Result<Binding, RouteError> {
+    pub fn lookup(&self, id: SandboxId) -> Result<(Binding, Client), RouteError> {
         let record = self
             .registry
             .lock()
@@ -222,7 +221,7 @@ impl SandboxOwner {
             .cloned()
             .ok_or(RouteError::NotFound)?;
         let endpoint = docker::port(&record.container)?;
-        let hello = readiness::hello(
+        let (hello, client) = readiness::hello_session(
             endpoint,
             &self.config.control_private,
             &record.daemon_public,
@@ -253,14 +252,13 @@ impl SandboxOwner {
             current.instance = Some(hello.instance);
         }
         let instance = hello.instance;
-        Ok(Binding {
-            sandbox: id,
-            instance,
-            endpoint,
-            selector: 1,
-            private: self.config.control_private,
-            server: record.daemon_public,
-        })
+        Ok((
+            Binding {
+                sandbox: id,
+                instance,
+            },
+            client,
+        ))
     }
 
     pub fn bind_workspace(
@@ -288,7 +286,10 @@ impl SandboxOwner {
         Ok(())
     }
 
-    pub fn workspace(&self, id: &WorkspaceId) -> Result<(Binding, WorkspaceBinding), RouteError> {
+    pub fn workspace(
+        &self,
+        id: &WorkspaceId,
+    ) -> Result<(Binding, WorkspaceBinding, Client), RouteError> {
         let route = self
             .registry
             .lock()
@@ -297,11 +298,11 @@ impl SandboxOwner {
             .get(&id.0)
             .cloned()
             .ok_or(RouteError::NotFound)?;
-        let binding = self.lookup(route.sandbox)?;
+        let (binding, client) = self.lookup(route.sandbox)?;
         if binding.instance != route.instance {
             return Err(RouteError::Stale);
         }
-        Ok((binding, route))
+        Ok((binding, route, client))
     }
 }
 

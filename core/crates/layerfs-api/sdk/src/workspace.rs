@@ -1,12 +1,12 @@
 use layerfs_api_core::{ExecResult, Mount, Project, SandboxId, WorkspaceError, WorkspaceId};
 use layerfs_bridge::{
-    adapters::native::{client::Client, connection::connect_until},
+    adapters::native::client::Client,
     contract::{
         Code, Operation, Request, Response, WorkspaceAttachOutcome, WorkspaceCommitOutcome,
         WorkspaceCommitReportWire, WorkspaceLifecycleOutcome, WORKSPACE_STATUS_PROFILE,
     },
 };
-use layerfs_sandbox::{Binding, RouteError, SandboxOwner};
+use layerfs_sandbox::{RouteError, SandboxOwner};
 use std::{
     io,
     time::{Duration, Instant},
@@ -27,7 +27,7 @@ impl<'a> WorkspaceApi<'a> {
         branch: [u8; 17],
         commit_id: Option<[u8; 33]>,
     ) -> Result<Mount, WorkspaceError> {
-        let binding = self.owner.lookup(sandbox).map_err(route_error)?;
+        let (binding, client) = self.owner.lookup(sandbox).map_err(route_error)?;
         let random = layerfs_sandbox::random::<16>()?;
         let mut id = String::with_capacity(32);
         for byte in random {
@@ -40,7 +40,7 @@ impl<'a> WorkspaceApi<'a> {
             .bind_workspace(&binding, id.clone(), incarnation)
             .map_err(route_error)?;
         let response = call(
-            &binding,
+            client,
             15_000,
             Operation::WorkspaceOpen {
                 workspace: id.0.as_bytes().to_vec(),
@@ -71,9 +71,9 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn exec(&self, id: &WorkspaceId, command: &str) -> Result<ExecResult, WorkspaceError> {
-        let (binding, route) = self.owner.workspace(id).map_err(route_error)?;
+        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
         let response = call(
-            &binding,
+            client,
             30_000,
             Operation::WorkspaceExec {
                 workspace: id.0.as_bytes().to_vec(),
@@ -94,9 +94,9 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn commit(&self, id: &WorkspaceId) -> Result<WorkspaceCommitReportWire, WorkspaceError> {
-        let (binding, route) = self.owner.workspace(id).map_err(route_error)?;
+        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
         let response = call(
-            &binding,
+            client,
             600_000,
             Operation::WorkspaceCommit {
                 workspace: id.0.as_bytes().to_vec(),
@@ -113,9 +113,9 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn unmount(&self, id: &WorkspaceId) -> Result<(), WorkspaceError> {
-        let (binding, route) = self.owner.workspace(id).map_err(route_error)?;
+        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
         let response = call(
-            &binding,
+            client,
             5_000,
             Operation::WorkspaceUnmount {
                 workspace: id.0.as_bytes().to_vec(),
@@ -144,20 +144,14 @@ fn route_error(error: RouteError) -> WorkspaceError {
 }
 
 fn call(
-    binding: &Binding,
+    mut client: Client,
     deadline_ms: u32,
     operation: Operation,
 ) -> Result<Response, WorkspaceError> {
     let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
-    let mut client = Client::new(connect_until(
-        binding.endpoint,
-        binding.selector,
-        &binding.private,
-        &binding.server,
-        deadline,
-    )?)?;
     let request = Request {
-        id: 1,
+        // Checked lookup sent SandboxHello as request 1 on this connection.
+        id: 2,
         generation: 0,
         store: 0,
         profile: WORKSPACE_STATUS_PROFILE,
