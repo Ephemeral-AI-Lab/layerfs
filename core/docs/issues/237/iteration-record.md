@@ -288,3 +288,18 @@ replacement sample for the earlier seven-commit treatment. Temporary pager
 FFI was archived and removed. The exact 1,024 appends motivate a distinct
 prospective pack-fit experiment, but no avoidable fraction or speed gain has
 yet been measured.
+
+## Round R11: indexed same-Save identity lookup
+
+An isolated [matched pair](identity-index-result.md) replaced bounded linear
+pending-member and current-wave sealed-row searches with hash lookups. The
+count-driven control inspected **2,173,717 pending IDs** and **3,798,693
+sealed IDs**; the candidate eliminated those **5,972,410 linear ID
+inspections**. Its raw public caller fell **1.349030916 → 1.330246417 s**
+(−18.784499 ms), but its Store gained **520,192 apparent bytes**, two packs
+and **516,333 B** of pack slack. That misses the preregistered physical-space
+condition, so the source remains isolated and **rejected**. The control's
+telemetry ingestion was `INCOMPLETE`; both source payload checks found
+0/27,503 resident pages, metadata was unqualified, and both separate full
+reopened readbacks passed the same root/object IDs, 10,101 paths and 300 MB.
+No arm was repeated and no physical-space threshold was rewritten.
