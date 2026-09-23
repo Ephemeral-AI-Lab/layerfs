@@ -50,9 +50,14 @@ reconciliation; there is no persistent sandbox directory in this revision.
 The control-session refinement after source commit
 `f61f575f4c5355fefdde347e68294329bc28545c` retains the authenticated
 connection used by checked `SandboxHello` and sends the Workspace operation as
-the next request on that connection. The owner still resolves the current Docker
-port on every lookup and checks the daemon instance before mutation; the SDK no
-longer opens a second control connection for the same call.
+the next request on that connection. It still checked the Docker-published port
+on every lookup at that revision. The fixed-port refinement after source commit
+`c45e93d4a7eb2a8f41d1803f704a881f41fe5282` selects a free loopback port
+at Create, configures Docker with that exact mapping and verifies it once. The
+owner retains that endpoint, so a Workspace call no longer launches `docker
+port`; it still authenticates Hello and checks the daemon instance before
+mutation. A failed port bind retains the assigned Sandbox ID for inspection and
+does not retry or silently choose another route.
 The fixed deployment profile uses two CPUs, 512 MiB memory/swap, 64 PIDs,
 a read-only image root with a 16 MiB `/tmp`, `/dev/fuse` and `SYS_ADMIN`, and
 a separate writable Workspace volume. The image digest must contain both the
@@ -85,9 +90,11 @@ After the one-connection diagnostic at source commit
 `0edc58ce8d4f21115a1eb27e2964290426f418bc`, the host owner accepts the
 application's existing telemetry runtime as well. Each checked lookup records
 Docker port discovery and authenticated Hello as separate local-process LFT1
-operations. Disabled telemetry performs no observation work; the owner shares
-the host SDK and Service recorder when enabled. These substeps remain diagnostic
-and do not change routing, cache state or deadlines.
+operations at that source. With the fixed-port refinement, only authenticated
+Hello remains on the per-call route; Docker port verification occurs at Create.
+Disabled telemetry performs no observation work; the owner shares the host SDK
+and Service recorder when enabled. These substeps remain diagnostic and do not
+change cache state or deadlines.
 
 The SDK-owned host setup extension is based on source commit
 `611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`

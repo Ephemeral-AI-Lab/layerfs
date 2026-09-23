@@ -29,6 +29,7 @@ pub(crate) fn launch(
     name: &str,
     id: SandboxId,
     container: &str,
+    host_port: u16,
 ) -> Result<(), Failure> {
     let image_actual = run(&["image", "inspect", "--format", "{{.Id}}", image])?;
     if !valid_image(image_actual.trim()) {
@@ -37,6 +38,7 @@ pub(crate) fn launch(
     let control_public = VerifiedPeer::from_private(&config.control_private)?;
     let peers = format!("1,{},{},255", hex(control_public.public_key()), u64::MAX);
     let mount_root = format!("type=volume,src={container}-root,dst=/layerfs");
+    let publish = format!("127.0.0.1:{host_port}:23456");
     let mut command = Command::new("docker");
     command.args([
         "run",
@@ -71,7 +73,7 @@ pub(crate) fn launch(
         "--mount",
         &mount_root,
         "--publish",
-        "127.0.0.1::23456",
+        &publish,
         "--entrypoint",
         "/layerfs-daemon",
     ]);
@@ -128,14 +130,14 @@ pub(crate) fn launch(
 
 pub(crate) fn port(container: &str) -> Result<SocketAddr, Failure> {
     let result = run(&["port", container, "23456/tcp"])?;
-    let port = result
+    let endpoint = result
         .trim()
-        .rsplit_once(':')
-        .ok_or(Code::InvalidInput)?
-        .1
-        .parse::<u16>()
+        .parse::<SocketAddr>()
         .map_err(|_| Code::InvalidInput)?;
-    Ok(SocketAddr::from(([127, 0, 0, 1], port)))
+    if endpoint.ip() != std::net::Ipv4Addr::LOCALHOST || endpoint.port() == 0 {
+        return Err(Code::Denied.into());
+    }
+    Ok(endpoint)
 }
 
 pub(crate) fn shell_ready(container: &str) -> Result<(), Failure> {

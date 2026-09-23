@@ -5,7 +5,13 @@ use layerfs_bridge::{
     contract::{Code, Failure},
 };
 use layerfs_telemetry::runtime::Runtime;
-use std::{collections::BTreeMap, fs::File, io::Read, sync::Mutex};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    io::Read,
+    net::{SocketAddr, TcpListener},
+    sync::Mutex,
+};
 
 #[derive(Clone)]
 pub struct OwnerConfig {
@@ -60,6 +66,7 @@ struct Record {
     name: String,
     container: String,
     daemon_public: [u8; 32],
+    endpoint: SocketAddr,
     instance: Option<[u8; 32]>,
 }
 
@@ -118,38 +125,72 @@ impl SandboxOwner {
             .public_key()
             .to_owned();
         let container = format!("layerfs-{id}");
-        let record = Record {
-            name: name.into(),
-            container: container.clone(),
-            daemon_public,
-            instance: None,
-        };
         let mut registry = self.registry.lock().map_err(|_| CreateError {
             sandbox: None,
             cause: Code::Io.into(),
             retained: false,
         })?;
-        if registry.sandboxes.contains_key(&id) {
+        let reservation =
+            TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).map_err(|cause| CreateError {
+                sandbox: None,
+                cause: cause.into(),
+                retained: false,
+            })?;
+        let endpoint = reservation.local_addr().map_err(|cause| CreateError {
+            sandbox: None,
+            cause: cause.into(),
+            retained: false,
+        })?;
+        if registry.sandboxes.contains_key(&id)
+            || registry
+                .sandboxes
+                .values()
+                .any(|record| record.endpoint == endpoint)
+        {
             return Err(CreateError {
                 sandbox: None,
                 cause: Code::Busy.into(),
                 retained: false,
             });
         }
-        registry.sandboxes.insert(id, record);
+        registry.sandboxes.insert(
+            id,
+            Record {
+                name: name.into(),
+                container: container.clone(),
+                daemon_public,
+                endpoint,
+                instance: None,
+            },
+        );
         drop(registry);
-        if let Err(cause) = docker::launch(&self.config, image_id, name, id, &container) {
+        drop(reservation);
+        if let Err(cause) = docker::launch(
+            &self.config,
+            image_id,
+            name,
+            id,
+            &container,
+            endpoint.port(),
+        ) {
             return Err(CreateError {
                 sandbox: Some(id),
                 cause,
                 retained: true,
             });
         }
-        let endpoint = docker::port(&container).map_err(|cause| CreateError {
+        let published = docker::port(&container).map_err(|cause| CreateError {
             sandbox: Some(id),
             cause,
             retained: true,
         })?;
+        if published != endpoint {
+            return Err(CreateError {
+                sandbox: Some(id),
+                cause: Code::Integrity.into(),
+                retained: true,
+            });
+        }
         let hello = readiness::wait(endpoint, &self.config.control_private, &daemon_public, id)
             .map_err(|cause| CreateError {
                 sandbox: Some(id),
@@ -190,14 +231,12 @@ impl SandboxOwner {
                 let status = if !docker::running(&record.container)? {
                     SandboxStatus::Stopped
                 } else if let Some(instance) = record.instance {
-                    match docker::port(&record.container).and_then(|endpoint| {
-                        readiness::hello(
-                            endpoint,
-                            &self.config.control_private,
-                            &record.daemon_public,
-                            *id,
-                        )
-                    }) {
+                    match readiness::hello(
+                        record.endpoint,
+                        &self.config.control_private,
+                        &record.daemon_public,
+                        *id,
+                    ) {
                         Ok(hello) if hello.instance == instance => SandboxStatus::Ready,
                         Ok(_) => SandboxStatus::Stale,
                         Err(_) => SandboxStatus::Unconfirmed,
@@ -223,12 +262,9 @@ impl SandboxOwner {
             .get(&id)
             .cloned()
             .ok_or(RouteError::NotFound)?;
-        let endpoint = self.observe(2001, "owner.docker_port", || {
-            docker::port(&record.container)
-        })?;
         let (hello, client) = self.observe(2002, "owner.hello", || {
             readiness::hello_session(
-                endpoint,
+                record.endpoint,
                 &self.config.control_private,
                 &record.daemon_public,
                 id,

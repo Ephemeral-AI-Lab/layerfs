@@ -11,7 +11,10 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     process::Command,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 const BINDING: &[u8] = b"issue236-sdk-proof";
@@ -26,15 +29,19 @@ fn repo() -> PathBuf {
 }
 
 fn proof_root() -> PathBuf {
-    let root = repo().join("core/target/issue236-proof").join(format!(
-        "{}-{}",
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = repo().join("core/target/issue236-proof");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = parent.join(format!(
+        "{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir(&root).unwrap();
     root
 }
 

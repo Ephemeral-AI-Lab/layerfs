@@ -59,7 +59,7 @@ def summarize(root):
     daemon = [event for event in records(root / f"layerfs-{sandbox}.stderr")
               if event.get("run") == run and event.get("role") == 2]
     route = metrics(one(host, 1000, "sdk.route"))
-    lookup_recorded = any(event.get("key") == 2001 for event in host)
+    lookup_recorded = any(event.get("key") in (2001, 2002) for event in host)
     phases = []
     for name, key, host_name, daemon_name in PHASES:
         sdk = one(host, key, host_name)
@@ -68,10 +68,9 @@ def summarize(root):
             start = sdk["opened_ns"]
             within = [event for event in host
                       if start <= event.get("opened_ns", -1) < start + sdk["timing"]["elapsed_ns"]]
-            phase["owner_lookup"] = {
-                "docker_port": metrics(one(within, 2001, "owner.docker_port")),
-                "hello": metrics(one(within, 2002, "owner.hello")),
-            }
+            phase["owner_lookup"] = {"hello": metrics(one(within, 2002, "owner.hello"))}
+            if any(event.get("key") == 2001 for event in host):
+                phase["owner_lookup"]["docker_port"] = metrics(one(within, 2001, "owner.docker_port"))
         if daemon_name:
             phase["daemon_process"] = metrics(one(daemon, name=daemon_name))
         else:

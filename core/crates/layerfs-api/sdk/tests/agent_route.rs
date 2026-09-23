@@ -79,6 +79,15 @@ fn observed<T, E>(
     result
 }
 
+fn published_port(id: &SandboxId) -> String {
+    let output = Command::new("docker")
+        .args(["port", &format!("layerfs-{id}"), "23456/tcp"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    String::from_utf8(output.stdout).unwrap()
+}
+
 fn create(
     api: &SandboxApi<'_>,
     cleanup: &mut Cleanup,
@@ -299,6 +308,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
     let CommitOutcomeWire::Committed(first_record) = first_commit.outcome else {
         panic!("first commit");
     };
+    let original_port = published_port(&first);
     assert_eq!(sandbox_api.list().unwrap()[0].id, first);
     assert!(Command::new("docker")
         .args(["restart", &format!("layerfs-{first}")])
@@ -339,6 +349,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         );
         thread::sleep(Duration::from_millis(25));
     }
+    assert_eq!(published_port(&first), original_port);
     assert!(matches!(
         workspace_api.exec(&mount.id, "cat note"),
         Err(WorkspaceError::Stale)

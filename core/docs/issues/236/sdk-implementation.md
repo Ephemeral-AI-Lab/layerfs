@@ -8,12 +8,18 @@ a descendant of the reviewed source. The reviewed-source pin describes this
 proposal's historical review and is not a claim that the implementation or
 existing Init receipts were produced from the worktree base.
 
-Implementation refinement: Docker may republish a different host control port
-when a container restarts. The host owner keeps the container ID, daemon key,
-and instance, resolves the current port on each checked lookup, and reports a
-stale binding when a new daemon instance answers. Selected-Commit mount also
-carries the expected instance in its authenticated request, closing the race
-between lookup and attach.
+Port-binding refinement after source commit
+`c45e93d4a7eb2a8f41d1803f704a881f41fe5282`: the host owner selects one
+free loopback port at Create, publishes that exact port to Docker, and verifies
+the mapping before daemon readiness. The fixed container mapping survives a
+successful Docker restart. Checked lookups use the recorded endpoint and
+authenticate `SandboxHello` on every call; a new daemon instance still produces
+`Stale` before Workspace mutation. A port collision or unavailable endpoint
+fails explicitly without retry or an alternate route. This supersedes the
+earlier ephemeral-port policy that ran `docker port` on every lookup. The fixed
+mapping is an implementation input, not a public `sandbox.create` option.
+Selected-Commit mount also carries the expected instance in its authenticated
+request, closing the race between lookup and attach.
 
 This is the follow-on design for the agent SDK after #236's working Project Init.
 Production Rust belongs under `core/crates/`; this document is the reviewable

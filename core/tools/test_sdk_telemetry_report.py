@@ -57,6 +57,12 @@ class TelemetryReportTest(unittest.TestCase):
             self.assertEqual(value["phases"][1]["owner_lookup"]["docker_port"]["elapsed_ns"], 20)
             self.assertEqual(value["phases"][4]["owner_lookup"]["hello"]["elapsed_ns"], 20)
 
+            host = [event for event in host if event.get("key") != 2001]
+            (root / "raw-host.log").write_text("".join("LFT1 " + json.dumps(e) + "\n" for e in host))
+            value = report.summarize(root)
+            self.assertNotIn("docker_port", value["phases"][1]["owner_lookup"])
+            self.assertEqual(value["phases"][1]["owner_lookup"]["hello"]["elapsed_ns"], 20)
+
     @staticmethod
     def event(role, key, name, elapsed):
         return {"kind": "operation", "run": f"{1:032x}", "role": role, "key": key,
