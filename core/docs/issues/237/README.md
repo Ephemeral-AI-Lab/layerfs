@@ -38,6 +38,11 @@ troubleshooting handoff](sdk-100k-v016-troubleshooting-handoff.md) now has a
 **5.077702667 s** on those same source bytes with a full reopened readback.
 The next measured comparison arm is v0.1.6 release on that exact source. The
 #236 two-case selection still records 100k as `NOT_RUN`.
+The [read-only 100k database allocation analysis](sdk-100k-db-allocation-analysis-20260924.md)
+accounts for Core's closed Store/History bytes and identifies 35,168,077 B of
+reserved pack BLOB tail capacity. The historical v0.1.6 100k Store is not
+retained, so its exact pack/page attribution remains open until the same-source
+reference run.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
