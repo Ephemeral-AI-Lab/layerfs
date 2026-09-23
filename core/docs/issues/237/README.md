@@ -109,6 +109,11 @@ The proposed one-pack C2 group queue stopped at a source-level feasibility
 check: delaying placement also delays locators required by same-save exact
 reuse, delta selection and reads. No prototype or timed arm was run for that
 idea; see [the failed C2 approach](c2-grouping-prototype.md).
+The proposed smaller per-file prefix reserve also failed its standalone
+[10k allocation diagnostic](prefix-probe-experiment.md): a 4 KiB start took
+7.006 ms versus 6.560 ms for the existing 128 KiB reserve, added 7,506
+reallocations, and grew capacity to 256 KiB at the default cutoff. No public
+Init arm or product edit followed that result.
 The verifier's one-entry metadata memo kept the full path/metadata/content
 oracle but **did not** get the debug build under its fixed 5 s watchdog.
 Moving cold preflight before startup initially made its one-second freshness
