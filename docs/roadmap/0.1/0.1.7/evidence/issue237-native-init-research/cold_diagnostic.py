@@ -151,7 +151,7 @@ def run_100k(out):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", choices=("namespace-1000-compact-v3", "namespace-10000", "namespace-100000"), required=True)
+    parser.add_argument("--case", choices=("namespace-100-compact-v3", "namespace-1000-compact-v3", "namespace-10000", "namespace-100000"), required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--fixed-operation-identity", action="store_true",
