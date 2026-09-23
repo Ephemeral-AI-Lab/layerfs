@@ -260,11 +260,11 @@ pub const fn body_area_offset(lane: PackLane) -> usize {
 
 /// Bytes a pack row allocates for a pack of `lane` that assembles to `used`.
 ///
-/// Every lane but Singleton allocates its full pack limit, because the pack is
-/// expected to be appended to and a BLOB's size cannot be changed in place:
-/// growing it would be an `UPDATE`, which rewrites the whole row. A Singleton
-/// pack holds one record for its whole life (`append_fits` refuses a second
-/// group), so it allocates exactly what it uses and wastes nothing.
+/// Open packs in every lane but Singleton allocate their full pack limit for
+/// future in-place appends. Placement can instead use the exact assembled length
+/// when a newly created pack closes before its first insert. A Singleton pack
+/// holds one record for its whole life (`append_fits` refuses a second group),
+/// so it always allocates exactly what it uses.
 pub const fn pack_capacity(lane: PackLane, used: usize) -> usize {
     match lane {
         PackLane::Singleton => used,
