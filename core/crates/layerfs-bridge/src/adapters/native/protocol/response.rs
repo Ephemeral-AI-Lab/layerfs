@@ -765,7 +765,6 @@ fn check_result(result: &HistoryResult) -> Result<(), Failure> {
         HistoryResult::Reservation { start, count, .. } => {
             serial(*start)?;
             if *count == 0
-                || *count > 65_536
                 || start
                     .checked_add(*count)
                     .is_none_or(|end| end > i64::MAX as u64)

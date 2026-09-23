@@ -13,7 +13,7 @@
 use super::{
     failure::{content, storage},
     filesystem::{self, PreparedUpdate},
-    history_bootstrap,
+    history_bootstrap, import_native,
     read::id,
 };
 use layerfs_bridge::contract::*;
@@ -29,7 +29,7 @@ use layerfs_history::{
 };
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::time::Instant;
+use std::{io::Write, path::Path, time::Instant};
 
 /// Maps one typed history failure onto its wire class without parsing a message.
 pub(crate) fn failure(error: HistoryError) -> Failure {
@@ -245,9 +245,11 @@ pub(crate) fn query(
 pub(crate) fn command(
     catalog: &dyn HistoryCatalog,
     store: &Store,
+    import_root: Option<&Path>,
     command: &HistoryCommand,
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
+    output: &mut dyn Write,
 ) -> Result<Response, Failure> {
     let result = match command {
         HistoryCommand::InitLayerStack {
@@ -261,21 +263,27 @@ pub(crate) fn command(
             let scope = scope_for_seed(*scope_seed);
             let manifest = manifest_of(manifest)?;
             manifest.check().map_err(|_| Code::InvalidInput)?;
+            let entries: Vec<_> = manifest
+                .entries
+                .iter()
+                .map(history_bootstrap::PreparedEntry::from)
+                .collect();
             let reservation = catalog
                 .reserve_inodes(&ReserveRequest {
                     scope: scope.object(),
-                    count: u64::try_from(manifest.entries.len()).map_err(|_| Code::Capacity)?,
+                    count: u64::try_from(entries.len()).map_err(|_| Code::Capacity)?,
                 })
                 .map_err(failure)?;
             let profile = layerfs_content::filesystem::profile_id();
             let provider = StoreProvider::new(store);
+            let mut progress = history_bootstrap::ImportProgress::disabled(deadline);
             let root = history_bootstrap::build_namespace(
                 store,
                 &provider,
                 scope,
                 reservation.start,
-                &manifest,
-                deadline,
+                &entries,
+                &mut progress,
                 timer,
             )?;
             let record = catalog
@@ -284,6 +292,48 @@ pub(crate) fn command(
                     name,
                     scope: scope.object(),
                     profile,
+                    genesis_root: root,
+                })
+                .map_err(failure)?;
+            HistoryResult::StackCreated(StackCreatedWire {
+                stack: stack_wire(&record),
+                root: *root.as_bytes(),
+                root_serial: reservation.start,
+            })
+        }
+        HistoryCommand::ImportNativeDirectory {
+            stack,
+            name,
+            scope_seed,
+        } => {
+            let source = import_root.ok_or(Code::Unsupported)?;
+            let stack = LayerStackId::from_authority(*stack);
+            let name = name_of(name)?;
+            let scope = scope_for_seed(*scope_seed);
+            let mut progress = history_bootstrap::ImportProgress::with_output(deadline, output);
+            let entries = import_native::scan_and_save(source, store, &mut progress, timer)?;
+            let reservation = catalog
+                .reserve_inodes(&ReserveRequest {
+                    scope: scope.object(),
+                    count: u64::try_from(entries.len()).map_err(|_| Code::Capacity)?,
+                })
+                .map_err(failure)?;
+            let provider = StoreProvider::new(store);
+            let root = history_bootstrap::build_namespace(
+                store,
+                &provider,
+                scope,
+                reservation.start,
+                &entries,
+                &mut progress,
+                timer,
+            )?;
+            let record = catalog
+                .initialize_layerstack(&StackInitialization {
+                    stack,
+                    name,
+                    scope: scope.object(),
+                    profile: layerfs_content::filesystem::profile_id(),
                     genesis_root: root,
                 })
                 .map_err(failure)?;

@@ -87,22 +87,22 @@ fn counts_are_checked_and_the_terminal_endpoint_is_refused() {
             .unwrap_err(),
         HistoryError::InvalidInput("inode reservation")
     );
-    assert_eq!(
-        catalog
-            .reserve_inodes(&ReserveRequest {
-                scope,
-                count: MAXIMUM_INODE_RESERVATION + 1,
-            })
-            .unwrap_err(),
-        HistoryError::InvalidInput("inode reservation")
-    );
     let accepted = catalog
         .reserve_inodes(&ReserveRequest {
             scope,
-            count: MAXIMUM_INODE_RESERVATION,
+            count: 100_000,
         })
         .unwrap();
-    assert_eq!(accepted.count, MAXIMUM_INODE_RESERVATION);
+    assert_eq!(accepted.count, 100_000);
+    assert_eq!(
+        catalog
+            .reserve_inodes(&ReserveRequest {
+                scope: root(0xc1),
+                count: i64::MAX as u64,
+            })
+            .unwrap_err(),
+        HistoryError::Capacity("inode serials")
+    );
     // The terminal endpoint is a checked refusal, not an overflow: a range that
     // would pass `i64::MAX` cannot be represented and cannot be reported.
     let terminal = Reservation {

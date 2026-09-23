@@ -768,7 +768,7 @@ fn check_effective_cycles(
 /// implies: every directory this operation allocates is reachable from the root
 /// exactly once, which is what makes a disconnected cycle - two directories
 /// binding each other with nothing binding either of them - a refusal. The walk
-/// is bounded by the same entry ceiling as every other whole-tree check.
+/// is bounded by the caller's supplied bindings, with no independent count cap.
 fn check_build_reachability(
     _reader: &dyn AuthenticatedObjects,
     checked: &CheckedInput<'_>,
@@ -809,7 +809,6 @@ fn check_build_reachability(
         .collect();
     let mut edges: BTreeMap<u64, u32> = declared.iter().map(|serial| (*serial, 0)).collect();
     let mut seen: BTreeSet<u64> = BTreeSet::new();
-    let mut visited = 0_usize;
     let mut pending = vec![checked.input.root_serial];
     while let Some(serial) = pending.pop() {
         if !seen.insert(serial) {
@@ -819,11 +818,7 @@ fn check_build_reachability(
             continue;
         }
         for child in stated.get(&serial).map(Vec::as_slice).unwrap_or(&[]) {
-            visited = visited.saturating_add(1);
             work.entries_examined = work.entries_examined.saturating_add(1);
-            if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
-                return Err(ContentError::InvalidRecord("cycle check work limit"));
-            }
             // A binding is an edge into the child. Only a directory has to be
             // reached exactly once: a regular file may be bound several times.
             if let Some(count) = edges.get_mut(child) {

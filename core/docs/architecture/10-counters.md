@@ -12,6 +12,9 @@ in place and carry their own commits, as is the `PoolCounters` home moved from
 counter added by #178 **V6** (2026-09-18), and the `presence_queries` counter
 added by #178 **V8** (2026-09-18). Scope, method,
 measurement status and upkeep are stated in the [index](README.md).
+The base-less reachability-bound correction describes product commit
+`64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; earlier counter notes keep
+their own source pins.
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
 
@@ -251,7 +254,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `BATCH_CANONICAL_BYTES_LIMIT` | 512 KiB | usually binds first: 512 average objects ≈ 512 KiB only at ~1 KiB each |
 | `TRANSACTION_ROW_LIMIT` | 8,191 | one transaction spans many waves |
 | `TRANSACTION_CANONICAL_BYTES_LIMIT` | 4 MiB − 1 | `2²²−1`, an encoding ceiling, not a round number |
-| `MAXIMUM_WALK_ENTRIES` | 4,096 | charged **per walk**, not per operation |
+| `MAXIMUM_WALK_ENTRIES` | 4,096 | charged per existing-tree cycle walk; base-less build reachability walks its supplied bindings without this cap |
 | `READ_WAVE_OBJECTS` | 32 | mapping read waves; ≤ 1 MiB payloads |
 | `EDIT_DEFERRED_LIMIT` | 8 MiB − 1 | binds by failing the operation, never by dropping state |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB | released wholesale; costs reads, never correctness |

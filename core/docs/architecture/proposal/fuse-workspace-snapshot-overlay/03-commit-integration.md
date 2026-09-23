@@ -9,6 +9,11 @@
 > rename replacement semantics and canonical link-count re-baseline. No
 > performance result, crash-durability guarantee or completed qualification is
 > claimed.
+> Native import and the lifted test-era entry/reservation caps describe product
+> commit `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; the rest of this
+> proposal retains the earlier source pins.
+> Native import progress records describe product commit
+> `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
 
 Read the [packet overview](README.md), [Workspace/FUSE contract](01-workspace-fuse-contract.md)
 and [overlay/snapshot design](02-overlay-snapshot.md) for runtime behavior.
@@ -185,12 +190,26 @@ acknowledged Branch creation into a reported creation failure. Its absent serial
 is expected, not zero or an assumed one. Native response matching requires a
 present serial for GetBranch and an absent one for Fork. [Client matching][client]
 
-InitLayerStack accepts at most 128 pathless manifest entries including the root,
+InitLayerStack accepts a pathless manifest inside the existing metadata frame,
 reserves the required serials, builds prerequisite metadata/symlink objects,
 saves the filesystem tree and publishes genesis/stack metadata. File roots in
 the manifest must already be saved. It creates no Branch, imports no host tree,
 and supplies no general live create/mkdir operation. Its root serial is the
 actual reservation result. [Bootstrap composition][bootstrap]
+
+`ImportNativeDirectory` is a separate history command (tag 9) whose source is
+the Service operator's `LAYERFS_IMPORT_ROOT`. One authorized request scans and
+reads that directory, saves file and filesystem objects through C1/C2, and
+publishes the C5 genesis stack before returning `StackCreated`. It refuses
+symlinks and special files and has no default file or entry-count ceiling. The
+pathless manifest no longer has its former 128-entry test cap, but its legacy
+metadata frame and 16-bit parent field remain representational bounds. This addition describes the source
+change in the same commit as this paragraph; prior source pins remain the
+baseline for the unchanged integration route.
+The importer emits checked one-byte progress records during long construction;
+the native client consumes them without treating them as result bytes. This
+keeps the existing five-second no-progress rule while the absolute operation
+deadline remains unchanged.
 
 A read-only explicit-root mount remains possible without Branch creation.
 History-backed mutation needs the Branch context above. The manifest and new
@@ -839,6 +858,7 @@ catalog method is introduced by this document.
 | Command | Main inputs | HistoryResult / ownership |
 | --- | --- | --- |
 | `InitLayerStack` | authority stack body, name, scope seed, bounded manifest | `StackCreated`; constructs/saves genesis, creates stack, no Branch |
+| `ImportNativeDirectory` | authority stack body, name, scope seed; source fixed by Service configuration | `StackCreated`; scans and reads native source, constructs/saves genesis, creates stack, no Branch |
 | `Fork` | stack, authority Branch body, name, Layer or authorized ancestor Commit source | `BranchSnapshot` without validated root serial; metadata only |
 | `StageChanges` | PreparedChanges | `Stage`; owns filesystem construction/save then stage insertion |
 | `Commit` | PreparedChanges | `Committed(CommitOutcomeWire)`; same stage and Commit bodies, one admission |
@@ -899,8 +919,8 @@ throughput, mounted acceptance or authorization to enlarge Pair 1's budgets.
 | History name / cursor | 63 bytes in its checked name grammar / 160-byte authenticated continuation |
 | History page / complete encoded result | 128 records maximum / 16 KiB including tags and continuation |
 | Profile-2 failure / legacy failure | At most 482 bytes / exactly three bytes |
-| Init manifest / symlink target | 128 entries including root / 4,096 bytes per target, also within total request metadata |
-| ReserveInodes | 1-65,536 serials; checked nonrecycled half-open range within signed integer bounds |
+| Pathless Init manifest / symlink target | 16-bit wire count and parent, 32 KiB total request metadata / 4,096 bytes per target; native import has no entry-count cap |
+| ReserveInodes | positive serial count; checked nonrecycled half-open range within signed integer bounds |
 | New explicit history ancestry membership proof | At most 4,096 examined rows; authenticated bounded-page continuation is a different operation |
 | Complete service operations | 2 service-wide, including reads; no waiting service queue |
 | C2 private saves | 2 per Store, including quarantined/failed-cleanup ownership |

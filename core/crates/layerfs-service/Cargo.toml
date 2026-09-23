@@ -12,3 +12,6 @@ layerfs-history={path="../layerfs-history"}
 layerfs-storage={path="../layerfs-storage"}
 layerfs-telemetry={path="../layerfs-telemetry",features=["native"]}
 nix = { version = "=0.31.3", features = ["poll"] }
+
+[dev-dependencies]
+sha2 = "=0.10.9"

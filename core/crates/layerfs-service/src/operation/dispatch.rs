@@ -11,18 +11,20 @@ use layerfs_storage::Store;
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{
     io::{Read, Write},
+    path::Path,
     time::Instant,
 };
 
 pub(crate) fn dispatch(
     store: &Store,
-    catalog: Option<&dyn HistoryCatalog>,
+    history: (Option<&dyn HistoryCatalog>, Option<&Path>),
     r: &Request,
     input: &mut dyn Read,
     output: &mut dyn Write,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
+    let (catalog, import_root) = history;
     match &r.operation {
         Operation::WorkspaceStatus { .. }
         | Operation::WorkspaceUnmount { .. }
@@ -39,9 +41,11 @@ pub(crate) fn dispatch(
             history::command(
                 catalog.ok_or(Code::Unsupported)?,
                 store,
+                import_root,
                 command,
                 deadline,
                 scope,
+                output,
             )
         }
         // A known successful C2 finish is never changed into a claimed abort.

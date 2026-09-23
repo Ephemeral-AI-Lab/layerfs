@@ -43,7 +43,9 @@ This file adds the owner's product-source and module-structure requirements.
   The harness lives in `core/benchmark/`, is its own Cargo workspace, and is **not**
   product source: benchmark Python files are exempt from the line ceilings, and the
   expected production LOC delta is 0. Preserve already-established canonical
-  compatibility proofs.
+  compatibility proofs. For the v0.1.7 unified fs-bench-pro successor, also read
+  [`core/benchmark/fs-bench-pro/AGENTS.md`](benchmark/fs-bench-pro/AGENTS.md) before
+  implementation; it fixes one sample/seed and the focused iteration workflow.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 

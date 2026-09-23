@@ -238,6 +238,24 @@ fn every_query_and_command_round_trips() {
 }
 
 #[test]
+fn native_import_declares_progress_response_budget() {
+    let mut value = request(Operation::HistoryCommand(
+        HistoryCommand::ImportNativeDirectory {
+            stack: [0x52; 16],
+            name: b"native".to_vec(),
+            scope_seed: [0x04; 32],
+        },
+    ));
+    value.response_bytes = 0;
+    assert_eq!(encode_request(&value).unwrap_err().code, Code::Capacity);
+    value.response_bytes = u64::from(value.deadline_ms.div_ceil(1_000));
+    let encoded = encode_request(&value).unwrap();
+    assert_eq!(decode_request(value.id, &encoded).unwrap(), value);
+    assert!(value.operation.content_mutation());
+    assert!(!value.operation.metadata_mutation());
+}
+
+#[test]
 fn profile_and_opcode_must_agree() {
     // A history operation on the legacy profile, and a legacy operation on the
     // history profile, are both refused before any mutation.
@@ -323,7 +341,7 @@ fn identity_widths_and_tags_are_checked() {
         }),
         Operation::HistoryCommand(HistoryCommand::ReserveInodes {
             scope: [0x03; 32],
-            count: 65_537,
+            count: i64::MAX as u64 + 1,
         }),
     ];
     for operation in cases {
@@ -378,7 +396,7 @@ fn page_and_count_bounds_are_checked() {
     let mut too_many = manifest();
     let root = too_many[0].clone();
     too_many = vec![root];
-    for index in 0..MANIFEST_ENTRIES {
+    for index in 0..1_500 {
         too_many.push(ManifestEntry {
             parent: 0,
             name: format!("n{index}").into_bytes(),
@@ -390,7 +408,13 @@ fn page_and_count_bounds_are_checked() {
             target: Vec::new(),
         });
     }
-    assert_eq!(too_many.len(), MANIFEST_ENTRIES + 1);
+    assert_eq!(too_many.len(), 1_501);
+    round_trip(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        stack: [0x51; 16],
+        name: b"main".to_vec(),
+        scope_seed: [0x02; 32],
+        manifest: too_many[..130].to_vec(),
+    }));
     assert_eq!(
         encode_request_with_budget(
             &request(Operation::HistoryCommand(HistoryCommand::InitLayerStack {

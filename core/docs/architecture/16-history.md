@@ -16,6 +16,13 @@ Implementation specification and its pre-publication audit:
 - **Source pin:** `7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c`, including the
   bridge codec consolidation. This pin-only update changes no product behavior.
   Reference root `crates/` remains separate.
+- **Native import/count-bound update:** product commit
+  `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
+  separate baseline pin.
+- **Native import progress update:** product commit
+  `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
+- **Init ordering-backing correction:** product commit
+  `0042a909ac3f16a5041aa51d76f96522a58352c8`.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
@@ -265,11 +272,29 @@ membership is validated on every suboperation.
 Dispatch is exhaustive and semantic. `Operation::read_only`,
 `content_mutation` and `metadata_mutation` are separate exhaustive matches, and
 the old `opcode >= 3` mutation test is gone. A `HistoryQuery` is read-only, a
-`InitLayerStack`, `StageChanges` and composite `Commit` write content; `Fork`,
+`InitLayerStack`, `ImportNativeDirectory`, `StageChanges` and composite `Commit` write content; `Fork`,
 `CommitStaged`, `AddLayer`, `DiscardStage` and `ReserveInodes` mutate metadata
 only. Metadata commands never start a C2 save. HELLO/framing version stays separate from the operation
 profile; an unknown profile/suboperation combination is refused before any
 mutation, and there is no automatic downgrade or resend.
+
+`ImportNativeDirectory` is history-command metadata tag 9. The authorized
+Service reads only its operator-configured `LAYERFS_IMPORT_ROOT`; the client
+cannot supply a host path. The operation scans names and reads file bytes before
+its C1/C2 saves and C5 genesis publication return `StackCreated`. It accepts
+regular files and directories, refuses symlinks and special files, and has no
+default file or entry-count ceiling. The pathless `InitLayerStack` retains its
+pre-saved-root semantics and is bounded by the legacy request's metadata frame
+and 16-bit parent encoding, without the former 128-entry test cap. Four source
+file workers construct C1 objects and send them through an eight-object bounded
+channel to one C2 save owner; C5 publication follows the saved filesystem root.
+For this long-running command only, the Service can flush one authenticated
+one-byte progress record per second while work advances. The client consumes
+the marker without treating it as result data; the absolute request deadline
+and five-second transport progress limit remain in force.
+This importer change is described against the product source in the same commit
+as this paragraph; the earlier
+source pin above remains the baseline for the rest of this paper.
 
 The daemon's generic framed relay selects history failure encoding from its
 validated request profile; it has no second history parser. Legacy failures stay
@@ -303,10 +328,14 @@ could mislabel a known successful metadata transition as abort.
 ## 16.8 Production namespace bootstrap
 
 Initialization is production code, not the `examples/prepare_store.rs` fixture.
-The service builds a bounded, pathless manifest — at most 128 entries including
-the root, inside the existing 32 KiB metadata envelope — whose entries name their
+The pathless bootstrap manifest fits the existing 32 KiB metadata envelope and
+16-bit parent encoding, without the former 128-entry test ceiling. Its entries name their
 parent by index, a canonical component name, a kind, portable mode/mtime and,
 per kind, an already published file root or a bounded inline symlink target.
+Native directory import has no default file or entry-count ceiling. Both
+initialization routes give the C1 ordering reducer a private file backing so
+the default bounded in-memory row set can spill and be checked for cleanup
+before publication.
 
 Every serial is assigned by the service from one reservation the C5 catalog
 consumed first; no caller supplies a serial and no foreign scope is imported. The

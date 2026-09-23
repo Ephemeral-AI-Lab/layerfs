@@ -14,6 +14,9 @@ the pending implementation or a performance change.
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
+The base-less build-count correction in this page describes product commit
+`64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
+own source pin.
 
 Chapter numbers are global to the set. This paper holds chapters 7 and 9;
 **chapter 8** (module map) and **chapter 10** (what the set does not claim) are in
@@ -226,10 +229,9 @@ where, because a limit that is stated but not enforced is not a limit.
 source is explicit, and the consequence is a real behavioral boundary rather than
 an implementation detail:
 
-- one `build_filesystem` call is refused above **4,096 bindings** — a build stating
-  exactly 4,096 is accepted, 4,097 is the first refusal, because the single
-  reachability walk charges every entry the tree states, so a larger tree is
-  reached by several operations that each stay under the ceiling;
+- a base-less `build_filesystem` call walks only its supplied binding vector and
+  has no independent entry-count ceiling. Its work and memory still grow with
+  that input;
 - an existing directory whose **effective subtree** reaches the ceiling **can
   never be renamed or relocated**, however small the change is, because the walk of
   the base tree charges the rest of the tree beside the rebound directory first.

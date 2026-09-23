@@ -16,6 +16,12 @@ and image do not identify this revision. The
 and [acceptance record](proposal/service-daemon-transport/implementation/07-acceptance.md)
 state exact selections and incomplete proofs. These changes do not rewrite Stage 6
 results or qualify #193 performance work.
+The native Init progress-record update describes product commit
+`1f74d80be12ad19de1335d39fad0688ecc48c0f8`; the older sections retain
+their separate source bases.
+The Init ordering-backing correction describes product commit
+`0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
+their separate source bases.
 
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
@@ -223,6 +229,17 @@ productive upload traffic keeps its concurrent response wait alive. A blocked
 socket read may continue waiting when the other direction made progress; this
 does not reconnect, resend frames or replay a mutation. Complete silence remains
 bounded by five seconds, and the overall deadline never extends.
+The public native-directory import sends a checked one-byte `ResultData`
+progress marker at most once per second while it constructs the source tree.
+The native client consumes that marker without delivering logical result bytes;
+it does not reset the absolute request deadline or change the five-second
+no-progress rule. Other operations still reject unexpected `ResultData`.
+The shared namespace builder supplies C1's existing file-backed ordering
+reducer with a private directory beside the Store. The default pending-row
+and ordering-byte budgets remain unchanged; C1 spills sorted rows when the
+in-memory budget fills and checks release before the Service publishes a root.
+The Service removes the private directory on success or failure and reports
+failed cleanup. No file or entry-count threshold is inferred from that budget.
 Each process shares
 one absolute operation deadline through its layers. Only a remaining duration
 crosses the network, never an Instant. Synchronous

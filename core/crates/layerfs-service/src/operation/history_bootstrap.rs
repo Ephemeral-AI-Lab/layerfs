@@ -22,6 +22,7 @@ use layerfs_content::filesystem::attributes::{
     build::build_attribute_tree, codec::AttributeEntry, keys::AttributeKey,
     portable::PortableMetadata, value::emit_value,
 };
+use layerfs_content::filesystem::references::FileBacking;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
     DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, InodeScope,
@@ -29,10 +30,85 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, FileView, ObjectId};
-use layerfs_history::{ManifestEntry, NamespaceManifest, RecordKind};
+use layerfs_history::{ManifestEntry, RecordKind};
 use layerfs_storage::{SaveHandoff, Store};
-use layerfs_telemetry::timer::{Active, TimingScope};
-use std::time::Instant;
+use layerfs_telemetry::timer::{Active, Timing, TimingScope};
+use std::{
+    fs,
+    io::Write,
+    os::unix::fs::DirBuilderExt,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
+};
+
+static NEXT_ORDERING_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+/// One bounded progress byte on a long native import, separate from result data.
+pub(crate) struct ImportProgress<'a> {
+    deadline: Instant,
+    last: Instant,
+    output: Option<&'a mut dyn Write>,
+}
+impl<'a> ImportProgress<'a> {
+    pub fn disabled(deadline: Instant) -> Self {
+        Self {
+            deadline,
+            last: Instant::now(),
+            output: None,
+        }
+    }
+    pub fn with_output(deadline: Instant, output: &'a mut dyn Write) -> Self {
+        Self {
+            deadline,
+            last: Instant::now(),
+            output: Some(output),
+        }
+    }
+    pub fn deadline(&self) -> Instant {
+        self.deadline
+    }
+    pub fn tick(&mut self) -> Result<(), Failure> {
+        let now = Instant::now();
+        if now >= self.deadline {
+            return Err(Code::Deadline.into());
+        }
+        if now.duration_since(self.last) >= Duration::from_secs(1) {
+            if let Some(output) = self.output.as_deref_mut() {
+                output.write_all(&[0])?;
+                output.flush()?;
+            }
+            self.last = now;
+        }
+        Ok(())
+    }
+}
+
+/// Internal import row. Its parent index is not restricted by the old wire manifest.
+pub(crate) struct PreparedEntry {
+    pub parent: usize,
+    pub name: Vec<u8>,
+    pub kind: RecordKind,
+    pub mode: u32,
+    pub mtime_seconds: i64,
+    pub mtime_nanoseconds: u32,
+    pub content: Option<ObjectId>,
+    pub target: Option<Vec<u8>>,
+}
+
+impl From<&ManifestEntry> for PreparedEntry {
+    fn from(entry: &ManifestEntry) -> Self {
+        Self {
+            parent: usize::from(entry.parent),
+            name: entry.name.clone(),
+            kind: entry.kind,
+            mode: entry.mode,
+            mtime_seconds: entry.mtime_seconds,
+            mtime_nanoseconds: entry.mtime_nanoseconds,
+            content: entry.content,
+            target: entry.target.clone(),
+        }
+    }
+}
 
 /// Builds and saves one bounded logical namespace, returning its published root.
 pub(crate) fn build_namespace(
@@ -40,24 +116,19 @@ pub(crate) fn build_namespace(
     provider: &dyn AuthenticatedObjects,
     scope: InodeScope,
     root_serial: u64,
-    manifest: &NamespaceManifest,
-    deadline: Instant,
+    entries: &[PreparedEntry],
+    progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<ObjectId, Failure> {
-    manifest.check().map_err(|_| Code::InvalidInput)?;
-    let count = u64::try_from(manifest.entries.len()).map_err(|_| Code::Capacity)?;
+    let count = u64::try_from(entries.len()).map_err(|_| Code::Capacity)?;
     let last = root_serial
         .checked_add(count)
         .filter(|end| *end <= i64::MAX as u64)
         .ok_or(Code::Capacity)?;
-    if Instant::now() >= deadline {
-        return Err(Code::Deadline.into());
-    }
+    progress.tick()?;
     let serials: Vec<u64> = (root_serial..last).collect();
-    let (metadata, content_roots) =
-        prerequisites(store, provider, &manifest.entries, deadline, timer)?;
-    let inodes: Vec<InodeUpdate> = manifest
-        .entries
+    let (metadata, content_roots) = prerequisites(store, provider, entries, progress, timer)?;
+    let inodes: Vec<InodeUpdate> = entries
         .iter()
         .enumerate()
         .map(|(index, entry)| {
@@ -76,7 +147,7 @@ pub(crate) fn build_namespace(
             })
         })
         .collect::<Result<_, Failure>>()?;
-    let directories = directory_updates(&manifest.entries, &serials)?;
+    let directories = directory_updates(entries, &serials)?;
     let input = FilesystemInput {
         base: None,
         scope,
@@ -87,29 +158,53 @@ pub(crate) fn build_namespace(
         resources: FilesystemResources::default(),
     };
     input.check().map_err(content)?;
-    if Instant::now() >= deadline {
-        return Err(Code::Deadline.into());
-    }
-    let mut save = store
-        .begin_save(timer.child("history.begin_tree_save"))
-        .map_err(storage)?;
+    progress.tick()?;
+    let scratch = loop {
+        let path = store.path().with_extension(format!(
+            "ordering-{}-{}",
+            std::process::id(),
+            NEXT_ORDERING_DIRECTORY.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::DirBuilder::new().mode(0o700).create(&path) {
+            Ok(()) => break path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let mut save = match store.begin_save(timer.child("history.begin_tree_save")) {
+        Ok(save) => save,
+        Err(error) => {
+            let mut failure = storage(error);
+            if fs::remove_dir(&scratch).is_err() {
+                failure.cleanup = Some(Code::Io);
+            }
+            return Err(failure);
+        }
+    };
     let mut handoff = SaveHandoff::new(&mut save);
+    let mut backing = FileBacking::new(&scratch);
     let built = {
         let mut objects = FilesystemObjects::new(provider, &mut handoff);
-        layerfs_content::build_filesystem(&mut objects, &input, None).map_err(content)
+        layerfs_content::build_filesystem(&mut objects, &input, Some(&mut backing)).map_err(content)
     };
+    let scratch_cleanup = fs::remove_dir(&scratch);
     let retained = handoff.take_failure();
     drop(handoff);
     let built = match retained {
         Some(error) => Err(storage(error)),
         None => built,
     };
-    let built = built.and_then(|value| {
-        if Instant::now() >= deadline {
-            Err(Code::Deadline.into())
-        } else {
-            Ok(value)
+    let built = match (built, scratch_cleanup) {
+        (Err(mut failure), Err(_)) => {
+            failure.cleanup = Some(Code::Io);
+            Err(failure)
         }
+        (Ok(_), Err(error)) => Err(error.into()),
+        (result, Ok(())) => result,
+    };
+    let built = built.and_then(|value| {
+        progress.tick()?;
+        Ok(value)
     });
     match built {
         Ok(result) => {
@@ -139,8 +234,8 @@ pub(crate) fn build_namespace(
 fn prerequisites(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
-    entries: &[ManifestEntry],
-    deadline: Instant,
+    entries: &[PreparedEntry],
+    progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<(Vec<ObjectId>, Vec<ObjectId>), Failure> {
     let mut save = store
@@ -148,11 +243,12 @@ fn prerequisites(
         .map_err(storage)?;
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = (|| {
+        let result = timer.child("history.prerequisites").run(|_| {
             let mut objects = FilesystemObjects::new(provider, &mut handoff);
             let mut metadata = Vec::with_capacity(entries.len());
             let mut content_roots = Vec::with_capacity(entries.len());
             for entry in entries {
+                progress.tick()?;
                 let kind = kind_of(entry.kind);
                 let value = PortableMetadata {
                     mode: entry.mode,
@@ -169,8 +265,11 @@ fn prerequisites(
                     .map_err(content)?,
                     RecordKind::RegularFile => {
                         let root = entry.content.ok_or(Code::InvalidInput)?;
-                        let view = FileView::open(provider, root, timer.child("history.role"))
-                            .map_err(content)?;
+                        let view = Timing::disabled("history.role", |scope| {
+                            FileView::open(provider, root, scope.child("file"))
+                        })
+                        .0
+                        .map_err(content)?;
                         if view.logical_len() > MAX_FILE {
                             return Err(Code::Capacity.into());
                         }
@@ -182,7 +281,7 @@ fn prerequisites(
                 content_roots.push(content_root);
             }
             Ok((metadata, content_roots))
-        })();
+        });
         let retained = handoff.take_failure();
         drop(handoff);
         match retained {
@@ -191,11 +290,8 @@ fn prerequisites(
         }
     };
     let built = built.and_then(|value| {
-        if Instant::now() >= deadline {
-            Err(Code::Deadline.into())
-        } else {
-            Ok(value)
-        }
+        progress.tick()?;
+        Ok(value)
     });
     match built {
         Ok(values) => {
@@ -251,7 +347,7 @@ pub(crate) fn build_metadata(
 /// states, so an unstated root would be dropped from the inode table; the empty
 /// statement is also what gives the one-directory namespace its real empty page.
 fn directory_updates(
-    entries: &[ManifestEntry],
+    entries: &[PreparedEntry],
     serials: &[u64],
 ) -> Result<Vec<DirectoryUpdate>, Failure> {
     let mut bindings = std::collections::BTreeMap::new();
@@ -262,7 +358,7 @@ fn directory_updates(
     }
     for (index, entry) in entries.iter().enumerate().skip(1) {
         let name = PathName::from_bytes(&entry.name).map_err(content)?;
-        let parent = serials[usize::from(entry.parent)];
+        let parent = serials[entry.parent];
         bindings
             .get_mut(&parent)
             .ok_or(Code::InvalidInput)?

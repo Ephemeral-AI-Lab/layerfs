@@ -537,6 +537,7 @@ dependencies = [
  "layerfs-storage",
  "layerfs-telemetry",
  "nix",
+ "sha2",
 ]
 
 [[package]]

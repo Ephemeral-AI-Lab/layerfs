@@ -518,6 +518,16 @@ fn put_command(e: &mut Encoder, command: &HistoryCommand) -> Result<(), Failure>
             e.put(scope_seed)?;
             put_manifest(e, manifest)?;
         }
+        HistoryCommand::ImportNativeDirectory {
+            stack,
+            name,
+            scope_seed,
+        } => {
+            e.u8(9)?;
+            e.put(stack)?;
+            e.blob(name)?;
+            e.put(scope_seed)?;
+        }
         HistoryCommand::Fork {
             stack,
             branch,
@@ -588,6 +598,11 @@ fn take_command(d: &mut Decoder<'_>) -> Result<HistoryCommand, Failure> {
             name: d.blob(NAME_MAX_BYTES)?,
             scope_seed: d.root()?,
             manifest: take_manifest(d)?,
+        },
+        9 => HistoryCommand::ImportNativeDirectory {
+            stack: take_array::<16>(d)?,
+            name: d.blob(NAME_MAX_BYTES)?,
+            scope_seed: d.root()?,
         },
         2 => {
             let stack = take_array::<17>(d)?;

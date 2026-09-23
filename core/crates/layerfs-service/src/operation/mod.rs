@@ -3,6 +3,7 @@ pub(crate) mod failure;
 mod filesystem;
 pub(crate) mod history;
 pub(crate) mod history_bootstrap;
+mod import_native;
 mod metadata;
 mod read;
 mod write;
