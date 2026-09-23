@@ -1,0 +1,13 @@
+{
+  "id": "sha256:cabfe428d4db68e122ed3f7f40fe9ca0dd7cf0693e8b283b3259faf1cbe1e6ab",
+  "labels": {
+    "dev.layerfs.compilation-seal": "bf62fd100dbf36339a6e4a6a67ece0b86291fd7f87d6eeab00246518b3a214d0",
+    "dev.layerfs.product-seal": "970964e9af43a8bf57f0d7bec70736a94171f7beb62fc3378ea5cc4797500ebd",
+    "dev.layerfs.source-dirty": "false",
+    "dev.layerfs.source-seal": "fdbd6273ee1ab63ab996ab977a694c2d59b294b43a481a330ef2b6c31f0782bf",
+    "dev.layerfs.workload-source-sha256": "e29d728e3b295c06a4318bbe3eec43b1a7954d489ffd0bb2f22ceccd2a3ba145",
+    "org.opencontainers.image.revision": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+    "org.opencontainers.image.source": "https://github.com/Ephemeral-AI-Lab/layerfs",
+    "org.opencontainers.image.source-tree": "3e022b48a31e06d4e072950c4396f0b2c70d56dd"
+  }
+}

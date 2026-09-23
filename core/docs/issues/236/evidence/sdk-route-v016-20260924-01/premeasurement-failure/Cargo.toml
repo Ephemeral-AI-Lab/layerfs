@@ -1,0 +1,10 @@
+[package]
+name = "v016-sdk-route-probe"
+version = "0.0.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+layerfs-sdk = { path = "../../crates/layerfs-sdk" }
+layerfs-telemetry = { path = "/Users/yifanxu/.codex/worktrees/bb50/layerfs/core/crates/layerfs-telemetry", features = ["native"] }
