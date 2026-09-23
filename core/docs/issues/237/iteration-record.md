@@ -45,3 +45,39 @@ cold-source baseline. The fastest separate C1 candidate still needs
 **0.739294 s** less public time to reach that number. Current work does not
 establish that the target is attainable; any new receipt, failure or rejected
 hypothesis will be appended with its exact identity and causal evidence.
+
+## Round R2: C1 parity and timed Save pager
+
+- **C1 H1, fixed identities:** one control at `a6d1d563` returned in
+  **1.615643334 s** and one direct-build candidate at `dc654bb06` in
+  **1.381173500 s** (raw difference −0.234469834 s). Both public commands
+  used the same frozen stack and scope, fresh Stores, and independently found
+  **0/27,503 resident source payload pages** immediately before their timers.
+  Both existing full verifiers passed 10,101 paths and SHA-256 of 300 MB after
+  reopening. Exact root and all 24,683 object IDs matched; whole-Store
+  apparent bytes and pack capacity matched, with 4,096-B database pages.
+  The control's daemon lost one telemetry event, making its receipt
+  **INCOMPLETE**; the candidate remains `INELIGIBLE` under the official
+  uncontrolled-cache label. The result proves the stated C1 parity/readback
+  on this fixture, not a fully cold #231 admission or #229 sparse-history
+  compactness. The repaired full `layerfs-content` suite passed. Source and
+  tests were adopted into this research worktree in `738157ede`; see
+  [full H1 evidence](c1-fixed-identity.md).
+- **Pager D13 attempt A:** copied fixture directory mtimes changed during
+  setup, so the harness stopped with `NOT_RUN`, **zero timed samples**. It was
+  retained. After repairing only copied setup metadata, attempt B made one
+  fixed-identity public call in **1.530461375 s** with a fresh 4-KiB-page
+  Store and **0/27,503 resident source payload pages** on both checks.
+  Verification was SKIPPED; telemetry/cleanup passed. The *actual timed file
+  Save connection* used 2,000 cache pages and recorded **718,990 hits,
+  3,838 misses, 94,513 page-write events and zero spills** across 79 commits.
+  Per its preregistered rule, the proposed 32-MiB/spill-OFF policy pair was
+  **rejected without a treatment sample**. Source instrumentation was restored;
+  the one D13 time is not compared as an algorithm change. See
+  [pager report and both attempts](pager-10k.md).
+
+C1 adoption remains limited to this research branch. The separate C2
+dependency-aware admission candidate has one control/candidate timing pair
+under analysis; its physical Store/readback outcome will be appended before
+any adoption decision. Source metadata cache remains unqualified for every
+reported run, and no prior receipt is promoted or rewritten.
