@@ -1182,16 +1182,18 @@ fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
             .collect::<Vec<_>>(),
         vec![0, 1, 2]
     );
-    let capacity: i64 = connection
+    let (length, header_used): (i64, Vec<u8>) = connection
         .query_row(
-            "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
+            "SELECT length(data), substr(data,17,4) FROM object_packs WHERE pack_id = ?1",
             [locations[0].0],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
-        .expect("open pack capacity");
+        .expect("final pooled pack geometry");
+    let used = u32::from_le_bytes(header_used.try_into().unwrap());
     assert_eq!(
-        usize::try_from(capacity).unwrap(),
-        layerfs_storage::policy::PACK_LIMIT
+        length,
+        i64::from(used),
+        "the shared pooled pack closes at its used length"
     );
     let (read, _) = read_objects(&reopened, &ids).expect("reopened pooled leaves");
     for (id, bytes) in ids.into_iter().zip(read) {
@@ -1216,7 +1218,7 @@ fn sparse_saves_finalize_pooled_rows_without_file_size_growth() {
     let connection = rusqlite::Connection::open(&path).expect("closed Store");
     let mut statement = connection
         .prepare(
-            "SELECT length(data), substr(data,17,4) FROM object_packs +             WHERE substr(data,9,4)=x'0c000000' ORDER BY pack_id",
+            "SELECT length(data), substr(data,17,4) FROM object_packs WHERE substr(data,9,4)=x'0c000000' ORDER BY pack_id",
         )
         .expect("pooled pack geometry");
     let rows: Vec<(i64, Vec<u8>)> = statement
