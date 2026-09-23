@@ -1,0 +1,99 @@
+{
+  "dbstat": {
+    "content_signatures": {
+      "page_bytes": 704512,
+      "pages": 172
+    },
+    "metadata_value_groups": {
+      "page_bytes": 102400,
+      "pages": 25
+    },
+    "object_packs": {
+      "page_bytes": 512823296,
+      "pages": 125201
+    },
+    "objects": {
+      "page_bytes": 6082560,
+      "pages": 1485
+    },
+    "packs_save": {
+      "page_bytes": 32768,
+      "pages": 8
+    },
+    "saves": {
+      "page_bytes": 4096,
+      "pages": 1
+    },
+    "signatures_save": {
+      "page_bytes": 106496,
+      "pages": 26
+    },
+    "sqlite_autoindex_metadata_value_groups_1": {
+      "page_bytes": 32768,
+      "pages": 8
+    },
+    "sqlite_autoindex_saves_1": {
+      "page_bytes": 4096,
+      "pages": 1
+    },
+    "sqlite_autoindex_saves_2": {
+      "page_bytes": 4096,
+      "pages": 1
+    },
+    "sqlite_schema": {
+      "page_bytes": 12288,
+      "pages": 3
+    },
+    "sqlite_sequence": {
+      "page_bytes": 4096,
+      "pages": 1
+    },
+    "store_policy": {
+      "page_bytes": 4096,
+      "pages": 1
+    }
+  },
+  "freelist_count": 0,
+  "history": {
+    "allocated_bytes": 86016,
+    "apparent_bytes": 86016,
+    "path": "benchmark-results/fs-bench-pro/sdk-100k-packspace-c3-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/history.sqlite",
+    "sha256": "afcce62dfc533408e1e94864186838a3fbfd41085291e4f99281f759bdb45941"
+  },
+  "object_rows": 112424,
+  "pack_blob_capacity_bytes": 511331101,
+  "pack_rows": 2297,
+  "pack_tail_bytes": 142988,
+  "pack_used_bytes": 511188113,
+  "pack_versions": {
+    "12": {
+      "capacity_bytes": 4194304,
+      "rows": 16,
+      "used_bytes": 4051316
+    },
+    "15": {
+      "capacity_bytes": 204002477,
+      "rows": 944,
+      "used_bytes": 204002477
+    },
+    "17": {
+      "capacity_bytes": 301901714,
+      "rows": 1319,
+      "used_bytes": 301901714
+    },
+    "9": {
+      "capacity_bytes": 1232606,
+      "rows": 18,
+      "used_bytes": 1232606
+    }
+  },
+  "page_count": 126933,
+  "page_size": 4096,
+  "source_manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "store": {
+    "allocated_bytes": 523313152,
+    "apparent_bytes": 519917568,
+    "path": "benchmark-results/fs-bench-pro/sdk-100k-packspace-c3-20260924-01/sdk-host/diagnostic-100k-release/namespace-100000/store.sqlite",
+    "sha256": "776060b1fa0d2ab0dc0d78672955906762f6d9e4d3f24af13ded71392a2ed2df"
+  }
+}

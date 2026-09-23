@@ -1,0 +1,10 @@
+{
+  "bytes": 500000000,
+  "copy": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-100k-packspace-c3-20260924-01/source-copy/namespace-100000/payload",
+  "files": 100000,
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "method": "shutil.copytree+copy2-independent-byte-copy",
+  "source": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/payload",
+  "status": "PASS",
+  "wall_ns": 36531574333
+}
