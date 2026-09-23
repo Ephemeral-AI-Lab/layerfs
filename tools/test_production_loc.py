@@ -22,6 +22,15 @@ class CounterTests(unittest.TestCase):
     def tearDown(self):
         self._temporary.cleanup()
 
+    def test_nested_api_members_count_only_product_source(self):
+        for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs",
+                     "mcp/src/lib.rs", "cli/src/main.rs"):
+            write(self.root, f"core/crates/layerfs-api/{name}", "pub fn value() {}\n")
+        files = production_loc.scope_files(self.root, "core")
+        self.assertEqual([str(path.relative_to(self.root / "core/crates/layerfs-api"))
+                          for path in files], ["core/src/lib.rs", "sdk/src/client.rs"])
+        self.assertEqual(production_loc.scan(self.root)["scopes"]["core"]["lines"], 2)
+
     def test_blank_and_comment_lines_do_not_count(self):
         path = write(
             self.root,

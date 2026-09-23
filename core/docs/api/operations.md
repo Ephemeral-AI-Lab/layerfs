@@ -1,10 +1,9 @@
 # Project and Workspace API contracts
 
-> **Status:** Proposal; target LayerFS v0.1.7; not a released contract.
+> **Status:** Project Init implemented in Core; Workspace and exec remain proposals.
 
-This document defines the small agent-facing vocabulary to implement in
-stages. Signatures below describe intended SDK behavior; they are not current
-Rust exports.
+This document defines the agent-facing vocabulary. `init_project` is a current
+SDK export. Workspace and exec signatures describe future behavior.
 
 ## `init_project(project_name, path)` — first implementation
 
@@ -21,10 +20,10 @@ current [command](../../crates/layerfs-bridge/src/contract/history.rs) is
 `HistoryCommand::ImportNativeDirectory`; the similarly named `InitLayerStack`
 uses a pathless manifest with pre-saved file roots and cannot implement this
 method. The current [Service](../../crates/layerfs-service/src/owner.rs) has a
-single startup-bound `import_root`, so per-call source ownership is a required
-backend change. No SDK wrapper may change that global field around an active
-request. Source scan, file reads, construction, saves and C5 publication stay
-inside the public operation boundary.
+single startup-bound `import_root`; the host-direct SDK passes a validated
+source binding to one authorized call without changing that field. Source
+scan, file reads, construction, saves and C5 publication stay inside the
+public operation boundary.
 
 Success means the returned root and genesis record were published. A known
 failure, unknown outcome and cleanup failure stay distinguishable; the SDK

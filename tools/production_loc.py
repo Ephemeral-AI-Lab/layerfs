@@ -316,9 +316,17 @@ def scope_files(root: Path, scope: str) -> list:
         parts = path.relative_to(base).parts
         if any(part in SKIP_DIRS for part in parts):
             continue
-        if "src" in parts and path.suffix in CODE_SUFFIXES:
+        source = (len(parts) > 2 and parts[1] == "src") or (
+            len(parts) > 3 and parts[0] == "layerfs-api"
+            and parts[1] in ("core", "sdk") and parts[2] == "src"
+        )
+        sql = (len(parts) > 2 and parts[1] == "sql") or (
+            len(parts) > 3 and parts[0] == "layerfs-api"
+            and parts[1] in ("core", "sdk") and parts[2] == "sql"
+        )
+        if source and path.suffix in CODE_SUFFIXES:
             files.append(path)
-        elif "sql" in parts and path.suffix == ".sql":
+        elif sql and path.suffix == ".sql":
             # Runtime SQL is shipped implementation for either product scope.
             files.append(path)
     excluded = test_only_files(files)

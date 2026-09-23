@@ -90,9 +90,11 @@ def production_files(core):
     for package in (core / "crates").glob("*"):
         if not package.is_dir():
             continue
-        files.update(path for path in (package / "src").rglob("*")
-                     if path.is_file() and path.suffix in (".rs", ".sql"))
-        files.update(path for path in (package / "sql").rglob("*.sql") if path.is_file())
+        packages = (package / "core", package / "sdk") if package.name == "layerfs-api" else (package,)
+        for member in packages:
+            files.update(path for path in (member / "src").rglob("*")
+                         if path.is_file() and path.suffix in (".rs", ".sql"))
+            files.update(path for path in (member / "sql").rglob("*.sql") if path.is_file())
     return sorted(files)
 
 

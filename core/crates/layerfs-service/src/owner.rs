@@ -135,6 +135,27 @@ impl Service {
         output: &mut dyn Write,
         deadline: Instant,
     ) -> (Result<Response, Failure>, Diagnostic) {
+        self.handle_until_bound(
+            peer,
+            r,
+            input,
+            output,
+            deadline,
+            self.import_root.as_deref(),
+        )
+    }
+
+    /// Binds one checked host source to one local request without changing the
+    /// startup root used by native daemon requests or other concurrent calls.
+    pub(crate) fn handle_until_bound(
+        &self,
+        peer: &VerifiedPeer,
+        r: &Request,
+        input: &mut dyn Read,
+        output: &mut dyn Write,
+        deadline: Instant,
+        import_root: Option<&Path>,
+    ) -> (Result<Response, Failure>, Diagnostic) {
         let deadline = deadline.min(Instant::now() + Duration::from_millis(r.deadline_ms as u64));
         self.recorder.run(r.id, r.operation.label(), |scope| {
             r.validate()?;
@@ -186,7 +207,7 @@ impl Service {
             };
             dispatch(
                 &store.store,
-                (store.history.as_deref(), self.import_root.as_deref()),
+                (store.history.as_deref(), import_root),
                 r,
                 input,
                 output,

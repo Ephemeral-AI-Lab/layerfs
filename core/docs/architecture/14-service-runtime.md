@@ -23,6 +23,17 @@ The Init ordering-backing correction describes product commit
 `0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
 their separate source bases.
 
+The agent-facing project Init route is based on `main` at
+`7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.
+The host Service accepts a checked, request-scoped directory binding for its
+existing native importer. `layerfs-sdk::Client::init_project(name, path)` calls
+that Service directly. The Service generates a stack body and scope seed for
+each call, runs its normal authorization and writer admission, and returns the
+published genesis record. The native daemon request retains its startup-bound
+root. Invalid sources are refused before the import call; name collisions are
+refused by C5 publication. Workspace lifecycle and exec remain unsupported.
+This route has no benchmark qualification from older daemon-host receipts.
+
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
 on accepted sockets. Socket option sizes are not admission criteria. The failed

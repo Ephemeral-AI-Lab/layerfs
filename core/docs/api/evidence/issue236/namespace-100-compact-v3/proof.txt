@@ -1,0 +1,12 @@
+route=host-direct-sdk-v1
+fixture_profile=core-sdk-init-fixture-v1
+case=namespace-100-compact-v3
+source_tree=c3de9def7a365ca038cd0385be7759068596b090
+manifest_sha256=4988076670f9583043de635b91f86b1468c0f7b61438f66645f925668469b108
+files=100
+bytes=5000000
+project_id=31fc1ce32df6b4b1aa6120a8725c532a11
+genesis_layer=3278001d4d2eddc63d269341a1dc6ac98e67a5c52350a5ca5dc44f2d967c3cc823
+root=e2c482fcd22c565d736a67059b19d15f6b49386dee3fc361e687677939d75d34
+root_serial=1
+status=PASS

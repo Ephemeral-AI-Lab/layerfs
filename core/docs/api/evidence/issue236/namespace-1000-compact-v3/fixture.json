@@ -1,0 +1,10 @@
+{
+  "case": "namespace-1000-compact-v3",
+  "directories": 11,
+  "files": 1000,
+  "logical_bytes": 20000000,
+  "manifest_sha256": "a4a31730c4af4a5673e85e7c0841bf7e0f0cea9151197fcc9d101b023dd06271",
+  "profile": "core-sdk-init-fixture-v1",
+  "route": "host-direct-sdk-v1",
+  "seed": 1
+}

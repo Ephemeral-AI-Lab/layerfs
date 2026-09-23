@@ -9,6 +9,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/layerfs-api/core",
+    "crates/layerfs-api/sdk",
     "crates/layerfs-daemon",
     "crates/layerfs-fuse",
     "crates/layerfs-workspace",

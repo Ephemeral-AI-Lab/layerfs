@@ -89,6 +89,18 @@ class ProductBoundaryTests(unittest.TestCase):
                               for p in production_files(core)],
                              ["sql/schema.sql", "src/lib.rs", "src/sql/query.sql"])
 
+    def test_nested_api_product_scope(self):
+        with TemporaryDirectory() as directory:
+            core = Path(directory)
+            for name in ("core/src/lib.rs", "sdk/src/client.rs", "sdk/tests/route.rs",
+                         "mcp/src/lib.rs", "cli/src/main.rs"):
+                path = core / "crates/layerfs-api" / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("")
+            self.assertEqual([str(p.relative_to(core / "crates/layerfs-api"))
+                              for p in production_files(core)],
+                             ["core/src/lib.rs", "sdk/src/client.rs"])
+
 
 if __name__ == "__main__":
     unittest.main()

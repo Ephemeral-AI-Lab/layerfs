@@ -1,0 +1,10 @@
+[package]
+name = "layerfs-api-core"
+description = "Agent-facing project results and explicit future operation surface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+layerfs-bridge = { path = "../../layerfs-bridge", default-features = false }

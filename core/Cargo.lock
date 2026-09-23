@@ -482,6 +482,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerfs-api-core"
+version = "0.1.6"
+dependencies = [
+ "layerfs-bridge",
+]
+
+[[package]]
 name = "layerfs-bridge"
 version = "0.1.6"
 dependencies = [
@@ -537,6 +544,19 @@ dependencies = [
  "layerfs-storage",
  "layerfs-telemetry",
  "nix",
+ "sha2",
+]
+
+[[package]]
+name = "layerfs-sdk"
+version = "0.1.6"
+dependencies = [
+ "layerfs-api-core",
+ "layerfs-bridge",
+ "layerfs-history",
+ "layerfs-service",
+ "layerfs-storage",
+ "layerfs-telemetry",
  "sha2",
 ]
 
