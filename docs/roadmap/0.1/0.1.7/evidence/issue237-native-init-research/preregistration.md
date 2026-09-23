@@ -199,3 +199,25 @@ speedup from this instrumented run. Keep four workers, channel capacity eight,
 Store policy and 4096-byte SQLite pages unchanged. Retain the instrumented
 diff and raw receipt, then restore product source. A candidate algorithm is
 registered only after these counts locate avoidable work.
+
+## D12: release 10k collision-validation detail diagnostic
+
+D11 retained the completed Save's seven disjoint buckets and the owner span,
+but omitted its already collected `DiagProfile` fields. On a new diagnostic
+identity, retain D11's count-only Service instrument and print the existing
+`DiagProfile` once after `save.finish`, especially `validate_ns` and its nested
+`collision_query_ns`. Change no algorithm, query, page size, worker count,
+channel capacity, timeout, fixture or public operation. Run one release-profile
+10k public Init with a fresh Store, full source payload rehash/invalidation and
+immediate whole-input nonfaulting residency recheck. Require zero resident
+source pages on both checks; verification is SKIPPED. The official harness's
+cache label remains uncontrolled, so the result is a diagnostic, never an
+admission PASS. Retain the raw receipt even on failure, record the instrument
+diff, and restore product source afterward.
+
+Decision: if `collision_query_ns` is below 50 ms, reject a batched-candidate
+lookup treatment for this 10k iteration. If it exceeds 50 ms, the query is
+large enough to investigate, but nested `validate_ns` and one measurement do
+not themselves prove a speedup. D11 and D12 are different instrumented source
+identities and are not compared as a treatment pair. SQLite stays at 4096-byte
+pages.
