@@ -14,6 +14,9 @@ the pending implementation or a performance change.
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
+The base-less build-count correction in this page describes product commit
+`64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
+own source pin.
 
 Chapter numbers are global to the set. This paper holds chapters 7 and 9;
 **chapter 8** (module map) and **chapter 10** (what the set does not claim) are in

@@ -12,6 +12,9 @@ in place and carry their own commits, as is the `PoolCounters` home moved from
 counter added by #178 **V6** (2026-09-18), and the `presence_queries` counter
 added by #178 **V8** (2026-09-18). Scope, method,
 measurement status and upkeep are stated in the [index](README.md).
+The base-less reachability-bound correction describes product commit
+`64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; earlier counter notes keep
+their own source pins.
 
 Chapter numbers are global to the set: this paper holds **chapter 15**.
 

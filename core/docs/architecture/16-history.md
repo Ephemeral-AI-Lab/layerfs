@@ -16,6 +16,9 @@ Implementation specification and its pre-publication audit:
 - **Source pin:** `7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c`, including the
   bridge codec consolidation. This pin-only update changes no product behavior.
   Reference root `crates/` remains separate.
+- **Native import/count-bound update:** product commit
+  `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
+  separate baseline pin.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source

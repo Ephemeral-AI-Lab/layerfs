@@ -18,6 +18,9 @@
 Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
+The current native import and base-less build-count notes describe product
+commit `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; the unexecuted phase
+proposal retains its earlier source pin.
 
 Chapter numbers are global to the set, so this paper holds **chapter 11**; the
 [contents table](README.md#contents) lists the other chapters.

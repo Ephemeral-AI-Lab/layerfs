@@ -9,6 +9,9 @@
 > rename replacement semantics and canonical link-count re-baseline. No
 > performance result, crash-durability guarantee or completed qualification is
 > claimed.
+> Native import and the lifted test-era entry/reservation caps describe product
+> commit `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; the rest of this
+> proposal retains the earlier source pins.
 
 Read the [packet overview](README.md), [Workspace/FUSE contract](01-workspace-fuse-contract.md)
 and [overlay/snapshot design](02-overlay-snapshot.md) for runtime behavior.
