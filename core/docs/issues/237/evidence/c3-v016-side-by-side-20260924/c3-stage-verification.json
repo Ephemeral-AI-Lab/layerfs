@@ -1,0 +1,27 @@
+{
+  "budget_ns": 600000000000,
+  "child": {
+    "bytes": 500000000,
+    "directories": 1001,
+    "files": 100000,
+    "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "metadata_attribute_waves": 5,
+    "paths": 101001,
+    "root": "4c6c883e8953c9c88aac667a6aca66d00142f4027ab20454e9a275909e11df8c",
+    "status": "PASS",
+    "workers": 4
+  },
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/binary-archive/48d9f812bbf117cffc70ef18155b5a54e13c38eb7d817128d900fc4d6df109a0/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue237-c3-stage-20260924-02/sdk-host/diagnostic-100k-release/namespace-100000/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue237-c3-stage-20260924-02/sdk-host/diagnostic-100k-release/namespace-100000/history.sqlite",
+    "4c6c883e8953c9c88aac667a6aca66d00142f4027ab20454e9a275909e11df8c",
+    "e1acc7cb0ce0e009e03ae4ad34e971b1",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+    "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
+  ],
+  "exit_code": 0,
+  "status": "PASS",
+  "stderr": "LFS237 verifier traversal paths=101001 directories=1001 queued_files=100000 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=0 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=15550 metadata_attribute_waves=1\nLFS237 verifier worker files=500 bytes=9450 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=40550 metadata_attribute_waves=1\nLFS237 verifier worker files=1000 bytes=34450 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=65550 metadata_attribute_waves=1\nLFS237 verifier worker files=1500 bytes=59450 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=90550 metadata_attribute_waves=1\nLFS237 verifier worker files=2000 bytes=84450 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=115550 metadata_attribute_waves=1\nLFS237 verifier worker files=2500 bytes=109450 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=140550 metadata_attribute_waves=1\nLFS237 verifier worker files=3000 bytes=134450 metadata_attribute_waves=1\nLFS237 verifier worker files=3500 bytes=159450 metadata_attribute_waves=1\nLFS237 verifier worker files=4000 bytes=165550 metadata_attribute_waves=1\nLFS237 verifier worker files=4000 bytes=184450 metadata_attribute_waves=1\nLFS237 verifier worker files=4500 bytes=190550 metadata_attribute_waves=1\nLFS237 verifier worker files=5000 bytes=215550 metadata_attribute_waves=1\nLFS237 verifier worker files=4500 bytes=209450 metadata_attribute_waves=1\nLFS237 verifier worker files=5000 bytes=234450 metadata_attribute_waves=1\nLFS237 verifier worker files=5500 bytes=259450 metadata_attribute_waves=1\nLFS237 verifier worker files=5500 bytes=240550 metadata_attribute_waves=1\nLFS237 verifier worker files=6000 bytes=284450 metadata_attribute_waves=1\nLFS237 verifier worker files=6500 bytes=309450 metadata_attribute_waves=1\nLFS237 verifier worker files=6000 bytes=265550 metadata_attribute_waves=1\nLFS237 verifier worker files=7000 bytes=334450 metadata_attribute_waves=1\nLFS237 verifier worker files=7500 bytes=359450 metadata_attribute_waves=1\nLFS237 verifier worker files=6500 bytes=290550 metadata_attribute_waves=1\nLFS237 verifier worker files=7000 bytes=315550 metadata_attribute_waves=1\nLFS237 verifier worker files=8000 bytes=384450 metadata_attribute_waves=1\nLFS237 verifier worker files=8500 bytes=409450 metadata_attribute_waves=1\nLFS237 verifier worker files=9000 bytes=434450 metadata_attribute_waves=1\nLFS237 verifier worker files=7500 bytes=340550 metadata_attribute_waves=1\nLFS237 verifier worker files=9500 bytes=459450 metadata_attribute_waves=1\nLFS237 verifier worker files=10000 bytes=484450 metadata_attribute_waves=1\nLFS237 verifier worker files=10500 bytes=509450 metadata_attribute_waves=1\nLFS237 verifier worker files=8000 bytes=365550 metadata_attribute_waves=1\nLFS237 verifier worker files=8500 bytes=390550 metadata_attribute_waves=1\nLFS237 verifier worker files=11000 bytes=534450 metadata_attribute_waves=1\nLFS237 verifier worker files=9000 bytes=415550 metadata_attribute_waves=1\nLFS237 verifier worker files=11500 bytes=559450 metadata_attribute_waves=1\nLFS237 verifier worker files=9500 bytes=440550 metadata_attribute_waves=1\nLFS237 verifier worker files=10000 bytes=465550 metadata_attribute_waves=1\nLFS237 verifier worker files=12000 bytes=584450 metadata_attribute_waves=1\nLFS237 verifier worker files=10500 bytes=490550 metadata_attribute_waves=1\nLFS237 verifier worker files=11000 bytes=515550 metadata_attribute_waves=1\nLFS237 verifier worker files=12500 bytes=609450 metadata_attribute_waves=1\nLFS237 verifier worker files=11500 bytes=540550 metadata_attribute_waves=1\nLFS237 verifier worker files=13000 bytes=634450 metadata_attribute_waves=1\nLFS237 verifier worker files=13500 bytes=659450 metadata_attribute_waves=1\nLFS237 verifier worker files=12000 bytes=565550 metadata_attribute_waves=1\nLFS237 verifier worker files=12500 bytes=590550 metadata_attribute_waves=1\nLFS237 verifier worker files=14000 bytes=684450 metadata_attribute_waves=1\nLFS237 verifier worker files=13000 bytes=615550 metadata_attribute_waves",
+  "wall_ns": 9405526625
+}

@@ -1,0 +1,27 @@
+{
+  "binary_sha256": "641f710b76599d27437556490c9acd9a4636a9f7dfe6ae33dd1dc9ca211ddca0",
+  "command": [
+    "target/release/fs-benchmark-pro",
+    "repository-init",
+    "benchmark-results/issue237-v016-exact-100k-20260924-01/readback",
+    "benchmark-results/issue237-v016-exact-100k-20260924-01/source/payload",
+    "verification-full-manifest",
+    "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv"
+  ],
+  "exit_code": 0,
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "result": {
+    "bytes_verified": 500000000,
+    "directories_verified": 1001,
+    "files_verified": 100000,
+    "fresh_reopen": true,
+    "mode": "verification-full-manifest",
+    "paths_verified": 101001,
+    "portable_metadata_verified": true,
+    "schema": "real-source-init-full-manifest-v1",
+    "status": "PASS",
+    "verification_ns": 21761521208
+  },
+  "status": "PASS",
+  "wall_ns": 21895595708
+}

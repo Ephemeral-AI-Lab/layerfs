@@ -1,0 +1,154 @@
+{
+  "dbstat": {
+    "branch_identity": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "branch_names": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "branches": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "commits": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "layer_identity": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 53,
+      "unused_bytes": 4032
+    },
+    "layer_stack_names": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 54,
+      "unused_bytes": 4031
+    },
+    "layer_stacks": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 88,
+      "unused_bytes": 3997
+    },
+    "layers": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 89,
+      "unused_bytes": 3996
+    },
+    "layers_child": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "layers_genesis": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 53,
+      "unused_bytes": 4032
+    },
+    "layers_source": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    },
+    "metadata_value_groups": {
+      "page_bytes": 36864,
+      "pages": 9,
+      "payload_bytes": 27898,
+      "unused_bytes": 5031
+    },
+    "object_packs": {
+      "page_bytes": 508952576,
+      "pages": 124256,
+      "payload_bytes": 507038871,
+      "unused_bytes": 1362143
+    },
+    "objects": {
+      "page_bytes": 5726208,
+      "pages": 1398,
+      "payload_bytes": 4793081,
+      "unused_bytes": 579083
+    },
+    "scope_allocator": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 41,
+      "unused_bytes": 4044
+    },
+    "sqlite_autoindex_metadata_value_groups_1": {
+      "page_bytes": 16384,
+      "pages": 4,
+      "payload_bytes": 6278,
+      "unused_bytes": 8109
+    },
+    "sqlite_schema": {
+      "page_bytes": 12288,
+      "pages": 3,
+      "payload_bytes": 6165,
+      "unused_bytes": 5908
+    },
+    "workspace_stages": {
+      "page_bytes": 4096,
+      "pages": 1,
+      "payload_bytes": 0,
+      "unused_bytes": 4088
+    }
+  },
+  "freelist_count": 20,
+  "pack_blob_bytes": 507025429,
+  "pack_rows": 2690,
+  "pack_versions": {
+    "1": {
+      "blob_bytes": 701616,
+      "groups": 389,
+      "packs": 9
+    },
+    "2": {
+      "blob_bytes": 200328926,
+      "groups": 3743,
+      "packs": 1116
+    },
+    "4": {
+      "blob_bytes": 301825980,
+      "groups": 98998,
+      "packs": 1501
+    },
+    "6": {
+      "blob_bytes": 4168907,
+      "groups": 794,
+      "packs": 64
+    }
+  },
+  "page_count": 125703,
+  "page_size": 4096,
+  "source_manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "store_allocated_bytes": 520110080,
+  "store_apparent_bytes": 514879488,
+  "store_sha256": "6bd5587f425364e3c962dea58a768bbbfe5f53902ea4e098bff9017de2a8eabb",
+  "table_rows": {
+    "branches": 0,
+    "commits": 0,
+    "layer_stacks": 1,
+    "layers": 1,
+    "metadata_value_groups": 651,
+    "object_packs": 2690,
+    "objects": 112424,
+    "scope_allocator": 1,
+    "workspace_stages": 0
+  }
+}

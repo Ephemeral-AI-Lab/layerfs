@@ -11,7 +11,8 @@
 This research began in `codex/issue237-init-research` from `main` at
 `7df25f979`. Its accepted direct C1 build, bounded C2 group admission,
 Service layout and ImportBatch source are integrated with the #236 SDK API
-on `main`. Later experimental product candidates remain isolated. Integration
+on `main`. The C3 pack-placement rule was later promoted by #239; other
+experimental product candidates remain isolated. Integration
 does not close #237 or the four-tier #231 gate, and the older daemon-host
 measurements are not SDK benchmark results or release qualification. The only
 fixed database page size used here is 4 KiB. The
@@ -31,6 +32,10 @@ remain separate from the older daemon-host timings.
 The [next-agent SDK 100k handoff](sdk-100k-performance-handoff.md) freezes the
 case and the work required before its first debug SDK diagnostic. The current
 #236 two-case runner still records 100k as `NOT_RUN`.
+The [exact-source v0.1.6 and promoted C3 side-by-side](c3-v016-exact-source-side-by-side-20260924.md)
+compares their release routes by stage and closed Store geometry, with a
+separate count-driven merged-C3 diagnostic. It does not qualify a speed
+claim or close the sparse-history gate.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

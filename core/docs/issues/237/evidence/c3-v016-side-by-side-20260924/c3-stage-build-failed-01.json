@@ -1,0 +1,27 @@
+{
+  "budget_ns": 30000000000,
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-service",
+    "--example",
+    "benchmark_init",
+    "--example",
+    "verify_namespace"
+  ],
+  "compiled_units": 84,
+  "exit_code": 101,
+  "mode": "first-use",
+  "profile": "release",
+  "status": "FAIL",
+  "target": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/core/target",
+  "wall_ns": 16279156000
+}
