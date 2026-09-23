@@ -50,3 +50,39 @@ and `verification.json` preserve the cache and readback evidence. Complete raw
 outputs, including Stores, source copies and fixture manifests, were moved to
 `benchmark-results/fs-bench-pro/sdk-merge-check-20260924/` in the main checkout;
 the temporary checkout was removed after collection.
+
+## Follow-up: release profile explains the apparent 10k slowdown
+
+The 6.140-s diagnostic above used Cargo's **debug** profile. The earlier
+1.110–1.419-s daemon-host observations used **release** binaries. A separate
+one-shot SDK diagnostic built the same merged product source with
+`cargo +1.85.1 build --manifest-path core/Cargo.toml --locked --release`
+for the SDK driver and verifier. It used the same SDK fixture manifest
+(`878f44e10303cc43f5f202a4cf59e817316b16cee153fb70f8bf389ade6253ab`)
+and a new independent source byte copy. Its final prelaunch check also found
+**0/27,503 resident source payload pages**.
+
+| 10,000 files / 300 MB | Debug SDK diagnostic | Release SDK diagnostic |
+| --- | ---: | ---: |
+| Public `Client::init_project` | 6,139.828 ms | **1,289.037 ms** |
+| Driver lifecycle user + system CPU | 14.338 + 0.957 s | 0.994 + 0.986 s |
+| Independent reopened readback | 8,287.477 ms, PASS | 2,166.301 ms, PASS |
+| Source payload residency before launch | 0/27,503 pages | 0/27,503 pages |
+
+The release SDK call is **4.76× faster** than the earlier debug SDK call and
+falls inside the old 1.110–1.419-s release daemon-host observation range.
+This establishes that the 6.140-s number was dominated by its debug build
+profile; it does not establish an exact route-to-route speed ratio. The SDK
+generates fresh authority identity on each call, the release and debug Stores
+therefore have different roots, and directory/inode metadata cache state was
+not qualified. Both independent verifiers passed all 10,101 paths and
+300,000,000 bytes. The 10k case is still **unregistered** in the #236 SDK
+benchmark and neither diagnostic is a performance admission row.
+
+The [release diagnostic receipt](evidence/sdk-release-10k-20260924/receipt.json),
+[cold recheck](evidence/sdk-release-10k-20260924/cold-recheck.json),
+[binary provenance](evidence/sdk-release-10k-20260924/sdk-build-source.json),
+and [full readback result](evidence/sdk-release-10k-20260924/verification.json)
+retain the measured identities and limits. Full raw output is under
+`benchmark-results/fs-bench-pro/sdk-release-compare-20260924/`; the temporary
+checkout was removed after collection.

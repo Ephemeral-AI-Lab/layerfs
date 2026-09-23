@@ -1,0 +1,16 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-release-compare/layerfs/benchmark-results/fs-bench-pro/binary-archive/fa431678c20e6d4b3bde5458b8b78f82aa89809866af62ab97b2eeefdc60f904/benchmark_init",
+      "sha256": "fa431678c20e6d4b3bde5458b8b78f82aa89809866af62ab97b2eeefdc60f904"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/sdk-release-compare/layerfs/benchmark-results/fs-bench-pro/binary-archive/f5cd992581fa790ae07b7fc43ecc367342f5471cd8a06bf443a0e46bd26b5988/verify_namespace",
+      "sha256": "f5cd992581fa790ae07b7fc43ecc367342f5471cd8a06bf443a0e46bd26b5988"
+    }
+  },
+  "build_profile": "release",
+  "product_seal": "1d9d64ee874c4dc3b305c3be5021471b80abf757e0f9309bdba12457f57c5f84",
+  "provenance": "exact merged-source release binaries built --locked in main worktree before diagnostic and copied by digest",
+  "source_commit": "ac946c7d3be45d0c468bff5d508a1bc4fa3f26b1"
+}
