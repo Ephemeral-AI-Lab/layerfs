@@ -57,6 +57,23 @@ The expected raw layout includes `identity.json`, `source-copy.json`,
 `cold-preflight.json`, `cold-recheck.json`, `stdout.txt`, `stderr.txt`,
 `receipt.json`, `store/store.sqlite`, and the separate `readback/` Store copy.
 
+## Frozen executable identity before GO
+
+The isolated, clean benchmark-only commit is
+`61d1eb10d8096f1315640fc2623542a34685850d`, with benchmark tree
+`667b1317dc2295ee70ff411f272962573ce59afd` and unchanged release
+product tree `dcc4fb6fd01115dcbf91ba02df414e91eb5733be`. Locked Cargo
+release build used Rust `1.85.1`; its executable SHA-256 is
+`641f710b76599d27437556490c9acd9a4636a9f7dfe6ae33dd1dc9ca211ddca0`.
+The wrapper SHA-256 is
+`91b2ea0007e4966d386421ad1cc415db11a190b0dda1b5bfb5b31b89eed8427a`;
+the Rust benchmark `main.rs` and `repository_init.rs` SHA-256 values are
+`9eda4c5c9d21bb509360ce7c7df304d9d1df448c62a3c221056c65330351b09e`
+and `8540684f77113a6875393ceb1ab426e7e5d765e38c7b5c5b9e826da8c88d3e1b`.
+The shared cold driver SHA-256 is
+`a730c67107ecfbb11f3cf91e260e5b9b34438e41accec665b95953d6d275ddfe`.
+The fixed output path was absent when these identities were frozen.
+
 The declared complete performance command limit is 15 s; the independent
 full verifier expectation is under 10 s. Safety watchdogs do not relax
 either limit. Record public time, command wall, process CPU and sampled RSS
