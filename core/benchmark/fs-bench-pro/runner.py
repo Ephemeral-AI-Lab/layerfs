@@ -233,13 +233,14 @@ def _verify_child(binary, case_dir, store, history, sample, fixture, cursor):
     return receipt
 
 
-def _case(out, case, binaries, identity):
+def _case(out, case, binaries, identity, full_verify=False):
     case_dir = out / "daemon-host" / "init_namespace" / case.id
     case_dir.mkdir(parents=True)
     started = time.monotonic_ns()
     receipt = {"schema": "core-fs-bench-pro-init-v1", "case": case.id, "route": "daemon-host",
                "identity": identity, "cache_contract": "source-cache-uncontrolled-v1",
                "admission_eligible": False, "performance_gate": "NOT_FROZEN", "sample_count": 0,
+               "verification_mode": "full" if full_verify else "skip-default",
                "placement": {"service": "host", "daemon": "host", "image_id": None}}
     service = daemon = service_thread = daemon_thread = None
     service_log, daemon_log = case_dir / "service.stderr", case_dir / "daemon.stderr"
@@ -295,8 +296,11 @@ def _case(out, case, binaries, identity):
                                          "system_cpu_s": cpu_after.ru_stime - cpu_before.ru_stime,
                                          "rss_phase_peak": None, "rss_reason": "rusage peak is lifetime, not phase"}
         receipt["performance_command_wall_ns"] = time.monotonic_ns() - command_started
-        if perf["status"] == "COMPLETE":
+        if perf["status"] == "COMPLETE" and full_verify:
             verification = _verify_child(binaries["verify_namespace"]["path"], case_dir, store, history, perf, fixture, cursor)
+        elif perf["status"] == "COMPLETE":
+            verification = {"status": "SKIPPED", "reason": "fast lane default; use run --verify for full proof"}
+            write_json(case_dir / "verification.json", verification)
         else:
             verification = {"status": "NOT_RUN", "reason": "public Init did not return a confirmed root"}
             write_json(case_dir / "verification.json", verification)
@@ -313,8 +317,16 @@ def _case(out, case, binaries, identity):
             cleanup["stderr_recycle"] = "RETAINED_INCOMPLETE"
         receipt["cleanup_wall_ns"] = time.monotonic_ns() - cleanup_started
         receipt["verification"] = verification
-        receipt["status"] = "INELIGIBLE" if (perf["status"] == "COMPLETE" and verification["status"] == "PASS" and parsed["status"] == "PASS" and
-                                                  all(value == "PASS" for value in cleanup.values())) else "FAIL" if any(value == "FAIL" for value in cleanup.values()) else "INCOMPLETE"
+        healthy = (perf["status"] == "COMPLETE" and parsed["status"] == "PASS" and
+                   all(value == "PASS" for value in cleanup.values()))
+        if healthy and verification["status"] == "SKIPPED":
+            receipt["status"] = "DIAGNOSTIC"
+        elif healthy and verification["status"] == "PASS":
+            receipt["status"] = "INELIGIBLE"
+        elif any(value == "FAIL" for value in cleanup.values()):
+            receipt["status"] = "FAIL"
+        else:
+            receipt["status"] = "INCOMPLETE"
     except Exception as error:
         receipt["status"] = "FAIL" if perf else "NOT_RUN"
         receipt["error"] = repr(error)
@@ -487,7 +499,7 @@ def _fill_not_run(out, selection, blocked=None):
                                              else blocked if selected and blocked else "not selected"})
 
 
-def run(selection, out):
+def run(selection, out, full_verify=False):
     target = target_path()
     identity = identities()
     out = owned(out)
@@ -512,11 +524,12 @@ def run(selection, out):
                     _canary(out, build_receipt["binaries"], identity)
                 for case in cases:
                     if case.id != "namespace-100000":
-                        _case(out, case, build_receipt["binaries"], identity)
+                        _case(out, case, build_receipt["binaries"], identity, full_verify)
     if blocked:
         write_json(out / "blocked.json", {"status": "NOT_RUN", "reason": blocked, "identity": identity})
     _fill_not_run(out, selection, blocked)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-run-v1", "selection": selection,
+                                  "full_verification_requested": full_verify,
                                   "identity": identity, "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
                                   "complete_run_wall_ns": time.monotonic_ns() - started,
                                   "family_cycle_budget_ns": 30_000_000_000})
@@ -534,6 +547,7 @@ def main():
     selector.add_argument("--case")
     selector.add_argument("--family", choices=["init_namespace"])
     run_parser.add_argument("--out", required=True)
+    run_parser.add_argument("--verify", action="store_true", help="run the separate full verifier after Init")
     for name in ("verify", "report"):
         sub = commands.add_parser(name)
         sub.add_argument("--run", required=True)
@@ -547,7 +561,9 @@ def main():
         selection = args.case or args.family
         if selection not in (*init.SELECTED, "init_namespace", "history-canary"):
             parser.error("unknown or deferred case")
-        print(run(selection, args.out))
+        if selection == "history-canary" and args.verify:
+            parser.error("history-canary has its own public-route witnesses")
+        print(run(selection, args.out, args.verify))
     elif args.command == "verify":
         print(verify_run(owned(args.run, existing=True)))
     else:

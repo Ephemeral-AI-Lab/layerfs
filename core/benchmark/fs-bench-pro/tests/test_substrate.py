@@ -1,11 +1,14 @@
 import fcntl
 import hashlib
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import runner
@@ -13,6 +16,15 @@ from shared import telemetry
 
 
 class Substrate(unittest.TestCase):
+    def test_run_skips_full_verifier_unless_requested(self):
+        case = runner.init.SELECTED[0]
+        with patch.object(runner, "run", return_value=Path("receipt")) as run:
+            for option, expected in (([], False), (["--verify"], True)):
+                with patch.object(sys, "argv", ["runner.py", "run", "--case", case, "--out", "fresh", *option]):
+                    with redirect_stdout(io.StringIO()):
+                        runner.main()
+                run.assert_called_with(case, "fresh", expected)
+
     def test_startup_keeps_telemetry_before_ready(self):
         with tempfile.TemporaryDirectory() as directory:
             script = Path(directory) / "service"

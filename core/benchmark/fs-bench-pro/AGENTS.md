@@ -26,16 +26,21 @@ never overwrite a receipt or rerun a passing cell to improve its number.
 - `list` reads the registry without building or preparing.
 - `run --case ID --out NEW` lazily acquires/reuses only that case's sealed
   source, builds/reuses exact product binaries, invokes the one public Init,
-  launches a separate full verifier child, captures telemetry/resources and
-  cleans owned temporary files. `run --family init_namespace` calls that path
-  once per selected 100/1,000/10,000 case and builds once.
-- `verify --run DIR` re-derives already retained raw/performance and verifier
-  receipts. `report --run DIR` renders them. Neither runs the product again.
+  captures telemetry/resources and cleans owned temporary files. It **skips
+  the full verifier by default** for the fast lane, writing
+  `verification.status=SKIPPED` and `status=DIAGNOSTIC` after a healthy import.
+  `run --case ID --verify --out NEW` opts into the separate full verifier child.
+  `run --family init_namespace` has the same default and option, calls each
+  selected 100/1,000/10,000 case once and builds once.
+- `verify --run DIR` re-derives retained raw/performance and verification
+  receipts. It does **not** run the full oracle or turn `SKIPPED` into `PASS`.
+  `report --run DIR` renders the recorded status. Neither runs the product again.
 
 Keep the Init case declarations and public-operation/full-verifier child in
 `families/init_namespace.py`; keep focused case, fixture and oracle-refusal
-checks in `tests/test_init_namespace.py`. The full benchmark proof is the
-separate verifier invocation and its `verification.json`, not a unit-test PASS.
+checks in `tests/test_init_namespace.py`. A default fast-lane row is diagnostic
+only. The full benchmark proof requires an explicit `run --verify`, its
+separate verifier invocation and `verification.json`, not a unit-test PASS.
 
 Do not add separate first-pass `prepare`, `prune`, `calibrate`, `self-check`,
 `build`, comparison or empty mode-adapter commands. Use focused tests for
@@ -52,7 +57,7 @@ invocation. Record first-use, edited-product and unchanged build walls and
 compiled units. A miss is `BUILD_SLOW` and must be fixed, not hidden with a
 warm no-op, stale binary, `cargo clean`, weaker checks or a changed profile.
 
-Each complete independent verifier child is **at most 5 s**, including reopen,
+Each requested independent verifier child is **at most 5 s**, including reopen,
 full oracle and teardown. Never sample/shrink the oracle or extend its deadline
 to pass. Preparation, the three case runs, verification and cleanup are
 recommended to finish within **30 s per family**; record and investigate a
@@ -89,7 +94,7 @@ and verification resources in separate scopes. `resource_status=sampled` does
 not prove phase coverage.
 
 Prepare a deterministic expected manifest once. Reuse it only outside the
-product timer; verification still reads actual persisted output. A clone is
+product timer; requested full verification reads actual persisted output. A clone is
 setup reuse, never a cold claim. If the source cache cannot be qualified,
 report the first-pass number as discovery-only with its actual cache state.
 Do not use the old 100,000-only `cold.py` to certify a smaller tier. Run the

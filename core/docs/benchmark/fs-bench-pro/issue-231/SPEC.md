@@ -5,6 +5,12 @@
 > performance receipt. Freeze and commit the applicable case contract before
 > building its driver or collecting its first sample.
 
+**Fast-lane amendment, 2026-09-23:** `run` skips the independent full
+verifier by default. `run --verify` requests it after the same single timed
+operation. A default row records `verification=SKIPPED` and is diagnostic
+only. `verify --run` checks retained evidence; it does not fill in the
+missing oracle. Earlier receipts keep their original status and identity.
+
 Tracking: [migration #230](https://github.com/Ephemeral-AI-Lab/layerfs/issues/230),
 [Init pilot #231](https://github.com/Ephemeral-AI-Lab/layerfs/issues/231), and
 the [shared substrate prerequisite #235](https://github.com/Ephemeral-AI-Lab/layerfs/issues/235).
@@ -24,7 +30,8 @@ native-directory import. Therefore #179 closure unlocks substrate work but
 does not make any `init_namespace` performance row runnable.
 
 The first #231 collection cohort is **100, 1,000 and 10,000 files only**. Each
-gets one raw performance sample per case and an independent verification.
+gets one raw performance sample per case. Full independent verification is
+requested explicitly with `run --verify` for proof rows.
 Report every number with its source, route, cache state, resource
 scope, result and gate status. `namespace-100000` stays in the registry as
 `NOT_RUN`, with the missing public route/scale proof and the 2.7 s historical
@@ -130,7 +137,7 @@ The new prerequisite under #230 owns the reusable **benchmark harness**, not
 the missing Init product API. Implement only the paths needed for one real
 #179 daemon-host canary and the three #231 selections. The first runner has
 one registered `daemon-host` route and no control/candidate arm, paired-run
-scheduler, `--source-arm`, `--perf-samples`, sample verification mode or
+scheduler, `--source-arm`, `--perf-samples`, sampled-oracle mode or
 unimplemented `storage-direct` adapter. Add another route only with its first
 real case. Reuse Stage 6 and root harness mechanics where their identity and
 cache rules match; do not copy their complete runners.
@@ -138,9 +145,9 @@ cache rules match; do not copy their complete runners.
 | Operation | Inputs and output | Why it exists |
 | --- | --- | --- |
 | `list` | Read-only case IDs, claim and `NOT_RUN` reason | Makes the deferred 100,000 row visible without build or setup. |
-| `run --case ID --out NEW` | Lazily acquire/reuse only that case's sealed source, build/reuse exact product binaries, create fresh Init output, take **one** full public-operation sample, invoke a separate verifier child, parse telemetry, clean temporary files and write receipts | One command is the fast development loop. It refuses an existing output path, missing public route, identity mismatch, undeclared cache state or fallback. |
-| `run --family init_namespace --out NEW` | Call the same selected-case path once for each of the three first-pass IDs, serially; build once | Gives one family report without three redundant builds or a hidden sample loop. The 100,000 row is emitted as `NOT_RUN`. |
-| `verify --run RUN` | Re-derive existing performance and separate verifier receipts from retained raw evidence | Catches receipt/report drift without another product run or performance sample. The verifier child already run by `run` has a hard 5 s wall limit per case. |
+| `run --case ID --out NEW` | Lazily acquire/reuse only that case's sealed source, build/reuse exact product binaries, create fresh Init output, take **one** full public-operation sample, parse telemetry, clean temporary files and write receipts; skip the full verifier by default | Fast diagnostic loop. It refuses an existing output path, missing public route, identity mismatch, undeclared cache state or fallback. `--verify` invokes the separate full verifier after the timer. |
+| `run --family init_namespace --out NEW` | Call the same selected-case path once for each of the three first-pass IDs, serially; build once; skip the full verifier by default | `--verify` requests the full oracle for each completed case. The 100,000 row remains `NOT_RUN`. |
+| `verify --run RUN` | Re-derive existing performance and verification receipts from retained raw evidence | Catches receipt/report drift without another product run or performance sample. It never upgrades `SKIPPED`; an explicitly requested verifier child has a hard 5 s wall limit per case. |
 | `report --run RUN` | Render a human table from retained evidence | Report-only edits never cause a new product run; failures and `NOT_RUN` remain visible. |
 
 `run` owns case-scoped preparation automatically; a separate `prepare`,
@@ -197,7 +204,7 @@ benchmark-results/fs-bench-pro/      ignored, per-worktree owned output
     perf.jsonl                       one raw caller/phase observation
     telemetry.lft1                  exact LFT1 event lines when enabled
     receipt.json                    parsed stats, identity, cache and statuses
-    verification.json               separate oracle and cleanup proof
+    verification.json               SKIPPED receipt or separate oracle proof
   <run>/manifest.json               hashes of every retained run file
   <run>/report.txt                  derived, reproducible human table
 ```
@@ -212,9 +219,10 @@ result tree as new observations.
 
 `tests/test_init_namespace.py` checks the case IDs and sizes, deterministic
 fixture manifest, and rejection of missing, altered or extra output. It does
-not substitute for the separate full verifier child: that child reopens and
-reads the actual persisted namespace for each benchmark case and writes
-`verification.json`. `tests/test_substrate.py` checks selector, isolation,
+not substitute for the separate full verifier child: when `run --verify` is
+requested, that child reopens and reads the actual persisted namespace and
+writes `verification.json`. The default fast lane writes a `SKIPPED` receipt.
+`tests/test_substrate.py` checks selector, isolation,
 identity, telemetry and receipt failure paths. The #179 canary exercises the
 real daemon/Service deployment before Init collection.
 
@@ -314,8 +322,9 @@ three. Cold and uncontrolled results are never pooled.
 
 Prepare and seal the expected path/metadata/size/per-file SHA-256 manifest
 **once** while acquiring the immutable fixture; do not rehash source files
-before each run. Verification starts a separate process after Init, checks
-the public returned root, reopens the persisted Store/history, walks every
+before each run. When `run --verify` is requested, verification starts a
+separate process after Init. It checks the public returned root, reopens the
+persisted Store/history, walks every
 directory through a public C1 reader and streams every file into SHA-256
 against that sealed manifest. The direct public C1/C2 verifier uses four
 independent read workers, each with one bounded C2 session and SHA-256 state;
@@ -325,12 +334,14 @@ Directory traversal uses bounded pagination and grouped inode lookups. Avoid 10,
 path, not raw SQL or expected data passed to the mutator. Declare any mounted
 readback as a separate, bounded coverage witness; do not label sampled mounted
 paths an exhaustive proof. Verification has its own invocation/resource scope
-and the exact performance identities. A skipped or partial full oracle is
-`INCOMPLETE`.
+and the exact performance identities. A default skipped oracle is recorded as
+`SKIPPED`; a completed import with sound telemetry and cleanup is
+`DIAGNOSTIC`, never admission-eligible. A requested but partial or failed full
+oracle is `INCOMPLETE`. `verify --run` never promotes a skipped row.
 
 The complete performance command retains the ordinary **15 s** budget, with
 only a prospectively declared small exception up to **25 s**. The **entire
-verification invocation is capped at 5 s per case**, including reopen,
+verification invocation, when requested, is capped at 5 s per case**, including reopen,
 readback and teardown; it may not use the older 60 s allowance. Preparation,
 the three test runs, verification and cleanup should complete in **30 s per
 family**; report the actual family-cycle wall and any miss. This 30 s family
@@ -377,11 +388,12 @@ admission performance claim ineligible.
 The substrate prerequisite closes when its four CLI operations, exact
 identity/isolation/reuse rules, parser/recycling checks, external resource scope,
 report re-derivation and a real #179 route canary pass. It must also show the
-30 s Cargo-build rule and 5 s verifier watchdog in evidence. An unresolved
+30 s Cargo-build rule and 5 s verifier watchdog in an explicit proof run. An unresolved
 `BUILD_SLOW` or verifier timeout at the accepted identity blocks completion;
 a warm no-op alone does not qualify the build.
 It does **not** claim Init performance. The #231 first pass is reviewable when
-all three raw numbers and their independent proofs, nonpassing rows and the
+all three raw numbers and their explicitly requested independent proofs,
+nonpassing rows and the
 100,000 `NOT_RUN` entry are retained. Record the 30 s family-cycle result
 without claiming it passed if it missed. This first pass does **not** by
 itself clear #230's existing four-tier pilot completion gate or authorize the

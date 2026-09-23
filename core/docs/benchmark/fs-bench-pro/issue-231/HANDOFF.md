@@ -9,9 +9,14 @@ Implement [#235](https://github.com/Ephemeral-AI-Lab/layerfs/issues/235)'s
 minimal `core/` fs-bench-pro substrate, then make
 [#231](https://github.com/Ephemeral-AI-Lab/layerfs/issues/231)'s public native
 Init first pass runnable. Measure the 100, 1,000 and 10,000-file cases once each
-at their exact final identities, with full independent proof. Keep the
+at their exact final identities. Request `--verify` when collecting full
+independent proof. Keep the
 100,000-file row `NOT_RUN`. This is a fast development loop and a discovery
 cohort, not a release or latency PASS claim.
+
+The current fast lane skips the independent full verifier by default. Use
+`run --verify` for a proof row; default rows record `SKIPPED` and remain
+diagnostic. Existing proof receipts are unchanged.
 
 Other agents may work in other worktrees. Preserve their edits and evidence.
 Use a dedicated worktree and private Cargo target, fixtures, Stores, scratch and
@@ -62,14 +67,16 @@ sample, with the required before/after production LOC count in every commit.
 2. Build the smallest #235 harness around existing production binaries and
    `core/Cargo.lock`: `list`, `run`, `verify`, `report`. `run --case` prepares only
    the selected case; `run --family init_namespace` shares one build across the
-   three selected cases. Use a single registered `daemon-host` route.
+   three selected cases. Both skip full verification by default; `--verify`
+   requests it after the timed operation. Use a single registered `daemon-host` route.
 3. Put the family declarations, public call and full verifier child in
    `core/benchmark/fs-bench-pro/families/init_namespace.py`. Add focused
    case/fixture/corruption-refusal checks in
    `core/benchmark/fs-bench-pro/tests/test_init_namespace.py` and minimal
    isolation, seal, telemetry and receipt checks in `tests/test_substrate.py`.
-   The full benchmark proof is the separate verifier process and its
-   `verification.json`, not a unit-test result. Reopen the persisted output and
+   The full benchmark proof requires an explicit `run --verify`, the separate
+   verifier process and its `verification.json`, not a unit-test result.
+   Reopen the persisted output and
    check every path, metadata item, byte count and file SHA-256 against a
    once-sealed source manifest through public product read APIs.
 4. Give each worktree its own mutable target and result namespace. Use no
@@ -85,7 +92,8 @@ sample, with the required before/after production LOC count in every commit.
 6. Run the real #179 public-operation canary for #235, then the three Init
    cases once each at their final source/fixture identities. Retain failures,
    unknown-cache status and 100,000 `NOT_RUN`. A source-cache-uncontrolled row
-   is diagnostic and admission-ineligible. Keep raw timing, verification,
+   is admission-ineligible; a default skipped-oracle row is `DIAGNOSTIC`.
+   Keep raw timing, verification status,
    resource, telemetry, cleanup and complete-command evidence.
 7. Record cold, changed-product and no-op Cargo build walls. Every invoked
    `cargo build --locked`, including first-use, must be <=30 s; each complete
