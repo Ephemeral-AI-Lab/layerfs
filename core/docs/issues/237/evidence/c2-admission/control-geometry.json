@@ -1,0 +1,85 @@
+{
+  "allocated_bytes": 335609856,
+  "file_bytes": 333910016,
+  "groups_by_save": {
+    "1": 7701,
+    "2": 2,
+    "3": 7
+  },
+  "objects": 24683,
+  "objects_by_save": {
+    "1": 24364,
+    "2": 11,
+    "3": 308
+  },
+  "ordered_object_ids_sha256": "4a9f14a45482c2ae3962f633b3655125278dc816ee9f499803302d76aa241789",
+  "pack_capacity_bytes": 331087872,
+  "pack_count": 1263,
+  "pack_spare_bytes": 25114190,
+  "pack_used_bytes": 305973682,
+  "pack_versions": {
+    "12": {
+      "capacity": 524288,
+      "count": 2,
+      "used": 406947
+    },
+    "15": {
+      "capacity": 293601280,
+      "count": 1120,
+      "used": 271020259
+    },
+    "17": {
+      "capacity": 35651584,
+      "count": 136,
+      "used": 33939743
+    },
+    "9": {
+      "capacity": 1310720,
+      "count": 5,
+      "used": 606733
+    }
+  },
+  "packs_by_save": {
+    "1": {
+      "capacity": 329777152,
+      "count": 1258,
+      "used": 305475670
+    },
+    "2": {
+      "capacity": 524288,
+      "count": 2,
+      "used": 8814
+    },
+    "3": {
+      "capacity": 786432,
+      "count": 3,
+      "used": 489198
+    }
+  },
+  "roles_by_save": {
+    "1": {
+      "1": 9399,
+      "2": 13920,
+      "3": 542,
+      "4": 1,
+      "5": 502
+    },
+    "2": {
+      "11": 2,
+      "2": 3,
+      "3": 3,
+      "5": 3
+    },
+    "3": {
+      "10": 1,
+      "6": 202,
+      "7": 101,
+      "9": 4
+    }
+  },
+  "sqlite_freelist_count": 0,
+  "sqlite_page_count": 81521,
+  "sqlite_page_size": 4096,
+  "store": "/Users/yifanxu/.codex/worktrees/issue237-c2-admission/layerfs/benchmark-results/fs-bench-pro/issue237-c2-control-d98cca6fe-a/daemon-host/init_namespace/namespace-10000/store.sqlite",
+  "store_sha256": "223e508cc5309be308ea2939d0e158e374393bc7d902f09504e57e64c592c825"
+}

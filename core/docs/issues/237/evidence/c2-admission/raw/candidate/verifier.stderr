@@ -1,0 +1,19 @@
+LFS237 verifier traversal paths=10101 directories=101 queued_files=10000 metadata_attribute_waves=1
+LFS237 verifier worker files=500 bytes=131378 metadata_attribute_waves=1
+LFS237 verifier worker files=500 bytes=162348 metadata_attribute_waves=1
+LFS237 verifier worker files=1000 bytes=294378 metadata_attribute_waves=1
+LFS237 verifier worker files=1000 bytes=325348 metadata_attribute_waves=1
+LFS237 verifier worker files=1500 bytes=488348 metadata_attribute_waves=1
+LFS237 verifier worker files=500 bytes=162674 metadata_attribute_waves=1
+LFS237 verifier worker files=1500 bytes=457378 metadata_attribute_waves=1
+LFS237 verifier worker files=2000 bytes=620378 metadata_attribute_waves=1
+LFS237 verifier worker files=1000 bytes=325674 metadata_attribute_waves=1
+LFS237 verifier worker files=2000 bytes=651348 metadata_attribute_waves=1
+LFS237 verifier worker files=1500 bytes=488674 metadata_attribute_waves=1
+LFS237 verifier worker files=2500 bytes=814348 metadata_attribute_waves=1
+LFS237 verifier worker files=2500 bytes=783378 metadata_attribute_waves=1
+LFS237 verifier worker files=3000 bytes=977106 metadata_attribute_waves=1
+LFS237 verifier worker files=2000 bytes=651259 metadata_attribute_waves=1
+LFS237 verifier worker files=2500 bytes=6684918 metadata_attribute_waves=1
+LFS237 verifier worker files=3500 bytes=7317620 metadata_attribute_waves=1
+LFS237 verifier worker files=3000 bytes=9374244 metadata_attribute_waves=1
