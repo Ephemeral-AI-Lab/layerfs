@@ -58,7 +58,12 @@ fn leaf(round: u64) -> Result<FinalizedObject, Box<dyn Error>> {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write;
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut result, "{byte:02x}").expect("hex string");
+    }
+    result
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
