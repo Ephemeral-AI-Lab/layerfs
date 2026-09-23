@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 import resource
 import shutil
+import signal
+import sqlite3
 import subprocess
 import sys
 import time
@@ -19,6 +21,8 @@ CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
+sys.path.insert(0, str(CORE / "benchmark/fs-bench-pro-storage-content/shared"))
+import residency  # noqa: E402
 
 CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
 BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
@@ -76,7 +80,7 @@ def identities():
     product += list((CORE / "crates/layerfs-api").glob("*/examples/*.rs"))
     product += list((CORE / "crates/layerfs-api").glob("*/Cargo.toml"))
     product += [CORE / "Cargo.toml", CORE / "Cargo.lock", ROOT / ".cargo/config.toml"]
-    harness = list(HERE.glob("**/*.py"))
+    harness = list(HERE.glob("**/*.py")) + [Path(residency.__file__)]
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)
@@ -131,12 +135,12 @@ def competing_work():
             not line.strip().startswith(str(os.getpid()) + " ")][:32]
 
 
-def verify_child(binary, folder, store, history, sample, fixture, cursor):
+def verify_child(binary, folder, store, history, sample, fixture, cursor, timeout=5):
     command = [binary, str(store), str(history), sample["root"], sample["stack_body"],
                fixture["manifest"], fixture["manifest_sha256"]]
     started = time.monotonic_ns()
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5,
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
                                 env={**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": cursor})
         wall = time.monotonic_ns() - started
         stdout, stderr = result.stdout, result.stderr
@@ -152,10 +156,191 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
         child, status, exit_code = None, "TIMEOUT", None
     (folder / "verifier.stdout").write_bytes(stdout)
     (folder / "verifier.stderr").write_bytes(stderr)
-    receipt = {"status": status, "wall_ns": wall, "budget_ns": 5_000_000_000,
+    receipt = {"status": status, "wall_ns": wall, "budget_ns": timeout * 1_000_000_000,
                "exit_code": exit_code, "command": command, "child": child,
                "stderr": stderr[:4096].decode(errors="replace")}
     write_json(folder / "verification.json", receipt)
+    return receipt
+
+
+def source_copy(case, fixture, out):
+    """Full byte copy and oracle check before invalidating its payload pages."""
+    source = Path(fixture["source"])
+    home = out / "source-copy" / case.id
+    started = time.monotonic_ns()
+    shutil.copytree(source.parent, home, copy_function=shutil.copy2)
+    init._check_reuse(case, home)
+    copied = home / "payload"
+    files = bytes_ = 0
+    with (home / "manifest.tsv").open() as manifest:
+        for row in manifest:
+            relative, kind, _, _, size, sha = row.rstrip("\n").split("\t")
+            if kind != "f":
+                continue
+            original, path = source / relative, copied / relative
+            if (original.stat().st_dev, original.stat().st_ino) == (path.stat().st_dev, path.stat().st_ino):
+                raise ValueError("source copy shares an inode with the prepared master")
+            if path.stat().st_nlink != 1 or path.stat().st_size != int(size) or digest(path) != sha:
+                raise ValueError(f"source copy content mismatch: {relative}")
+            files += 1
+            bytes_ += int(size)
+    if (files, bytes_) != (case.files, case.logical_bytes):
+        raise ValueError("source copy cardinality mismatch")
+    record = {"status": "PASS", "method": "shutil.copytree+copy2-independent-byte-copy",
+              "source": str(source), "copy": str(copied), "files": files, "bytes": bytes_,
+              "manifest_sha256": fixture["manifest_sha256"], "wall_ns": time.monotonic_ns() - started}
+    write_json(out / "source-copy.json", record)
+    return copied
+
+
+def payload_pages(source, manifest, *, invalidate):
+    files = bytes_ = pages = resident = invalidated = 0
+    with Path(manifest).open() as rows:
+        for row in rows:
+            relative, kind, _, _, size, _ = row.rstrip("\n").split("\t")
+            if kind != "f":
+                continue
+            path = source / relative
+            reading = residency.de_warm(path) if invalidate else residency.residency(path)
+            expected = (int(size) + residency.page_size() - 1) // residency.page_size()
+            if path.stat().st_size != int(size) or reading.total_pages != expected:
+                raise ValueError(f"source payload page count mismatch: {relative}")
+            files += 1
+            bytes_ += int(size)
+            pages += reading.total_pages
+            resident += reading.resident_after if invalidate else reading.resident_pages
+            invalidated += int(reading.invalidated) if invalidate else 0
+    return {"files": files, "bytes": bytes_, "page_size_bytes": residency.page_size(),
+            "expected_pages": pages, "resident_pages": resident, "invalidated_files": invalidated}
+
+
+def diagnostic_child(command, folder, private, cursor, timeout=610):
+    """wait4 scopes CPU and peak RSS to this driver, including its threads."""
+    started = time.monotonic_ns()
+    with (folder / "driver.stdout").open("wb") as output, (folder / "driver.stderr").open("wb") as errors:
+        child = subprocess.Popen(command, stdout=output, stderr=errors, start_new_session=True,
+                                 env={**os.environ, "LAYERFS_PRIVATE_KEY": private,
+                                      "LAYERFS_HISTORY_CURSOR_KEY": cursor})
+        timed_out = False
+        while True:
+            pid, status, usage = os.wait4(child.pid, os.WNOHANG)
+            if pid:
+                break
+            if time.monotonic_ns() - started >= timeout * 1_000_000_000:
+                timed_out = True
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                _, status, usage = os.wait4(child.pid, 0)
+                break
+            time.sleep(0.05)
+        child.returncode = os.waitstatus_to_exitcode(status)
+    wall = time.monotonic_ns() - started
+    stdout = (folder / "driver.stdout").read_bytes()
+    try:
+        perf = json.loads(stdout)
+    except (ValueError, UnicodeDecodeError):
+        perf = {"status": "INCOMPLETE", "operation_ns": None,
+                "error": "missing or malformed SDK result"}
+    rss_units = "bytes" if sys.platform == "darwin" else "KiB"
+    return perf, {"wall_ns": wall, "watchdog_ns": timeout * 1_000_000_000,
+                  "exit_code": child.returncode, "timed_out": timed_out,
+                  "external_resources": {"scope": "one-driver-process-lifecycle-including-threads",
+                                         "source": "wait4 per-child rusage",
+                                         "user_cpu_s": usage.ru_utime, "system_cpu_s": usage.ru_stime,
+                                         "peak_rss_bytes": usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024),
+                                         "raw_peak_rss": usage.ru_maxrss, "raw_peak_rss_unit": rss_units}}
+
+
+def sqlite_geometry(path, *, packs=False):
+    if not path.exists():
+        return {"status": "NOT_CREATED"}
+    stat_ = path.stat()
+    record = {"apparent_bytes": stat_.st_size, "allocated_bytes": stat_.st_blocks * 512}
+    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+        record["page_size_bytes"] = connection.execute("PRAGMA page_size").fetchone()[0]
+        record["page_count"] = connection.execute("PRAGMA page_count").fetchone()[0]
+        if packs:
+            record["pack_rows"], record["pack_blob_bytes"] = connection.execute(
+                "SELECT count(*), coalesce(sum(length(data)), 0) FROM object_packs").fetchone()
+    record["status"] = "PASS" if record["page_size_bytes"] == 4096 else "FAIL"
+    return record
+
+
+def diagnostic_100k(out, binaries, identity):
+    case = init.CASES["namespace-100000"]
+    folder = out / "sdk-host" / "diagnostic-100k" / case.id
+    folder.mkdir(parents=True)
+    receipt = {"schema": "core-fs-bench-pro-sdk-init-100k-diagnostic-v1",
+               "benchmark_registration": "UNREGISTERED_DIAGNOSTIC", "case": case.id,
+               "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
+               "identity": identity, "binaries": binaries, "sample_count": 0,
+               "public_api_call_count": 0, "admission_eligible": False,
+               "performance_status": "INELIGIBLE", "status": "INCOMPLETE",
+               "cache_contract": "zero-resident-source-payload; inode-and-directory-metadata-unqualified",
+               "competing_work": competing_work(), "driver_watchdog_s": 610,
+               "verifier_watchdog_s": 600}
+    store, history = folder / "store.sqlite", folder / "history.sqlite"
+    try:
+        failures = residency.self_check()
+        if failures:
+            raise RuntimeError(f"residency backend self-check failed: {failures}")
+        fixture = init.prepare(case, RESULTS / "sdk-prepared")
+        receipt["fixture"] = fixture
+        source = source_copy(case, fixture, out)
+        preflight = payload_pages(source, fixture["manifest"], invalidate=True)
+        write_json(folder / "cold-preflight.json", preflight)
+        if (preflight["files"], preflight["bytes"], preflight["resident_pages"]) != (100_000, 500_000_000, 0):
+            raise RuntimeError("source payload preflight failed")
+        preflight_end = time.monotonic_ns()
+        launch = payload_pages(source, fixture["manifest"], invalidate=False)
+        launch["gap_since_preflight_ns"] = time.monotonic_ns() - preflight_end
+        write_json(folder / "cold-launch.json", launch)
+        if any(launch[key] != preflight[key] for key in ("files", "bytes", "page_size_bytes", "expected_pages")) or launch["resident_pages"] != 0:
+            raise RuntimeError("source payload launch check failed")
+        private, cursor = os.urandom(32).hex(), os.urandom(32).hex()
+        command = [binaries["benchmark_init"]["path"], str(source), str(store), str(history), case.id]
+        receipt["command"] = command
+        receipt["gap_preflight_to_driver_launch_ns"] = time.monotonic_ns() - preflight_end
+        perf, process = diagnostic_child(command, folder, private, cursor)
+        receipt.update(process)
+        receipt["perf"] = perf
+        (folder / "perf.jsonl").write_text(json.dumps(perf, sort_keys=True) + "\n")
+        entered = isinstance(perf.get("operation_ns"), int)
+        receipt["sample_count"] = receipt["public_api_call_count"] = int(entered)
+        receipt["raw_operation_ns"] = perf.get("operation_ns")
+        complete = perf.get("status") == "COMPLETE" and process["exit_code"] == 0 and not process["timed_out"]
+        if complete:
+            verification = verify_child(binaries["verify_namespace"]["path"], folder,
+                                        store, history, perf, fixture, cursor, timeout=600)
+            expected = {"paths": 101_001, "directories": 1_001, "files": 100_000,
+                        "bytes": 500_000_000, "manifest_sha256": fixture["manifest_sha256"],
+                        "root": perf["root"]}
+            if verification["status"] == "PASS" and any(
+                verification["child"].get(key) != value for key, value in expected.items()
+            ):
+                verification["status"] = "FAIL"
+                verification["error"] = "full oracle cardinality/root mismatch"
+                write_json(folder / "verification.json", verification)
+            receipt["verification"] = verification
+        else:
+            receipt["verification"] = {"status": "NOT_RUN", "reason": "no confirmed SDK root"}
+            write_json(folder / "verification.json", receipt["verification"])
+        receipt["cleanup_status"] = "PASS" if not process["timed_out"] else "KILLED_AFTER_WATCHDOG"
+        receipt["status"] = "COMPLETE" if complete and receipt["verification"]["status"] == "PASS" else "FAIL"
+    except Exception as error:
+        receipt["status"] = "FAIL"
+        receipt["error"] = repr(error)
+    finally:
+        for name, path in (("store", store), ("history", history)):
+            try:
+                write_json(folder / f"{name}-geometry.json", sqlite_geometry(path, packs=name == "store"))
+            except Exception as error:
+                write_json(folder / f"{name}-geometry.json", {"status": "FAIL", "error": repr(error)})
+        receipt["scratch"] = [str(path.relative_to(folder)) for path in folder.rglob("*")
+                              if path.is_file() and path.suffix not in (".json", ".jsonl", ".stdout", ".stderr", ".sqlite")]
+        write_json(folder / "receipt.json", receipt)
     return receipt
 
 
@@ -246,6 +431,12 @@ def report(run):
                     f"{row.get('performance_command_wall_ns')}\t"
                     f"{row.get('verification', {}).get('wall_ns')}\t"
                     f"{row.get('functional_status')}\t{row['status']}\t{row['cache_contract']}")
+    diagnostic = run / "sdk-host/diagnostic-100k/namespace-100000/receipt.json"
+    if diagnostic.exists():
+        row = json.loads(diagnostic.read_text())
+        rows.append(f"diagnostic-100k/{row['case']}\t{row['sample_count']}\t{row.get('raw_operation_ns')}\t"
+                    f"{row.get('wall_ns')}\t{row.get('verification', {}).get('wall_ns')}\t"
+                    f"{row['status']}\t{row['performance_status']}\t{row['cache_contract']}")
     return ("case\tsamples\toperation_ns\tcommand_ns\tverification_ns\tfunctional\t"
             "performance\tcache\n" + "\n".join(rows) + "\n")
 
@@ -278,6 +469,17 @@ def verify_run(run):
                 raise ValueError("raw SDK timing mismatch")
             if json.loads((folder / "verification.json").read_text()) != receipt["verification"]:
                 raise ValueError("SDK verification receipt mismatch")
+    diagnostic = run / "sdk-host/diagnostic-100k/namespace-100000"
+    if diagnostic.exists():
+        receipt = json.loads((diagnostic / "receipt.json").read_text())
+        if receipt["schema"] != "core-fs-bench-pro-sdk-init-100k-diagnostic-v1" or receipt["sample_count"] not in (0, 1):
+            raise ValueError("invalid diagnostic identity or cardinality")
+        if receipt["sample_count"] == 1:
+            lines = (diagnostic / "perf.jsonl").read_text().splitlines()
+            if len(lines) != 1 or json.loads(lines[0])["operation_ns"] != receipt["raw_operation_ns"]:
+                raise ValueError("diagnostic raw timing mismatch")
+            if json.loads((diagnostic / "verification.json").read_text()) != receipt["verification"]:
+                raise ValueError("diagnostic verification receipt mismatch")
     return "PASS"
 
 
@@ -313,11 +515,15 @@ def run(selection, out):
             except BlockingIOError:
                 blocked = "same-worktree run active"
             if blocked is None:
-                cases = [init.CASES[selection]] if selection in init.CASES else [init.CASES[name] for name in init.SELECTED]
-                for case in cases:
-                    case_run(out, case, build_receipt["binaries"], identity)
+                if selection == "diagnostic-100k":
+                    diagnostic_100k(out, build_receipt["binaries"], identity)
+                else:
+                    cases = [init.CASES[selection]] if selection in init.CASES else [init.CASES[name] for name in init.SELECTED]
+                    for case in cases:
+                        case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v2", "selection": selection,
+        "benchmark_registration": "UNREGISTERED_DIAGNOSTIC" if selection == "diagnostic-100k" else "REGISTERED_V2",
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})
@@ -334,6 +540,7 @@ def main():
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
     selector.add_argument("--family", choices=["init_namespace"])
+    selector.add_argument("--diagnostic-100k", action="store_true")
     run_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
@@ -343,8 +550,8 @@ def main():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
     elif args.command == "run":
-        selection = args.case or args.family
-        if selection not in (*init.SELECTED, "init_namespace"):
+        selection = "diagnostic-100k" if args.diagnostic_100k else args.case or args.family
+        if selection not in (*init.SELECTED, "init_namespace", "diagnostic-100k"):
             parser.error("unknown or deferred SDK case")
         print(run(selection, args.out))
     elif args.command == "verify":

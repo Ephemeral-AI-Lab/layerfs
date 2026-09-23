@@ -4,7 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -44,6 +44,42 @@ class Substrate(unittest.TestCase):
                     runner.os.environ.pop("CARGO_TARGET_DIR", None)
                 else:
                     runner.os.environ["CARGO_TARGET_DIR"] = original
+
+    def test_100k_selector_is_explicit_and_registered_case_stays_deferred(self):
+        with patch.object(runner, "run", return_value=Path("receipt")) as run:
+            with patch.object(sys, "argv", ["runner.py", "run", "--diagnostic-100k", "--out", "fresh"]):
+                with redirect_stdout(io.StringIO()):
+                    runner.main()
+            run.assert_called_once_with("diagnostic-100k", "fresh")
+            with patch.object(sys, "argv", ["runner.py", "run", "--case", "namespace-100000", "--out", "fresh"]):
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        runner.main()
+            run.assert_called_once()
+
+    def test_payload_residency_refuses_warmed_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            path = source / "payload"
+            path.write_bytes(b"x" * runner.residency.page_size())
+            manifest = source / "manifest.tsv"
+            manifest.write_text(f"payload\tf\t420\t0\t{path.stat().st_size}\t-\n")
+            self.assertEqual(runner.payload_pages(source, manifest, invalidate=True)["resident_pages"], 0)
+            path.read_bytes()
+            self.assertGreater(runner.payload_pages(source, manifest, invalidate=False)["resident_pages"], 0)
+
+    def test_driver_resource_scope_and_frozen_not_run_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            perf, child = runner.diagnostic_child(
+                [sys.executable, "-c", 'print("{\\\"status\\\":\\\"COMPLETE\\\",\\\"operation_ns\\\":1}")'],
+                root, "unused", "unused", timeout=2)
+            self.assertEqual(perf["operation_ns"], 1)
+            self.assertEqual(child["exit_code"], 0)
+            self.assertGreater(child["external_resources"]["peak_rss_bytes"], 0)
+            runner.fill_not_run(root, "diagnostic-100k")
+            frozen = root / "sdk-host/init_namespace/namespace-100000/receipt.json"
+            self.assertEqual(runner.json.loads(frozen.read_text())["status"], "NOT_RUN")
 
     def test_worktree_locks_are_local(self):
         with tempfile.TemporaryDirectory() as directory:
