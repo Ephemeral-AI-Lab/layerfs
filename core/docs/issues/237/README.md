@@ -96,6 +96,10 @@ inside the unchanged request deadline. See [C1 analysis](c1-scaling.md).
 The adjacent metadata memo and native-only duplicate file-root read removal
 each reduced redundant work in source, but their attempts **did not return a
 root**. They are retained as failed treatments rather than selected speedups.
+The proposed one-pack C2 group queue stopped at a source-level feasibility
+check: delaying placement also delays locators required by same-save exact
+reuse, delta selection and reads. No prototype or timed arm was run for that
+idea; see [the failed C2 approach](c2-grouping-prototype.md).
 The verifier's one-entry metadata memo kept the full path/metadata/content
 oracle but **did not** get the debug build under its fixed 5 s watchdog.
 Moving cold preflight before startup initially made its one-second freshness
