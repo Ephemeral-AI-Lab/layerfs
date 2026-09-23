@@ -1,0 +1,10 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/core/crates/layerfs-service)
+    Finished `release` profile [optimized] target(s) in 7.23s

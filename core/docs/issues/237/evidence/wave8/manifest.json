@@ -1,0 +1,93 @@
+{
+  "arms": {
+    "candidate": {
+      "binary_sha256": {
+        "create_store": "eaac5659f71f5ea86bf1a55e9f02d831a818e58ed022f61ecdcee80cc6c5973a",
+        "layerfs-daemon": "0f0917a1c4835bed912a83d355950bc2c587ee422708816d40911b59359b5363",
+        "layerfs-service": "a7d737ece87b22b1e392d314a7ba31304f1508fcf8090541cd4428d89b2006b9",
+        "public_key": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "verify_namespace": "2570f9e0bf46842850fd83cdea79514086b8b46443c730e2f7d123e72f53d15e"
+      },
+      "build_status": "PASS",
+      "build_wall_ns": 3204482500,
+      "command_wall_ns": 2169729083,
+      "dirty_paths": [
+        " M core/crates/layerfs-service/src/operation/import_native.rs"
+      ],
+      "evidence_sha256": {
+        "build.json": "e82a1547aa191b252eb4be518c1c02ec012eae2c328641ca870e1b83b01dbfee",
+        "cold-launch.json": "fcd916cb7c23c5a30b280a607fdc537a9790598b4b30d79b1febdfb8bd1bdeff",
+        "cold-preflight.json": "91ff683c4fb5091ac239f05bacde32da9a8e8d3c53061835a17863ab2b3fca88",
+        "cold-recheck.json": "529eef3b660748325ff29d333f021d9708a2b9aed5f271d5435b9600cda3af49",
+        "operation-identity.json": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf",
+        "perf.jsonl": "f17d36dd24694432253b65006c0f7527a3bb4a2d00b568b5166de597aa6d9bb5",
+        "receipt.json": "9abca183aa345b21c581e13271310f314facd3c36f7472f3802e87f28ff36c5a",
+        "run.json": "eb093091d1b84f6662eee0cef637ada1b423ddd9cbfdc2cdc87783c681d6a9ef",
+        "telemetry.lft1": "f09c86f7f1d107533e7b2f184e3630b4fc4aa8d1a4e864c6ed8b8f751ba44716",
+        "verification.json": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+      },
+      "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+      "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+      "object_id_digest": "4a9f14a45482c2ae3962f633b3655125278dc816ee9f499803302d76aa241789",
+      "output_store": "/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/benchmark-results/fs-bench-pro/issue237-wave8-candidate/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "page_size": 4096,
+      "product_seal": "bc33b6c30eca6874d481577079a7190020b4f7c78aae971adba9d5bcc1bea808",
+      "raw_operation_ns": 1234139583,
+      "root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+      "source_commit": "7850dbe528d1e8de799f1e2c343e92f2b85fb8ee",
+      "source_dirty": true,
+      "status": "DIAGNOSTIC",
+      "telemetry_status": "PASS",
+      "verification_status": "SKIPPED"
+    },
+    "control": {
+      "binary_sha256": {
+        "create_store": "f11c5a7b66b38513566d97f47d7da6c40aaf8cfcbbd2c25330e3f720087f529c",
+        "layerfs-daemon": "0f0917a1c4835bed912a83d355950bc2c587ee422708816d40911b59359b5363",
+        "layerfs-service": "4e034d59889636afd6506f4894ec89d5309373b689a92a2995e5979d5ffbf81c",
+        "public_key": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1",
+        "verify_namespace": "a9b62fb9d5c2cfc391e8e93aa884bf85f3dea860cb49eb0c27db854117eef5d0"
+      },
+      "build_status": "PASS",
+      "build_wall_ns": 7272294083,
+      "command_wall_ns": 2215663750,
+      "dirty_paths": [
+        " M core/crates/layerfs-service/src/operation/import_native.rs"
+      ],
+      "evidence_sha256": {
+        "build.json": "32f9b5f23aaea65fa391229a33e0396d1b161bc9cbeb854074bd7492ebbc7f6c",
+        "cold-launch.json": "376c1205bf324d2b6b9bb29b5b647f7098b0770570e533841837e1f7f0d62530",
+        "cold-preflight.json": "512eac128ee9c15e05ae2b54f7d75baf17fa78c6af8d3f824b2677ddf85f4de4",
+        "cold-recheck.json": "df14f152a251ff5a270d959a2ca6bc6b2deb3eb9d657b249e5f3b41880d2e3b5",
+        "daemon.stderr": "c23fd12ed9a79a15a0c061cf65092cb05c5ffe364c739a6a2369480f3eb2395b",
+        "operation-identity.json": "9d6dbf102b463bbbf111887832ca6a8cf9c73595dda92dd1cee9786726c147cf",
+        "perf.jsonl": "c725c8a4f83957a7414620a23606b8f4b6d1912a58a6c7aa4ee76509ef5efd59",
+        "receipt.json": "e6d4dc936975ae3d86ae463786bcd15ced88339cbaa649e2cee1a8689a0580d3",
+        "run.json": "649a91880e8fa56b94de10eb8822f6deab186b029faafe0a3af76eeb362b62bf",
+        "service.stderr": "b8a14fda12ca50b31adc3fc7615ea618d2e89a853445f5f78f1582de0adcf257",
+        "telemetry.lft1": "260bcf7432ce5cc1752475df79122910512034c01dcac52a2485a9030f75f50b",
+        "verification.json": "fd615407ff24bf410aeef8042e840bdaef7393385e543492cb44a5d9fecafa7f"
+      },
+      "harness_seal": "6d9a3e2eb2a1eea1f3f0d63f0df15949d6f3bab103657a824b0a04d34482eff8",
+      "manifest_sha256": "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e",
+      "object_id_digest": "4a9f14a45482c2ae3962f633b3655125278dc816ee9f499803302d76aa241789",
+      "output_store": "/Users/yifanxu/.codex/worktrees/issue237-wave8/layerfs/benchmark-results/fs-bench-pro/issue237-wave8-control/daemon-host/init_namespace/namespace-10000/store.sqlite",
+      "page_size": 4096,
+      "product_seal": "4437f437ba8024edffd0c9188730d9c7511a2e45be8c013fba9422108b90b5c6",
+      "raw_operation_ns": 1281196166,
+      "root": "e7850f75a65309568e3454f7ab962aa16952d0c02218a55f42f3e2fd44ddf673",
+      "source_commit": "bceddce87548792d952df2d949bb73e9c358e39a",
+      "source_dirty": true,
+      "status": "INCOMPLETE",
+      "telemetry_status": "INCOMPLETE",
+      "verification_status": "SKIPPED"
+    }
+  },
+  "diagnostic_diff_uncompressed_sha256": "7c74a899134dd2b5209027002c62699ee6ae10e10633eeb4c71c0464c82efd90",
+  "prepared_target_copy": {
+    "method": "cp -c -R root/core/target/. into isolated core/target/",
+    "role": "untimed incremental-build setup; never a product source payload cache claim",
+    "wall_seconds_approx": 7.05
+  },
+  "schema": "issue237-wave8-research-v1"
+}
