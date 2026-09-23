@@ -159,8 +159,26 @@ build specification. See [file ingest](file-ingest.md) and
   served. Legacy, #219 pipeline and Core native Init have different routes,
   content bytes, timers and cache identities; none is a matched speed pair.
 
-The current 10k research directions are the
-[C2/file-ingest mechanism](file-ingest-10k-next.md), a
-[bounded direct C1 build hypothesis](c1-10k-next.md), and the
-[700 MB/s boundary map](throughput-10k.md). No production optimization from
-this branch is merged.
+## Three-squad 518.8 MB/s investigation
+
+- The [v0.1.6/Core architecture comparison](architecture-v016-v017.md)
+  separates the old dirty, zero-disk-read 578 ms row from the cold-source Core
+  route. Bounded producer/admission overlap and direct initial namespace
+  construction are transferable ideas; its time is not a cold baseline.
+- The [complexity map](complexity-10k.md) records the removed C1 sparse-run
+  blowup, the remaining 30,302 reducer entries and modeled 83,551 ordering
+  writes, and the necessary `Ω(bytes + files + objects)` work. Batching can
+  reduce call count and latency, not make a full import constant time.
+- The [version-matched SQLite EXPLAIN audit](sqlite-explain.md) finds primary-key
+  seeks on the hot object and pack queries, with no missing-index scan. Core's
+  observed fresh-connection default is about 8 MiB page cache versus the
+  reference's explicit 32 MiB, but the timed Save's spill counters were not
+  captured. A larger same-operation cache is a hypothesis to test after an
+  actual-owner pager diagnostic, not an established speedup.
+
+The [518.8 MB/s budget](target-518.md) requires another **0.739 s** cut after
+the fastest separate C1 prototype. The three squads found no measured
+single-site change that supplies it. A bounded C2 admission redesign and a
+properly measured cache/transaction policy comparison are prospective work;
+the 4 KiB database page, fresh timed work and no-warm-source rule remain fixed.
+No production optimization from this branch is merged.

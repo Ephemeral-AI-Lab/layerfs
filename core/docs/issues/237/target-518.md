@@ -42,5 +42,15 @@ fixture and source cache contract in control and treatment, fresh Stores, a
 outside the public timer. Keep performance-only exploration separate from the
 independent readback and #229 sparse-pack proof. The next algorithmic candidate
 must address most of the file-import critical path, not only one small C2
-counter. This document will record the outcome of that search before calling
-any treatment a solution.
+counter. The three read-only squad reports are the
+[architecture comparison](architecture-v016-v017.md),
+[complexity map](complexity-10k.md), and
+[SQLite EXPLAIN audit](sqlite-explain.md). They found no missing hot index or
+remaining 10k quadratic scan. The old C1 scan blowup is fixed; direct C1
+construction is the only separately measured improvement, while roughly
+7,700 Store group publications and 80 commits remain on the file path. The
+SQLite audit did not measure the timed Save's pager spills, so the reference's
+32 MiB cache profile is a diagnostic candidate rather than a claimed
+solution. A bounded bulk-admission design may change these costs but must
+flush on same-save dependencies and retain exact readback and space
+properties. None has yet demonstrated 518.8 MB/s with cold source pages.
