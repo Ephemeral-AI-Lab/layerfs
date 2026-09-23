@@ -388,3 +388,23 @@ At the measured slab source, Core boundary/tool tests, formatting and full
 workspace tests passed; warning-denying Clippy **failed** one
 `collapsible_if` style warning in `import_native.rs:200`. It was not fixed
 after the timed source identity, and no release-admission claim follows.
+
+## Round R16: Service layout and ImportBatch integration
+
+The [Service layout report](service-layout-and-import-batch.md) records the
+source move from a flat `operation/` directory into `service.rs`, `server/`,
+`read/`, `save/`, and `save/import/batch/`. The import path now uses an ordered,
+bounded `ImportBatch` on the existing four file constructors and one C2 owner.
+Experiment-only per-file counters and `LFS237` stderr logging were removed from
+the product implementation. Pack BLOBs remain in SQLite, with 4,096-byte pages
+and the 128-KiB whole-file cutoff.
+
+The prior one-shot prototype measured **1,400.623 → 1,166.251 ms** and
+**34,562 → 1,202** channel receives. Its control telemetry and binary
+preregistration were incomplete, and metadata cache state was unqualified.
+Those figures remain pinned to the prior candidate identity; they are not
+assigned to this reorganized source. This integration has not taken a new
+10k public timing sample. Its locked Core workspace tests/doctests and
+warning-denying Clippy passed, as did formatting, the product boundary guard
+and six tool tests. The issue remains exploratory: channel batching did not
+establish a 90% reduction in C2/SQLite transactions.

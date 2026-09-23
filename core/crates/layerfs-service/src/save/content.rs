@@ -1,13 +1,11 @@
 //! One C2 save per mutation. Root delivery follows validated EOF and finish.
-use super::{
-    dispatch::end_input,
-    failure::{content, storage},
-    filesystem,
-    history_bootstrap::validate_inode_role,
-    metadata,
-    read::id,
-};
+use super::{filesystem, metadata, validation::validate_inode_role};
 use crate::input::Exact;
+use crate::{
+    error::{content, storage},
+    read::content::id,
+    service::end_input,
+};
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;

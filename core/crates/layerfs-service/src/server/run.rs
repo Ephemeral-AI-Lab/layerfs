@@ -63,14 +63,14 @@ pub fn run() -> Result<(), Failure> {
     let path = env("LAYERFS_STORE")?;
     let store = Timing::disabled("open", |s| Store::open(path, s.child("open")))
         .0
-        .map_err(crate::operation::failure::storage)?;
+        .map_err(crate::error::storage)?;
     // One session can carry one operation, so the transport admits this Store's
     // whole write budget plus the service read bound. A smaller cap would be an
     // accidental ceiling under the configured writer setting.
     let sessions_capacity = session_capacity(
         store
             .max_concurrent_writes()
-            .map_err(crate::operation::failure::storage)?,
+            .map_err(crate::error::storage)?,
     );
     let listener = layerfs_bridge::adapters::native::listen(
         env("LAYERFS_LISTEN")?

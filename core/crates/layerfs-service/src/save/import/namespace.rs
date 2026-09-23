@@ -15,13 +15,10 @@
 //! consumed before this function was called. No caller supplies a serial, and no
 //! scope is imported: the scope arrives as a checked C1 value.
 
-use crate::operation::failure::{content, storage};
+use crate::error::{content, storage};
+use crate::save::metadata::build_metadata;
 use layerfs_bridge::contract::{Code, Failure, MAX_FILE};
-use layerfs_content::filesystem::attributes::read::{read_portable, AttributeReadWork};
-use layerfs_content::filesystem::attributes::{
-    build::build_attribute_tree, codec::AttributeEntry, keys::AttributeKey,
-    portable::PortableMetadata, value::emit_value,
-};
+use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::references::FileBacking;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
@@ -340,34 +337,6 @@ fn prerequisites(
     }
 }
 
-/// Builds the typed portable fields through the caller's existing save owner.
-/// The constructors only emit; they never read these unpublished new objects.
-pub(crate) fn build_metadata(
-    objects: &mut FilesystemObjects<'_>,
-    kind: InodeKind,
-    value: PortableMetadata,
-) -> Result<ObjectId, Failure> {
-    value.validate(kind).map_err(content)?;
-    let mode = emit_value(objects, &value.mode_bytes(kind).map_err(content)?).map_err(content)?;
-    let mtime = emit_value(objects, &value.mtime_bytes().map_err(content)?).map_err(content)?;
-    build_attribute_tree(
-        objects,
-        vec![
-            Ok(AttributeEntry {
-                key: AttributeKey::new("portable".into(), b"mode".to_vec()).map_err(content)?,
-                value_root: mode,
-            }),
-            Ok(AttributeEntry {
-                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).map_err(content)?,
-                value_root: mtime,
-            }),
-        ]
-        .into_iter(),
-    )
-    .map(|(root, _)| root)
-    .map_err(content)
-}
-
 /// Groups the manifest's entries into sorted final directory bindings.
 ///
 /// The root directory is always stated, even when it has no children. A build
@@ -409,38 +378,4 @@ fn kind_of(kind: RecordKind) -> InodeKind {
         RecordKind::RegularFile => InodeKind::RegularFile,
         RecordKind::Symlink => InodeKind::Symlink,
     }
-}
-
-/// Bounded semantic-role validation of one already published inode value.
-///
-/// A stored root's presence is not provenance. A regular file's content root
-/// must open as a file representation, a symlink's must decode as a stored
-/// target, and every kind's metadata root must decode as an attribute tree whose
-/// typed portable fields are valid for that kind. Nothing here walks a tree.
-pub(crate) fn validate_inode_role(
-    provider: &dyn AuthenticatedObjects,
-    kind: InodeKind,
-    content_root: ObjectId,
-    metadata_root: ObjectId,
-    timer: &TimingScope<'_, Active>,
-) -> Result<(), Failure> {
-    match kind {
-        InodeKind::RegularFile => {
-            let view = FileView::open(provider, content_root, timer.child("history.role_file"))
-                .map_err(content)?;
-            if view.logical_len() > MAX_FILE {
-                return Err(Code::Capacity.into());
-            }
-        }
-        InodeKind::Symlink => {
-            let canonical = provider.read_canonical(content_root).map_err(content)?;
-            SymlinkTarget::decode(&canonical).map_err(content)?;
-        }
-        InodeKind::Directory => {
-            provider.read_canonical(content_root).map_err(content)?;
-        }
-    }
-    let mut work = AttributeReadWork::default();
-    read_portable(provider, metadata_root, kind, &mut work).map_err(content)?;
-    Ok(())
 }

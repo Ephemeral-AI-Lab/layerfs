@@ -1,5 +1,5 @@
 //! Fresh portable fields or two existing-root patches, under one save owner.
-use super::{failure::content, history_bootstrap::build_metadata, read::id};
+use crate::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::{
     filesystem::attributes::{
@@ -150,4 +150,36 @@ pub(crate) fn patch_portable(
         },
     ];
     apply_patches(reader, objects, base, &patches).map(|(root, _)| root)
+}
+
+use layerfs_content::filesystem::attributes::{
+    build::build_attribute_tree, codec::AttributeEntry, value::emit_value,
+};
+
+/// Builds the typed portable fields through the caller's existing save owner.
+/// The constructors only emit; they never read these unpublished new objects.
+pub(crate) fn build_metadata(
+    objects: &mut FilesystemObjects<'_>,
+    kind: InodeKind,
+    value: PortableMetadata,
+) -> Result<ObjectId, Failure> {
+    value.validate(kind).map_err(content)?;
+    let mode = emit_value(objects, &value.mode_bytes(kind).map_err(content)?).map_err(content)?;
+    let mtime = emit_value(objects, &value.mtime_bytes().map_err(content)?).map_err(content)?;
+    build_attribute_tree(
+        objects,
+        vec![
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mode".to_vec()).map_err(content)?,
+                value_root: mode,
+            }),
+            Ok(AttributeEntry {
+                key: AttributeKey::new("portable".into(), b"mtime".to_vec()).map_err(content)?,
+                value_root: mtime,
+            }),
+        ]
+        .into_iter(),
+    )
+    .map(|(root, _)| root)
+    .map_err(content)
 }

@@ -37,6 +37,12 @@ Implementation specification and its pre-publication audit:
 - **Research source pin advance:** `048dc7245` adds only a Clippy expectation
   for that shared builder's explicit import-provenance argument; the described
   algorithm and measurement identities are unchanged.
+- **#237 Service layout and import batching:** the same-commit Service source
+  based on research parent `27a0eb6aabb4e0ca44878c5ad47d81077bc41654`
+  groups requests under `read/` and `save/`, moves server assembly under
+  `server/`, and uses `save/import/batch/` for bounded producer messages. This
+  source is a new build identity; the earlier one-shot prototype timings do not
+  automatically measure it.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
@@ -300,8 +306,14 @@ regular files and directories, refuses symlinks and special files, and has no
 default file or entry-count ceiling. The pathless `InitLayerStack` retains its
 pre-saved-root semantics and is bounded by the legacy request's metadata frame
 and 16-bit parent encoding, without the former 128-entry test cap. Four source
-file workers construct C1 objects and send them through an eight-object bounded
-channel to one C2 save owner; C5 publication follows the saved filesystem root.
+file workers construct C1 objects and send ordered Object/Done events through
+four bounded `ImportBatch` channel slots to one C2 save owner. An ordinary batch
+holds at most 256 KiB of canonical object bytes, 512 objects and 512 file
+completions; a larger valid object travels alone under the C2 canonical-object
+limit. The save owner still calls `SaveHandoff::accept` once per object, and C5
+publication follows the saved filesystem root. Pack payloads remain SQLite
+BLOBs, pages remain 4,096 bytes, and the whole-file cutoff remains 128 KiB.
+This changes channel traffic, not C2 transaction policy.
 For this long-running command only, the Service can flush one authenticated
 one-byte progress record per second while work advances. The client consumes
 the marker without treating it as result data; the absolute request deadline

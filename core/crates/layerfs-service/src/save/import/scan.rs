@@ -1,13 +1,11 @@
-//! One operator-bound native directory import. Scan and file reads are inside
-//! the public history command; only the configured root is selectable.
+//! One operator-bound directory import into a single C2 save.
 use super::{
-    failure::{content, storage},
-    history_bootstrap::{ImportProgress, PreparedEntry},
+    batch::{BatchProducer, Event, ImportBatch, QUEUE_SLOTS},
+    namespace::{ImportProgress, PreparedEntry},
 };
+use crate::error::{content, storage};
 use layerfs_bridge::contract::{Code, Failure, MAX_FILE};
-use layerfs_content::{
-    construct_stream, ContentError, FinalizedConsumer, FinalizedObject, ObjectId, PathName,
-};
+use layerfs_content::{construct_stream, FinalizedConsumer, ObjectId, PathName};
 use layerfs_history::RecordKind;
 use layerfs_storage::{SaveHandoff, Store};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
@@ -26,20 +24,6 @@ struct Job {
     index: usize,
     path: PathBuf,
     metadata: Metadata,
-}
-
-enum Message {
-    Object(FinalizedObject),
-    Done(usize, Result<ObjectId, Failure>),
-}
-
-struct ChannelConsumer(mpsc::SyncSender<Message>);
-impl FinalizedConsumer for ChannelConsumer {
-    fn accept(&mut self, object: FinalizedObject) -> Result<(), ContentError> {
-        self.0
-            .send(Message::Object(object))
-            .map_err(|_| ContentError::OutputRejected)
-    }
 }
 
 pub(crate) fn scan_and_save(
@@ -153,34 +137,40 @@ fn save_files(
     let capacities = policy.capacities();
     let deadline = progress.deadline();
     std::thread::scope(|workers| -> Result<(), Failure> {
-        let (sender, receiver) = mpsc::sync_channel::<Message>(8);
+        let (sender, receiver) = mpsc::sync_channel::<ImportBatch>(QUEUE_SLOTS);
         for _ in 0..INIT_WORKERS {
             let sender = sender.clone();
             let queue = &queue;
-            workers.spawn(move || loop {
-                let job = queue.lock().expect("import queue poisoned").pop_front();
-                let Some(job) = job else { break };
-                let index = job.index;
-                let result = construct_file(job, policy, &capacities, &sender, deadline);
-                if sender.send(Message::Done(index, result)).is_err() {
-                    break;
+            workers.spawn(move || {
+                let mut producer = BatchProducer::new(&sender);
+                loop {
+                    let job = queue.lock().expect("import queue poisoned").pop_front();
+                    let Some(job) = job else { break };
+                    let index = job.index;
+                    let result = construct_file(job, policy, &capacities, &mut producer, deadline);
+                    if producer.done(index, result).is_err() {
+                        return;
+                    }
                 }
+                let _ = producer.flush();
             });
         }
         drop(sender);
         let mut finished = 0;
         while finished < remaining {
             progress.tick()?;
-            let message = match receiver.recv_timeout(Duration::from_millis(500)) {
-                Ok(message) => message,
+            let batch = match receiver.recv_timeout(Duration::from_millis(500)) {
+                Ok(batch) => batch,
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Err(Code::Io.into()),
             };
-            match message {
-                Message::Object(object) => handoff.accept(object).map_err(content)?,
-                Message::Done(index, result) => {
-                    entries.get_mut(index).ok_or(Code::InvalidInput)?.content = Some(result?);
-                    finished += 1;
+            for event in batch.events {
+                match event {
+                    Event::Object(object) => handoff.accept(object).map_err(content)?,
+                    Event::Done(index, result) => {
+                        entries.get_mut(index).ok_or(Code::InvalidInput)?.content = Some(result?);
+                        finished += 1;
+                    }
                 }
             }
         }
@@ -192,7 +182,7 @@ fn construct_file(
     job: Job,
     policy: layerfs_content::ConstructionPolicy,
     capacities: &layerfs_content::ConstructionCapacities,
-    sender: &mpsc::SyncSender<Message>,
+    producer: &mut BatchProducer<'_>,
     deadline: Instant,
 ) -> Result<ObjectId, Failure> {
     if Instant::now() >= deadline {
@@ -203,13 +193,12 @@ fn construct_file(
     if opened.dev() != job.metadata.dev() || opened.ino() != job.metadata.ino() {
         return Err(Code::InvalidInput.into());
     }
-    let mut consumer = ChannelConsumer(sender.clone());
     let (result, _) = Timing::disabled("history.import_file", |scope| {
         construct_stream(
             policy,
             capacities,
             &mut file,
-            &mut consumer,
+            producer,
             scope.child("content.construct"),
         )
     });

@@ -1,5 +1,5 @@
 //! Local bounded reads and the frozen inspection variants.
-use super::failure::content;
+use crate::error::content;
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::root::FilesystemRootId;
 use layerfs_content::object::inode_leaf::InodeKind;

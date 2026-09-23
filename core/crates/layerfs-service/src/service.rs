@@ -7,11 +7,12 @@
 //! another Store keeps its own. A read-only operation takes no writer permit at
 //! all; it holds one of the process's bounded read permits, which exist because a
 //! read owns a decode workspace and a connection, not because writers are busy.
-use crate::operation::dispatch;
+use crate::{read, save};
 use layerfs_bridge::contract::*;
 use layerfs_history::HistoryCatalog;
 use layerfs_storage::Store;
 use layerfs_telemetry::operation::{Diagnostic, OperationRecorder};
+use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -89,7 +90,7 @@ impl Service {
             let limit = s
                 .store
                 .max_concurrent_writes()
-                .map_err(crate::operation::failure::storage)?;
+                .map_err(crate::error::storage)?;
             writers.push(WriteBudget {
                 live: AtomicUsize::new(0),
                 limit: usize::from(limit),
@@ -195,4 +196,61 @@ impl Service {
             )
         })
     }
+}
+
+pub(crate) fn dispatch(
+    store: &Store,
+    history: (Option<&dyn HistoryCatalog>, Option<&Path>),
+    r: &Request,
+    input: &mut dyn Read,
+    output: &mut dyn Write,
+    deadline: Instant,
+    scope: &TimingScope<'_, Active>,
+) -> Result<Response, Failure> {
+    let (catalog, import_root) = history;
+    match &r.operation {
+        Operation::WorkspaceStatus { .. }
+        | Operation::WorkspaceUnmount { .. }
+        | Operation::WorkspaceCloseClean { .. }
+        | Operation::WorkspaceCommit { .. }
+        | Operation::WorkspaceAttach { .. }
+        | Operation::WorkspaceMount { .. } => Err(Code::Unsupported.into()),
+        Operation::HistoryQuery(query) => {
+            end_input(input)?;
+            read::catalog::query(catalog.ok_or(Code::Unsupported)?, query, store)
+        }
+        Operation::HistoryCommand(command) => {
+            end_input(input)?;
+            save::catalog::command(
+                catalog.ok_or(Code::Unsupported)?,
+                store,
+                import_root,
+                command,
+                deadline,
+                scope,
+                output,
+            )
+        }
+        // A known successful C2 finish is never changed into a claimed abort.
+        Operation::ConstructFile { .. }
+        | Operation::ConstructSymlink { .. }
+        | Operation::EditFile { .. }
+        | Operation::UpdatePortableMetadata { .. }
+        | Operation::ConstructPortableMetadata { .. }
+        | Operation::UpdatePreparedFilesystem { .. } => {
+            save::content::mutate(store, r, input, deadline, scope)
+        }
+        Operation::ReadFile { .. } | Operation::Inspect { .. } => {
+            end_input(input)?;
+            read::content::read(store, r, output, scope)
+        }
+    }
+}
+
+pub(crate) fn end_input(input: &mut dyn Read) -> Result<(), Failure> {
+    let mut byte = [0; 1];
+    if input.read(&mut byte)? != 0 {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
 }

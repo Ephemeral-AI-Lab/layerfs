@@ -65,7 +65,7 @@ pub fn history() -> Result<Option<std::sync::Arc<dyn HistoryCatalog>>, Failure> 
 
 /// Maps a catalog failure onto the service's wire class.
 pub fn catalog_failure(error: layerfs_history::HistoryError) -> Failure {
-    crate::operation::history::failure(error)
+    crate::error::catalog(error)
 }
 
 pub fn telemetry(role: u8) -> Runtime {

@@ -4,9 +4,8 @@
 //! history staging. It is the same production body in both cases: one builder,
 //! one ownership rule, one place where a supplied root is checked against the
 //! base tree. Callers validate fresh file/symlink roles; history validates every inode role.
-use super::{
-    failure::content, history_bootstrap::build_metadata, metadata::patch_portable, read::id,
-};
+use super::metadata::{build_metadata, patch_portable};
+use crate::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::{
     filesystem::{attributes::PortableMetadata, root::FilesystemRootId},

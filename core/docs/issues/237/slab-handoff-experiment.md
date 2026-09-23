@@ -1,5 +1,10 @@
 # #237: bounded Core producer slabs against the v0.1.6 10k reference
 
+> **Later integration:** The Service source now uses `ImportBatch` under
+> `save/import/batch/`; see [the layout and integration report](service-layout-and-import-batch.md).
+> The timings below remain pinned to the earlier isolated prototype and do not
+> measure the reorganized, counter-free source.
+
 > **Status: exploratory result, not release admission.** One preregistered
 > Core control/candidate pair used the same 10,000-file, 300,000,000-B seed-1
 > source manifest as the [v0.1.6 common-source run](v016-v017-common-source-results.md).
@@ -24,8 +29,9 @@ SQLite BLOBs**, SQLite pages remain **4,096 B**, and the whole-file cutoff
 remains **128 KiB**. The isolated candidate's
 [source, test and architecture diff](evidence/slab-handoff/candidate-source-and-tests.diff.gz)
 (SHA-256 `7feae59c3396883f4f70a112c56d081b083b3422d6defdfc6245e0641ed7e770`)
-records the ordering and memory bounds. The root research product still has
-the original message handoff; this result does not silently change it.
+records the ordering and memory bounds. At the time of this experiment, the root research product still had
+the original per-message path. The later integrated source is described in
+[the layout report](service-layout-and-import-batch.md).
 
 The candidate made **1,202** handoffs versus the Core control's **34,562**:
 **96.52% fewer receives**, essentially the v0.1.6 reference's 1,203 slabs.

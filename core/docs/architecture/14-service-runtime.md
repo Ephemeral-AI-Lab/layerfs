@@ -23,6 +23,14 @@ The Init ordering-backing correction describes product commit
 `0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
 their separate source bases.
 
+The #237 Service layout and import-batch description below is written against
+the Service source in the same commit as that update, based on research parent
+`27a0eb6aabb4e0ca44878c5ad47d81077bc41654`. It changes source organization
+and native Init's bounded producer-to-save messages; it does not change the
+bridge wire format, the C2 save owner, or SQLite's physical format. The measured
+prototype and its qualifications are in
+[`#237`](../issues/237/slab-handoff-experiment.md).
+
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
 on accepted sockets. Socket option sizes are not admission criteria. The failed
@@ -85,6 +93,14 @@ No request carries a native Store path or independent construction capacities.
 `VerifiedPeer` belongs to the portable bridge contract and only trusted native
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
+
+The Service source follows the same request flow: `service.rs` owns admission
+and dispatch; `read/` holds content and catalog queries; `save/` holds content
+and catalog mutations plus shared filesystem construction. `save/import/` owns
+native scanning and namespace construction, with bounded producer messages in
+`save/import/batch/`. `server/` contains process configuration and socket
+serving. `records.rs` converts catalog identities and wire records. The
+`lib.rs` and `mod.rs` files only declare or export these modules.
 
 A local `StoreProvider`, C1 call and `SaveHandoff` implement each operation. File
 construction uses exact-length streaming; edits acquire at most 8 MiB of separate
@@ -155,7 +171,7 @@ less than one billion. The kind is the caller's typed construction context; an
 attribute root does not by itself prove membership in a particular inode.
 
 The existing mutation owner validates empty input, takes one writer permit and
-opens one C2 save. `operation/metadata.rs` reads the existing typed fields through
+opens one C2 save. `save/metadata.rs` reads the existing typed fields through
 C1, applies the two sorted portable patches and preserves every generic value
 root through the existing streaming patch builder. No full attribute map, object
 RPC, new storage implementation or arbitrary generic mutation operation is added.

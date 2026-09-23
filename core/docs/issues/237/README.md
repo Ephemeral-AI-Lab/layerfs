@@ -7,8 +7,9 @@ This work is isolated in
 `codex/issue237-init-research`, based on `main` at `7df25f979`. Product edits
 on this branch are **unmerged research prototypes**. They do not close #237 or
 the four-tier #231 gate. The only fixed database page size used here is 4 KiB.
-The direct C1 build and bounded C2 group admission now live in this research
-tree; neither has been merged to `main` or release-qualified. The
+The direct C1 build, bounded C2 group admission, and Service import
+batching now live in this research tree; none has been merged to `main` or
+release-qualified. The
 [iteration record](iteration-record.md) lists their separate and integrated
 results, failed receipts and open gates.
 
@@ -66,7 +67,8 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [Exact pack-fit buffering](exact-pack-fit-experiment.md) | One isolated SQLite BLOB control/candidate pair | 1.518 → 1.482 s raw | Pack appends 1,054→21 with 7 COMMITs both; Store +528,384 B, sampled RSS +16.9 MB, control externally interfered/telemetry INCOMPLETE. Both full readbacks PASS; source not adopted. |
 | [Same-Save identity index](identity-index-result.md) | One matched integrated C1+C2 control/candidate pair | 1.349 → **1.330 s** | Removed 5.97M linear ID inspections, but Store +520,192 B and two packs; rejected by preregistered space gate. Both full readbacks PASS; control telemetry INCOMPLETE and metadata cache unqualified. |
 | [v0.1.6 versus Core, same source](v016-v017-common-source-results.md) | One exact-release reference and one integrated Core 10k diagnostic | **0.751 vs 1.380 s** | Same 300 MB bytes, zero resident payload pages, both full readbacks PASS. Core telemetry INCOMPLETE; metadata cache unqualified. [SQLite plans and counts](v016-core-sqlite-head2head.md) show nearly equal measured COMMIT wall but 1,203 old slabs versus 34,562 Core messages. |
-| [Core bounded producer slabs](slab-handoff-experiment.md) | One Core control/candidate pair | **1.401 → 1.166 s** raw | Receive events 34,562→1,202 with one C2/SQLite owner and SQLite BLOB packs. Exact root/IDs and full readbacks PASS, Store smaller; control telemetry and binary prereg incomplete, metadata cache unqualified. Separate slab count diagnostic: 115 C2 commits, not timed-arm counts. |
+| [Core import batching prototype](slab-handoff-experiment.md) | One Core control/candidate pair | **1.401 → 1.166 s** raw | Receive events 34,562→1,202 with one C2/SQLite owner and SQLite BLOB packs. Exact root/IDs and full readbacks PASS, Store smaller; control telemetry and binary prereg incomplete, metadata cache unqualified. Separate count diagnostic: 115 C2 commits, not timed-arm counts. |
+| [Service layout and ImportBatch integration](service-layout-and-import-batch.md) | Product source reorganized under `server/`, `read/`, `save/`, `save/import/batch/` | **NOT_MEASURED** at new source identity | Locked Core tests, Clippy, formatting, boundary and tool checks passed; the earlier raw prototype gain is retained with its identity and limitations. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
