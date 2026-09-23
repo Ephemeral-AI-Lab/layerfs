@@ -41,6 +41,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D7 oracle](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d7-oracle/daemon-host/init_namespace/namespace-10000/receipt.json) | `858624cbc`, verifier metadata memo + stronger cold preflight | 7.456 s | Root and cleanup/telemetry PASS; 7.511 s command; full verifier still **TIMEOUT**, row INCOMPLETE. |
 | [D8 release build](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d8-release-stale/daemon-host/init_namespace/namespace-10000/receipt.json) | `59a85bea`, `--release` build | no sample | Build PASS in 17.544 s; cold preflight became stale during startup. Retained NOT_RUN. |
 | [D9 release fast lane](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/daemon-host/init_namespace/namespace-10000/receipt.json) | `2a66f84d`, release binaries, immediate whole-source mincore recheck | **1.591 s** | Confirmed C5 root, 2.018 s command, telemetry/cleanup PASS; verifier **SKIPPED**, diagnostic only. |
+| [D10 100k research](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d10-release-100k/daemon-host/init_namespace/namespace-100000/receipt.json) | `a6d1d563`, one-shot release driver around the official hard skip | 10.011 s | Daemon returned `Unknown` with no confirmed root; Service later reported 11.021 s success and one LayerStack. Command 15.395 s, telemetry INCOMPLETE, cleanup FAIL; verifier NOT_RUN. No further 100k work is planned in this 10k-focused round. |
 
 D9 reused exactly sealed release binaries from D8. Its source was rehashed and
 invalidated outside the command; both the first check and the immediately
@@ -51,6 +52,14 @@ operation. The Store remained at SQLite `page_size=4096` and occupied
 334,184,448 B on disk; its 1,263 pack rows reserved 331,350,016 B and
 declared 305,977,888 B used. These are [raw Store geometry](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/store_geometry.json),
 not a matched compactness PASS.
+
+The current research target is **700 decimal MB/s on the 10k public operation**:
+300,000,000 B / 700,000,000 B/s = **0.428571 s**. D9 reached 188.58 MB/s.
+Its file construction/Store span alone was 1.249614 s, and everything else in
+the caller consumed 0.341234 s. Keeping that other work fixed would require
+the file span to fall to 0.087338 s, a 93.0% cut. A file-only change cannot
+credibly clear the target without also reducing C1/other work. This is a
+bound from one observed row, not a prediction that the target is impossible.
 
 ## Improvements and failed ideas
 
@@ -88,8 +97,9 @@ build specification. See [file ingest](file-ingest.md) and
 - The Core first-pass runner deliberately leaves `namespace-100000` `NOT_RUN`.
   Its exact 100,000-file/500 MB source, cold contract, complete command, resource
   scopes and full oracle need a prospective runner version and one fresh sample.
-  The [100k route handoff](100k-route.md) identifies every hard skip. The 2.7 s
-  historical cold target remains a target, not a waiver or PASS.
+  The [100k route handoff](100k-route.md) identifies every hard skip. D10's
+  one-shot research driver did not change that registry or prove readback. The
+  2.7 s historical cold target remains a target, not a waiver or PASS.
 - Process CPU, sampled RSS, source-page residency, scratch/spool and Store bytes
   are separate domains. The retained RSS samples have no complete phase
   coverage, and no cgroup anonymous/file split exists for this host route.
@@ -106,6 +116,8 @@ build specification. See [file ingest](file-ingest.md) and
   served. Legacy, #219 pipeline and Core native Init have different routes,
   content bytes, timers and cache identities; none is a matched speed pair.
 
-The next engineering decision is to keep the minimal C1 gap fix, take an
-independent count/semantic check of its output, and investigate the release
-file-ingest span. No production optimization from this branch is merged.
+The current 10k research directions are the
+[file-ingest count diagnostic](file-ingest-10k-next.md), a
+[bounded direct C1 build hypothesis](c1-10k-next.md), and the
+[700 MB/s boundary map](throughput-10k.md). No production optimization from
+this branch is merged.

@@ -182,3 +182,20 @@ command, telemetry, cleanup or resource miss. The 2.7 s historical cold target
 remains a target, not an automatic PASS, and the official #231 first-pass
 registry remains unchanged. No 100k admission or full-readback claim follows
 from this diagnostic.
+
+## D11: release 10k file-ingest count diagnostic
+
+The owner now prioritizes 10k and a possible 700 MB/s clean-source result;
+100k work stops after D10's retained failure. D9's 1.590847333 s public call
+contains 1.249613667 s in `history.import_files`, which exceeds the entire
+0.428571429 s target. Take one new labelled release diagnostic identity on the
+same 10k public route/fixture/cold-data contract with verifier SKIPPED. The
+only source difference is temporary count/time instrumentation in
+`import_native.rs`: aggregate worker jobs/logical bytes and construct wall,
+object-channel send count/wall, receiver wait wall, C2 owner `accept` count/wall,
+and one completed `SaveOutcome` counter/profile line. These are nested and
+concurrent spans; never add their times as disjoint CPU or claim an operation
+speedup from this instrumented run. Keep four workers, channel capacity eight,
+Store policy and 4096-byte SQLite pages unchanged. Retain the instrumented
+diff and raw receipt, then restore product source. A candidate algorithm is
+registered only after these counts locate avoidable work.
