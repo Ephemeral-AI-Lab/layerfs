@@ -7,11 +7,13 @@ This work is isolated in
 `codex/issue237-init-research`, based on `main` at `7df25f979`. Product edits
 on this branch are **unmerged research prototypes**. They do not close #237 or
 the four-tier #231 gate. The only fixed database page size used here is 4 KiB.
+The direct C1 build and bounded C2 group admission now live in this research
+tree; neither has been merged to `main` or release-qualified. The
+[iteration record](iteration-record.md) lists their separate and integrated
+results, failed receipts and open gates.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
-The [append-only iteration record](iteration-record.md) tracks successful,
-failed and active approaches with their evidence.
 Each invoked case/source identity has one public-operation sample at most, a
 fresh output directory, and retained failures. The research
 [cold driver](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py)
@@ -50,6 +52,10 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D10 100k research](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d10-release-100k/daemon-host/init_namespace/namespace-100000/receipt.json) | `a6d1d563`, one-shot release driver around the official hard skip | 10.011 s | Daemon returned `Unknown` with no confirmed root; Service later reported 11.021 s success and one LayerStack. Command 15.395 s, telemetry INCOMPLETE, cleanup FAIL; verifier NOT_RUN. No further 100k work is planned in this 10k-focused round. |
 | [D11 ingest counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d11-ingest-counts/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, temporary release instrumentation, then restored | 1.493 s | Root and telemetry/cleanup PASS, verifier SKIPPED; count-driven diagnostic only, no time comparison. |
 | [D12 collision detail](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d12-collision-detail/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, reporting-only release instrumentation, then restored | 1.875 s | Root returned, source payload 0/27,503 resident pages, verifier SKIPPED; daemon dropped one telemetry event, row **INCOMPLETE**. |
+| [C1 fixed-identity proof](c1-fixed-identity.md) | Direct fresh-build C1, one control/candidate pair | 1.616 → **1.381 s** | Same root/object IDs/Store capacity; both full verifiers PASS. Control telemetry INCOMPLETE; cache admission unqualified. |
+| [D13 live pager](pager-10k.md) | Reporting-only actual Save connection diagnostic | 1.530 s | 0 cache spills; proposed 32 MiB policy pair rejected. Prior setup attempt retained NOT_RUN. |
+| [C2 bounded admission](c2-admission-experiment.md) | One fixed-identity control/candidate pair | 1.597 → **1.468 s** | Same root/readback; candidate Store smaller. Control telemetry INCOMPLETE; cache admission unqualified. |
+| [Integrated C1+C2](combined-c1-c2.md) | One C1-only control, one combined candidate | 1.311 → **1.252 s** | Best raw rate **239.554 MB/s**; same root/readback, both telemetry INCOMPLETE, metadata cache unqualified; pack used +160 B despite smaller Store. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
@@ -183,4 +189,6 @@ the fastest separate C1 prototype. The three squads found no measured
 single-site change that supplies it. A bounded C2 admission redesign and a
 properly measured cache/transaction policy comparison are prospective work;
 the 4 KiB database page, fresh timed work and no-warm-source rule remain fixed.
-No production optimization from this branch is merged.
+The C1/C2 source changes remain confined to this research branch. A matched
+#229 sparse-history space/readback guard and a prospective 8-MiB C2-wave
+experiment are in progress; neither has a result in this index yet.
