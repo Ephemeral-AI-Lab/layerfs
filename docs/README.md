@@ -5,6 +5,10 @@
 ## Use LayerFS v0.1.6
 
 - [Manual](versioned/0.1.6/README.md)
+- [Quickstart](versioned/0.1.6/quickstart.md)
+- [CLI reference](versioned/0.1.6/cli.md)
+- [Rust SDK reference](versioned/0.1.6/sdk.md)
+- [Container runtime](versioned/0.1.6/container-runtime.md)
 - [Release record and accepted limitations](../release-notes/0.1.6/README.md)
 - [Owner acceptance, waivers and issue disposition](../release-notes/0.1.6/acceptance.md)
 - [Sandbox-local state and unchanged Store format](versioned/0.1.6/storage-format.md)
