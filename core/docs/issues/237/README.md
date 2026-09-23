@@ -1,6 +1,12 @@
 # #237 — native Init scaling research
 
 > **Status:** Research; informative and not a product contract.
+> **Owner stopping point, 2026-09-23:** keep the refactored `ImportBatch` Core
+> source from `970854f2c` and its one-shot **1.110 s / 270.189 MB/s** 10k
+> observation. Later experimental product changes remain isolated and are not
+> adopted. Their reports and receipts stay in this issue directory. This is an
+> accepted research checkpoint, not release admission: the public row was
+> `INCOMPLETE` from telemetry loss and metadata cache residency was unqualified.
 
 This work is isolated in
 `/Users/yifanxu/.codex/worktrees/2776/layerfs` on
@@ -75,6 +81,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [Pack BLOB write feasibility](pack-blob-write-feasibility.md) | v0.1.6/Core source and retained-count comparison | no new sample | Earlier ImportBatch count diagnostic implies 7,761 incremental BLOB writes across three Saves. The older Core head-to-head charged 78.920 ms to file-Save pack writes; no narrow pack-only treatment justified a new 10k pair. |
 | [Streamed transactions with 4-MiB waves](streamed-transaction-result.md) | One isolated matched 10k control/candidate pair | 1.193 → 1.113 s raw; **91→10** file COMMITs | Both readbacks PASS and source payload0/27,503 pages, but candidate missed ≤9 COMMIT, ≤200-ms lock hold and ≤16-MiB RSS growth gates; Store +262,144 B. Source not adopted. |
 | [Exact v0.1.6 microstep count diagnostic](v016-microstep-count-diagnostic.md) | One old-release count-only operation beside separate Core counters | no new speed arm | Old consumer callback661.613ms, receiver wait65.862ms, signatures96.907ms on four producers; Core C2 `accept`752.757ms, wait197.262ms, signatures96.164ms on its owner. Distinct identities/scopes; placement hypothesis, no adopted treatment. |
+| [Known-length native Init candidate](known-length-native-init-stopped.md) | Isolated C1/Service source and focused checks | **NOT_RUN** public 10k pair | Owner stopped at 1.110-s refactor checkpoint before timing. Candidate and unfinished correction diffs retained; no product source adopted. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →

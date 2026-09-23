@@ -489,3 +489,24 @@ but is not a measured public speed saving. The old maximum producer wall
 726.482ms versus Core951.226ms tracks their broad pipeline endpoints;
 receiver wait/producer pacing remains unresolved. No producer-side signature
 treatment was run under the earlier owner direction.
+
+## Round R20: owner accepts the refactored 1.110-s checkpoint
+
+On 2026-09-23 the owner selected the earlier reorganized `ImportBatch`
+research source (`bc944fe63`, documented at `970854f2c`) and its one-shot
+**1,110.332-ms / 270.189-MB/s** 10k observation as the stopping point.
+The root `core/crates/` Git tree still has exact hash
+`0d2aa55282b7bf968ccbd64fb71cc332caff5eb1`, the same as checkpoint
+`970854f2c`; later commits added **documentation and evidence only**. The
+accepted public row remains telemetry `INCOMPLETE`, source payload0/27,503
+resident pages at final preflight, metadata cache unqualified, and separate
+full reopened 10k/300-MB readback PASS. This is not release admission.
+
+The isolated [known-length C1 candidate](known-length-native-init-stopped.md)
+was built and passed focused tests but its public control/candidate pair was
+**NOT_RUN**. Review found two public-API edge cases; the interrupted correction
+diff and committed candidate diff were archived before restoring its
+uncommitted files. Signature placement, connection reuse, CTE locator,
+collision pages, streamed transactions, and pack-write ideas remain historical
+research records. No further product optimization from those branches is
+adopted into this worktree.

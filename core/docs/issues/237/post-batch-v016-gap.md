@@ -80,7 +80,14 @@ connection remains open across Init, while Core normally opens/closes a private
 connection per Save. The native scan's entire 47.525-ms current child is also
 smaller than the 359.706-ms gap, and it is not an old/new matched scan delta.
 
-## Remaining investigation
+## Archived gap and stopping point
+
+The owner accepted the reorganized Core `ImportBatch` source and its
+1,110.332-ms / 270.189-MB/s observation as the research stopping point on
+2026-09-23. The raw 359.706-ms v0.1.6 gap remains documented, not closed.
+No later treatment source was adopted. The
+[known-length C1 candidate](known-length-native-init-stopped.md) was stopped
+before a public 10k sample; its prospective record and diffs are retained.
 
 The exact v0.1.6 release now has one **count-only** microstep diagnostic at
 closer owner/producer boundaries. Its original 750.626-ms public speed arm

@@ -1,6 +1,9 @@
 # #237 Service layout and import batch integration
 
-> **Status: implemented on `codex/issue237-init-research`, not release-admitted.**
+> **Status: accepted research stopping point on `codex/issue237-init-research`,
+> not release-admitted.** The owner kept this source and its one-shot
+> **1.110 s / 270.189 MB/s** result on 2026-09-23. Later treatment sources
+> remain isolated; their evidence is linked from [the issue index](README.md).
 > This report describes Service source commit
 > `bc944fe6347f640b6d4877f69f2d98b464c4d0ad`. The matched timing table
 > below belongs to the earlier isolated prototype at `329325587`; the
