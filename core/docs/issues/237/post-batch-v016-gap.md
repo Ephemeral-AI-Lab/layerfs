@@ -34,6 +34,32 @@ That number belongs to a different instrumented identity and cannot be
 subtracted from the 1,110.332-ms row. Similarly, the 225.420/134.286-ms split
 above compares nonidentical timer scopes and does not partition the gap.
 
+## Instrumented exact-release microsteps
+
+One subsequent [v0.1.6 count-only diagnostic](v016-microstep-count-diagnostic.md)
+used the exact release product plus temporary aggregate timers on the same
+source. Its 768.649-ms public wall is **not** a second speed sample of the
+750.626-ms reference. The Core column below is a separate instrumented
+ImportBatch pipeline diagnostic, not the clean 1,110.332-ms Core speed arm.
+
+| Count-only region | v0.1.6 | Core ImportBatch | Limit of comparison |
+| --- | ---: | ---: | --- |
+| Broad pipeline / file loop | 727.788 ms | 951.323 ms | Different endpoints; +223.535 ms arithmetic gap |
+| Consumer callback / C2 `accept` | 661.613 ms | 752.757 ms | Different APIs; +91.144 ms arithmetic gap |
+| Receiver blocking wait | 65.862 ms | 197.262 ms | Old includes terminal channel close, Core stops at last Done; +131.400 ms is not channel overhead |
+| Maximum producer wall | 726.482 ms | 951.226 ms | Both nearly equal their loop endpoints; +224.744 ms |
+| Signature work | 96.907 ms over four old producers | 96.164 ms on one Core C2 owner | Same 9,399 small files / 33.747 MB; workers overlap |
+
+Subtracting Core's separately measured 96.164-ms signature wall from its
+752.757-ms `accept` sum leaves 656.593 ms, close to the old 661.613-ms
+consumer callback. The ~5-ms residual crosses identities and boundaries;
+it is a **hypothesis about placement**, not proof that moving signatures
+would save 96 ms of public time. Such a move would use the existing four
+file constructors and keep one C2/SQLite owner, but producer-side signature
+precomputation was previously paused by owner direction. No treatment has
+run. The higher Core receiver wait reflects batch arrival pacing; similar
+1,202/1,204 batch counts do not explain it by channel call count.
+
 ## Count-driven findings and treatment decisions
 
 | Mechanism | Evidence | Decision |
@@ -56,9 +82,9 @@ smaller than the 359.706-ms gap, and it is not an old/new matched scan delta.
 
 ## Remaining investigation
 
-The exact v0.1.6 release needs one **count-only** microstep diagnostic at
-comparable owner/producer boundaries. Its original 750.626-ms public speed arm
-will not be repeated as a new speed sample. The one-slot connection result
+The exact v0.1.6 release now has one **count-only** microstep diagnostic at
+closer owner/producer boundaries. Its original 750.626-ms public speed arm
+was not repeated as a new speed sample. The one-slot connection result
 offers a concrete ~84-ms raw treatment but needs a qualified space/RSS decision
 and full Core checks at any selected source identity. No warm cache from an
 earlier run may enter a timed arm; every arm creates a fresh Store/process and

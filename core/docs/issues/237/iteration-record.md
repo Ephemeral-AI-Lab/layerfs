@@ -467,4 +467,25 @@ release-admitted speedup.
 The [pack BLOB write review](pack-blob-write-feasibility.md) found no narrow
 current-format mechanism with a credible large enough gain to justify a new
 10k sample. Packs remained inside SQLite BLOBs throughout. The exact-release
-v0.1.6 microstep count diagnostic is the next read-only comparison in progress.
+v0.1.6 microstep count diagnostic follows below.
+
+## Round R19: exact-release v0.1.6 microsteps
+
+One [count-only release diagnostic](v016-microstep-count-diagnostic.md) on the
+same 10k/300-MB manifest returned `DIAGNOSTIC`, with **0/27,503** resident
+source payload pages immediately before its call. Its instrumented 768.649-ms
+public wall is not a second release speed arm; the original unmodified
+750.626-ms observation remains the speed reference. Temporary timers were
+archived and removed, leaving the release `crates` tree byte-identical.
+
+Old pipeline727.788ms comprised consumer callback661.613ms and blocking
+receiver wait65.862ms. Separate Core ImportBatch count diagnostic file loop
+951.323ms comprised C2 `accept`752.757ms and wait197.262ms. Both used about
+1,200 bounded messages; their timer boundaries and identities differ. Old
+four producers computed 9,399 signatures /33.747MB in96.907ms summed wall;
+Core measured96.164ms for the same bytes on its single C2 owner. The
+arithmetic `752.757−96.164=656.593ms` is close to old consumer661.613ms,
+but is not a measured public speed saving. The old maximum producer wall
+726.482ms versus Core951.226ms tracks their broad pipeline endpoints;
+receiver wait/producer pacing remains unresolved. No producer-side signature
+treatment was run under the earlier owner direction.

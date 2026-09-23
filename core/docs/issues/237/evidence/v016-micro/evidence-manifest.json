@@ -1,0 +1,16 @@
+{
+  "binary_sha256": "66f2e18f8e62b04bc3b0ce620550aaae682b7529cc9d35309a5fa9f874a9cd82",
+  "files_sha256": {
+    "raw/cold-preflight.json": "74c65ef710c62757af0cb2319c2d47db8a74940eb2a0255b88ddbf6911501a82",
+    "raw/cold-recheck.json": "34b23f8197898945087b243f41a7b6e1b5794fcf22f9f7959117390a6ee27580",
+    "raw/identity.json": "0ad4a2f33022cd2ab2118077619a84caefdef848d75ee1ea4d0d3ea5847e84fe",
+    "raw/receipt.json": "a795ad78856287d279f5368855bcd589caf9ab68768833cbf67b9045bc1722b5",
+    "raw/source-copy.json": "b847b56c61b42e22055104f78e24b714248aa30c79bbc1a2dbfef74d2032d6e5",
+    "raw/stderr.txt": "ab2eab11994ed97cffa95e33cb9c87dc4f03a520d3c27183c35c48fc8a75789a",
+    "raw/stdout.txt": "c4b5920b191385d36699d3ae7fe2b61c9e3068f650e80163df85bd710dea5acc",
+    "temporary-instrumentation.diff.gz": "561c9d785bbffcd0b3854d4d341a251ef576834e1da057e47eb155ee97706f8a"
+  },
+  "instrumented_base_release_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "product_diff_sha256": "6d8160b482ab114cae2eb3c69f0ffc7b4b0bc279d3518954c2d7724d4ec3c834",
+  "schema": "issue237-v016-micro-evidence-v1"
+}
