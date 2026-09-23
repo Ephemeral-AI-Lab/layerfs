@@ -17,14 +17,14 @@ use std::{
 
 pub(crate) fn dispatch(
     store: &Store,
-    catalog: Option<&dyn HistoryCatalog>,
-    import_root: Option<&Path>,
+    history: (Option<&dyn HistoryCatalog>, Option<&Path>),
     r: &Request,
     input: &mut dyn Read,
     output: &mut dyn Write,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
+    let (catalog, import_root) = history;
     match &r.operation {
         Operation::WorkspaceStatus { .. }
         | Operation::WorkspaceUnmount { .. }

@@ -186,8 +186,7 @@ impl Service {
             };
             dispatch(
                 &store.store,
-                store.history.as_deref(),
-                self.import_root.as_deref(),
+                (store.history.as_deref(), self.import_root.as_deref()),
                 r,
                 input,
                 output,
