@@ -16,6 +16,9 @@ and image do not identify this revision. The
 and [acceptance record](proposal/service-daemon-transport/implementation/07-acceptance.md)
 state exact selections and incomplete proofs. These changes do not rewrite Stage 6
 results or qualify #193 performance work.
+The native Init progress-record update describes product commit
+`1f74d80be12ad19de1335d39fad0688ecc48c0f8`; the older sections retain
+their separate source bases.
 
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode

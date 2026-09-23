@@ -19,6 +19,8 @@ Implementation specification and its pre-publication audit:
 - **Native import/count-bound update:** product commit
   `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
   separate baseline pin.
+- **Native import progress update:** product commit
+  `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
