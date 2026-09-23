@@ -20,6 +20,8 @@ The #237 bounded multi-group admission amendment in §18.4.2 describes the
 product source in **this document's commit**, which also changes
 `cas/placement.rs`, `cas/save.rs` and `cas/selection.rs`. Earlier sections retain
 their historical source pins where they describe older behavior.
+The #237 pack-space C1 amendment in §18.4.3 likewise describes the product
+source in its own document/source commit; earlier section pins stay historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -318,6 +320,23 @@ the save through its existing rollback/cleanup path. No queued group survives a
 wave or the final publication. This is a bounded change to *when* groups are
 placed, not a new format or a path that moves cold source or Store work outside
 the caller's operation.
+
+### 18.4.3 Exact capacity for a new pack closed in one placement call (#237)
+
+`LanePlacement::select_many` can receive enough groups to create a pack and
+then displace it with the next pack **before any of that call's writes reach
+SQLite**. That created-and-closing pack can never be appended later, so its
+`SelectedWrite.capacity` equals its final declared `used` length. A newly
+created pack still open at the call boundary reserves the lane's full 256-KiB
+limit, as does any pack already inserted by a prior call. The existing
+`zeroblob(write.capacity)` plus bounded incremental BLOB writes and reader
+grammar are unchanged; only the length of a row known final before insertion
+differs. This avoids a full-BLOB rewrite and adds no pending payload buffer.
+
+This is the narrow C1 mechanism from the [prospective #237 treatment plan](../issues/237/pack-space-treatment-plan-20260924.md).
+Its physical saving and any sparse-history effect require measured receipts;
+it does not claim to remove the unused tail of a pack first inserted while
+still open. The #236 benchmark selection and historical receipts are unchanged.
 
 ---
 

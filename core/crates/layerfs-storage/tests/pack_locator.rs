@@ -550,7 +550,7 @@ fn a_pack_never_assembles_past_its_lane_limit() {
         .select_many(lane, probe, &mut next_pack_id)
         .expect("placement must not assemble a pack it will refuse");
     assert!(!writes.is_empty());
-    for write in &writes {
+    for (index, write) in writes.iter().enumerate() {
         assert!(
             write.used <= lane.pack_limit(),
             "an assembled pack of {} bytes exceeds the {} limit",
@@ -564,8 +564,12 @@ fn a_pack_never_assembles_past_its_lane_limit() {
         );
         assert_eq!(
             write.capacity,
-            lane.pack_limit(),
-            "an appendable pack allocates its lane's whole limit"
+            if index == 0 {
+                write.used
+            } else {
+                lane.pack_limit()
+            },
+            "a new closed pack is exact-sized; the still-open pack reserves append space"
         );
     }
     // The boundary is a real one: the groups fill the lane's pack limit, so the

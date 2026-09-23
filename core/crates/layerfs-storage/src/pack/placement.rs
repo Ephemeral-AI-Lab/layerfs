@@ -50,7 +50,7 @@ pub struct SelectedWrite {
     /// Assembled length of the pack after this write.
     pub used: usize,
     /// Bytes the pack row allocates, which is what a created row is zero-filled
-    /// to. Every lane but Singleton allocates its full pack limit.
+    /// to. A new pack closed in this call allocates only its used length.
     pub capacity: usize,
     /// Control area of the pack as this write leaves it.
     pub control: [u8; HEADER_LEN],
@@ -238,7 +238,14 @@ impl LanePlacement {
             .checked_add(directory_entry_len(lane) * entry.first_group)
             .ok_or(StorageError::Integrity("pack directory"))?;
         let control = control_area(lane, group_count, used)?;
-        let capacity = pack_capacity(lane, used);
+        // A pack created and displaced in this selection has not reached SQLite
+        // yet and cannot receive another append. Existing rows and the final open
+        // pack retain their original capacity for future in-place appends.
+        let capacity = if closing && entry.created {
+            used
+        } else {
+            pack_capacity(lane, used)
+        };
         if closing {
             // The tail is consumed, so its running total goes with it: the caller
             // replaces the open pack immediately after a closing increment. What
