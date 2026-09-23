@@ -1,0 +1,55 @@
+{
+  "binaries": {
+    "create_store": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/binary-archive/fa33d5f2e63cece5019850106de5e77baf8d6000b888e3b2cd2d855584f28d34/create_store",
+      "sha256": "fa33d5f2e63cece5019850106de5e77baf8d6000b888e3b2cd2d855584f28d34"
+    },
+    "layerfs-daemon": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/binary-archive/70a37125bec7e386c2a0f5f640850377a3cb2050f4e0ef3286bbcdb107c841e4/layerfs-daemon",
+      "sha256": "70a37125bec7e386c2a0f5f640850377a3cb2050f4e0ef3286bbcdb107c841e4"
+    },
+    "layerfs-service": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/binary-archive/90e97516863af7e20fe559f5ee321ed30d11b4a1caeda88c050c30a40ae87b2a/layerfs-service",
+      "sha256": "90e97516863af7e20fe559f5ee321ed30d11b4a1caeda88c050c30a40ae87b2a"
+    },
+    "public_key": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/binary-archive/f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1/public_key",
+      "sha256": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/benchmark-results/fs-bench-pro/binary-archive/accb06960fbf921661b1214c4e745255a2e852f19265437b65017e815b3d04ff/verify_namespace",
+      "sha256": "accb06960fbf921661b1214c4e745255a2e852f19265437b65017e815b3d04ff"
+    }
+  },
+  "build_profile": "release",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--release",
+    "-p",
+    "layerfs-service",
+    "-p",
+    "layerfs-daemon",
+    "-p",
+    "layerfs-bridge",
+    "--bin",
+    "layerfs-service",
+    "--bin",
+    "layerfs-daemon",
+    "--example",
+    "public_key",
+    "--example",
+    "create_store",
+    "--example",
+    "verify_namespace"
+  ],
+  "exit_code": 0,
+  "mode": "changed-product",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/issue237-cutoff512/layerfs/core/target",
+  "wall_ns": 3162314541
+}

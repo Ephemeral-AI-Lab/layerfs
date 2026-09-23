@@ -58,6 +58,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [Integrated C1+C2](combined-c1-c2.md) | One C1-only control, one combined candidate | 1.311 → **1.252 s** | Best raw rate **239.554 MB/s**; same root/readback, both telemetry INCOMPLETE, metadata cache unqualified; pack used +160 B despite smaller Store. |
 | [8-MiB wave policy](wave8-experiment.md) | One isolated 4→8 MiB C2 wave pair | 1.281 → **1.234 s** | Commits 80→55, but metadata cache unqualified; Store capacity and sampled RSS increased. No validated cold gain or adoption. |
 | [Sparse C2 guard](sparse-c2-guard.md) | Separate fresh history control/candidate | no completed history sample | Both stopped on `Integrity("dependency encoded work")` before a state root. Equal partial Store geometry and authenticated objects do not close #229. |
+| [Bounded transaction waves](bounded-wave-experiment.md) | One instrumented 10k control/candidate pair | 1.364 → **1.440 s** | File-Save commits **80→7** (−91.25%), but candidate was slower with higher sampled RSS and a larger Store; both full reopened readbacks passed. Control telemetry INCOMPLETE and metadata cache unqualified. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
@@ -191,11 +192,11 @@ The [518.8 MB/s budget](target-518.md) predated the integrated C1+C2 pair.
 From its best raw **1.252325 s** observation, the remaining gap is
 **0.674080 s**. D11/D12 charged about **0.2275 s** to file-Save transaction
 cadence at older source identities, so even removing that entire bucket would
-not recover the historical time. A prospective bounded-wave and coalesced-final
-[transaction experiment](iteration-record.md#round-r5-primary-transaction-count-hypothesis)
-targets **at most eight file-Save commits**, down at least 90% from roughly 80.
-Its speed and resource results are not yet measured. The 4 KiB database page,
-128 KiB whole-file cutoff, fresh timed work and no-warm-source rule remain fixed.
+not recover the historical time. The [bounded-wave experiment](bounded-wave-experiment.md)
+cut file-Save commits by **91.25%** but made the matched public caller
+**75.087 ms slower** and raised sampled RSS and Store space. This treatment is
+not adopted. The 4 KiB database page, 128 KiB whole-file cutoff, fresh timed
+work and no-warm-source rule remain fixed.
 The C1/C2 source changes remain confined to this research branch; the complete
 #229 sparse-history space/readback gate remains open after both attempted arms
 stopped at the same product error.

@@ -180,3 +180,38 @@ will use fresh independent source byte copies and zero-resident payload
 checks, but remains exploratory because metadata warmed by setup is not
 qualified. No timed transaction treatment or result has been taken yet;
 do not infer a wall-time gain from the 227-ms historical COMMIT bucket.
+
+## Round R6: seven commits, slower Init
+
+The [bounded-wave pair](bounded-wave-experiment.md) used one instrumented
+control `c5d9e8af3` and one candidate `343e4e029`, with the same H3 driver,
+fixed operation IDs, fresh independent writable source copies and fresh
+4-KiB-page Stores. Both immediate checks found **0/27,503 resident source
+payload pages**; metadata warmed by setup was unqualified. The control's
+daemon telemetry lost an event (`INCOMPLETE`); the candidate is `DIAGNOSTIC`.
+Both public runs skipped verification and were sampled once.
+
+- The candidate enlarged bounded preparation to **8,192 objects / 64 MiB**
+  and coalesced final seals/publication. File-Save commits fell **80 → 7**
+  (**−91.25%**), with preparation waves **75 → 5**. This met the owner's
+  transaction-count target without changing the 128-KiB file cutoff or
+  SQLite page size.
+- Public Init became **1.364419666 → 1.439506625 s** (**+75.086959 ms**,
+  slower). File-Save COMMIT time rose **228.068 → 276.719 ms**; the largest
+  accounted transaction rose **8.51 → 134.19 MB**, longest arbitration hold
+  **22.28 → 267.89 ms**, and sampled Service RSS **59.97 → 247.10 MB**.
+  The candidate Store file grew **1,069,056 B** and pack slack **1,032,165 B**.
+  Current-owner accept/SQL breakdown and actual-owner pager spill counters
+  were `NOT_MEASURED`, so the cause of the extra COMMIT and finish time is not
+  established beyond its correlation with larger transactions.
+- Separate reopened full-manifest verification passed both Stores: identical
+  root/object-ID digest, 10,101 paths and all 300 MB. Its wall time did not
+  enter the public comparison. The candidate stayed isolated and was **not
+  adopted** as a speed optimization. The first Save-wide-transaction sketch
+  was rejected before build/sample because it would release Store arbitration
+  with a live SQLite write transaction; its [record](single-transaction-experiment.md)
+  and diff are retained.
+
+The candidate's **208.4 MB/s** raw rate remains far below the historical
+**518.8 MB/s / 0.578245 s** row, which itself lacked a cold-cache contract.
+Reducing transaction count by 90% was insufficient on this 10k route.
