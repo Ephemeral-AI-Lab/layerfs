@@ -24,9 +24,8 @@ use support::{
 
 /// The pack row one object's locator names, truncated to the pack it declares.
 ///
-/// A pack row is allocated at its lane's capacity so an append can write in
-/// place, so the row is longer than the pack until `truncate_pack` reads the
-/// declared length out of the control area.
+/// A historical pack row may be longer than the bytes its control area declares;
+/// current closed rows can be exact length. Decode the declared length in both.
 fn pack_of_object(path: &std::path::Path, root: layerfs_content::ObjectId) -> Vec<u8> {
     let connection = rusqlite::Connection::open(path).expect("external connection");
     support::truncate_pack(

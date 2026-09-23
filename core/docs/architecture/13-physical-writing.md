@@ -21,7 +21,8 @@ product source in **this document's commit**, which also changes
 `cas/placement.rs`, `cas/save.rs` and `cas/selection.rs`. Earlier sections retain
 their historical source pins where they describe older behavior.
 The #237 pack-space C1 amendment in §18.4.3 likewise describes the product
-source in its own document/source commit; earlier section pins stay historical.
+source at `bbb0281bc`. The C2 amendment in §18.4.4 describes the product
+source in this document's commit; earlier section pins stay historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -323,6 +324,10 @@ the caller's operation.
 
 ### 18.4.3 Exact capacity for a new pack closed in one placement call (#237)
 
+This was the C1 treatment at `bbb0281bc`; §18.4.4 supersedes its open-tail
+rule. Its [one-shot 100k result](../issues/237/pack-space-c1-result-20260924.md)
+saved 622,930 B of 35,168,077 B reserved pack tail and passed full readback.
+
 `LanePlacement::select_many` can receive enough groups to create a pack and
 then displace it with the next pack **before any of that call's writes reach
 SQLite**. That created-and-closing pack can never be appended later, so its
@@ -337,6 +342,26 @@ This is the narrow C1 mechanism from the [prospective #237 treatment plan](../is
 Its physical saving and any sparse-history effect require measured receipts;
 it does not claim to remove the unused tail of a pack first inserted while
 still open. The #236 benchmark selection and historical receipts are unchanged.
+
+### 18.4.4 Close the selected tail at every flush (#237)
+
+The C2 treatment closes the last pack of each `select_many` call too, and
+releases its open placement state before another call. A later group always
+starts a new pack rather than appending to an already inserted row. Because
+every pack has its final length **before its first SQLite INSERT**, its
+`SelectedWrite.capacity` equals `used`, while the same reserved directory
+grammar and incremental BLOB writer continue to apply. A demanded same-Save
+read still flushes the queue and writes pack bytes before its object locators
+in the same transaction; no visibility or publication work moves outside the
+operation. The existing bounded queue is unchanged and no extra pending body
+buffer is introduced.
+
+This changes physical pack granularity, not canonical object identities or
+reader grammar. More pack IDs, rows, directory reservations and SQL work may
+offset the saved BLOB tails. The [prospective C2 rule](../issues/237/pack-space-treatment-plan-20260924.md)
+requires measured Store apparent/allocated bytes, pack count, full reopened
+readback, time and RSS before accepting it. Existing larger-capacity packs
+remain readable. The #229 sparse-history guard remains a separate requirement.
 
 ---
 

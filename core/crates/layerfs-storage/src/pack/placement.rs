@@ -1,13 +1,12 @@
-//! Exact append-or-new placement and the retained open-pack tail.
+//! Exact pack placement within one flush.
 //!
 //! Placement is decided before anything is written: a group joins the lane's open
 //! pack only when the exact assembled length and group count still fit, and
 //! otherwise starts a new pack. A write is an **increment** - the directory
 //! entries and the bodies of the groups it places, and nothing else - because the
 //! directory region is reserved by the format and a body's offset never depends
-//! on how many groups precede it (`pack::layout`). The retained tail holds framed
-//! groups; it is kept because a closing assembly needed it, and because the
-//! lane's retained bytes are a published observable, but no write copies it.
+//! on how many groups precede it (`pack::layout`). Each flush closes its final
+//! pack, so a later flush starts a new one rather than appending to a written row.
 
 use crate::error::{StorageError, StorageResult};
 use crate::pack::assemble::{body_bytes, control_area, directory_entries};
@@ -97,7 +96,7 @@ impl LanePlacement {
         Self { open: None }
     }
 
-    /// Bytes retained by this lane's open tail.
+    /// Bytes retained by this lane's open tail during placement.
     ///
     /// The open state already carries the assembled length of its groups, so this
     /// is a read rather than a re-measurement; the lane is the state's own, which
@@ -109,7 +108,8 @@ impl LanePlacement {
     /// Places `groups`, deciding append or new pack for each one in order.
     ///
     /// Every pack that receives a group in this call produces exactly one write,
-    /// assembled once, after the last group that landed in it.
+    /// assembled once, after the last group that landed in it. The final pack is
+    /// closed before returning, leaving no cross-call open tail.
     pub fn select_many(
         &mut self,
         lane: PackLane,
@@ -202,10 +202,9 @@ impl LanePlacement {
             });
         }
         if let Some(entry) = pending {
-            // This pack stays open: a later group may still append to it, so the
-            // tail is retained and the next increment borrows it.
-            writes.push(self.increment(lane, entry, false)?);
+            writes.push(self.increment(lane, entry, true)?);
         }
+        self.open = None;
         Ok(writes)
     }
 
@@ -238,9 +237,9 @@ impl LanePlacement {
             .checked_add(directory_entry_len(lane) * entry.first_group)
             .ok_or(StorageError::Integrity("pack directory"))?;
         let control = control_area(lane, group_count, used)?;
-        // A pack created and displaced in this selection has not reached SQLite
-        // yet and cannot receive another append. Existing rows and the final open
-        // pack retain their original capacity for future in-place appends.
+        // A pack created and closed in this selection has not reached SQLite
+        // yet and cannot receive another append. An earlier-written row keeps
+        // its original capacity if one is ever passed through this path.
         let capacity = if closing && entry.created {
             used
         } else {
@@ -248,9 +247,7 @@ impl LanePlacement {
         };
         if closing {
             // The tail is consumed, so its running total goes with it: the caller
-            // replaces the open pack immediately after a closing increment. What
-            // is left is an empty pack, which assembles to its control area and
-            // its whole reserved directory region.
+            // replaces or discards the open pack after a closing increment.
             open.groups.clear();
             open.assembled = body_area_offset(lane);
         }
