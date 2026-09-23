@@ -16,6 +16,10 @@ fresh output directory, and retained failures. The research
 uses the existing Darwin invalidate/mincore backend. The original Core runner
 still marks these rows `source-cache-uncontrolled-v1` and
 `admission_eligible=false`; research sidecars do not relabel them as gate PASS.
+The sidecars prove zero resident **payload** pages just before the call. Their
+file opens and metadata checks can leave directory-entry and inode metadata
+resident; that cache is not independently evicted or qualified. Accordingly,
+these are source-payload-cold diagnostics, not a fully cold namespace claim.
 Verification is separate from every performance number. D9 and subsequent
 algorithm exploration use the performance-only fast lane by default.
 
