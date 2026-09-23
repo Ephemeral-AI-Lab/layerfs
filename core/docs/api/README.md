@@ -85,5 +85,7 @@ it is not required for host-direct project initialization. Historical
 `init_namespace` receipts keep their recorded route and identity. See the
 [#231 first-pass report](../benchmark/fs-bench-pro/issue-231/RESULTS-20260923.md)
 and [API operation contracts](operations.md). The [#236 functional proof](evidence/issue236/README.md)
-and [SDK benchmark report](../benchmark/fs-bench-pro/issue-236-sdk-init/RESULTS-20260923.md)
-record the 100/1,000-file source manifests and single raw SDK Init times.
+and [SDK-owned host benchmark report](../benchmark/fs-bench-pro/issue-236-sdk-init/RESULTS-V2-20260923.md)
+record the 100/1,000-file source manifests, returned Project IDs and single
+raw SDK Init times. The earlier [v1 route report](../benchmark/fs-bench-pro/issue-236-sdk-init/RESULTS-20260923.md)
+remains archival evidence.
