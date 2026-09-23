@@ -247,6 +247,9 @@ fn prerequisites(
             let mut objects = FilesystemObjects::new(provider, &mut handoff);
             let mut metadata = Vec::with_capacity(entries.len());
             let mut content_roots = Vec::with_capacity(entries.len());
+            // Adjacent equal portable fields have the same canonical metadata root.
+            // One slot avoids an entry-count-sized cache on heterogeneous imports.
+            let mut previous_metadata = None;
             for entry in entries {
                 progress.tick()?;
                 let kind = kind_of(entry.kind);
@@ -255,7 +258,15 @@ fn prerequisites(
                     mtime_seconds: entry.mtime_seconds,
                     mtime_nanoseconds: entry.mtime_nanoseconds,
                 };
-                let metadata_root = build_metadata(&mut objects, kind, value)?;
+                let key = (kind.code(), entry.mode, entry.mtime_seconds, entry.mtime_nanoseconds);
+                let metadata_root = match previous_metadata {
+                    Some((previous, root)) if previous == key => root,
+                    _ => {
+                        let root = build_metadata(&mut objects, kind, value)?;
+                        previous_metadata = Some((key, root));
+                        root
+                    }
+                };
                 let content_root = match entry.kind {
                     RecordKind::Symlink => emit_symlink(
                         &mut objects,

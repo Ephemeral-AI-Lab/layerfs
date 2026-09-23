@@ -23,6 +23,12 @@ Implementation specification and its pre-publication audit:
   `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
 - **Init ordering-backing correction:** product commit
   `0042a909ac3f16a5041aa51d76f96522a58352c8`.
+- **#237 unmerged research prototype:** the same-commit `history_bootstrap.rs`
+  diff based on `e6e528c3f830db07bffc8643cc0d18db8abf10b7` reuses the
+  preceding entry's metadata root only when kind, mode and mtime are equal.
+  The memo holds one key/root pair; the history, C1 and C2 contracts are
+  unchanged. Its evidence belongs to the #237 research directory, not to a
+  released performance claim.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
