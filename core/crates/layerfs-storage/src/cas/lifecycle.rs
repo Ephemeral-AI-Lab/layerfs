@@ -84,6 +84,7 @@ impl MutationOwner {
             ceiling: baseline_pack_id,
             placement: std::array::from_fn(|_| LanePlacement::new()),
             groups: std::array::from_fn(|_| PendingGroup::default()),
+            queued: Default::default(),
             sealed_rows: Vec::new(),
             transaction: TransactionState::default(),
             transaction_open: false,

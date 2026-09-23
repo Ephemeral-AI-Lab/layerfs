@@ -16,6 +16,11 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 marked in place and carries its own commit. Scope, method, measurement status and
 upkeep are stated in the [index](README.md).
 
+The #237 bounded multi-group admission amendment in §18.4.2 describes the
+product source in **this document's commit**, which also changes
+`cas/placement.rs`, `cas/save.rs` and `cas/selection.rs`. Earlier sections retain
+their historical source pins where they describe older behavior.
+
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
 ---
@@ -248,8 +253,8 @@ copied, for the case where the retained tail is about to be replaced (§18.5).
                               • the new pack's write is marked CREATED
 ```
 
-**A sealed group is written with one statement per bound chunk (#178 P2-2,
-2026-09-18).** The group's rows are inserted together, `k` at a time, with `k`
+**Object rows are written with one statement per bound chunk (#178 P2-2,
+2026-09-18).** Rows from one or several groups are inserted together, `k` at a time, with `k`
 derived from the connection's own `SQLITE_LIMIT_VARIABLE_NUMBER` and
 `SQLITE_LIMIT_SQL_LENGTH` and capped at 128 - read back from the engine, never
 copied as a constant - and SQLite applies each multi-row `INSERT` atomically, so a
@@ -286,6 +291,33 @@ identifier.
 A pack appended to in three separate calls is re-assembled three times — and
 produces byte-identical bytes for the groups it already held, so `group_number` and
 `record_number` are stable across appends. Locators survive.
+
+### 18.4.2 Bounded multi-group admission during one save wave (#237)
+
+`MutationOwner` now retains one FIFO of **sealed** ordinary, native or whole-file
+groups while a preparation wave holds the Store's arbitration and transaction.
+The FIFO contains only one lane at a time, at most **256 KiB of encoded group
+bodies** and at most **512 locator rows**. A lane switch or projected bound
+flushes it. Pooled-metadata and singleton groups continue through the immediate
+path. The wave's existing 512-object/4 MiB limits, transaction cadence, SQLite
+page size and physical pack grammar are unchanged.
+
+A flush moves the queued groups into the existing `LanePlacement::select_many`.
+That placement returns one increment per receiving pack; `write_pack` still
+invalidates cached pack bytes for each increment, and the existing engine-limited
+multi-row SQL writer inserts all resulting locators. The row is visible only after
+its pack bytes and locator have both been written in the same transaction.
+
+The queue also belongs to the dependency boundary. An exact reuse or same-save
+read that asks for a queued identity flushes before its locator lookup; a
+whole-file predecessor or content-index candidate flushes before delta-base
+selection. Direct-reference validation may recognize a queued identity as
+accepted, because the queue is drained before the wave's collision check,
+candidate-index flush and COMMIT. Failed placement, SQL or collision work fails
+the save through its existing rollback/cleanup path. No queued group survives a
+wave or the final publication. This is a bounded change to *when* groups are
+placed, not a new format or a path that moves cold source or Store work outside
+the caller's operation.
 
 ---
 

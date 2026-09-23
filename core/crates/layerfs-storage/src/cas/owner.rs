@@ -13,7 +13,7 @@ use rusqlite::Connection;
 
 use layerfs_content::ObjectId;
 
-use crate::cas::placement::PendingGroup;
+use crate::cas::placement::{PendingGroup, QueuedGroups};
 use crate::cas::pool_lane::PoolCounters;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::Candidates;
@@ -445,6 +445,7 @@ pub struct MutationOwner {
     pub(super) ceiling: i64,
     pub(super) placement: [LanePlacement; 5],
     pub(super) groups: [PendingGroup; 5],
+    pub(super) queued: QueuedGroups,
     /// Identities whose row this preparation wave has already written.
     ///
     /// A group is framed and placed as a whole, so one seal publishes rows for

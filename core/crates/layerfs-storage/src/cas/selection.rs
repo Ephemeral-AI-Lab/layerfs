@@ -43,6 +43,7 @@ impl MutationOwner {
             })?
         };
         self.counters.presence_queries = self.counters.presence_queries.saturating_add(queries);
+        self.flush_queued_if_contains(advisory, availability)?;
         // **Only a placed row can be a delta base.** The whole-file lane's groups
         // are no longer sealed per record, so a member this operation has already
         // admitted is still waiting in an open group when a later offer asks
@@ -57,7 +58,7 @@ impl MutationOwner {
         // only place that can act on the answer; it is handed to the selection, so
         // it is still computed exactly once per object, as it was when only the
         // selection computed it.
-        let prehashed = self.pending_base_for(object, advisory, availability)?;
+        let prehashed = self.pending_base_for(object, advisory)?;
         let record = self.select_record(object, advisory, prehashed)?;
         let lane = record.lane;
         let index = lane.index();
@@ -131,7 +132,6 @@ impl MutationOwner {
         &mut self,
         object: &FinalizedObject,
         advisory: &[ObjectId],
-        availability: &mut Availability,
     ) -> StorageResult<Option<[u64; 8]>> {
         if PackLane::for_role(object.role()) != PackLane::WholeFile {
             return Ok(None);
@@ -151,7 +151,11 @@ impl MutationOwner {
         };
         let proposed_pending = proposed.is_some_and(|id| self.pending_member(id));
         if listed || proposed_pending {
-            self.seal_group(PackLane::WholeFile, availability)?;
+            let mut needed = advisory.to_vec();
+            if let Some(id) = proposed {
+                needed.push(id);
+            }
+            self.seal_pending(&needed)?;
         }
         Ok(Some(signature))
     }
