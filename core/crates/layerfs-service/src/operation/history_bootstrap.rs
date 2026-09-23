@@ -22,6 +22,7 @@ use layerfs_content::filesystem::attributes::{
     build::build_attribute_tree, codec::AttributeEntry, keys::AttributeKey,
     portable::PortableMetadata, value::emit_value,
 };
+use layerfs_content::filesystem::references::FileBacking;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
     DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, InodeScope,
@@ -33,9 +34,14 @@ use layerfs_history::{ManifestEntry, RecordKind};
 use layerfs_storage::{SaveHandoff, Store};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 use std::{
+    fs,
     io::Write,
+    os::unix::fs::DirBuilderExt,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
+
+static NEXT_ORDERING_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 /// One bounded progress byte on a long native import, separate from result data.
 pub(crate) struct ImportProgress<'a> {
@@ -153,19 +159,48 @@ pub(crate) fn build_namespace(
     };
     input.check().map_err(content)?;
     progress.tick()?;
-    let mut save = store
-        .begin_save(timer.child("history.begin_tree_save"))
-        .map_err(storage)?;
+    let scratch = loop {
+        let path = store.path().with_extension(format!(
+            "ordering-{}-{}",
+            std::process::id(),
+            NEXT_ORDERING_DIRECTORY.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::DirBuilder::new().mode(0o700).create(&path) {
+            Ok(()) => break path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let mut save = match store.begin_save(timer.child("history.begin_tree_save")) {
+        Ok(save) => save,
+        Err(error) => {
+            let mut failure = storage(error);
+            if fs::remove_dir(&scratch).is_err() {
+                failure.cleanup = Some(Code::Io);
+            }
+            return Err(failure);
+        }
+    };
     let mut handoff = SaveHandoff::new(&mut save);
+    let mut backing = FileBacking::new(&scratch);
     let built = {
         let mut objects = FilesystemObjects::new(provider, &mut handoff);
-        layerfs_content::build_filesystem(&mut objects, &input, None).map_err(content)
+        layerfs_content::build_filesystem(&mut objects, &input, Some(&mut backing)).map_err(content)
     };
+    let scratch_cleanup = fs::remove_dir(&scratch);
     let retained = handoff.take_failure();
     drop(handoff);
     let built = match retained {
         Some(error) => Err(storage(error)),
         None => built,
+    };
+    let built = match (built, scratch_cleanup) {
+        (Err(mut failure), Err(_)) => {
+            failure.cleanup = Some(Code::Io);
+            Err(failure)
+        }
+        (Ok(_), Err(error)) => Err(error.into()),
+        (result, Ok(())) => result,
     };
     let built = built.and_then(|value| {
         progress.tick()?;

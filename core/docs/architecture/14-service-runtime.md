@@ -19,6 +19,10 @@ results or qualify #193 performance work.
 The native Init progress-record update describes product commit
 `1f74d80be12ad19de1335d39fad0688ecc48c0f8`; the older sections retain
 their separate source bases.
+The Init ordering-backing correction follows parent source
+`8dc25e4fcca700b90a0d61c84152c59c4acfb951`; this document is updated
+with the product change in the same commit, and its resulting commit is pinned
+in the next documentation-only commit.
 
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
@@ -231,6 +235,12 @@ progress marker at most once per second while it constructs the source tree.
 The native client consumes that marker without delivering logical result bytes;
 it does not reset the absolute request deadline or change the five-second
 no-progress rule. Other operations still reject unexpected `ResultData`.
+The shared namespace builder supplies C1's existing file-backed ordering
+reducer with a private directory beside the Store. The default pending-row
+and ordering-byte budgets remain unchanged; C1 spills sorted rows when the
+in-memory budget fills and checks release before the Service publishes a root.
+The Service removes the private directory on success or failure and reports
+failed cleanup. No file or entry-count threshold is inferred from that budget.
 Each process shares
 one absolute operation deadline through its layers. Only a remaining duration
 crosses the network, never an Instant. Synchronous

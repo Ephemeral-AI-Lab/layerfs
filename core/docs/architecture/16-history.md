@@ -21,6 +21,9 @@ Implementation specification and its pre-publication audit:
   separate baseline pin.
 - **Native import progress update:** product commit
   `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
+- **Init ordering-backing correction:** follows parent source
+  `8dc25e4fcca700b90a0d61c84152c59c4acfb951`; this document is updated
+  with the product change and the resulting commit is pinned separately.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
@@ -326,10 +329,14 @@ could mislabel a known successful metadata transition as abort.
 ## 16.8 Production namespace bootstrap
 
 Initialization is production code, not the `examples/prepare_store.rs` fixture.
-The service builds a bounded, pathless manifest — at most 128 entries including
-the root, inside the existing 32 KiB metadata envelope — whose entries name their
+The pathless bootstrap manifest fits the existing 32 KiB metadata envelope and
+16-bit parent encoding, without the former 128-entry test ceiling. Its entries name their
 parent by index, a canonical component name, a kind, portable mode/mtime and,
 per kind, an already published file root or a bounded inline symlink target.
+Native directory import has no default file or entry-count ceiling. Both
+initialization routes give the C1 ordering reducer a private file backing so
+the default bounded in-memory row set can spill and be checked for cleanup
+before publication.
 
 Every serial is assigned by the service from one reservation the C5 catalog
 consumed first; no caller supplies a serial and no foreign scope is imported. The

@@ -423,6 +423,40 @@ fn native_directory_import_exceeds_bootstrap_and_reads_bytes() {
 }
 
 #[test]
+fn native_directory_import_spills_ordering_without_an_entry_cap() {
+    let mut fixture = fixture("native-import-spill", ALL);
+    let source = fixture._temp.0.join("source");
+    std::fs::create_dir(&source).unwrap();
+    for index in 0..4097 {
+        std::fs::create_dir(source.join(format!("d{index:04}"))).unwrap();
+    }
+    fixture.service.set_import_root(&source).unwrap();
+    let created = call(
+        &fixture.service,
+        &fixture.peer,
+        1,
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
+            stack: [0x74; 16],
+            name: b"spill".to_vec(),
+            scope_seed: [0x75; 32],
+        }),
+    )
+    .unwrap();
+    let root = match result(created) {
+        HistoryResult::StackCreated(value) => value.root,
+        other => panic!("expected imported stack: {other:?}"),
+    };
+    stat(&fixture.service, &fixture.peer, 2, root, b"d4096");
+    assert!(std::fs::read_dir(&fixture._temp.0)
+        .unwrap()
+        .all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("store.ordering-")));
+}
+
+#[test]
 fn legacy_mask_grants_no_history() {
     let fixture = fixture("legacy", LEGACY);
     let failure = call(
