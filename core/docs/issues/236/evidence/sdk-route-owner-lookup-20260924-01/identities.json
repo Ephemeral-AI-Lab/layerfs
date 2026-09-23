@@ -1,0 +1,14 @@
+{
+  "cache_contract": "uncontrolled OS/source cache; diagnostic only",
+  "harness_source_sha256": "351f4baa055c584687c82138d3ac3e85de94ebe3eb18ecff07451ce9348b92c9",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "image_base_digest": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "image_id": "sha256:e08b4efc6d4ea1be3e8df2fbeaccd60581ecaeb0551c1a440c9fd538ecf2e961",
+  "reporter_sha256": "dc4c6890e07e175c1ff37151a0941dba40b08236b0df066398676be9acd1f628",
+  "sample_count": 1,
+  "sdk_test_binary_sha256": "9ffd842936122f33aacf3b7dc8b1ace8de91fdc5aeb6f28fb6ca967bcb936018",
+  "source_commit": "e448f534a1aecd79d2bcc0cd72305a6104d994dc",
+  "source_status": "",
+  "source_tree": "41087a4ccdfe07f4237fb6540124af112050cdf0",
+  "telemetry_run": 340263387238162298188565702861443307951
+}
