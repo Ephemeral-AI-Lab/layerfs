@@ -15,8 +15,8 @@ class InitCases(unittest.TestCase):
             self.assertEqual(len(planned), case.files)
             self.assertEqual(sum(size for _, _, size in planned), case.logical_bytes)
             self.assertEqual(len({path for path, _, _ in planned}), case.files)
-        self.assertEqual(init.SELECTED, tuple(init.CASES)[:3])
-        self.assertIn("first-pass", init.NOT_RUN_REASON)
+        self.assertEqual(init.SELECTED, tuple(init.CASES)[:2])
+        self.assertIn("SDK two-case", init.NOT_RUN_REASON)
 
     def test_seal_and_inventory_refuse_corruption(self):
         with tempfile.TemporaryDirectory() as directory:

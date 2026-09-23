@@ -1,16 +1,16 @@
-"""Frozen first-pass native Init cases, source fixture and public operation."""
+"""Frozen SDK Init cases, source fixture and one public SDK operation."""
 from dataclasses import dataclass
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import time
 import uuid
 
-PROFILE = "core-native-import-fixture-v2"
-ROUTE = "core-native-directory-import-v2"
+PROFILE = "core-sdk-init-fixture-v1"
+ROUTE = "host-direct-sdk-v1"
 MTIME_NS = 1_700_000_000_000_000_000
 CHUNK = 1024 * 1024
 
@@ -33,8 +33,8 @@ CASES = {
         Case("namespace-100000", 100_000, 1_000, 500_000_000, 100_000_000, (2, 1_000, 78_998, 15_000, 5_000)),
     )
 }
-SELECTED = tuple(CASES)[:3]
-NOT_RUN_REASON = "outside the #231 first-pass cohort; four-tier final gate open"
+SELECTED = tuple(CASES)[:2]
+NOT_RUN_REASON = "outside the #236 SDK two-case selection; #231 four-tier gate open"
 
 
 def plan(case: Case):
@@ -144,33 +144,30 @@ def prepare(case: Case, prepared_root: Path):
             "preparation_wall_ns": time.monotonic_ns() - start, "reused": False}
 
 
-def _route():
-    path = Path(__file__).resolve().parents[3] / "crates/layerfs-daemon/tests/history_route.py"
-    spec = importlib.util.spec_from_file_location("layerfs_history_route", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def public_import(daemon, case: Case, stack: bytes, scope_seed: bytes):
-    """One public daemon request; the Service scans and reads the source."""
-    route = _route()
-    payload = b"\x09" + stack + route.blob(case.id.encode()) + scope_seed
+def public_import(binary, case: Case, source: Path, store: Path, history: Path,
+                  private: str, cursor: str):
+    """One public SDK Init; the driver times only Client::init_project."""
+    command = [binary, str(source), str(store), str(history), case.id]
     started = time.monotonic_ns()
     try:
-        daemon.stdin.write(route.begin(1, 7, payload, profile=2, deadline_ms=15_000))
-        daemon.stdin.write(route.frame(4, 1, b"\0" * 8))
-        daemon.stdin.flush()
-        kind, body = route.receive(daemon, timeout=15)
-        if kind != 6:
-            raise RuntimeError(f"native import failed: {body.hex()}")
-        label, value = route.history(body)
-        if label != "StackCreated" or value["stack"][:1] != b"\x31":
-            raise ValueError("native import returned an unexpected result")
-        outcome = {"status": "COMPLETE", "root": value["root"].hex(),
-                   "root_serial": value["root_serial"], "stack": value["stack"].hex()}
-    except Exception as error:
-        outcome = {"status": "INCOMPLETE", "error": repr(error)}
-    finished = time.monotonic_ns()
-    return {"operation_ns": finished - started, "started_ns": started, "finished_ns": finished,
-            "stack_body": stack.hex(), "sample_count": 1, **outcome}
+        child = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               timeout=15, env={**os.environ, "LAYERFS_PRIVATE_KEY": private,
+                                                "LAYERFS_HISTORY_CURSOR_KEY": cursor})
+        stdout, stderr, exit_code, timed_out = child.stdout, child.stderr, child.returncode, False
+    except subprocess.TimeoutExpired as error:
+        stdout, stderr, exit_code, timed_out = error.stdout or b"", error.stderr or b"", None, True
+    command_wall_ns = time.monotonic_ns() - started
+    try:
+        result = json.loads(stdout) if stdout else None
+    except (ValueError, UnicodeDecodeError):
+        result = None
+    if not isinstance(result, dict):
+        result = {"status": "INCOMPLETE", "operation_ns": None,
+                  "error": "missing or malformed SDK result"}
+    if result.get("status") == "COMPLETE" and (
+        exit_code != 0 or timed_out or not result.get("project_id", "").startswith("31") or
+        not result.get("genesis_layer", "").startswith("32")
+    ):
+        result["status"] = "INCOMPLETE"
+        result["error"] = "SDK result or process terminal mismatch"
+    return result, command_wall_ns, stdout, stderr, exit_code, timed_out, command

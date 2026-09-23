@@ -1,7 +1,5 @@
 import fcntl
-import hashlib
 import io
-import json
 import subprocess
 import sys
 import tempfile
@@ -12,29 +10,18 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import runner
-from shared import telemetry
 
 
 class Substrate(unittest.TestCase):
-    def test_run_skips_full_verifier_unless_requested(self):
+    def test_run_uses_sdk_only_and_always_verifies(self):
         case = runner.init.SELECTED[0]
         with patch.object(runner, "run", return_value=Path("receipt")) as run:
-            for option, expected in (([], False), (["--verify"], True)):
-                with patch.object(sys, "argv", ["runner.py", "run", "--case", case, "--out", "fresh", *option]):
-                    with redirect_stdout(io.StringIO()):
-                        runner.main()
-                run.assert_called_with(case, "fresh", expected)
-
-    def test_startup_keeps_telemetry_before_ready(self):
-        with tempfile.TemporaryDirectory() as directory:
-            script = Path(directory) / "service"
-            script.write_text("#!/usr/bin/env python3\nimport sys\nprint('LFT1 {}', file=sys.stderr, flush=True)\nprint('layerfs-service ready 127.0.0.1:12345', file=sys.stderr, flush=True)\nsys.stdin.read()\n")
-            script.chmod(0o755)
-            capture = Path(directory) / "service.stderr"
-            process, thread, port = runner._start_service(str(script), runner.os.environ.copy(), capture)
-            self.assertEqual(port, 12345)
-            self.assertEqual(runner._stop(process, thread), "PASS")
-            self.assertEqual(capture.read_bytes(), b"LFT1 {}\nlayerfs-service ready 127.0.0.1:12345\n")
+            with patch.object(sys, "argv", ["runner.py", "run", "--case", case, "--out", "fresh"]):
+                with redirect_stdout(io.StringIO()):
+                    runner.main()
+            run.assert_called_once_with(case, "fresh")
+        self.assertEqual(runner.BINARIES, ("benchmark_init", "verify_namespace"))
+        self.assertFalse(hasattr(runner.init, "_route"))
 
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -64,36 +51,14 @@ class Substrate(unittest.TestCase):
                 self.assertNotEqual(subprocess.run([sys.executable, "-c", code, str(one)], stderr=subprocess.DEVNULL).returncode, 0)
                 self.assertEqual(subprocess.run([sys.executable, "-c", code, str(two)], stderr=subprocess.DEVNULL).returncode, 0)
 
-    def test_telemetry_loss_and_truncation_keep_capture(self):
-        run = "1" * 32
-        op = {"v": 1, "kind": "operation", "run": run, "pid": 123, "role": 1,
-              "namespace": 10, "success": True, "timing": {"name": "HistoryCommand", "elapsed_ns": 7, "children": []}}
-        summary = {"v": 1, "kind": "run-summary", "run": run, "pid": 123, "role": 1,
-                   "namespace": 10, "dropped": 0, "failed": 0, "overflow": False}
-        raw = b"".join(b"LFT1 " + json.dumps(item).encode() + b"\n" for item in (op, summary))
-        producer = {"name": "service", "pid": 123, "role": 1, "namespace": 10,
-                    "start": 0, "end": len(raw), "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
-        self.assertEqual(telemetry.inspect(raw, [producer], run)["status"], "PASS")
-        summary["dropped"] = 1
-        lost = b"".join(b"LFT1 " + json.dumps(item).encode() + b"\n" for item in (op, summary))
-        producer.update(end=len(lost), bytes=len(lost), sha256=hashlib.sha256(lost).hexdigest())
-        self.assertEqual(telemetry.inspect(lost, [producer], run)["status"], "INCOMPLETE")
-        with tempfile.TemporaryDirectory() as directory:
-            capture = Path(directory) / "service.stderr"
-            capture.write_bytes(lost[:-1])
-            parsed = telemetry.ingest([{ "name": "service", "path": str(capture), "pid": 123,
-                                         "role": 1, "namespace": 10}], Path(directory) / "telemetry.lft1", run)
-            self.assertEqual(parsed["status"], "INCOMPLETE")
-            self.assertTrue(capture.exists())
-
     def test_one_sample_cardinality_and_retained_hash(self):
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             for case in runner.init.CASES.values():
-                folder = run / "daemon-host" / "init_namespace" / case.id
+                folder = run / "sdk-host" / "init_namespace" / case.id
                 folder.mkdir(parents=True)
                 runner.write_json(folder / "receipt.json", {"status": "NOT_RUN", "sample_count": 0})
-            target = run / "daemon-host" / "init_namespace" / runner.init.SELECTED[0] / "receipt.json"
+            target = run / "sdk-host" / "init_namespace" / runner.init.SELECTED[0] / "receipt.json"
             runner.write_json(target, {"status": "INCOMPLETE", "sample_count": 2})
             runner.manifest_run(run)
             with self.assertRaisesRegex(ValueError, "one-sample"):
