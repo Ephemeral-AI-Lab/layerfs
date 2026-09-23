@@ -1,0 +1,37 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/a83d0f64c23712f7debafd20b05d115ca51fb0003ed3fa69e3f5d90922a3237b/benchmark_init",
+      "sha256": "a83d0f64c23712f7debafd20b05d115ca51fb0003ed3fa69e3f5d90922a3237b"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/benchmark-results/fs-bench-pro/binary-archive/30e637498bf119dd5a8492d66c948be1535bd54825ac3873cb786ff8d3601681/verify_namespace",
+      "sha256": "30e637498bf119dd5a8492d66c948be1535bd54825ac3873cb786ff8d3601681"
+    }
+  },
+  "budget_ns": 30000000000,
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-service",
+    "--example",
+    "benchmark_init",
+    "--example",
+    "verify_namespace"
+  ],
+  "compiled_units": 3,
+  "exit_code": 0,
+  "mode": "changed-product",
+  "profile": "release",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/bb86/layerfs/core/target",
+  "wall_ns": 3736316292
+}

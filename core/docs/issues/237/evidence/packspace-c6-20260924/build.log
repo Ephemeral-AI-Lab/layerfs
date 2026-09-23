@@ -1,0 +1,4 @@
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/bb86/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-service v0.1.6 (/Users/yifanxu/.codex/worktrees/bb86/layerfs/core/crates/layerfs-service)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/bb86/layerfs/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 3.69s

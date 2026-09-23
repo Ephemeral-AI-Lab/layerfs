@@ -1,0 +1,16 @@
+{
+  "c3": {
+    "capacity_bytes": 4194304,
+    "pack_rows": 16,
+    "sorted_multiset_digest": "c785c716c19ebef2d7cd833b6cc391a74056df0c661ffd0a187ff5c9b0846310",
+    "used_bytes": 4051316
+  },
+  "c6": {
+    "capacity_bytes": 4194304,
+    "pack_rows": 16,
+    "sorted_multiset_digest": "c785c716c19ebef2d7cd833b6cc391a74056df0c661ffd0a187ff5c9b0846310",
+    "used_bytes": 4051316
+  },
+  "equal": true,
+  "method": "readonly immutable SQLite; SHA256 of concatenated sorted per-BLOB SHA256 digests, selecting header version 12"
+}
