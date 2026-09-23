@@ -47,6 +47,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D9 release fast lane](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/daemon-host/init_namespace/namespace-10000/receipt.json) | `2a66f84d`, release binaries, immediate whole-source mincore recheck | **1.591 s** | Confirmed C5 root, 2.018 s command, telemetry/cleanup PASS; verifier **SKIPPED**, diagnostic only. |
 | [D10 100k research](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d10-release-100k/daemon-host/init_namespace/namespace-100000/receipt.json) | `a6d1d563`, one-shot release driver around the official hard skip | 10.011 s | Daemon returned `Unknown` with no confirmed root; Service later reported 11.021 s success and one LayerStack. Command 15.395 s, telemetry INCOMPLETE, cleanup FAIL; verifier NOT_RUN. No further 100k work is planned in this 10k-focused round. |
 | [D11 ingest counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d11-ingest-counts/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, temporary release instrumentation, then restored | 1.493 s | Root and telemetry/cleanup PASS, verifier SKIPPED; count-driven diagnostic only, no time comparison. |
+| [D12 collision detail](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d12-collision-detail/daemon-host/init_namespace/namespace-10000/receipt.json) | Dirty, reporting-only release instrumentation, then restored | 1.875 s | Root returned, source payload 0/27,503 resident pages, verifier SKIPPED; daemon dropped one telemetry event, row **INCOMPLETE**. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
@@ -114,6 +115,12 @@ The proposed smaller per-file prefix reserve also failed its standalone
 7.006 ms versus 6.560 ms for the existing 128 KiB reserve, added 7,506
 reallocations, and grew capacity to 256 KiB at the default cutoff. No public
 Init arm or product edit followed that result.
+The [D12 C2 detail](c2-detail-diagnostic.md) charged 43.306 ms to collision
+queries across the file Save, below the preregistered 50 ms threshold for a
+batched-query treatment. That candidate was rejected without a product edit.
+The same incomplete row charged 350.786 ms to SQLite connection release;
+D11's entire finish call was 54.223 ms, so this is variability to diagnose,
+not an established saving.
 The verifier's one-entry metadata memo kept the full path/metadata/content
 oracle but **did not** get the debug build under its fixed 5 s watchdog.
 Moving cold preflight before startup initially made its one-second freshness
