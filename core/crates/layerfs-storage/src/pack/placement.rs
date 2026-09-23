@@ -105,6 +105,11 @@ impl LanePlacement {
         Ok(self.open.as_ref().map_or(0, |open| open.assembled))
     }
 
+    /// Releases this lane's final open pack after its last placement.
+    pub(crate) fn finish_open_pack(&mut self) -> Option<(i64, usize)> {
+        self.open.take().map(|open| (open.pack_id, open.assembled))
+    }
+
     /// Places `groups`, deciding append or new pack for each one in order.
     ///
     /// Every pack that receives a group in this call produces exactly one write,

@@ -22,8 +22,9 @@ product source in **this document's commit**, which also changes
 their historical source pins where they describe older behavior.
 The #237 pack-space C1 amendment in §18.4.3 describes product source at
 `bbb0281bc`, and C2 in §18.4.4 describes source at `2ba19aad8`.
-The selective pooled-lane amendment in §18.4.5 describes product source in
-this document's commit; earlier section pins stay historical.
+The selective pooled-lane amendment in §18.4.5 describes product source at
+`4b94e9131`. The final pooled-tail amendment in §18.4.6 describes product
+source in this document's commit; earlier section pins stay historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -382,6 +383,28 @@ extra body queue; the expected saving is a prospective calculation in the
 [C3 plan](../issues/237/pack-space-c3-plan-20260924.md). The closed Store,
 resource cost, readback and sparse-history result determine whether it is
 accepted. The retained C2 receipt is not relabelled.
+
+### 18.4.6 Finalize the last pooled row within Save (#237)
+
+During a Save, PooledMetadata still reuses one open 256-KiB row across
+placement flushes and writes each accepted group before its catalogue row.
+After the final lane seal, the owner consumes that open state and, inside
+the Save's existing final transaction and before publication, shortens
+only its final pooled BLOB to the header-declared used length. The SQL
+UPDATE checks the owned pack ID, unpublished Save, v12 header, original
+capacity and declared length and must affect exactly one row. A full row
+needs no update. No later append can follow this boundary; group ordinals,
+body offsets and locators do not move.
+
+This is one bounded whole-BLOB rewrite of at most 256 KiB per Save, not
+a per-append rewrite or a post-operation compaction. A definite failure
+follows the existing rollback and Save cleanup; an uncertain COMMIT keeps
+its existing quarantine. SQLite's `auto_vacuum=NONE` profile can reuse
+freed overflow pages for later Saves, while pages freed by the final Save
+can remain in the closed file's freelist. The
+[prospective sparse-tail plan](../issues/237/pack-space-c5-sparse-tail-plan-20260924.md)
+requires matched release evidence for that effect. The dense Init and
+the full #229 history guard remain distinct proofs.
 
 ---
 

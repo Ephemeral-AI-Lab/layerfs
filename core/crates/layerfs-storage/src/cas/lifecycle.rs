@@ -246,6 +246,17 @@ impl MutationOwner {
         if !self.transaction_open {
             self.begin_write()?;
         }
+        // The pooled lane is the only lane that retains an appendable pack across
+        // flushes. Its final row can be shortened now that no more groups will
+        // land in this Save, while this transaction still owns it privately.
+        if let Some((pack_id, used)) =
+            self.placement[PackLane::PooledMetadata.index()].finish_open_pack()
+        {
+            let started = Instant::now();
+            let shortened = write::shrink_final_pooled_pack(&self.connection, pack_id, used);
+            SaveProfile::charge(&mut self.profile.sql_ns, started);
+            shortened?;
+        }
         // W2 (#188d): the content index is written in the transaction that publishes
         // the objects it names, so a save's output and its index become visible
         // together or not at all.

@@ -14,8 +14,9 @@
 //! append, and a small companion column would not help: any `UPDATE` of a row
 //! holding a 256 KiB BLOB rebuilds and rewrites that BLOB, measured at ~72 us per
 //! statement on a 256 KiB row against ~11 us for a four-byte in-place BLOB write
-//! (`#219`). The declaration therefore rides in the BLOB, and the row is only
-//! ever *read* after it is created.
+//! (`#219`). The declaration therefore rides in the BLOB. The sole SQL BLOB
+//! rewrite is the final pooled row's bounded shrink at Save finish, after its
+//! last append and before publication, to make sparse Saves reuse freed pages.
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
@@ -99,6 +100,46 @@ pub fn insert_pack(
         return Err(StorageError::Integrity("pack insert cardinality"));
     }
     write_in_place(connection, pack_id, write)
+}
+
+/// Shrinks this Save's final pooled row once, before its publication transaction
+/// commits. Earlier appends used the full BLOB; no later append may need its tail.
+pub fn shrink_final_pooled_pack(
+    connection: &Connection,
+    pack_id: i64,
+    used: usize,
+) -> StorageResult<()> {
+    let limit = crate::policy::PACK_LIMIT;
+    if pack_id <= 0
+        || used <= crate::pack::layout::body_area_offset(crate::pack::PackLane::PooledMetadata)
+        || used > limit
+    {
+        return Err(StorageError::Integrity("final pooled pack length"));
+    }
+    if used == limit {
+        return Ok(());
+    }
+    let used_bytes = (used as u32).to_le_bytes();
+    let version_bytes = crate::pack::layout::VERSION_POOLED_METADATA.to_le_bytes();
+    let affected = connection.execute(
+        "UPDATE object_packs SET data = substr(data, 1, ?2) \
+         WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) \
+         AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id \
+                     AND active_slot IS NOT NULL AND publication IS NULL) \
+         AND length(data) = ?3 AND substr(data, 17, 4) = ?4 \
+         AND substr(data, 9, 4) = ?5",
+        rusqlite::params![
+            pack_id,
+            used as i64,
+            limit as i64,
+            used_bytes.as_slice(),
+            version_bytes.as_slice()
+        ],
+    )?;
+    if affected != 1 {
+        return Err(StorageError::Integrity("final pooled pack cardinality"));
+    }
+    Ok(())
 }
 
 /// Appends to an existing pack row without rewriting it.

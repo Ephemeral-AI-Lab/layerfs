@@ -1198,3 +1198,47 @@ fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
         assert_eq!(ObjectId::for_bytes(&bytes), id);
     }
 }
+
+/// Successive sparse Saves reuse SQLite pages released by each final pooled row.
+#[test]
+fn sparse_saves_finalize_pooled_rows_without_file_size_growth() {
+    let dir = TempDir::new("pool-sparse-finalize");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let mut ids = Vec::new();
+    for round in 0..17_u64 {
+        let object = leaf(1, &[value(InodeKind::RegularFile, 1, round * 100)]);
+        ids.push(object.id());
+        save_one(&store, object).expect("one sparse save");
+    }
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).expect("closed Store");
+    let mut statement = connection
+        .prepare(
+            "SELECT length(data), substr(data,17,4) FROM object_packs +             WHERE substr(data,9,4)=x'0c000000' ORDER BY pack_id",
+        )
+        .expect("pooled pack geometry");
+    let rows: Vec<(i64, Vec<u8>)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("pooled rows")
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(rows.len(), 17, "one pooled pack per sparse Save");
+    for (length, header_used) in rows {
+        let used = u32::from_le_bytes(header_used.try_into().unwrap());
+        assert_eq!(length, i64::from(used), "final pooled row is exact");
+    }
+    assert!(
+        path.metadata().unwrap().len() < 2_000_000,
+        "freed overflow pages are reused by later Saves"
+    );
+    drop(statement);
+    drop(connection);
+
+    let reopened = open_store(&path);
+    let (values, _) = read_objects(&reopened, &ids).expect("reopened sparse leaves");
+    for (id, bytes) in ids.into_iter().zip(values) {
+        assert_eq!(ObjectId::for_bytes(&bytes), id);
+    }
+}
