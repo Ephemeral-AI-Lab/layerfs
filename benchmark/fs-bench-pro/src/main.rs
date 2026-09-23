@@ -3025,6 +3025,15 @@ fn namespace_init_diagnostic(
     let initialization_resources_after = process_resource_snapshot()?;
     let trace = shared_core_fixture.then(layerfs_layerstack_store::sql_trace);
     let sqlite_resources_after = sqlite_resource_snapshot(&store, false)?;
+    if shared_core_fixture {
+        let layer = store
+            .layer(initialized.genesis_layer_id)?
+            .ok_or("issue237 genesis layer is missing")?;
+        eprintln!(
+            "issue237-reference-identities-v1 layer_id={} root_id={}",
+            layer.id, layer.root_id
+        );
+    }
     if let Some(trace) = trace {
         let mut shapes = std::collections::BTreeMap::new();
         for sql in &trace {
@@ -3098,7 +3107,7 @@ fn namespace_init_diagnostic(
         "{{\"schema\":\"{}\",\"scenario\":\"{}\",\"iteration\":{iteration},\"fixture_profile\":\"{}\",\"fixture_digest_profile\":\"{}\",\"edit_contract\":\"{}\",\"result_profile\":\"{}\",\"measurement_mode\":\"init-only-diagnostic\",\"nonterminal\":false,\"fixture_cache_profile\":\"{}\",\"setup_ns\":{setup_ns},\"layerstack_init_ns\":{layerstack_init_ns},\"teardown_ns\":{teardown_ns},\"init_bytes_per_second\":{init_bytes_per_second},\"init_files_per_second\":{init_files_per_second},\"regular_files\":{},\"data_directories\":{},\"logical_bytes\":{},\"empty_files\":{},\"tiny_files\":{},\"small_files\":{},\"medium_files\":{},\"anchor_files\":{},\"anchor_bytes\":{},\"file_mode\":{},\"directory_mode\":{},\"mtime_seconds\":{},\"mtime_nanoseconds\":{},\"fixture_digest\":\"{}\",\"scanned_files\":{},\"scanned_bytes\":{},\"candidate_objects\":{},\"candidate_bytes\":{},\"inserted_objects\":{},\"inserted_bytes\":{},\"reused_objects\":{},\"reused_bytes\":{},\"initialize_batch_inserted_objects\":{},\"initialize_batch_inserted_bytes\":{},\"initialize_final_inserted_objects\":{},\"initialize_final_inserted_bytes\":{},\"initialize_preexisting_reused_objects\":{},\"initialize_preexisting_reused_bytes\":{},\"initialize_admission_transactions\":{},\"initialize_max_transaction_objects\":{},\"initialize_max_transaction_bytes\":{},\"store_baseline_bytes\":{store_baseline_bytes},\"store_database_bytes\":{store_database_bytes},\"store_growth_bytes\":{store_growth_bytes},\"store_canonical_objects\":{},\"store_canonical_bytes\":{},\"process_t0_rss_bytes\":{},\"process_t1_rss_bytes\":{},\"process_t1_rss_growth_bytes\":{},\"process_t0_peak_rss_bytes\":{},\"process_t1_peak_rss_bytes\":{},\"process_initialization_incremental_peak_rss_bytes\":{},\"process_initialization_peak_status\":\"{initialization_peak_status}\",\"process_t0_swaps\":{},\"process_t1_swaps\":{},\"process_t0_physical_footprint_bytes\":{},\"process_t1_physical_footprint_bytes\":{},\"initialization_user_cpu_ns\":{},\"initialization_system_cpu_ns\":{},\"initialization_disk_read_bytes\":{},\"initialization_disk_write_bytes\":{},\"initialization_context_switches\":{},\"process_threads_before\":{},\"process_threads_after\":{},\"sqlite_t0_memory_used_bytes\":{sqlite_t0_memory_used_bytes},\"sqlite_t0_memory_peak_bytes\":{sqlite_t0_memory_peak_bytes},\"sqlite_t0_page_cache_overflow_bytes\":{sqlite_t0_page_cache_overflow_bytes},\"sqlite_t0_page_cache_overflow_peak_bytes\":{sqlite_t0_page_cache_overflow_peak_bytes},\"sqlite_t0_allocation_count\":{sqlite_t0_allocation_count},\"sqlite_t0_allocation_peak_count\":{sqlite_t0_allocation_peak_count},\"sqlite_t0_connection_cache_used_bytes\":{sqlite_t0_connection_cache_used_bytes},\"sqlite_connection_cache_target_bytes\":{sqlite_t0_connection_cache_target_bytes},\"sqlite_t1_memory_used_bytes\":{sqlite_t1_memory_used_bytes},\"sqlite_t1_memory_peak_bytes\":{sqlite_t1_memory_peak_bytes},\"sqlite_t1_page_cache_overflow_bytes\":{sqlite_t1_page_cache_overflow_bytes},\"sqlite_t1_page_cache_overflow_peak_bytes\":{sqlite_t1_page_cache_overflow_peak_bytes},\"sqlite_t1_allocation_count\":{sqlite_t1_allocation_count},\"sqlite_t1_allocation_peak_count\":{sqlite_t1_allocation_peak_count},\"sqlite_t1_connection_cache_used_bytes\":{sqlite_t1_connection_cache_used_bytes},\"sqlite_t1_connection_cache_target_bytes\":{sqlite_t1_connection_cache_target_bytes}}}",
         workload_source::NAMESPACE_SCHEMA,
         scenario.id,
-        if shared_core_fixture { "core-native-import-fixture-v2" } else { scenario.fixture_profile },
+        if shared_core_fixture { "core-sdk-init-fixture-v2" } else { scenario.fixture_profile },
         if shared_core_fixture { "sha256-manifest-tsv-v1" } else { workload_source::NAMESPACE_DIGEST_PROFILE },
         workload_source::NAMESPACE_EDIT_CONTRACT,
         workload_source::NAMESPACE_INIT_DIAGNOSTIC_PROFILE,

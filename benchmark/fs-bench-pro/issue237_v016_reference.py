@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One v0.1.6 public Init on the shared Core 10k fixture, with a cold GO barrier."""
+"""One v0.1.6 release Init on the exact Core 100k fixture, with a cold GO barrier."""
 import argparse
 import hashlib
 import importlib.util
@@ -7,12 +7,13 @@ import json
 from pathlib import Path
 import re
 import select
+import shutil
 import sqlite3
 import subprocess
 import time
 import os
 
-MANIFEST_SHA256 = "c1d7937c9f90d3585558e6d20b35183a737530d386667d08badc3121a6b3d55e"
+MANIFEST_SHA256 = "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
 CACHE_PROFILE = "independent-source-payload-zero;metadata-residency-unmeasured"
 
 
@@ -70,6 +71,8 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if args.binary.resolve().parent.name != "release":
+        raise ValueError("v0.1.6 reference binary must be a Cargo release build")
     args.out.mkdir(parents=True)  # Fresh output only; no receipt is overwritten.
     manifest = args.master / "manifest.tsv"
     if sha256(manifest) != MANIFEST_SHA256:
@@ -84,7 +87,7 @@ def main():
     env["LAYERFS_BENCH_INITIALIZATION_SEED_HEX"] = seed
     store_parent = args.out / "store"
     command = [str(args.binary.resolve()), "namespace-init-diagnostic-core-fixture",
-               str(store_parent), copy["source"], "namespace-10000", "1", MANIFEST_SHA256, CACHE_PROFILE]
+               str(store_parent), copy["source"], "namespace-100000", "1", MANIFEST_SHA256, CACHE_PROFILE]
     identity = {"tag_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
                 "binary_sha256": sha256(args.binary), "harness_sha256": sha256(Path(__file__)),
                 "cold_driver_sha256": sha256(args.cold_driver), "manifest_sha256": MANIFEST_SHA256,
@@ -101,14 +104,14 @@ def main():
         before_stderr = wait_ready(process)
         result = cold.cold_source(Path(copy["source"]), manifest)
         write_json(args.out / "cold-preflight.json", result)
-        if (result["status"] != "VERIFIED_COLD" or result["files"] != 10_000
-                or result["directories"] != 101 or result["bytes"] != 300_000_000):
+        if (result["status"] != "VERIFIED_COLD" or result["files"] != 100_000
+                or result["directories"] != 1_001 or result["bytes"] != 500_000_000):
             raise RuntimeError("source cold preflight failed")
         recheck = cold.recheck_source(Path(copy["source"]), manifest)
         recheck_wall_ns = time.time_ns()
         write_json(args.out / "cold-recheck.json", recheck)
-        if (recheck["status"] != "VERIFIED_COLD" or recheck["files"] != 10_000
-                or recheck["bytes"] != 300_000_000):
+        if (recheck["status"] != "VERIFIED_COLD" or recheck["files"] != 100_000
+                or recheck["bytes"] != 500_000_000):
             raise RuntimeError("source cold recheck failed")
         if time.monotonic_ns() - recheck["finished_ns"] > cold.cold.MAX_LAUNCH_GAP_NS:
             raise RuntimeError("source cold recheck aged before GO")
@@ -122,18 +125,37 @@ def main():
         process.stdin.close()
         process.stdin = None
     stdout, stderr = process.communicate(timeout=60)
+    complete_wall_ns = time.monotonic_ns() - started_ns
     stderr = "".join(before_stderr) + stderr
     (args.out / "stdout.txt").write_text(stdout)
     (args.out / "stderr.txt").write_text(stderr)
     match = re.search(r"issue237-reference-t0-v1 unix_ns=(\d+)", stderr)
     gap_ns = int(match.group(1)) - recheck_wall_ns if match and recheck_wall_ns else None
-    if gap_ns is not None and not 0 <= gap_ns <= cold.cold.MAX_LAUNCH_GAP_NS:
+    if gap_ns is None or not 0 <= gap_ns <= cold.cold.MAX_LAUNCH_GAP_NS:
         cold_status = "INELIGIBLE"
     store = store_parent / "store.sqlite"
-    receipt = {"status": "DIAGNOSTIC" if process.returncode == 0 and cold_status == "VERIFIED_COLD" else "INELIGIBLE",
+    ids = re.search(r"issue237-reference-identities-v1 layer_id=([0-9a-f]{66}) root_id=([0-9a-f]{64})", stderr)
+    readback = args.out / "readback"
+    readback_error = None
+    if process.returncode == 0 and ids:
+        try:
+            readback.mkdir()
+            shutil.copyfile(store, readback / "store.sqlite")
+            (readback / "layer-id").write_text(ids.group(1))
+            (readback / "root-id").write_text(ids.group(2))
+        except Exception as error:
+            readback_error = repr(error)
+    status = ("INELIGIBLE" if cold_status != "VERIFIED_COLD" else
+              "DIAGNOSTIC" if process.returncode == 0 and ids and readback_error is None else "INCOMPLETE")
+    receipt = {"status": status,
                "exit_code": process.returncode, "cold_status": cold_status,
-               "recheck_to_t0_ns": gap_ns, "complete_wall_ns": time.monotonic_ns() - started_ns,
+               "recheck_to_t0_ns": gap_ns, "complete_wall_ns": complete_wall_ns,
+               "complete_wall_scope": "process-spawn-through-exit-including-cold-preflight",
                "public_call_count": 1 if match else 0,
+               "genesis_layer_id": ids.group(1) if ids else None,
+               "root_id": ids.group(2) if ids else None,
+               "readback_root": str(readback.resolve()) if process.returncode == 0 and readback_error is None and ids else None,
+               "readback_error": readback_error,
                "sqlite": sqlite_after(store) if process.returncode == 0 and store.exists() else None,
                "result": json.loads(stdout) if process.returncode == 0 else None}
     write_json(args.out / "receipt.json", receipt)
