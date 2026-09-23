@@ -28,6 +28,9 @@ The [SDK merge functionality check](sdk-merge-check-20260924.md) records one
 post-merge SDK call and full reopened readback for 100 and 1,000 files, plus
 an explicitly unregistered 10,000-file SDK diagnostic. These SDK observations
 remain separate from the older daemon-host timings.
+The [next-agent SDK 100k handoff](sdk-100k-performance-handoff.md) freezes the
+case and the work required before its first debug SDK diagnostic. The current
+#236 two-case runner still records 100k as `NOT_RUN`.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

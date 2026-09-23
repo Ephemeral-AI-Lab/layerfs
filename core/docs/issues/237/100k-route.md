@@ -3,6 +3,11 @@
 > **Status:** Research; informative and not a product contract.
 >
 > Source audit only, 2026-09-23. No 100k run, production edit, benchmark limit change, or performance claim was made for this note. The current Core runner's 100k status is `NOT_RUN`. This page is an implementation handoff, not a revision of #231's first-pass receipts or contract.
+>
+> **Current successor:** [SDK 100k performance handoff](sdk-100k-performance-handoff.md).
+> This older audit describes the pre-#236 daemon-host layout and has obsolete
+> source paths, selector counts and deadline wording. Use the successor for an
+> SDK run; retain this page as historical research.
 
 ## Existing case and the exact hard skip
 
