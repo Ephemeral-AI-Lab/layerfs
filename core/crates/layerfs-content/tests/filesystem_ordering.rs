@@ -137,135 +137,33 @@ fn records_are_fixed_width_and_every_malformed_field_is_rejected() {
 
 #[test]
 fn the_pending_threshold_changes_only_where_the_rows_live() {
-    // The same operation with a one-record pending map and with a large one must
-    // reach the same root identity: crossing the threshold is planned work, not
-    // an alternate result.
-    let mut small = Session::new(1).expect("empty");
-    let mut large = Session::new(1).expect("empty");
-    let file = 2_u64;
-    let mut roots = Vec::new();
-    for session in [&mut small, &mut large] {
-        session
-            .apply(
-                &[DirectoryUpdate {
-                    parent: 1,
-                    changes: vec![(name("f"), Some(file))],
-                }],
-                &[InodeUpdate {
-                    serial: file,
-                    value: regular("ordering/content"),
-                }],
-                &[file],
-            )
-            .expect("creates the file");
-        roots.push(session.root);
-    }
-    assert_eq!(
-        roots[0], roots[1],
-        "the threshold must not change the result"
-    );
-
-    // Now force many crossings on a base tree and compare with a bounded map that
-    // never spills.
-    let directory_serial = 2_u64;
-    let serials = (3..=40_u64).collect::<Vec<_>>();
-    let directories = |count: usize| {
-        vec![
-            DirectoryUpdate {
-                parent: 1,
-                changes: vec![(name("d"), Some(directory_serial))],
-            },
-            DirectoryUpdate {
-                parent: directory_serial,
-                changes: (0..count)
-                    .map(|index| (name(&format!("f{index:03}")), Some(serials[index])))
-                    .collect(),
-            },
-        ]
-    };
-    let inodes = std::iter::once(InodeUpdate {
-        serial: 1,
-        value: directory(),
-    })
-    .chain(std::iter::once(InodeUpdate {
-        serial: directory_serial,
-        value: directory(),
-    }))
-    .chain(
-        serials
-            .iter()
-            .enumerate()
-            .map(|(index, serial)| InodeUpdate {
-                serial: *serial,
-                value: regular(&format!("ordering/content-{index:03}")),
-            }),
-    )
-    .collect::<Vec<_>>();
-    let mut new_inodes = vec![1_u64, directory_serial];
-    new_inodes.extend(serials.iter().copied());
-    new_inodes.sort_unstable();
-
-    let temp = TempDir::new("ordering-threshold");
+    let temp = TempDir::new("ordering-threshold-update");
     let mut backing = RecordingBacking::new(temp.path());
-    let input = FilesystemInput {
-        base: None,
-        scope: layerfs_content::filesystem::scope_for_seed([0x61; 32]),
-        root_serial: 1,
-        directories: &directories(serials.len()),
-        inodes: &inodes,
-        new_inodes: &new_inodes,
-        resources: FilesystemResources {
+    let (spilled, sink) = update_with_backing(
+        38,
+        FilesystemResources {
             maximum_pending_records: 1,
             ..resources()
         },
-    };
-    let reader = TreeStore::new();
-    let mut sink = TreeStore::new();
-    let spilled_result = {
-        let mut objects = FilesystemObjects::new(&reader, &mut sink);
-        build_filesystem(&mut objects, &input, Some(&mut backing)).expect("spilling build")
-    };
-    let spilled_sink = sink.clone();
-    assert!(
-        spilled_result.counters.references.rows_spilled > 0,
-        "a one-record map must cross the threshold"
+        &mut backing,
     );
-    assert!(
-        spilled_result.counters.references.runs.runs_created > 0,
-        "crossing the threshold must create runs"
-    );
+    let spilled = spilled.expect("spilling update");
+    assert!(spilled.counters.references.rows_spilled > 0);
+    assert!(spilled.counters.references.runs.runs_created > 0);
     assert_eq!(
-        spilled_result.counters.references.runs.runs_created,
-        backing.runs_created(),
-        "the reported run count must equal what the backing created"
+        spilled.counters.references.runs.runs_created,
+        backing.runs_created()
     );
-    assert_eq!(count_role(&spilled_sink, ObjectRole::FilesystemRoot), 1);
+    assert_eq!(count_role(&sink, ObjectRole::FilesystemRoot), 1);
 
-    let bounded_reader = TreeStore::new();
-    let mut bounded_sink = TreeStore::new();
-    let bounded_result = {
-        let input = FilesystemInput {
-            base: None,
-            scope: layerfs_content::filesystem::scope_for_seed([0x61; 32]),
-            root_serial: 1,
-            directories: &directories(serials.len()),
-            inodes: &inodes,
-            new_inodes: &new_inodes,
-            resources: resources(),
-        };
-        let mut objects = FilesystemObjects::new(&bounded_reader, &mut bounded_sink);
-        build_filesystem(&mut objects, &input, None).expect("bounded build")
-    };
+    let (bounded, _) = update_pending_ceiling_arm(38, resources());
+    let bounded = bounded.expect("unspilled update");
+    assert_eq!(bounded.counters.references.rows_spilled, 0);
     assert_eq!(
-        bounded_result.counters.references.rows_spilled, 0,
-        "a large pending map must not spill for this input"
+        bounded.root, spilled.root,
+        "the pending ceiling cannot change the root"
     );
-    assert_eq!(
-        bounded_result.root, spilled_result.root,
-        "both thresholds must produce the same canonical root"
-    );
-    assert_eq!(bounded_result.value, spilled_result.value);
-    let _ = temp;
+    assert_eq!(bounded.value, spilled.value);
 }
 
 #[test]
@@ -461,60 +359,8 @@ fn the_operation_ceiling_is_enforced_before_the_rows_are_written() {
 
 #[test]
 fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
-    /// Fixture: a three-inode build whose ordering spills with a one-record map.
-    fn build(
-        backing: &mut RecordingBacking,
-        resources: FilesystemResources,
-    ) -> (
-        layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult>,
-        TreeStore,
-    ) {
-        let directories = [
-            DirectoryUpdate {
-                parent: 1,
-                changes: vec![(name("a"), Some(2)), (name("b"), Some(3))],
-            },
-            DirectoryUpdate {
-                parent: 2,
-                changes: vec![(name("c"), Some(4))],
-            },
-        ];
-        let inodes = [
-            InodeUpdate {
-                serial: 1,
-                value: directory(),
-            },
-            InodeUpdate {
-                serial: 2,
-                value: directory(),
-            },
-            InodeUpdate {
-                serial: 3,
-                value: regular("ordering/failure-a"),
-            },
-            InodeUpdate {
-                serial: 4,
-                value: regular("ordering/failure-b"),
-            },
-        ];
-        let input = FilesystemInput {
-            base: None,
-            scope: layerfs_content::filesystem::scope_for_seed([0x63; 32]),
-            root_serial: 1,
-            directories: &directories,
-            inodes: &inodes,
-            new_inodes: &[1, 2, 3, 4],
-            resources,
-        };
-        let reader = TreeStore::new();
-        let mut sink = TreeStore::new();
-        let outcome = {
-            let mut objects = FilesystemObjects::new(&reader, &mut sink);
-            build_filesystem(&mut objects, &input, Some(backing))
-        };
-        (outcome, sink)
-    }
-
+    // These faults belong to the spilling update path; a fresh build has no
+    // ordering runs to append, read or flush.
     let small = FilesystemResources {
         maximum_pending_records: 1,
         ..resources()
@@ -524,7 +370,7 @@ fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
     let temp = TempDir::new("ordering-fail-append");
     let mut backing = RecordingBacking::new(temp.path());
     backing.fail_append_at = Some(2);
-    let (outcome, sink) = build(&mut backing, small);
+    let (outcome, sink) = update_with_backing(4, small, &mut backing);
     assert!(
         matches!(outcome, Err(ContentError::Io)),
         "a failed append must fail the operation: {outcome:?}"
@@ -540,7 +386,7 @@ fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
     let temp = TempDir::new("ordering-fail-read");
     let mut backing = RecordingBacking::new(temp.path());
     backing.fail_read_at = Some(1);
-    let (outcome, sink) = build(&mut backing, small);
+    let (outcome, sink) = update_with_backing(4, small, &mut backing);
     assert!(
         matches!(outcome, Err(ContentError::Io)),
         "a failed tier read must fail the operation: {outcome:?}"
@@ -552,7 +398,7 @@ fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
     let temp = TempDir::new("ordering-fail-flush");
     let mut backing = RecordingBacking::new(temp.path());
     backing.fail_flush_at = Some(1);
-    let (outcome, sink) = build(&mut backing, small);
+    let (outcome, sink) = update_with_backing(4, small, &mut backing);
     assert!(
         matches!(outcome, Err(ContentError::Io)),
         "a failed flush must fail the operation: {outcome:?}"
@@ -563,7 +409,7 @@ fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
     let temp = TempDir::new("ordering-fail-release");
     let mut backing = RecordingBacking::new(temp.path());
     backing.refuse_release = true;
-    let (outcome, sink) = build(&mut backing, small);
+    let (outcome, sink) = update_with_backing(4, small, &mut backing);
     assert!(
         matches!(
             outcome,
@@ -589,79 +435,26 @@ fn append_read_flush_and_release_failures_fail_the_operation_without_a_root() {
 fn a_successful_operation_releases_its_ordering_resources_once() {
     let temp = TempDir::new("ordering-success-cleanup");
     let mut backing = RecordingBacking::new(temp.path());
-    let directories = [
-        DirectoryUpdate {
-            parent: 1,
-            changes: vec![(name("d"), Some(2))],
-        },
-        DirectoryUpdate {
-            parent: 2,
-            changes: (0..12)
-                .map(|index| (name(&format!("f{index:02}")), Some(index as u64 + 3)))
-                .collect(),
-        },
-    ];
-    let inodes = std::iter::once(InodeUpdate {
-        serial: 1,
-        value: directory(),
-    })
-    .chain(std::iter::once(InodeUpdate {
-        serial: 2,
-        value: directory(),
-    }))
-    .chain((0..12).map(|index| InodeUpdate {
-        serial: index + 3,
-        value: regular(&format!("ordering/success-{index:02}")),
-    }))
-    .collect::<Vec<_>>();
-    let new_inodes = (1..=14).collect::<Vec<u64>>();
-    let input = FilesystemInput {
-        base: None,
-        scope: layerfs_content::filesystem::scope_for_seed([0x64; 32]),
-        root_serial: 1,
-        directories: &directories,
-        inodes: &inodes,
-        new_inodes: &new_inodes,
-        resources: FilesystemResources {
+    let (result, sink) = update_with_backing(
+        12,
+        FilesystemResources {
             maximum_pending_records: 1,
             ..resources()
         },
-    };
-    let reader = TreeStore::new();
-    let mut sink = TreeStore::new();
-    let result = {
-        let mut objects = FilesystemObjects::new(&reader, &mut sink);
-        build_filesystem(&mut objects, &input, Some(&mut backing)).expect("build")
-    };
+        &mut backing,
+    );
+    let result = result.expect("spilling update");
     let observed = backing.counters();
-    assert!(
-        result.counters.references.rows_spilled > 0,
-        "this fixture must actually spill"
-    );
+    assert!(result.counters.references.rows_spilled > 0);
     assert_eq!(
-        result.counters.references.runs.runs_created, observed.creates,
-        "returned counters must match the backing's own observation"
+        result.counters.references.runs.runs_created,
+        observed.creates
     );
-    assert!(
-        result.counters.references.runs.rows_written >= observed.appends,
-        "returned row writes must cover the appends the backing saw"
-    );
-    assert!(
-        result.counters.references.runs.peak_run_bytes > 0,
-        "real spills must report a nonzero simultaneous byte peak"
-    );
-    assert!(
-        result.counters.references.runs.peak_live_runs >= 2,
-        "a merge owns its inputs and its output at once"
-    );
-    assert_eq!(
-        observed.releases, 1,
-        "cleanup runs exactly once, on success"
-    );
-    assert!(
-        !backing.owns_storage(),
-        "success means nothing is still owned"
-    );
+    assert!(result.counters.references.runs.rows_written >= observed.appends);
+    assert!(result.counters.references.runs.peak_run_bytes > 0);
+    assert!(result.counters.references.runs.peak_live_runs >= 2);
+    assert_eq!(observed.releases, 1, "checked cleanup runs once");
+    assert!(!backing.owns_storage());
     assert_eq!(backing.held_bytes(), 0);
     assert!(backing.peak_bytes() >= ROW_BYTES as u64);
     assert_eq!(count_role(&sink, ObjectRole::FilesystemRoot), 1);
@@ -1106,6 +899,108 @@ fn pending_ceiling_arm(
     (result, sink)
 }
 
+/// Exercises the reducer on a real update; fresh builds take the direct path.
+fn update_with_backing(
+    count: usize,
+    resources: FilesystemResources,
+    backing: &mut RecordingBacking,
+) -> (
+    layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult>,
+    TreeStore,
+) {
+    let session = Session::new(1).expect("base root");
+    let new_inodes = (2..2 + count as u64).collect::<Vec<_>>();
+    let directories = [DirectoryUpdate {
+        parent: 1,
+        changes: new_inodes
+            .iter()
+            .enumerate()
+            .map(|(index, serial)| (name(&format!("f{index:04}")), Some(*serial)))
+            .collect(),
+    }];
+    let inodes = new_inodes
+        .iter()
+        .enumerate()
+        .map(|(index, serial)| InodeUpdate {
+            serial: *serial,
+            value: regular(&format!("ordering/update-{index:04}")),
+        })
+        .collect::<Vec<_>>();
+    let input = FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources,
+    };
+    let mut sink = TreeStore::new();
+    let outcome = {
+        let mut objects = FilesystemObjects::new(&session.store, &mut sink);
+        update_filesystem(&mut objects, &input, Some(backing))
+    };
+    (outcome, sink)
+}
+
+fn update_pending_ceiling_arm(
+    count: usize,
+    resources: FilesystemResources,
+) -> (
+    layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult>,
+    TreeStore,
+) {
+    let temp = TempDir::new("ordering-update-ceiling");
+    let mut backing = RecordingBacking::new(temp.path());
+    update_with_backing(count, resources, &mut backing)
+}
+
+#[test]
+fn a_fresh_build_counts_bindings_without_ordering_runs() {
+    let (result, _) = pending_ceiling_arm(
+        100,
+        FilesystemResources {
+            maximum_pending_records: 1,
+            ..resources()
+        },
+    );
+    let result = result.expect("direct initial build");
+    assert_eq!(result.counters.bindings_added, 101);
+    assert_eq!(result.counters.references.final_values, 102);
+    assert_eq!(result.counters.references.rows_spilled, 0);
+    assert_eq!(result.counters.references.runs.runs_created, 0);
+}
+
+#[test]
+fn a_fresh_build_charges_its_count_array_to_the_ordering_ceiling() {
+    const INODES: usize = 102;
+    let (inside, _) = pending_ceiling_arm(
+        100,
+        FilesystemResources {
+            ordering_bytes: (INODES * 16) as u64,
+            maximum_pending_records: 1,
+            ..resources()
+        },
+    );
+    assert!(inside.is_ok(), "the declared count array fits exactly");
+    let (outside, sink) = pending_ceiling_arm(
+        100,
+        FilesystemResources {
+            ordering_bytes: ((INODES - 1) * 16) as u64,
+            maximum_pending_records: 1,
+            ..resources()
+        },
+    );
+    assert!(matches!(
+        outside,
+        Err(ContentError::ObjectLimitExceeded {
+            limit: 101,
+            actual: 102
+        })
+    ));
+    assert_eq!(count_role(&sink, ObjectRole::FilesystemRoot), 0);
+}
+
 #[test]
 fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     // The pending ceiling's spill-free bound is the ordering ceiling divided by the
@@ -1116,7 +1011,7 @@ fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     // the x2 charge is the bound the next three arms sit on.
     const ROW_BYTES: u64 = 96;
     const FILES: usize = 100;
-    let (calibrated, _) = pending_ceiling_arm(
+    let (calibrated, _) = update_pending_ceiling_arm(
         FILES,
         FilesystemResources {
             ordering_bytes: 64 << 20,
@@ -1134,7 +1029,7 @@ fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     let bound = 2 * ROW_BYTES * rows;
 
     // Exactly at the bound: every row fits, so nothing spills.
-    let (spill_free, _) = pending_ceiling_arm(
+    let (spill_free, _) = update_pending_ceiling_arm(
         FILES,
         FilesystemResources {
             ordering_bytes: bound,
@@ -1155,7 +1050,7 @@ fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     // widened for this arm because a spill reserves the run it becomes *and* the
     // merge output it may produce, which the tight bound above deliberately cannot
     // hold; the point here is the verdict, not the bytes.
-    let (spilled, _) = pending_ceiling_arm(
+    let (spilled, _) = update_pending_ceiling_arm(
         FILES,
         FilesystemResources {
             ordering_bytes: 4 * bound,
@@ -1178,7 +1073,7 @@ fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     // ceiling that cannot hold them fails closed instead of allocating past the
     // declared bound. This is the arm that pins the arithmetic: the map is the
     // same, only the ceiling differs from the arm above.
-    let (refused, _) = pending_ceiling_arm(
+    let (refused, _) = update_pending_ceiling_arm(
         FILES,
         FilesystemResources {
             ordering_bytes: bound,

@@ -169,14 +169,29 @@ fn run_body<'b>(
     };
     let table = checked.topology.table();
     let base_table = checked.topology.base.map(|root| root.inode_table());
+    // A build already supplies sorted new serials and every final typed value.
+    // One count per declared serial avoids ordering runs and their lookups.
+    let mut initial_counts = if base_table.is_none() {
+        if input.new_inodes.len() > input.resources.maximum_touched_serials() {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: input.resources.maximum_touched_serials(),
+                actual: input.new_inodes.len(),
+            });
+        }
+        Some(vec![0_u64; input.new_inodes.len()])
+    } else {
+        None
+    };
     let mut reducer = ReferenceReducer::new(
         input.resources.maximum_pending_records,
         backing,
         input.resources.merge_buffer_bytes,
         input.resources.ordering_bytes,
     );
-    reducer.check_backing_capacity()?;
-    register_values(&mut reducer, input, &unreachable)?;
+    if initial_counts.is_none() {
+        reducer.check_backing_capacity()?;
+        register_values(&mut reducer, input, &unreachable)?;
+    }
     let batch = input.resources.base_read_batch.min(MAXIMUM_READ_DEMANDS);
     let mut contents: BTreeMap<u64, ObjectId> = BTreeMap::new();
     let mut retained_parents = Vec::new();
@@ -205,7 +220,12 @@ fn run_body<'b>(
                         let Some(child) = binding else {
                             continue;
                         };
-                        reducer.note_retained_binding(*child)?;
+                        note_retained_binding(
+                            &mut reducer,
+                            initial_counts.as_deref_mut(),
+                            input.new_inodes,
+                            *child,
+                        )?;
                         counters.bindings_added = counters.bindings_added.saturating_add(1);
                     }
                     continue;
@@ -246,7 +266,12 @@ fn run_body<'b>(
                         // Additions precede removals, so a move never drops an
                         // inode to a spurious zero between its two bindings.
                         if let Some(next) = after {
-                            reducer.note_retained_binding(next)?;
+                            note_retained_binding(
+                                &mut reducer,
+                                initial_counts.as_deref_mut(),
+                                input.new_inodes,
+                                next,
+                            )?;
                             counters.bindings_added = counters.bindings_added.saturating_add(1);
                         }
                         if let Some(previous) = before {
@@ -305,57 +330,61 @@ fn run_body<'b>(
     // interleaving values with later effects can increase spill quota demands.
     // Reuse the final parent batch; earlier omitted values are read in bounded
     // groups rather than retaining a record for every directory in the input.
-    let mut contents_iter = contents.iter();
-    loop {
-        let wave = contents_iter.by_ref().take(batch).collect::<Vec<_>>();
-        if wave.is_empty() {
-            break;
-        }
-        let missing = wave
-            .iter()
-            .filter(|(serial, _)| {
-                input.value_for(**serial).is_none()
-                    && retained_parents.binary_search(serial).is_err()
-            })
-            .map(|(serial, _)| **serial)
-            .collect::<Vec<_>>();
-        let bases = lookup_many(reader, table, &missing, &mut InodeReadWork::default())?;
-        for (serial, content_root) in wave {
-            let value = input.value_for(*serial).or_else(|| {
-                retained_parents
-                    .binary_search(serial)
-                    .ok()
-                    .and_then(|index| retained_bases[index])
-                    .or_else(|| {
-                        missing
-                            .binary_search(serial)
-                            .ok()
-                            .and_then(|index| bases[index])
-                    })
-            });
-            let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
-            reducer.note_value(
-                *serial,
-                InodeValue {
-                    content_root: *content_root,
-                    ..value
-                },
-            )?;
+    if initial_counts.is_none() {
+        let mut contents_iter = contents.iter();
+        loop {
+            let wave = contents_iter.by_ref().take(batch).collect::<Vec<_>>();
+            if wave.is_empty() {
+                break;
+            }
+            let missing = wave
+                .iter()
+                .filter(|(serial, _)| {
+                    input.value_for(**serial).is_none()
+                        && retained_parents.binary_search(serial).is_err()
+                })
+                .map(|(serial, _)| **serial)
+                .collect::<Vec<_>>();
+            let bases = lookup_many(reader, table, &missing, &mut InodeReadWork::default())?;
+            for (serial, content_root) in wave {
+                let value = input.value_for(*serial).or_else(|| {
+                    retained_parents
+                        .binary_search(serial)
+                        .ok()
+                        .and_then(|index| retained_bases[index])
+                        .or_else(|| {
+                            missing
+                                .binary_search(serial)
+                                .ok()
+                                .and_then(|index| bases[index])
+                        })
+                });
+                let value = value.ok_or(ContentError::InvalidRecord("directory value missing"))?;
+                reducer.note_value(
+                    *serial,
+                    InodeValue {
+                        content_root: *content_root,
+                        ..value
+                    },
+                )?;
+            }
         }
     }
     // Every other supplied value keeps the content root the caller named, unless
     // this operation rebuilt that inode's own directory.
-    let mut updates = Vec::with_capacity(input.inodes.len());
-    for update in input.inodes {
-        if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
-            // A directory this batch drops is not part of the result at all: its
-            // value is never a final row, so it must not enter the reduction.
-            continue;
+    if initial_counts.is_none() {
+        let mut updates = Vec::with_capacity(input.inodes.len());
+        for update in input.inodes {
+            if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
+                // A directory this batch drops is not part of the result at all: its
+                // value is never a final row, so it must not enter the reduction.
+                continue;
+            }
+            updates.push((update.serial, update.value));
         }
-        updates.push((update.serial, update.value));
-    }
-    for (serial, value) in updates {
-        reducer.note_value(serial, value)?;
+        for (serial, value) in updates {
+            reducer.note_value(serial, value)?;
+        }
     }
     if checked.topology.table.is_some() {
         // Only an update can release descendants: a new filesystem has no base
@@ -384,37 +413,74 @@ fn run_body<'b>(
             },
         )?;
     }
-    let mut rows = phases.phase("references", || {
-        reducer.finish(
-            reader,
-            table,
-            input.resources.base_read_batch.max(1),
-            input.root_serial,
-        )
-    })?;
-    let mut source_error: Option<ContentError> = None;
-    let changes = std::iter::from_fn(|| match rows.next_change() {
-        Ok(Some(change)) => Some(Ok((change.serial, change.value))),
-        Ok(None) => None,
-        Err(error) => {
-            source_error = Some(error);
-            None
+    let (inode_table, inode_work) = if let Some(counts) = initial_counts {
+        if input
+            .inodes
+            .iter()
+            .any(|update| input.new_inodes.binary_search(&update.serial).is_err())
+        {
+            return Err(ContentError::InvalidRecord("effect inode record"));
         }
-    });
-    let built = phases.phase("inodes", || {
-        apply_inode_values(objects, base_table, changes, input.resources.scratch_bytes)
-    });
-    if let Some(error) = source_error {
-        return Err(error);
-    }
-    let (inode_table, inode_work) = built?;
+        let changes = input
+            .new_inodes
+            .iter()
+            .zip(counts)
+            .filter(|(serial, _)| !unreachable.contains_key(serial))
+            .map(|(serial, count)| {
+                if count == 0 && *serial != input.root_serial {
+                    return Err(ContentError::InvalidRecord("new inode without binding"));
+                }
+                let value = input
+                    .value_for(*serial)
+                    .ok_or(ContentError::InvalidRecord("new inode value"))?;
+                Ok((
+                    *serial,
+                    Some(InodeValue {
+                        namespace_ref_count: count,
+                        content_root: contents.get(serial).copied().unwrap_or(value.content_root),
+                        ..value
+                    }),
+                ))
+            });
+        let built = phases.phase("inodes", || {
+            apply_inode_values(objects, None, changes, input.resources.scratch_bytes)
+        })?;
+        counters.references.final_values = (input.new_inodes.len() - unreachable.len()) as u64;
+        built
+    } else {
+        let mut rows = phases.phase("references", || {
+            reducer.finish(
+                reader,
+                table,
+                input.resources.base_read_batch.max(1),
+                input.root_serial,
+            )
+        })?;
+        let mut source_error: Option<ContentError> = None;
+        let changes = std::iter::from_fn(|| match rows.next_change() {
+            Ok(Some(change)) => Some(Ok((change.serial, change.value))),
+            Ok(None) => None,
+            Err(error) => {
+                source_error = Some(error);
+                None
+            }
+        });
+        let built = phases.phase("inodes", || {
+            apply_inode_values(objects, base_table, changes, input.resources.scratch_bytes)
+        });
+        if let Some(error) = source_error {
+            return Err(error);
+        }
+        let built = built?;
+        counters.references = rows.work();
+        drop(rows);
+        built
+    };
     counters.inodes = inode_work;
     // The final stream is done with: its counters are snapshotted, its reader
     // handle is closed, and only then is the backing's completion checked. A
     // cleanup failure fails the operation before any root object exists, so a
     // successful result always means the ordering resources were released.
-    counters.references = rows.work();
-    drop(rows);
     *cleanup_attempted = true;
     phases.phase("cleanup", || reducer.release())?;
     let root = match checked.topology.base {
@@ -486,6 +552,25 @@ fn register_values(
         reducer.note_value(update.serial, update.value)?;
     }
     Ok(())
+}
+
+fn note_retained_binding(
+    reducer: &mut ReferenceReducer<'_, '_>,
+    initial_counts: Option<&mut [u64]>,
+    new_inodes: &[u64],
+    serial: u64,
+) -> ContentResult<()> {
+    if let Some(counts) = initial_counts {
+        let index = new_inodes
+            .binary_search(&serial)
+            .map_err(|_| ContentError::InvalidRecord("effect inode record"))?;
+        counts[index] = counts[index]
+            .checked_add(1)
+            .ok_or(ContentError::LengthOverflow)?;
+        Ok(())
+    } else {
+        reducer.note_retained_binding(serial)
+    }
 }
 
 fn lookup_base(

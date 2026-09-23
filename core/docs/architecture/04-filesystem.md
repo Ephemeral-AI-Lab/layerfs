@@ -8,6 +8,10 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 the #190 working-tree change over `9f35c49ad62956f131dc2676787f99d69659686e`.
 The #237 unmerged research diff in the same commit as this paragraph starts
 from `1850f497a` and adds one proven-absent interval to each live run scan.
+The #237 direct fresh-build change in this research tree starts from
+`3c2c8d793` and is described below with its same-commit source edit. Its
+fixed-identity proof is in [`c1-fixed-identity.md`](../issues/237/c1-fixed-identity.md);
+this branch has not been merged or release-qualified.
 
 ---
 
@@ -207,6 +211,14 @@ Base records are read **at the end**, in bounded waves
 (`DEFAULT_BASE_BATCH = 32`), and **only for the serials whose effect rows need
 them**. An inode whose count is unchanged and whose value was not supplied produces
 **no row at all**.
+
+For a build with no base, the already sorted declared-new serials index one
+checked binding count apiece. The final typed values go directly to the same
+sorted inode writer, without ordering runs or a second reducer pass. The
+count array is charged against the existing ordering-byte ceiling, and a new
+inode without a binding still fails. Updates with a base keep the reference
+reducer and its spill, fault and cleanup behavior. The earlier sparse-run gap
+fix remains in that update path.
 
 Run storage is caller-supplied through `OrderingBacking`, with one concrete local
 implementation over real files. The completion contract is explicit and is the
