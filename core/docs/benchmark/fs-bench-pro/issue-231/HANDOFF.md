@@ -53,7 +53,7 @@ sample, with the required before/after production LOC count in every commit.
 
 ## Do, in order
 
-1. Confirm the public operation and timer boundary. The present 128-entry
+1. Confirm the public operation and timer boundary. The former 128-entry
    `InitLayerStack` with pre-saved roots is insufficient. Define and implement
    a bounded public native-directory import through the real daemon, Service,
    C1, C2 and C5 path if it is still missing. Source scan and file reads must

@@ -77,15 +77,16 @@ The first-pass public operation is `HistoryCommand::ImportNativeDirectory`
 authorized Service reads the exact operator-configured `LAYERFS_IMPORT_ROOT`
 directory; the client cannot choose a host path. The Service refuses absent or
 non-directory configuration, symlinks, unsupported file types, invalid portable
-names/metadata, and more than 16,384 total entries including root. It scans and
+names/metadata. It has no default file or entry-count ceiling; allocation and
+inode-serial representability remain checked. It scans and
 reads source bytes **during this one request**, saves C1 file objects through
 C2, builds the complete filesystem root, then publishes one C5 genesis stack.
 The reply is the existing `StackCreated` result. The caller timer begins before
 the daemon request frame and ends after decoding that reply. This operation has
 fixture/route identity `core-native-directory-import-v1`; historical case IDs
 remain selectors, but no v0.1.6 performance equivalence is inferred from the
-matching counts and bytes. The 100,000 tier exceeds this first-pass bound and
-is explicitly `NOT_RUN`.
+matching counts and bytes. The 100,000 tier is explicitly `NOT_RUN` because it
+is outside this first-pass collection cohort, not because of a product count cap.
 
 The first three times are a **discovery cohort**: no new v0.1.7 latency target
 or v0.1.6 speedup is approved here. Freeze correctness, resource, cache and
@@ -94,6 +95,24 @@ operation boundaries before collection; record `admission_eligible=false` and
 One observed number is not a median or percentile. Do not promote discovery
 receipts later by changing their labels; an admission campaign needs a new
 prospectively frozen identity and fresh sample.
+
+The source fixture profile for this cohort is `core-native-import-fixture-v1`
+with seed 1. Paths are `dNNNN/fNNNNNN`, 100 files per directory, with indices
+assigned in order: anchor, empty, tiny, small, medium. The 100/1,000/10,000
+cases use class counts from the legacy registry respectively
+`(1,1,78,15,5)`, `(1,10,789,150,50)`, and
+`(1,100,7899,1500,500)`. Their one anchor is respectively 1, 5 and 100
+decimal MB. Each positive non-anchor file starts with one byte; remaining
+logical bytes after the anchor and these one-byte minima are apportioned with
+weights tiny=1, small=64, medium=1024 by integer floor, then one extra byte
+to the lexicographically earliest paths until the exact case byte total is
+reached. Every content chunk of at most 1 MiB is the SHAKE-256 output of
+`core-native-directory-import-v1|<case>|1|<path>|<chunk-index>` (UTF-8),
+truncated to that chunk's length. File mode is `0640`, directory mode `0750`,
+and all mtimes are exactly `1700000000` seconds. Fixture generation hashes
+each file while writing it and seals one complete path/metadata/size/SHA-256
+manifest without a subsequent content read. The changed profile avoids a
+false claim that matching counts/bytes reproduce v0.1.6 content bytes.
 
 ## 3. Shared substrate prerequisite: minimal operations
 

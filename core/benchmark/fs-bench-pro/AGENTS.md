@@ -73,7 +73,7 @@ diagnostic for an admission claim. One sample per case identity does not
 mean one active run globally.
 
 Only a real public native-directory Init can clear #231. Pre-saved roots,
-the 128-entry bootstrap or mounted creates are different operations. Use one
+the pathless bootstrap or mounted creates are different operations. Use one
 caller timer for the full public operation. M1–M4 are report headings; retain
 actual daemon and Service `LFT1` labels and separate clocks, never add
 overlapping spans or subtract them to invent transit time. C5 stays within

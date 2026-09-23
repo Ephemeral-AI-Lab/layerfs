@@ -68,7 +68,7 @@ Initialization also needs its own operation match. The current `InitLayerStack`
 is a bounded bootstrap with pre-saved file roots, not v0.1.6's native directory
 import. Do not register or report an inherited `init_namespace` case as an
 equivalent v0.1.7 result. The [ASCII route and limit map](pipeline-and-modes.md#initialization-equivalence-gap)
-records the missing path and the 128-entry request ceiling.
+records the native import path and the former 128-entry test ceiling.
 
 Names are deliberate. In [#193](https://github.com/Ephemeral-AI-Lab/layerfs/issues/193),
 `direct` enters the **Service handler** without wire delivery and `forward`

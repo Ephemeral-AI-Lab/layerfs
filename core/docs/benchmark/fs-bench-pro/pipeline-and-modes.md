@@ -221,22 +221,19 @@ v0.1.7 current InitLayerStack
   C5 LayerStack record in the separately configured history catalog
 ```
 
-One manifest has at most **128 total entries**: entry zero is the root, leaving
-at most 127 files, directories, or symlinks. A 129-entry public request returns
-`Capacity` before service mutation. This is a per-request bootstrap limit, not
-a Store-wide file limit. The [history design review](../../architecture/proposal/commit-history/review-20260921.md)
-chose bounded production bootstrap while deferring general host import and live
-create; it did not establish 128 as a product-scale optimum. The count bounds
-request allocations and validation work, including a duplicate-name scan of
-prior entries. The exact value does not provide an equivalence or speed claim.
+The pathless bootstrap once had a **128-entry test cap**. That arbitrary cap is
+lifted. Its legacy request still has a finite metadata frame, a 16-bit count and
+16-bit parent indices, so it remains a small pre-saved-root operation. The
+public native-directory import uses an internal wider index and no default
+file or entry-count cap. Its source scan and reads occur inside one request.
 
 ```text
-removing only the 128-entry check
+removing only the old 128-entry check
        |
        +--> request metadata still capped at 32 KiB
-       +--> encoded entry count still uses 16 bits
+       +--> encoded entry count still uses 16 bits for pathless bootstrap
        +--> no streaming / multi-batch Init or native directory scan
-       `--> no equivalent 10,000- or 100,000-file import
+       `--> cannot make pathless bootstrap equivalent to native import
 ```
 
 Even the smallest entry occupies at least 24 encoded bytes: 100,000 entries
