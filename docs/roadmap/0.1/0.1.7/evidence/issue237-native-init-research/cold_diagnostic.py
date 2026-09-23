@@ -10,8 +10,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[6]
-sys.path.insert(0, str(ROOT / "core/benchmark/fs-bench-pro"))
 sys.path.insert(0, str(ROOT / "benchmark/fs-bench-pro/shared"))
+sys.path.insert(0, str(ROOT / "core/benchmark/fs-bench-pro"))
 import runner  # noqa: E402
 import cold  # noqa: E402
 

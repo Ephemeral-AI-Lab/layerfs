@@ -43,3 +43,10 @@ matched pair for this trial. Read its pack policy and calculate allocation from
 the retained rows. A metadata memo must leave pack reservation behavior intact;
 no claim of sparse-pack repair follows from a dense Init Store. A future pack
 algorithm requires a separate sparse-history control/treatment and full readback.
+
+## Attempt ledger
+
+- `issue237-d1-control-edc290627-a`: script import failed before it created an
+  output directory, fixture or product process (`runner` resolved to the legacy
+  module, which has no `owned`). Zero performance samples. Fixed only the Python
+  import order before the first D1 control sample.
