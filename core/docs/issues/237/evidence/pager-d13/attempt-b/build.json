@@ -1,0 +1,29 @@
+{
+  "binaries": {
+    "create_store": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/binary-archive/68696fe25f060d90714ebd33433d3def3f971c5f3378a8003e64316285d6e4c3/create_store",
+      "sha256": "68696fe25f060d90714ebd33433d3def3f971c5f3378a8003e64316285d6e4c3"
+    },
+    "layerfs-daemon": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/binary-archive/e9af05ad5756f242232cf7a768d643a7a1790ca21a6a3cdd5a3df8599ed57c46/layerfs-daemon",
+      "sha256": "e9af05ad5756f242232cf7a768d643a7a1790ca21a6a3cdd5a3df8599ed57c46"
+    },
+    "layerfs-service": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/binary-archive/67ec0f77f76b5d6e1258854dff2729583562732e5d1cce51b67948b16141535a/layerfs-service",
+      "sha256": "67ec0f77f76b5d6e1258854dff2729583562732e5d1cce51b67948b16141535a"
+    },
+    "public_key": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/binary-archive/f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1/public_key",
+      "sha256": "f4437a09b4667ab625358e93cf9acffed5f03e401d812f895fc203f2475916e1"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue237-pager/layerfs/benchmark-results/fs-bench-pro/binary-archive/6a777231ff4a852a67a18f8a794f30d40df7783215ae8571b18de636b1e1fc80/verify_namespace",
+      "sha256": "6a777231ff4a852a67a18f8a794f30d40df7783215ae8571b18de636b1e1fc80"
+    }
+  },
+  "build_profile": "release",
+  "command": null,
+  "mode": "exact-binary-reuse",
+  "status": "PASS",
+  "wall_ns": 0
+}
