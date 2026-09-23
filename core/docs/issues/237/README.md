@@ -21,6 +21,10 @@ results, failed receipts and open gates.
 
 The [post-ImportBatch v0.1.6 comparison](post-batch-v016-gap.md) tracks the
 remaining raw 359.706-ms 10k gap, stage-scope limits, and isolated treatments.
+The [accepted-checkpoint scale run](accepted-scale-results.md) records one new
+100, 1,000 and 10,000-file performance-only sample with time, SQLite storage,
+child-process CPU and sampled RSS, while retaining the earlier 1.110-s 10k
+observation separately.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

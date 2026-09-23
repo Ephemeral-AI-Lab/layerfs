@@ -1,0 +1,82 @@
+{
+  "queries": {
+    "objects": "SELECT save_id, count(*) FROM objects GROUP BY save_id",
+    "packs": "SELECT save_id, count(*), sum(length(data)) FROM object_packs GROUP BY save_id"
+  },
+  "rows": {
+    "earlier_1p110": {
+      "objects_by_save": [
+        [
+          1,
+          24364
+        ],
+        [
+          2,
+          11
+        ],
+        [
+          3,
+          308
+        ]
+      ],
+      "packs_by_save": [
+        [
+          1,
+          1259,
+          330039296
+        ],
+        [
+          2,
+          2,
+          524288
+        ],
+        [
+          3,
+          3,
+          786432
+        ]
+      ],
+      "page_count": 81583,
+      "page_size": 4096,
+      "small_file_threshold_bytes": 131072,
+      "store_sha256": "b9c609bd17514eafa427361e94643b6bc432c8fcdee5122ec198c087b5098bb1"
+    },
+    "new_1p419": {
+      "objects_by_save": [
+        [
+          1,
+          24364
+        ],
+        [
+          2,
+          11
+        ],
+        [
+          3,
+          308
+        ]
+      ],
+      "packs_by_save": [
+        [
+          1,
+          1258,
+          329777152
+        ],
+        [
+          2,
+          2,
+          524288
+        ],
+        [
+          3,
+          3,
+          786432
+        ]
+      ],
+      "page_count": 81522,
+      "page_size": 4096,
+      "small_file_threshold_bytes": 131072,
+      "store_sha256": "c36ef1092473df0d3a39260f62474b0e76d9ac7f8f54705e0994a4e421fc23df"
+    }
+  }
+}
