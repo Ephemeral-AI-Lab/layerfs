@@ -4,6 +4,7 @@ use layerfs_bridge::{
     adapters::native::client::Client,
     contract::{Code, Failure},
 };
+use layerfs_telemetry::runtime::Runtime;
 use std::{collections::BTreeMap, fs::File, io::Read, sync::Mutex};
 
 #[derive(Clone)]
@@ -16,6 +17,8 @@ pub struct OwnerConfig {
     pub store: u32,
     /// One shared diagnostic run identity; absent keeps daemon telemetry off.
     pub telemetry_run: Option<u128>,
+    /// Host process recorder shared with the application Service and SDK.
+    pub telemetry: Runtime,
 }
 
 #[derive(Clone)]
@@ -220,13 +223,17 @@ impl SandboxOwner {
             .get(&id)
             .cloned()
             .ok_or(RouteError::NotFound)?;
-        let endpoint = docker::port(&record.container)?;
-        let (hello, client) = readiness::hello_session(
-            endpoint,
-            &self.config.control_private,
-            &record.daemon_public,
-            id,
-        )?;
+        let endpoint = self.observe(2001, "owner.docker_port", || {
+            docker::port(&record.container)
+        })?;
+        let (hello, client) = self.observe(2002, "owner.hello", || {
+            readiness::hello_session(
+                endpoint,
+                &self.config.control_private,
+                &record.daemon_public,
+                id,
+            )
+        })?;
         if record
             .instance
             .is_some_and(|instance| hello.instance != instance)
@@ -303,6 +310,17 @@ impl SandboxOwner {
             return Err(RouteError::Stale);
         }
         Ok((binding, route, client))
+    }
+
+    fn observe<T>(
+        &self,
+        key: u64,
+        label: &'static str,
+        call: impl FnOnce() -> Result<T, Failure>,
+    ) -> Result<T, Failure> {
+        let (result, diagnostic) = self.config.telemetry.recorder().run(key, label, |_| call());
+        self.config.telemetry.publish(diagnostic);
+        result
     }
 }
 

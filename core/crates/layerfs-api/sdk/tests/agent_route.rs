@@ -262,6 +262,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         control_private,
         store: 1,
         telemetry_run,
+        telemetry: telemetry.clone(),
     })
     .unwrap();
     let sandbox_api = SandboxApi::new(&owner);

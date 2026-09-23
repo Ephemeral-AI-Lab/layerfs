@@ -540,6 +540,7 @@ version = "0.1.6"
 dependencies = [
  "layerfs-api-core",
  "layerfs-bridge",
+ "layerfs-telemetry",
 ]
 
 [[package]]

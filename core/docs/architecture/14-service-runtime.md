@@ -81,6 +81,13 @@ enables that recorder. CPU and RSS windows are process-shared samples, not
 exclusive call costs or exact memory peaks. The opt-in functional diagnostic
 and its non-admission cache/resource limits are declared in
 [`telemetry-diagnostic.md`](../issues/236/telemetry-diagnostic.md).
+After the one-connection diagnostic at source commit
+`0edc58ce8d4f21115a1eb27e2964290426f418bc`, the host owner accepts the
+application's existing telemetry runtime as well. Each checked lookup records
+Docker port discovery and authenticated Hello as separate local-process LFT1
+operations. Disabled telemetry performs no observation work; the owner shares
+the host SDK and Service recorder when enabled. These substeps remain diagnostic
+and do not change routing, cache state or deadlines.
 
 The SDK-owned host setup extension is based on source commit
 `611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`
