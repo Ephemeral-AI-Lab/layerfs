@@ -32,8 +32,11 @@ The [next-agent SDK 100k handoff](sdk-100k-performance-handoff.md) freezes the
 case and the work required before its first debug SDK diagnostic. The
 [one-shot 100k result](sdk-100k-result-20260924.md) records a completed
 23.972-s public SDK call and full 101,001-path/500-MB readback at the new
-unregistered diagnostic identity. The #236 two-case selection still records
-100k as `NOT_RUN`.
+unregistered **debug** diagnostic identity. The [release-to-release
+troubleshooting handoff](sdk-100k-v016-troubleshooting-handoff.md) starts with
+v0.1.6 on those exact source bytes and calls for a separately frozen Core SDK
+release diagnostic. The #236 two-case selection still records 100k as
+`NOT_RUN`.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
