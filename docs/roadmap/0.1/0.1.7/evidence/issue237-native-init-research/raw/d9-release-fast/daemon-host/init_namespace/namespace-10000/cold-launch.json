@@ -1,0 +1,7 @@
+{
+  "launch_gap_ns": 1061083,
+  "preflight_sha256": "aa3e3167aeb8c606c6084ccc4db9e4da3e73b19b96a3b5de6c1de7515aae4d97",
+  "preflight_to_timer_ns": 457940250,
+  "recheck_sha256": "1aca005d0a206987096ffc7afa76818c59c957809c78b017934793d32f5d64d0",
+  "status": "VERIFIED_COLD"
+}

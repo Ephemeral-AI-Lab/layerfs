@@ -1,0 +1,111 @@
+# #237 — native Init scaling research
+
+> **Status:** Research; informative and not a product contract.
+
+This work is isolated in
+`/Users/yifanxu/.codex/worktrees/2776/layerfs` on
+`codex/issue237-init-research`, based on `main` at `7df25f979`. Product edits
+on this branch are **unmerged research prototypes**. They do not close #237 or
+the four-tier #231 gate. The only fixed database page size used here is 4 KiB.
+
+The methods and prospective differences are in the
+[preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).
+Each invoked case/source identity has one public-operation sample at most, a
+fresh output directory, and retained failures. The research
+[cold driver](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/cold_diagnostic.py)
+uses the existing Darwin invalidate/mincore backend. The original Core runner
+still marks these rows `source-cache-uncontrolled-v1` and
+`admission_eligible=false`; research sidecars do not relabel them as gate PASS.
+Verification is separate from every performance number. D9 and subsequent
+algorithm exploration use the performance-only fast lane by default.
+
+## What was measured
+
+All times below are **one raw observation**, not a median. The 10k source is
+10,000 files, 100 data directories and **300,000,000 total logical bytes**,
+including its one 100 MB anchor. D1–D7 used debug binaries. Command walls
+for D1–D6 include the research cold preflight, so they
+are not comparable to the frozen complete-command budget. D7 moved that
+preflight outside the command. D9's command includes an extra 0.373 s
+nonfaulting residency recheck, which makes its command number conservative.
+
+| Attempt | Change / source | Public Init | Result and proof |
+| --- | --- | ---: | --- |
+| D0 | Initial research driver import error | no sample | Failed before fixture or product process; [ledger](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md#attempt-ledger). |
+| [D1 control](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d1-control/daemon-host/init_namespace/namespace-10000/receipt.json) | `e6e528c3`, original Core import | 14.021 s | No root; verifier NOT_RUN; FAIL. |
+| [D1 metadata](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d1-metadata/daemon-host/init_namespace/namespace-10000/receipt.json) | `561aaf940`, one-entry portable-metadata memo | 13.004 s | No root; verifier NOT_RUN; FAIL. |
+| [D3 counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d3-phasecounts/daemon-host/init_namespace/namespace-10000/receipt.json) | Instrumented metadata prototype, dirty diagnostic | 13.011 s | No root; source milestones retained in stderr. |
+| [D4 reopen](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d4-native-reopen/daemon-host/init_namespace/namespace-10000/receipt.json) | `d8282da2`, native-only duplicate `FileView` removal | 12.111 s | No root; source tree recorded dirty from a concurrent research note. |
+| [D5 reducer counts](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d5-reducer-counts/daemon-host/init_namespace/namespace-10000/receipt.json) | Count-driven C1 diagnostic, dirty source | 11.048 s | No root; 13,869,215 run-row reads by 5,120 remaining values. |
+| [D6 gap](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d6-gap/daemon-host/init_namespace/namespace-10000/receipt.json) | `0615c5f4`, per-tier proven-absence interval | **7.362 s** | Confirmed C5 root, 9.318 s command including 1.301 s cold preflight, cleanup/telemetry PASS; full verifier **TIMEOUT** at 5 s, row INCOMPLETE. |
+| [D7 oracle](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d7-oracle/daemon-host/init_namespace/namespace-10000/receipt.json) | `858624cbc`, verifier metadata memo + stronger cold preflight | 7.456 s | Root and cleanup/telemetry PASS; 7.511 s command; full verifier still **TIMEOUT**, row INCOMPLETE. |
+| [D8 release build](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d8-release-stale/daemon-host/init_namespace/namespace-10000/receipt.json) | `59a85bea`, `--release` build | no sample | Build PASS in 17.544 s; cold preflight became stale during startup. Retained NOT_RUN. |
+| [D9 release fast lane](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/daemon-host/init_namespace/namespace-10000/receipt.json) | `2a66f84d`, release binaries, immediate whole-source mincore recheck | **1.591 s** | Confirmed C5 root, 2.018 s command, telemetry/cleanup PASS; verifier **SKIPPED**, diagnostic only. |
+
+D9 reused exactly sealed release binaries from D8. Its source was rehashed and
+invalidated outside the command; both the first check and the immediately
+preceding nonfaulting check found **0 resident pages out of 27,503** across all
+10,000 files/300 MB. The recheck finished 1.061 ms before the caller timer.
+The release file-construction/Store handoff span was 1.250 s of the 1.591 s
+operation. The Store remained at SQLite `page_size=4096` and occupied
+334,184,448 B on disk; its 1,263 pack rows reserved 331,350,016 B and
+declared 305,977,888 B used. These are [raw Store geometry](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/store_geometry.json),
+not a matched compactness PASS.
+
+## Improvements and failed ideas
+
+The shared C1 reducer's `RunStore::find` repeatedly restarted a sparse newer
+run while looking for ascending serials held by an older run. D5 measured
+9,011,202 run-row reads just after directory effects and 13,869,215 by the
+5,120-value milestone. A source-derived model reproduces those exact cumulative
+counts after merge reads and predicts 18,484,823 lookup row returns for the
+full 10k sequence, versus 33,331 with one proven-empty interval per tier.
+The same model predicts 1,375,401,339 versus 353,971 at 100k; **the 100k
+counts are not runtime measurements**. The bounded C1 prototype holds one
+interval per live tier, changes no Store format, and its external sparse-tier
+regression passes. D6 is the first 10k public operation here to return a root
+inside the unchanged request deadline. See [C1 analysis](c1-scaling.md).
+
+The adjacent metadata memo and native-only duplicate file-root read removal
+each reduced redundant work in source, but their attempts **did not return a
+root**. They are retained as failed treatments rather than selected speedups.
+The verifier's one-entry metadata memo kept the full path/metadata/content
+oracle but **did not** get the debug build under its fixed 5 s watchdog.
+Moving cold preflight before startup initially made its one-second freshness
+window expire: D8 took zero samples. The immediate nonfaulting recheck in D9
+resolved that acquisition problem, without warming source bytes. The debug to
+release time change is a **build-profile difference**, not an algorithm speedup
+factor; the original runner's debug build contradicted the frozen #231 release
+build specification. See [file ingest](file-ingest.md) and
+[verifier analysis](verifier.md).
+
+## Open qualification work
+
+- The 10k row still lacks a passing full independent readback at its final
+  performance identity. D9's `SKIPPED` proof is explicit; D6/D7's 5 s timeouts
+  remain failures. Explore performance separately from verifier repair, as the
+  updated `AGENTS.md` guidance says.
+- The Core first-pass runner deliberately leaves `namespace-100000` `NOT_RUN`.
+  Its exact 100,000-file/500 MB source, cold contract, complete command, resource
+  scopes and full oracle need a prospective runner version and one fresh sample.
+  The [100k route handoff](100k-route.md) identifies every hard skip. The 2.7 s
+  historical cold target remains a target, not a waiver or PASS.
+- Process CPU, sampled RSS, source-page residency, scratch/spool and Store bytes
+  are separate domains. The retained RSS samples have no complete phase
+  coverage, and no cgroup anonymous/file split exists for this host route.
+  Neither a lifetime high-water mark nor a compact heap proves a memory gate.
+- A dense Init Store cannot prove the [#229 sparse-pack lane](sparse-pack.md).
+  The available archived/current stride1 Stores differ in advisory depth and
+  physical representation; the alleged matched baseline cannot be reconstructed
+  from those named files. A new same-policy sparse-history control and treatment
+  need full reopened readback and physical pack utilization checks before any
+  compactness claim.
+- The [v0.1.6 comparison](v016-comparison.md) corrects a repeated numerator
+  error: its 100 MB anchor is inside 300 MB. The 578.245 ms reference row is
+  518.8 MB/s, not 691.8 MB/s. Faster historical rows were dirty and cache
+  served. Legacy, #219 pipeline and Core native Init have different routes,
+  content bytes, timers and cache identities; none is a matched speed pair.
+
+The next engineering decision is to keep the minimal C1 gap fix, take an
+independent count/semantic check of its output, and investigate the release
+file-ingest span. No production optimization from this branch is merged.

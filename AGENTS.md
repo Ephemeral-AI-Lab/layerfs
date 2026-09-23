@@ -125,14 +125,21 @@ the report.
 3. Pin identities: source commit/seal/tree, product, compilation and dependency
    seals, image ID, harness identity, workload-source hash. A rebuilt artifact
    needs a rebuilt matched arm; a harness change invalidates the pair.
-4. Verify separately, in verification mode, with the exact identities from the
-   performance receipt. A performance PASS is not release admission. **Verify
-   once, with the commands that cover the change; do not verify or test
-   iteratively.** Re-running a suite in a loop to watch it turn green is not a
-   verification method: a red test is diagnosed from its output and the source,
-   the fix is applied once, and the covering commands then run once. A change
-   that needs a second verification pass to be believable was not verified the
-   first time.
+4. **Default exploratory benchmarks to performance only.** Run the selected
+   case through the fast lane without full verification; record `SKIPPED` and
+   keep the row diagnostic. Verification wall is separate from the performance
+   timer and never enters a speed comparison. During an experiment, record a
+   verifier defect or timeout and keep working on the measured mechanism; fix
+   it then only if it prevents the performance run, corrupts its evidence, or
+   blocks a proof the current decision actually requires. A verifier that misses
+   its bound cannot turn the row into an admission PASS.
+
+   At a frozen final source identity, verify separately with the exact
+   identities from the performance receipt. A performance PASS alone is not
+   release admission. **Verify once, with the commands that cover the change;
+   do not verify or test iteratively.** A red test is diagnosed from its output
+   and the source, the fix is applied once, and the covering commands then run
+   once. Do not rerun an unchanged performance arm to select a better number.
 5. Respect the measurement lock — it is **per worktree** (owner direction,
    2026-09-21): builds and measurements in different worktrees do not exclude each
    other, two runs in one worktree still never overlap, and no build may take a

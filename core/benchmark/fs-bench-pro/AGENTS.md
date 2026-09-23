@@ -42,6 +42,14 @@ checks in `tests/test_init_namespace.py`. A default fast-lane row is diagnostic
 only. The full benchmark proof requires an explicit `run --verify`, its
 separate verifier invocation and `verification.json`, not a unit-test PASS.
 
+Use that performance-only fast lane by default while researching an algorithm:
+run one selected case, read its counters/receipt, then change the mechanism or
+use a labelled count-driven diagnostic. Keep verification wall outside every
+performance comparison. Record a verifier timeout or bug and defer its repair
+during exploration unless it prevents the run, damages evidence, or blocks the
+proof needed for the current decision. A frozen qualification still runs one
+separate full proof at its exact source identity; no skipped proof is a PASS.
+
 Do not add separate first-pass `prepare`, `prune`, `calibrate`, `self-check`,
 `build`, comparison or empty mode-adapter commands. Use focused tests for
 self-checking and automatic owned-temporary cleanup. The three immutable
@@ -59,7 +67,7 @@ warm no-op, stale binary, `cargo clean`, weaker checks or a changed profile.
 
 Each requested independent verifier child is **at most 5 s**, including reopen,
 full oracle and teardown. Never sample/shrink the oracle or extend its deadline
-to pass. Preparation, the three case runs, verification and cleanup are
+to pass. Preparation, the three case runs, requested verification and cleanup are
 recommended to finish within **30 s per family**; record and investigate a
 miss without reducing work. Keep the existing complete-performance-command
 15 s budget and prospectively declared small exceptions up to 25 s.
