@@ -283,6 +283,7 @@ pub(crate) fn command(
                 scope,
                 reservation.start,
                 &entries,
+                false,
                 &mut progress,
                 timer,
             )?;
@@ -325,6 +326,7 @@ pub(crate) fn command(
                 scope,
                 reservation.start,
                 &entries,
+                true,
                 &mut progress,
                 timer,
             )?;

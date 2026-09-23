@@ -117,6 +117,7 @@ pub(crate) fn build_namespace(
     scope: InodeScope,
     root_serial: u64,
     entries: &[PreparedEntry],
+    files_just_imported: bool,
     progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<ObjectId, Failure> {
@@ -127,7 +128,14 @@ pub(crate) fn build_namespace(
         .ok_or(Code::Capacity)?;
     progress.tick()?;
     let serials: Vec<u64> = (root_serial..last).collect();
-    let (metadata, content_roots) = prerequisites(store, provider, entries, progress, timer)?;
+    let (metadata, content_roots) = prerequisites(
+        store,
+        provider,
+        entries,
+        files_just_imported,
+        progress,
+        timer,
+    )?;
     let inodes: Vec<InodeUpdate> = entries
         .iter()
         .enumerate()
@@ -235,6 +243,7 @@ fn prerequisites(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
     entries: &[PreparedEntry],
+    files_just_imported: bool,
     progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
 ) -> Result<(Vec<ObjectId>, Vec<ObjectId>), Failure> {
@@ -258,7 +267,12 @@ fn prerequisites(
                     mtime_seconds: entry.mtime_seconds,
                     mtime_nanoseconds: entry.mtime_nanoseconds,
                 };
-                let key = (kind.code(), entry.mode, entry.mtime_seconds, entry.mtime_nanoseconds);
+                let key = (
+                    kind.code(),
+                    entry.mode,
+                    entry.mtime_seconds,
+                    entry.mtime_nanoseconds,
+                );
                 let metadata_root = match previous_metadata {
                     Some((previous, root)) if previous == key => root,
                     _ => {
@@ -276,13 +290,15 @@ fn prerequisites(
                     .map_err(content)?,
                     RecordKind::RegularFile => {
                         let root = entry.content.ok_or(Code::InvalidInput)?;
-                        let view = Timing::disabled("history.role", |scope| {
-                            FileView::open(provider, root, scope.child("file"))
-                        })
-                        .0
-                        .map_err(content)?;
-                        if view.logical_len() > MAX_FILE {
-                            return Err(Code::Capacity.into());
+                        if !files_just_imported {
+                            let view = Timing::disabled("history.role", |scope| {
+                                FileView::open(provider, root, scope.child("file"))
+                            })
+                            .0
+                            .map_err(content)?;
+                            if view.logical_len() > MAX_FILE {
+                                return Err(Code::Capacity.into());
+                            }
                         }
                         root
                     }

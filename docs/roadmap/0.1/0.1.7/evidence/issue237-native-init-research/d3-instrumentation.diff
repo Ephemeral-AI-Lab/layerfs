@@ -1,0 +1,136 @@
+diff --git a/core/crates/layerfs-content/src/filesystem/update.rs b/core/crates/layerfs-content/src/filesystem/update.rs
+index 5b096f857..c9326e4e0 100644
+--- a/core/crates/layerfs-content/src/filesystem/update.rs
++++ b/core/crates/layerfs-content/src/filesystem/update.rs
+@@ -154,6 +154,7 @@ fn run_body<'b>(
+     phases: &FilesystemPhases<'_>,
+     cleanup_attempted: &mut bool,
+ ) -> ContentResult<FilesystemResult> {
++    let diagnostic_started = std::time::Instant::now();
+     // A directory this batch leaves with no binding is dead on arrival: its
+     // parent already accounted the binding it lost, so there is no final count to
+     // hold it, no page worth building, and no subtree to walk.
+@@ -162,6 +163,7 @@ fn run_body<'b>(
+     let checked = phases.phase("validate", || {
+         validate::check(objects.reader(), input, &unreachable, &mut validation)
+     })?;
++    eprintln!("LFS237 c1_validate_done elapsed_ns={} bindings={} inodes={}", diagnostic_started.elapsed().as_nanos(), input.directories.iter().map(|d| d.changes.len()).sum::<usize>(), input.inodes.len());
+     let reader = objects.reader();
+     let mut counters = FilesystemUpdateCounters {
+         validation,
+@@ -301,6 +303,7 @@ fn run_body<'b>(
+         }
+         Ok(())
+     })?;
++    eprintln!("LFS237 c1_directories_done elapsed_ns={} pages_created={} bindings_added={}", diagnostic_started.elapsed().as_nanos(), counters.directories.pages_created, counters.bindings_added);
+     // Keep the reducer's original all-effects-before-values insertion order:
+     // interleaving values with later effects can increase spill quota demands.
+     // Reuse the final parent batch; earlier omitted values are read in bounded
+@@ -357,6 +360,7 @@ fn run_body<'b>(
+     for (serial, value) in updates {
+         reducer.note_value(serial, value)?;
+     }
++    eprintln!("LFS237 c1_values_done elapsed_ns={} pending={} spilled={}", diagnostic_started.elapsed().as_nanos(), reducer.work().peak_pending, reducer.work().rows_spilled);
+     if checked.topology.table.is_some() {
+         // Only an update can release descendants: a new filesystem has no base
+         // binding to lose, and its root is never released.
+@@ -392,6 +396,7 @@ fn run_body<'b>(
+             input.root_serial,
+         )
+     })?;
++    eprintln!("LFS237 c1_references_done elapsed_ns={} rows_spilled={} merge_reads={} merge_writes={} merges={}", diagnostic_started.elapsed().as_nanos(), rows.work().rows_spilled, rows.work().runs.rows_read, rows.work().runs.rows_written, rows.work().runs.merges);
+     let mut source_error: Option<ContentError> = None;
+     let changes = std::iter::from_fn(|| match rows.next_change() {
+         Ok(Some(change)) => Some(Ok((change.serial, change.value))),
+@@ -408,6 +413,7 @@ fn run_body<'b>(
+         return Err(error);
+     }
+     let (inode_table, inode_work) = built?;
++    eprintln!("LFS237 c1_inodes_done elapsed_ns={} pages_created={}", diagnostic_started.elapsed().as_nanos(), inode_work.pages_created);
+     counters.inodes = inode_work;
+     // The final stream is done with: its counters are snapshotted, its reader
+     // handle is closed, and only then is the backing's completion checked. A
+diff --git a/core/crates/layerfs-service/src/operation/history_bootstrap.rs b/core/crates/layerfs-service/src/operation/history_bootstrap.rs
+index 1d87fd199..90f6110f1 100644
+--- a/core/crates/layerfs-service/src/operation/history_bootstrap.rs
++++ b/core/crates/layerfs-service/src/operation/history_bootstrap.rs
+@@ -120,6 +120,7 @@ pub(crate) fn build_namespace(
+     progress: &mut ImportProgress<'_>,
+     timer: &TimingScope<'_, Active>,
+ ) -> Result<ObjectId, Failure> {
++    let diagnostic_started = Instant::now();
+     let count = u64::try_from(entries.len()).map_err(|_| Code::Capacity)?;
+     let last = root_serial
+         .checked_add(count)
+@@ -128,6 +129,7 @@ pub(crate) fn build_namespace(
+     progress.tick()?;
+     let serials: Vec<u64> = (root_serial..last).collect();
+     let (metadata, content_roots) = prerequisites(store, provider, entries, progress, timer)?;
++    eprintln!("LFS237 prerequisites_done elapsed_ns={} entries={}", diagnostic_started.elapsed().as_nanos(), entries.len());
+     let inodes: Vec<InodeUpdate> = entries
+         .iter()
+         .enumerate()
+@@ -158,6 +160,7 @@ pub(crate) fn build_namespace(
+         resources: FilesystemResources::default(),
+     };
+     input.check().map_err(content)?;
++    eprintln!("LFS237 input_done elapsed_ns={} inodes={} directories={}", diagnostic_started.elapsed().as_nanos(), inodes.len(), directories.len());
+     progress.tick()?;
+     let scratch = loop {
+         let path = store.path().with_extension(format!(
+@@ -187,6 +190,7 @@ pub(crate) fn build_namespace(
+         let mut objects = FilesystemObjects::new(provider, &mut handoff);
+         layerfs_content::build_filesystem(&mut objects, &input, Some(&mut backing)).map_err(content)
+     };
++    eprintln!("LFS237 c1_return elapsed_ns={} success={}", diagnostic_started.elapsed().as_nanos(), built.is_ok());
+     let scratch_cleanup = fs::remove_dir(&scratch);
+     let retained = handoff.take_failure();
+     drop(handoff);
+@@ -306,8 +310,8 @@ fn prerequisites(
+     });
+     match built {
+         Ok(values) => {
+-            save.finish(timer.child("history.finish_prerequisite_save"))
+-                .map_err(storage)?;
++            let outcome = save.finish(timer.child("history.finish_prerequisite_save")).map_err(storage)?;
++            eprintln!("LFS237 prerequisite_save_done inserted={} reused={} packs={} appends={} commits={} statements={} presence={} sql_ns={} commit_ns={}", outcome.inserted, outcome.reused, outcome.packs_created, outcome.pack_appends, outcome.commits, outcome.statements, outcome.presence_queries, outcome.profile.sql_ns, outcome.profile.commit_ns);
+             Ok(values)
+         }
+         Err(mut error) => {
+diff --git a/core/crates/layerfs-service/src/operation/import_native.rs b/core/crates/layerfs-service/src/operation/import_native.rs
+index 67a42ebea..90001154a 100644
+--- a/core/crates/layerfs-service/src/operation/import_native.rs
++++ b/core/crates/layerfs-service/src/operation/import_native.rs
+@@ -48,6 +48,7 @@ pub(crate) fn scan_and_save(
+     progress: &mut ImportProgress<'_>,
+     timer: &TimingScope<'_, Active>,
+ ) -> Result<Vec<PreparedEntry>, Failure> {
++    let diagnostic_started = Instant::now();
+     let root_metadata = fs::symlink_metadata(source)?;
+     if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+         return Err(Code::InvalidInput.into());
+@@ -106,11 +107,13 @@ pub(crate) fn scan_and_save(
+         Ok((entries, jobs))
+     });
+     let scanned = scanned.and_then(|(mut entries, jobs)| {
++        eprintln!("LFS237 scan_done elapsed_ns={} entries={} files={}", diagnostic_started.elapsed().as_nanos(), entries.len(), jobs.len());
+         timer
+             .child("history.import_files")
+             .run(|_| save_files(&mut entries, jobs, store, &mut handoff, progress))?;
+         Ok(entries)
+     });
++    eprintln!("LFS237 files_done elapsed_ns={}", diagnostic_started.elapsed().as_nanos());
+     let retained = handoff.take_failure();
+     drop(handoff);
+     let scanned = match retained {
+@@ -123,8 +126,8 @@ pub(crate) fn scan_and_save(
+     });
+     match scanned {
+         Ok(entries) => {
+-            save.finish(timer.child("history.import_finish_save"))
+-                .map_err(storage)?;
++            let outcome = save.finish(timer.child("history.import_finish_save")).map_err(storage)?;
++            eprintln!("LFS237 file_save_done elapsed_ns={} inserted={} reused={} packs={} appends={} commits={} statements={} presence={} sql_ns={} commit_ns={}", diagnostic_started.elapsed().as_nanos(), outcome.inserted, outcome.reused, outcome.packs_created, outcome.pack_appends, outcome.commits, outcome.statements, outcome.presence_queries, outcome.profile.sql_ns, outcome.profile.commit_ns);
+             Ok(entries)
+         }
+         Err(mut error) => {

@@ -50,3 +50,30 @@ algorithm requires a separate sparse-history control/treatment and full readback
   output directory, fixture or product process (`runner` resolved to the legacy
   module, which has no `owned`). Zero performance samples. Fixed only the Python
   import order before the first D1 control sample.
+
+## D3: labelled count-driven localization after D1 failure
+
+D1 control and metadata treatment both returned `Unknown` with no C5 root, and
+their Stores had only file/prerequisite save rows. Do not repeat either identity.
+An instrumented derivative of the metadata prototype will emit coarse Service
+and C1 phase milestones plus completed C2 save counters to retained stderr.
+Take one new cold-source `namespace-10000` run, solely to locate the unfinished
+work and its counts. Its elapsed time is diagnostic, not a D1 third sample.
+Keep the instrumentation as a separate unmerged diff, then restore product
+source; never promote this run to performance admission.
+
+## D4: native-only redundant file-root reopen removal
+
+D3 observed 10,000 files saved by 6.80 s and a subsequent ~2.01 s
+prerequisite stage despite its C2 save inserting only 11 objects. The source
+opens each of the 10,000 just-constructed roots in that stage. Freeze one
+additional unmerged research diff: native import passes an internal boolean
+to `build_namespace` so the prerequisite pass trusts only file roots that the
+same call constructed, length-checked and acknowledged through C2. The
+pathless `InitLayerStack` keeps its existing `FileView::open` validation. The
+metadata memo remains in both D1 treatment and D4. Reuse the same 10k source
+fixture with zero-residency whole-input preflight, the same public daemon
+request, seed, worker count, deadlines, full verifier and Store policy. Take
+one D4 performance observation. A successful root plus full readback and equal
+physical/semantic Store metrics are required before any public time comparison;
+if D4 still fails, retain it and report only mechanism localization.

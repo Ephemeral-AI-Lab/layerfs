@@ -29,6 +29,11 @@ Implementation specification and its pre-publication audit:
   The memo holds one key/root pair; the history, C1 and C2 contracts are
   unchanged. Its evidence belongs to the #237 research directory, not to a
   released performance claim.
+- **#237 second unmerged prototype:** the same-commit Service diff based on
+  `561aaf940d6cdf0365ec28f122b8bfb8f136fead` omits the second
+  `FileView::open` only for native file roots constructed, length-checked and
+  saved by that very import call. Pathless bootstrap still opens each supplied
+  root. The #237 evidence records whether this shortens a completed operation.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
