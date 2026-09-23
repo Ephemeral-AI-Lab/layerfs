@@ -76,7 +76,7 @@ environment variable when selecting an image explicitly.
 | --- | --- |
 | `setup.sh` | Prepare the selected input without running performance. |
 | `perf.sh --perf-fast` | One full selected sample; the default mode. |
-| `perf.sh --perf-samples N` | N independent sequential samples of the same selected input. |
+| `perf.sh --perf-samples N` | Legacy only; do not use for current evidence. The v0.1.7 successor omits it. |
 | `perf.sh --setup fresh\|clone` | Rebuild the initial Store or copy an authenticated prepared Store, outside operation timing. |
 | `verify.sh` | One identity-pinned verification invocation; never a performance campaign. |
 

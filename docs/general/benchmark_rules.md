@@ -389,10 +389,14 @@ never a fabricated zero. Summaries MUST identify whether they use a median,
 range, percentile, ratio of medians, median of paired ratios, or another frozen
 formula.
 
-Published tables MUST show raw elapsed-time units, sample count, median, and
-min-max range. Claims MUST remain within the measured file sizes, environment,
-operation, and acknowledgement boundary. Complexity analysis is not measured
-evidence, and measured rows MUST NOT be extrapolated to an unmeasured size.
+Published tables MUST show raw elapsed-time units and sample count. A registered
+multi-sample profile also shows its median and min-max range. A registered
+one-sample profile shows its one raw observation with `sample_count=1`; it MUST
+NOT imply a distribution, percentile, or repeatability result by presenting
+that observation as a separate median or range. Claims MUST remain within the
+measured file sizes, environment, operation, and acknowledgement boundary.
+Complexity analysis is not measured evidence, and measured rows MUST NOT be
+extrapolated to an unmeasured size.
 
 A sparse, compressed, deduplicated, repeated-subtree, or otherwise synthetic
 logical-size fixture is structural/complexity proof only. It MUST NOT extend
@@ -618,6 +622,15 @@ MUST be reproducible solely from retained raw evidence and the sealed report
 generator. Secrets MAY be redacted before persistence without removing the
 public command shape.
 
+For structured product telemetry on stderr, one case may retain the exact
+event lines in a single source-identified raw event file instead of duplicate
+per-process stderr captures. Preserve each producer's line order, source
+identity and byte range, plus non-event diagnostics and exit/failure context
+in the receipt. Validate parsing, expected-event cardinality and hashes before
+deleting temporary capture or owned operational-log files. If ingestion is
+incomplete, retain the original stderr as failure evidence. A parsed summary
+alone is not raw evidence; retained event lines must still reproduce it.
+
 Release evidence MUST bind the exact candidate source, product, harness,
 workload, fixture, environment, and report generator. Any relevant change
 makes prior admission evidence stale and requires the affected exact-candidate
@@ -770,8 +783,8 @@ evidence:
 4. Are baseline and candidate semantically and operationally identical except
    for the declared treatment?
 5. Is every family member present with the required seeds and arms?
-6. Are raw elapsed times, sample counts, medians, ranges, formulas, and units
-   visible and reproducible?
+6. Are raw elapsed times, sample counts, applicable multi-sample medians and
+   ranges, formulas, and units visible and reproducible?
 7. Are process RSS, cgroup domains, file cache, spool disk, Store disk, and
    verifier resources separated?
 8. Do size-scaling rows and mechanism counters reject hidden work proportional

@@ -199,21 +199,21 @@ remains separate; a performance gate pass is not release admission. See the
 
 ## Verify separately
 
-The default loop is one focused code check and one complete selected public case
-when needed. Once a relevant change stabilizes, freeze one concise case/arm
-configuration: exact comparator binaries/images, input, cache policy,
-repetitions, timer and gates. Use the existing family runner and analyzer for
-alternating pairs, then run the affected independent proofs once. A/A pairs
-qualify infra repeatability; they are not a product speedup claim. Record whole
-command/build/setup/proof/cleanup wall alongside the declared product timer.
-Expensive boundaries and endurance runs remain explicit selections.
+The current owner-directed loop is one focused code check, one target case, one
+sample per registered case/arm, and seed `1` (or repetition `1` where required).
+There is no n3 screen, averaging, or rerun to stabilize a passing number. The old
+#118 n3 rule is historical and does not apply to new measurements; preserve its
+receipts unchanged. A new sample is needed only for an affected case after a
+relevant code/identity change, and it is run once at the final identity. Keep
+unaffected successful cells and matching `--reuse-pass` proofs; do not repeat a
+whole checkpoint after each edit.
 
-For ordinary regression screens, #118 permits a prospectively frozen n3 rule:
-median paired wall slowdown greater than `max(15% of control median, 3 ms)`
-and at least two of three pairs slower; CPU uses `max(15%, 1 ms)`. Keep stronger
-unwaived contracts, the Stage2 K10 owner waiver, every failed sample and valid
-outlier. Isolated minor misses may be WARN; the authentic cold Init <=2.7 s,
-correctness, authentication and resource bounds remain hard gates.
+During implementation, run the smallest test that exercises the changed path
+immediately. Use a selected case rather than a family or full-lane campaign.
+After the final relevant edit, run the affected independent proof once and the
+required workspace checks once. Record whole command/build/setup/proof/cleanup
+wall beside the declared product timer. Expensive boundaries and endurance runs
+remain explicit selections.
 
 Use the family's `verify.sh` with the exact case, seed/repetition, source, input,
 image and setup identity from the performance receipt. SDK proofs also bind the
