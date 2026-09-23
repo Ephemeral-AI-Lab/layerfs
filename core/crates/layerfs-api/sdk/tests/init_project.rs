@@ -11,11 +11,15 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     process::Command,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 const BINDING: &[u8] = b"issue236-sdk-proof";
 const CURSOR_KEY: [u8; 32] = [0x36; 32];
+static NEXT_PROOF_ROOT: AtomicUsize = AtomicUsize::new(0);
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -27,12 +31,13 @@ fn repo() -> PathBuf {
 
 fn proof_root() -> PathBuf {
     let root = repo().join("core/target/issue236-proof").join(format!(
-        "{}-{}",
+        "{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT_PROOF_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&root).unwrap();
     root
