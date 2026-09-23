@@ -137,17 +137,32 @@ def _drain(pipe, file):
 
 def _start_service(binary, env, stderr):
     process = subprocess.Popen([binary], env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.PIPE)
-    if not select.select([process.stderr], [], [], 5)[0]:
+                               stderr=subprocess.PIPE, bufsize=0)
+    captured = bytearray()
+    deadline = time.monotonic() + 5
+    try:
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([process.stderr], [], [], remaining)[0]:
+                break
+            line = process.stderr.readline()
+            captured.extend(line)
+            if line.startswith(b"layerfs-service ready "):
+                stderr.write_bytes(captured)
+                port = int(line.rstrip().rsplit(b":", 1)[1])
+                thread = threading.Thread(target=_drain, args=(process.stderr, stderr), daemon=True)
+                thread.start()
+                return process, thread, port
+            if not line or len(captured) > 64 * 1024:
+                break
         raise TimeoutError("Service did not announce readiness")
-    first = process.stderr.readline()
-    stderr.write_bytes(first)
-    if not first.startswith(b"layerfs-service ready "):
-        raise RuntimeError(f"Service startup: {first[:200]!r}")
-    port = int(first.rstrip().rsplit(b":", 1)[1])
-    thread = threading.Thread(target=_drain, args=(process.stderr, stderr), daemon=True)
-    thread.start()
-    return process, thread, port
+    except Exception:
+        stderr.write_bytes(captured)
+        process.terminate()
+        process.wait(timeout=2)
+        process.stdin.close()
+        process.stderr.close()
+        raise
 
 
 def _start_daemon(binary, env, stderr):
@@ -176,6 +191,10 @@ def _stop(process, thread):
     finally:
         if thread:
             thread.join(timeout=2)
+        if process.stdout:
+            process.stdout.close()
+        if process.stderr:
+            process.stderr.close()
     return "PASS" if process.returncode == 0 else "FAIL"
 
 

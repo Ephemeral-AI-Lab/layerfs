@@ -13,6 +13,17 @@ from shared import telemetry
 
 
 class Substrate(unittest.TestCase):
+    def test_startup_keeps_telemetry_before_ready(self):
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "service"
+            script.write_text("#!/usr/bin/env python3\nimport sys\nprint('LFT1 {}', file=sys.stderr, flush=True)\nprint('layerfs-service ready 127.0.0.1:12345', file=sys.stderr, flush=True)\nsys.stdin.read()\n")
+            script.chmod(0o755)
+            capture = Path(directory) / "service.stderr"
+            process, thread, port = runner._start_service(str(script), runner.os.environ.copy(), capture)
+            self.assertEqual(port, 12345)
+            self.assertEqual(runner._stop(process, thread), "PASS")
+            self.assertEqual(capture.read_bytes(), b"LFT1 {}\nlayerfs-service ready 127.0.0.1:12345\n")
+
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
