@@ -159,3 +159,26 @@ sealed by D8, same product/fixture/worker/PageSize=4096 and unchanged 15 s
 limits. Take one fresh `namespace-10000` sample with verifier **SKIPPED** for
 fast iteration. Do not count verifier cost in performance, do not promote this
 diagnostic to #231 admission, and retain any failed row.
+
+## D10: one release-profile 100k native Init diagnostic
+
+D9's release fast lane completed the 10k public Init in 1.590847333 s;
+full-oracle work is deliberately omitted for performance exploration. The
+official #231 runner hard-skips 100k, so a research-only driver will call its
+existing `_case` once under the same worktree lock, then retain the normal
+four-case report/manifest with the 100k receipt marked diagnostic. The product
+command stays the same `HistoryCommand::ImportNativeDirectory`, seed 1, 15 s
+deadline, four construction workers, one C2 owner, 4 KiB SQLite pages, and
+fresh Store. The source is the declared 100,000 files/1,000 data directories,
+500,000,000 total bytes (two 100 MB anchors inside the total), generated once
+under the worktree's prepared root. Reuse the full hash/evict plus immediate
+nonfaulting whole-input mincore contract; require zero resident pages and
+record all 100,000 files, pages and launch gap. The research recheck is inside
+the command wall and its cost is reported separately, not hidden.
+
+Run **one** release 100k performance sample at this exact identity, with
+verification SKIPPED as the fast-lane default. Preserve any deadline,
+command, telemetry, cleanup or resource miss. The 2.7 s historical cold target
+remains a target, not an automatic PASS, and the official #231 first-pass
+registry remains unchanged. No 100k admission or full-readback claim follows
+from this diagnostic.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run one #231 diagnostic with declared whole-source residency evidence."""
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -88,9 +89,44 @@ def recheck_source(source, manifest):
     return result
 
 
+def run_100k(out):
+    """Research-only bypass of #231's intentional 100k NOT_RUN selector."""
+    case = runner.init.CASES["namespace-100000"]
+    if (case.files, case.directories, case.logical_bytes) != (100_000, 1_000, 500_000_000):
+        raise ValueError("100k case declaration changed")
+    target = runner.target_path()
+    identity = runner.identities()
+    out.mkdir(parents=True)
+    started = time.monotonic_ns()
+    built = runner.build(out, target, identity)
+    runner.write_json(out / "build.json", built)
+    blocked = None if built["status"] == "PASS" else built["status"]
+    if blocked is None:
+        with (runner.RESULTS / ".run.lock").open("a+b") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                blocked = "same-worktree run active"
+            if blocked is None:
+                runner._case(out, case, built["binaries"], identity, full_verify=False)
+    if blocked:
+        runner.write_json(out / "blocked.json", {"status": "NOT_RUN", "reason": blocked, "identity": identity})
+        folder = out / "daemon-host/init_namespace" / case.id
+        folder.mkdir(parents=True)
+        runner.write_json(folder / "receipt.json", {"case": case.id, "status": "NOT_RUN",
+                                                    "sample_count": 0, "reason": blocked})
+    runner._fill_not_run(out, case.id, blocked)
+    runner.write_json(out / "run.json", {"schema": "issue237-native-100k-research-v1",
+                                       "selection": case.id, "full_verification_requested": False,
+                                       "identity": identity,
+                                       "complete_run_wall_ns": time.monotonic_ns() - started})
+    (out / "report.txt").write_text(runner.report(out))
+    runner.manifest_run(out)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", choices=("namespace-1000-compact-v3", "namespace-10000"), required=True)
+    parser.add_argument("--case", choices=("namespace-1000-compact-v3", "namespace-10000", "namespace-100000"), required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args()
@@ -139,7 +175,12 @@ def main():
 
     runner.init.prepare = prepare
     runner.init.public_import = public_import
-    runner.run(args.case, out, full_verify=args.verify)
+    if args.case == "namespace-100000":
+        if args.verify:
+            parser.error("100k research lane is performance-only")
+        run_100k(out)
+    else:
+        runner.run(args.case, out, full_verify=args.verify)
     print(runner.report(out), end="")
 
 
