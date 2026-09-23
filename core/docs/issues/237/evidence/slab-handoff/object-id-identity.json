@@ -1,0 +1,15 @@
+{
+  "arms": {
+    "candidate": {
+      "object_rows": 24683,
+      "tuple_sha256": "7916ff14e95ba1c78e8d12b485d02c4843a84c5cec3aa7266f88477aebf15c5b"
+    },
+    "control": {
+      "object_rows": 24683,
+      "tuple_sha256": "7916ff14e95ba1c78e8d12b485d02c4843a84c5cec3aa7266f88477aebf15c5b"
+    }
+  },
+  "equal": true,
+  "sql": "SELECT object_id,object_role,canonical_length FROM objects ORDER BY object_id,object_role,canonical_length",
+  "tuple_encoding": "object_id bytes || u32le role || u64le canonical_length"
+}

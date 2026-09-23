@@ -361,3 +361,30 @@ unqualified. No causal speed gain is claimed. The preregistered no-worse
 space/RSS conditions failed, so the product source remains isolated and
 unadopted. Three old visibility tests also retained a stale early-commit
 premise under the 64-MiB wave; they were not repaired during this experiment.
+
+## Round R15: Core bounded producer slabs
+
+The [Core-only slab pair](slab-handoff-experiment.md) kept four existing Init
+constructors, **one C2/SQLite owner**, 4-KiB DB pages, 128-KiB cutoff and
+SQLite BLOB packs. Ordered object/file-completion events moved through a
+four-slot bounded slab channel; every object still called the same C2
+`SaveHandoff::accept`. The control/candidate handoff count fell **34,562 →
+1,202 (−96.52%)**; raw public 10k Init fell **1.400623250 → 1.166250708 s**
+(−234.372542 ms, −16.73%). The Store file and pack capacity were smaller,
+exact root/object IDs matched, both full reopened 10k/300-MB readbacks passed,
+and both final source checks found 0/27,503 resident payload pages.
+
+This remains exploratory: control telemetry was `INCOMPLETE`, its
+preregistered manual-build binary hash differed from the exact H3 runner
+binary, and metadata residency was unqualified. The timed pair did **not**
+log per-Save COMMIT/SQL counts. One separate, preregistered count diagnostic
+on the slab algorithm measured **115 C2 COMMITs / 268.705 ms** (plus two
+source-derived catalog writes), but its own daemon telemetry was `INCOMPLETE`
+and its counts are **not** attached to either timed arm. The raw slab
+candidate still took **415.625 ms** longer than the same-source v0.1.6
+diagnostic. Subsequent owner direction keeps similarity-signature calculation
+on the single C2 owner; producer-side offload was stopped without a sample.
+At the measured slab source, Core boundary/tool tests, formatting and full
+workspace tests passed; warning-denying Clippy **failed** one
+`collapsible_if` style warning in `import_native.rs:200`. It was not fixed
+after the timed source identity, and no release-admission claim follows.
