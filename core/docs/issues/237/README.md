@@ -59,6 +59,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [8-MiB wave policy](wave8-experiment.md) | One isolated 4→8 MiB C2 wave pair | 1.281 → **1.234 s** | Commits 80→55, but metadata cache unqualified; Store capacity and sampled RSS increased. No validated cold gain or adoption. |
 | [Sparse C2 guard](sparse-c2-guard.md) | Separate fresh history control/candidate | no completed history sample | Both stopped on `Integrity("dependency encoded work")` before a state root. Equal partial Store geometry and authenticated objects do not close #229. |
 | [Bounded transaction waves](bounded-wave-experiment.md) | One instrumented 10k control/candidate pair | 1.364 → **1.440 s** | File-Save commits **80→7** (−91.25%), but candidate was slower with higher sampled RSS and a larger Store; both full reopened readbacks passed. Control telemetry INCOMPLETE and metadata cache unqualified. |
+| [External pack segments](segment-store-feasibility.md) | Format feasibility only | no sample | A naive sidecar breaks rollback across committed waves; a safe variant needs immutable per-transaction segments, schema/read/cleanup changes and bundle-aware measurement. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →

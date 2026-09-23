@@ -215,3 +215,17 @@ Both public runs skipped verification and were sampled once.
 The candidate's **208.4 MB/s** raw rate remains far below the historical
 **518.8 MB/s / 0.578245 s** row, which itself lacked a cold-cache contract.
 Reducing transaction count by 90% was insufficient on this 10k route.
+
+## Round R7: external pack segment feasibility
+
+A [schema-11 bundle design](segment-store-feasibility.md) examined moving
+immutable pack bytes outside SQLite while retaining 4-KiB database pages and
+the 128-KiB file cutoff. The proposed motivation is to keep payload writes
+out of the large SQLite MEMORY-journal transactions, **not** a measured speed
+result. A naive per-Save append file fails runtime rollback: the current open
+pack tail can cross committed waves, so a later failed append could overwrite
+pack header/directory bytes already referenced by an earlier committed row.
+Safe external storage needs per-transaction immutable segments, new pack
+locators/read paths, abort and unknown-COMMIT handling, and bundle-aware
+copy/backup/space verification. This is an explicit Store format migration.
+No product edit, build or timed sample was made; a public pair is **NOT_RUN**.
