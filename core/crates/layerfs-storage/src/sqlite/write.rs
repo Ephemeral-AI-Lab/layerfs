@@ -15,8 +15,9 @@
 //! holding a 256 KiB BLOB rebuilds and rewrites that BLOB, measured at ~72 us per
 //! statement on a 256 KiB row against ~11 us for a four-byte in-place BLOB write
 //! (`#219`). The declaration therefore rides in the BLOB. The sole SQL BLOB
-//! rewrite is the final pooled row's bounded shrink at Save finish, after its
-//! last append and before publication, to make sparse Saves reuse freed pages.
+//! rewrite is the final mostly empty pooled row's bounded shrink at Save finish,
+//! after its last append and before publication, to make sparse Saves reuse
+//! freed pages without rewriting a mostly used row.
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
@@ -102,7 +103,7 @@ pub fn insert_pack(
     write_in_place(connection, pack_id, write)
 }
 
-/// Shrinks this Save's final pooled row once, before its publication transaction
+/// Shrinks a mostly empty final pooled row before its publication transaction
 /// commits. Earlier appends used the full BLOB; no later append may need its tail.
 pub fn shrink_final_pooled_pack(
     connection: &Connection,
@@ -116,7 +117,7 @@ pub fn shrink_final_pooled_pack(
     {
         return Err(StorageError::Integrity("final pooled pack length"));
     }
-    if used == limit {
+    if used > limit / 2 {
         return Ok(());
     }
     let used_bytes = (used as u32).to_le_bytes();

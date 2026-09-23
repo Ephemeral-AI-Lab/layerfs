@@ -1244,3 +1244,57 @@ fn sparse_saves_finalize_pooled_rows_without_file_size_growth() {
         assert_eq!(ObjectId::for_bytes(&bytes), id);
     }
 }
+
+/// A mostly used pooled row keeps its appendable allocation after Save finish.
+#[test]
+fn mostly_used_final_pooled_pack_skips_the_rewrite() {
+    let dir = TempDir::new("pool-half-full");
+    let path = dir.store_path("pool");
+    let store = create_store(&path);
+    let objects: Vec<_> = (0..24_u64)
+        .map(|round| {
+            let values: Vec<_> = (0..100_u64)
+                .map(|index| value(InodeKind::RegularFile, 1, round * 100 + index))
+                .collect();
+            leaf(1, &values)
+        })
+        .collect();
+    let ids: Vec<_> = objects.iter().map(FinalizedObject::id).collect();
+    disabled(|scope| {
+        let mut save = store.begin_save(scope.child("begin"))?;
+        for object in objects {
+            save.accept(object)?;
+        }
+        save.finish(scope.child("finish"))
+    })
+    .expect("one populated Save");
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).expect("closed Store");
+    let mut statement = connection
+        .prepare(
+            "SELECT length(data), substr(data,17,4) FROM object_packs WHERE substr(data,9,4)=x'0c000000'",
+        )
+        .unwrap();
+    let rows: Vec<(i64, Vec<u8>)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(rows.len(), 1, "all pooled groups share one pack");
+    let used = u32::from_le_bytes(rows[0].1.as_slice().try_into().unwrap()) as usize;
+    assert!(used > layerfs_storage::policy::PACK_LIMIT / 2);
+    assert_eq!(
+        rows[0].0,
+        layerfs_storage::policy::PACK_LIMIT as i64,
+        "mostly used row keeps its capacity"
+    );
+    drop(statement);
+    drop(connection);
+
+    let reopened = open_store(&path);
+    let (values, _) = read_objects(&reopened, &ids).expect("reopened populated leaves");
+    for (id, bytes) in ids.into_iter().zip(values) {
+        assert_eq!(ObjectId::for_bytes(&bytes), id);
+    }
+}

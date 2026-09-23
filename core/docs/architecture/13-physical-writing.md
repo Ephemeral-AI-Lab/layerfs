@@ -24,7 +24,8 @@ The #237 pack-space C1 amendment in §18.4.3 describes product source at
 `bbb0281bc`, and C2 in §18.4.4 describes source at `2ba19aad8`.
 The selective pooled-lane amendment in §18.4.5 describes product source at
 `4b94e9131`. The final pooled-tail amendment in §18.4.6 describes product
-source in this document's commit; earlier section pins stay historical.
+source at `14d73f3ac`; the half-full rule in §18.4.7 describes product
+source in this document's commit. Earlier section pins stay historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -386,7 +387,8 @@ accepted. The retained C2 receipt is not relabelled.
 
 ### 18.4.6 Finalize the last pooled row within Save (#237)
 
-During a Save, PooledMetadata still reuses one open 256-KiB row across
+The historical C5 treatment: during a Save, PooledMetadata reuses one
+open 256-KiB row across
 placement flushes and writes each accepted group before its catalogue row.
 After the final lane seal, the owner consumes that open state and, inside
 the Save's existing final transaction and before publication, shortens
@@ -405,6 +407,24 @@ can remain in the closed file's freelist. The
 [prospective sparse-tail plan](../issues/237/pack-space-c5-sparse-tail-plan-20260924.md)
 requires matched release evidence for that effect. The dense Init and
 the full #229 history guard remain distinct proofs.
+
+### 18.4.7 Shrink only a mostly empty final pooled row (#237)
+
+The C6 treatment retains C5's guarded, in-transaction finalization but
+issues its SQL BLOB rewrite only when the final pooled pack declares
+at most half of its 256-KiB limit used (≤131,072 B). A mostly used
+final row keeps its allocated capacity; no SQL UPDATE is attempted.
+The rule applies to any Save, independent of benchmark case or file
+count. It trades at most one 256-KiB rewrite for at least half a
+pack of reclaimable tail, while avoiding C5's rewrite on the dense
+100k Init's final 133,675-B pooled row.
+
+The [C5 result](../issues/237/pack-space-c5-result-20260924.md)
+retains its sparse benefit and dense allocation miss. The
+[prospective C6 plan](../issues/237/pack-space-c6-half-full-plan-20260924.md)
+requires separate sparse and dense release receipts before this
+selective rule can be accepted. Existing Store formats and older
+pack rows remain readable; the full #229 history guard is still open.
 
 ---
 
