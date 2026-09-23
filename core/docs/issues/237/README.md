@@ -56,6 +56,8 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [D13 live pager](pager-10k.md) | Reporting-only actual Save connection diagnostic | 1.530 s | 0 cache spills; proposed 32 MiB policy pair rejected. Prior setup attempt retained NOT_RUN. |
 | [C2 bounded admission](c2-admission-experiment.md) | One fixed-identity control/candidate pair | 1.597 → **1.468 s** | Same root/readback; candidate Store smaller. Control telemetry INCOMPLETE; cache admission unqualified. |
 | [Integrated C1+C2](combined-c1-c2.md) | One C1-only control, one combined candidate | 1.311 → **1.252 s** | Best raw rate **239.554 MB/s**; same root/readback, both telemetry INCOMPLETE, metadata cache unqualified; pack used +160 B despite smaller Store. |
+| [8-MiB wave policy](wave8-experiment.md) | One isolated 4→8 MiB C2 wave pair | 1.281 → **1.234 s** | Commits 80→55, but metadata cache unqualified; Store capacity and sampled RSS increased. No validated cold gain or adoption. |
+| [Sparse C2 guard](sparse-c2-guard.md) | Separate fresh history control/candidate | no completed history sample | Both stopped on `Integrity("dependency encoded work")` before a state root. Equal partial Store geometry and authenticated objects do not close #229. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
@@ -76,7 +78,8 @@ operation. The Store remained at SQLite `page_size=4096` and occupied
 declared 305,977,888 B used. These are [raw Store geometry](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/raw/d9-release-fast/store_geometry.json),
 not a matched compactness PASS.
 
-The current research target is **700 decimal MB/s on the 10k public operation**:
+The historical **518.8 decimal MB/s** comparison is **0.578245 s** for this
+300-MB numerator. The stretch target is **700 decimal MB/s**:
 300,000,000 B / 700,000,000 B/s = **0.428571 s**. D9 reached 188.58 MB/s.
 Its file construction/Store span alone was 1.249614 s, and everything else in
 the caller consumed 0.341234 s. Keeping that other work fixed would require
@@ -184,11 +187,15 @@ build specification. See [file ingest](file-ingest.md) and
   captured. A larger same-operation cache is a hypothesis to test after an
   actual-owner pager diagnostic, not an established speedup.
 
-The [518.8 MB/s budget](target-518.md) requires another **0.739 s** cut after
-the fastest separate C1 prototype. The three squads found no measured
-single-site change that supplies it. A bounded C2 admission redesign and a
-properly measured cache/transaction policy comparison are prospective work;
-the 4 KiB database page, fresh timed work and no-warm-source rule remain fixed.
-The C1/C2 source changes remain confined to this research branch. A matched
-#229 sparse-history space/readback guard and a prospective 8-MiB C2-wave
-experiment are in progress; neither has a result in this index yet.
+The [518.8 MB/s budget](target-518.md) predated the integrated C1+C2 pair.
+From its best raw **1.252325 s** observation, the remaining gap is
+**0.674080 s**. D11/D12 charged about **0.2275 s** to file-Save transaction
+cadence at older source identities, so even removing that entire bucket would
+not recover the historical time. A prospective bounded-wave and coalesced-final
+[transaction experiment](iteration-record.md#round-r5-primary-transaction-count-hypothesis)
+targets **at most eight file-Save commits**, down at least 90% from roughly 80.
+Its speed and resource results are not yet measured. The 4 KiB database page,
+128 KiB whole-file cutoff, fresh timed work and no-warm-source rule remain fixed.
+The C1/C2 source changes remain confined to this research branch; the complete
+#229 sparse-history space/readback gate remains open after both attempted arms
+stopped at the same product error.
