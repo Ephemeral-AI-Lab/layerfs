@@ -111,6 +111,7 @@ impl From<&ManifestEntry> for PreparedEntry {
 }
 
 /// Builds and saves one bounded logical namespace, returning its published root.
+#[expect(clippy::too_many_arguments, reason = "import provenance is explicit")]
 pub(crate) fn build_namespace(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
