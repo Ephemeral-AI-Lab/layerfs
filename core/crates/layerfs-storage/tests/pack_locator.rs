@@ -96,7 +96,11 @@ fn a_full_lane_starts_a_new_pack_and_keeps_existing_locators() {
     }
     let first = save_objects(&store, first_batch);
     assert_eq!(first.inserted, 12);
-    assert_eq!(first.packs_created, 1, "one pack holds the first twelve");
+    assert_eq!(
+        first.packs_created, 2,
+        "two placement flushes close two packs"
+    );
+    assert_eq!(first.pack_appends, 0);
     let before = locator_snapshot(&path);
 
     let mut second_batch = Vec::new();
@@ -196,7 +200,7 @@ fn whole_file_records_share_a_group_and_keep_their_own_locators() {
 }
 
 #[test]
-fn append_reuses_a_pack_without_changing_record_ordinals() {
+fn each_placement_flush_closes_an_exact_length_pack() {
     let dir = TempDir::new("append");
     let path = dir.store_path("append");
     let store = create_store(&path);
@@ -206,23 +210,50 @@ fn append_reuses_a_pack_without_changing_record_ordinals() {
     let second = whole_file(&noise(41_000));
     let first_id = first.id();
     let second_id = second.id();
+    let first_bytes = first.canonical().to_vec();
+    let second_bytes = second.canonical().to_vec();
 
     let outcome = save_objects(&store, vec![first, second]);
     assert_eq!(outcome.inserted, 2);
-    assert_eq!(outcome.packs_created, 1);
-    assert_eq!(
-        outcome.pack_appends, 1,
-        "the second record appended to the pack"
-    );
+    assert_eq!(outcome.packs_created, 2);
+    assert_eq!(outcome.pack_appends, 0);
 
     let snapshot = locator_snapshot(&path);
     let first_locator = snapshot.get(first_id.to_bytes().as_slice()).unwrap();
     let second_locator = snapshot.get(second_id.to_bytes().as_slice()).unwrap();
-    assert_eq!(first_locator.0, second_locator.0, "same pack");
+    assert_ne!(
+        first_locator.0, second_locator.0,
+        "each flush closes its pack"
+    );
     assert_eq!(first_locator.1, 0);
-    assert_eq!(second_locator.1, 1);
+    assert_eq!(second_locator.1, 0);
     assert_eq!(first_locator.2, 0);
     assert_eq!(second_locator.2, 0);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let mut rows = connection.prepare("SELECT data FROM object_packs").unwrap();
+    let packs: Vec<Vec<u8>> = rows
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(packs.len(), 2);
+    for pack in packs {
+        assert_eq!(
+            pack.len(),
+            u32::from_le_bytes(pack[16..20].try_into().unwrap()) as usize,
+            "closed pack allocates exactly its declared length"
+        );
+    }
+    drop(rows);
+    drop(connection);
+    let reopened = open_store(&path);
+    let values =
+        disabled(|scope| reopened.read_batch(&[first_id, second_id], scope.child("storage.read")))
+            .unwrap()
+            .0;
+    assert_eq!(values, vec![first_bytes, second_bytes]);
 }
 
 #[test]
@@ -563,9 +594,8 @@ fn a_pack_never_assembles_past_its_lane_limit() {
             "the declared length is the body end"
         );
         assert_eq!(
-            write.capacity,
-            lane.pack_limit(),
-            "an appendable pack allocates its lane's whole limit"
+            write.capacity, write.used,
+            "a flush closes every pack at its exact length"
         );
     }
     // The boundary is a real one: the groups fill the lane's pack limit, so the
