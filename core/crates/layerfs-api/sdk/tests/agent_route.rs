@@ -15,9 +15,14 @@ use layerfs_sandbox::{OwnerConfig, SandboxOwner};
 use layerfs_sdk::{ProjectApi, SandboxApi, WorkspaceApi};
 use layerfs_service::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
-use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
+use layerfs_telemetry::{
+    output::{Identity, OutputConfig},
+    runtime::{Configuration, MonitorConfig, Runtime},
+    timer::Timing,
+};
 use std::{
-    io::Cursor,
+    fs::OpenOptions,
+    io::{Cursor, Write},
     net::TcpListener,
     path::PathBuf,
     process::Command,
@@ -33,11 +38,27 @@ struct Cleanup {
     root: PathBuf,
     containers: Vec<String>,
     stop: Arc<AtomicBool>,
+    telemetry_output: Option<PathBuf>,
 }
 impl Drop for Cleanup {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Release);
+        if self.telemetry_output.is_some() {
+            thread::sleep(Duration::from_millis(100));
+        }
         for name in &self.containers {
+            if let Some(output) = &self.telemetry_output {
+                if let Ok(logs) = Command::new("docker").args(["logs", name]).output() {
+                    for (suffix, bytes) in [("stdout", logs.stdout), ("stderr", logs.stderr)] {
+                        let path = output.join(format!("{name}.{suffix}"));
+                        if let Ok(mut file) =
+                            OpenOptions::new().write(true).create_new(true).open(path)
+                        {
+                            let _ = file.write_all(&bytes);
+                        }
+                    }
+                }
+            }
             let _ = Command::new("docker").args(["rm", "-f", name]).output();
             let _ = Command::new("docker")
                 .args(["volume", "rm", &format!("{name}-root")])
@@ -47,17 +68,33 @@ impl Drop for Cleanup {
     }
 }
 
-fn create(api: &SandboxApi<'_>, cleanup: &mut Cleanup, image: &str, name: &str) -> SandboxId {
+fn observed<T, E>(
+    runtime: &Runtime,
+    key: u64,
+    label: &'static str,
+    call: impl FnOnce() -> Result<T, E>,
+) -> Result<T, E> {
+    let (result, diagnostic) = runtime.recorder().run(key, label, |_| call());
+    runtime.publish(diagnostic);
+    result
+}
+
+fn create(
+    api: &SandboxApi<'_>,
+    cleanup: &mut Cleanup,
+    image: &str,
+    name: &str,
+) -> Result<SandboxId, layerfs_sandbox::CreateError> {
     match api.create(image, name) {
         Ok(id) => {
             cleanup.containers.push(format!("layerfs-{id}"));
-            id
+            Ok(id)
         }
         Err(error) => {
             if let Some(id) = error.sandbox {
                 cleanup.containers.push(format!("layerfs-{id}"));
             }
-            panic!("sandbox create: {error:?}");
+            Err(error)
         }
     }
 }
@@ -67,6 +104,33 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
     let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
         return;
     };
+    let telemetry_run = std::env::var("LAYERFS_TEST_TELEMETRY_RUN")
+        .ok()
+        .map(|value| value.parse::<u128>().unwrap());
+    let telemetry_output = std::env::var_os("LAYERFS_TEST_TELEMETRY_OUTPUT").map(PathBuf::from);
+    assert_eq!(telemetry_run.is_some(), telemetry_output.is_some());
+    let telemetry = match telemetry_run {
+        Some(run) => Runtime::start(Configuration {
+            enabled: true,
+            timing: true,
+            monitor: MonitorConfig {
+                cpu: true,
+                memory: true,
+                interval_ms: 10,
+                history: 600,
+                windows: 32,
+            },
+            output: OutputConfig::forward(),
+            identity: Identity {
+                run,
+                pid: std::process::id(),
+                role: 1,
+                namespace: 1,
+            },
+        })
+        .unwrap(),
+        None => Runtime::disabled(),
+    };
     let root = std::env::temp_dir().join(format!("layerfs-agent-route-{}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
     let stop = Arc::new(AtomicBool::new(false));
@@ -74,6 +138,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         root: root.clone(),
         containers: Vec::new(),
         stop: stop.clone(),
+        telemetry_output: telemetry_output.clone(),
     };
     let source = root.join("source");
     std::fs::create_dir(&source).unwrap();
@@ -120,7 +185,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
                     })
                     .collect(),
             }],
-            OperationRecorder::disabled(),
+            telemetry.recorder(),
         )
         .unwrap(),
     );
@@ -157,6 +222,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
     let port = listener.local_addr().unwrap().port();
     listener.set_nonblocking(true).unwrap();
     let server = service.clone();
+    let server_telemetry = telemetry.clone();
     let stopping = stop.clone();
     let peer = Peer {
         selector: 1,
@@ -168,13 +234,15 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
             match listener.accept() {
                 Ok((stream, _)) => {
                     let server = server.clone();
+                    let server_telemetry = server_telemetry.clone();
                     let peer = peer.clone();
                     thread::spawn(move || {
                         if let Ok(connection) = accept(stream, &service_private, &[peer]) {
                             let _ = serve(connection, |peer, request, input, output, deadline| {
-                                server
-                                    .handle_until(peer, request, input, output, deadline)
-                                    .0
+                                let (result, diagnostic) =
+                                    server.handle_until(peer, request, input, output, deadline);
+                                server_telemetry.publish(diagnostic);
+                                result
                             });
                         }
                     });
@@ -193,48 +261,44 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         service_public: *service_peer.public_key(),
         control_private,
         store: 1,
+        telemetry_run,
     })
     .unwrap();
     let sandbox_api = SandboxApi::new(&owner);
     let workspace_api = WorkspaceApi::new(&owner);
-    let first = create(&sandbox_api, &mut cleanup, &image, "agent-one");
-    assert_eq!(sandbox_api.list().unwrap()[0].id, first);
-    let mount = workspace_api
-        .mount(first, &project, branch.branch.branch, None)
+    let (route, diagnostic) = telemetry.recorder().run(1000, "sdk.route", |_| {
+        let first = observed(&telemetry, 1001, "sdk.sandbox.create", || {
+            create(&sandbox_api, &mut cleanup, &image, "agent-one")
+        })
         .unwrap();
-    assert_eq!(
-        workspace_api.exec(&mount.id, "cat note").unwrap().stdout,
-        b"base"
-    );
-    let output = workspace_api
-        .exec(&mount.id, "yes x | head -c 100000")
+        let mount = observed(&telemetry, 1002, "sdk.workspace.mount", || {
+            workspace_api.mount(first, &project, branch.branch.branch, None)
+        })
         .unwrap();
-    assert_eq!(output.stdout.len(), 8192);
-    assert!(output.stdout_truncated);
-    assert_eq!(
-        workspace_api
-            .exec(&mount.id, "printf first > note")
-            .unwrap()
-            .exit_status,
-        Some(0)
-    );
-    let first_commit = workspace_api.commit(&mount.id).unwrap();
+        let edit = observed(&telemetry, 1003, "sdk.workspace.exec", || {
+            workspace_api.exec(&mount.id, "printf first > note")
+        })
+        .unwrap();
+        let first_commit = observed(&telemetry, 1004, "sdk.workspace.commit", || {
+            workspace_api.commit(&mount.id)
+        })
+        .unwrap();
+        observed(&telemetry, 1005, "sdk.workspace.unmount", || {
+            workspace_api.unmount(&mount.id)
+        })
+        .unwrap();
+        Ok::<_, ()>((first, mount, edit, first_commit))
+    });
+    telemetry.publish(diagnostic);
+    let (first, mount, edit, first_commit) = route.unwrap();
+    if let Some(output) = &telemetry_output {
+        std::fs::write(output.join("primary-sandbox-id.txt"), first.to_string()).unwrap();
+    }
+    assert_eq!(edit.exit_status, Some(0));
     let CommitOutcomeWire::Committed(first_record) = first_commit.outcome else {
         panic!("first commit");
     };
-    assert_eq!(
-        workspace_api
-            .exec(&mount.id, "printf second > note")
-            .unwrap()
-            .exit_status,
-        Some(0)
-    );
-    let second_commit = workspace_api.commit(&mount.id).unwrap();
-    assert!(matches!(
-        second_commit.outcome,
-        CommitOutcomeWire::Committed(_)
-    ));
-    workspace_api.unmount(&mount.id).unwrap();
+    assert_eq!(sandbox_api.list().unwrap()[0].id, first);
     assert!(Command::new("docker")
         .args(["restart", &format!("layerfs-{first}")])
         .output()
@@ -278,16 +342,42 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         workspace_api.exec(&mount.id, "cat note"),
         Err(WorkspaceError::Stale)
     ));
-    let current_sandbox = create(&sandbox_api, &mut cleanup, &image, "agent-current");
+    let current_sandbox = create(&sandbox_api, &mut cleanup, &image, "agent-current").unwrap();
     let current = workspace_api
         .mount(current_sandbox, &project, branch.branch.branch, None)
         .unwrap();
     assert_eq!(
         workspace_api.exec(&current.id, "cat note").unwrap().stdout,
+        b"first"
+    );
+    let output = workspace_api
+        .exec(&current.id, "yes x | head -c 100000")
+        .unwrap();
+    assert_eq!(output.stdout.len(), 8192);
+    assert!(output.stdout_truncated);
+    assert_eq!(
+        workspace_api
+            .exec(&current.id, "printf second > note")
+            .unwrap()
+            .exit_status,
+        Some(0)
+    );
+    let second_commit = workspace_api.commit(&current.id).unwrap();
+    assert!(matches!(
+        second_commit.outcome,
+        CommitOutcomeWire::Committed(_)
+    ));
+    workspace_api.unmount(&current.id).unwrap();
+    let current_readback = create(&sandbox_api, &mut cleanup, &image, "agent-readback").unwrap();
+    let readback = workspace_api
+        .mount(current_readback, &project, branch.branch.branch, None)
+        .unwrap();
+    assert_eq!(
+        workspace_api.exec(&readback.id, "cat note").unwrap().stdout,
         b"second"
     );
-    workspace_api.unmount(&current.id).unwrap();
-    let second = create(&sandbox_api, &mut cleanup, &image, "agent-two");
+    workspace_api.unmount(&readback.id).unwrap();
+    let second = create(&sandbox_api, &mut cleanup, &image, "agent-two").unwrap();
     let older = workspace_api
         .mount(
             second,

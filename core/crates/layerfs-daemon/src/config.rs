@@ -48,13 +48,26 @@ pub fn telemetry(role: u8) -> Runtime {
             return Runtime::disabled();
         }
     };
+    let interval_ms = match std::env::var("LAYERFS_TELEMETRY_INTERVAL_MS") {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(value @ 10..=1000) => value,
+            _ => {
+                layerfs_bridge::adapters::native::pipe::diagnostic(
+                    "telemetry initialization: invalid interval\n",
+                );
+                return Runtime::disabled();
+            }
+        },
+        Err(std::env::VarError::NotPresent) => 100,
+        Err(_) => return Runtime::disabled(),
+    };
     match Runtime::start(Configuration {
         enabled: true,
         timing: true,
         monitor: MonitorConfig {
             cpu: true,
             memory: true,
-            interval_ms: 100,
+            interval_ms,
             history: 600,
             windows: 32,
         },

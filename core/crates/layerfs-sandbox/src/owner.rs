@@ -11,6 +11,8 @@ pub struct OwnerConfig {
     pub service_public: [u8; 32],
     pub control_private: [u8; 32],
     pub store: u32,
+    /// One shared diagnostic run identity; absent keeps daemon telemetry off.
+    pub telemetry_run: Option<u128>,
 }
 
 #[derive(Clone)]
@@ -71,7 +73,10 @@ pub struct SandboxOwner {
 }
 impl SandboxOwner {
     pub fn new(config: OwnerConfig) -> Result<Self, Failure> {
-        if config.service_endpoint.is_empty() || config.store == 0 {
+        if config.service_endpoint.is_empty()
+            || config.store == 0
+            || config.telemetry_run == Some(0)
+        {
             return Err(Code::InvalidInput.into());
         }
         Ok(Self {

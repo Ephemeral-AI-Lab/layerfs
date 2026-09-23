@@ -93,10 +93,29 @@ pub(crate) fn launch(
         ("LAYERFS_CONTROL_LISTEN", "0.0.0.0:23456".into()),
         ("LAYERFS_CONTROL_PEERS", peers),
         ("LAYERFS_SANDBOX_ID", id.to_string()),
-        ("LAYERFS_TELEMETRY", "off".into()),
+        (
+            "LAYERFS_TELEMETRY",
+            if config.telemetry_run.is_some() {
+                "forward"
+            } else {
+                "off"
+            }
+            .into(),
+        ),
         ("LAYERFS_CONSTRUCTION_WORKERS", "1".into()),
     ] {
         command.env(key, value).args(["--env", key]);
+    }
+    if let Some(run) = config.telemetry_run {
+        let namespace =
+            u64::from_be_bytes(id.0[..8].try_into().map_err(|_| Code::InvalidInput)?).max(1);
+        for (key, value) in [
+            ("LAYERFS_RUN_ID", run.to_string()),
+            ("LAYERFS_NAMESPACE", namespace.to_string()),
+            ("LAYERFS_TELEMETRY_INTERVAL_MS", "10".into()),
+        ] {
+            command.env(key, value).args(["--env", key]);
+        }
     }
     let output = command
         .args([image, "--idle-sandbox", &config.store.to_string(), "0", "0"])

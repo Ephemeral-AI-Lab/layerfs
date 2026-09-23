@@ -32,6 +32,7 @@ struct Target {
     lifecycle: Arc<Lifecycle>,
     stopping: Arc<AtomicBool>,
     identity: Option<layerfs_bridge::contract::SandboxHelloWire>,
+    telemetry: layerfs_telemetry::runtime::Runtime,
 }
 
 pub(crate) struct Control {
@@ -45,6 +46,7 @@ impl Control {
         listener: TcpListener,
         private: [u8; 32],
         lifecycle: Arc<Lifecycle>,
+        telemetry: layerfs_telemetry::runtime::Runtime,
     ) -> Result<Self, Failure> {
         listener.set_nonblocking(true)?;
         let stopping = Arc::new(AtomicBool::new(false));
@@ -52,6 +54,7 @@ impl Control {
             lifecycle,
             stopping: Arc::clone(&stopping),
             identity: config.identity.clone(),
+            telemetry,
         };
         let worker = thread::Builder::new()
             .name("layerfs-control".into())
@@ -131,7 +134,22 @@ fn run(
                 .spawn(move || {
                     if let Ok(connection) = accept(stream, &private, &config.peers) {
                         let _ = serve(connection, |peer, request, input, _, deadline| {
-                            dispatch(&target, &config.grants, peer, request, input, deadline)
+                            let (result, diagnostic) = target.telemetry.recorder().run(
+                                request.id,
+                                request.operation.label(),
+                                |_| {
+                                    dispatch(
+                                        &target,
+                                        &config.grants,
+                                        peer,
+                                        request,
+                                        input,
+                                        deadline,
+                                    )
+                                },
+                            );
+                            target.telemetry.publish(diagnostic);
+                            result
                         });
                     }
                 })?;

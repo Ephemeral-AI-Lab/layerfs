@@ -97,6 +97,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     signals.add(nix::sys::signal::Signal::SIGINT);
     signals.add(nix::sys::signal::Signal::SIGTERM);
     signals.thread_block()?;
+    let control_telemetry = telemetry.clone();
     let delivery: OperationDelivery = Arc::new(move |request, input, output, deadline| {
         // Every call is one attempt. The existing server closes on any failure,
         // including PathNotFound; a later independent lookup needs a new session.
@@ -128,6 +129,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             listener,
             control_private,
             Arc::clone(&lifecycle),
+            control_telemetry.clone(),
         )?);
         pipe::diagnostic(&format!("sandbox control ready {address}\n"));
         loop {
@@ -194,6 +196,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             listener,
             control_private,
             Arc::clone(&lifecycle),
+            control_telemetry.clone(),
         ) {
             Ok(started) => {
                 control = Some(started);

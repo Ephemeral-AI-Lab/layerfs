@@ -66,6 +66,16 @@ but keeps dirty Workspace ownership. A daemon instance change invalidates old
 Workspace bindings; a Sandbox ID alone grants no control authority. These
 operations have no benchmark receipt or performance qualification here.
 
+The sandbox owner now accepts an optional telemetry run identity at assembly.
+When present, it forwards the existing daemon telemetry stream and supplies a
+10 ms monitor interval and a sandbox-specific namespace. The daemon's one
+runtime records authenticated control operations and upstream Service calls;
+the host Service records its own operations when its application assembly
+enables that recorder. CPU and RSS windows are process-shared samples, not
+exclusive call costs or exact memory peaks. The opt-in functional diagnostic
+and its non-admission cache/resource limits are declared in
+[`telemetry-diagnostic.md`](../issues/236/telemetry-diagnostic.md).
+
 The SDK-owned host setup extension is based on source commit
 `611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`
 owns fresh Store/history creation, credential parsing and the local Service
