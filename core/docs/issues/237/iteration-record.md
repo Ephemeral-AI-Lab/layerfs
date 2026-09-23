@@ -229,3 +229,26 @@ Safe external storage needs per-transaction immutable segments, new pack
 locators/read paths, abort and unknown-COMMIT handling, and bundle-aware
 copy/backup/space verification. This is an explicit Store format migration.
 No product edit, build or timed sample was made; a public pair is **NOT_RUN**.
+
+## Round R8: current integrated source hot-path diagnostic
+
+One [count-driven diagnostic](integrated-hot-profile.md) at the integrated
+4-MiB-wave C1+C2 source recorded a **1.352215375 s** public operation,
+**0/27,503 resident payload pages** just before it, and telemetry/cleanup
+PASS. It is `DIAGNOSTIC`: metadata residency was unqualified and full
+verification was `SKIPPED`. File Save made **80 commits**; aggregate COMMIT
+time was **232.460 ms**, SQL **139.616 ms**, and FULL encoding **69.896 ms**.
+The receiver spent **725.295 ms** accepting 24,562 objects and **441.699 ms**
+waiting for producers. Four workers had **1.800 s aggregate non-send
+construction** and **2.701 s aggregate blocked/object-send** time; sums
+overlap and are not caller contributions to add.
+
+The bounded queue drained **1,347** times: **1,153 byte-cap**, 118 lane
+switch, 75 wave end and one row cap. Its queued encoded bytes imply a
+**1,147-drain** minimum at 256 KiB, so removing lane-switch flushes alone
+has limited scope. The seven-commit 64-MiB candidate is a *different*
+source identity; these queue-cause counts are not its matched baseline.
+About 260 ms of owner work remains outside the seven disjoint Save profile
+buckets, and connection release cost **62.64 ms** inside the public call.
+Those are localization targets, not attributed savings. The diagnostic's
+temporary instrumentation was archived and removed from product source.

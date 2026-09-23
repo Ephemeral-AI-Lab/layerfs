@@ -60,6 +60,7 @@ nonfaulting residency recheck, which makes its command number conservative.
 | [Sparse C2 guard](sparse-c2-guard.md) | Separate fresh history control/candidate | no completed history sample | Both stopped on `Integrity("dependency encoded work")` before a state root. Equal partial Store geometry and authenticated objects do not close #229. |
 | [Bounded transaction waves](bounded-wave-experiment.md) | One instrumented 10k control/candidate pair | 1.364 → **1.440 s** | File-Save commits **80→7** (−91.25%), but candidate was slower with higher sampled RSS and a larger Store; both full reopened readbacks passed. Control telemetry INCOMPLETE and metadata cache unqualified. |
 | [External pack segments](segment-store-feasibility.md) | Format feasibility only | no sample | A naive sidecar breaks rollback across committed waves; a safe variant needs immutable per-transaction segments, schema/read/cleanup changes and bundle-aware measurement. |
+| [Integrated hot-path profile](integrated-hot-profile.md) | One current C1+C2 count diagnostic | 1.352 s | 80 file-Save commits; 232 ms COMMIT, 140 ms SQL, 725 ms owner accept and 442 ms receiver wait. Queue drains were mostly byte-bound. Metadata cache unqualified; verifier SKIPPED. |
 
 A separately preregistered [C1 direct-build prototype](c1-direct-prototype.md)
 used one release 10k control/candidate pair in its own worktree: **1.564 →
