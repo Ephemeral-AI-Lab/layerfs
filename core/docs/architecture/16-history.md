@@ -21,9 +21,8 @@ Implementation specification and its pre-publication audit:
   separate baseline pin.
 - **Native import progress update:** product commit
   `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
-- **Init ordering-backing correction:** follows parent source
-  `8dc25e4fcca700b90a0d61c84152c59c4acfb951`; this document is updated
-  with the product change and the resulting commit is pinned separately.
+- **Init ordering-backing correction:** product commit
+  `0042a909ac3f16a5041aa51d76f96522a58352c8`.
 - **Scope:** the replacement product under `core/` only.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source

@@ -19,10 +19,9 @@ results or qualify #193 performance work.
 The native Init progress-record update describes product commit
 `1f74d80be12ad19de1335d39fad0688ecc48c0f8`; the older sections retain
 their separate source bases.
-The Init ordering-backing correction follows parent source
-`8dc25e4fcca700b90a0d61c84152c59c4acfb951`; this document is updated
-with the product change in the same commit, and its resulting commit is pinned
-in the next documentation-only commit.
+The Init ordering-backing correction describes product commit
+`0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
+their separate source bases.
 
 The optimization revision uses ordinary `TcpListener` and one
 `TcpStream::connect_timeout` attempt, with TCP_NODELAY and explicit blocking mode
