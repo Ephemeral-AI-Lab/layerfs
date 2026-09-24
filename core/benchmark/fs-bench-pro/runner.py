@@ -358,8 +358,49 @@ def run(selection, out):
 
 EXEC_EDIT_BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
                   "--offline", "--release", "-p", "layerfs-sdk", "-p", "layerfs-server",
-                  "--example", "benchmark_edit", "--example", "verify_edit"]
-EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify_edit"}
+                  "--example", "benchmark_edit", "--example", "verify_edit",
+                  "--example", "benchmark_init"]
+EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify_edit",
+                     "benchmark_init": "benchmark_init"}
+
+
+def verify_exec_edit(out):
+    """Verifies one retained #232 receipt without repeating its measurement."""
+    run = json.loads((out / "run.json").read_text())
+    receipt = run.get("receipt") or {}
+    folder = Path(receipt.get("folder", ""))
+    case_path = Path(receipt.get("case_file", ""))
+    store = Path(receipt.get("store", ""))
+    history = Path(receipt.get("history", ""))
+    for path in (folder, case_path, store, history):
+        if not path.exists():
+            raise ValueError(f"retained evidence is missing: {path}")
+    if (receipt.get("verification") or {}).get("status") != "SKIPPED":
+        raise ValueError("this receipt already carries a verification result; verify it once")
+    rows = {row["scenario_id"]: row for row in edit.registry()}
+    row = rows[receipt["scenario_id"]]
+    build = json.loads((out / "build.json").read_text())
+    binaries = {name: entry["path"] for name, entry in build["binaries"].items()}
+    cursor_key = (out / "cursor-key.txt").read_text().strip()
+    verification = edit_route.verify(folder, binaries, case_path, store, history, row, receipt,
+                                     cursor_key, output=out)
+    write_json(out / "verification-bound.json", {
+        "schema": "core-fs-bench-pro-exec-fuse-edit-verification-binding-v1",
+        "performance_run": str(out),
+        "scenario_id": receipt["scenario_id"],
+        "performance_command_wall_ns": receipt.get("complete_command_wall_ns"),
+        "edit_commit_ns": receipt.get("edit_commit_ns"),
+        "identity": build.get("identity", run.get("identity")),
+        "image_id": (run.get("image") or {}).get("image_id"),
+        "verification_status": verification["status"],
+        "verification_wall_ns": verification["wall_ns"],
+        "fresh_reopen": True,
+        "full_file_bytes_verified": (verification.get("child") or {}).get(
+            "full_file_bytes_verified"),
+        "coverage": (verification.get("child") or {}).get("coverage"),
+    })
+    manifest_run(out)
+    return json.dumps({"status": verification["status"], "wall_ns": verification["wall_ns"]})
 
 
 def exec_edit_cursor_key():
@@ -393,7 +434,7 @@ def build_exec_edit(out, target, identity):
     return record
 
 
-def run_exec_edit(selection, out):
+def run_exec_edit(selection, out, verification="inline"):
     """One #232 performance sample; never a rerun of the same arm."""
     out = owned(out)
     identity = identities()
@@ -423,13 +464,18 @@ def run_exec_edit(selection, out):
         return out
     binaries = {name: entry["path"] for name, entry in build_receipt["binaries"].items()}
     telemetry_run = int.from_bytes(os.urandom(16), "big") or 1
+    cursor_key = exec_edit_cursor_key()
+    # The benchmark-local history cursor capability, retained so the separate
+    # verification can reopen the case's own byte copy read-only.
+    (out / "cursor-key.txt").write_text(cursor_key + "\n")
+    (out / "cursor-key.txt").chmod(0o600)
     results = RESULTS
     results.mkdir(parents=True, exist_ok=True)
     with (results / ".run.lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         receipt = edit_route.sample(results, row, binaries, image["image_id"], identity,
-                                    exec_edit_cursor_key(), telemetry_run,
-                                    os.urandom(16).hex())
+                                    cursor_key, telemetry_run,
+                                    os.urandom(16).hex(), verification)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
                                   "selection": selection, "identity": identity,
                                   "image": image, "receipt": receipt})
@@ -455,8 +501,10 @@ def main():
                                                "workspace_exec_edit_length_changing",
                                                "workspace_exec_edit_canonical_chunk_count"])
     run_parser.add_argument("--out", required=True)
+    run_parser.add_argument("--verification", choices=["inline", "skipped"], default="inline")
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
+    commands.add_parser("verify-edit").add_argument("--run", required=True)
     args = parser.parse_args()
     edit_rows = {row["scenario_id"]: row for row in edit.registry()}
     edit_families = {row["family_id"] for row in edit.registry()}
@@ -479,13 +527,15 @@ def main():
                               and row["registration_status"] == "REGISTERED"), None)
             if selection is None:
                 parser.error("no registered Exec/FUSE case in that selection")
-            print(run_exec_edit(selection, args.out))
+            print(run_exec_edit(selection, args.out, args.verification))
         elif selection in (*init.SELECTED, "init_namespace"):
             print(run(selection, args.out))
         else:
             parser.error("unknown or deferred SDK case")
     elif args.command == "verify":
         print(verify_run(owned(args.run, existing=True)))
+    elif args.command == "verify-edit":
+        print(verify_exec_edit(owned(args.run, existing=True)))
     else:
         print(report(owned(args.run, existing=True)), end="")
 

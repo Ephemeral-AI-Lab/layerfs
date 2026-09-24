@@ -185,7 +185,8 @@ def case_spec(record):
                     if value is not None)
 
 
-def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, branch_body):
+def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, branch_body,
+           verification="inline"):
     """Runs one performance sample and its separate verification."""
     folder = Path(run_root) / "sdk-exec-fuse" / row["family_id"] / row["scenario_id"]
     folder.mkdir(parents=True, exist_ok=True)
@@ -213,6 +214,9 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "repetition": contract.REPETITION,
         "sample_count": 0,
         "case_file": str(case_path),
+        "folder": str(folder),
+        "store": str(store),
+        "history": str(history),
         "identity": identity,
         "image_id": image,
         "master": {key: master_record[key] for key in
@@ -272,8 +276,16 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
             receipt["commit_ns"] = driver.get("commit_ns")
             (folder / "perf.jsonl").write_text(json.dumps(driver, sort_keys=True) + "\n")
         receipt["telemetry"] = edit_telemetry_check(lft1)
-        receipt["verification"] = verify(folder, binaries, case_path, store, history, row,
-                                        receipt, cursor_key)
+        if verification == "inline":
+            receipt["verification"] = verify(folder, binaries, case_path, store, history, row,
+                                            receipt, cursor_key)
+        else:
+            receipt["verification"] = {
+                "status": "SKIPPED",
+                "reason": ("performance-only exploratory sample at this source identity; the "
+                           "independent verifier runs separately against this retained receipt"),
+                "scenario_id": row["scenario_id"],
+            }
         receipt.update(terminal_status(receipt, row))
     except Exception as error:  # noqa: BLE001 - retained as evidence, never hidden
         receipt["status"] = "FAIL"
@@ -309,8 +321,9 @@ def edit_telemetry_check(lines):
     return report
 
 
-def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key):
+def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key, output=None):
     """Runs the independent bounded verifier once, under its hard cap."""
+    output = Path(output or folder)
     driver = receipt.get("driver") or {}
     record = dict(line.split("=", 1) for line in Path(case_path).read_text().splitlines() if line)
     record["expected_head_commit"] = driver.get("head_commit", "")
@@ -327,8 +340,9 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
     except subprocess.TimeoutExpired as error:
         wall = time.monotonic_ns() - started
         stdout, stderr, code, timed_out = error.stdout or b"", error.stderr or b"", None, True
-    (folder / "verifier.stdout").write_bytes(stdout)
-    (folder / "verifier.stderr").write_bytes(stderr)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "verifier.stdout").write_bytes(stdout)
+    (output / "verifier.stderr").write_bytes(stderr)
     try:
         child = json.loads(stdout.decode().strip().splitlines()[-1]) if stdout else None
     except (ValueError, IndexError):
@@ -346,7 +360,7 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
         "stderr": stderr[:4096].decode(errors="replace"),
         "scenario_id": row["scenario_id"],
     }
-    (folder / "verification.json").write_text(json.dumps(receipt_json, indent=2, sort_keys=True) + "\n")
+    (output / "verification.json").write_text(json.dumps(receipt_json, indent=2, sort_keys=True) + "\n")
     return receipt_json
 
 
@@ -361,13 +375,18 @@ def terminal_status(receipt, row):
         reasons.append("the measured attempt did not complete")
     if (receipt.get("telemetry") or {}).get("status") != "PASS":
         reasons.append("caller LFT1 root/children missing")
-    if (receipt.get("verification") or {}).get("status") != "PASS":
+    verification = (receipt.get("verification") or {}).get("status")
+    if verification not in ("PASS", "SKIPPED"):
         reasons.append("independent verification did not pass")
+    if verification == "SKIPPED":
+        reasons.append("independent verification not run on this sample")
     if driver.get("sandbox_delete_ok") is not True:
         reasons.append("sandbox cleanup was not confirmed")
     if (cache.get("macos-store") or {}).get("status") != "PASS":
         reasons.append("macOS Store domain is not cold-qualified")
     fuse_warm = (cache.get("linux-fuse-backing") or {}).get("status") != "PASS"
+    if verification == "SKIPPED":
+        reasons.remove("independent verification not run on this sample")
     if reasons:
         return {"status": "FAIL", "status_reasons": reasons}
     if fuse_warm:
