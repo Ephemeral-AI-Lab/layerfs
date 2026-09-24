@@ -61,3 +61,10 @@ Docker-exec wall for accounting only. No raw `/dev/fuse` frame capture is
 claimed. If Linux or unmodified `fuser` rejects a 48-byte reply for the
 encoded `_IOWR` buffer, or ACK cannot be returned on the live FD, record
 `FAIL`/`INCOMPLETE` with its exact errno; do not lengthen/retry the same case.
+
+**Design scope note before execution:** ACK is an optional test-only
+capability experiment, not a selected product ABI. The smaller product
+candidate is STATE plus EDIT, caller `fstat`/readback, then a second STATE
+confirmation. A successful ACK case must not be cited as a requirement to
+add a product ACK command or nonce slot. The frozen ACK cases still run as
+specified to test what the carrier can transport.
