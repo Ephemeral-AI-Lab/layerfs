@@ -6,6 +6,13 @@
 > speed result. It accompanies the [frontier](bounded-import-frontier.md)
 > and [fresh-namespace](bounded-compact-fresh-namespace.md) proposals.
 
+**Treatment A outcome, 2026-09-24:** the matched
+[memory result](../c3-entry-lifetime-memory-result-20260924.md) failed its
+8-MiB whole-call peak reduction gate: the candidate was 753,664 B higher.
+The product treatment was reverted. Namespace remains the peak, so
+Treatment B's file-job-frontier condition is not met. The remaining
+fresh-builder design gate below is still open.
+
 ## Review verdict
 
 The measured maximum occurs during namespace construction, after the full

@@ -157,13 +157,13 @@ expected-head conflict rule independently of this import design.
 
 ## Decision and proof needed
 
-The first peak-memory treatment should instead transfer the already-owned
-`Vec<PreparedEntry>` into `build_namespace` and drop it immediately after
-the existing namespace inputs are assembled, before C1 builds the tree. It
-preserves current serials, format, validation and worker order, and removes
-the entry list from the interval that currently sets peak RSS. A file-job
-queue follows only if a measured remaining peak makes that list material.
-Neither step is an end-to-end import memory bound. The
+The first peak-memory treatment transferred the already-owned
+`Vec<PreparedEntry>` into `build_namespace` and dropped it before C1 built
+the tree. Its [one-shot matched result](../c3-entry-lifetime-memory-result-20260924.md)
+failed the 8-MiB whole-call reduction gate: candidate peak RSS was
+753,664 B higher, and the product change was reverted. Namespace Save still
+sets the maximum, so the file-job queue's condition is not met. Neither
+change established an end-to-end import memory bound. The
 [implementation spec](bounded-import-implementation-spec.md) states the
 decision gates for the larger fresh-build design.
 

@@ -1,0 +1,22 @@
+{
+  "build_profile": "locked release diagnostic",
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "candidate_peak_target_bytes": 136314880,
+  "control_peak_rss_bytes": 144703488,
+  "control_receipt": "core/docs/issues/237/evidence/c3-job-metadata-20260924/receipt.json",
+  "driver_sha256": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+  "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+  "instrument_diff_sha256": "e0ae76ca6086bcb000f670e1250f1aaccec2277e19a431524a3c0889dfb2b022",
+  "limitations": "candidate differs from retained control by product treatment and one added entries_released marker; metadata cache unqualified; timings diagnostic only",
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "meaningful_whole_call_reduction_bytes": 8388608,
+  "measurement": "one public Client::init_project call; getrusage lifetime peak at call end and phase markers; full separate reopened oracle",
+  "output": "benchmark-results/fs-bench-pro/issue237-entry-memory-20260924-01",
+  "product_seal": "73fd29128f7929123c8e08c4b1c5ff2e40985aa5364359633b54cbb5b71ce5cd",
+  "purpose": "entry-vector lifetime candidate versus retained compact-Job phase diagnostic; memory only, no speed arm",
+  "runner_sha256": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f",
+  "source_commit": "ca9a9b721b9ba9c7bb350bc9b2322f85a23d8eef",
+  "source_dirty": true,
+  "source_tree": "b14f831610dc01dd24b6201b7ec15079fbdfcf27",
+  "status": "FROZEN_BEFORE_BUILD"
+}

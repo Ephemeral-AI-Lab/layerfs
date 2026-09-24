@@ -149,12 +149,12 @@ cache and the persistent Store remain separate costs. No exact RSS target can
 be derived by subtracting vector reservations from the observed 144,703,488-B
 peak; allocator behavior and lifetimes were not measured as disjoint charges.
 
-Before a new C1 API, a smaller candidate can make `build_namespace` own the
-existing `Vec<PreparedEntry>` and drop it after constructing its current
-inputs, before C1 validation/build. That removes the entry list from the
-measured peak interval without changing C1, C2 or serial order. It is a
-peak-memory treatment, **not** a bounded namespace algorithm; a one-shot
-diagnostic must establish whether process RSS actually falls.
+A smaller candidate made `build_namespace` own the existing
+`Vec<PreparedEntry>` and dropped it before C1 validation/build. The
+[matched diagnostic](../c3-entry-lifetime-memory-result-20260924.md)
+found **753,664 B higher**, not lower, whole-call peak RSS. The treatment
+was reverted. It was a lifetime change, not a bounded namespace algorithm;
+the result does not predict what avoiding those allocations entirely would do.
 
 Fewer allocations and sequential construction might improve speed, but
 counting, ordering, validation or backing I/O might erase that gain. The

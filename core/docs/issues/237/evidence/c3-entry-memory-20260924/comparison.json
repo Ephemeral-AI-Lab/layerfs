@@ -1,0 +1,76 @@
+{
+  "arms": {
+    "candidate": {
+      "complete_command_wall_ns": 6759894667,
+      "current_rss_at_return_bytes": 137658368,
+      "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+      "oracle_status": "PASS",
+      "peak_rss_bytes": 146440192,
+      "performance_status": "INELIGIBLE",
+      "phase_peak_rss_bytes": {
+        "entries_released": 120799232,
+        "file_loop_end": 106889216,
+        "file_save_end": 106889216,
+        "history_published": 146440192,
+        "import_begin": 22855680,
+        "namespace_entry": 106889216,
+        "namespace_save_end": 146440192,
+        "prereq_end": 106889216,
+        "scan_end": 76267520,
+        "tree_build_end": 142934016,
+        "tree_input": 120799232
+      },
+      "product_seal": "73fd29128f7929123c8e08c4b1c5ff2e40985aa5364359633b54cbb5b71ce5cd",
+      "raw_operation_ns": 5387219583,
+      "sample_count": 1,
+      "source_payload_resident_pages_launch": 0,
+      "status": "COMPLETE",
+      "store_apparent_bytes": 519880704
+    },
+    "control": {
+      "complete_command_wall_ns": 5450737666,
+      "current_rss_at_return_bytes": 136904704,
+      "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+      "oracle_status": "PASS",
+      "peak_rss_bytes": 145686528,
+      "performance_status": "INELIGIBLE",
+      "phase_peak_rss_bytes": {
+        "file_loop_end": 106708992,
+        "file_save_end": 106708992,
+        "history_published": 145686528,
+        "import_begin": 22675456,
+        "namespace_entry": 106708992,
+        "namespace_save_end": 145686528,
+        "prereq_end": 106708992,
+        "scan_end": 76185600,
+        "tree_build_end": 142229504,
+        "tree_input": 120143872
+      },
+      "product_seal": "c2e50eecfed39038a1d6f943acd6741ebe5fa85c57e57846d12af21428c83c3a",
+      "raw_operation_ns": 5406411000,
+      "sample_count": 1,
+      "source_payload_resident_pages_launch": 0,
+      "status": "COMPLETE",
+      "store_apparent_bytes": 519901184
+    }
+  },
+  "candidate_minus_control": {
+    "complete_command_wall_ns": 1309157001,
+    "peak_rss_bytes": 753664,
+    "raw_operation_ns": -19191417,
+    "store_apparent_bytes": -20480
+  },
+  "decision": {
+    "met": false,
+    "namespace_remains_peak": true,
+    "observed_reduction_bytes": -753664,
+    "whole_call_peak_reduction_target_bytes": 8388608
+  },
+  "limitations": [
+    "one sample per arm",
+    "source metadata cache unqualified",
+    "public times diagnostic only",
+    "independent fresh Stores and operation identities; exact root equality not tested"
+  ],
+  "schema": "issue237-entry-lifetime-one-shot-memory-v1"
+}
