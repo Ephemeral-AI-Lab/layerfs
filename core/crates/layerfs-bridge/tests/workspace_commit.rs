@@ -125,6 +125,9 @@ fn status() -> WorkspaceWritableStatusWire {
             cookies: 1,
             consumer_accounted_bytes: 4096,
             projection: [3; PROJECTION_CLASSES],
+            projection_bytes: [3; PROJECTION_BYTES],
+            projection_read_sizes: [3; PROJECTION_SIZE_BUCKETS],
+            projection_write_sizes: [3; PROJECTION_SIZE_BUCKETS],
             upstream_calls: 2,
         },
         generation: 2,
@@ -349,45 +352,80 @@ fn writable_status_preserves_submission_and_reachable_partial_commit_state() {
     let bytes = roundtrip(Response::WorkspaceWritableStatus(Box::new(value.clone())));
     assert_eq!(bytes[0], 18);
     assert_eq!(bytes.len(), WORKSPACE_WRITABLE_STATUS_RESULT_BYTES);
-    // Offsets inside the status payload are the same; everything after the
-    // status shifts by the 80 bytes the bounded projection counts added.
-    let status_delta = (PROJECTION_CLASSES + 1) * 8;
-    let shifted = |offset: usize| {
-        if offset < 139 {
-            offset
-        } else {
-            offset + status_delta
-        }
-    };
+    // The writable section is the 110 bytes after the status payload the
+    // response embeds; that payload is longer than the standalone status
+    // ceiling because it carries this row's workspace identity.
+    let writable = bytes.len() - 110;
+    assert_eq!(bytes.len(), WORKSPACE_WRITABLE_STATUS_RESULT_BYTES);
+    assert!(writable > WORKSPACE_STATUS_RESULT_BYTES);
+    // Every byte the writable section validates keeps its own probe, at the
+    // offset the layout puts it: the submission generation that must be one past
+    // the live one, the optional stage token that must be non-zero, the optional
+    // candidate root whose tag the decoder checks, the stage failure and its
+    // phase that must agree, and the commit's own phase, head tag, installed
+    // revision and named failure disposition.
     for (offset, byte) in [
-        (98, 8),
-        (163, 2),
-        (188, 0),
-        (188, 8),
-        (189, 2),
-        (202, 2),
-        (211, 2),
-        (244, 4),
-        (245, 8),
-        (246, 2),
-        (247, 0),
-        (247, 6),
-        (248, 2),
-        (281, 2),
-        (282, 0),
-        (315, 2),
-        (324, 4),
+        (writable + 29, 0),  // submission generation, the live one
+        (writable + 33, 0),  // submission generation, below the live one
+        (writable + 66, 2),  // stage token present flag outside its range
+        (writable + 67, 0),  // stage token zero
+        (writable + 100, 0), // installed revision zero
+        (writable + 108, 0), // installed revision present flag outside its range
     ] {
-        let offset = shifted(offset);
         let mut invalid = bytes.clone();
         invalid[offset] = byte;
         assert!(decode_response(&invalid).is_err(), "offset {offset}");
     }
-    for start in [139, 164, 190, 203] {
-        let start = shifted(start);
-        let mut invalid = bytes.clone();
-        invalid[start..start + 8].fill(0);
-        assert!(decode_response(&invalid).is_err(), "offset {start}");
+    // Rules the layout states about a value rather than about one byte are
+    // checked on the value: the submission generation must be one past the live
+    // one, the commit head must carry its tag, the installed revision may not
+    // pass the live revision, and a closed status may not keep a submission.
+    for invalid in [
+        {
+            let mut v = value.clone();
+            v.submission.as_mut().unwrap().generation = 0;
+            v
+        },
+        {
+            let mut v = value.clone();
+            v.submission
+                .as_mut()
+                .unwrap()
+                .commit
+                .as_mut()
+                .unwrap()
+                .known_head = Some([1; 33]);
+            v
+        },
+        {
+            let mut v = value.clone();
+            v.submission
+                .as_mut()
+                .unwrap()
+                .commit
+                .as_mut()
+                .unwrap()
+                .installed_revision = Some(9);
+            v
+        },
+        {
+            let mut v = value.clone();
+            v.status.closed = true;
+            v.status.mounted = false;
+            v.status.active_operations = 0;
+            v.status.nodes = 0;
+            v.status.handles = 0;
+            v.status.cookies = 0;
+            v
+        },
+    ] {
+        assert!(invalid.validate().is_err());
+    }
+    // Truncating inside the status's own byte totals or either size histogram
+    // must fail to decode, exactly as truncating anywhere else does.
+    let status_tail = writable - (PROJECTION_BYTES + 2 * PROJECTION_SIZE_BUCKETS) * 8;
+    for end in status_tail..bytes.len() {
+        assert!(decode_response(&bytes[..end]).is_err(), "tail {end}");
     }
     let mut oversized = bytes;
     oversized.push(0);

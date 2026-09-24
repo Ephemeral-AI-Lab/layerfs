@@ -232,14 +232,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_ns = cleanup_started.elapsed().as_nanos();
     let projection = post_status
         .as_ref()
-        .map(|value| {
-            value
-                .projection
-                .iter()
-                .map(|(label, count)| format!("{label}={count}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        })
+        .map(|value| joined(&value.projection))
+        .unwrap_or_default();
+    let byte_totals = post_status
+        .as_ref()
+        .map(|value| joined(&value.projection_bytes))
+        .unwrap_or_default();
+    let size_histogram = post_status
+        .as_ref()
+        .map(|value| joined(&value.projection_histogram))
         .unwrap_or_default();
     let upstream = post_status
         .as_ref()
@@ -256,7 +257,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"g2_target_ms\":{},\"edit_ns\":{edit_ns},\"commit_ns\":{commit_ns},\
 \"edit_commit_ns\":{edit_commit_ns},\"preparation_ns\":{preparation_ns},\
 \"cleanup_ns\":{cleanup_ns},\"branch_id\":\"{}\",\"head_commit\":\"{head_commit}\",\
-\"projection_counts\":\"{projection}\",\"upstream_calls\":{upstream},\
+\"projection_counts\":\"{projection}\",\"projection_bytes\":\"{byte_totals}\",\"projection_size_histogram\":\"{size_histogram}\",\"upstream_calls\":{upstream},\
 \"unmount_ok\":{},\"sandbox_delete_ok\":{},\"sandbox_delete_container_removed\":{},\
 \"sandbox_delete_volume_removed\":{},\"store\":\"{}\",\"history\":\"{}\",\
 \"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false}}",
@@ -288,6 +289,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("measured attempt failed: {detail}").into());
     }
     Ok(())
+}
+
+/// Renders labeled counts as the receipt's stable `label=value` list.
+fn joined(rows: &[(String, u64)]) -> String {
+    rows.iter()
+        .map(|(label, value)| format!("{label}={value}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn case_bytes(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {

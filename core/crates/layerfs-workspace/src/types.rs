@@ -280,6 +280,10 @@ pub struct WorkspaceStatus {
     pub projection_replies: usize,
     /// Bounded per-operation projection callback counts for this Workspace.
     pub projection_calls: Vec<(&'static str, u64)>,
+    /// Bounded data-callback byte totals for this Workspace.
+    pub projection_bytes: Vec<(String, u64)>,
+    /// Bounded projection read/write request-size histograms.
+    pub projection_histogram: Vec<(String, u64)>,
     /// Upstream host Service calls this Workspace has issued.
     pub upstream_calls: u64,
     pub coherence: Option<CoherenceStatus>,

@@ -3,7 +3,8 @@ use layerfs_api_core::{
 };
 use layerfs_bridge::contract::{
     Code, Operation, Response, WorkspaceAttachOutcome, WorkspaceCommitOutcome,
-    WorkspaceCommitReportWire, WorkspaceLifecycleOutcome, PROJECTION_CLASS_LABELS,
+    WorkspaceCommitReportWire, WorkspaceLifecycleOutcome, PROJECTION_BYTE_LABELS,
+    PROJECTION_CLASS_LABELS, PROJECTION_SIZE_LABELS,
 };
 use layerfs_sandbox::{ControlRoute, RouteError, SandboxOwner};
 
@@ -137,9 +138,25 @@ impl<'a> WorkspaceApi<'a> {
             Response::WorkspaceWritableStatus(writable) => writable.status,
             _ => return Err(Code::Integrity.into()),
         };
-        if status.projection.len() != PROJECTION_CLASS_LABELS.len() {
+        if status.projection.len() != PROJECTION_CLASS_LABELS.len()
+            || status.projection_bytes.len() != PROJECTION_BYTE_LABELS.len()
+            || status.projection_read_sizes.len() != PROJECTION_SIZE_LABELS.len()
+            || status.projection_write_sizes.len() != PROJECTION_SIZE_LABELS.len()
+        {
             return Err(Code::Integrity.into());
         }
+        let histogram = [
+            ("read", &status.projection_read_sizes),
+            ("write", &status.projection_write_sizes),
+        ]
+        .into_iter()
+        .flat_map(|(direction, counts)| {
+            PROJECTION_SIZE_LABELS
+                .iter()
+                .zip(counts)
+                .map(move |(label, count)| (format!("{direction}:{label}"), *count))
+        })
+        .collect();
         Ok(WorkspaceStatus {
             mounted: status.mounted,
             stopping: status.stopping,
@@ -154,6 +171,12 @@ impl<'a> WorkspaceApi<'a> {
                 .zip(status.projection)
                 .map(|(label, count)| ((*label).to_string(), count))
                 .collect(),
+            projection_bytes: PROJECTION_BYTE_LABELS
+                .iter()
+                .zip(status.projection_bytes)
+                .map(|(label, total)| ((*label).to_string(), total))
+                .collect(),
+            projection_histogram: histogram,
             upstream_calls: status.upstream_calls,
         })
     }

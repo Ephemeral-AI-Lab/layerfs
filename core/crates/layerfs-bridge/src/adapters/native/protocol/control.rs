@@ -17,6 +17,15 @@ pub(super) fn put_status(e: &mut Encoder, status: &WorkspaceStatusWire) -> Resul
     for count in status.projection {
         e.u64(count)?;
     }
+    for total in status.projection_bytes {
+        e.u64(total)?;
+    }
+    for count in status.projection_read_sizes {
+        e.u64(count)?;
+    }
+    for count in status.projection_write_sizes {
+        e.u64(count)?;
+    }
     e.u64(status.upstream_calls)
 }
 pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Failure> {
@@ -39,6 +48,27 @@ pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Fa
         consumer_accounted_bytes: d.u64()?,
         projection: {
             let mut counts = [0u64; PROJECTION_CLASSES];
+            for slot in counts.iter_mut() {
+                *slot = d.u64()?;
+            }
+            counts
+        },
+        projection_bytes: {
+            let mut totals = [0u64; PROJECTION_BYTES];
+            for slot in totals.iter_mut() {
+                *slot = d.u64()?;
+            }
+            totals
+        },
+        projection_read_sizes: {
+            let mut counts = [0u64; PROJECTION_SIZE_BUCKETS];
+            for slot in counts.iter_mut() {
+                *slot = d.u64()?;
+            }
+            counts
+        },
+        projection_write_sizes: {
+            let mut counts = [0u64; PROJECTION_SIZE_BUCKETS];
             for slot in counts.iter_mut() {
                 *slot = d.u64()?;
             }

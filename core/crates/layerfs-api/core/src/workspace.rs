@@ -58,6 +58,10 @@ pub struct WorkspaceStatus {
     pub consumer_accounted_bytes: u64,
     /// Bounded projection callback counts in `projection_labels` order.
     pub projection: Vec<(String, u64)>,
+    /// Bounded data-callback byte totals, labeled by direction and quantity.
+    pub projection_bytes: Vec<(String, u64)>,
+    /// Request-size histogram buckets, labeled `<direction>:<size range>`.
+    pub projection_histogram: Vec<(String, u64)>,
     /// Upstream host Service calls this Workspace issued.
     pub upstream_calls: u64,
 }
@@ -69,6 +73,24 @@ impl WorkspaceStatus {
         self.projection
             .iter()
             .find(|(label, _)| label == class)
+            .map(|(_, count)| *count)
+    }
+
+    /// One declared data-callback byte total, or `None` for a total this build
+    /// does not report.
+    pub fn projection_bytes(&self, label: &str) -> Option<u64> {
+        self.projection_bytes
+            .iter()
+            .find(|(name, _)| name == label)
+            .map(|(_, total)| *total)
+    }
+
+    /// One request-size histogram bucket, or `None` for a bucket this build does
+    /// not report.
+    pub fn projection_size(&self, label: &str) -> Option<u64> {
+        self.projection_histogram
+            .iter()
+            .find(|(name, _)| name == label)
             .map(|(_, count)| *count)
     }
 }

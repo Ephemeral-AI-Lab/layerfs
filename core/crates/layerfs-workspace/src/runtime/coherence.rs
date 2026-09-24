@@ -425,6 +425,21 @@ impl Workspace {
         }
     }
 
+    /// Records one data callback's request and transferred byte counts.
+    ///
+    /// This is the ordinary product telemetry that shows what the kernel asked
+    /// the projection to move; recording never gates the callback.
+    pub fn record_projection_bytes(
+        &self,
+        op: crate::filesystem::projection_counters::ProjectionOp,
+        request: u64,
+        returned: u64,
+    ) {
+        if let Ok(mut state) = self.state() {
+            state.counters.record_bytes(op, request, returned);
+        }
+    }
+
     pub fn begin_projection_reply(
         &self,
         deadline: Instant,

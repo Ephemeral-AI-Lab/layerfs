@@ -1,4 +1,5 @@
 use super::state::Workspace;
+use crate::filesystem::projection_counters::SizeHistogram;
 use crate::{ReferenceScope, WorkspaceError, WorkspaceStatus};
 use std::{
     fs,
@@ -61,6 +62,23 @@ impl Workspace {
                 .iter()
                 .map(|op| (op.label(), state.counters.count(*op)))
                 .collect(),
+            projection_bytes: crate::filesystem::projection_counters::PROJECTION_BYTE_LABELS
+                .iter()
+                .zip(state.counters.byte_totals())
+                .map(|(label, total)| ((*label).to_string(), total))
+                .collect(),
+            projection_histogram: {
+                let bytes = state.counters.bytes();
+                [("read", bytes.read_sizes), ("write", bytes.write_sizes)]
+                    .into_iter()
+                    .flat_map(|(direction, sizes)| {
+                        SizeHistogram::LABELS
+                            .iter()
+                            .zip(sizes.buckets())
+                            .map(move |(label, count)| (format!("{direction}:{label}"), count))
+                    })
+                    .collect()
+            },
             upstream_calls: state.counters.upstream(),
             coherence: state.projection.as_ref().map(|p| p.status),
             cookies: state.cookies.len(),

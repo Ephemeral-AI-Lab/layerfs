@@ -1,16 +1,30 @@
 //! Daemon-targeted control; service grants confer no control authority.
 use super::{Code, Failure, Root};
 
-pub const WORKSPACE_STATUS_PROFILE: u16 = 3;
+pub const WORKSPACE_STATUS_PROFILE: u16 = 4;
 pub const WORKSPACE_STATUS_OPCODE: u8 = 8;
 pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
-pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 219;
+pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 539;
 /// Fixed, bounded projection callback classes reported by status.
 pub const PROJECTION_CLASSES: usize = 9;
 pub const PROJECTION_CLASS_LABELS: [&str; PROJECTION_CLASSES] = [
     "lookup", "getattr", "read", "write", "readdir", "open", "setattr", "rename", "other",
+];
+/// Fixed, bounded projection data-callback byte totals reported by status.
+pub const PROJECTION_BYTES: usize = 4;
+pub const PROJECTION_BYTE_LABELS: [&str; PROJECTION_BYTES] = [
+    "read_request",
+    "read_returned",
+    "write_request",
+    "write_returned",
+];
+/// Fixed, bounded request-size histogram buckets reported per direction.
+pub const PROJECTION_SIZE_BUCKETS: usize = 18;
+pub const PROJECTION_SIZE_LABELS: [&str; PROJECTION_SIZE_BUCKETS] = [
+    "0-1", "2", "3-4", "5-8", "9-16", "17-32", "33-64", "65-128", "129-256", "257-512", "513-1k",
+    "1k-2k", "2k-4k", "4k-8k", "8k-16k", "16k-32k", "32k-64k", "64k-128k",
 ];
 pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
@@ -142,8 +156,15 @@ pub struct WorkspaceStatusWire {
     /// Bounded projection callback counts in `PROJECTION_CLASS_LABELS` order.
     ///
     /// These are ordinary product counts of what the kernel asked the mounted
-    /// projection for; they are not byte totals and never gate an operation.
+    /// projection for; the byte totals below carry the moved bytes and never
+    /// gate an operation.
     pub projection: [u64; PROJECTION_CLASSES],
+    /// Bounded data-callback byte totals in `PROJECTION_BYTE_LABELS` order.
+    pub projection_bytes: [u64; PROJECTION_BYTES],
+    /// Read request-size histogram in `PROJECTION_SIZE_LABELS` order.
+    pub projection_read_sizes: [u64; PROJECTION_SIZE_BUCKETS],
+    /// Write request-size histogram in `PROJECTION_SIZE_LABELS` order.
+    pub projection_write_sizes: [u64; PROJECTION_SIZE_BUCKETS],
     /// Upstream host Service calls this Workspace has issued.
     pub upstream_calls: u64,
 }

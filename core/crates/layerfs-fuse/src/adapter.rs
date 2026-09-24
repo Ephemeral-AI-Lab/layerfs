@@ -263,6 +263,11 @@ impl Filesystem for Adapter {
                     )
                     .map_err(errno)
             });
+        // The kernel's request and the projection's answer are recorded
+        // separately, so a short transfer is visible rather than inferred.
+        let returned = result.as_ref().map_or(0, |bytes| bytes.as_ref().len()) as u64;
+        self.workspace
+            .record_projection_bytes(ProjectionOp::Read, u64::from(size), returned);
         match result {
             Ok(bytes) => reply.data(bytes.as_ref()),
             Err(error) => reply.error(error),
@@ -575,6 +580,9 @@ impl Filesystem for Adapter {
             });
         // The origin permit stays alive through the send attempt. fuser does not
         // expose checked reply delivery or a later kernel-completion acknowledgement.
+        let accepted = result.as_ref().map_or(0, |receipt| receipt.accepted_bytes);
+        self.workspace
+            .record_projection_bytes(ProjectionOp::Write, data.len() as u64, accepted);
         match result {
             Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
             Err(error) => reply.error(error),

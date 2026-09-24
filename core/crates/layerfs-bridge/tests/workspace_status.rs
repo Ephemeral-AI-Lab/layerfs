@@ -28,6 +28,9 @@ fn status() -> WorkspaceStatusWire {
         cookies: 4,
         consumer_accounted_bytes: 5,
         projection: [7; PROJECTION_CLASSES],
+        projection_bytes: [8; PROJECTION_BYTES],
+        projection_read_sizes: [9; PROJECTION_SIZE_BUCKETS],
+        projection_write_sizes: [10; PROJECTION_SIZE_BUCKETS],
         upstream_calls: 11,
     }
 }
@@ -43,7 +46,7 @@ fn status_profile_is_bounded_and_has_no_store_permission() {
     assert_eq!(r.operation.input_length().unwrap(), 0);
     assert_eq!(permission_bit(r.operation.opcode()), None);
     assert_eq!(decode_request(1, &encode_request(&r).unwrap()).unwrap(), r);
-    for profile in [1, 2, 4] {
+    for profile in [1, 2, 3] {
         r.profile = profile;
         assert_eq!(r.validate().unwrap_err().code, Code::Unsupported);
     }

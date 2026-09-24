@@ -2,7 +2,8 @@
 use layerfs_bridge::contract::{
     Code, Failure, Response, WorkspaceAttachOutcome, WorkspaceAttachWire,
     WorkspaceAttachmentProgress, WorkspaceAttachmentState, WorkspaceAttachmentWire,
-    WorkspaceStatusWire, PROJECTION_CLASSES, PROJECTION_CLASS_LABELS,
+    WorkspaceStatusWire, PROJECTION_BYTES, PROJECTION_BYTE_LABELS, PROJECTION_CLASSES,
+    PROJECTION_CLASS_LABELS, PROJECTION_SIZE_BUCKETS, PROJECTION_SIZE_LABELS,
 };
 use layerfs_fuse::{MountError, MountFailure, MountHandle};
 use layerfs_workspace::{
@@ -248,6 +249,50 @@ fn projection_counts(
     Ok(counts)
 }
 
+/// Maps the Workspace's labeled byte totals into the fixed wire order.
+///
+/// A label the Workspace does not report is a contract mismatch, not a zero.
+fn projection_bytes(
+    local: &layerfs_workspace::WorkspaceStatus,
+) -> Result<[u64; PROJECTION_BYTES], Failure> {
+    let mut totals = [0u64; PROJECTION_BYTES];
+    for (label, total) in &local.projection_bytes {
+        let slot = PROJECTION_BYTE_LABELS
+            .iter()
+            .position(|name| name == label)
+            .ok_or(Code::Integrity)?;
+        totals[slot] = *total;
+    }
+    if local.projection_bytes.len() != PROJECTION_BYTES {
+        return Err(Code::Integrity.into());
+    }
+    Ok(totals)
+}
+
+/// Maps one direction's labeled request-size histogram into the fixed wire order.
+fn projection_sizes(
+    rows: &[(String, u64)],
+    direction: &str,
+) -> Result<[u64; PROJECTION_SIZE_BUCKETS], Failure> {
+    let mut counts = [0u64; PROJECTION_SIZE_BUCKETS];
+    let prefix = format!("{direction}:");
+    for (label, count) in rows {
+        let bucket = label
+            .strip_prefix(prefix.as_str())
+            .and_then(|name| {
+                PROJECTION_SIZE_LABELS
+                    .iter()
+                    .position(|entry| *entry == name)
+            })
+            .ok_or(Code::Integrity)?;
+        counts[bucket] = *count;
+    }
+    if rows.len() != PROJECTION_SIZE_BUCKETS {
+        return Err(Code::Integrity.into());
+    }
+    Ok(counts)
+}
+
 fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), WorkspaceError> {
     if workspace.status()?.closed {
         return Ok(());
@@ -272,6 +317,9 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         cookies: local.cookies as u64,
         consumer_accounted_bytes: local.accounted_bytes as u64,
         projection: projection_counts(&local)?,
+        projection_bytes: projection_bytes(&local)?,
+        projection_read_sizes: projection_sizes(&local.projection_histogram, "read")?,
+        projection_write_sizes: projection_sizes(&local.projection_histogram, "write")?,
         upstream_calls: local.upstream_calls,
     };
     result.validate()?;
