@@ -1,0 +1,21 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.10s
+     Running tests/agent_route.rs (core/target/debug/deps/agent_route-278818838e301cd5)
+
+running 1 test
+LFT1 {"v":1,"namespace":1,"run":"13ce9d1b9fcad40d39147aec2aee4f38","pid":81906,"role":1,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":118625,"incarnation":4546779500995,"user_ns":2079000,"source":"getrusage+libproc","probe_ns":86125,"selected":3,"system_ns":4022000,"rss":2506752}
+LFT1 {"v":1,"namespace":1,"run":"13ce9d1b9fcad40d39147aec2aee4f38","pid":81906,"role":1,"kind":"operation","key":1001,"timing":{"name": "sdk.sandbox.create", "elapsed_ns": 230841125, "outcome": "error", "children": []},"success":false,"resource_status":"sampled","samples":25,"gaps":0,"concurrency":2,"cpu_shared_ns":[3851000,9673000],"scope":"process-shared","clock":"local-monitor","first_ns":21908625,"opened_ns":30980500,"closed_ns":261825125,"last_ns":260237959,"incarnation":4546779500995,"largest_gap_ns":12378250,"source":"getrusage+libproc","last_probe_ns":11834,"selected":3,"sampled_max_rss":27361280}
+
+thread 'init_mount_exec_commit_unmount_and_historical_conflict' panicked at crates/layerfs-api/sdk/tests/agent_route.rs:283:10:
+called `Result::unwrap()` on an `Err` value: CreateError { sandbox: Some(SandboxId([194, 116, 102, 235, 177, 152, 113, 233, 122, 176, 89, 101, 15, 38, 130, 70])), cause: Failure { code: Io, unknown: false, cleanup: None, history: None }, retained: true }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+LFT1 {"v":1,"kind":"run-summary","run":"13ce9d1b9fcad40d39147aec2aee4f38","pid":81906,"role":1,"namespace":1,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}
+test init_mount_exec_commit_unmount_and_historical_conflict ... FAILED
+
+failures:
+
+failures:
+    init_mount_exec_commit_unmount_and_historical_conflict
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+error: test failed, to rerun pass `-p layerfs-sdk --test agent_route`
