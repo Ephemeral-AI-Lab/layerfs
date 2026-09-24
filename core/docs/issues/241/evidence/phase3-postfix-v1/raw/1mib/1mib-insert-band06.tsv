@@ -1,0 +1,5 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-insert-band06
+offset	393744
+status	NOT_RUN	stopped after prior failure

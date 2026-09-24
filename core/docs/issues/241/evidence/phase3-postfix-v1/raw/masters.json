@@ -1,0 +1,69 @@
+{
+  "cursor_key": "ephemeral private; not a persisted master compatibility input",
+  "init_binary_sha256": "d21ecdef5fd0b9a61d29fd91a6726dc070e1d000a57d9a33c0933a8236be92cf",
+  "masters": {
+    "1048576": {
+      "compatibility_key_sha256": "c13f4c9506195faa",
+      "fixture_bytes": 1048576,
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-1048576-c13f4c9506195faa/history.sqlite",
+      "history_sha256": "1750c837a2c77f6464d1c4881b5addfb36779ff4d9207ec4eb79cc381bddcdf0",
+      "manifest_sha256": "ec58ce5a5b1a1b9aefca2eb40be3442490550cc3ac5d72111d0007b1db711117",
+      "master": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-1048576-c13f4c9506195faa/master.json",
+      "producer_binary_sha256": "d21ecdef5fd0b9a61d29fd91a6726dc070e1d000a57d9a33c0933a8236be92cf",
+      "producer_source_commit": "50414c386a4f6b71dfc074dee685ca21d63f1eb0",
+      "producer_source_tree": "6e2b4fb1f9bc3c68507891f308cf5a2ce7414c78",
+      "reuse": "first-use",
+      "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-1048576-c13f4c9506195faa/store.sqlite",
+      "store_sha256": "c571468bccdd48e00a42507f11e6cbcd03042bb781ccbc7cda8b145bae000588"
+    },
+    "10485760": {
+      "compatibility_key_sha256": "8fe44cb9c0539896",
+      "fixture_bytes": 10485760,
+      "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+      "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-10485760-8fe44cb9c0539896/history.sqlite",
+      "history_sha256": "9f52b6d313aa60bdcbbea3533e449d39f6194bd07f5e75f956ba741354c7ce1c",
+      "manifest_sha256": "6c26bdd561fdf2e580b6e32ce7a197aa5d25dbeb977724bf862dfe4b09cfe364",
+      "master": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-10485760-8fe44cb9c0539896/master.json",
+      "producer_binary_sha256": "d21ecdef5fd0b9a61d29fd91a6726dc070e1d000a57d9a33c0933a8236be92cf",
+      "producer_source_commit": "50414c386a4f6b71dfc074dee685ca21d63f1eb0",
+      "producer_source_tree": "6e2b4fb1f9bc3c68507891f308cf5a2ce7414c78",
+      "reuse": "first-use",
+      "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-10485760-8fe44cb9c0539896/store.sqlite",
+      "store_sha256": "93a04dad45660985db7a80225c025ffbcee073e554d3f046289d130a6740bf25"
+    },
+    "104857600": {
+      "compatibility_key_sha256": "5a35f31d2d2f5fcf",
+      "fixture_bytes": 104857600,
+      "fixture_sha256": "1bb2d79d54f72ae15eb0bb76ad715b9aafeba8ff8f9aa4f47bad3e3f101885bd",
+      "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-104857600-5a35f31d2d2f5fcf/history.sqlite",
+      "history_sha256": "4219afff2d900a0596dea88b548d3a8af55615ff04e2b5022edbe5bde499bab8",
+      "manifest_sha256": "beea96fc10aaa4fb0f171412894b3be3b0ca7c8a5d8443276fae6131c95af26d",
+      "master": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-104857600-5a35f31d2d2f5fcf/master.json",
+      "producer_binary_sha256": "d21ecdef5fd0b9a61d29fd91a6726dc070e1d000a57d9a33c0933a8236be92cf",
+      "producer_source_commit": "50414c386a4f6b71dfc074dee685ca21d63f1eb0",
+      "producer_source_tree": "6e2b4fb1f9bc3c68507891f308cf5a2ce7414c78",
+      "reuse": "first-use",
+      "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-104857600-5a35f31d2d2f5fcf/store.sqlite",
+      "store_sha256": "8f0c88cf7fbc00c694380682bd17db972db62501c3024448bd07bea6aca63f90"
+    },
+    "524283904": {
+      "compatibility_key_sha256": "f636b56a0e64b2a6",
+      "fixture_bytes": 524283904,
+      "fixture_sha256": "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f",
+      "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-524283904-f636b56a0e64b2a6/history.sqlite",
+      "history_sha256": "f481ca7dbe771d7c9e0e7575672d5768c04bf020fb95bf66f9b7292db6ec101c",
+      "manifest_sha256": "fbdf2a6c18afd5e69b07ea950a0ef34dfc3a95e93e6a26ef4351db869859c647",
+      "master": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-524283904-f636b56a0e64b2a6/master.json",
+      "producer_binary_sha256": "d21ecdef5fd0b9a61d29fd91a6726dc070e1d000a57d9a33c0933a8236be92cf",
+      "producer_source_commit": "50414c386a4f6b71dfc074dee685ca21d63f1eb0",
+      "producer_source_tree": "6e2b4fb1f9bc3c68507891f308cf5a2ce7414c78",
+      "reuse": "first-use",
+      "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-524283904-f636b56a0e64b2a6/store.sqlite",
+      "store_sha256": "8dedb98a83984cf73198657d1e76d1688c9c37a9c28bda019ada6c6640b206d3"
+    }
+  },
+  "schema": "issue241-postfix-closed-masters-v1",
+  "source_commit": "50414c386a4f6b71dfc074dee685ca21d63f1eb0",
+  "source_tree": "6e2b4fb1f9bc3c68507891f308cf5a2ce7414c78"
+}

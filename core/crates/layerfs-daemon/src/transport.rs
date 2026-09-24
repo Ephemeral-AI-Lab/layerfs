@@ -8,9 +8,8 @@
 //!
 //! Reuse is deliberately narrow:
 //!
-//! - A session belongs to one delivery thread. It is held in that thread's
-//!   own `Option`, so unrelated concurrent FUSE requests never contend on it
-//!   and cannot be serialized by it.
+//! - The daemon keeps at most one session across delivery threads. Its lock
+//!   serializes calls, and a lower request ID opens a new session before use.
 //! - Reuse never crosses a failure. Any error, including a remote refusal,
 //!   drops the connection and the next call opens a fresh one. A mutation
 //!   whose outcome is uncertain is never resent on a reused socket.

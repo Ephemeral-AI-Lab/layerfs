@@ -8,7 +8,6 @@ use layerfs_workspace::{OperationDelivery, WorkspaceHost};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
     sync::{Arc, Mutex},
-    thread::ThreadId,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -96,29 +95,38 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     signals.add(nix::sys::signal::Signal::SIGTERM);
     signals.thread_block()?;
     let control_telemetry = telemetry.clone();
-    // One reusable session per delivery thread. A session serves only that
-    // thread's own sequential calls, so unrelated concurrent FUSE requests
-    // never contend on it and cannot be serialized by it.
-    let sessions = Mutex::new(std::collections::HashMap::<ThreadId, Transport>::new());
+    // One session across delivery threads. The lock already serializes calls;
+    // request IDs allocated before this lock can arrive in reverse order.
+    let session = Mutex::new(None::<(u64, Transport)>);
     let delivery: OperationDelivery = Arc::new(move |request, input, output, deadline| {
         // Every call is one attempt. A failure closes its session, so a later
         // independent lookup starts a fresh authenticated connection.
         let result = telemetry
             .recorder()
             .run(request.id, request.operation.label(), |scope| {
-                let thread = std::thread::current().id();
-                let mut sessions = sessions.lock().map_err(|_| Failure::from(Code::Io))?;
-                let transport = sessions.entry(thread).or_insert_with(|| {
-                    Transport::new(
-                        connection.address,
-                        connection.selector,
-                        connection.private,
-                        connection.server,
+                let mut session = session.lock().map_err(|_| Failure::from(Code::Io))?;
+                if session
+                    .as_ref()
+                    .is_some_and(|(last_id, _)| request.id <= *last_id)
+                {
+                    *session = None;
+                }
+                let (last_id, transport) = session.get_or_insert_with(|| {
+                    (
+                        0,
+                        Transport::new(
+                            connection.address,
+                            connection.selector,
+                            connection.private,
+                            connection.server,
+                        ),
                     )
                 });
                 let result = transport.call(request, input, output, deadline, scope);
                 if result.is_err() {
-                    sessions.remove(&thread);
+                    *session = None;
+                } else {
+                    *last_id = request.id;
                 }
                 result
             });

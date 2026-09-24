@@ -97,16 +97,19 @@ opened a fresh authenticated Service connection per upstream request, so a
 Mount that issues `HistoryQuery` and `Inspect`, and a Commit that issues
 `EditFile`, `UpdatePortableMetadata` and `HistoryCommand`, each paid a TCP
 connect and a Noise handshake. The native server already admits many successful
-requests per connection. `layerfs-daemon::transport` now retains one session
-per delivery thread and serves that thread's consecutive upstream calls on it.
-Reuse is bounded and failure-closed: a session is dropped on any error,
-including a remote refusal, so an uncertain mutation is never resent; a session
-idle beyond two seconds is closed and replaced, staying well inside the
-server's five-second idle limit; and because the session belongs to one thread,
-unrelated concurrent FUSE requests never contend on it. Request identifiers
-stay monotone across the session because the native `Client` carries its own
-previous-identifier marker, and authorization, deadlines, response bounds and
-existing operation counts are unchanged.
+requests per connection. `layerfs-daemon::transport` retains one session across
+delivery threads and serves their consecutive upstream calls on it. The daemon
+serializes those calls under one mutex. Reuse is bounded and failure-closed: a
+session is dropped on any error, including a remote refusal, so an uncertain
+mutation is never resent; a session idle beyond two seconds is closed and
+replaced, staying well inside the server's five-second idle limit. Request IDs
+are allocated before the mutex, so a lower ID can arrive after a higher one;
+the daemon closes the session before such a call and starts a fresh authenticated
+connection. This preserves the native `Client`'s per-session increasing-ID rule
+without rewriting request identities. Authorization, deadlines, response bounds
+and existing operation counts are unchanged. This shared-session correction is
+based on source `50414c386a4f6b71dfc074dee685ca21d63f1eb0` plus the run.rs
+change recorded with this document; it has no mounted qualification yet.
 
 **Daemon and owner spans.** Bounded child timing scopes now divide the real
 route: `daemon.workspace_attach` and `daemon.fuse_mount` inside selected
