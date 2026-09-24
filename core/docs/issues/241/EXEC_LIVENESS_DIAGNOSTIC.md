@@ -16,6 +16,13 @@ own frozen identity. It proves the error pair is possible under the current
 native progress rule, but does not identify the stage that delayed the small
 historical baseline write.
 
+An instrumented [10 MiB diagnostic selection](evidence/position-exec-liveness-v2/REPORT.md)
+then retained 29 PASS / 1 mount FAIL / 36 NOT_RUN at a new source identity.
+The failed mount's first daemon-to-host `HistoryQuery` and enclosing
+`WorkspaceOpen` both errored after about five seconds, before FUSE mount or
+Exec. This broadens the observed liveness gap to the upstream Service path;
+the exact nested transport/handler stage remains open.
+
 The [integrated position receipt](evidence/position-sweep-integrated/REPORT.md)
 has one Unknown baseline SDK Exec after 45 PASS cases on 10 MiB. Its command
 was a small shell write to .position-baseline. It did not reach range EDIT or

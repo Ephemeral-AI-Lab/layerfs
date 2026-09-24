@@ -1,0 +1,277 @@
+[
+    {
+        "Id": "5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f",
+        "Created": "2026-09-24T20:48:39.716128389Z",
+        "Path": "/layerfs-daemon",
+        "Args": [
+            "--idle-sandbox",
+            "1",
+            "0",
+            "0"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 18726,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2026-09-24T20:48:39.744051347Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:03d791bd1c133c438f621eb713ef933a33adf00e0ac5c79eb37c9436bfbc1a27",
+        "ResolvConfPath": "/var/lib/docker/containers/5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f/hostname",
+        "HostsPath": "/var/lib/docker/containers/5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f/hosts",
+        "LogPath": "/var/lib/docker/containers/5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f/5f2fc0fa1340e296f7d2aa0fafd5bc2f0fbb109eb6979ea675423a36aa0b771f-json.log",
+        "Name": "/layerfs-12d3f85437d605d6d0851b59a6230a8d",
+        "RestartCount": 0,
+        "Driver": "overlayfs",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": null,
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "bridge",
+            "PortBindings": {
+                "23456/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "57416"
+                    }
+                ]
+            },
+            "RestartPolicy": {
+                "Name": "no",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": [
+                "CAP_SYS_ADMIN"
+            ],
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": [
+                "host.docker.internal:host-gateway"
+            ],
+            "GroupAdd": null,
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": true,
+            "SecurityOpt": [
+                "apparmor=unconfined",
+                "no-new-privileges"
+            ],
+            "Tmpfs": {
+                "/tmp": "rw,nosuid,nodev,size=16m"
+            },
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 536870912,
+            "NanoCpus": 2000000000,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [
+                {
+                    "PathOnHost": "/dev/fuse",
+                    "PathInContainer": "/dev/fuse",
+                    "CgroupPermissions": "rwm"
+                }
+            ],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 536870912,
+            "MemorySwappiness": null,
+            "OomKillDisable": null,
+            "PidsLimit": 64,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "Mounts": [
+                {
+                    "Type": "volume",
+                    "Source": "layerfs-12d3f85437d605d6d0851b59a6230a8d-root",
+                    "Target": "/layerfs"
+                }
+            ],
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "Storage": {
+            "RootFS": {
+                "Snapshot": {
+                    "Name": "overlayfs"
+                }
+            }
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "layerfs-12d3f85437d605d6d0851b59a6230a8d-root",
+                "Source": "/var/lib/docker/volumes/layerfs-12d3f85437d605d6d0851b59a6230a8d-root/_data",
+                "Destination": "/layerfs",
+                "Driver": "local",
+                "Mode": "z",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "5f2fc0fa1340",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "23456/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "no_proxy=localhost,127.0.0.1,::1",
+                "LAYERFS_ENDPOINT=host.docker.internal:56231",
+                "LAYERFS_SANDBOX_ID=12d3f85437d605d6d0851b59a6230a8d",
+                "LAYERFS_CONSTRUCTION_WORKERS=1",
+                "LAYERFS_NAMESPACE=1356700953366365654",
+                "HTTPS_PROXY=http://http.docker.internal:3128",
+                "LAYERFS_PRIVATE_KEY=8bcb989edf358391ba167f8f64b86683c35bf184f2319b697ae154ab6ff3245b",
+                "LAYERFS_WORKSPACE_DISK_BUDGET_BYTES=1073741824",
+                "LAYERFS_CONTROL_PEERS=1,9b0df5572ddfb3e8a29e81544f87275f58c9a410368e67a1f34a6f24be40ca78,18446744073709551615,255",
+                "LAYERFS_RUN_ID=2412026092502",
+                "HTTP_PROXY=http://http.docker.internal:3128",
+                "https_proxy=http://http.docker.internal:3128",
+                "NO_PROXY=localhost,127.0.0.1,::1",
+                "LAYERFS_WORKSPACE_MEMORY_BUDGET_BYTES=16777216",
+                "LAYERFS_CONTROL_LISTEN=0.0.0.0:23456",
+                "LAYERFS_TELEMETRY=forward",
+                "LAYERFS_SELECTOR=1",
+                "LAYERFS_SERVER_KEY=f0aa9f96f591c3673bfe257db9ea9b966a6e35bf7e9e1b9f31ff1d355f226f7d",
+                "LAYERFS_WORKSPACE_ROOT=/layerfs",
+                "LAYERFS_WORKSPACE_MAX_COUNT=2",
+                "LAYERFS_TELEMETRY_INTERVAL_MS=10",
+                "http_proxy=http://http.docker.internal:3128",
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ],
+            "Cmd": [
+                "--idle-sandbox",
+                "1",
+                "0",
+                "0"
+            ],
+            "Image": "sha256:03d791bd1c133c438f621eb713ef933a33adf00e0ac5c79eb37c9436bfbc1a27",
+            "Volumes": null,
+            "WorkingDir": "/",
+            "Entrypoint": [
+                "/layerfs-daemon"
+            ],
+            "Labels": {
+                "io.layerfs.owner": "agent-sdk",
+                "io.layerfs.sandbox-name": "10mib-overwrite-band13-edit"
+            },
+            "StopTimeout": 1
+        },
+        "NetworkSettings": {
+            "SandboxID": "6ebe8c42914da8d9fb864cf735c40325961bfaeb9028fd626309ae18894b65d0",
+            "SandboxKey": "/var/run/docker/netns/6ebe8c42914d",
+            "Ports": {
+                "23456/tcp": [
+                    {
+                        "HostIp": "127.0.0.1",
+                        "HostPort": "57416"
+                    }
+                ]
+            },
+            "Networks": {
+                "bridge": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "e3af092079b38d56da4155156a843fa084f9f9ec5ec244136eb441ecb849c6a5",
+                    "EndpointID": "34f0685b844b56181b9922b4e79e7011ca999f2b92ab95827fe38646f6a860ac",
+                    "Gateway": "172.17.0.1",
+                    "IPAddress": "172.17.0.2",
+                    "MacAddress": "9e:5f:84:66:86:04",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        },
+        "ImageManifestDescriptor": {
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "digest": "sha256:d9efc8f7d0a3e6297308d85df54f0e47385577ce4bc3ef3c1901df917f144b52",
+            "size": 1053,
+            "platform": {
+                "architecture": "arm64",
+                "os": "linux"
+            }
+        }
+    }
+]
