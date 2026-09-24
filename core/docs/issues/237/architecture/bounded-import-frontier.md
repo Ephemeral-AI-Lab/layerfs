@@ -166,6 +166,10 @@ sets the maximum, so the file-job queue's condition is not met. Neither
 change established an end-to-end import memory bound. The
 [implementation spec](bounded-import-implementation-spec.md) states the
 decision gates for the larger fresh-build design.
+The later [direct-inode treatment](../c3-prerequisite-inode-fusion-result-20260924.md)
+avoided two intermediate namespace root vectors and cut whole-call peak RSS
+by 17.22 MiB in one separate diagnostic. Namespace Save still sets the peak,
+so the file-job queue remains conditional and unrun.
 
 Before any product or performance claim, freeze a treatment and verify one
 real public import with full reopened path, portable-metadata, size and content

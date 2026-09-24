@@ -13,6 +13,13 @@ The product treatment was reverted. Namespace remains the peak, so
 Treatment B's file-job-frontier condition is not met. The remaining
 fresh-builder design gate below is still open.
 
+**Direct-inode outcome, 2026-09-24:** a separately frozen allocation
+treatment avoided both prerequisite root vectors and reduced one-shot
+whole-call peak RSS by **17.22 MiB**, above its 4-MiB gate; full reopened
+readback passed. See the [result](../c3-prerequisite-inode-fusion-result-20260924.md).
+It is kept. Namespace Save still sets the high-water, so Treatment B
+remains unrun and the full bounded builder remains a separate design.
+
 ## Review verdict
 
 The measured maximum occurs during namespace construction, after the full

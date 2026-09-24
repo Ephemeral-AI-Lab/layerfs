@@ -46,6 +46,11 @@ The [compact-Job memory treatment](c3-job-metadata-memory-result-20260924.md)
 narrows each file job's scanned metadata while retaining source
 identity checks; its one-shot release memory diagnostic and full
 oracle are separate from the earlier C3 rows.
+The [entry-lifetime memory treatment](c3-entry-lifetime-memory-result-20260924.md)
+failed its frozen whole-call peak gate and was reverted. The later
+[direct-inode allocation treatment](c3-prerequisite-inode-fusion-result-20260924.md)
+avoided two namespace root vectors and cut one diagnostic whole-call
+peak by 17.22 MiB, while remaining ineligible for a speed claim.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

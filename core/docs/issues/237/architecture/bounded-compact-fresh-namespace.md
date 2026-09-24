@@ -155,6 +155,10 @@ A smaller candidate made `build_namespace` own the existing
 found **753,664 B higher**, not lower, whole-call peak RSS. The treatment
 was reverted. It was a lifetime change, not a bounded namespace algorithm;
 the result does not predict what avoiding those allocations entirely would do.
+The separate [direct-inode result](../c3-prerequisite-inode-fusion-result-20260924.md)
+then avoided the two intermediate root vectors and observed a 17.22-MiB
+whole-call peak reduction. It still retains the entry list and C1's
+whole-tree validation state, so it does not establish the bound proposed here.
 
 Fewer allocations and sequential construction might improve speed, but
 counting, ordering, validation or backing I/O might erase that gain. The
