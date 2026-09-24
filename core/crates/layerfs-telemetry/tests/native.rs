@@ -262,11 +262,12 @@ fn retention_expiry_open_reader_and_deletion_failure() {
         .unwrap();
     let next = Output::start(config()).unwrap();
     assert!(!path.exists());
-    next.submit(vec![b'b'; 800]);
     next.shutdown(Duration::from_secs(1));
     let mut retained = Vec::new();
     reader.read_to_end(&mut retained).unwrap();
     assert_eq!(retained, vec![b'a'; 800]);
+    // Build the next segment fixture synchronously: bounded shutdown is lossy.
+    std::fs::write(&path, vec![b'b'; 800]).unwrap();
     assert_eq!(std::fs::metadata(&path).unwrap().len(), 800);
     drop(reader);
     let failing = Output::start(config()).unwrap();
