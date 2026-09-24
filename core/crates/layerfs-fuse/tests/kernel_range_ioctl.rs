@@ -41,6 +41,28 @@ mod linux {
         bytes
     }
 
+    fn edit(stamp: &[u8; 88], offset: u64, deleted: u64, replacement: &[u8]) -> [u8; 4192] {
+        assert!(replacement.len() <= 4096);
+        let mut bytes = [0; 4192];
+        bytes[..4].copy_from_slice(b"LFE2");
+        bytes[4..6].copy_from_slice(&2u16.to_le_bytes());
+        bytes[8..64].copy_from_slice(&stamp[8..64]);
+        bytes[64..72].copy_from_slice(&offset.to_le_bytes());
+        bytes[72..80].copy_from_slice(&deleted.to_le_bytes());
+        bytes[80..84].copy_from_slice(&(replacement.len() as u32).to_le_bytes());
+        bytes[96..96 + replacement.len()].copy_from_slice(replacement);
+        bytes
+    }
+
+    fn call_edit(file: &File, bytes: &mut [u8; 4192]) -> Result<(), i32> {
+        let result = unsafe { libc::ioctl(file.as_raw_fd(), EDIT as _, bytes.as_mut_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error().raw_os_error().unwrap())
+        }
+    }
+
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_range_insert_commit() {
@@ -127,5 +149,125 @@ mod linux {
             .forget(data.serial, u64::MAX, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
         println!("KERNEL_RANGE_CHECK mounted-projected-insert-Commit PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_range_variants() {
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        f.workspace.set_len(data.serial, 8192, deadline()).unwrap();
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(f.workspace.mount_path().join("data.bin"))
+            .unwrap();
+        let alias = File::open(f.workspace.mount_path().join("alias")).unwrap();
+        let initial = read(&file, 0, 8192);
+        let before = state(&file);
+
+        let mut malformed = edit(&before, 4094, 0, b"ABCD");
+        malformed[4191] = 1;
+        assert_eq!(call_edit(&file, &mut malformed), Err(libc::EINVAL));
+        assert_eq!(state(&file), before);
+        assert_eq!(read(&file, 0, 8192), initial);
+
+        let mut overwrite = edit(&before, 4094, 4, b"WXYZ");
+        call_edit(&file, &mut overwrite).unwrap();
+        let after_overwrite = state(&file);
+        assert_eq!(number(&after_overwrite, 56), number(&before, 56) + 1);
+        assert_eq!(number(&after_overwrite, 64), 8192);
+        assert_eq!(
+            read(&alias, 4092, 8),
+            [
+                initial[4092],
+                initial[4093],
+                b'W',
+                b'X',
+                b'Y',
+                b'Z',
+                initial[4098],
+                initial[4099]
+            ]
+        );
+        assert_eq!(
+            call_edit(&file, &mut edit(&before, 4094, 4, b"WXYZ")),
+            Err(libc::ESTALE)
+        );
+        assert_eq!(state(&file), after_overwrite);
+
+        let append = OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(f.workspace.mount_path().join("data.bin"))
+            .unwrap();
+        assert_eq!(
+            call_edit(&append, &mut edit(&after_overwrite, 4094, 4, b"ABCD")),
+            Err(libc::EBADF)
+        );
+        assert_eq!(state(&file), after_overwrite);
+
+        let mut delete = edit(&after_overwrite, 4094, 4, b"");
+        call_edit(&file, &mut delete).unwrap();
+        let after_delete = state(&file);
+        assert_eq!(number(&after_delete, 56), number(&before, 56) + 2);
+        assert_eq!(number(&after_delete, 64), 8188);
+        let mut expected = initial;
+        expected.drain(4094..4098);
+        assert_eq!(read(&file, 0, 8188), expected);
+        assert_eq!(alias.metadata().unwrap().len(), 8188);
+        assert!(read(&alias, 8188, 1).is_empty());
+
+        assert_eq!(file.write_at(b"OP", 5000).unwrap(), 2);
+        expected[5000..5002].copy_from_slice(b"OP");
+        assert_eq!(read(&alias, 4998, 6), expected[4998..5004]);
+        let final_state = state(&file);
+        assert!(number(&final_state, 56) > number(&after_delete, 56));
+        let status = f.workspace.status().unwrap();
+        assert_eq!(status.range_accepted_payload_bytes, 4);
+        assert_eq!(status.range_shifted_suffix_bytes, 0);
+
+        let report = f.workspace.commit(deadline()).unwrap();
+        let root = match report.outcome {
+            layerfs_bridge::contract::CommitOutcomeWire::Committed(committed) => committed.root,
+            other => panic!("{other:?}"),
+        };
+        let committed = super::support::attr(f.native.attributes(root, b"data.bin"));
+        assert_eq!(committed.2, 8188);
+        assert_eq!(f.native.bytes(committed.1, 0, expected.len()), expected);
+        drop(append);
+        drop(file);
+        drop(alias);
+        mount.unmount(deadline()).unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK variants PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_range_read_only() {
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        let mut mount = layerfs_fuse::mount(&f.workspace, deadline()).unwrap();
+        let file = File::open(f.workspace.mount_path().join("data.bin")).unwrap();
+        let before = state(&file);
+        assert_eq!(
+            call_edit(&file, &mut edit(&before, 0, 0, b"ABCD")),
+            Err(libc::EROFS)
+        );
+        assert_eq!(state(&file), before);
+        assert_eq!(
+            f.workspace.status().unwrap().range_accepted_payload_bytes,
+            0
+        );
+        drop(file);
+        mount.unmount(deadline()).unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK read-only PASS");
     }
 }

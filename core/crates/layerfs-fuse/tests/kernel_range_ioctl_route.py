@@ -6,8 +6,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'layerfs-workspace/tests'))
 import stage_route as driver
 
-driver.CASES = {'insert_commit': ['mounted-projected-insert-Commit']}
-driver.REQUIREMENTS = {'insert_commit': ['W-04', 'W-07', 'W-11', 'S-18']}
+driver.CASES = {
+    'insert_commit': ['mounted-projected-insert-Commit'],
+    'variants': ['variants'],
+    'read_only': ['read-only'],
+}
+driver.REQUIREMENTS = {
+    'insert_commit': ['W-04', 'W-07', 'W-11', 'S-18'],
+    'variants': ['W-04', 'W-07', 'W-11', 'S-18'],
+    'read_only': ['W-04', 'W-07'],
+}
 driver.TEST_SOURCE = Path(__file__).with_name('kernel_range_ioctl.rs')
 driver.ENTRY_SOURCE = Path(__file__)
 driver.TEST_PREFIX = 'kernel_range_'
