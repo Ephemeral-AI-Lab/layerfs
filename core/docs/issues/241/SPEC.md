@@ -98,6 +98,41 @@ programs that do not request a splice. The route is independent of the outer
 shell: `/bin/sh -c` is today's `WorkspaceApi::exec` launcher, while FUSE sees
 filesystem calls from any process under the mount.
 
+## Portable semantics and platform adapters
+
+The range replacement is a **LayerFS Workspace semantic operation**: byte
+offset, deleted length, replacement bytes, version/handle authority, result
+size, and typed failure/uncertainty. Its definition and Commit lowering must
+contain no Linux ioctl number, `fuser` type, macFUSE type, WinFsp type, or
+platform-specific cache assumption. Platform adapters translate their native
+filesystem requests into that same checked projected mutation; none gets a
+second edit algorithm. Ordinary WRITE/SETATTR semantics remain the default
+for programs that do not request a range operation.
+
+The current product projection is explicitly Linux-only
+([mount implementation](../../../crates/layerfs-fuse/src/mount.rs)); #241's
+live Docker and four-case performance gate is Linux. A Linux FUSE ioctl is
+one candidate **carrier**, not the universal product API. [macFUSE documents
+FUSE_IOCTL support](https://github.com/macfuse/macfuse/wiki/FUSE-Features),
+but its ABI, payload and kernel invalidation must be proved on macOS before
+that adapter advertises range replacement. [WinFsp distinguishes its FUSE
+compatibility layer from the native Windows filesystem API](https://github.com/winfsp/winfsp/wiki/Native-API-vs-FUSE);
+a Windows adapter must select and prove a supported request mechanism and
+Windows open-handle/size semantics rather than assume a Linux ioctl works.
+Future support also needs native mount and process-launch integration for the
+same public SDK behavior; adding a range callback alone is insufficient.
+Unsupported platforms return an explicit typed `Unsupported` result before
+mutation. A platform is not called supported until its mounted end-to-end
+tests prove the same bytes, metadata, coherence, Commit, and failure behavior.
+Do not pool latency or cache claims across platforms.
+
+Use published third-party packages unchanged. Do not patch, fork, vendor,
+`[patch]`/`[replace]`, or edit a package registry or installed macFUSE/WinFsp
+files to obtain an ioctl, notification or mount behavior. If an unmodified
+provider cannot deliver a required operation, retain that platform as
+unsupported and report the blocker; keep builds locked. This requirement
+applies to the Linux implementation now and future macOS/Windows adapters.
+
 ## Functional position proof (not performance samples)
 
 For each of the four pristine input sizes above, exercise **insert, overwrite

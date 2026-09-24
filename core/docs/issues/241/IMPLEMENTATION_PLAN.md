@@ -18,6 +18,14 @@ about 5 s (100 and capped 500 MiB). The latter two have **no completed Commit
 time**. All completed scenario-v2 rows are cache-ineligible. Keep their
 registry and receipts append-only.
 
+The Workspace range-edit semantics must remain portable product code; Linux FUSE,
+future macFUSE and future Windows WinFsp are adapters with separate capability
+and coherence proofs. #241 implements and measures the current Linux adapter,
+without claiming macOS or Windows support today. Never modify, patch, fork or
+vendor a third-party package, add Cargo `[patch]`/`[replace]`, or edit an
+installed provider. An unavailable provider capability fails explicitly;
+builds remain `--locked`.
+
 ## Intended route and boundaries
 
 ```text
@@ -45,8 +53,8 @@ permission to create every optional file.
 | Path | Required change |
 | --- | --- |
 | `core/crates/layerfs-fuse/src/adapter.rs` | Add the narrow FUSE request callback, projected handle check, reply and callback count. At 938 physical lines now, delegate substantial parsing and ABI logic to a small new module to stay under the 999-line production limit. |
-| `core/crates/layerfs-fuse/src/range_ioctl.rs` **if selected** | Own one versioned Linux request format, strict bounds/flag validation and response encoding. Reuse this product-owned ABI in the cooperating tool or assert byte-for-byte conformance; do not create a second edit engine. |
-| `core/crates/layerfs-workspace/src/filesystem/write.rs` | Extend the existing `RangeEdit` mutation path for projected, writable-handle origin with owned payload, exact inode/version checks, mutation permit and completion/coherence. Preserve the local API. |
+| `core/crates/layerfs-fuse/src/range_ioctl.rs` **if selected** | Linux-only carrier: own one versioned request format, strict bounds/flag validation and response encoding. Reuse this product-owned ABI in the cooperating tool or assert byte-for-byte conformance; do not create a second edit engine or put ioctl values in Workspace semantics. |
+| `core/crates/layerfs-workspace/src/filesystem/write.rs` | Extend the existing platform-neutral `RangeEdit` mutation path for projected, writable-handle origin with owned payload, exact inode/version checks, mutation permit and completion/coherence. Preserve the local API and typed results. |
 | `core/crates/layerfs-workspace/src/filesystem/projection_counters.rs` | Expose a distinct bounded range callback count and accepted payload/shifted-byte evidence through the existing public status route. Count actual requests, including refusals, separately from accepted operations. |
 | `core/crates/layerfs-bridge/src/contract/control.rs`, `core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs`, `core/crates/layerfs-daemon/src/lifecycle.rs` | Extend the existing bounded projection-count wire only as needed to carry the new class into `WorkspaceApi::status`; preserve its versioned decoding rules. |
 | `core/crates/layerfs-workspace/src/overlay/pieces.rs` | Change only if one-splice profiling proves that all-piece rebuild is still material. A new tree/index is not a prerequisite for the first insert proof. |
@@ -64,6 +72,18 @@ docs are outside production LOC. Do not add a new UAPI crate, general command
 parser, or piece-tree replacement merely to meet this estimate. Every actual
 commit needs the AGENTS.md before/after production-LOC count for its exact staged
 tree, with Core/legacy/combined subtotals.
+
+Future macOS/Windows adapters are not scaffolds in this change. When requested,
+add each only after its unmodified provider exposes a suitable request and
+the platform's own kernel/open-handle coherence can be tested. macFUSE lists
+`FUSE_IOCTL` among supported operations, but that is not proof that Linux's
+request bytes or invalidation behavior transfer unchanged
+([macFUSE features](https://github.com/macfuse/macfuse/wiki/FUSE-Features)).
+WinFsp offers both a FUSE compatibility layer and a native Windows API; its
+carrier must be chosen from those actual capabilities
+([WinFsp comparison](https://github.com/winfsp/winfsp/wiki/Native-API-vs-FUSE)).
+Keep one semantic test matrix shared across adapters, plus real mounted tests
+for each supported platform. Unsupported platforms refuse before mutation.
 
 ## Phases and exit gates
 
@@ -89,6 +109,15 @@ must fit the validated request path. Reject malformed or oversized requests
 before ownership/publication; never interpret arbitrary ioctl bytes as a
 Workspace edit.
 
+Freeze the common byte-range replacement semantics independently from that
+Linux carrier: offset/deletion/replacement, handle authority, size/mtime,
+mutation receipt, Commit input and typed failure. Do not expose Linux ioctl
+constants through `layerfs-workspace` or the public SDK. Capability discovery
+must fail closed on a platform whose adapter cannot supply the operation; do
+not silently select a suffix-copy fallback. The Linux proof is this issue's
+implementation gate; macFUSE/WinFsp require separate adapter and mounted-test
+gates before either can be advertised as supported.
+
 Specify the atomic visibility point, size/mtime update, revision/generation
 stamp and FUSE invalidation/reply order. In particular, ioctl completion alone
 must not be assumed to refresh Linux inode size. Existing open descriptors,
@@ -106,7 +135,8 @@ chosen request actually reaches FUSE and can make size/old-FD state coherent.
 Route the FUSE callback through the same projection ingress, writable handle
 authorization, `OwnedPayload`, mutation permit, exact version check, piece
 splice and publication accounting used by ordinary projected writes. Reuse
-Core's `RangeEdit`; do not call its local-path API directly from the callback
+Core's platform-neutral `RangeEdit`; keep Linux `fuser` types in its adapter,
+and do not call the local-path API directly from the callback
 and bypass projection admission. Keep the payload bounded and owned before
 publication. Count the one range request and prove the 500 MiB untouched suffix
 is neither read nor written by the tool/FUSE route. Preserve rollback on
@@ -208,6 +238,10 @@ Provide the frozen ABI and offset manifest, source/build/image/master seals,
 exact commands, all four append-only performance and independent-verification
 receipts, the per-offset functional matrix, raw LFT1, bounded FUSE counts,
 cache status, full-command/verification walls and every nonpassing line.
+State platform support explicitly: Linux live proof or failure; macFUSE and
+WinFsp remain unsupported until their own adapters and mounted tests pass.
+Record the unmodified third-party version and capability used; no provider
+patch or local fork is an acceptable proof.
 Run owning Core boundary, test, Clippy and formatting checks once at final
 source identity and state exactly which checks ran. Close #241 only when its
 four completion, correctness, cleanup and route-custody gates hold; #232 stays
