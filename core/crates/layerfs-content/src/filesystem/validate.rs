@@ -168,6 +168,26 @@ pub fn check<'a>(
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
+    check_inner(reader, input, unreachable, work, true)
+}
+
+/// The internal fresh build does not consume zero-count `additions` rows.
+pub(crate) fn check_for_fresh_run<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a FilesystemInput<'a>,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+) -> ContentResult<CheckedInput<'a>> {
+    check_inner(reader, input, unreachable, work, false)
+}
+
+fn check_inner<'a>(
+    reader: &dyn AuthenticatedObjects,
+    input: &'a FilesystemInput<'a>,
+    unreachable: &BTreeMap<u64, ()>,
+    work: &mut ValidationWork,
+    include_zero_additions: bool,
+) -> ContentResult<CheckedInput<'a>> {
     input.check()?;
     let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
@@ -286,10 +306,12 @@ pub fn check<'a>(
         &mut state,
     )?;
     charge_site(work, aliases_before, |sites| &mut sites.aliases);
-    for update in input.directories {
-        for (_, binding) in &update.changes {
-            if let Some(child) = binding {
-                let _ = additions.entry(*child).or_insert(0);
+    if include_zero_additions {
+        for update in input.directories {
+            for (_, binding) in &update.changes {
+                if let Some(child) = binding {
+                    let _ = additions.entry(*child).or_insert(0);
+                }
             }
         }
     }
@@ -780,18 +802,6 @@ fn check_build_reachability(
     // batch drops is not part of the result, so walking it would charge work the
     // operation does not do - and could refuse a build for a subtree it never
     // builds.
-    // Every directory binding this operation states, as `(parent, child)` pairs.
-    // `update_for` answers by parent serial, so the pairs come from the updates
-    // themselves rather than from a serial-keyed lookup.
-    let mut stated: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
-    for update in checked.input.directories {
-        let children = update
-            .changes
-            .iter()
-            .filter_map(|(_, binding)| *binding)
-            .collect::<Vec<_>>();
-        stated.insert(update.parent, children);
-    }
     // The root is reached by definition: it is the walk's own starting point.
     let declared: BTreeSet<u64> = checked
         .input
@@ -817,17 +827,22 @@ fn check_build_reachability(
         if unreachable.contains_key(&serial) {
             continue;
         }
-        for child in stated.get(&serial).map(Vec::as_slice).unwrap_or(&[]) {
+        for child in checked
+            .input
+            .update_for(serial)
+            .into_iter()
+            .flat_map(|update| update.changes.iter().filter_map(|(_, binding)| *binding))
+        {
             work.entries_examined = work.entries_examined.saturating_add(1);
             // A binding is an edge into the child. Only a directory has to be
             // reached exactly once: a regular file may be bound several times.
-            if let Some(count) = edges.get_mut(child) {
+            if let Some(count) = edges.get_mut(&child) {
                 *count = count.checked_add(1).ok_or(ContentError::LengthOverflow)?;
                 if *count > 1 {
                     return Err(ContentError::InvalidRecord("multiple parents"));
                 }
+                pending.push(child);
             }
-            pending.push(*child);
         }
     }
     // Every directory this operation allocates is held by a binding the root

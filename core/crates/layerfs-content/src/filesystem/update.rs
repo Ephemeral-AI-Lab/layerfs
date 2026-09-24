@@ -160,7 +160,11 @@ fn run_body<'b>(
     let unreachable = unreachable_parents(input);
     let mut validation = ValidationWork::default();
     let checked = phases.phase("validate", || {
-        validate::check(objects.reader(), input, &unreachable, &mut validation)
+        if input.base.is_none() {
+            validate::check_for_fresh_run(objects.reader(), input, &unreachable, &mut validation)
+        } else {
+            validate::check(objects.reader(), input, &unreachable, &mut validation)
+        }
     })?;
     let reader = objects.reader();
     let mut counters = FilesystemUpdateCounters {
@@ -508,26 +512,19 @@ fn run_body<'b>(
 /// declared-new parent can be in that state - an existing directory that is not
 /// rebound keeps the record it already has.
 fn unreachable_parents(input: &FilesystemInput<'_>) -> BTreeMap<u64, ()> {
-    let mut bound: BTreeMap<u64, ()> = BTreeMap::new();
-    for update in input.directories {
-        for (_, binding) in &update.changes {
-            if let Some(child) = binding {
-                bound.insert(*child, ());
-            }
-        }
-    }
     let mut dead = BTreeMap::new();
     for update in input.directories {
         let parent = update.parent;
-        if parent == input.root_serial || bound.contains_key(&parent) {
-            continue;
+        if parent != input.root_serial && input.new_inodes.contains(&parent) {
+            dead.insert(parent, ());
         }
-        if !input.new_inodes.contains(&parent) {
-            continue;
+    }
+    for update in input.directories {
+        for (_, binding) in &update.changes {
+            if let Some(child) = binding {
+                dead.remove(child);
+            }
         }
-        // An empty binding list is the "keep the bindings you have" form, and a
-        // directory this operation allocates has none to keep.
-        dead.insert(parent, ());
     }
     dead
 }
