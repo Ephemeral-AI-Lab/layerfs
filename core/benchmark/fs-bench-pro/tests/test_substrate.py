@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -39,6 +40,34 @@ class Substrate(unittest.TestCase):
                     with redirect_stdout(io.StringIO()):
                         runner.main()
                 run.assert_called_once_with(case, "fresh")
+
+    def test_release_build_refuses_an_old_debug_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            results, target = home / "results", home / "target"
+            results.mkdir()
+            (target / runner.BINARY_DIR).mkdir(parents=True)
+            old = home / "debug"
+            old.mkdir()
+            binaries = {}
+            for name in runner.BINARIES:
+                (old / name).write_bytes(b"debug")
+                (target / runner.BINARY_DIR / name).write_bytes(b"release")
+                binaries[name] = {"path": str(old / name), "sha256": runner.digest(old / name)}
+            runner.write_json(results / "sdk-build-release.json", {
+                "build_profile": "debug", "product_seal": "same", "binaries": binaries,
+            })
+            output = results / "out"
+            output.mkdir()
+            with patch.object(runner, "RESULTS", results), patch.object(
+                runner.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ) as build:
+                result = runner.build(output, target, {"product_seal": "same"})
+            build.assert_called_once()
+            self.assertEqual(result["build_profile"], "release")
+            self.assertEqual(result["mode"], "changed-product")
+            self.assertEqual(result["binaries"]["benchmark_init"]["sha256"],
+                             runner.digest(target / runner.BINARY_DIR / "benchmark_init"))
 
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:

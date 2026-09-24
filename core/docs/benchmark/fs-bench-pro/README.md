@@ -10,6 +10,9 @@ precedes the [#231 first-pass spec](issue-231/SPEC.md): one run each for 100,
 original four-tier final gate remains open.
 The later [four-tier SDK diagnostic](issue-231/SDK-FOUR-TIER-RESULTS-20260924.md)
 retains one fresh observation per case and does not clear that gate.
+Owner direction now requires release binaries for new SDK Init rows; the
+[release-only four-tier result](issue-231/SDK-RELEASE-FOUR-TIER-RESULTS-20260924.md)
+also leaves the gate open.
 The [handoff prompt](issue-231/HANDOFF.md) lists what an implementation agent
 must read, do and avoid; the new Init family test path and separate full
 verifier are specified there and in the first-pass spec.
