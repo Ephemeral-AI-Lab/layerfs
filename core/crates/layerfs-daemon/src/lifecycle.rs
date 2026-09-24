@@ -329,6 +329,14 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         projection_sizes(&local.projection_histogram, "read").err(),
         projection_sizes(&local.projection_histogram, "write").err(),
     ));
+    diag.push_str(&format!(
+        "access={:?} mounted={} closed={} nodes={}\n",
+        workspace.access_mode(),
+        local.mounted,
+        local.closed,
+        local.nodes,
+    ));
+    std::fs::write("/layerfs/diag-status.txt", &diag).ok();
     let result = WorkspaceStatusWire {
         workspace: selected.id.as_bytes().into(),
         incarnation: selected.incarnation,
