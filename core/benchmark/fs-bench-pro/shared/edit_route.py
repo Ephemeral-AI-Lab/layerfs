@@ -6,12 +6,15 @@ each case uses, the declared cache qualification, the release SDK driver run,
 raw LFT1 retention and the separate bounded verifier.
 """
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 BENCH = Path(__file__).resolve().parent.parent
@@ -32,6 +35,12 @@ def sha256(path):
         for block in iter(lambda: source.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _clone_seals(store, history, master_record):
+    copied = {"store": sha256(store), "history": sha256(history)}
+    return copied, all(copied[name] == master_record[f"{name}_sha256"]
+                       for name in ("store", "history"))
 
 
 def fixture_bytes(size):
@@ -85,6 +94,119 @@ def compatibility_key(identity, fixture, row=None, init_binary_sha256=None):
     }
 
 
+def _sealed_master(directory, key, size, published_directory=None):
+    """Validate the complete v3 entry once before copying from it."""
+    if directory.is_symlink() or not directory.is_dir():
+        raise ValueError(f"v3 master is not a directory: {directory}")
+    names = {path.name for path in directory.iterdir()}
+    if names != {"master.json", "store.sqlite", "history.sqlite"}:
+        raise ValueError(f"v3 master has missing files or unexpected sidecars: {directory}")
+    for name in names:
+        if not stat.S_ISREG((directory / name).lstat().st_mode):
+            raise ValueError(f"v3 master member is not a regular file: {name}")
+    record_path = directory / "master.json"
+    record = json.loads(record_path.read_text())
+    digest = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
+    published_directory = published_directory or directory
+    if (record.get("schema") != "core-fs-bench-pro-exec-fuse-edit-master-v3" or
+            record.get("compatibility_key") != key or
+            record.get("compatibility_key_sha256") != digest or
+            record.get("fixture_bytes") != size or
+            record.get("fixture_sha256") != contract.FIXTURE_SHA256[size] or
+            record.get("fixture_canonical_root") != contract.FIXTURE_CANONICAL_ROOT[size] or
+            record.get("fixture_extent_count") != contract.FIXTURE_INITIAL_COUNT[size] or
+            record.get("store") != str(published_directory / "store.sqlite") or
+            record.get("history") != str(published_directory / "history.sqlite") or
+            not isinstance(record.get("producer_source_commit"), str) or
+            len(record["producer_source_commit"]) != 40 or
+            not isinstance(record.get("producer_source_tree"), str) or
+            len(record["producer_source_tree"]) != 40 or
+            record.get("producer_binary_sha256") != key["benchmark_init_sha256"] or
+            (record.get("init_receipt") or {}).get("status") != "COMPLETE" or
+            any(record.get(field) != (record.get("init_receipt") or {}).get(source)
+                for field, source in (("project_id", "project_id"),
+                                      ("genesis_layer", "genesis_layer"),
+                                      ("genesis_root", "root"),
+                                      ("genesis_root_serial", "root_serial")))):
+        raise ValueError(f"v3 master manifest identity mismatch: {directory}")
+    for name in ("store", "history"):
+        path = directory / f"{name}.sqlite"
+        if (path.stat().st_size == 0 or
+                record.get(f"{name}_bytes") != path.stat().st_size or
+                record.get(f"{name}_sha256") != sha256(path)):
+            raise ValueError(f"v3 master {name} seal mismatch: {directory}")
+    return {**record, "manifest_sha256": sha256(record_path)}
+
+
+def _master_v3(root, size, binaries, identity, cursor_key, row, budget_ns):
+    """Build a new sealed master; old in-place masters remain diagnostic only."""
+    root.mkdir(parents=True, exist_ok=True)
+    key = compatibility_key(
+        identity, {"bytes": size, "sha256": contract.FIXTURE_SHA256[size]}, row,
+        sha256(binaries["benchmark_init"]))
+    digest = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
+    directory = root / f"master-v3-{size}-{digest}"
+    prefix = f".master-v3-{size}-{digest}-"
+    with (root / f".master-v3-{size}-{digest}.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        with (root / f".fixture-{size}.lock").open("a+b") as fixture_lock:
+            fcntl.flock(fixture_lock, fcntl.LOCK_EX)
+            fixture = prepare_fixture(root, size)
+        if directory.exists() or directory.is_symlink():
+            return {**_sealed_master(directory, key, size), "reuse": "exact-sealed-key"}
+        if list(root.glob(prefix + "*")):
+            raise ValueError(f"incomplete prior v3 master attempt for {size}; retained for audit")
+        if identity.get("source_dirty"):
+            raise ValueError("v3 master preparation requires a committed source tree")
+        temporary = Path(tempfile.mkdtemp(prefix=prefix, dir=root))
+        store = temporary / "store.sqlite"
+        history = temporary / "history.sqlite"
+        started = time.monotonic_ns()
+        result = subprocess.run(
+            [str(binaries["benchmark_init"]), fixture["path"], str(store), str(history),
+             f"exec-fuse-edit-{size}"],
+            capture_output=True, text=True,
+            env={**os.environ, CURSOR_KEY_ENV: cursor_key}, timeout=budget_ns / 1e9)
+        wall_ns = time.monotonic_ns() - started
+        if result.returncode != 0:
+            raise RuntimeError(f"v3 master preparation failed: {result.stdout}\n{result.stderr}")
+        created = json.loads(result.stdout.strip().splitlines()[-1])
+        if created.get("status") != "COMPLETE":
+            raise RuntimeError(f"v3 master Init did not complete: {created}")
+        if {path.name for path in temporary.iterdir()} != {"store.sqlite", "history.sqlite"}:
+            raise ValueError(f"v3 Init left incomplete files or sidecars: {temporary}")
+        record = {
+            "schema": "core-fs-bench-pro-exec-fuse-edit-master-v3",
+            "fixture_bytes": size,
+            "fixture_sha256": fixture["sha256"],
+            "fixture_canonical_root": contract.FIXTURE_CANONICAL_ROOT[size],
+            "fixture_extent_count": contract.FIXTURE_INITIAL_COUNT[size],
+            "project_id": created["project_id"],
+            "genesis_layer": created["genesis_layer"],
+            "genesis_root": created["root"],
+            "genesis_root_serial": created["root_serial"],
+            "first_use_wall_ns": wall_ns,
+            "store": str(directory / "store.sqlite"),
+            "history": str(directory / "history.sqlite"),
+            "store_bytes": store.stat().st_size,
+            "history_bytes": history.stat().st_size,
+            "store_sha256": sha256(store),
+            "history_sha256": sha256(history),
+            "compatibility_key": key,
+            "compatibility_key_sha256": digest,
+            "route": row["route"],
+            "init_receipt": created,
+            "producer_source_commit": identity["source_commit"],
+            "producer_source_tree": identity["source_tree"],
+            "producer_binary_sha256": key["benchmark_init_sha256"],
+            "legacy_unsealed_master": "not reused or promoted",
+        }
+        (temporary / "master.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+        qualified = _sealed_master(temporary, key, size, published_directory=directory)
+        temporary.rename(directory)
+        return {**qualified, "reuse": "first-use"}
+
+
 def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000, row=None):
     """Prepares (or reuses) the one closed master Store/history pair for a size.
 
@@ -95,6 +217,8 @@ def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000,
     the earlier one as evidence.
     """
     root = Path(root)
+    if row and row["scenario_version"] == 3:
+        return _master_v3(root, size, binaries, identity, cursor_key, row, budget_ns)
     fixture = prepare_fixture(root, size)
     key = compatibility_key(identity, fixture, row,
                             sha256(binaries["benchmark_init"]) if row and
@@ -255,7 +379,9 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "image_id": image,
         "master": {key: master_record[key] for key in
                    ("fixture_bytes", "fixture_sha256", "first_use_wall_ns", "reuse",
-                    "compatibility_key", "store_bytes", "history_bytes")},
+                    "compatibility_key", "store_bytes", "history_bytes") +
+                   (("store_sha256", "history_sha256", "manifest_sha256")
+                    if row["scenario_version"] == 3 else ())},
         "clone_method": row["clone_method"],
         "clone_copy_wall_ns": copy_wall_ns,
         "cache_contract": row["cache_contract"],
@@ -264,7 +390,14 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "performance_gate": row["performance_gate"],
         "admission_eligible": False,
     }
+    if row["scenario_version"] == 3:
+        receipt["clone_sha256_verified"] = False
     try:
+        if row["scenario_version"] == 3:
+            receipt["clone_sha256"], receipt["clone_sha256_verified"] = _clone_seals(
+                store, history, master_record)
+            if not receipt["clone_sha256_verified"]:
+                raise ValueError("independent v3 Store/history copy differs from sealed master")
         cache_started = time.monotonic_ns()
         receipt["cache"]["macos-store"] = edit_cache.qualify_store([store, history])
         receipt["cache"]["linux-fuse-backing"] = edit_cache.qualify_fuse_backing()

@@ -1,7 +1,9 @@
 """Focused source-only checks for the prospective four-case #241 selection."""
 import hashlib
+import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 BENCH = Path(__file__).resolve().parent.parent
@@ -111,6 +113,68 @@ class InsertV3(unittest.TestCase):
             with self.subTest(key=key):
                 failed = {**receipt, "driver": {**driver, key: value}}
                 self.assertEqual(edit_route.terminal_status(failed, row)["status"], "FAIL")
+
+    def test_master_seal_rejects_corruption_and_incomplete_entries(self):
+        size = self.rows[0]["fixture_bytes"]
+        key = {"fixture_bytes": size, "fixture_sha256": v2.FIXTURE_SHA256[size],
+               "fixture_generator_seed": v2.FIXTURE_GENERATOR_SEED,
+               "benchmark_init_sha256": "a" * 64, "cargo_lock_sha256": "b" * 64}
+        with tempfile.TemporaryDirectory() as scratch:
+            directory = Path(scratch) / "master-v3"
+            directory.mkdir()
+            store = directory / "store.sqlite"
+            history = directory / "history.sqlite"
+            store.write_bytes(b"sealed store")
+            history.write_bytes(b"sealed history")
+            created = {"status": "COMPLETE", "project_id": "c" * 66,
+                       "genesis_layer": "d" * 66, "root": "e" * 64, "root_serial": 1}
+            record = {
+                "schema": "core-fs-bench-pro-exec-fuse-edit-master-v3",
+                "fixture_bytes": size, "fixture_sha256": v2.FIXTURE_SHA256[size],
+                "fixture_canonical_root": v2.FIXTURE_CANONICAL_ROOT[size],
+                "fixture_extent_count": v2.FIXTURE_INITIAL_COUNT[size],
+                "compatibility_key": key,
+                "compatibility_key_sha256": hashlib.sha256(
+                    json.dumps(key, sort_keys=True).encode()).hexdigest()[:16],
+                "store": str(store), "history": str(history),
+                "store_bytes": store.stat().st_size, "history_bytes": history.stat().st_size,
+                "store_sha256": edit_route.sha256(store),
+                "history_sha256": edit_route.sha256(history),
+                "producer_source_commit": "f" * 40, "producer_source_tree": "1" * 40,
+                "producer_binary_sha256": key["benchmark_init_sha256"],
+                "project_id": created["project_id"], "genesis_layer": created["genesis_layer"],
+                "genesis_root": created["root"], "genesis_root_serial": created["root_serial"],
+                "init_receipt": created,
+            }
+            (directory / "master.json").write_text(json.dumps(record))
+            self.assertEqual(edit_route._sealed_master(directory, key, size)["store_sha256"],
+                             record["store_sha256"])
+            cloned_store = Path(scratch) / "copy-store.sqlite"
+            cloned_history = Path(scratch) / "copy-history.sqlite"
+            cloned_store.write_bytes(store.read_bytes())
+            cloned_history.write_bytes(history.read_bytes())
+            self.assertTrue(edit_route._clone_seals(cloned_store, cloned_history, record)[1])
+            cloned_history.write_bytes(b"wrong copy")
+            self.assertFalse(edit_route._clone_seals(cloned_store, cloned_history, record)[1])
+            store.write_bytes(b"corrupt store")
+            with self.assertRaisesRegex(ValueError, "seal mismatch"):
+                edit_route._sealed_master(directory, key, size)
+            store.write_bytes(b"sealed store")
+            (directory / "store.sqlite-wal").write_bytes(b"incomplete")
+            with self.assertRaisesRegex(ValueError, "sidecars"):
+                edit_route._sealed_master(directory, key, size)
+            binary = Path(scratch) / "benchmark_init"
+            binary.write_bytes(b"never execute this incomplete attempt")
+            identity = {"cargo_lock_sha256": "b" * 64}
+            pending_key = edit_route.compatibility_key(
+                identity, {"bytes": size, "sha256": v2.FIXTURE_SHA256[size]}, self.rows[0],
+                edit_route.sha256(binary))
+            pending_digest = hashlib.sha256(json.dumps(pending_key, sort_keys=True).encode()
+                                            ).hexdigest()[:16]
+            (Path(scratch) / f".master-v3-{size}-{pending_digest}-interrupted").mkdir()
+            with self.assertRaisesRegex(ValueError, "incomplete prior v3 master"):
+                edit_route._master_v3(Path(scratch), size, {"benchmark_init": binary},
+                                      identity, "unused", self.rows[0], 1_000_000_000)
 
 
 if __name__ == "__main__":
