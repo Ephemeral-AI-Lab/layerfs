@@ -322,7 +322,8 @@ fn observe_failed_sandbox(
     docker_snapshot(
         output,
         &format!("{prefix}-docker-inspect"),
-        &["inspect", &container],
+        // Full inspect includes ephemeral control keys; State has the OOM facts.
+        &["inspect", "--format", "{{json .State}}", &container],
         receipt,
     );
     docker_snapshot(
@@ -1162,7 +1163,10 @@ fn baseline_exec_liveness_diagnostic() {
         if failed {
             let container = format!("layerfs-{sandbox}");
             for (name, args) in [
-                ("inspect", vec!["inspect", container.as_str()]),
+                (
+                    "inspect",
+                    vec!["inspect", "--format", "{{json .State}}", container.as_str()],
+                ),
                 ("top", vec!["top", container.as_str()]),
                 ("logs", vec!["logs", container.as_str()]),
             ] {
