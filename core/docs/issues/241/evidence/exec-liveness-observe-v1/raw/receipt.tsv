@@ -1,0 +1,15 @@
+schema	issue241-baseline-exec-liveness-diagnostic-v1
+command	printf baseline > .position-baseline
+cache	functional-uncontrolled;admission-ineligible
+status	STARTED
+sandbox_id	663d12ffabc2078f515086b13e2e32b8
+mount	Ok(Mount { id: WorkspaceId("b6a2d195822598ce9394e07e762155c4"), location: "/layerfs/workspace/b6a2d195822598ce9394e07e762155c4" })
+exec_elapsed_ms	24
+exec	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+docker_inspect_status	ExitStatus(unix_wait_status(0))
+docker_top_status	ExitStatus(unix_wait_status(0))
+docker_logs_status	ExitStatus(unix_wait_status(0))
+unmount	Ok(())
+sandbox_delete	Ok(())
+sandbox_absent	true
+status	PASS
