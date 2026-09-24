@@ -232,6 +232,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // The daemon forwards its own LFT1 records on its stderr, which the harness
     // cannot otherwise reach once the container is removed.
+    if let Ok(listed) = std::process::Command::new("docker")
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            "label=io.layerfs.owner=agent-sdk",
+            "--format",
+            "{{.ID}}",
+        ])
+        .output()
+    {
+        for id in String::from_utf8_lossy(&listed.stdout).lines() {
+            if let Ok(logs) = std::process::Command::new("docker")
+                .args(["logs", id])
+                .output()
+            {
+                eprint!("{}", String::from_utf8_lossy(&logs.stderr));
+            }
+        }
+    }
     if let Ok(logs) = std::process::Command::new("docker")
         .args(["logs", &sandbox_name])
         .output()
