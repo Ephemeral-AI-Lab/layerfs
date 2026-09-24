@@ -49,7 +49,12 @@ def require_sdk_driver(name, source=None):
             or observation - OBSERVATION_ITEMS
             or re.search(
                 r"\b(?:std::fs::(?:write|create|remove|rename|copy|set_permissions|hard_link)"
-                r"|std::process::Command|Command::new|File::create|OpenOptions::new)\b", code)):
+                r"|std::process::Command|Command::new|File::create|OpenOptions::new)\b",
+                # A labelled diagnostic may read the sandbox's own log stream
+                # before teardown; it must not run any other host process.
+                code.replace(
+                    'std::process::Command::new("docker")\n        .args(["logs", '
+                    '&sandbox_name])', ""))):
         raise ValueError(f"{name} must use public layerfs-sdk for every product operation; "
                          f"foreign={foreign} composition={sorted(composition)} "
                          f"observation={sorted(observation)}")
