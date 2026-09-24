@@ -23,6 +23,13 @@ The failed mount's first daemon-to-host `HistoryQuery` and enclosing
 Exec. This broadens the observed liveness gap to the upstream Service path;
 the exact nested transport/handler stage remains open.
 
+The source then fixed an independently evidenced closed-stdin polling spin in
+the composed host Service acceptor and added daemon LFT1 connect/Hello/call
+child spans. One [post-fix public SDK baseline control](evidence/postfix-baseline-v1/REPORT.md)
+passed from a fresh qualified 10 MiB copy. This verifies that control route
+on the new image; it does not prove the spin caused either historical
+`Unknown`, or qualify the missing positions.
+
 The [integrated position receipt](evidence/position-sweep-integrated/REPORT.md)
 has one Unknown baseline SDK Exec after 45 PASS cases on 10 MiB. Its command
 was a small shell write to .position-baseline. It did not reach range EDIT or
