@@ -1258,27 +1258,25 @@ fn baseline_exec_liveness_diagnostic() {
         failed = !exec
             .as_ref()
             .is_ok_and(|result| result.exit_status == Some(0));
-        if failed {
-            let container = format!("layerfs-{sandbox}");
-            for (name, args) in [
-                (
-                    "inspect",
-                    vec!["inspect", "--format", "{{json .State}}", container.as_str()],
-                ),
-                ("top", vec!["top", container.as_str()]),
-                ("logs", vec!["logs", container.as_str()]),
-            ] {
-                let snapshot = Command::new("docker").args(&args).output().unwrap();
-                File::create_new(output.join(format!("docker-{name}.stdout")))
-                    .unwrap()
-                    .write_all(&snapshot.stdout)
-                    .unwrap();
-                File::create_new(output.join(format!("docker-{name}.stderr")))
-                    .unwrap()
-                    .write_all(&snapshot.stderr)
-                    .unwrap();
-                writeln!(receipt, "docker_{name}_status\t{:?}", snapshot.status).unwrap();
-            }
+        let container = format!("layerfs-{sandbox}");
+        for (name, args) in [
+            (
+                "inspect",
+                vec!["inspect", "--format", "{{json .State}}", container.as_str()],
+            ),
+            ("top", vec!["top", container.as_str()]),
+            ("logs", vec!["logs", container.as_str()]),
+        ] {
+            let snapshot = Command::new("docker").args(&args).output().unwrap();
+            File::create_new(output.join(format!("docker-{name}.stdout")))
+                .unwrap()
+                .write_all(&snapshot.stdout)
+                .unwrap();
+            File::create_new(output.join(format!("docker-{name}.stderr")))
+                .unwrap()
+                .write_all(&snapshot.stderr)
+                .unwrap();
+            writeln!(receipt, "docker_{name}_status\t{:?}", snapshot.status).unwrap();
         }
         let unmount = api.unmount(&mount.id);
         writeln!(receipt, "unmount\t{unmount:?}").unwrap();
