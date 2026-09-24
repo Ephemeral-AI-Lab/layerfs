@@ -10,9 +10,9 @@
 //!
 //! - The daemon keeps at most one session across delivery threads. Its lock
 //!   serializes calls, and a lower request ID opens a new session before use.
-//! - Reuse never crosses a failure. Any error, including a remote refusal,
-//!   drops the connection and the next call opens a fresh one. A mutation
-//!   whose outcome is uncertain is never resent on a reused socket.
+//! - A confirmed missing-name Inspect refusal may retain its synchronized
+//!   session. Every other error drops it. A mutation whose outcome is
+//!   uncertain is never resent on a reused socket.
 //! - The idle window is short and bounded. A session left idle past it is
 //!   closed and replaced, so a server that has already timed out its side
 //!   cannot leave a client believing in a live connection.
@@ -22,6 +22,7 @@ use layerfs_bridge::{
     adapters::native::{
         client::Client,
         connection::{authenticate_until, connect_tcp_until},
+        reusable_inspect_refusal,
     },
     contract::{Failure, Request, Response, Source},
 };
@@ -68,10 +69,10 @@ impl Transport {
     }
 
     /// Delivers one request on the retained session, or on a fresh one when the
-    /// retained session is absent, idle past its bound, or failed.
+    /// retained session is absent, idle past its bound, or failed unsafely.
     ///
-    /// The first failure closes the session and is returned unchanged. Nothing
-    /// is retried: the caller sees the original outcome.
+    /// A definite missing-name Inspect refusal preserves synchronization;
+    /// other failures close the session. Nothing is retried.
     pub(crate) fn call(
         &mut self,
         request: &Request,
@@ -109,7 +110,11 @@ impl Transport {
             .child("daemon.service_call")
             .run(|_| session.client.call_until(request, input, output, deadline));
         session.idle_since = Instant::now();
-        if result.is_err() {
+        if result
+            .as_ref()
+            .err()
+            .is_some_and(|error| !reusable_inspect_refusal(request, error))
+        {
             self.session = None;
         }
         result

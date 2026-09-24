@@ -106,6 +106,66 @@ fn repeated_native_connections_authenticate_with_ordinary_tcp() {
 }
 
 #[test]
+fn definite_missing_inspect_keeps_one_authenticated_session() {
+    use layerfs_bridge::{
+        adapters::native::{client::Client, server::serve},
+        contract::{Code, Inspect, Operation, Request},
+    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+    let address = listener.local_addr().unwrap();
+    let private = [7; 32];
+    let server = [9; 32];
+    let public = *VerifiedPeer::from_private(&server).unwrap().public_key();
+    let peers = [Peer {
+        selector: 1,
+        public: *VerifiedPeer::from_private(&private).unwrap().public_key(),
+        expires_unix: u64::MAX,
+    }];
+    let calls = AtomicUsize::new(0);
+    std::thread::scope(|threads| {
+        let worker = threads.spawn(|| {
+            let (socket, _) = listener.accept().unwrap();
+            let connection = accept(socket, &server, &peers).unwrap();
+            let _ = serve(connection, |_, _, _, _, _| {
+                let code = if calls.fetch_add(1, Ordering::Relaxed) == 0 {
+                    Code::PathNotFound
+                } else {
+                    Code::NotFound
+                };
+                Err(code.into())
+            });
+        });
+        let mut client = Client::new(connect(address, 1, &private, &public).unwrap()).unwrap();
+        for (id, expected) in [(1, Code::PathNotFound), (2, Code::NotFound)] {
+            let request = Request {
+                id,
+                generation: 1,
+                store: 1,
+                profile: 1,
+                deadline_ms: 1000,
+                response_bytes: 0,
+                operation: Operation::Inspect {
+                    root: [1; 32],
+                    query: Inspect::File,
+                },
+            };
+            assert_eq!(
+                client
+                    .call(&request, &mut &[][..], &mut Vec::new())
+                    .unwrap_err()
+                    .code,
+                expected
+            );
+        }
+        drop(client);
+        worker.join().unwrap();
+    });
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+}
+
+#[test]
 fn productive_upload_keeps_the_response_wait_alive() {
     use std::time::{Duration, Instant};
     let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();

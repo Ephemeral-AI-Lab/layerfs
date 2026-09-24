@@ -107,9 +107,10 @@ connect and a Noise handshake. The native server already admits many successful
 requests per connection. `layerfs-daemon::transport` retains one session across
 delivery threads and serves their consecutive upstream calls on it. The daemon
 serializes those calls under one mutex. Reuse is bounded and failure-closed: a
-session is dropped on any error, including a remote refusal, so an uncertain
-mutation is never resent; a session idle beyond two seconds is closed and
-replaced, staying well inside the server's five-second idle limit. Request IDs
+session is dropped on every error except a definite missing-name Inspect
+refusal, so an uncertain mutation is never resent; a session idle beyond two
+seconds is closed and replaced, staying well inside the server's five-second
+idle limit. Request IDs
 are allocated before the mutex, so a lower ID can arrive after a higher one;
 the daemon closes the session before such a call and starts a fresh authenticated
 connection. This preserves the native `Client`'s per-session increasing-ID rule
@@ -143,6 +144,14 @@ summary with accepted, admitted, reaped, live, peak-live and dropped counts,
 plus the acceptor's terminal error code when it exits unexpectedly.
 Missing shutdown summary makes that diagnostic incomplete. These observations
 do not classify the historical `Unknown` cause or change admission behavior.
+The subsequent #241 missing-path correction uses source basis `9a377c85f`
+plus the coordinated client, server and daemon change in this commit. After
+a complete zero-input Inspect refusal with `PathNotFound` or `NotFound`, the
+server drains the input and sends the exact failure frame, then both sides
+retain the authenticated session for the next increasing request ID. Every
+other failure, including uncertain delivery, closes it. This removes the
+confirmed reconnect between missing-path lookup and inode reservation;
+it does not establish why one historical connection stalled.
 
 **Bounded Workspace control session.** `layerfs-sandbox::session` retains at
 most one authenticated control connection across rapid Workspace calls. A
@@ -497,9 +506,10 @@ seconds. The existing `connect` retains its separate five-second connect and
 authentication/HELLO caps. A consumer using `connect_until` also passes the same
 deadline to `Client::call_until`, so setup cannot grant a fresh operation budget.
 Connection errors retain their existing typed mapping; socket timeouts can still
-be reported as Io. Every failed Client operation closes that session, including
-confirmed logical absence; consumers must not reuse a failed client or replay
-the failed operation implicitly.
+be reported as Io. A complete missing-name Inspect refusal is the one
+synchronized error that permits session reuse. Every other failed Client
+operation closes the session; consumers must not replay a failed operation
+implicitly.
 
 ## Single-crate telemetry
 

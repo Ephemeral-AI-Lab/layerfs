@@ -202,11 +202,19 @@ impl Client {
                 }
             })();
             cancel.store(true, Ordering::Release);
-            if response.is_err() {
+            let reusable = response
+                .as_ref()
+                .err()
+                .is_some_and(|error| super::reusable_inspect_refusal(r, error));
+            if response.is_err() && !reusable {
                 receive.close();
             }
             let upload = upload.join().map_err(|_| delivery(r))?;
             match response {
+                Err(e) if reusable => {
+                    upload?;
+                    Err(e)
+                }
                 Err(e) => Err(e),
                 Ok(value) => {
                     upload.map_err(|_| delivery(r))?;
@@ -214,7 +222,11 @@ impl Client {
                 }
             }
         });
-        if result.is_err() {
+        if result
+            .as_ref()
+            .err()
+            .is_some_and(|error| !super::reusable_inspect_refusal(r, error))
+        {
             self.closed = true;
             self.connection.receive.close();
         }
