@@ -39,7 +39,8 @@ OBSERVATION_ITEMS = {"runtime", "output", "operation", "timer"}
 
 def require_sdk_driver(name, source=None):
     """Reject a performance driver that bypasses the public SDK package."""
-    source = source or CORE / "crates/layerfs-api/sdk/examples" / f"{name}.rs"
+    source = Path(source) if source else (
+        CORE / "crates/layerfs-api/sdk/examples" / f"{name}.rs")
     code = source.read_text()
     foreign = sorted(set(re.findall(r"\blayerfs_[a-z0-9_]+\b", code)) - DRIVER_CRATES)
     composition = set(re.findall(r"layerfs_server::([A-Za-z_][A-Za-z0-9_]*)", code))
@@ -408,9 +409,12 @@ def exec_edit_cursor_key():
 
 
 def build_exec_edit(out, target, identity):
-    """Builds the two release examples this route needs, sealed by hash."""
+    """Builds the release examples this route needs, sealed by hash."""
+    # Only a performance driver must use the public SDK for every product
+    # operation; the independent verifier reads public C1/C2/C5 readers instead.
     for name in EXEC_EDIT_BINARIES:
-        require_sdk_driver(name)
+        if name.startswith("benchmark_"):
+            require_sdk_driver(name)
     started = time.monotonic_ns()
     with (out / "build.log").open("wb") as log:
         process = subprocess.run(EXEC_EDIT_BUILD, cwd=ROOT,
