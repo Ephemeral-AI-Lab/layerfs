@@ -367,6 +367,10 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
     output = Path(output or folder)
     driver = receipt.get("driver") or {}
     record = dict(line.split("=", 1) for line in Path(case_path).read_text().splitlines() if line)
+    # The Branch identity and its published head exist only after the fork and
+    # Commit, so the verifier receives them from the retained performance receipt
+    # and checks them against the reopened history.
+    record["branch_id"] = driver.get("branch_id", "")
     record["expected_head_commit"] = driver.get("head_commit", "")
     bound = folder / "verifier-case.txt"
     bound.write_text("".join(f"{key}={value}\n" for key, value in sorted(record.items())))
