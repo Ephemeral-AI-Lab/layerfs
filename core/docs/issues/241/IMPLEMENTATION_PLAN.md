@@ -29,6 +29,19 @@ stale-handle lifecycle and sub-millisecond CPU attribution remain unproved.
 Those gaps are a focused next probe, not a failed ioctl or an Edit→Commit
 performance claim. No product splice or registered #241 case was run.
 
+**Follow-up evidence (2026-09-24):** The [mounted failure and CPU
+summary](evidence/carrier-followup-summary.md) links separate append-only
+receipts. Boundary LFT1 captured nonzero process-shared CPU for all four
+virtual ioctl sizes and the WRITE controls; cache still forbids an admitted
+latency PASS. A real read-only mount required daemon-side `EROFS` refusal, and
+deliberate daemon death after test-only publication gave the caller
+`ECONNABORTED`, confirming the need for an uncertain outcome. Most notably,
+`fuser` invalidation returned `Ok` even after unmount, so that return cannot
+by itself certify live client coherence. The candidate is still promising;
+the remaining Phase 1 decision concerns truthful product acknowledgement and
+caller-observed readback, not carrier speed optimization. No product change or
+registered Edit→Commit sample followed from these diagnostics.
+
 The Workspace range-edit semantics must remain portable product code; Linux FUSE,
 future macFUSE and future Windows WinFsp are adapters with separate capability
 and coherence proofs. #241 implements and measures the current Linux adapter,
