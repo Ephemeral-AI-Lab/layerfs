@@ -20,6 +20,13 @@ readback passed. See the [result](../c3-prerequisite-inode-fusion-result-2026092
 It is kept. Namespace Save still sets the high-water, so Treatment B
 remains unrun and the full bounded builder remains a separate design.
 
+**Fresh C1 scratch outcome, 2026-09-24:** a later, separately frozen
+prototype removed tree-wide validation copies in the fresh path, but its
+[one-shot result](../c1-fresh-validation-memory-result-20260924.md)
+reduced whole-call peak RSS by only **2.42 MiB**, below the 8-MiB gate.
+It passed full readback and was reverted. Namespace still sets the peak;
+the remaining bound needs input ownership and a builder-level design.
+
 ## Review verdict
 
 The measured maximum occurs during namespace construction, after the full

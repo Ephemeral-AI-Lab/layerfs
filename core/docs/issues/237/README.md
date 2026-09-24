@@ -51,6 +51,9 @@ failed its frozen whole-call peak gate and was reverted. The later
 [direct-inode allocation treatment](c3-prerequisite-inode-fusion-result-20260924.md)
 avoided two namespace root vectors and cut one diagnostic whole-call
 peak by 17.22 MiB, while remaining ineligible for a speed claim.
+The subsequent [fresh C1 validation state treatment](c1-fresh-validation-memory-result-20260924.md)
+passed full readback but cut peak by only 2.42 MiB against its frozen
+8-MiB gate; it was reverted without a speed claim.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

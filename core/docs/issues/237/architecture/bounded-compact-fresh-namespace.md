@@ -159,6 +159,11 @@ The separate [direct-inode result](../c3-prerequisite-inode-fusion-result-202609
 then avoided the two intermediate root vectors and observed a 17.22-MiB
 whole-call peak reduction. It still retains the entry list and C1's
 whole-tree validation state, so it does not establish the bound proposed here.
+The [fresh C1 validation-state prototype](../c1-fresh-validation-memory-result-20260924.md)
+then removed some duplicate reachability and binding collections but cut
+whole-call peak by only 2.42 MiB against its 8-MiB gate; it was reverted.
+That result reinforces the need to avoid complete input materialization
+for a larger peak reduction.
 
 Fewer allocations and sequential construction might improve speed, but
 counting, ordering, validation or backing I/O might erase that gain. The

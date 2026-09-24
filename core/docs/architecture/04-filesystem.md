@@ -12,10 +12,6 @@ The #237 direct fresh-build change in this research tree starts from
 `3c2c8d793` and is described below with its same-commit source edit. Its
 fixed-identity proof is in [`c1-fixed-identity.md`](../issues/237/c1-fixed-identity.md);
 this branch has not been merged or release-qualified.
-The #237 fresh-validation memory treatment starts from product source
-`ef59cabc652824e6508ec9fc3e49c0a43114b65a` plus the same-commit
-`filesystem/update.rs` and `filesystem/validate.rs` edits described in §5.8.
-Older descriptions retain their own source pins.
 
 ---
 
@@ -343,21 +339,3 @@ record cache, format change, or validation shortcut is introduced; validation's
 existing memo is not extended across phases. Directory value overlay remains
 outside the `directories` phase, as before. Exact roots, quota outcomes and read
 counts are checked externally; this description makes no latency claim.
-
-### 5.8 Fresh validation state on native Init (#237)
-
-The internal base-less `run` does not consume the returned `additions` map.
-It uses the same complete validation checks but omits zero-count entries for
-file bindings from that private result; the public `validate::check` still
-returns its original map for callers. Fresh reachability reads the already
-sorted `DirectoryUpdate` slices directly and only queues directory children,
-because regular files have no child bindings. `unreachable_parents` starts
-with candidate newly declared directory parents and removes those reached
-by any stated binding, rather than retaining every bound child.
-
-The same invalid topology, wrong-kind, duplicate-parent and disconnected-
-cycle checks run before any tree object is emitted. The directory and inode
-construction engines, their canonical bytes, output order and update
-semantics are unchanged. This cuts duplicate fresh-build validation collections; it
-does not bound the caller's complete `FilesystemInput` slices or promise a
-process-RSS or speed gain. Those require a separate measured treatment.
