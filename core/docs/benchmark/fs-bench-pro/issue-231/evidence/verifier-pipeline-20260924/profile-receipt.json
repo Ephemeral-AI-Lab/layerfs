@@ -1,0 +1,21 @@
+{
+  "binary_sha256": "041ec1ccaea600e8e511d26616684f5b4c44ccd65399aeadc81d6a140d6364b4",
+  "cache_contract": "retained Store; cache state uncontrolled",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/core/target/release/examples/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue231-release-four-tier-48282bfb8-100000/sdk-host/init_namespace/namespace-100000/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue231-release-four-tier-48282bfb8-100000/sdk-host/init_namespace/namespace-100000/history.sqlite",
+    "338c65defecc949211190a4c3af54d5032b3ab45cc9ff505d7a4c35a747dbb95",
+    "c2bc6081383c65d5b63fb04c30abca8b",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+    "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5"
+  ],
+  "diagnostic_only": true,
+  "exit_code": null,
+  "history_auth_skipped": true,
+  "instrument_sha256": "eb4811d8b0ab5405c1e859c4b484dc8febd914d1e75873b512b5520d004477cf",
+  "source_commit": "05130dfa15bd59b5e49425c02c5ae5bafab8fe31",
+  "status": "TIMEOUT",
+  "wall_ns": 9805215459,
+  "watchdog_ns": 9800000000
+}

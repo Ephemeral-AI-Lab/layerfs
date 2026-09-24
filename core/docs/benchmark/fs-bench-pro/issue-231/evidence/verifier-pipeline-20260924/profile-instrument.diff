@@ -1,0 +1,88 @@
+diff --git a/core/crates/layerfs-service/examples/verify_namespace.rs b/core/crates/layerfs-service/examples/verify_namespace.rs
+index edd155d8a..31a8fda02 100644
+--- a/core/crates/layerfs-service/examples/verify_namespace.rs
++++ b/core/crates/layerfs-service/examples/verify_namespace.rs
+@@ -16,6 +16,7 @@ use std::{
+     io::{self, Write},
+     path::Path,
+     sync::Mutex,
++    time::Instant,
+ };
+ 
+ const VERIFY_WORKERS: usize = 4;
+@@ -126,6 +127,7 @@ fn verify_files(
+     store: &Store,
+     expected: &BTreeMap<String, Expected>,
+     jobs: VecDeque<(String, InodeValue)>,
++    started: Instant,
+ ) -> Result<(u64, u64, u64), String> {
+     let queue = Mutex::new(jobs);
+     std::thread::scope(|scope| {
+@@ -167,7 +169,7 @@ fn verify_files(
+                     files += 1;
+                     bytes += output.bytes;
+                     if files % 500 == 0 {
+-                        eprintln!("LFS237 verifier worker files={files} bytes={bytes} metadata_attribute_waves={}", attributes.read_waves);
++                        eprintln!("LFS237 verifier worker files={files} bytes={bytes} metadata_attribute_waves={} elapsed_ms={}", attributes.read_waves, started.elapsed().as_millis());
+                     }
+                 }
+                 Ok((files, bytes, attributes.read_waves))
+@@ -185,6 +187,7 @@ fn verify_files(
+ }
+ 
+ fn main() -> Result<(), Box<dyn std::error::Error>> {
++    let started = Instant::now();
+     let args: Vec<_> = std::env::args().collect();
+     if args.len() != 7 {
+         return Err(
+@@ -197,22 +200,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+         return Err("sealed manifest digest mismatch".into());
+     }
+     let expected = manifest(&raw)?;
++    eprintln!("LFS237 profile manifest_done_ms={}", started.elapsed().as_millis());
+     let root = ObjectId::from_bytes(&unhex(&args[3])?)?;
+     let stack: [u8; 16] = unhex(&args[4])?
+         .try_into()
+         .map_err(|_| "stack body width")?;
+-    let cursor: [u8; 32] = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?
+-        .try_into()
+-        .map_err(|_| "cursor key width")?;
+-    let history = open_read_only(Path::new(&args[2]), b"layerfs-bench-pro", cursor)?;
+-    let record = history
+-        .layer_stack(LayerStackId::from_authority(stack))?
+-        .ok_or("missing stack")?;
+-    let layer = history
+-        .layer(record.head_layer)?
+-        .ok_or("missing genesis layer")?;
+-    if layer.root != root {
+-        return Err("history root differs from returned root".into());
++    if std::env::var_os("LAYERFS_VERIFY_STORE_ONLY").is_none() {
++        let cursor: [u8; 32] = unhex(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?)?
++            .try_into()
++            .map_err(|_| "cursor key width")?;
++        let history = open_read_only(Path::new(&args[2]), b"layerfs-bench-pro", cursor)?;
++        let record = history
++            .layer_stack(LayerStackId::from_authority(stack))?
++            .ok_or("missing stack")?;
++        let layer = history
++            .layer(record.head_layer)?
++            .ok_or("missing genesis layer")?;
++        if layer.root != root {
++            return Err("history root differs from returned root".into());
++        }
+     }
+     let store = Timing::disabled("open", |scope| Store::open(&args[1], scope.child("store"))).0?;
+     let provider = StoreProvider::new(&store);
+@@ -265,9 +271,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+     if seen.len() != expected.len() {
+         return Err("missing output paths".into());
+     }
+-    eprintln!("LFS237 verifier traversal paths={} directories={} queued_files={} metadata_attribute_waves={}", seen.len(), directories, jobs.len(), attributes.read_waves);
++    eprintln!("LFS237 verifier traversal paths={} directories={} queued_files={} metadata_attribute_waves={} elapsed_ms={}", seen.len(), directories, jobs.len(), attributes.read_waves, started.elapsed().as_millis());
+     let (files, bytes, file_metadata_waves) =
+-        verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
++        verify_files(&store, &expected, jobs, started).map_err(io::Error::other)?;
++    eprintln!("LFS237 profile verified_files_ms={}", started.elapsed().as_millis());
+     println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
+         seen.len(), files, directories, bytes, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);
+     Ok(())
