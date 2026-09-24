@@ -668,13 +668,14 @@ def main():
     report_edit_parser.add_argument("--runs", required=True)
     report_edit_parser.add_argument("--out")
     args = parser.parse_args()
-    edit_rows = {row["scenario_id"]: row for row in edit.registry()}
-    edit_families = {row["family_id"] for row in edit.registry()}
+    edit_registry = edit.registry()
+    edit_rows = {row["scenario_id"]: row for row in edit_registry}
+    edit_families = {row["family_id"] for row in edit_registry}
     if args.command == "list":
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
-        for row in edit.registry():
+        for row in edit_registry:
             state = (f"REGISTERED target={row['g2_target_ms']:.2f}ms"
                      if row["registration_status"] == "REGISTERED"
                      else f"NOT_RUN {row['not_run_reason'].split(':')[0]}")
@@ -683,7 +684,7 @@ def main():
     elif args.command == "run":
         selection = args.case or args.family
         if selection in edit_rows or selection in edit_families:
-            selection = next((row["scenario_id"] for row in edit.registry()
+            selection = next((row["scenario_id"] for row in edit_registry
                               if row["scenario_id"] == selection
                               or row["family_id"] == selection
                               and row["registration_status"] == "REGISTERED"), None)

@@ -26,6 +26,7 @@ unchanged; the case identity carries the new scenario version.
 Run `python3 shared/edit_contract.py` from this directory to regenerate
 `registry/workspace-exec-edit-v2.json` and print its SHA-256.
 """
+import functools
 import hashlib
 import json
 from pathlib import Path
@@ -456,7 +457,8 @@ def family_registry(family_id, operations, targets):
     return rows
 
 
-def registry():
+@functools.lru_cache(maxsize=1)
+def _registry():
     import sys as _sys
     if str(BENCH) not in _sys.path:
         _sys.path.insert(0, str(BENCH))
@@ -490,7 +492,18 @@ def registry():
             raise ValueError(f"{row['scenario_id']}: shift direction")
         if len(row["final_sha256"]) != 64:
             raise ValueError(f"{row['scenario_id']}: final digest")
-    return rows
+    return tuple(rows)
+
+
+def registry():
+    """The 56 frozen rows, computed once per process and returned read-only.
+
+    Every row is derived from the frozen recipe, so recomputing it cannot change
+    an answer; memoizing only removes the redundant per-process recomputation of
+    the 500 MiB result digests from the harness's own wall time. Callers must
+    treat the returned rows as read-only evidence.
+    """
+    return list(_registry())
 
 
 def document():
