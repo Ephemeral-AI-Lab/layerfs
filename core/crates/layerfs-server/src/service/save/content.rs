@@ -236,6 +236,11 @@ pub fn mutate(
     });
     match result {
         Ok((root, length, metadata)) => {
+            eprintln!(
+                "DIAG saved op={} length={length} metadata={:?}",
+                r.operation.label(),
+                metadata.is_some()
+            );
             let outcome = save
                 .finish(scope.child("service.finish"))
                 .map_err(storage)?;

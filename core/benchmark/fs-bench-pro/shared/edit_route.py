@@ -53,6 +53,40 @@ def daemon_diag_snapshot(folder, deadline_s=15.0):
     return False
 
 
+def daemon_log_capture(folder, deadline_s=20.0):
+    """Streams an owned sandbox's log for the life of one sample.
+
+    The sandbox does not exist until the driver creates it, so attaching polls
+    for it; `--since` replays whatever the daemon already wrote, so no record is
+    lost to the attach. The stream is drained after the driver exits.
+    """
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    deadline = time.monotonic() + deadline_s
+    containers = []
+    while time.monotonic() < deadline:
+        containers = owned_containers()
+        if containers:
+            break
+        time.sleep(0.01)
+    if not containers:
+        (folder / "daemon.log").write_bytes(b"NO_CONTAINER\n")
+        return
+    process = subprocess.Popen(["docker", "logs", "--follow", "--since", since] + containers,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    chunks = []
+    try:
+        while time.monotonic() < deadline:
+            line = process.stdout.readline()
+            if not line:
+                break
+            chunks.append(line)
+    except Exception:  # noqa: BLE001 - a diagnostic never fails a sample
+        pass
+    process.kill()
+    process.wait()
+    (folder / "daemon.log").write_bytes(b"".join(chunks))
+
+
 def daemon_log_stream(deadline_s=10.0):
     """Streams every owned sandbox's log for the life of one sample.
 
@@ -313,7 +347,8 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         command = [str(binaries[DRIVER]), case_spec(record), str(store), str(history), image,
                    f"exec-{row['scenario_id'][:40]}"]
         environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
-        daemon_log = daemon_log_stream()
+        daemon_log = threading.Thread(target=daemon_log_capture, args=(folder,), daemon=True)
+        daemon_log.start()
         diag = threading.Thread(target=daemon_diag_snapshot, args=(folder,), daemon=True)
         diag.start()
         started = time.monotonic_ns()
@@ -324,14 +359,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         except subprocess.TimeoutExpired as error:
             stdout, stderr, code, timed_out = error.stdout or b"", error.stderr or b"", None, True
         wall = time.monotonic_ns() - started
-        if daemon_log is not None:
-            daemon_log.terminate()
-            try:
-                sandbox_log = daemon_log.communicate(timeout=5)[0]
-            except subprocess.TimeoutExpired:
-                daemon_log.kill()
-                sandbox_log = daemon_log.communicate()[0]
-            (folder / "daemon.log").write_bytes(sandbox_log)
+        daemon_log.join(timeout=20)
         # The telemetry crate forwards LFT1 records on stderr; the driver's own
         # receipt is one tagged stdout line. Both streams are retained whole.
         lft1 = [line for line in stderr.splitlines() if line.startswith(b"LFT1 ")]
