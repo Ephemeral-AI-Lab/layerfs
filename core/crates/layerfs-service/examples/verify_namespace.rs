@@ -15,7 +15,7 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
-    sync::Mutex,
+    sync::{mpsc, Mutex},
 };
 
 const VERIFY_WORKERS: usize = 4;
@@ -125,9 +125,8 @@ fn check_metadata(
 fn verify_files(
     store: &Store,
     expected: &BTreeMap<String, Expected>,
-    jobs: VecDeque<(String, InodeValue)>,
+    queue: &Mutex<mpsc::Receiver<(String, InodeValue)>>,
 ) -> Result<(u64, u64, u64), String> {
-    let queue = Mutex::new(jobs);
     std::thread::scope(|scope| {
         let mut workers = Vec::new();
         for _ in 0..VERIFY_WORKERS {
@@ -142,8 +141,8 @@ fn verify_files(
                     let job = queue
                         .lock()
                         .map_err(|_| "verifier queue poisoned")?
-                        .pop_front();
-                    let Some((path, value)) = job else { break };
+                        .recv();
+                    let Ok((path, value)) = job else { break };
                     let wanted = expected.get(&path).ok_or("unexpected actual path")?;
                     check_metadata(&provider, value, wanted, &path, &mut attributes, &mut memo)?;
                     let mut output = DigestWriter {
@@ -225,49 +224,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut seen = BTreeSet::from([String::new()]);
     let mut attributes = AttributeReadWork::default();
     let mut memo = None;
-    let mut jobs = VecDeque::new();
+    // ponytail: this verifier channel can hold O(files), as the old VecDeque did;
+    // bound it if verifier RSS becomes an admission gate.
+    let (sender, receiver) = mpsc::channel();
+    let receiver = Mutex::new(receiver);
+    let mut discovered_files = 0usize;
     let mut directories = 0u64;
-    while let Some((path, value)) = pending.pop_front() {
-        let wanted = expected.get(&path).ok_or("unexpected actual path")?;
-        let logical = LogicalPath::new(&path)?;
-        check_metadata(&provider, value, wanted, &path, &mut attributes, &mut memo)?;
-        if value.kind != InodeKind::Directory {
-            return Err(format!("listed non-directory for traversal: {path}").into());
-        }
-        directories += 1;
-        let mut after = None;
-        loop {
-            let page = fs.list(&logical, after.as_ref(), 128, 16_384)?;
-            let serials: Vec<_> = page.entries.iter().map(|(_, serial)| *serial).collect();
-            let inodes = fs.lookup_inodes(&serials)?;
-            for ((name, _), inode) in page.entries.into_iter().zip(inodes) {
-                let child = if path.is_empty() {
-                    name.as_str().to_owned()
-                } else {
-                    format!("{path}/{}", name.as_str())
-                };
-                if !seen.insert(child.clone()) {
-                    return Err(format!("duplicate actual path: {child}").into());
+    let (files, bytes, file_metadata_waves) = std::thread::scope(
+        |scope| -> Result<_, Box<dyn std::error::Error>> {
+            let verifier = scope.spawn(|| verify_files(&store, &expected, &receiver));
+            let traversal = (|| -> Result<(), Box<dyn std::error::Error>> {
+                while let Some((path, value)) = pending.pop_front() {
+                    let wanted = expected.get(&path).ok_or("unexpected actual path")?;
+                    let logical = LogicalPath::new(&path)?;
+                    check_metadata(&provider, value, wanted, &path, &mut attributes, &mut memo)?;
+                    if value.kind != InodeKind::Directory {
+                        return Err(format!("listed non-directory for traversal: {path}").into());
+                    }
+                    directories += 1;
+                    let mut after = None;
+                    loop {
+                        let page = fs.list(&logical, after.as_ref(), 128, 16_384)?;
+                        let serials: Vec<_> =
+                            page.entries.iter().map(|(_, serial)| *serial).collect();
+                        let inodes = fs.lookup_inodes(&serials)?;
+                        for ((name, _), inode) in page.entries.into_iter().zip(inodes) {
+                            let child = if path.is_empty() {
+                                name.as_str().to_owned()
+                            } else {
+                                format!("{path}/{}", name.as_str())
+                            };
+                            if !seen.insert(child.clone()) {
+                                return Err(format!("duplicate actual path: {child}").into());
+                            }
+                            let value = inode.ok_or("missing listed inode")?;
+                            match value.kind {
+                                InodeKind::Directory => pending.push_back((child, value)),
+                                InodeKind::RegularFile => {
+                                    sender
+                                        .send((child, value))
+                                        .map_err(|_| "file verifier stopped")?;
+                                    discovered_files += 1;
+                                }
+                                InodeKind::Symlink => {
+                                    return Err("unexpected actual symlink".into())
+                                }
+                            }
+                        }
+                        after = page.continuation;
+                        if after.is_none() {
+                            break;
+                        }
+                    }
                 }
-                let value = inode.ok_or("missing listed inode")?;
-                match value.kind {
-                    InodeKind::Directory => pending.push_back((child, value)),
-                    InodeKind::RegularFile => jobs.push_back((child, value)),
-                    InodeKind::Symlink => return Err("unexpected actual symlink".into()),
+                if seen.len() != expected.len() {
+                    return Err("missing output paths".into());
                 }
-            }
-            after = page.continuation;
-            if after.is_none() {
-                break;
-            }
-        }
-    }
-    if seen.len() != expected.len() {
-        return Err("missing output paths".into());
-    }
-    eprintln!("LFS237 verifier traversal paths={} directories={} queued_files={} metadata_attribute_waves={}", seen.len(), directories, jobs.len(), attributes.read_waves);
-    let (files, bytes, file_metadata_waves) =
-        verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
+                eprintln!("LFS237 verifier traversal paths={} directories={} discovered_files={} metadata_attribute_waves={}", seen.len(), directories, discovered_files, attributes.read_waves);
+                Ok(())
+            })();
+            drop(sender);
+            let verified = verifier
+                .join()
+                .map_err(|_| io::Error::other("file verifier panic"))?
+                .map_err(io::Error::other);
+            traversal?;
+            Ok(verified?)
+        },
+    )?;
     println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
         seen.len(), files, directories, bytes, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);
     Ok(())

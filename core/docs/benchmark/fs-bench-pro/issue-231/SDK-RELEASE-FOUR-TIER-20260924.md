@@ -4,6 +4,9 @@
 > row. Owner direction on 2026-09-24 supersedes the earlier debug-only Core
 > SDK Init profile. Historical debug receipts and frozen contracts keep their
 > recorded identities and statuses; none is relabeled or resampled.
+> **Verifier amendment:** the five-second limit below applies to this
+> historical v3 cohort. The prospective [v4 verifier treatment](SDK-VERIFIER-PIPELINE-20260924.md)
+> selects 9.5 s for new receipts; old five-second results remain unchanged.
 
 This selection uses the four exact `core-sdk-init-fixture-v2` cases from the
 [registry](../../../../benchmark/fs-bench-pro/families/init_namespace.py):

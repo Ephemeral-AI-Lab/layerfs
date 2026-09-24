@@ -20,9 +20,10 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 
-CONTRACT_COMMIT = "23787205938e075d8ec4f7a9af841843f31e4778"
+CONTRACT_COMMIT = "1ab035c5cdd6ff207ad3bc93302fcfcae9c89cb0"
 BUILD_PROFILE = "release"
 BINARY_DIR = "release/examples"
+VERIFY_TIMEOUT_S = 9.5
 BUILD = ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
@@ -139,7 +140,7 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
                fixture["manifest"], fixture["manifest_sha256"]]
     started = time.monotonic_ns()
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5,
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=VERIFY_TIMEOUT_S,
                                 env={**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": cursor})
         wall = time.monotonic_ns() - started
         stdout, stderr = result.stdout, result.stderr
@@ -155,7 +156,7 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
         child, status, exit_code = None, "TIMEOUT", None
     (folder / "verifier.stdout").write_bytes(stdout)
     (folder / "verifier.stderr").write_bytes(stderr)
-    receipt = {"status": status, "wall_ns": wall, "budget_ns": 5_000_000_000,
+    receipt = {"status": status, "wall_ns": wall, "budget_ns": int(VERIFY_TIMEOUT_S * 1_000_000_000),
                "exit_code": exit_code, "command": command, "child": child,
                "stderr": stderr[:4096].decode(errors="replace")}
     write_json(folder / "verification.json", receipt)
@@ -165,11 +166,11 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
 def case_run(out, case, binaries, identity):
     folder = out / "sdk-host" / "init_namespace" / case.id
     folder.mkdir(parents=True)
-    receipt = {"schema": "core-fs-bench-pro-sdk-init-release-v3", "case": case.id,
+    receipt = {"schema": "core-fs-bench-pro-sdk-init-release-v4", "case": case.id,
                "build_profile": BUILD_PROFILE,
-               "benchmark_registration": ("REGISTERED_SDK_RELEASE_V3" if case.id in init.SELECTED
+               "benchmark_registration": ("REGISTERED_SDK_RELEASE_V4" if case.id in init.SELECTED
                                           else "UNREGISTERED_DIAGNOSTIC"),
-               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 3,
+               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 4,
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "operation_contract_id": "sdk-init-project-host-v1",
                "operation_surface": "layerfs-sdk", "operation_entrypoint": "Client::init_project",
@@ -220,7 +221,7 @@ def case_run(out, case, binaries, identity):
             receipt["verification"] = verification
             receipt["functional_status"] = "PASS" if (
                 receipt["performance_command_status"] == "PASS" and
-                verification["status"] == "PASS" and verification["wall_ns"] <= 5_000_000_000
+                verification["status"] == "PASS" and verification["wall_ns"] <= int(VERIFY_TIMEOUT_S * 1_000_000_000)
             ) else "FAIL"
         else:
             receipt["verification"] = {"status": "NOT_RUN", "reason": "no confirmed SDK root"}
@@ -324,10 +325,10 @@ def run(selection, out):
                 for case in cases:
                     case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
-    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-release-v3", "selection": selection,
+    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-release-v4", "selection": selection,
         "build_profile": BUILD_PROFILE,
         "benchmark_registration": ("UNREGISTERED_DIAGNOSTIC" if selection in init.CASES
-                                   and selection not in init.SELECTED else "REGISTERED_SDK_RELEASE_V3"),
+                                   and selection not in init.SELECTED else "REGISTERED_SDK_RELEASE_V4"),
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})

@@ -31,8 +31,10 @@ fallback or reuse of an old unmarked/debug build cache is allowed. Keep all
 older debug v2 and release research receipts under their original identities;
 never promote them into the new release selection. A source/cache/operation
 change requires its own frozen identity and fresh receipts.
-The complete performance command has a 15 s budget; the independent verifier
-has a 5 s budget. The two-case cycle has a recommended 30 s budget. Hold the
+The complete performance command has a 15 s budget; the independent full
+verifier has a prospectively fixed 9.5 s budget, strictly below 10 s.
+Historical 5 s receipts keep that limit. The two-case cycle has a recommended
+30 s budget. Hold the
 nonblocking worktree-local run lock while fixtures and result files are mutable;
 never block another owner's worktree. No build overlaps a timed operation in
 this worktree.
