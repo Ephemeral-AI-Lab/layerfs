@@ -1,0 +1,1 @@
+78 142 0:64 / /probe/coherence/mnt rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,max_read=1048576

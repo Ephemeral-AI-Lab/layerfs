@@ -15,3 +15,4 @@ libc = "=0.2.189"
 
 [dev-dependencies]
 layerfs-bridge = { path = "../layerfs-bridge" }
+layerfs-telemetry = { path = "../layerfs-telemetry", features = ["native"] }
