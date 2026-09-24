@@ -1,0 +1,1 @@
+{"argv": ["docker", "exec", "-e", "PROBE_CASE=ioctl-500m", "-e", "PROBE_ROOT=/probe/ioctl-500m", "layerfs-241-cpu-probe-de4cb0", "/runner/range_ioctl_cpu_probe-1aff9fc4deff40ad", "--ignored", "--exact", "linux::probe", "--nocapture"], "complete_command_wall_ns": 80948083, "exit_code": 0}
