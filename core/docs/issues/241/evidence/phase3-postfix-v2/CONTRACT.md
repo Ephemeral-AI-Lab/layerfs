@@ -15,9 +15,11 @@ hashes, immutable daemon/tool image, prepared master keys and hashes, fixture
 hashes, telemetry identities and four fresh output paths must be written to a
 new append-only plan before execution. Do not promote a v1 result to v2.
 
-Prepare each size's closed master once via release SDK Init at the new source
-identity. The functional test makes one independent writable byte copy per
-size. Keep one construction worker. Each position uses its own Branch and
+Use the existing closed release SDK Init master when its exact fixture, Init
+binary and lockfile compatibility key still match; otherwise prepare it once
+at the new identity. Record the producer commit and reuse decision for each
+size. The functional test makes one independent writable byte copy per size.
+Keep one construction worker. Each position uses its own Branch and
 Sandboxes. A size stops after its first failure with explicit `NOT_RUN`
 receipts; run the other declared sizes once. Retain failures, fresh-mount
 daemon diagnostics, cleanup outcomes and all passing receipts. A diagnostic
