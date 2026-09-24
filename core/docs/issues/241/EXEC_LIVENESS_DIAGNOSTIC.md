@@ -30,6 +30,11 @@ passed from a fresh qualified 10 MiB copy. This verifies that control route
 on the new image; it does not prove the spin caused either historical
 `Unknown`, or qualify the missing positions.
 
+One [post-fix 10 MiB diagnostic selection](evidence/postfix-position-diagnostic-v1/REPORT.md)
+then completed all 66 positions with passing byte, Commit and cleanup
+checks. It is one new-source diagnostic with uncontrolled cache, not a
+replacement of the failed historical selections or a full Phase 3 pass.
+
 The [integrated position receipt](evidence/position-sweep-integrated/REPORT.md)
 has one Unknown baseline SDK Exec after 45 PASS cases on 10 MiB. Its command
 was a small shell write to .position-baseline. It did not reach range EDIT or
