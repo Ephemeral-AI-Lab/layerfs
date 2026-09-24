@@ -1,0 +1,21 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "candidate_output": "benchmark-results/fs-bench-pro/issue237-c1-fresh-val-20260924-01",
+  "candidate_peak_target_bytes": 119242752,
+  "candidate_product_seal": "aea0b49350972248e0ef02d2bbad6cb8ada6b45362869182f14bf800e37f548f",
+  "control_peak_rss_bytes": 127631360,
+  "control_product_seal": "79eef35961f0ccc1a837507871cabe0d40b650465546639933cc5828897c44c1",
+  "control_receipt": "core/docs/issues/237/evidence/c3-inode-fusion-20260924/candidate/receipt.json",
+  "driver_sha256": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+  "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+  "instrument_diff_sha256": "1e37b9ef099a469c64518e68a77be3da8657d566f14d9b0a7a7482cab400f677",
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "measurement": "one real public Client::init_project call, fresh source byte copy/Store/History, separate full 101001-path 500000000-byte oracle; no resampling",
+  "profile": "locked release diagnostic; registered SDK debug selection separate",
+  "question": "skip unused zero-count additions, avoid copied reachability children/file traversal, and bound dead-parent candidates; does whole-call peak fall >=8 MiB?",
+  "runner_sha256": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f",
+  "source_commit": "7ae155265a1f212bec99f68a820e35b5a119f8f2",
+  "source_tree": "afed3c8fd6ecbc450116369cbb88e64d18eec99a",
+  "status": "FROZEN_BEFORE_BUILD",
+  "whole_call_peak_reduction_target_bytes": 8388608
+}

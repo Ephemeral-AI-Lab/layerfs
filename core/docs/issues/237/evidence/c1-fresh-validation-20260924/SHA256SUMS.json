@@ -1,0 +1,16 @@
+{
+  "candidate/build.json": "5c8fad22fedf1bbf80d49f5dc882bdd61194a7071c0032c72bf170c56cf5c8ba",
+  "candidate/cold-launch.json": "8a991458a3ed2ab66461501608ceae329fedd14601e89d9c6acd7d6cc8bf052b",
+  "candidate/cold-preflight.json": "6d6b9d7d59b2d39647bdd3fdff15ba5c85a107144734384708305db16088680f",
+  "candidate/driver.stderr": "ba03a08fef040c4e8abb2ded1df7ffff9acf5f0a4294a71d3b193ec1aba0dd42",
+  "candidate/driver.stdout": "1814720a0aa4125d4c1bb254e987ab815f3e46432c7ce5c39a12c6be91a0e4a4",
+  "candidate/history-geometry.json": "eafa8ad8b1e3560839f488b519cadcc6b59a23cdcff973b3d558031708f07e3e",
+  "candidate/perf.jsonl": "f0d5e71fafd19b1e2e7aaec77078d52afe828d80d9640cc8f55dc9993419f90b",
+  "candidate/receipt.json": "097ef59624721e66ebbff8649c2d4690f402c1ad130e85272bd79953e9a3ec96",
+  "candidate/source-residency-after.json": "5732e01c766d5ee9bfa99b5be573504e71c7ed3cfdd795c86f4d3748050114e7",
+  "candidate/store-geometry.json": "95faf44d27e9fda23aa5a4aba7f986ca53200f21c75fa40793f7dcaadf060800",
+  "candidate/verification.json": "5cf8568a6efffc9cf092257cfd7b322ce61e96544224c033dc1be8ce56ab1168",
+  "comparison.json": "626cb5ecad478db5c863c21ff15e2b5bd548e30613bbd588d7c653c125bb4979",
+  "freeze.json": "6bf34c8ccb0eb227f0ed5cb94cc174a6ff0964ad2236e41dbdbdfdd696c41fd2",
+  "instrument.diff.gz": "f797b8f440e7f8ae8030f4af91380777155659302ded20a9714445ebe5629d6a"
+}

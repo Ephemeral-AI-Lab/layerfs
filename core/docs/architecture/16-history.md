@@ -21,6 +21,12 @@ Implementation specification and its pre-publication audit:
   separate baseline pin.
 - **Native import progress update:** product commit
   `1f74d80be12ad19de1335d39fad0688ecc48c0f8`.
+- **#237 native Job metadata treatment:** base product at
+  `d455ad42cdc59de7224259722f1f3153c3ec3ab6` plus the same-commit
+  `save/import/scan.rs` change described below; older sections keep their pins.
+- **#237 prerequisite-to-inode memory treatment:** base product at
+  `ba5d903fa` plus the same-commit `save/import/namespace.rs` change
+  described below; older sections keep their pins.
 - **Init ordering-backing correction:** product commit
   `0042a909ac3f16a5041aa51d76f96522a58352c8`.
 - **#237 unmerged research prototype:** the same-commit `history_bootstrap.rs`
@@ -314,6 +320,17 @@ limit. The save owner still calls `SaveHandoff::accept` once per object, and C5
 publication follows the saved filesystem root. Pack payloads remain SQLite
 BLOBs, pages remain 4,096 bytes, and the whole-file cutoff remains 128 KiB.
 This changes channel traffic, not C2 transaction policy.
+Each queued file `Job` now keeps only the scanned device, inode, length and
+mtime fields it checks after opening and reading, instead of cloning the full
+`std::fs::Metadata`. The same source-identity checks run; the scan still retains
+one entry and one job per file, so this narrows their representation without
+claiming constant-memory Init.
+The namespace prerequisite Save now builds ordered typed inode updates as it
+emits metadata and symlink roots. It no longer materializes separate metadata-
+root and content-root vectors before copying both into an inode vector. The
+same serials, roots and C1 input are supplied, with unchanged Save/publication
+boundaries. This removes two entry-count-sized temporary allocations; process
+RSS and speed effects require separate measurement.
 For this long-running command only, the Service can flush one authenticated
 one-byte progress record per second while work advances. The client consumes
 the marker without treating it as result data; the absolute request deadline

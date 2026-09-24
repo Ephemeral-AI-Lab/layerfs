@@ -1,0 +1,65 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 718,
+      "sha256": "f73c252a381f20edd444cf5b30ef9a982163a1c9deaaaf405dc26522b1c2cfb4"
+    },
+    "report.txt": {
+      "bytes": 426,
+      "sha256": "98bb2f15b42acc3688b8ae2361941824d96568d9fd7a841df5dbb13923a26705"
+    },
+    "run.json": {
+      "bytes": 851,
+      "sha256": "b53f5568f2ff7b601d1c7482b377a4eb182f4af3b98fd56c58e131182aa65ad0"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "bytes": 199,
+      "sha256": "d55bcdb9163a5b70da191ee7b4d89fcd6052fa1eb2578a3656fffc17d3b8de19"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "bytes": 200,
+      "sha256": "c46297b1dd74794aa6d897005e0e40a30eddbbabdb942758f10093775c8b35f3"
+    },
+    "sdk-host/init_namespace/namespace-10000/driver.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-10000/driver.stdout": {
+      "bytes": 321,
+      "sha256": "35710c6dcab53cbbe449ee5573e6f6fd90282109a0d73a56c918f41491b3ed51"
+    },
+    "sdk-host/init_namespace/namespace-10000/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "c8b3e50983dd74224628a94b42957e907607e0eda7177a93ba16f80b046200ef"
+    },
+    "sdk-host/init_namespace/namespace-10000/perf.jsonl": {
+      "bytes": 334,
+      "sha256": "e48a0fd470ca4431ccc313245e3af726bee20a55a3b955eb9d94bea6ab14eda3"
+    },
+    "sdk-host/init_namespace/namespace-10000/receipt.json": {
+      "bytes": 7561,
+      "sha256": "a9f8b9676074782767f5f7975af69f19a3828b73a02cb05cabc18f09b5b4b9c2"
+    },
+    "sdk-host/init_namespace/namespace-10000/store.sqlite": {
+      "bytes": 310190080,
+      "sha256": "4e98527fbc003f6d92f7d230e5581bb7718ff25bda8d1a51054971d56b4850c4"
+    },
+    "sdk-host/init_namespace/namespace-10000/verification.json": {
+      "bytes": 2460,
+      "sha256": "18af627e5f75f9ee122f8996b0c0e76a15beb8e5940d90b3ca645f053446a57c"
+    },
+    "sdk-host/init_namespace/namespace-10000/verifier.stderr": {
+      "bytes": 1432,
+      "sha256": "dec891e952d7a392d3efb3477070fb341da776513891aac91aeb4b8e55915398"
+    },
+    "sdk-host/init_namespace/namespace-10000/verifier.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-100000/receipt.json": {
+      "bytes": 244,
+      "sha256": "0df90e67b4b2c3ec3270693936b9b621c66b00f8bd51f6ba78c69fd76bf2467a"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

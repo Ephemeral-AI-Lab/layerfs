@@ -101,14 +101,15 @@ the report.
 
 ## 3. Running a measurement
 
-**Current Core SDK Init profile:** `core/benchmark/fs-bench-pro` measures
-`init_namespace` with Cargo's default **debug** build only (`--locked`, no
-`--release` or optimization override). Use its `target/debug/examples/`
-driver and verifier. A release-build diagnostic remains historical context,
-not a replacement sample or a speed arm for this SDK selection. Never infer a
-regression by comparing this debug route with an older release-build
-daemon-host row. The SDK selection's mandatory separate verifier is a scoped
-exception to the exploratory performance-only default below; see
+**Current Core SDK Init profile (owner direction, 2026-09-24):**
+`core/benchmark/fs-bench-pro` measures `init_namespace` with locked Cargo
+**release** binaries only. Build with `--release` and use the driver and
+independent verifier from `target/release/examples/`; a debug binary or
+unmarked/debug build cache is forbidden for every new SDK Init measurement.
+Historical debug receipts retain their original profile and status and must
+never be relabeled, pooled with release rows, or used as a release speed arm.
+The SDK selection's mandatory separate verifier is a scoped exception to the
+exploratory performance-only default below; see
 [`core/benchmark/fs-bench-pro/AGENTS.md`](core/benchmark/fs-bench-pro/AGENTS.md).
 
 1. **One sample per case per arm, and do not sample.** No n3, no best-of

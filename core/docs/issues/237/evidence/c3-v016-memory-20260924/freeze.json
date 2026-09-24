@@ -1,0 +1,20 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "output": "benchmark-results/fs-bench-pro/issue237-c3-memory-20260924-01",
+  "paths": {
+    "diff": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue237-memory-instrument.diff",
+    "driver": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/core/crates/layerfs-api/sdk/examples/benchmark_init_memory.rs",
+    "master_manifest": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-100000-b69e710dfd0474a5/manifest.tsv",
+    "runner": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/core/benchmark/fs-bench-pro/issue237_memory_runner.py"
+  },
+  "profile": "Cargo locked release",
+  "purpose": "count-driven resource diagnostic, not performance sample",
+  "sha256": {
+    "diff": "34fe91a12ce4b5c995961b4d60ffc3996d2ef8d4901f04bae618a14ea91a1d15",
+    "driver": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+    "master_manifest": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "runner": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f"
+  },
+  "source_commit": "4caae8a27",
+  "status": "FROZEN_BEFORE_BUILD"
+}

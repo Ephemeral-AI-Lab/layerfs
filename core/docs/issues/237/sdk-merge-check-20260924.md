@@ -103,7 +103,8 @@ retain the measured identities and limits. Full raw output is under
 `benchmark-results/fs-bench-pro/sdk-release-compare-20260924/`; the temporary
 checkout was removed after collection.
 
-Owner direction on 2026-09-24 is **debug-only** for subsequent active Core SDK
-Init measurements. The release row above is retained as a historical diagnostic
-of the build-profile mismatch; it is not an active benchmark selection or a
-replacement for any debug receipt.
+Owner direction at this report's collection was **debug-only** for active
+Core SDK Init measurements. That direction was later superseded on
+2026-09-24 by the [release-only SDK selection](../../benchmark/fs-bench-pro/issue-231/SDK-RELEASE-FOUR-TIER-20260924.md).
+The release row above remains a historical diagnostic of the build-profile
+mismatch; neither it nor any debug receipt is relabeled into the new selection.

@@ -1,5 +1,8 @@
 # C3 promotion: v0.1.6 exact-source side-by-side handoff
 
+> **Historical handoff.** Its statement that the active SDK selection is
+> debug-only was superseded by the [release-only Core SDK Init contract](../../benchmark/fs-bench-pro/issue-231/SDK-RELEASE-FOUR-TIER-20260924.md).
+
 > **Status: Research; informative and not a product contract.** Handoff
 > for the next agents after C3's product promotion. The #236 registered
 > SDK selection remains debug-only; do not relabel a release diagnostic

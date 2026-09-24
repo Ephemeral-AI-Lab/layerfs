@@ -1,0 +1,8 @@
+{
+  "bytes": 500000000,
+  "expected_pages": 126206,
+  "files": 100000,
+  "invalidated_files": 53658,
+  "page_size_bytes": 16384,
+  "resident_pages": 0
+}

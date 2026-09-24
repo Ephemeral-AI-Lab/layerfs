@@ -1,0 +1,22 @@
+{
+  "candidate_conservative_rss_plus_scratch_bytes": 124974195,
+  "candidate_peak_rss_bytes": 116654080,
+  "candidate_peak_scratch_bytes": 8320115,
+  "candidate_raw_operation_ns": 5901850000,
+  "candidate_source_path_bytes": 175,
+  "conservative_reduction_bytes": 2657165,
+  "conservative_target_status": "NUMERIC_MISS_DIAGNOSTIC_ONLY",
+  "control_peak_rss_bytes": 127631360,
+  "control_raw_operation_ns": 5410089250,
+  "control_source_path_bytes": 146,
+  "frozen_target_reduction_bytes": 8388608,
+  "full_oracle": "PASS",
+  "matched_memory_status": "INELIGIBLE: candidate source path is 29 bytes longer and its pre-namespace RSS is higher; retained control is not a path-matched arm",
+  "path_length_difference_bytes": 29,
+  "raw_time_delta_ns": 491760750,
+  "raw_time_eligible": false,
+  "rss_reduction_bytes": 10977280,
+  "scratch_cleanup": [],
+  "speed_status": "INELIGIBLE: metadata and scratch-run cache unqualified",
+  "target_met": false
+}

@@ -1,0 +1,31 @@
+{
+  "budget_ns": 9500000000,
+  "child": {
+    "directories": 11,
+    "discovered_files": 1000,
+    "manifest_bytes": 20000000,
+    "manifest_sha256": "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c",
+    "metadata_attribute_waves": 5,
+    "paths": 1011,
+    "root": "5171f14ef083df0b839b49b5b51dddef615fbdcbffeab34dfbc3d69ddd53bf00",
+    "sample_policy": "stride64-size-log2-endpoints-v1",
+    "sampled_bytes": 6430827,
+    "sampled_files": 70,
+    "status": "PASS",
+    "workers": 4
+  },
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/binary-archive/b23e016215a74ed2f431cbec84833b5ec044d5b55084e39114987faeb4190b19/verify_namespace",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue231-lite-verifier-92608113f-1000/sdk-host/init_namespace/namespace-1000-compact-v3/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/issue231-lite-verifier-92608113f-1000/sdk-host/init_namespace/namespace-1000-compact-v3/history.sqlite",
+    "5171f14ef083df0b839b49b5b51dddef615fbdcbffeab34dfbc3d69ddd53bf00",
+    "b1261b0998f4e6a347c8b0a1f200b94d",
+    "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/sdk-prepared/namespace-1000-compact-v3-6e3f54c14f81c5e9/manifest.tsv",
+    "e4c484767163117b3c846b6d846cc8157fed052e0b15c70a908ad977f59d881c"
+  ],
+  "exit_code": 0,
+  "scope": "complete paths/kinds; sampled file metadata/content",
+  "status": "PASS",
+  "stderr": "LFS237 lite verifier traversal paths=1011 directories=11 discovered_files=1000 sampled_files=70 metadata_attribute_waves=1\n",
+  "wall_ns": 51693583
+}
