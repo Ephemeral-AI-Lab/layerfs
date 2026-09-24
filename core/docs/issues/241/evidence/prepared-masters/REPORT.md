@@ -1,6 +1,6 @@
 # #241 closed v3 prepared masters
 
-Four prospective 1/10/100/capped-500 MiB pristine fixtures were acquired
+Four diagnostic 1/10/100/capped-500 MiB pristine fixtures were acquired
 once, outside any edit timer, using locked release benchmark_init through
 edit_route.master at source 576dd181f. The exact input sizes, fixture digests,
 canonical file roots and extent counts are in the individual
@@ -9,13 +9,18 @@ all four Store and history SHA-256 values, their local source paths, the
 benchmark_init binary hash and the first-use preparation walls. [SHA256SUMS](SHA256SUMS)
 seals the compact receipts.
 
-The v3 compatibility key uses the exact fixture recipe and benchmark_init
-binary hash. A registry-only or harness-only edit therefore does not recreate
-the master. The later functional sweep and each performance selection must
-take an independent writable byte copy of the validated closed Store/history
-pair, then create fresh Branch/Workspace state. The master bytes are kept in
-ignored benchmark-results/prepared paths and are never mutated by those runs.
-Clone reuse is setup reuse; these receipts make no cold-cache claim.
+**Qualification limit found after sealing:** the original preparation code
+created each final cache directory in place and the master manifest did not
+contain Store/history hashes. The SHA-256 values here prove the bytes observed
+when this report was sealed, but they cannot establish atomic publication or
+the bytes at the instant Init finished. These four directories remain
+diagnostic input and must not be promoted into a registered performance or
+Phase 3 PASS. The v3 preparation path is being changed to publish complete,
+content-sealed entries atomically under a new key. These receipts and
+directories remain unchanged. A later functional sweep and each performance
+selection must use an independent writable byte copy of a qualified closed
+master, then fresh Branch/Workspace state. Clone reuse is setup reuse and
+does not establish a cold-cache claim.
 
 | Pristine bytes | Store SHA-256 | History SHA-256 |
 | ---: | --- | --- |
