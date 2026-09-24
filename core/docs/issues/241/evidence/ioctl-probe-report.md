@@ -2,8 +2,9 @@
 
 ## Decision
 
-**NO-GO for product implementation at this evidence level.** The published
-`fuser` 0.18.0 and Linux 6.12.76 kernel delivered the 4,128-byte ioctl once;
+**Carrier feasibility: promising. No provider/kernel blocker or carrier
+performance miss was demonstrated.** The published `fuser` 0.18.0 and Linux
+6.12.76 kernel delivered the 4,128-byte ioctl once;
 the tested direct-I/O plus inode-invalidation profile provided immediate
 length, mtime, old-FD, alias, read/EOF and later-write coherence. The observed
 carrier wall rows were below the frozen 1.0 ms diagnostic screen. **Efficiency
@@ -15,8 +16,15 @@ injected in the probe before the real notifier send; actual kernel notifier
 failure, reply loss, actual stale-handle lifecycle and read-only *mount*
 capability detection were not proved. The callback log holds exact request
 bytes; raw kernel reply frames were not captured. Client success/errno came
-from the mounted test assertions.
+from the mounted test assertions. These are evidence gaps, not observed ioctl
+failures or a reason to optimize the carrier.
 No `range_ioctl.rs`, product `src/`, benchmark tool or registry was changed.
+
+**Phase 1 sign-off remains incomplete**, so this probe does not authorize the
+product implementation gate in the #241 plan. The next step is a focused
+prospective proof of the missing failure/capability behavior and sub-millisecond
+CPU observation. It is not a recommendation to abandon ioctl or tune its
+latency.
 
 This is a carrier diagnostic only. The virtual file never calls Workspace,
 Store, SDK or Commit. The 4 KiB WRITE control is a carrier control, not an
@@ -125,7 +133,9 @@ checking this Linux-only test. That product file was outside this probe's edit
 scope and was not modified. The Linux test was compiled and run via the locked
 release build above.
 
-Before product implementation, a new prospective probe should demonstrate
-real notifier/reply failure custody and read-only mount behavior and use a
-CPU observation method whose boundary resolves a sub-millisecond operation.
-These missing proofs must remain separate from this one-attempt receipt.
+Before Phase 1 sign-off, a new prospective probe should demonstrate real
+notifier/reply failure custody, read-only mount behavior and actual stale-handle
+lifecycle, and use a CPU observation method whose boundary resolves a
+sub-millisecond operation. These missing proofs must remain separate from this
+one-attempt receipt. No carrier optimization is indicated by the measured wall
+rows.

@@ -18,6 +18,17 @@ about 5 s (100 and capped 500 MiB). The latter two have **no completed Commit
 time**. All completed scenario-v2 rows are cache-ineligible. Keep their
 registry and receipts append-only.
 
+**Carrier probe status (2026-09-24):** The isolated Linux Docker/FUSE test-only
+probe found ioctl delivery, positive open-descriptor/alias coherence and
+carrier wall below its 1.0 ms diagnostic budget at all four virtual sizes.
+This is a promising route, with no demonstrated provider blocker or need for
+carrier optimization. [The append-only report](evidence/ioctl-probe-report.md)
+keeps the exact identities, attempts and limits. Phase 1 sign-off is still
+incomplete: real notifier/reply failure and mount-capability behavior, actual
+stale-handle lifecycle and sub-millisecond CPU attribution remain unproved.
+Those gaps are a focused next probe, not a failed ioctl or an Edit→Commit
+performance claim. No product splice or registered #241 case was run.
+
 The Workspace range-edit semantics must remain portable product code; Linux FUSE,
 future macFUSE and future Windows WinFsp are adapters with separate capability
 and coherence proofs. #241 implements and measures the current Linux adapter,
