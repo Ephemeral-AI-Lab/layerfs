@@ -3,8 +3,8 @@
 mod linux {
     use fuser::{
         Config, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation, INodeNo,
-        IoctlFlags, KernelConfig, MountOption, Notifier, OpenFlags, ReplyAttr, ReplyEntry,
-        ReplyIoctl, ReplyOpen, Request, Session,
+        IoctlFlags, KernelConfig, MountOption, Notifier, OpenFlags, ReplyAttr, ReplyData,
+        ReplyEntry, ReplyIoctl, ReplyOpen, ReplyWrite, Request, Session, WriteFlags,
     };
     use layerfs_telemetry::{
         observation::{Observation, Source, Window, WindowSource},
@@ -16,7 +16,7 @@ mod linux {
         ffi::OsStr,
         fs::{self, File, OpenOptions},
         io::{self, Read},
-        os::fd::AsRawFd,
+        os::{fd::AsRawFd, unix::fs::FileExt},
         path::{Path, PathBuf},
         process::{Command, Stdio},
         sync::{Arc, Mutex},
@@ -166,6 +166,7 @@ mod linux {
         input_bytes: u64,
         read: u64,
         write: u64,
+        write_bytes: u64,
         events: Vec<String>,
     }
     struct Probe {
@@ -234,6 +235,53 @@ mod linux {
                 reply.error(Errno::EBADF);
             }
         }
+        fn read(
+            &self,
+            _req: &Request,
+            _ino: INodeNo,
+            _fh: FileHandle,
+            _offset: u64,
+            _size: u32,
+            _flags: OpenFlags,
+            _lock_owner: Option<fuser::LockOwner>,
+            reply: ReplyData,
+        ) {
+            self.state.lock().unwrap().read += 1;
+            reply.error(Errno::EIO);
+        }
+        fn write(
+            &self,
+            _req: &Request,
+            ino: INodeNo,
+            fh: FileHandle,
+            offset: u64,
+            data: &[u8],
+            _write_flags: WriteFlags,
+            _flags: OpenFlags,
+            _lock_owner: Option<fuser::LockOwner>,
+            reply: ReplyWrite,
+        ) {
+            let (recorder, source) = recorder();
+            let (result, report) = recorder.run(4, "carrier.daemon.write", |_| {
+                let mut state = self.state.lock().unwrap();
+                state.write += 1;
+                state.write_bytes += data.len() as u64;
+                if ino.0 != 2 || fh.0 != 40 || offset != state.length / 2 || data.len() != 4096 {
+                    reply.error(Errno::EINVAL);
+                    return Ok::<(), ()>(());
+                }
+                state.events.push(format!(
+                    "write ino={} fh={} offset={offset} bytes={}",
+                    ino.0,
+                    fh.0,
+                    data.len()
+                ));
+                reply.written(4096);
+                Ok(())
+            });
+            assert!(result.is_ok());
+            save(&self.root, 2, report, &source);
+        }
         fn ioctl(
             &self,
             _req: &Request,
@@ -291,17 +339,32 @@ mod linux {
         }
         bytes
     }
-    fn caller(file: &File, offset: u64, root: &Path) {
-        let mut bytes = request(offset);
+    fn caller(file: &File, offset: u64, root: &Path, is_write: bool) {
+        let mut bytes = if is_write {
+            vec![0x5a; 4096]
+        } else {
+            request(offset)
+        };
         let (recorder, source) = recorder();
-        let (result, report) = recorder.run(1, "carrier.caller.ioctl", |_| {
-            let rc = unsafe { libc::ioctl(file.as_raw_fd(), CMD as _, bytes.as_mut_ptr()) };
-            if rc < 0 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(())
-            }
-        });
+        let (result, report) = if is_write {
+            recorder.run(2, "carrier.caller.write", |_| {
+                let written = file.write_at(&bytes, offset)?;
+                if written == 4096 {
+                    Ok(())
+                } else {
+                    Err(io::Error::other("short WRITE"))
+                }
+            })
+        } else {
+            recorder.run(1, "carrier.caller.ioctl", |_| {
+                let rc = unsafe { libc::ioctl(file.as_raw_fd(), CMD as _, bytes.as_mut_ptr()) };
+                if rc < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            })
+        };
         save(root, 1, report, &source);
         result.unwrap();
     }
@@ -310,11 +373,11 @@ mod linux {
     fn probe() {
         let case = std::env::var("PROBE_CASE").unwrap();
         let root = PathBuf::from(std::env::var("PROBE_ROOT").unwrap());
-        let initial = match case.as_str() {
-            "ioctl-1m" => 1024 * 1024,
-            "ioctl-500m" => 500 * 1024 * 1024,
-            _ => panic!("unknown case {case}"),
-        };
+        let (operation, size) = case.split_once('-').expect("operation-size case");
+        assert!(operation == "ioctl" || operation == "write");
+        let mib: u64 = size.strip_suffix('m').unwrap().parse().unwrap();
+        assert!(matches!(mib, 1 | 10 | 100 | 500));
+        let initial = mib * 1024 * 1024;
         if std::env::var_os("PROBE_DAEMON").is_some() {
             let state = Arc::new(Mutex::new(State {
                 length: initial,
@@ -322,6 +385,7 @@ mod linux {
                 input_bytes: 0,
                 read: 0,
                 write: 0,
+                write_bytes: 0,
                 events: Vec::new(),
             }));
             let notifier = Arc::new(Mutex::new(None));
@@ -360,12 +424,13 @@ mod linux {
             fs::write(
                 root.join("daemon.log"),
                 format!(
-                    "length={} ioctl={} input_bytes={} read={} write={}\n{}\n",
+                    "length={} ioctl={} input_bytes={} read={} write={} write_bytes={}\n{}\n",
                     state.length,
                     state.ioctl,
                     state.input_bytes,
                     state.read,
                     state.write,
+                    state.write_bytes,
                     state.events.join("\n")
                 ),
             )
@@ -397,8 +462,11 @@ mod linux {
             .write(true)
             .open(root.join("mnt/file"))
             .unwrap();
-        caller(&file, initial / 2, &root);
-        assert_eq!(file.metadata().unwrap().len(), initial + 4096);
+        caller(&file, initial / 2, &root, operation == "write");
+        assert_eq!(
+            file.metadata().unwrap().len(),
+            initial + if operation == "ioctl" { 4096 } else { 0 }
+        );
         drop(file);
         drop(child.stdin.take());
         assert!(child.wait().unwrap().success());
