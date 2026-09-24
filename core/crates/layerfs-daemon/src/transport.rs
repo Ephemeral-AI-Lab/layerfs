@@ -23,6 +23,7 @@ use layerfs_bridge::{
     adapters::native::{client::Client, connection::connect_until},
     contract::{Failure, Request, Response, Source},
 };
+use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{
     io::Write,
     net::SocketAddr,
@@ -75,6 +76,7 @@ impl Transport {
         input: &mut dyn Source,
         output: &mut dyn Write,
         deadline: Instant,
+        scope: &TimingScope<'_, Active>,
     ) -> Result<Response, Failure> {
         if self
             .session
@@ -84,20 +86,27 @@ impl Transport {
             self.session = None;
         }
         if self.session.is_none() {
-            let connection = connect_until(
-                self.address,
-                self.selector,
-                &self.private,
-                &self.server,
-                deadline,
-            )?;
+            let connection = scope.child("daemon.service_connect").run(|_| {
+                connect_until(
+                    self.address,
+                    self.selector,
+                    &self.private,
+                    &self.server,
+                    deadline,
+                )
+            })?;
+            let client = scope
+                .child("daemon.service_hello")
+                .run(|_| Client::new(connection))?;
             self.session = Some(Session {
-                client: Client::new(connection)?,
+                client,
                 idle_since: Instant::now(),
             });
         }
         let session = self.session.as_mut().expect("session opened above");
-        let result = session.client.call_until(request, input, output, deadline);
+        let result = scope
+            .child("daemon.service_call")
+            .run(|_| session.client.call_until(request, input, output, deadline));
         session.idle_since = Instant::now();
         if result.is_err() {
             self.session = None;

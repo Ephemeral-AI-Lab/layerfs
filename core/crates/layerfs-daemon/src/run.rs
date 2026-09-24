@@ -105,7 +105,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // independent lookup starts a fresh authenticated connection.
         let result = telemetry
             .recorder()
-            .run(request.id, request.operation.label(), |_| {
+            .run(request.id, request.operation.label(), |scope| {
                 let thread = std::thread::current().id();
                 let mut sessions = sessions.lock().map_err(|_| Failure::from(Code::Io))?;
                 let transport = sessions.entry(thread).or_insert_with(|| {
@@ -116,7 +116,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         connection.server,
                     )
                 });
-                let result = transport.call(request, input, output, deadline);
+                let result = transport.call(request, input, output, deadline, scope);
                 if result.is_err() {
                     sessions.remove(&thread);
                 }

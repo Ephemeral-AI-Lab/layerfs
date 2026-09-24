@@ -104,8 +104,9 @@ impl Acceptor {
                     PollFd::new(self.listener.as_fd(), PollFlags::POLLIN),
                     PollFd::new(stdin.as_fd(), PollFlags::POLLIN),
                 ];
-                poll(&mut fds, 100u16).map_err(|_| Code::Io)?;
-                if matches!(stop, Stop::Stdin)
+                let count = if matches!(stop, Stop::Stdin) { 2 } else { 1 };
+                poll(&mut fds[..count], 100u16).map_err(|_| Code::Io)?;
+                if count == 2
                     && fds[1]
                         .revents()
                         .is_some_and(|f| f.intersects(PollFlags::POLLIN | PollFlags::POLLHUP))

@@ -111,11 +111,19 @@ existing operation counts are unchanged.
 **Daemon and owner spans.** Bounded child timing scopes now divide the real
 route: `daemon.workspace_attach` and `daemon.fuse_mount` inside selected
 Workspace Open, `daemon.exec_spawn` and `daemon.exec_output` inside Exec, and
-`daemon.commit` around native Commit. The owner records
+`daemon.commit` around native Commit. Daemon-to-Service calls record
+`daemon.service_connect` for a fresh TCP/Noise connection,
+`daemon.service_hello` for its checked protocol Hello, and
+`daemon.service_call` through request delivery and terminal receipt. Reused
+sessions omit the first two children. The owner records
 `owner.docker_launch`, `owner.docker_port`, `owner.daemon_ready` and
 `owner.shell_ready` inside Create, which previously reported one undivided
 window. These are ordinary product telemetry: they add no test-only branch and
 change no result.
+The #241 liveness update here uses source basis
+`fa1c0774c9d12cd6e58f730118164140fa04fa22` and the transport timing and
+acceptor changes committed with this document; it carries no performance or
+release qualification claim.
 
 **Bounded Workspace control session.** `layerfs-sandbox::session` retains at
 most one authenticated control connection across rapid Workspace calls. A
@@ -408,6 +416,9 @@ live sockets, and collects completed workers for at most two seconds. If core wo
 is still running, explicit process exit preserves an unresolved outcome; detached
 workers are not labelled cleanup. Kernel socket state, backlog, stack mappings
 and RSS are separate observed domains.
+The composed Server's flag-driven acceptor polls only its listener; stdin is
+polled solely by the operator `Stop::Stdin` mode. A closed stdin therefore
+cannot turn an idle composed host into a polling loop.
 
 The [resource profile](proposal/service-daemon-transport/implementation/10-resource-profile.md)
 records the aggregate byte/count ownership vector. At the default budget it
