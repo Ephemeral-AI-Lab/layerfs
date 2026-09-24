@@ -1,0 +1,18 @@
+schema	issue241-exec-liveness-diagnostic-v1
+case_id	issue241-silent-exec-control-v1
+command	sleep 6
+fixture_bytes	4
+image_id	sha256:03d791bd1c133c438f621eb713ef933a33adf00e0ac5c79eb37c9436bfbc1a27
+cache_contract	functional-uncontrolled-nonadmission
+performance_sample	false
+status	STARTED
+sandbox_id	df004398d5c0781863ebabfb871b2662
+exec_elapsed_ns	5003852042
+exec	Err(Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }))
+exec_unknown	true
+five_second_idle_window	true
+unmount	Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None }))
+sandbox_delete	Ok(())
+sandbox_list	Ok([])
+sandbox_absent	true
+status	PASS_DIAGNOSTIC

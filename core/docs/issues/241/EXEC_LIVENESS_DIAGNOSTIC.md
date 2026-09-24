@@ -10,6 +10,12 @@ qualified 10 MiB copy. Its limited telemetry did not capture daemon or FUSE
 events on the successful path. It is inconclusive about the retained failure;
 the request-scoped event vector below remains the next diagnostic requirement.
 
+A separate [six-second silent Exec control](evidence/silent-exec-control-v1/REPORT.md)
+reproduced `Unknown` after 5.003852042 s and immediate unmount `Io` at its
+own frozen identity. It proves the error pair is possible under the current
+native progress rule, but does not identify the stage that delayed the small
+historical baseline write.
+
 The [integrated position receipt](evidence/position-sweep-integrated/REPORT.md)
 has one Unknown baseline SDK Exec after 45 PASS cases on 10 MiB. Its command
 was a small shell write to .position-baseline. It did not reach range EDIT or
