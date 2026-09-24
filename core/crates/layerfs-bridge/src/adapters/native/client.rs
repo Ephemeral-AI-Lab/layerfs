@@ -188,7 +188,16 @@ impl Client {
                                 }
                             }
                             if !matches_response(r, &response, bytes) {
+                                eprintln!(
+                                    "DIAG response rejected op={} bytes={bytes} response={response:?}",
+                                    r.operation.label()
+                                );
                                 return Err(delivery(r));
+                            }
+                            if r.operation.label() == "EditFileWithMetadata" {
+                                eprintln!(
+                                    "DIAG merged accepted bytes={bytes} response={response:?}"
+                                );
                             }
                             return Ok(response);
                         }
