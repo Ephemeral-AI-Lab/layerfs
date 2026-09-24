@@ -2,7 +2,11 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 > Written 2026-09-24. This is an implementation plan and a prospective speed
-> target, not a performance receipt or an admission PASS. Freeze the case and
+> target, not a performance receipt or an admission PASS.
+> Scenario-version-2 baseline collected 2026-09-24: all 56 registered cases are
+> implemented and receipted; see
+> [the baseline report](exec-fuse-edit-v2-baseline.md) for the 45 completed and
+> verified rows, the 11 product-side `FAIL` rows and the open blockers. Freeze the case and
 > cache contract described below before implementing the benchmark driver or
 > collecting a timed row.
 

@@ -75,15 +75,14 @@ its API objects from a borrowed Server; Server does not depend on SDK. The
 existing SDK `Host` and `Client` types must move/retire with their Init callers
 before #232 registration. Do not add a second acceptor implementation.
 
-**Current blocker:** the Core SDK has `ProjectApi::init`, `SandboxApi::create`
-and `WorkspaceApi::{mount,exec,commit,unmount}`, but the live route test forks
-its Branch with direct `Service::handle`, and the current `Host::create` neither
-opens a prepared Store clone nor assembles the listener and sandbox owner. The test
-also removes its containers and volumes with direct Docker commands because
-`SandboxApi::delete` does not exist. Add public SDK setup and cleanup before an
-SDK-only edit driver is registered. Until then the family is `NOT_RUN`; a
-benchmark-only direct Service fork or Docker owner is not an acceptable
-shortcut. Keep the existing #236 functional receipt under its own identity.
+**Resolved:** the Core SDK now exposes `ProjectApi::fork`, `Server::open`,
+`SandboxApi::delete` and post-timer `WorkspaceApi::status`, and the registered
+release driver performs every product operation through them. The family is
+registered under scenario version 2 and collected once per case; the earlier
+`NOT_RUN` state and its receipts stay historical. A benchmark-only direct
+Service fork or Docker owner remains unacceptable. Keep the existing #236
+functional receipt under its own identity. Results and open blockers:
+[the #232 baseline report](../../issues/232/exec-fuse-edit-v2-baseline.md).
 
 ## Commands and fixture custody
 

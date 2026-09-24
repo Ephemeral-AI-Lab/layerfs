@@ -1,0 +1,74 @@
+{
+  "campaign": "benchmark-results/fs-bench-pro/exec-fuse-edit-v2-campaign",
+  "counts": {
+    "attempted": 56,
+    "cleanup_confirmed": 56,
+    "complete_command_within_budget": 45,
+    "completed": 45,
+    "driver_fail": 11,
+    "driver_timeout": 0,
+    "goal_met": 0,
+    "ineligible": 45,
+    "raw_above_target": 56,
+    "raw_at_or_below_target": 0,
+    "registered": 56,
+    "structural_completed": 9,
+    "structural_failed": 11,
+    "target_miss": 0,
+    "verification_fail": 0,
+    "verification_not_run": 11,
+    "verification_pass": 45,
+    "verification_timeout": 0
+  },
+  "coverage": {
+    "bounded_windows_1": 6,
+    "bounded_windows_2": 5,
+    "full_file": 34
+  },
+  "findings": [
+    "exec-progress-window: every structural shift that needed more than 5 s of FUSE work failed at 5.002-5.005 s with Failure { code: Unknown, unknown: true }; the bridge caps every silent wait at IO_PROGRESS_MS = 5000 ms (layerfs-bridge/src/adapters/native/connection.rs Socket::read and adapters/native/pipe.rs Pipe::ready), and a Workspace Exec that emits no output until it finishes never refreshes that window",
+    "shift-cost-is-superlinear: completed shift rows cost about 15 ms per 128 KiB block plus a quadratic term (descriptive fit over 9 completed rows, 2-80 blocks); the per-block cost rises from ~19-26 ms at 4 blocks to ~68 ms at 40 blocks",
+    "cache-eligibility: the Linux FUSE backing domain stays INELIGIBLE (frozen contract), so no row is an eligible cold claim and no row is GOAL_MET",
+    "every raw edit_commit_ns in the campaign is above its historical G2 target"
+  ],
+  "historical_registry": {
+    "path": "registry/workspace-exec-edit-v1.json",
+    "scenario_version": 1,
+    "sha256": "e4b4d2fc67cb1630dc8f15283db3085663466071bb373c829a6026ffddb66aab"
+  },
+  "identity": {
+    "cargo_lock_sha256": "d6fb4800e048346f87b6c825bdc2f2d446f50e33a2ead40799147408b8dc7e9b",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "7d037a57af936b313cf0f9f4e1b4a8abd0733883d55636d2c0ff20bcaeb236a9",
+    "product_seal": "9a8d6644fdf2ced0fb5219fa219d32a15d86f4f2e99b10b2eb51bc8e24356f9c",
+    "source_commit": "1b4dfdf7efc702e67fe335ea3cad6a0d50fd550d",
+    "source_dirty": false,
+    "source_tree": "7bfde2ee9f41ce84d94ab188b1c4e8b45c6af3dd"
+  },
+  "image": {
+    "base": "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "daemon_sha256": "e10b3ab6303b6949560bebf9a33518d7f40fe41cdf9784698a2b5d79cea4a9c9",
+    "edit_tool_sha256": "70d41e2868196bad3a70e266aaf8e20796965154aaa5da70964879d193545ff9",
+    "image_id": "sha256:07898cbabbeab35eb57d8fdcd43125b17386fae91968d9d3f3863c75d62e7815",
+    "profile": "release",
+    "registry_sha256": "05a133b543db33729d60cc321cc88682046c16bfb1761daec6a57c5df3b11823"
+  },
+  "registry": {
+    "cases": 56,
+    "path": "registry/workspace-exec-edit-v2.json",
+    "scenario_version": 2,
+    "sha256": "05a133b543db33729d60cc321cc88682046c16bfb1761daec6a57c5df3b11823"
+  },
+  "schema": "core-fs-bench-pro-exec-fuse-edit-v2-baseline-v1",
+  "shift_scaling_fit": {
+    "a_ns_per_block": 15453608.668143539,
+    "b_ns_per_block_squared": 1330442.2082905935,
+    "completed_points": 9,
+    "domain_blocks": [
+      4,
+      40
+    ],
+    "model": "edit_ns ~ a*blocks + b*blocks^2"
+  }
+}

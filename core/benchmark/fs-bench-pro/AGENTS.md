@@ -11,8 +11,10 @@ benchmark performance driver must use the public `layerfs-sdk` package for
 product operations. `runner.py` checks registered `benchmark_*` driver source
 before building or reusing a binary. The check complements runtime route
 counters and independent verification; it does not register an edit case.
-Until the SDK supplies Branch setup and full sandbox assembly, an SDK-only
-exec-to-edit family remains `NOT_RUN`. The current runner selects Init only.
+The SDK-only Exec/FUSE edit family is registered under scenario version 2
+(`registry/workspace-exec-edit-v2.json`), and `runner.py run --case` selects one
+Exec/FUSE case per fresh output path; the Init selection stays separate. See
+[the #232 baseline report](../../docs/issues/232/exec-fuse-edit-v2-baseline.md).
 
 `runner.py` is the sole `init_namespace` runner. `families/init_namespace.py`
 owns the case registry, sealed source preparation, and invocation of the

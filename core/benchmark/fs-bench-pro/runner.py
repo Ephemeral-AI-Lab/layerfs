@@ -553,11 +553,13 @@ def run_exec_edit(selection, out, verification="inline"):
 EDIT_REPORT_COLUMNS = (
     "scenario_id", "family_id", "fixture_bytes", "final_bytes", "editor_algorithm",
     "attempted", "completed", "driver_exit", "timeout", "verification", "terminal",
-    "edit_commit_ns", "g2_target_ms", "goal", "master_reuse", "clone_copy_ns", "cache_ns",
-    "driver_preparation_ns", "complete_command_wall_ns", "complete_command_status",
+    "edit_commit_ns", "g2_target_ms", "goal", "raw_vs_target", "master_reuse", "clone_copy_ns",
+    "cache_ns", "cache_store", "cache_fuse", "driver_preparation_ns", "cleanup_ns",
+    "complete_command_wall_ns", "complete_command_status", "verifier_wall_ns",
+    "verification_coverage", "full_file_bytes_verified",
     "lft1_root_ns", "lft1_edit_ns", "lft1_commit_ns", "lft1_cpu_user_ns", "lft1_cpu_system_ns",
-    "lft1_sampled_max_rss", "lft1_resource_status", "projection_counts", "upstream_calls",
-    "unmount_ok", "sandbox_delete_ok", "evidence",
+    "lft1_sampled_max_rss", "lft1_resource_status", "lft1_scope", "projection_counts",
+    "upstream_calls", "unmount_ok", "sandbox_delete_ok", "evidence",
 )
 
 
@@ -568,6 +570,7 @@ def edit_report_row(row, folder):
                    "fixture_bytes": row["fixture_bytes"], "final_bytes": row["final_bytes"],
                    "editor_algorithm": row["editor_algorithm"],
                    "g2_target_ms": row["g2_target_ms"], "attempted": 0, "completed": 0,
+                   "lft1_scope": "caller-process-window (host caller + Service)",
                    "evidence": str(folder)})
     run_file = Path(folder) / "run.json"
     if not run_file.is_file():
@@ -579,18 +582,36 @@ def edit_report_row(row, folder):
     driver = receipt.get("driver") or {}
     telemetry = receipt.get("telemetry") or {}
     master = receipt.get("master") or {}
+    # The identity-matched verification is a separate command with its own
+    # retained receipt; the performance receipt keeps the SKIPPED marker it was
+    # collected with, so the report reads both without repeating either.
+    verification = receipt.get("verification") or {}
+    retained = folder / "verification.json"
+    if retained.is_file():
+        verification = json.loads(retained.read_text())
+    observed = receipt.get("edit_commit_ns")
+    target = row["g2_target_ms"] * 1_000_000
     values.update({
         "attempted": 1 if receipt.get("sample_count") or driver else 0,
         "completed": 1 if driver.get("status") == "COMPLETE" else 0,
         "driver_exit": receipt.get("driver_exit_code"),
         "timeout": bool(receipt.get("driver_timeout")),
-        "verification": (receipt.get("verification") or {}).get("status"),
+        "verification": verification.get("status"),
+        "verifier_wall_ns": verification.get("wall_ns"),
+        "verification_coverage": (verification.get("child") or {}).get("coverage"),
+        "full_file_bytes_verified": (verification.get("child") or {}).get(
+            "full_file_bytes_verified"),
+        "raw_vs_target": (None if not isinstance(observed, int)
+                          else "AT_OR_BELOW" if observed <= target else "ABOVE"),
         "terminal": receipt.get("status"),
         "edit_commit_ns": receipt.get("edit_commit_ns"),
         "goal": receipt.get("status"),
         "master_reuse": master.get("reuse"),
         "clone_copy_ns": receipt.get("clone_copy_wall_ns"),
         "cache_ns": receipt.get("cache_wall_ns"),
+        "cache_store": (receipt.get("cache", {}).get("macos-store") or {}).get("status"),
+        "cache_fuse": (receipt.get("cache", {}).get("linux-fuse-backing") or {}).get("status"),
+        "cleanup_ns": receipt.get("cleanup_ns"),
         "driver_preparation_ns": receipt.get("preparation_ns"),
         "complete_command_wall_ns": receipt.get("complete_command_wall_ns"),
         "complete_command_status": receipt.get("complete_command_status"),
@@ -639,6 +660,9 @@ def report_edit(campaign, out=None):
     counts["complete_command_slow"] = sum(
         1 for row in rows if row["complete_command_status"] == "COMMAND_SLOW")
     counts["target_misses"] = sum(1 for row in rows if row["goal"] == "TARGET_MISS")
+    counts["raw_target_misses"] = sum(1 for row in rows if row["raw_vs_target"] == "ABOVE")
+    counts["raw_at_or_below_target"] = sum(1 for row in rows
+                                           if row["raw_vs_target"] == "AT_OR_BELOW")
     document = {"schema": "core-fs-bench-pro-exec-fuse-edit-campaign-report-v1",
                 "campaign": str(campaign), "counts": counts, "rows": rows}
     if out:
