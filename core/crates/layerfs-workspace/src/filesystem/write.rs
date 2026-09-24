@@ -171,7 +171,7 @@ impl Workspace {
                 return Err(WorkspaceError::BadHandle);
             }
             if matches!(mutation, FileMutation::Range { .. }) && handle.options.append {
-                return Err(WorkspaceError::Unsupported);
+                return Err(WorkspaceError::BadHandle);
             }
             if let FileMutation::Range {
                 expected: Some(expected),
