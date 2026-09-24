@@ -68,11 +68,32 @@ def summarize(root):
             start = sdk["opened_ns"]
             within = [event for event in host
                       if start <= event.get("opened_ns", -1) < start + sdk["timing"]["elapsed_ns"]]
-            phase["owner_lookup"] = {"hello": metrics(one(within, 2002, "owner.hello"))}
-            if any(event.get("key") == 2001 for event in host):
-                phase["owner_lookup"]["docker_port"] = metrics(one(within, 2001, "owner.docker_port"))
+            # A retained control session reuses one checked Hello across rapid
+            # calls, so a window may legitimately carry no Hello of its own.
+            # Report the observed count rather than assuming one per call.
+            hellos = [event for event in within
+                      if event.get("kind") == "operation" and event.get("key") == 2002
+                      and event.get("timing", {}).get("name") == "owner.hello"]
+            phase["owner_lookup"] = {
+                "hello_count": len(hellos),
+                "hello": metrics(hellos[0]) if len(hellos) == 1 else None,
+            }
+            ports = [event for event in within
+                     if event.get("kind") == "operation" and event.get("key") == 2001]
+            if ports:
+                phase["owner_lookup"]["docker_port"] = metrics(ports[0])
         if daemon_name:
-            phase["daemon_process"] = metrics(one(daemon, name=daemon_name))
+            # The daemon keeps its own clock domain, so its absolute stamps are
+            # not comparable with the host's. The route runs more than one call
+            # for some names (the test issues several Execs), and the measured
+            # one is the first: it is the call the SDK phase window covers.
+            matches = [event for event in daemon
+                       if event.get("kind") == "operation"
+                       and event.get("timing", {}).get("name") == daemon_name]
+            if not matches:
+                raise ValueError(f"no {daemon_name} daemon event")
+            phase["daemon_process"] = metrics(matches[0])
+            phase["daemon_process_count"] = len(matches)
         else:
             phase["daemon_process"] = None
         phases.append(phase)
