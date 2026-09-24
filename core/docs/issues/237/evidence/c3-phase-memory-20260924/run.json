@@ -1,0 +1,29 @@
+{
+  "benchmark_registration": "UNREGISTERED_DIAGNOSTIC",
+  "blocked": null,
+  "cases": [
+    "namespace-100-compact-v3",
+    "namespace-1000-compact-v3"
+  ],
+  "family_cycle_budget_ns": null,
+  "family_cycle_wall_ns": 80809570875,
+  "identity": {
+    "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [
+      " M core/crates/layerfs-service/src/save/catalog.rs",
+      " M core/crates/layerfs-service/src/save/import/namespace.rs",
+      " M core/crates/layerfs-service/src/save/import/scan.rs",
+      " M core/crates/layerfs-storage/src/cas/store.rs",
+      "?? core/benchmark/fs-bench-pro/issue237_memory_runner.py",
+      "?? core/crates/layerfs-api/sdk/examples/benchmark_init_memory.rs"
+    ],
+    "harness_seal": "7614161b4c70cad74ca93c684c105c86f778870e2481c56ad761348ea19b9ae2",
+    "product_seal": "ca72aa0f1e627661f4ad3009918e30c46998d0321f8929929c73125bbd6ad158",
+    "source_commit": "c6751e8aaed12f5bf0ee063ff8703f234e2add06",
+    "source_dirty": true,
+    "source_tree": "d0f484ef38dad6cf12749313830ff378d0833f29"
+  },
+  "schema": "core-fs-bench-pro-sdk-run-v2",
+  "selection": "diagnostic-100k-release"
+}

@@ -90,6 +90,16 @@ it handed 111,354 objects in 2,134 batches. Its three Saves inserted
 diagnostic. Counts and receipt identities are in the
 [trace](evidence/c3-v016-memory-20260924/driver.stderr).
 
+**Later phase-cause follow-up, 2026-09-24:** a separate
+[C3 boundary diagnostic](c3-memory-phase-cause-result-20260924.md)
+found that scan, file construction/Save and namespace construction
+each set new process high-waters. It measured 54,753,736 B of entry/job
+reservation and name/path lengths together at scan completion, then
+18,838,440 B of serial/metadata/content-root/inode/directory vector
+reservation at tree input. The result supports two materialization
+contributors, not a byte-for-byte partition of this receipt's
+62,357,504-B old-to-C3 difference.
+
 The Core public-call CPU was 3.926369 s user + 5.579379 s system,
 versus old 3.125596042 s user + 4.220182875 s system. That is a
 matched resource window, but the APIs differ and this diagnostic is
