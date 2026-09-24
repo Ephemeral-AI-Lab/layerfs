@@ -1,0 +1,40 @@
+{
+  "compatibility_key": {
+    "benchmark_init_sha256": "f3fa5771038fe40495d9c3de7b777ea652c8fd8b50efba5172489a9dcb7d7aae",
+    "cargo_lock_sha256": "791a62b55b22d18ce827d49e500326d68a163384629e9c2865b893d8c5914efe",
+    "fixture_bytes": 10485760,
+    "fixture_generator_seed": 5494771174636671793,
+    "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79"
+  },
+  "compatibility_key_sha256": "c2e99bd89857123e",
+  "first_use_wall_ns": 66457250,
+  "fixture_bytes": 10485760,
+  "fixture_canonical_root": "dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85",
+  "fixture_extent_count": 544,
+  "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+  "genesis_layer": "321a42e7990ff3a763677ea4c751baf9f9785215a29233120750987f68a91376f5",
+  "genesis_root": "b0b1d8fa69073ee5130dd3ba47f5d1f8a668556bb50c30559d97687410896207",
+  "genesis_root_serial": 1,
+  "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-10485760-c2e99bd89857123e/history.sqlite",
+  "history_bytes": 86016,
+  "history_sha256": "735f2647c842d2cbb5caac0bfa081bd2381671e77ad1ec305d434ce9b5a3c739",
+  "init_receipt": {
+    "genesis_layer": "321a42e7990ff3a763677ea4c751baf9f9785215a29233120750987f68a91376f5",
+    "operation_ns": 53973542,
+    "project_id": "313a2c358ac490c2fadc26e8de4cc1cc36",
+    "root": "b0b1d8fa69073ee5130dd3ba47f5d1f8a668556bb50c30559d97687410896207",
+    "root_serial": 1,
+    "stack_body": "3a2c358ac490c2fadc26e8de4cc1cc36",
+    "status": "COMPLETE"
+  },
+  "legacy_unsealed_master": "not reused or promoted",
+  "producer_binary_sha256": "f3fa5771038fe40495d9c3de7b777ea652c8fd8b50efba5172489a9dcb7d7aae",
+  "producer_source_commit": "eb17431fc3cebec12d033d98bda97472101ce87a",
+  "producer_source_tree": "b6bc7e70f5ffcc891c8ec9620ccef3c08305464c",
+  "project_id": "313a2c358ac490c2fadc26e8de4cc1cc36",
+  "route": "sdk-exec-fuse-range-splice-commit-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-master-v3",
+  "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-v3-10485760-c2e99bd89857123e/store.sqlite",
+  "store_bytes": 13225984,
+  "store_sha256": "9881bdd7a9cdf773a33ae883ee01ab5b6cf550688d6dd5786441143f0a1ddbeb"
+}
