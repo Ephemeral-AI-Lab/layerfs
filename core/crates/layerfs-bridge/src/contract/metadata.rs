@@ -5,6 +5,8 @@ pub const UPDATE_PORTABLE_METADATA_OPCODE: u8 = 9;
 pub const PORTABLE_METADATA_REQUEST_BYTES: usize = 76;
 pub const PORTABLE_METADATA_RESULT_BYTES: usize = 98;
 pub const CONSTRUCT_PORTABLE_METADATA_OPCODE: u8 = 15;
+/// Saves edited content and its portable metadata under one save owner.
+pub const EDIT_FILE_WITH_METADATA_OPCODE: u8 = 20;
 pub const CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES: usize = 44;
 pub const CONSTRUCT_PORTABLE_METADATA_RESULT_BYTES: usize = 66;
 

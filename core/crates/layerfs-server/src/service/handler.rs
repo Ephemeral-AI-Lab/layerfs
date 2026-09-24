@@ -262,6 +262,7 @@ pub(crate) fn dispatch(
         Operation::ConstructFile { .. }
         | Operation::ConstructSymlink { .. }
         | Operation::EditFile { .. }
+        | Operation::EditFileWithMetadata { .. }
         | Operation::UpdatePortableMetadata { .. }
         | Operation::ConstructPortableMetadata { .. }
         | Operation::UpdatePreparedFilesystem { .. } => {

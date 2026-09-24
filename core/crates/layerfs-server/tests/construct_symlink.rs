@@ -143,6 +143,7 @@ fn saved(response: Response, expected: &[u8]) -> (Root, u64, u64) {
         length,
         inserted,
         reused,
+        ..
     } = response
     else {
         panic!("Saved result");

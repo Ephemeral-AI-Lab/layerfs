@@ -53,7 +53,7 @@ pub const fn permission_bit(opcode: u8) -> Option<u8> {
         1 => Some(1 << 0),
         2 => Some(1 << 1),
         3 | super::CONSTRUCT_SYMLINK_OPCODE => Some(1 << 2),
-        4 => Some(1 << 3),
+        4 | super::EDIT_FILE_WITH_METADATA_OPCODE => Some(1 << 3),
         5 => Some(1 << 4),
         QUERY_OPCODE => Some(1 << 5),
         COMMAND_OPCODE => Some(1 << 6),

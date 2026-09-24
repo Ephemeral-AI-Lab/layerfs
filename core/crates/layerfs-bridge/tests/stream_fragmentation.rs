@@ -76,6 +76,7 @@ fn exercise(upload: bool) {
                         length: bytes.len() as u64,
                         inserted: 1,
                         reused: 0,
+                        metadata: None,
                     })
                 } else {
                     for byte in bytes {

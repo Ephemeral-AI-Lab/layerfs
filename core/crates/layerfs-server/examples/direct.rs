@@ -62,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         length,
         inserted,
         reused,
+        ..
     } = saved
     else {
         return Err("expected saved file".into());

@@ -23,7 +23,9 @@ pub fn mutate(
 ) -> Result<Response, Failure> {
     // Replay acquisition is part of this operation and precedes mutation ownership.
     let mut replacements = Replacements::new();
-    if let Operation::EditFile { edits, .. } = &r.operation {
+    if let Operation::EditFile { edits, .. } | Operation::EditFileWithMetadata { edits, .. } =
+        &r.operation
+    {
         for e in edits {
             let n = usize::try_from(e.replacement).map_err(|_| Code::Capacity)?;
             let mut part = vec![0; n];
@@ -59,12 +61,13 @@ pub fn mutate(
                 checked,
             )
             .map_err(content)?;
-            Ok((*root.as_bytes(), target.len() as u64))
+            Ok((*root.as_bytes(), target.len() as u64, None))
         }),
         Operation::UpdatePortableMetadata { .. } | Operation::ConstructPortableMetadata { .. } => {
-            scope
-                .child("service.metadata")
-                .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
+            scope.child("service.metadata").run(|_| {
+                metadata::save(&provider, r, &mut handoff, deadline)
+                    .map(|(root, length)| (root, length, None))
+            })
         }
         Operation::ConstructFile { length } => {
             let mut source = Exact::new(input, *length, deadline);
@@ -81,7 +84,54 @@ pub fn mutate(
                 if file.logical_len != *length {
                     return Err(Code::InvalidInput.into());
                 }
-                Ok((*file.root.as_bytes(), file.logical_len))
+                Ok((*file.root.as_bytes(), file.logical_len, None))
+            })
+        }
+        Operation::EditFileWithMetadata {
+            root,
+            base_length,
+            edits,
+            kind,
+            mode,
+            mtime_seconds,
+            mtime_nanoseconds,
+        } => {
+            let edits = EditStream::new(
+                *base_length,
+                edits
+                    .iter()
+                    .map(|e| layerfs_content::Edit::new(e.start, e.end, e.replacement))
+                    .collect(),
+            )
+            .map_err(content);
+            edits.and_then(|edits| {
+                let file = apply_edits(
+                    policy,
+                    &capacities,
+                    &provider,
+                    EditRequest {
+                        root: id(root),
+                        edits: &edits,
+                        source: &replacements,
+                    },
+                    &mut handoff,
+                    scope.child("service.edit"),
+                )
+                .map_err(content)?;
+                // The edited content root is the base the portable fields are
+                // patched onto, so both objects land in this one save.
+                let metadata = metadata::patch_portable(
+                    &mut FilesystemObjects::new(&provider, &mut handoff),
+                    id(file.root.as_bytes()),
+                    InodeKind::from_code(*kind).map_err(content)?,
+                    layerfs_content::filesystem::attributes::PortableMetadata {
+                        mode: *mode,
+                        mtime_seconds: *mtime_seconds,
+                        mtime_nanoseconds: *mtime_nanoseconds,
+                    },
+                )
+                .map_err(content)?;
+                Ok((*file.root.as_bytes(), file.logical_len, Some(metadata)))
             })
         }
         Operation::EditFile {
@@ -110,7 +160,7 @@ pub fn mutate(
                     &mut handoff,
                     scope.child("service.edit"),
                 )
-                .map(|f| (*f.root.as_bytes(), f.logical_len))
+                .map(|f| (*f.root.as_bytes(), f.logical_len, None))
                 .map_err(content)
             })
         }
@@ -163,6 +213,7 @@ pub fn mutate(
                 deadline,
                 scope,
             )
+            .map(|(root, length)| (root, length, None))
         })(),
         _ => Err(Code::Unsupported.into()),
     };
@@ -180,7 +231,7 @@ pub fn mutate(
         }
     });
     match result {
-        Ok((root, length)) => {
+        Ok((root, length, metadata)) => {
             let outcome = save
                 .finish(scope.child("service.finish"))
                 .map_err(storage)?;
@@ -232,6 +283,7 @@ pub fn mutate(
                 length,
                 inserted: outcome.inserted,
                 reused: outcome.reused,
+                metadata: metadata.map(|root| *root.as_bytes()),
             })
         }
         Err(mut error) => {
