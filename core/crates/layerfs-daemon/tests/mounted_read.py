@@ -30,8 +30,9 @@ def product_inputs():
     """Include new product files even before their first Git commit."""
     paths = [route.ROOT / '.cargo/config.toml', route.ROOT / 'core/Cargo.toml',
              route.ROOT / 'core/Cargo.lock']
-    for package in (route.ROOT / 'core/crates').iterdir():
-        paths.append(package / 'Cargo.toml')
+    for manifest in (route.ROOT / 'core/crates').rglob('Cargo.toml'):
+        package = manifest.parent
+        paths.append(manifest)
         for group in ('src', 'sql'):
             paths.extend(path for path in (package / group).rglob('*') if path.is_file())
     digest = hashlib.sha256()

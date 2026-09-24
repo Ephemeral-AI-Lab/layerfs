@@ -29,8 +29,9 @@ def command(args, **kwargs):
 
 def product_inputs():
     paths = [ROOT / '.cargo/config.toml', ROOT / 'core/Cargo.toml', ROOT / 'core/Cargo.lock']
-    for package in (ROOT / 'core/crates').iterdir():
-        paths.append(package / 'Cargo.toml')
+    for manifest in (ROOT / 'core/crates').rglob('Cargo.toml'):
+        package = manifest.parent
+        paths.append(manifest)
         for group in ('src', 'sql'):
             paths.extend(path for path in (package / group).rglob('*') if path.is_file())
     digest = hashlib.sha256()
