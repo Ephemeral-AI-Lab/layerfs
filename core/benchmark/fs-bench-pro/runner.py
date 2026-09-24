@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import resource
 import shutil
 import subprocess
@@ -25,6 +26,16 @@ BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--l
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
 BINARIES = ("benchmark_init", "verify_namespace")
+
+
+def require_sdk_driver(name, source=None):
+    """Reject a performance driver that bypasses the public SDK package."""
+    source = source or CORE / "crates/layerfs-api/sdk/examples" / f"{name}.rs"
+    code = source.read_text()
+    foreign = sorted(set(re.findall(r"\blayerfs_[a-z0-9_]+\b", code)) - {"layerfs_sdk"})
+    if ("use layerfs_sdk" not in code or foreign or
+            re.search(r"\b(?:std::fs|std::process|Command::new|File::create|OpenOptions::new)\b", code)):
+        raise ValueError(f"{name} must use public layerfs-sdk for every product operation; foreign={foreign}")
 
 
 def digest(path):
@@ -87,6 +98,9 @@ def identities():
 
 
 def build(out, target, identity):
+    for name in BINARIES:
+        if name.startswith("benchmark_"):
+            require_sdk_driver(name)
     cache = RESULTS / "sdk-build.json"
     prior = json.loads(cache.read_text()) if cache.exists() else None
     if prior and prior.get("product_seal") == identity["product_seal"] and all(

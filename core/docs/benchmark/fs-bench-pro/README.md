@@ -27,10 +27,18 @@ worktree-local run locks never serialize agents in different worktrees.
 The migration starts with three complete family clusters, each tracked as a
 sub-issue of [#230](https://github.com/Ephemeral-AI-Lab/layerfs/issues/230):
 
+> **Owner direction, 2026-09-24:** #232's prospective successor route is
+> [`WorkspaceApi::exec` through FUSE followed by explicit Commit](exec2edit.md),
+> with every product operation entering through the public SDK. The original
+> 56 direct-range-edit cases and historical receipts are not transferred into
+> the new Exec family. No Exec
+> case, numeric gate or performance PASS is registered until a new full
+> specification is frozen. The current Core runner remains Init-only.
+
 | Pilot | Required membership | Product route to qualify |
 | --- | --- | --- |
 | [#231](https://github.com/Ephemeral-AI-Lab/layerfs/issues/231) | First pass: 100/1,000/10,000 native Init; retain 100,000 as `NOT_RUN` under the original final gate | Public native Init, including source reads and construction |
-| [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232) | All three active SDK `edit-*` families: 56 cases | Public SDK range edit into the live Workspace, then explicit Commit |
+| [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232) | New Exec-to-edit membership to freeze; original 56 direct-range-edit cases stay historical | Public SDK `WorkspaceApi::exec` through FUSE, then explicit Commit |
 | [#233](https://github.com/Ephemeral-AI-Lab/layerfs/issues/233) | `tiny_file_churn` (20) and `local_snapshot` (one lifecycle): 21 cases | Ordinary mounted POSIX/FUSE operations and complete Commit lifecycle |
 
 Freeze each selected family's full v0.1.7 case, operation, cache and numeric
@@ -84,7 +92,7 @@ additive numbers or four runner modes.
 
 | Scope | Question and owner | Timing boundary |
 | --- | --- | --- |
-| 1. Public workflow | #231 native Init, #232 SDK edit and Commit, #233 FUSE mutation and Commit | One caller monotonic interval from the registered public start to acknowledgement |
+| 1. Public workflow | #231 native Init, #232 SDK Exec/FUSE edit and Commit, #233 FUSE mutation and Commit | One caller monotonic interval from the registered public start to acknowledgement |
 | 2. Daemon-to-host delivery | [#193](https://github.com/Ephemeral-AI-Lab/layerfs/issues/193) compares the **same Service handler** through `direct` and daemon/network `forward` | One caller interval per matched route; daemon and Service local spans are diagnostics, not a socket-only duration |
 | 3. C1/C2 engine | Stage 6 and #230 `storage-direct` call public C1/C2 APIs on the host | C1 construction/edit and C2 save/ack on the same process clock; Service spans show the integrated path |
 | 4. C5 history | Init reservation/publication and Commit stage/branch publication | Inside the public Init/Commit interval; named Service spans are still needed for a C5 duration |

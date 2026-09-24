@@ -27,6 +27,20 @@ class Substrate(unittest.TestCase):
         self.assertIn("Host::create(", driver)
         for backend in ("layerfs_bridge", "layerfs_history", "layerfs_service", "layerfs_storage"):
             self.assertNotIn(f"use {backend}", driver)
+        runner.require_sdk_driver("benchmark_init")
+
+    def test_sdk_driver_refuses_backend_and_host_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "benchmark_exec2edit.rs"
+            source.write_text("use layerfs_sdk::WorkspaceApi;\nuse layerfs_service::Service;\n")
+            with self.assertRaisesRegex(ValueError, "public layerfs-sdk"):
+                runner.require_sdk_driver("benchmark_exec2edit", source)
+            source.write_text("use layerfs_sdk::WorkspaceApi;\nstd::fs::write(\"note\", b\"x\");\n")
+            with self.assertRaisesRegex(ValueError, "public layerfs-sdk"):
+                runner.require_sdk_driver("benchmark_exec2edit", source)
+            source.write_text("use layerfs_sdk::WorkspaceApi;\nstd::process::Command::new(\"docker\");\n")
+            with self.assertRaisesRegex(ValueError, "public layerfs-sdk"):
+                runner.require_sdk_driver("benchmark_exec2edit", source)
 
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:

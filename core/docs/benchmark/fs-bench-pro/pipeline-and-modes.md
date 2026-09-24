@@ -3,6 +3,13 @@
 > **Status:** Proposed v0.1.7 migration contract. Case membership and numeric
 > gates are not frozen; no benchmark has been run under this proposal.
 
+> **#232 route amendment, 2026-09-24:** The owner selected an SDK-only
+> `WorkspaceApi::exec` → FUSE edit → explicit Commit successor. The older
+> direct-range-edit cases are historical planning text, not an active Exec
+> case registry or admission gate. See
+> [`exec2edit.md`](exec2edit.md); no new case may run until its full contract
+> is frozen and the required SDK setup surface exists.
+
 ## Pipeline to preserve
 
 Keep the useful fs-bench-pro run sequence and its evidence boundaries:
@@ -45,11 +52,11 @@ then migrates three prerequisite family clusters before the remaining suite:
    100,000 tier as `NOT_RUN` under the original four-tier final gate. The
    bounded `InitLayerStack` cannot substitute; see the
    [first-pass spec](issue-231/SPEC.md) and [route gap](#initialization-equivalence-gap).
-2. [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232): all 56 active
-   cases in `edit_length_preserving`, `edit_length_changing`, and
-   `edit_canonical_chunk_count`. They require the public SDK edit route into the
-   live Workspace, not a POSIX write or direct C1/C2 edit. The five capped-v1
-   duplicates remain historical optional rows.
+2. [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232): new
+   Exec-to-edit membership to freeze. Every product operation enters through
+   the public SDK; the edit itself is an ordinary POSIX/FUSE write invoked by
+   `WorkspaceApi::exec`, followed by explicit Commit. The earlier 56 direct
+   range-edit cases and five capped-v1 duplicates remain historical rows.
 3. [#233](https://github.com/Ephemeral-AI-Lab/layerfs/issues/233): all 20
    `tiny_file_churn` cases plus the single `local_snapshot` lifecycle. The
    latter creates 25,000 one-byte files, edits and restores 256 selected files,
@@ -87,7 +94,7 @@ additive timing terms.
 
 ```text
 M1 PUBLIC WORKFLOW: one caller interval, start -> promised acknowledgement
-  #232 SDK edit + explicit Commit, or #233 FUSE mutations + explicit Commit
+  #232 SDK Exec/FUSE edit + explicit Commit, or #233 FUSE mutations + explicit Commit
   micro: edit/mutate | capture/prepare | file/metadata/tree saves | reconcile
     |
     +-- M2 DELIVERY: daemon -> bridge/network -> host Service.handle -> result
@@ -112,7 +119,7 @@ M3's separate component experiment belongs to Stage 6 / storage-direct:
 
 | Macro | Recorded now | Micro timing still needed for the proposed breakdown |
 | --- | --- | --- |
-| M1 public workflow | Workspace has named Stage/Commit **status** phases, not durations. The #230 caller timer does not exist yet. | One caller root at the frozen public boundary; bounded substeps for SDK edit or FUSE mutation, capture/prepare, Commit and reconcile. Do not create one timer node per file or callback. |
+| M1 public workflow | Workspace has named Stage/Commit **status** phases, not durations. The #230 caller timer does not exist yet. | One caller root at the frozen public boundary; bounded substeps for SDK Exec/FUSE edit, capture/prepare, Commit and reconcile. Do not create one timer node per file or callback. |
 | M2 delivery | Daemon and Service emit separate local `LFT1` operation roots. In the Workspace route, the daemon root includes connection and call. | Caller route interval under #193, and named connection/framing/input/result spans only if required for attribution. The existing roots do not isolate socket time. |
 | M3 C1/C2 | Service `begin_save`, `construct`/`edit`, `read` and `finish` scopes plus C1 content children exist. Stage 6 has its own component timer. | `service.construct`/`service.edit` include C2 `SaveHandoff::accept`; never label them pure C1. C2 accept has no per-object node. Add a bounded aggregate span only if the frozen claim needs that split. |
 | M4 C5 | History calls run within the Service operation root; outcome is known. | Coarse spans for Init reservation/publication, `stage_changes` and `commit_staged`. SQL validation, insertion, Branch CAS and stage removal stay grouped until evidence justifies finer spans. |
