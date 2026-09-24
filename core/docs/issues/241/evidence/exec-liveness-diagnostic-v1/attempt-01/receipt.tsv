@@ -1,0 +1,12 @@
+schema	issue241-baseline-exec-liveness-diagnostic-v1
+command	printf baseline > .position-baseline
+cache	functional-uncontrolled;admission-ineligible
+status	STARTED
+sandbox_id	e03bafd5de0c3ab1d4f92af2af27a779
+mount	Ok(Mount { id: WorkspaceId("11829b857a7a75ad2ccb65359d1184bd"), location: "/layerfs/workspace/11829b857a7a75ad2ccb65359d1184bd" })
+exec_elapsed_ms	23
+exec	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+unmount	Ok(())
+sandbox_delete	Ok(())
+sandbox_absent	true
+status	PASS

@@ -2,7 +2,13 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product
 > contract. Frozen after the integrated functional campaign failed on
-> 2026-09-24. No diagnostic execution is claimed here.
+> 2026-09-24; the first diagnostic attempt is linked below.
+
+The first prospective [baseline-only attempt](evidence/exec-liveness-diagnostic-v1/REPORT.md)
+ran on 2026-09-25 and passed in 23 ms of SDK Exec context wall from a fresh
+qualified 10 MiB copy. Its limited telemetry did not capture daemon or FUSE
+events on the successful path. It is inconclusive about the retained failure;
+the request-scoped event vector below remains the next diagnostic requirement.
 
 The [integrated position receipt](evidence/position-sweep-integrated/REPORT.md)
 has one Unknown baseline SDK Exec after 45 PASS cases on 10 MiB. Its command
