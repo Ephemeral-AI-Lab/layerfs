@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "layerfs-edit-tool"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "layerfs-edit-tool"
+path = "src/main.rs"
+
+[profile.release]
+panic = "abort"

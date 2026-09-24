@@ -67,6 +67,16 @@ FIXTURE_SHA256 = {
     524_285_952: "0e2cc5b14abf95553ba633a11b395c80de3f0a1642cdef0adf753cb5984fbe55",
     524_288_000: "bd782f202ec4c40a2070a1d08b78f5135a0ac604b871e4907846740bde906157",
 }
+# Pinned canonical identity of the six pristine fixtures (v0.1.6 family
+# constants for the same bytes) and their extent counts.
+FIXTURE_CANONICAL_ROOT = {
+    1_048_576: "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
+    10_485_760: "dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85",
+    104_857_600: "bbee7155df021324495d88954be4db125eca49442b50aadc16439f61f6c32efe",
+    524_283_904: "6c74b4ba6ad67f352a0bd85879a2f16a77511286bf9a73883d5c8858d2eded8f",
+    524_285_952: "138fcae123c3a4fccbf38aa38b2d01f60e13d087cb108c2ff1f8f456ecf78552",
+    524_288_000: "e4ab3cdbf81fe421e6bd2df0b34e57639845dcf244d127507cf15d6ebe01e9a3",
+}
 FIXTURE_INITIAL_COUNT = {
     1_048_576: 54,
     10_485_760: 544,
@@ -227,6 +237,43 @@ def final_sha256(size, start, delete_len, replacement):
         digest.update(chunk(FIXTURE_GENERATOR_SEED, offset + written, take))
         written += take
     return digest.hexdigest()
+
+
+def stream_bytes(seed, offset, length):
+    """Bytes [offset, offset + length) of the stream, at any byte alignment."""
+    if length <= 0:
+        return b""
+    base = offset - (offset % 8)
+    extra = offset - base
+    words = (extra + length + 7) // 8
+    data = _words(seed, base // 8, words).astype("<u8").tobytes()
+    return data[extra:extra + length]
+
+
+def result_window(size, start, delete_len, replacement, offset, length):
+    """Declared bytes of the edit result in [offset, offset + length).
+
+    The result is the pristine fixture with [start, start + delete_len) replaced
+    by `replacement`, so any window is a splice of those three regions.
+    """
+    final = size - delete_len + len(replacement)
+    end = min(offset + length, final)
+    out = bytearray()
+    cursor = offset
+    while cursor < end:
+        if cursor < start:
+            take = min(end - cursor, start - cursor)
+            out.extend(stream_bytes(FIXTURE_GENERATOR_SEED, cursor, take))
+        elif cursor < start + len(replacement):
+            take = min(end - cursor, start + len(replacement) - cursor)
+            out.extend(replacement[cursor - start:cursor - start + take])
+        else:
+            fixture_offset = start + delete_len + (cursor - start - len(replacement))
+            take = min(end - cursor, 1 << 20)
+            out.extend(stream_bytes(FIXTURE_GENERATOR_SEED, fixture_offset, take))
+        cursor += len(out) - (cursor - offset) + (cursor - offset) - (cursor - offset)
+        cursor = offset + len(out)
+    return bytes(out)
 
 
 def boundary_window(start, delete_len, replacement_len, final):

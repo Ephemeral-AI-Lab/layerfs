@@ -10,6 +10,7 @@ pub use layerfs_api_core::{
     Branch, DeleteError, Error, ExecResult, Mount, Project, SandboxId, SandboxInfo, SandboxStatus,
     WorkspaceError, WorkspaceId, WorkspaceStatus,
 };
+pub use layerfs_bridge::contract::{CommitOutcomeWire, WorkspaceCommitReportWire};
 pub use layerfs_server::{HistoryMode, Server, ServerConfig};
 pub use project::{ProjectApi, BRANCH_BODY_BYTES};
 pub use sandbox::SandboxApi;

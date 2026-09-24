@@ -20,6 +20,8 @@ CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
+from shared import edit_contract as edit  # noqa: E402
+from shared import edit_route  # noqa: E402
 
 CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
 BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
@@ -44,7 +46,9 @@ def require_sdk_driver(name, source=None):
     observation = set(re.findall(r"layerfs_telemetry::([A-Za-z_][A-Za-z0-9_]*)", code))
     if ("use layerfs_sdk" not in code or foreign or composition - COMPOSITION_ITEMS
             or observation - OBSERVATION_ITEMS
-            or re.search(r"\b(?:std::fs|std::process|Command::new|File::create|OpenOptions::new)\b", code)):
+            or re.search(
+                r"\b(?:std::fs::(?:write|create|remove|rename|copy|set_permissions|hard_link)"
+                r"|std::process::Command|Command::new|File::create|OpenOptions::new)\b", code)):
         raise ValueError(f"{name} must use public layerfs-sdk for every product operation; "
                          f"foreign={foreign} composition={sorted(composition)} "
                          f"observation={sorted(observation)}")
@@ -352,6 +356,94 @@ def run(selection, out):
     return out
 
 
+EXEC_EDIT_BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
+                  "--offline", "--release", "-p", "layerfs-sdk", "-p", "layerfs-server",
+                  "--example", "benchmark_edit", "--example", "verify_edit"]
+EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify_edit"}
+
+
+def exec_edit_cursor_key():
+    return os.urandom(32).hex()
+
+
+def build_exec_edit(out, target, identity):
+    """Builds the two release examples this route needs, sealed by hash."""
+    for name in EXEC_EDIT_BINARIES:
+        require_sdk_driver(name)
+    started = time.monotonic_ns()
+    with (out / "build.log").open("wb") as log:
+        process = subprocess.run(EXEC_EDIT_BUILD, cwd=ROOT,
+                                 env={**os.environ, "CARGO_TARGET_DIR": str(target)},
+                                 stdout=log, stderr=subprocess.STDOUT)
+    wall = time.monotonic_ns() - started
+    record = {"status": "PASS" if process.returncode == 0 else "FAIL", "mode": "release",
+              "profile": "release", "wall_ns": wall, "exit_code": process.returncode,
+              "compiled_units": (out / "build.log").read_text(errors="replace").count("Compiling "),
+              "command": EXEC_EDIT_BUILD, "target": str(target), "binaries": {}}
+    if process.returncode == 0:
+        for name in EXEC_EDIT_BINARIES:
+            source = target / "release/examples" / name
+            binary_sha = digest(source)
+            archive = RESULTS / "binary-archive" / binary_sha / name
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            if not archive.exists():
+                shutil.copy2(source, archive)
+                archive.chmod(0o555)
+            record["binaries"][name] = {"path": str(archive), "sha256": binary_sha}
+    return record
+
+
+def run_exec_edit(selection, out):
+    """One #232 performance sample; never a rerun of the same arm."""
+    out = owned(out)
+    identity = identities()
+    if identity["source_dirty"]:
+        raise ValueError("commit the Exec/FUSE route before collecting benchmark samples")
+    target = target_path()
+    out.mkdir(parents=True)
+    build_receipt = build_exec_edit(out, target, identity)
+    write_json(out / "build.json", build_receipt)
+    image_path = CORE / "target/exec-fuse-edit/image.json"
+    if not image_path.is_file():
+        raise ValueError("build the sealed edit image before sampling")
+    image = json.loads(image_path.read_text())
+    if image.get("registry_sha256") != edit.REGISTRY_SHA256:
+        raise ValueError("sealed image was built from a different registry")
+    rows = {row["scenario_id"]: row for row in edit.registry()}
+    if selection not in rows:
+        raise ValueError("unregistered Exec/FUSE scenario")
+    row = rows[selection]
+    if row["registration_status"] != "REGISTERED":
+        receipt = {"status": "NOT_RUN", "sample_count": 0, "reason": row["not_run_reason"]}
+        write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
+                                      "selection": selection, "identity": identity,
+                                      "receipt": receipt})
+        (out / "report.txt").write_text(f"{selection}\tNOT_RUN\t{row['not_run_reason']}\n")
+        manifest_run(out)
+        return out
+    binaries = {name: entry["path"] for name, entry in build_receipt["binaries"].items()}
+    telemetry_run = int.from_bytes(os.urandom(16), "big") or 1
+    results = RESULTS
+    results.mkdir(parents=True, exist_ok=True)
+    with (results / ".run.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        receipt = edit_route.sample(results, row, binaries, image["image_id"], identity,
+                                    exec_edit_cursor_key(), telemetry_run,
+                                    os.urandom(16).hex())
+    write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
+                                  "selection": selection, "identity": identity,
+                                  "image": image, "receipt": receipt})
+    (out / "report.txt").write_text(
+        f"{selection}\t{receipt.get('status')}\tsamples={receipt.get('sample_count')}\t"
+        f"edit_commit_ns={receipt.get('edit_commit_ns')}\t"
+        f"target_ms={row['g2_target_ms']}\t"
+        f"command_wall_ns={receipt.get('complete_command_wall_ns')}\t"
+        f"lft1={receipt.get('lft1_lines')}\t"
+        f"verification={(receipt.get('verification') or {}).get('status')}\n")
+    manifest_run(out)
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -359,20 +451,39 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace"])
+    selector.add_argument("--family", choices=["init_namespace", "workspace_exec_edit_length_preserving",
+                                               "workspace_exec_edit_length_changing",
+                                               "workspace_exec_edit_canonical_chunk_count"])
     run_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     args = parser.parse_args()
+    edit_rows = {row["scenario_id"]: row for row in edit.registry()}
+    edit_families = {row["family_id"] for row in edit.registry()}
     if args.command == "list":
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
+        for row in edit.registry():
+            state = (f"REGISTERED target={row['g2_target_ms']:.2f}ms"
+                     if row["registration_status"] == "REGISTERED"
+                     else f"NOT_RUN {row['not_run_reason'].split(':')[0]}")
+            print(f"{row['scenario_id']}\t{row['fixture_bytes']}\t{row['final_bytes']}\t"
+                  f"{row['family_id']} {state}")
     elif args.command == "run":
         selection = args.case or args.family
-        if selection not in (*init.SELECTED, "init_namespace"):
+        if selection in edit_rows or selection in edit_families:
+            selection = next((row["scenario_id"] for row in edit.registry()
+                              if row["scenario_id"] == selection
+                              or row["family_id"] == selection
+                              and row["registration_status"] == "REGISTERED"), None)
+            if selection is None:
+                parser.error("no registered Exec/FUSE case in that selection")
+            print(run_exec_edit(selection, args.out))
+        elif selection in (*init.SELECTED, "init_namespace"):
+            print(run(selection, args.out))
+        else:
             parser.error("unknown or deferred SDK case")
-        print(run(selection, args.out))
     elif args.command == "verify":
         print(verify_run(owned(args.run, existing=True)))
     else:
