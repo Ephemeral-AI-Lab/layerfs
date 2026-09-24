@@ -1,0 +1,42 @@
+{
+  "budget_ns": 15000000000,
+  "child": {
+    "branch_id": "110d2b99ace94d17305c612f1e732e08e2",
+    "canonical_count_match": true,
+    "canonical_root": "83a5dadc083bfef90501113b82df102bda171429d62ef2c299dd6fb68f9e4eef",
+    "canonical_root_expected": "-",
+    "canonical_root_match": true,
+    "chunked": 1,
+    "content_match": true,
+    "coverage": "full-file",
+    "declared_bytes": 1048576,
+    "expected_digest": "f998113b31421539b874cc777fe34d6daea3bc3fe5f4b6e4c8db7bac889e3e19",
+    "extent_count": 56,
+    "fixture_bytes": 1048576,
+    "fixture_canonical_root_observed": "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
+    "fixture_extent_count_observed": 54,
+    "full_file_bytes_verified": true,
+    "genesis_root": "fa79b147cc125c891f69ea7e74e3f8f88deead8fc89eba2cbff08afd50b1c587",
+    "head_commit": "12e418b8644fe9b8f59695c3617f7d72302a65b91ce1a87d175baf68ca7ed75c38",
+    "historical_root_match": true,
+    "history": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite",
+    "observed_bytes": 1048576,
+    "observed_digest": "f998113b31421539b874cc777fe34d6daea3bc3fe5f4b6e4c8db7bac889e3e19",
+    "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+    "schema": "core-fs-bench-pro-exec-fuse-edit-verification-v1",
+    "status": "PASS",
+    "store": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite"
+  },
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/binary-archive/9a81ddf3565989c30506637235961019ef6d36e015e9e23834763010d422e8ae/verify_edit",
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/verifier-case.txt",
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite"
+  ],
+  "exit_code": 0,
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "status": "PASS",
+  "stderr": "",
+  "timeout": false,
+  "wall_ns": 41308000
+}

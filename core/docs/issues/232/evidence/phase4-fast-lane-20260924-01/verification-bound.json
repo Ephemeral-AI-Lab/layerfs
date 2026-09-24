@@ -1,0 +1,23 @@
+{
+  "coverage": "full-file",
+  "edit_commit_ns": 41451208,
+  "fresh_reopen": true,
+  "full_file_bytes_verified": true,
+  "identity": {
+    "cargo_lock_sha256": "d6fb4800e048346f87b6c825bdc2f2d446f50e33a2ead40799147408b8dc7e9b",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "fdc9b05dac24de684d56a34c2bdc4fcca41b57135386c9eed141f5b92e197a7f",
+    "product_seal": "dec1242a6a381d3e7573a7b1b32590c29461d13c09e78eb2d0e7e3ada08dd176",
+    "source_commit": "2ed00cc8774ffd8d9f5cbaa403e830f37aba14c6",
+    "source_dirty": false,
+    "source_tree": "8677dc35b65060ecb8232aef17bf342799ee9baa"
+  },
+  "image_id": "sha256:cb51ce524b113a6aed95953df7c091dde77e29e87477271964f65aff53f15766",
+  "performance_command_wall_ns": 932240000,
+  "performance_run": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/exec-fuse-edit-phase4-04",
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-verification-binding-v1",
+  "verification_status": "PASS",
+  "verification_wall_ns": 41308000
+}

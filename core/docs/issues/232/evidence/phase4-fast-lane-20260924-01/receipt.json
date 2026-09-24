@@ -1,0 +1,161 @@
+{
+  "acknowledgement_boundary": "WorkspaceApi::commit",
+  "admission_eligible": false,
+  "cache": {
+    "linux-fuse-backing": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "linux-fuse-backing",
+      "method": "declared-warm-not-invalidatable-v1",
+      "reason": "the per-case sandbox creates a fresh backing directory and spool inside the container; no host-side or product-side invalidation exists, and a benchmark-only eviction between Edit and Commit is forbidden, so Commit may read the bytes Edit just wrote from resident backing pages",
+      "status": "INELIGIBLE"
+    },
+    "macos-store": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "macos-store",
+      "files": {
+        "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite": {
+          "bytes": 86016,
+          "pages": 6,
+          "resident_pages": 0
+        },
+        "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite": {
+          "bytes": 2691072,
+          "pages": 165,
+          "resident_pages": 0
+        }
+      },
+      "method": "darwin-mmap-msync-invalidate-mincore-v1",
+      "pages_checked": 171,
+      "resident_pages": 0,
+      "resident_pages_before": 0,
+      "status": "PASS"
+    }
+  },
+  "cache_contract": "exec-fuse-edit-cache-v1",
+  "case_file": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/case.txt",
+  "cleanup_ns": 421268667,
+  "clone_method": "independent-writable-byte-copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/binary-archive/c231362ca3d833948db2db39b8c923a8a6eed52863bac4d4fe082b9427964987/benchmark_edit",
+    "branch_body=0d2b99ace94d17305c612f1e732e08e2;canonical_count_expected=-;canonical_root_expected=-;command=/layerfs-bench/bin/layerfs-edit-tool pwrite --file payload.bin --offset 522240 --length 4096 --payload /layerfs-bench/payloads/overwrite-middle-4k.bin --expect-size 1048576;delete_len=4096;edit_start=522240;editor_algorithm=single-positional-write;family_id=workspace_exec_edit_length_preserving;final_bytes=1048576;final_sha256=f998113b31421539b874cc777fe34d6daea3bc3fe5f4b6e4c8db7bac889e3e19;fixture_bytes=1048576;fixture_canonical_root=8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078;fixture_extent_count=54;full_file_digest=1;g2_target_ms=5.63;genesis_layer=326a61ad2da97b4a492d45a111241b8d8e06002e733fd117ca7bfb919338b0558f;genesis_root=fa79b147cc125c891f69ea7e74e3f8f88deead8fc89eba2cbff08afd50b1c587;genesis_root_serial=1;project_id=31c6c2f4631a68ea2d84b59bb698be57b4;replacement_kind=inline;replacement_len=4096;replacement_sha256=f2ebe7d18fdbdd17c8aaff760ad8eeb0dfd82dadf874c41dad175ff916b2a6c5;route=sdk-exec-fuse-edit-commit-v1;scenario_id=overwrite-middle-4k-on-1mib-ops-1-exec-v1;stack_body=c6c2f4631a68ea2d84b59bb698be57b4;telemetry_run=120986700373943274253076689976830668743;window_bytes=139264;window_offset=456704;window_sha256=fcd1da220c2825a6909f644ac3d3b865cec9e0532f96f5a584debbc46dd53d46",
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite",
+    "sha256:cb51ce524b113a6aed95953df7c091dde77e29e87477271964f65aff53f15766",
+    "exec-overwrite-middle-4k-on-1mib-ops-1-exec-v"
+  ],
+  "commit_ns": 22428250,
+  "complete_command_budget_ns": 15000000000,
+  "complete_command_status": "PASS",
+  "complete_command_wall_ns": 932240000,
+  "driver": {
+    "acknowledgement_boundary": "WorkspaceApi::commit",
+    "branch_id": "110d2b99ace94d17305c612f1e732e08e2",
+    "cleanup_ns": 421268667,
+    "commit_ns": 22428250,
+    "delete_len": 4096,
+    "detail": "commit_outcome=COMMITTED revision=3",
+    "edit_commit_ns": 41451208,
+    "edit_ns": 19018375,
+    "edit_start": 522240,
+    "family_id": "workspace_exec_edit_length_preserving",
+    "final_bytes": 1048576,
+    "fixture_bytes": 1048576,
+    "g2_target_ms": 5.63,
+    "head_commit": "12e418b8644fe9b8f59695c3617f7d72302a65b91ce1a87d175baf68ca7ed75c38",
+    "history": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite",
+    "image": "sha256:cb51ce524b113a6aed95953df7c091dde77e29e87477271964f65aff53f15766",
+    "operation_contract_id": "workspace-exec-fuse-edit-commit-v1",
+    "operation_entrypoint": "WorkspaceApi::exec",
+    "operation_surface": "workspace-posix-fuse",
+    "preparation_ns": 385256625,
+    "projection_counts": "lookup=1,getattr=5,read=0,write=1,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "replacement_len": 4096,
+    "replacement_sha256": "f2ebe7d18fdbdd17c8aaff760ad8eeb0dfd82dadf874c41dad175ff916b2a6c5",
+    "replay": false,
+    "route": "sdk-exec-fuse-edit-commit-v1",
+    "sandbox_delete_container_removed": false,
+    "sandbox_delete_ok": true,
+    "sandbox_delete_volume_removed": false,
+    "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+    "schema": "core-fs-bench-pro-exec-fuse-edit-performance-v1",
+    "service_endpoint_port": 52926,
+    "status": "COMPLETE",
+    "store": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "edit_commit_ns": 41451208,
+  "edit_ns": 19018375,
+  "family_id": "workspace_exec_edit_length_preserving",
+  "folder": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "g2_target_ms": 5.63,
+  "history": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/history.sqlite",
+  "identity": {
+    "cargo_lock_sha256": "d6fb4800e048346f87b6c825bdc2f2d446f50e33a2ead40799147408b8dc7e9b",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "fdc9b05dac24de684d56a34c2bdc4fcca41b57135386c9eed141f5b92e197a7f",
+    "product_seal": "dec1242a6a381d3e7573a7b1b32590c29461d13c09e78eb2d0e7e3ada08dd176",
+    "source_commit": "2ed00cc8774ffd8d9f5cbaa403e830f37aba14c6",
+    "source_dirty": false,
+    "source_tree": "8677dc35b65060ecb8232aef17bf342799ee9baa"
+  },
+  "image_id": "sha256:cb51ce524b113a6aed95953df7c091dde77e29e87477271964f65aff53f15766",
+  "lft1_lines": 17,
+  "master": {
+    "compatibility_key": {
+      "cargo_lock_sha256": "d6fb4800e048346f87b6c825bdc2f2d446f50e33a2ead40799147408b8dc7e9b",
+      "fixture_bytes": 1048576,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "harness_seal": "fdc9b05dac24de684d56a34c2bdc4fcca41b57135386c9eed141f5b92e197a7f",
+      "product_seal": "dec1242a6a381d3e7573a7b1b32590c29461d13c09e78eb2d0e7e3ada08dd176",
+      "registry_sha256": "e4b4d2fc67cb1630dc8f15283db3085663466071bb373c829a6026ffddb66aab",
+      "route": "sdk-exec-fuse-edit-commit-v1"
+    },
+    "first_use_wall_ns": 50806750,
+    "fixture_bytes": 1048576,
+    "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+    "history_bytes": 86016,
+    "reuse": "first-use",
+    "store_bytes": 2691072
+  },
+  "operation_contract_id": "workspace-exec-fuse-edit-commit-v1",
+  "operation_entrypoint": "WorkspaceApi::exec",
+  "operation_surface": "workspace-posix-fuse",
+  "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+  "preparation_ns": 385256625,
+  "repetition": 1,
+  "route": "sdk-exec-fuse-edit-commit-v1",
+  "sample_count": 1,
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "scenario_version": 1,
+  "schema": "core-fs-bench-pro-exec-fuse-edit-receipt-v1",
+  "status": "FAIL",
+  "status_reasons": [
+    "caller LFT1 root/children missing"
+  ],
+  "store": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/store.sqlite",
+  "telemetry": {
+    "caller_root_present": true,
+    "child_labels": [
+      null,
+      null
+    ],
+    "commit_child": false,
+    "edit_child": false,
+    "malformed_lines": 0,
+    "operation_records": 15,
+    "root_count": 1,
+    "root_label": null,
+    "status": "UNAVAILABLE"
+  },
+  "telemetry_raw_lines": 17,
+  "verification": {
+    "reason": "performance-only exploratory sample at this source identity; the independent verifier runs separately against this retained receipt",
+    "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+    "status": "SKIPPED"
+  }
+}

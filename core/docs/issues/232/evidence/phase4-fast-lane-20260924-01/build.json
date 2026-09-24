@@ -1,0 +1,43 @@
+{
+  "binaries": {
+    "benchmark_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/binary-archive/c231362ca3d833948db2db39b8c923a8a6eed52863bac4d4fe082b9427964987/benchmark_edit",
+      "sha256": "c231362ca3d833948db2db39b8c923a8a6eed52863bac4d4fe082b9427964987"
+    },
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/binary-archive/1394371b95776662a9463c872f1d53d850ba3783108f9d0d8e951c83f5ce8fd5/benchmark_init",
+      "sha256": "1394371b95776662a9463c872f1d53d850ba3783108f9d0d8e951c83f5ce8fd5"
+    },
+    "verify_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/binary-archive/9a81ddf3565989c30506637235961019ef6d36e015e9e23834763010d422e8ae/verify_edit",
+      "sha256": "9a81ddf3565989c30506637235961019ef6d36e015e9e23834763010d422e8ae"
+    }
+  },
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--release",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-server",
+    "--example",
+    "benchmark_edit",
+    "--example",
+    "verify_edit",
+    "--example",
+    "benchmark_init"
+  ],
+  "compiled_units": 0,
+  "exit_code": 0,
+  "mode": "release",
+  "profile": "release",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/core/target",
+  "wall_ns": 232557625
+}
