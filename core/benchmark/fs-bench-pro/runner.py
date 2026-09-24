@@ -28,14 +28,26 @@ BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--l
 BINARIES = ("benchmark_init", "verify_namespace")
 
 
+# A registered performance driver may name the SDK for product operations, the
+# server package only to compose the authority, and telemetry only to observe.
+DRIVER_CRATES = {"layerfs_sdk", "layerfs_server", "layerfs_telemetry"}
+COMPOSITION_ITEMS = {"Server", "ServerConfig", "HistoryMode"}
+OBSERVATION_ITEMS = {"runtime", "output", "operation", "timer"}
+
+
 def require_sdk_driver(name, source=None):
     """Reject a performance driver that bypasses the public SDK package."""
     source = source or CORE / "crates/layerfs-api/sdk/examples" / f"{name}.rs"
     code = source.read_text()
-    foreign = sorted(set(re.findall(r"\blayerfs_[a-z0-9_]+\b", code)) - {"layerfs_sdk"})
-    if ("use layerfs_sdk" not in code or foreign or
-            re.search(r"\b(?:std::fs|std::process|Command::new|File::create|OpenOptions::new)\b", code)):
-        raise ValueError(f"{name} must use public layerfs-sdk for every product operation; foreign={foreign}")
+    foreign = sorted(set(re.findall(r"\blayerfs_[a-z0-9_]+\b", code)) - DRIVER_CRATES)
+    composition = set(re.findall(r"layerfs_server::([A-Za-z_][A-Za-z0-9_]*)", code))
+    observation = set(re.findall(r"layerfs_telemetry::([A-Za-z_][A-Za-z0-9_]*)", code))
+    if ("use layerfs_sdk" not in code or foreign or composition - COMPOSITION_ITEMS
+            or observation - OBSERVATION_ITEMS
+            or re.search(r"\b(?:std::fs|std::process|Command::new|File::create|OpenOptions::new)\b", code)):
+        raise ValueError(f"{name} must use public layerfs-sdk for every product operation; "
+                         f"foreign={foreign} composition={sorted(composition)} "
+                         f"observation={sorted(observation)}")
 
 
 def digest(path):

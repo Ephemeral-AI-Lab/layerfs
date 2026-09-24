@@ -1,4 +1,5 @@
 //! Store, history, grant and capacity construction shared by every entry point.
+use crate::host::HistoryMode;
 use crate::Grant;
 use layerfs_bridge::contract::{Code, Failure};
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
@@ -28,8 +29,15 @@ pub(crate) fn capacity(store: &Store) -> Result<usize, Failure> {
 pub(crate) fn history(
     path: &Path,
     config: &HistoryCatalogConfig,
+    mode: HistoryMode,
 ) -> Result<Arc<dyn HistoryCatalog>, Failure> {
-    sqlite::create(path, config)
+    let catalog = match mode {
+        HistoryMode::Create => sqlite::create(path, config),
+        HistoryMode::OpenWritable => {
+            sqlite::open_writable(path, &config.binding_key, config.cursor_key)
+        }
+    };
+    catalog
         .map(|catalog| Arc::new(catalog) as Arc<dyn HistoryCatalog>)
         .map_err(crate::service::error::catalog)
 }

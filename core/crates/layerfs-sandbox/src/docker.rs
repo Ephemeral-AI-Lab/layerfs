@@ -166,3 +166,63 @@ fn hex(bytes: &[u8]) -> String {
     }
     out
 }
+
+/// `docker stop` with a bounded grace period, then confirmation of the state.
+pub(crate) fn stop(container: &str, timeout_seconds: u32) -> Result<(), Failure> {
+    if !running(container)? {
+        return Ok(());
+    }
+    run(&["stop", "--time", &timeout_seconds.to_string(), container])?;
+    if running(container)? {
+        return Err(Code::Busy.into());
+    }
+    Ok(())
+}
+
+/// Removes the owned container; an already-absent container is not a failure,
+/// because a refused launch never created one.
+pub(crate) fn remove_container(container: &str) -> Result<(), Failure> {
+    if !container_present(container)? {
+        return Ok(());
+    }
+    run(&["rm", container])?;
+    if container_present(container)? {
+        return Err(Code::Io.into());
+    }
+    Ok(())
+}
+
+/// Removes the owned Workspace volume; an already-absent volume is not a
+/// failure, but a volume that survives its removal is.
+pub(crate) fn remove_volume(volume: &str) -> Result<(), Failure> {
+    if !volume_present(volume)? {
+        return Ok(());
+    }
+    run(&["volume", "rm", volume])?;
+    if volume_present(volume)? {
+        return Err(Code::Io.into());
+    }
+    Ok(())
+}
+
+pub(crate) fn container_present(container: &str) -> Result<bool, Failure> {
+    probe(&["inspect", "--format", "{{.Id}}", container])
+}
+
+pub(crate) fn volume_present(volume: &str) -> Result<bool, Failure> {
+    probe(&["volume", "inspect", volume])
+}
+
+/// True when the named object is present; a `docker` failure is not proof of
+/// absence, so a probe that cannot answer reports the failure instead.
+fn probe(args: &[&str]) -> Result<bool, Failure> {
+    let output = Command::new("docker").args(args).output()?;
+    if output.status.success() {
+        return Ok(true);
+    }
+    let text = String::from_utf8_lossy(&output.stderr);
+    if text.contains("No such") || text.contains("no such") {
+        return Ok(false);
+    }
+    Err(Code::Io.into())
+}

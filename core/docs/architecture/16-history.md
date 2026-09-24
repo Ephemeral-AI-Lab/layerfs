@@ -76,6 +76,15 @@ layerfs-history ◄── layerfs-server    (composition, authorization, bootstr
 layerfs-bridge  does not depend on layerfs-history at all
 ```
 
+`layerfs_history::sqlite::open_writable` reopens one existing, closed catalog
+for writable continuity in the new owning process: it validates the same
+application identity, schema version, application-table set, singleton metadata
+row and binding-derived catalog identity as the read-only open, then opens the
+same file read-write under the declared MEMORY-journal/no-sync profile. It
+exists for a prepared Store/history byte copy that a caller must fork, commit or
+allocate against; it is not a migration, repair or promotion, and an
+incomplete, foreign or inconsistent catalog is refused.
+
 The `native` feature is the only provider switch. Building the crate with
 `--no-default-features` compiles the portable contract and no SQLite provider; it
 proves the contract is separable and claims no other backend.

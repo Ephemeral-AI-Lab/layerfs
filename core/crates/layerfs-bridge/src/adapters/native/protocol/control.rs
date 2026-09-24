@@ -13,7 +13,11 @@ pub(super) fn put_status(e: &mut Encoder, status: &WorkspaceStatusWire) -> Resul
     e.u64(status.nodes)?;
     e.u64(status.handles)?;
     e.u64(status.cookies)?;
-    e.u64(status.consumer_accounted_bytes)
+    e.u64(status.consumer_accounted_bytes)?;
+    for count in status.projection {
+        e.u64(count)?;
+    }
+    e.u64(status.upstream_calls)
 }
 pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Failure> {
     let workspace = d.blob(WORKSPACE_ID_BYTES)?;
@@ -33,6 +37,14 @@ pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Fa
         handles: d.u64()?,
         cookies: d.u64()?,
         consumer_accounted_bytes: d.u64()?,
+        projection: {
+            let mut counts = [0u64; PROJECTION_CLASSES];
+            for slot in counts.iter_mut() {
+                *slot = d.u64()?;
+            }
+            counts
+        },
+        upstream_calls: d.u64()?,
     };
     status.validate()?;
     Ok(status)

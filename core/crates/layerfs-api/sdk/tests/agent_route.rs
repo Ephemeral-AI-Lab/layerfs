@@ -1,70 +1,56 @@
-//! Optional live Docker proof: set LAYERFS_TEST_IMAGE to an immutable image with /layerfs-daemon and /bin/sh.
+//! Optional live Docker proof: set LAYERFS_TEST_IMAGE to an immutable image with
+//! `/layerfs-daemon` and `/bin/sh`.
+//!
+//! Every product operation in this route goes through the public SDK:
+//! `Server::create`, `ProjectApi::init`, `ProjectApi::fork`,
+//! `SandboxApi::{create,list,delete}` and
+//! `WorkspaceApi::{mount,exec,commit,status,unmount}`. `docker` appears only as
+//! read-only supervision (publishing port observation, absence checks) and as
+//! fault injection for the stale-daemon outcome; it performs no cleanup and no
+//! edit.
 use layerfs_api_core::{SandboxId, SandboxStatus, WorkspaceError};
-use layerfs_bridge::{
-    adapters::native::{
-        connection::{accept, Peer, VerifiedPeer},
-        server::serve,
-    },
-    contract::{
-        Code, CommitOutcomeWire, HistoryCommand, HistoryForkSource, HistoryResult, Operation,
-        Request, Response, HISTORY_PROFILE, HISTORY_RESULT_BYTES, MAX_OPERATION_MS,
-    },
-};
-use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
-use layerfs_sandbox::{OwnerConfig, SandboxOwner};
-use layerfs_sdk::{ProjectApi, SandboxApi, WorkspaceApi};
-use layerfs_server::{Grant, Service, StoreAccess};
-use layerfs_storage::Store;
+use layerfs_bridge::contract::{Code, CommitOutcomeWire};
+use layerfs_sdk::{HistoryMode, ProjectApi, SandboxApi, Server, ServerConfig, WorkspaceApi};
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},
     runtime::{Configuration, MonitorConfig, Runtime},
-    timer::Timing,
 };
-use nix::poll::{poll, PollFd, PollFlags};
-use std::{
-    fs::OpenOptions,
-    io::{Cursor, Write},
-    net::TcpListener,
-    os::fd::AsFd,
-    path::PathBuf,
-    process::Command,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
+use std::{fs::OpenOptions, io::Write, path::PathBuf, process::Command, thread, time::Duration};
 
-struct Cleanup {
+const BRANCH: [u8; 16] = [36; 16];
+const RETIRED_IMAGE: &str =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Product-route cleanup: every admitted sandbox is deleted through the SDK.
+/// A cleanup failure is recorded, never replaced by a direct Docker removal.
+struct Cleanup<'a> {
     root: PathBuf,
-    containers: Vec<String>,
-    stop: Arc<AtomicBool>,
-    telemetry_output: Option<PathBuf>,
+    owner: &'a layerfs_sandbox::SandboxOwner,
+    sandboxes: Vec<SandboxId>,
+    failures: Vec<String>,
+    diagnostics: Option<PathBuf>,
 }
-impl Drop for Cleanup {
+impl Drop for Cleanup<'_> {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        if self.telemetry_output.is_some() {
-            thread::sleep(Duration::from_millis(100));
+        let api = SandboxApi::new(self.owner);
+        for id in std::mem::take(&mut self.sandboxes) {
+            if let Err(error) = api.delete(id) {
+                self.failures.push(format!(
+                    "sandbox {id}: {:?} container_removed={} volume_removed={}",
+                    error.cause, error.container_removed, error.volume_removed
+                ));
+            }
         }
-        for name in &self.containers {
-            if let Some(output) = &self.telemetry_output {
-                if let Ok(logs) = Command::new("docker").args(["logs", name]).output() {
-                    for (suffix, bytes) in [("stdout", logs.stdout), ("stderr", logs.stderr)] {
-                        let path = output.join(format!("{name}.{suffix}"));
-                        if let Ok(mut file) =
-                            OpenOptions::new().write(true).create_new(true).open(path)
-                        {
-                            let _ = file.write_all(&bytes);
-                        }
-                    }
+        if let Some(output) = &self.diagnostics {
+            if !self.failures.is_empty() {
+                if let Ok(mut file) = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(output.join("cleanup-failures.txt"))
+                {
+                    let _ = file.write_all(self.failures.join("\n").as_bytes());
                 }
             }
-            let _ = Command::new("docker").args(["rm", "-f", name]).output();
-            let _ = Command::new("docker")
-                .args(["volume", "rm", &format!("{name}-root")])
-                .output();
         }
         let _ = std::fs::remove_dir_all(&self.root);
     }
@@ -90,28 +76,54 @@ fn published_port(id: &SandboxId) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+/// Read-only host observation used by the test's cleanup assertions.
+fn docker_object_present(args: &[&str]) -> bool {
+    Command::new("docker")
+        .args(args)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 fn create(
-    api: &SandboxApi<'_>,
-    cleanup: &mut Cleanup,
+    cleanup: &mut Cleanup<'_>,
     image: &str,
     name: &str,
 ) -> Result<SandboxId, layerfs_sandbox::CreateError> {
-    match api.create(image, name) {
+    match SandboxApi::new(cleanup.owner).create(image, name) {
         Ok(id) => {
-            cleanup.containers.push(format!("layerfs-{id}"));
+            cleanup.sandboxes.push(id);
             Ok(id)
         }
         Err(error) => {
+            // A retained create still names an owned sandbox the caller must be
+            // able to delete; it is recorded here so cleanup reaches it.
             if let Some(id) = error.sandbox {
-                cleanup.containers.push(format!("layerfs-{id}"));
+                cleanup.sandboxes.push(id);
             }
             Err(error)
         }
     }
 }
 
+fn delete(cleanup: &mut Cleanup<'_>, id: SandboxId) {
+    SandboxApi::new(cleanup.owner)
+        .delete(id)
+        .unwrap_or_else(|error| panic!("sandbox delete {id}: {error:?}"));
+    cleanup.sandboxes.retain(|held| *held != id);
+    assert!(!docker_object_present(&[
+        "inspect",
+        &format!("layerfs-{id}")
+    ]));
+    assert!(!docker_object_present(&[
+        "volume",
+        "inspect",
+        &format!("layerfs-{id}-root")
+    ]));
+}
+
 #[test]
-fn init_mount_exec_commit_unmount_and_historical_conflict() {
+fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
     let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
         return;
     };
@@ -144,193 +156,90 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
     };
     let root = std::env::temp_dir().join(format!("layerfs-agent-route-{}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
-    let stop = Arc::new(AtomicBool::new(false));
-    let mut cleanup = Cleanup {
-        root: root.clone(),
-        containers: Vec::new(),
-        stop: stop.clone(),
-        telemetry_output: telemetry_output.clone(),
-    };
     let source = root.join("source");
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("note"), b"base").unwrap();
-    let host_private = [31; 32];
-    let daemon_private = [32; 32];
-    let service_private = [33; 32];
-    let control_private = [34; 32];
-    let host_peer = VerifiedPeer::from_private(&host_private).unwrap();
-    let daemon_peer = VerifiedPeer::from_private(&daemon_private).unwrap();
-    let service_peer = VerifiedPeer::from_private(&service_private).unwrap();
-    let store = Timing::disabled("create", |scope| {
-        Store::create(
-            root.join("store.sqlite"),
-            Store::default_policy(),
-            scope.child("store"),
-        )
-    })
-    .0
-    .unwrap();
-    let history: Arc<dyn HistoryCatalog> = Arc::new(
-        sqlite::create(
-            &root.join("history.sqlite"),
-            &HistoryCatalogConfig {
-                binding_key: b"agent-route".to_vec(),
-                incarnation: 1,
-                cursor_key: [35; 32],
-            },
-        )
-        .unwrap(),
-    );
-    let service = Arc::new(
-        Service::new(
-            vec![StoreAccess {
-                id: 1,
-                store,
-                history: Some(history),
-                grants: vec![&host_peer, &daemon_peer]
-                    .into_iter()
-                    .map(|peer| Grant {
-                        public_key: *peer.public_key(),
-                        operations: u8::MAX,
-                        expires_unix: u64::MAX,
-                    })
-                    .collect(),
-            }],
-            telemetry.recorder(),
-        )
-        .unwrap(),
-    );
-    let project = ProjectApi::new(&service, &host_peer, 1)
-        .init("agent-route", &source)
-        .unwrap();
-    let request = Request {
-        id: 1,
-        generation: 1,
-        store: 1,
-        profile: HISTORY_PROFILE,
-        deadline_ms: MAX_OPERATION_MS,
-        response_bytes: HISTORY_RESULT_BYTES as u64,
-        operation: Operation::HistoryCommand(HistoryCommand::Fork {
-            stack: project.id,
-            branch: [36; 16],
-            name: b"main".to_vec(),
-            source: HistoryForkSource::Layer(project.genesis_layer),
-        }),
-    };
-    let (result, _) = service.handle(
-        &host_peer,
-        &request,
-        &mut Cursor::new([]),
-        &mut std::io::sink(),
-    );
-    let Response::History(result) = result.unwrap() else {
-        panic!("fork result");
-    };
-    let HistoryResult::BranchSnapshot(branch) = *result else {
-        panic!("fork snapshot");
-    };
-    let listener = TcpListener::bind("0.0.0.0:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    listener.set_nonblocking(true).unwrap();
-    let server = service.clone();
-    let server_telemetry = telemetry.clone();
-    let stopping = stop.clone();
-    let peer = Peer {
-        selector: 1,
-        public: *daemon_peer.public_key(),
-        expires_unix: u64::MAX,
-    };
-    let thread = thread::spawn(move || {
-        while !stopping.load(Ordering::Acquire) {
-            let mut fds = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
-            poll(&mut fds, 10u16).unwrap();
-            if !fds[0]
-                .revents()
-                .is_some_and(|flags| flags.contains(PollFlags::POLLIN))
-            {
-                continue;
-            }
-            match listener.accept() {
-                Ok((stream, _)) => {
-                    let server = server.clone();
-                    let server_telemetry = server_telemetry.clone();
-                    let peer = peer.clone();
-                    thread::spawn(move || {
-                        if let Ok(connection) = accept(stream, &service_private, &[peer]) {
-                            let _ = serve(connection, |peer, request, input, output, deadline| {
-                                let (result, diagnostic) =
-                                    server.handle_until(peer, request, input, output, deadline);
-                                server_telemetry.publish(diagnostic);
-                                result
-                            });
-                        }
-                    });
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
-                Err(error) => panic!("service accept: {error}"),
-            }
-        }
-    });
-    let owner = SandboxOwner::new(OwnerConfig {
-        service_endpoint: format!("host.docker.internal:{port}"),
-        service_selector: 1,
-        service_private: daemon_private,
-        service_public: *service_peer.public_key(),
-        control_private,
-        store: 1,
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"agent-route".to_vec(),
+        incarnation: 1,
+        cursor_key: [35; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: telemetry.clone(),
         telemetry_run,
-        telemetry: telemetry.clone(),
     })
     .unwrap();
-    let sandbox_api = SandboxApi::new(&owner);
-    let workspace_api = WorkspaceApi::new(&owner);
-    let (route, diagnostic) = telemetry.recorder().run(1000, "sdk.route", |_| {
-        let first = observed(&telemetry, 1001, "sdk.sandbox.create", || {
-            create(&sandbox_api, &mut cleanup, &image, "agent-one")
-        })
-        .unwrap();
-        let mount = observed(&telemetry, 1002, "sdk.workspace.mount", || {
-            workspace_api.mount(first, &project, branch.branch.branch, None)
-        })
-        .unwrap();
-        let edit = observed(&telemetry, 1003, "sdk.workspace.exec", || {
-            workspace_api.exec(&mount.id, "printf first > note")
-        })
-        .unwrap();
-        let first_commit = observed(&telemetry, 1004, "sdk.workspace.commit", || {
-            workspace_api.commit(&mount.id)
-        })
-        .unwrap();
-        observed(&telemetry, 1005, "sdk.workspace.unmount", || {
-            workspace_api.unmount(&mount.id)
-        })
-        .unwrap();
-        Ok::<_, ()>((first, mount, edit, first_commit))
-    });
-    telemetry.publish(diagnostic);
-    let (first, mount, edit, first_commit) = route.unwrap();
-    if let Some(output) = &telemetry_output {
-        std::fs::write(output.join("primary-sandbox-id.txt"), first.to_string()).unwrap();
-    }
-    assert_eq!(edit.exit_status, Some(0));
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+        failures: Vec::new(),
+        diagnostics: telemetry_output.clone(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let workspaces = WorkspaceApi::new(&owner);
+    let project = projects.init("agent-route", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "main").unwrap();
+    assert_eq!(branch.name, "main");
+    assert!(branch.head_root.is_none());
+
+    // One live sandbox: edit, see the uncommitted edit in the mount, commit.
+    let primary = create(&mut cleanup, &image, "agent-one").unwrap();
+    let mount = observed(&telemetry, 1002, "sdk.workspace.mount", || {
+        workspaces.mount(primary, &project, branch.id, None)
+    })
+    .unwrap();
+    let first_edit = observed(&telemetry, 1003, "sdk.workspace.exec", || {
+        workspaces.exec(&mount.id, "printf first > note")
+    })
+    .unwrap();
+    assert_eq!(first_edit.exit_status, Some(0));
+    // Edit visibility before publication: the mount already serves the write.
+    assert_eq!(
+        workspaces.exec(&mount.id, "cat note").unwrap().stdout,
+        b"first"
+    );
+    let first_commit = observed(&telemetry, 1004, "sdk.workspace.commit", || {
+        workspaces.commit(&mount.id)
+    })
+    .unwrap();
     let CommitOutcomeWire::Committed(first_record) = first_commit.outcome else {
         panic!("first commit");
     };
-    let original_port = published_port(&first);
-    assert_eq!(sandbox_api.list().unwrap()[0].id, first);
+    // Post-acknowledgement status: bounded projection counts from the real route.
+    let status = workspaces.status(&mount.id).unwrap();
+    assert!(status.mounted);
+    assert!(
+        status.projection_count("write").unwrap() >= 1,
+        "projection counts: {:?}",
+        status.projection
+    );
+    assert!(status.projection_count("setattr").is_some());
+    assert!(status.projection_count("rename").is_some());
+    assert!(status.upstream_calls > 0);
+    workspaces.unmount(&mount.id).unwrap();
+    assert_eq!(sandboxes.list().unwrap()[0].id, primary);
+
+    // A restarted daemon is a stale, uncertain route: refused, never replayed.
+    let original_port = published_port(&primary);
     assert!(Command::new("docker")
-        .args(["restart", &format!("layerfs-{first}")])
+        .args(["restart", &format!("layerfs-{primary}")])
         .output()
         .unwrap()
         .status
         .success());
     let until = std::time::Instant::now() + Duration::from_secs(10);
     loop {
-        let status = sandbox_api
+        let status = sandboxes
             .list()
             .unwrap()
             .into_iter()
-            .find(|item| item.id == first)
+            .find(|item| item.id == primary)
             .unwrap()
             .status;
         if status == SandboxStatus::Stale {
@@ -338,87 +247,90 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
         }
         assert!(
             std::time::Instant::now() < until,
-            "daemon restart status {status:?}; lookup: {:?}; port: {}; logs: {}",
-            owner.lookup(first).err(),
-            String::from_utf8_lossy(
-                &Command::new("docker")
-                    .args(["port", &format!("layerfs-{first}"), "23456/tcp"])
-                    .output()
-                    .unwrap()
-                    .stdout
-            ),
-            String::from_utf8_lossy(
-                &Command::new("docker")
-                    .args(["logs", &format!("layerfs-{first}")])
-                    .output()
-                    .unwrap()
-                    .stderr
-            )
+            "daemon restart status {status:?}"
         );
         thread::sleep(Duration::from_millis(25));
     }
-    assert_eq!(published_port(&first), original_port);
+    assert_eq!(published_port(&primary), original_port);
     assert!(matches!(
-        workspace_api.exec(&mount.id, "cat note"),
+        workspaces.exec(&mount.id, "cat note"),
         Err(WorkspaceError::Stale)
     ));
-    let current_sandbox = create(&sandbox_api, &mut cleanup, &image, "agent-current").unwrap();
-    let current = workspace_api
-        .mount(current_sandbox, &project, branch.branch.branch, None)
-        .unwrap();
+
+    // Fresh sandbox on the same Branch: the committed content is published.
+    let reader = create(&mut cleanup, &image, "agent-readback").unwrap();
+    let readback = workspaces.mount(reader, &project, branch.id, None).unwrap();
     assert_eq!(
-        workspace_api.exec(&current.id, "cat note").unwrap().stdout,
+        workspaces.exec(&readback.id, "cat note").unwrap().stdout,
         b"first"
     );
-    let output = workspace_api
-        .exec(&current.id, "yes x | head -c 100000")
+    let output = workspaces
+        .exec(&readback.id, "yes x | head -c 100000")
         .unwrap();
     assert_eq!(output.stdout.len(), 8192);
     assert!(output.stdout_truncated);
+    // Second edit and Commit on the fresh mount.
     assert_eq!(
-        workspace_api
-            .exec(&current.id, "printf second > note")
+        workspaces
+            .exec(&readback.id, "printf second > note")
             .unwrap()
             .exit_status,
         Some(0)
     );
-    let second_commit = workspace_api.commit(&current.id).unwrap();
-    assert!(matches!(
-        second_commit.outcome,
-        CommitOutcomeWire::Committed(_)
-    ));
-    workspace_api.unmount(&current.id).unwrap();
-    let current_readback = create(&sandbox_api, &mut cleanup, &image, "agent-readback").unwrap();
-    let readback = workspace_api
-        .mount(current_readback, &project, branch.branch.branch, None)
-        .unwrap();
     assert_eq!(
-        workspace_api.exec(&readback.id, "cat note").unwrap().stdout,
+        workspaces.exec(&readback.id, "cat note").unwrap().stdout,
         b"second"
     );
-    workspace_api.unmount(&readback.id).unwrap();
-    let second = create(&sandbox_api, &mut cleanup, &image, "agent-two").unwrap();
-    let older = workspace_api
-        .mount(
-            second,
-            &project,
-            branch.branch.branch,
-            Some(first_record.commit),
-        )
+    assert!(matches!(
+        workspaces.commit(&readback.id).unwrap().outcome,
+        CommitOutcomeWire::Committed(_)
+    ));
+    workspaces.unmount(&readback.id).unwrap();
+
+    // A third fresh mount reads the second commit.
+    let latest = create(&mut cleanup, &image, "agent-latest").unwrap();
+    let fresh = workspaces.mount(latest, &project, branch.id, None).unwrap();
+    assert_eq!(
+        workspaces.exec(&fresh.id, "cat note").unwrap().stdout,
+        b"second"
+    );
+    workspaces.unmount(&fresh.id).unwrap();
+
+    // The retained historical root still resolves the first commit.
+    let historical = create(&mut cleanup, &image, "agent-two").unwrap();
+    let older = workspaces
+        .mount(historical, &project, branch.id, Some(first_record.commit))
         .unwrap();
     assert_eq!(
-        workspace_api.exec(&older.id, "cat note").unwrap().stdout,
+        workspaces.exec(&older.id, "cat note").unwrap().stdout,
         b"first"
     );
-    workspace_api
-        .exec(&older.id, "printf stale > note")
-        .unwrap();
-    let failure = workspace_api.commit(&older.id).unwrap_err();
-    match failure {
+    workspaces.exec(&older.id, "printf stale > note").unwrap();
+    match workspaces.commit(&older.id).unwrap_err() {
         WorkspaceError::Commit(failure) => assert_eq!(failure.cause.code, Code::HeadMoved),
         other => panic!("unexpected conflict: {other:?}"),
     }
-    workspace_api.unmount(&older.id).unwrap();
-    cleanup.stop.store(true, Ordering::Release);
-    thread.join().unwrap();
+    workspaces.unmount(&older.id).unwrap();
+
+    // Normal deletion of every admitted sandbox, through the SDK only.
+    for id in [primary, reader, latest, historical] {
+        delete(&mut cleanup, id);
+    }
+    assert!(sandboxes.list().unwrap().is_empty());
+
+    // A retained create that never became ready is still deletable by ID.
+    let refused = create(&mut cleanup, RETIRED_IMAGE, "agent-retained").unwrap_err();
+    let retained = refused.sandbox.expect("retained create names its sandbox");
+    assert!(refused.retained);
+    assert_eq!(sandboxes.list().unwrap().len(), 1);
+    delete(&mut cleanup, retained);
+    assert!(sandboxes.list().unwrap().is_empty());
+    // An unknown ID names no container and is refused.
+    let unknown = SandboxId([7; 16]);
+    let error = sandboxes.delete(unknown).unwrap_err();
+    assert_eq!(error.sandbox, unknown);
+    assert!(!error.container_removed && !error.volume_removed);
+
+    server.shutdown();
+    assert!(cleanup.failures.is_empty(), "{:?}", cleanup.failures);
 }

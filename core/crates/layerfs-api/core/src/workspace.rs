@@ -44,3 +44,31 @@ impl std::fmt::Display for WorkspaceError {
     }
 }
 impl std::error::Error for WorkspaceError {}
+
+/// One current observation of a Workspace, never a receipt for an earlier call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceStatus {
+    pub mounted: bool,
+    pub stopping: bool,
+    pub closed: bool,
+    pub active_operations: u64,
+    pub nodes: u64,
+    pub handles: u64,
+    pub cookies: u64,
+    pub consumer_accounted_bytes: u64,
+    /// Bounded projection callback counts in `projection_labels` order.
+    pub projection: Vec<(String, u64)>,
+    /// Upstream host Service calls this Workspace issued.
+    pub upstream_calls: u64,
+}
+
+impl WorkspaceStatus {
+    /// One declared projection callback class count, or `None` for a class this
+    /// build does not report.
+    pub fn projection_count(&self, class: &str) -> Option<u64> {
+        self.projection
+            .iter()
+            .find(|(label, _)| label == class)
+            .map(|(_, count)| *count)
+    }
+}

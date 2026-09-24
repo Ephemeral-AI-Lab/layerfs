@@ -25,3 +25,15 @@ pub struct SandboxInfo {
     pub name: String,
     pub status: SandboxStatus,
 }
+
+/// One owned sandbox removal outcome.
+///
+/// Confirmed removal is reported per resource, so a caller can record partial
+/// cleanup and make an explicit later attempt with the same Sandbox ID.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeleteError {
+    pub sandbox: SandboxId,
+    pub cause: layerfs_bridge::contract::Failure,
+    pub container_removed: bool,
+    pub volume_removed: bool,
+}

@@ -440,6 +440,9 @@ impl Filesystem for Adapter {
         reply: ReplyAttr,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        // The callback class is counted as observed, before any refusal, so the
+        // count describes what the kernel asked for rather than what succeeded.
+        self.workspace.record_projection_call(ProjectionOp::Setattr);
         let request = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -765,6 +768,7 @@ impl Filesystem for Adapter {
         reply: ReplyEmpty,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Rename);
         // RENAME_NOREPLACE is the only selected flag; exchange and whiteout stay
         // unsupported and are refused before any publication.
         let noreplace = match flags.bits() {

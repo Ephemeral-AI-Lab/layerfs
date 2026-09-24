@@ -2,7 +2,7 @@
 use layerfs_bridge::contract::{
     Code, Failure, Response, WorkspaceAttachOutcome, WorkspaceAttachWire,
     WorkspaceAttachmentProgress, WorkspaceAttachmentState, WorkspaceAttachmentWire,
-    WorkspaceStatusWire,
+    WorkspaceStatusWire, PROJECTION_CLASSES, PROJECTION_CLASS_LABELS,
 };
 use layerfs_fuse::{MountError, MountFailure, MountHandle};
 use layerfs_workspace::{
@@ -228,6 +228,26 @@ impl Lifecycle {
     }
 }
 
+/// Maps the Workspace's labeled projection counts into the fixed wire classes.
+///
+/// A class the Workspace does not report is a contract mismatch, not a zero.
+fn projection_counts(
+    local: &layerfs_workspace::WorkspaceStatus,
+) -> Result<[u64; PROJECTION_CLASSES], Failure> {
+    let mut counts = [0u64; PROJECTION_CLASSES];
+    for (label, count) in &local.projection_calls {
+        let slot = PROJECTION_CLASS_LABELS
+            .iter()
+            .position(|name| name == label)
+            .ok_or(Code::Integrity)?;
+        counts[slot] = *count;
+    }
+    if local.projection_calls.len() != PROJECTION_CLASSES {
+        return Err(Code::Integrity.into());
+    }
+    Ok(counts)
+}
+
 fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), WorkspaceError> {
     if workspace.status()?.closed {
         return Ok(());
@@ -251,6 +271,8 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         handles: local.handles as u64,
         cookies: local.cookies as u64,
         consumer_accounted_bytes: local.accounted_bytes as u64,
+        projection: projection_counts(&local)?,
+        upstream_calls: local.upstream_calls,
     };
     result.validate()?;
     if workspace.access_mode() == WorkspaceAccess::LocalEdit {

@@ -6,7 +6,12 @@ pub const WORKSPACE_STATUS_OPCODE: u8 = 8;
 pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
-pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 139;
+pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 219;
+/// Fixed, bounded projection callback classes reported by status.
+pub const PROJECTION_CLASSES: usize = 9;
+pub const PROJECTION_CLASS_LABELS: [&str; PROJECTION_CLASSES] = [
+    "lookup", "getattr", "read", "write", "readdir", "open", "setattr", "rename", "other",
+];
 pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_UNMOUNT_REQUEST_BYTES: usize = 124;
@@ -134,6 +139,13 @@ pub struct WorkspaceStatusWire {
     pub cookies: u64,
     /// Aggregate accounted Workspace allocations across the owning consumer.
     pub consumer_accounted_bytes: u64,
+    /// Bounded projection callback counts in `PROJECTION_CLASS_LABELS` order.
+    ///
+    /// These are ordinary product counts of what the kernel asked the mounted
+    /// projection for; they are not byte totals and never gate an operation.
+    pub projection: [u64; PROJECTION_CLASSES],
+    /// Upstream host Service calls this Workspace has issued.
+    pub upstream_calls: u64,
 }
 
 impl WorkspaceStatusWire {

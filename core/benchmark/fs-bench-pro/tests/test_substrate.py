@@ -23,15 +23,18 @@ class Substrate(unittest.TestCase):
         self.assertEqual(runner.BINARIES, ("benchmark_init", "verify_namespace"))
         self.assertFalse(hasattr(runner.init, "_route"))
         driver = (runner.CORE / "crates/layerfs-api/sdk/examples/benchmark_init.rs").read_text()
-        self.assertIn("client.init_project(", driver)
-        self.assertIn("Host::create(", driver)
-        for backend in ("layerfs_bridge", "layerfs_history", "layerfs_server", "layerfs_storage"):
+        self.assertIn("ProjectApi::new(", driver)
+        self.assertIn("Server::create(", driver)
+        for backend in ("layerfs_bridge", "layerfs_history", "layerfs_sandbox", "layerfs_storage"):
             self.assertNotIn(f"use {backend}", driver)
         runner.require_sdk_driver("benchmark_init")
 
     def test_sdk_driver_refuses_backend_and_host_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "benchmark_exec2edit.rs"
+            source.write_text("use layerfs_sdk::WorkspaceApi;\nuse layerfs_storage::Store;\n")
+            with self.assertRaisesRegex(ValueError, "public layerfs-sdk"):
+                runner.require_sdk_driver("benchmark_exec2edit", source)
             source.write_text("use layerfs_sdk::WorkspaceApi;\nuse layerfs_server::Service;\n")
             with self.assertRaisesRegex(ValueError, "public layerfs-sdk"):
                 runner.require_sdk_driver("benchmark_exec2edit", source)

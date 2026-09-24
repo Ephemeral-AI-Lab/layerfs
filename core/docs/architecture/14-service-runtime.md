@@ -132,12 +132,23 @@ own cause. The public SDK surface is unchanged.
 
 **Projection counts.** `layerfs-workspace::filesystem::projection_counters`
 holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,
-`read`, `write`, `readdir`, `open`, `other`) and of upstream host Service calls
-issued by that Workspace. The FUSE adapter records each callback at its single
-entry point and `Workspace::remote_call` counts each upstream call. The counts
-appear in `WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
+`read`, `write`, `readdir`, `open`, `setattr`, `rename`, `other`) and of upstream
+host Service calls issued by that Workspace. The FUSE adapter records each
+callback at its single entry point, `setattr` and `rename` included, and
+`Workspace::remote_call` counts each upstream call. The counts appear in
+`WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
 diagnostic product telemetry and never gate an operation; no cache, backing or
 write path changes, and FUSE edits are still written locally.
+
+The daemon status wire carries the same counts in the fixed
+`layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,
+so a caller reads bounded classes rather than a variable-length map. A Workspace
+that does not report exactly those classes is refused as `Integrity` instead of
+being read as zeros. The public SDK exposes one read-only route for them,
+`WorkspaceApi::status`, which accepts either the plain status response or the
+local-edit writable observation for the same request. The counts describe what
+the kernel asked the mounted projection for; they are not byte totals and the
+status call is never part of an acknowledgement boundary.
 
 The sandbox owner now accepts an optional telemetry run identity at assembly.
 When present, it forwards the existing daemon telemetry stream and supplies a
@@ -1028,3 +1039,27 @@ The former SDK `Host` and forwarding `Client` are retired; every Init caller now
 calls `ProjectApi::init` directly. Existing #236 receipts keep their original
 source and build identity because this is a relocation and a new composition
 surface, not a measured change.
+
+Four product surfaces complete that route:
+
+* `ProjectApi::fork` publishes a named Branch from a project's genesis Layer as
+  an ordinary authorized history command, returning a typed `Branch` with its
+  base Layer, head Commit, resolved roots and allocation scope.
+* `Server::open` reopens a prepared Store clone together with its history
+  catalog. `HistoryMode` makes the ownership explicit: `Create` is a fresh
+  catalog and `OpenWritable` is one existing, closed catalog taken into this
+  process's continuity (`layerfs_history::sqlite::open_writable`), validated for
+  application identity, schema version, table set, metadata row and
+  binding-derived identity exactly as the read-only open does. Nothing is
+  migrated, repaired or promoted; a mismatch is refused.
+* `SandboxApi::delete` delegates to `SandboxOwner::delete`, which stops the
+  owned daemon within a bounded grace period, then removes the owned container
+  and its named Workspace volume, confirming each before it drops the matching
+  registry bindings. `DeleteError` keeps the Sandbox ID, the cause and which
+  resources still exist, so a partial outcome is recorded and retried
+  explicitly. An unknown ID is refused and can never name an arbitrary
+  container; a retained `CreateError.sandbox` ID is deletable even when
+  readiness never completed. Dropping a `Server` or an owner is not a cleanup
+  receipt.
+* `WorkspaceApi::status` exposes the bounded projection and upstream counts
+  described above after the acknowledgement, never between Edit and Commit.

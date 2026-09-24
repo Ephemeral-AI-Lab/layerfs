@@ -27,6 +27,8 @@ fn status() -> WorkspaceStatusWire {
         handles: 3,
         cookies: 4,
         consumer_accounted_bytes: 5,
+        projection: [7; PROJECTION_CLASSES],
+        upstream_calls: 11,
     }
 }
 

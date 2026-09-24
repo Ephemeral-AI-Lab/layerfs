@@ -1,4 +1,4 @@
-//! Catalog creation, read-only reopen and profile validation.
+//! Catalog creation, writable reopen, read-only reopen and profile validation.
 //!
 //! A fresh writable catalog is created inside the process that will own it.
 //! That ownership is the continuity evidence this provider has: a later process
@@ -103,6 +103,46 @@ pub fn create(path: &Path, config: &HistoryCatalogConfig) -> HistoryResult<Sqlit
         catalog_id,
         incarnation: stored,
         cursor_key: config.cursor_key,
+    })
+}
+
+/// Opens one existing, closed catalog for writable continuity in this process.
+///
+/// This is the reopen a prepared Store/history byte copy needs before a caller
+/// can fork, commit or allocate: the catalog it names was created and closed by
+/// a prior process, and this process now owns its continuity. The same
+/// validation as the read-only open applies — application identity, schema
+/// version, the exact application-table set, the singleton metadata row and the
+/// binding-derived catalog identity — and nothing is migrated, repaired or
+/// promoted. An incomplete, foreign or inconsistent catalog is refused.
+pub fn open_writable(
+    path: &Path,
+    binding_key: &[u8],
+    cursor_key: [u8; 32],
+) -> HistoryResult<SqliteCatalog> {
+    if cursor_key == [0; 32] {
+        return Err(HistoryError::InvalidInput("cursor capability"));
+    }
+    let catalog_id = CatalogId::derive(binding_key)?;
+    let flags = OpenFlags::SQLITE_OPEN_READ_WRITE;
+    let connection = Connection::open_with_flags(path, flags).map_err(super::rows::sql)?;
+    configure(&connection, true)?;
+    if application_id(&connection)? != APPLICATION_ID {
+        return Err(HistoryError::Integrity("catalog application identity"));
+    }
+    if user_version(&connection)? != USER_VERSION {
+        return Err(HistoryError::Unsupported("catalog schema version"));
+    }
+    let stored = read_meta(&connection, &catalog_id)?;
+    Ok(SqliteCatalog {
+        state: std::sync::Mutex::new(Provider {
+            connection,
+            writable: true,
+            quarantined: false,
+        }),
+        catalog_id,
+        incarnation: stored,
+        cursor_key,
     })
 }
 

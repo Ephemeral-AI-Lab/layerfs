@@ -1,5 +1,5 @@
 use crate::{docker, readiness};
-use layerfs_api_core::{SandboxId, SandboxInfo, SandboxStatus, WorkspaceId};
+use layerfs_api_core::{DeleteError, SandboxId, SandboxInfo, SandboxStatus, WorkspaceId};
 use layerfs_bridge::{
     adapters::native::client::Client,
     contract::{Code, Failure, Operation, Response},
@@ -52,6 +52,9 @@ impl ControlRoute {
         Ok((id.0.as_bytes().to_vec(), *incarnation))
     }
 }
+
+/// Bounded grace period for one owned sandbox's daemon stop.
+const STOP_TIMEOUT_SECONDS: u32 = 5;
 
 #[derive(Clone)]
 pub struct Binding {
@@ -252,6 +255,75 @@ impl SandboxOwner {
         })?;
         record.instance = Some(hello.instance);
         Ok(id)
+    }
+
+    /// Remove one owned sandbox, its container and its named Workspace volume.
+    ///
+    /// Discovery is by owned identity only: an unknown or never-admitted ID is
+    /// refused and can never name an arbitrary container. Removal is a bounded
+    /// graceful daemon stop, then container removal, then volume removal, each
+    /// confirmed before the matching registry bindings are dropped. A partial
+    /// outcome keeps its bindings and reports which resources remain.
+    pub fn delete(&self, id: SandboxId) -> Result<(), DeleteError> {
+        let record = self
+            .registry
+            .lock()
+            .map_err(|_| DeleteError {
+                sandbox: id,
+                cause: Code::Io.into(),
+                container_removed: false,
+                volume_removed: false,
+            })?
+            .sandboxes
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| DeleteError {
+                sandbox: id,
+                cause: Code::NotFound.into(),
+                container_removed: false,
+                volume_removed: false,
+            })?;
+        self.sessions.discard();
+        let volume = format!("{}-root", record.container);
+        self.observe(2007, "owner.docker_stop", || {
+            docker::stop(&record.container, STOP_TIMEOUT_SECONDS)
+        })
+        .map_err(|cause| DeleteError {
+            sandbox: id,
+            cause,
+            container_removed: false,
+            volume_removed: false,
+        })?;
+        self.observe(2008, "owner.docker_remove", || {
+            docker::remove_container(&record.container)
+        })
+        .map_err(|cause| DeleteError {
+            sandbox: id,
+            cause,
+            container_removed: false,
+            volume_removed: false,
+        })?;
+        self.observe(2009, "owner.volume_remove", || {
+            docker::remove_volume(&volume)
+        })
+        .map_err(|cause| DeleteError {
+            sandbox: id,
+            cause,
+            container_removed: true,
+            volume_removed: false,
+        })?;
+        // Bindings are dropped only after both resources are confirmed gone.
+        let mut registry = self.registry.lock().map_err(|_| DeleteError {
+            sandbox: id,
+            cause: Code::Io.into(),
+            container_removed: true,
+            volume_removed: true,
+        })?;
+        registry.sandboxes.remove(&id);
+        registry
+            .workspaces
+            .retain(|_, binding| binding.sandbox != id);
+        Ok(())
     }
 
     pub fn list(&self) -> Result<Vec<SandboxInfo>, Failure> {

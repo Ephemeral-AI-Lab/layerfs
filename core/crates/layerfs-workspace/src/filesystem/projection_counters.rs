@@ -19,17 +19,21 @@ pub enum ProjectionOp {
     Write,
     Readdir,
     Open,
+    Setattr,
+    Rename,
     Other,
 }
 
 impl ProjectionOp {
-    pub const ALL: [ProjectionOp; 7] = [
+    pub const ALL: [ProjectionOp; 9] = [
         ProjectionOp::Lookup,
         ProjectionOp::Getattr,
         ProjectionOp::Read,
         ProjectionOp::Write,
         ProjectionOp::Readdir,
         ProjectionOp::Open,
+        ProjectionOp::Setattr,
+        ProjectionOp::Rename,
         ProjectionOp::Other,
     ];
 
@@ -41,7 +45,9 @@ impl ProjectionOp {
             ProjectionOp::Write => 3,
             ProjectionOp::Readdir => 4,
             ProjectionOp::Open => 5,
-            ProjectionOp::Other => 6,
+            ProjectionOp::Setattr => 6,
+            ProjectionOp::Rename => 7,
+            ProjectionOp::Other => 8,
         }
     }
 
@@ -54,6 +60,8 @@ impl ProjectionOp {
             ProjectionOp::Write => "write",
             ProjectionOp::Readdir => "readdir",
             ProjectionOp::Open => "open",
+            ProjectionOp::Setattr => "setattr",
+            ProjectionOp::Rename => "rename",
             ProjectionOp::Other => "other",
         }
     }

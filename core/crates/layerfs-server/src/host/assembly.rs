@@ -29,6 +29,15 @@ pub const PRIMARY_STORE: u32 = 1;
 const SELECTOR: u32 = 1;
 const ACCEPT_SETTLE_MS: u64 = 20;
 
+/// How the composed authority takes ownership of its history catalog.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryMode {
+    /// Create a fresh catalog; the file must not exist yet.
+    Create,
+    /// Reopen one existing, closed catalog for writable continuity.
+    OpenWritable,
+}
+
 /// Everything a composed authority needs; no field has a default.
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -38,6 +47,8 @@ pub struct ServerConfig {
     pub binding_key: Vec<u8>,
     pub incarnation: u64,
     pub cursor_key: [u8; 32],
+    /// How the history catalog is taken into this process's ownership.
+    pub history: HistoryMode,
     /// Sandbox container endpoint as seen from the container.
     pub service_host: String,
     /// Shared host-process recorder and resource monitor.
@@ -69,6 +80,9 @@ struct Listening {
 impl Server {
     /// Prepare a fresh Store and history catalog for a first Init.
     pub fn create(config: ServerConfig) -> Result<Self, Failure> {
+        if config.history != HistoryMode::Create {
+            return Err(Code::InvalidInput.into());
+        }
         let store = Timing::disabled("create", |scope| {
             store::create(&config.store_path, scope.child("store"))
         })
@@ -76,8 +90,11 @@ impl Server {
         Self::assemble(config, store)
     }
 
-    /// Open a prepared Store clone and its history catalog.
+    /// Open a prepared Store clone and reopen its history catalog writable.
     pub fn open(config: ServerConfig) -> Result<Self, Failure> {
+        if config.history != HistoryMode::OpenWritable {
+            return Err(Code::InvalidInput.into());
+        }
         let store = store::open(&config.store_path)?;
         Self::assemble(config, store)
     }
@@ -96,6 +113,7 @@ impl Server {
                 incarnation: config.incarnation,
                 cursor_key: config.cursor_key,
             },
+            config.history,
         )?;
         let host_private = random_key()?;
         let daemon_private = random_key()?;
@@ -147,7 +165,7 @@ impl Server {
 
     /// The agent-facing host peer identity an SDK caller is authorized as.
     pub fn peer(&self) -> Result<VerifiedPeer, Failure> {
-        Ok(VerifiedPeer::from_private(&self.host_private)?)
+        VerifiedPeer::from_private(&self.host_private)
     }
 
     /// Bind the loopback endpoint sandboxes call back on, and serve it.

@@ -6,5 +6,5 @@
 #![forbid(unsafe_code)]
 pub mod host;
 mod service;
-pub use host::{run, Server, ServerConfig};
+pub use host::{run, HistoryMode, Server, ServerConfig};
 pub use service::{Grant, Service, StoreAccess};

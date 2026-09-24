@@ -124,6 +124,8 @@ fn status() -> WorkspaceWritableStatusWire {
             handles: 1,
             cookies: 1,
             consumer_accounted_bytes: 4096,
+            projection: [3; PROJECTION_CLASSES],
+            upstream_calls: 2,
         },
         generation: 2,
         revision: 5,
@@ -347,6 +349,16 @@ fn writable_status_preserves_submission_and_reachable_partial_commit_state() {
     let bytes = roundtrip(Response::WorkspaceWritableStatus(Box::new(value.clone())));
     assert_eq!(bytes[0], 18);
     assert_eq!(bytes.len(), WORKSPACE_WRITABLE_STATUS_RESULT_BYTES);
+    // Offsets inside the status payload are the same; everything after the
+    // status shifts by the 80 bytes the bounded projection counts added.
+    let status_delta = (PROJECTION_CLASSES + 1) * 8;
+    let shifted = |offset: usize| {
+        if offset < 139 {
+            offset
+        } else {
+            offset + status_delta
+        }
+    };
     for (offset, byte) in [
         (98, 8),
         (163, 2),
@@ -366,11 +378,13 @@ fn writable_status_preserves_submission_and_reachable_partial_commit_state() {
         (315, 2),
         (324, 4),
     ] {
+        let offset = shifted(offset);
         let mut invalid = bytes.clone();
         invalid[offset] = byte;
         assert!(decode_response(&invalid).is_err(), "offset {offset}");
     }
     for start in [139, 164, 190, 203] {
+        let start = shifted(start);
         let mut invalid = bytes.clone();
         invalid[start..start + 8].fill(0);
         assert!(decode_response(&invalid).is_err(), "offset {start}");

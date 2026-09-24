@@ -1,7 +1,9 @@
-use layerfs_api_core::{ExecResult, Mount, Project, SandboxId, WorkspaceError, WorkspaceId};
+use layerfs_api_core::{
+    ExecResult, Mount, Project, SandboxId, WorkspaceError, WorkspaceId, WorkspaceStatus,
+};
 use layerfs_bridge::contract::{
     Code, Operation, Response, WorkspaceAttachOutcome, WorkspaceCommitOutcome,
-    WorkspaceCommitReportWire, WorkspaceLifecycleOutcome,
+    WorkspaceCommitReportWire, WorkspaceLifecycleOutcome, PROJECTION_CLASS_LABELS,
 };
 use layerfs_sandbox::{ControlRoute, RouteError, SandboxOwner};
 
@@ -110,6 +112,50 @@ impl<'a> WorkspaceApi<'a> {
             WorkspaceCommitOutcome::Completed(report) => Ok(report),
             WorkspaceCommitOutcome::Failed(failure) => Err(WorkspaceError::Commit(failure)),
         }
+    }
+
+    /// Read one current Workspace observation through the public status route.
+    ///
+    /// The counts are bounded callback and upstream-call counts the daemon
+    /// reports for this incarnation. Callers must not insert this between Edit
+    /// and Commit: it is an observation, not part of the acknowledgement.
+    pub fn status(&self, id: &WorkspaceId) -> Result<WorkspaceStatus, WorkspaceError> {
+        let route = self.owner.workspace(id).map_err(route_error)?;
+        let (workspace, incarnation) = route.selector()?;
+        let response = self
+            .owner
+            .control_call(route, 5_000, || Operation::WorkspaceStatus {
+                workspace,
+                incarnation,
+            })
+            .map_err(route_error)?;
+        // A Workspace in local-edit mode answers the same status request with
+        // its writable observation; the projection counts are the same fields,
+        // and both are one current observation rather than a receipt.
+        let status = match response {
+            Response::WorkspaceStatus(status) => *status,
+            Response::WorkspaceWritableStatus(writable) => writable.status,
+            _ => return Err(Code::Integrity.into()),
+        };
+        if status.projection.len() != PROJECTION_CLASS_LABELS.len() {
+            return Err(Code::Integrity.into());
+        }
+        Ok(WorkspaceStatus {
+            mounted: status.mounted,
+            stopping: status.stopping,
+            closed: status.closed,
+            active_operations: status.active_operations,
+            nodes: status.nodes,
+            handles: status.handles,
+            cookies: status.cookies,
+            consumer_accounted_bytes: status.consumer_accounted_bytes,
+            projection: PROJECTION_CLASS_LABELS
+                .iter()
+                .zip(status.projection)
+                .map(|(label, count)| ((*label).to_string(), count))
+                .collect(),
+            upstream_calls: status.upstream_calls,
+        })
     }
 
     pub fn unmount(&self, id: &WorkspaceId) -> Result<(), WorkspaceError> {
