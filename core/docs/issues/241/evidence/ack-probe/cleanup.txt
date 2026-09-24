@@ -1,0 +1,5 @@
+Each case's own mount cleanup succeeded; post_cleanup_mountinfo is empty.
+docker rm -f layerfs-241-ack-probe-80496bdb
+exit=0; owned container removed after raw copy
+docker volume rm layerfs-241-ack-probe-80496bdb
+exit=0; owned volume removed after raw copy
