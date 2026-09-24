@@ -96,9 +96,12 @@ request may have been issued, a mismatch, or a lost second STATE yields a
 distinct **UNKNOWN** tool result (exit code 75 with bounded request/stamp/
 errno evidence), not a retry. A definite prepublication refusal is separate.
 The #241 SDK caller invokes explicit Commit only for `ExecResult.exit_status
-== Some(0)`; `None`, 75, any other nonzero status, and transport uncertainty
-stop its automatic workflow. Current `WorkspaceApi::exec` exposes process
-exit status, not a typed per-range receipt. A deliberate later Commit by an
+== Some(0)`, untruncated stdout/stderr and the exact splice-tool PASS line
+with the expected final length and zero shifted suffix bytes. `None`, 75,
+any other nonzero status, truncation, malformed output and transport
+uncertainty stop its automatic workflow. Current `WorkspaceApi::exec` exposes
+process exit status and output, not a typed per-range receipt. A deliberate
+later Commit by an
 independent caller and exact reconciliation after daemon death need a separate
 product custody/API decision; this candidate does not claim to solve them.
 
@@ -111,5 +114,10 @@ probe then observed `STATE in=88,out=88` with the full 88-byte caller reply,
 `EDIT in=4192,out=0`, one published revision, exact post-STATE/fstat/readback,
 and `ESTALE` with unchanged state for a stale stamp. Suppressed notification
 and lost reply produced caller UNKNOWN without retry. Those are carrier
-observations only; projected Workspace mutation and Commit still need their
-own proof.
+observations. Separate [mounted product receipts](evidence/product-functional/REPORT.md)
+and [public SDK functional evidence](evidence/sdk-exec-gate/REPORT.md) now
+prove the projected splice and one small Exec→Commit route. The
+[integrated position campaign](evidence/position-sweep-integrated/REPORT.md)
+has one baseline Exec Unknown before EDIT and 20 NOT_RUN positions, so full
+position qualification and the four registered release Edit→Commit samples
+remain open.

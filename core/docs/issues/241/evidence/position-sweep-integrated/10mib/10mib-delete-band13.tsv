@@ -1,0 +1,11 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	10mib-delete-band13
+operation	delete
+offset	8584572
+status	STARTED
+edit_sandbox_id	8983569ef7b90d65c99d39b530d007db
+edit_unmount	Err("unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })")
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	FAIL	primary=baseline exec: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); cleanup=unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })

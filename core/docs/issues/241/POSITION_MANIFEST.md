@@ -9,8 +9,11 @@ complete [manifest](position-manifest-v1.tsv) has SHA-256
 `653a9af543db01b26a114b2455c982171784e57fee80b5000d023de7f57b3fb1`.
 The final manifest includes the same 192 rows unchanged.
 The [exploratory mounted position receipts](evidence/position-sweep/README.md)
-record four historical FAILs and one later single-case PASS; the full sweep
-remains unrun.
+record four historical FAILs and one later single-case PASS. The later
+[integrated campaign](evidence/position-sweep-integrated/REPORT.md) attempted
+the full frozen selection: 243 PASS, one FAIL and 20 explicit NOT_RUN. Phase 3
+is incomplete because the 10 MiB baseline Exec returned Unknown before EDIT
+at its 46th case. No performance sample followed.
 
 The 500 MiB case starts from the **524,283,904-byte capped pristine input**.
 All other sizes and the fixture SHA-256, canonical file root, and extent count
@@ -102,6 +105,6 @@ The test-only boundary derivation is opt-in. Set
 `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-sdk
 --test range_position_sweep derive_validated_pristine_chunk_boundaries`.
 The source directory and output path should be absolute because Cargo sets the
-test process working directory to the package directory. The live sweep remains
-unrun until the complete source/image identities and output destination are
-declared for its own attempt.
+test process working directory to the package directory. The integrated
+campaign used declared source/image/master identities and a fresh output
+directory per size; its FAIL and NOT_RUN rows remain in the append-only report.

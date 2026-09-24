@@ -42,6 +42,25 @@ the remaining Phase 1 decision concerns truthful product acknowledgement and
 caller-observed readback, not carrier speed optimization. No product change or
 registered Edit→Commit sample followed from these diagnostics.
 
+**Integrated product/functional update (2026-09-24):** The frozen
+[LFS2/LFE2 ABI](RANGE_IOCTL_ABI.md) now routes through Linux FUSE and the
+platform-neutral projected Workspace splice. The
+[product mounted receipts](evidence/product-functional/REPORT.md) prove
+8 KiB insert, overwrite, delete, alias/open-FD coherence, refusal paths and
+canonical Commit; the [public SDK gate](evidence/sdk-exec-gate/REPORT.md)
+proves one small mounted Exec→confirmed splice→Commit route. Its initial
+output check occurred after Commit; the corrected pre-Commit test helper and
+[addendum](evidence/sdk-exec-gate/GATE_CORRECTION.md) are retained separately.
+The four new v3 middle-insert rows and release image are frozen, and
+[atomically published integrated masters](evidence/qualified-masters-integrated/REPORT.md)
+are available. The [264-position integrated campaign](evidence/position-sweep-integrated/REPORT.md)
+has 243 PASS, one FAIL and 20 explicit NOT_RUN: the 10 MiB case failed at
+baseline SDK Exec with an Unknown outcome before range EDIT, so Phase 3
+has **not** passed. No registered four-case Edit→Commit sample or independent
+verifier has run. This is an unresolved liveness/custody investigation, not
+evidence that the range splice copied the untouched suffix or that cold
+latency met a target.
+
 The Workspace range-edit semantics must remain portable product code; Linux FUSE,
 future macFUSE and future Windows WinFsp are adapters with separate capability
 and coherence proofs. #241 implements and measures the current Linux adapter,

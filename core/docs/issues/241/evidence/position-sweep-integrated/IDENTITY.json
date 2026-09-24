@@ -1,0 +1,34 @@
+{
+  "cache_claim": null,
+  "fixture_source_copy_method": "independent-byte-copy-from-validated-recipe-files",
+  "image_id": "sha256:3086fd0b2f84d1377a3b0e7f424a6cbf2006800e382c851dc48f6ba6f3a15321",
+  "image_receipt_sha256": "7d902c15d1a2f71624683aba9ac9e6e15092f38ba2f7347a15e642f8df704e26",
+  "manifest_sha256": "e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a",
+  "performance_sample": false,
+  "runs": {
+    "100mib": {
+      "master_receipt_sha256": "aa94f2a94c956719c290fce603234f758e737282e0131058a5307ac197a38d30",
+      "source_fixture_sha256": "1bb2d79d54f72ae15eb0bb76ad715b9aafeba8ff8f9aa4f47bad3e3f101885bd",
+      "source_path": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-position-sweep-integrated-100mib-01"
+    },
+    "10mib": {
+      "master_receipt_sha256": "2b314a9bcb83c50dd3cf0416d2a4305cb589bdcb1b7773f83c9c0e4469d0e76f",
+      "source_fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+      "source_path": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-position-sweep-integrated-10mib-01"
+    },
+    "1mib": {
+      "master_receipt_sha256": "e2fc6f92a031a06455ffa9752c6e6533f9bc5343046c76f35ff5cecb9be1d589",
+      "source_fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "source_path": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-position-sweep-integrated-1mib-01"
+    },
+    "500mib-capped": {
+      "master_receipt_sha256": "a51d7d36308da3129103ff085d3c2062866a99582acf21528af0576c2e61772f",
+      "source_fixture_sha256": "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f",
+      "source_path": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-position-sweep-integrated-500mib-capped-01"
+    }
+  },
+  "schema": "issue241-position-integrated-identity-v1",
+  "source_commit": "cdd3ea8636604a91086bf458dc999366e4e2d04e",
+  "test_binary_sha256": "653251c154de023b0d97a2806b5e953a3fb6d2c63d7875855db79ddedfb8eba6",
+  "test_source_sha256": "b44522841b70e121e5da1fe17f11869f172c8e2ce40701c6bdbaf623b318f520"
+}

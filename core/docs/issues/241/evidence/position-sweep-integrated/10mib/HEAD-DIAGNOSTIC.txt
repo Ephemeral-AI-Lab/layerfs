@@ -1,0 +1,23 @@
+Read-only post-failure diagnostic; no Store/history mutation and no new sample.
+Source: core/target/issue241-position-sweep-integrated-10mib-01/private-state/history.sqlite
+Open mode: SQLite URI mode=ro
+
+select count(*), sum(case when head_commit_id is null then 1 else 0 end)
+from branches;
+47|2
+
+select name, case when head_commit_id is null then 'NONE' else hex(head_commit_id) end
+from branches where head_commit_id is null order by name;
+10mib-delete-band13|NONE
+pristine-source|NONE
+
+select count(*) from commits;
+90
+
+Inspection window for Docker OOM events: 2026-09-24 22:50:00–22:55:00 +08:00.
+Result: no OOM event returned.
+
+Interpretation: 45 prior PASS rows each made a baseline and an edited Commit.
+The failing row did not publish a baseline Commit or a range edit Commit.
+This does not establish whether its baseline shell write reached the discarded
+Workspace before Exec returned Unknown.

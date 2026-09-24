@@ -8,8 +8,8 @@
 //! `WorkspaceApi::commit`; mount, status, unmount, sandbox create/delete and
 //! preparation are outside it and reported separately.
 use layerfs_sdk::{
-    CommitOutcomeWire, HistoryMode, Project, ProjectApi, SandboxApi, Server, ServerConfig,
-    WorkspaceApi,
+    CommitOutcomeWire, ExecResult, HistoryMode, Project, ProjectApi, SandboxApi, Server,
+    ServerConfig, WorkspaceApi,
 };
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},
@@ -65,6 +65,13 @@ fn hex(bytes: &[u8]) -> String {
         write!(&mut text, "{byte:02x}").expect("string write");
     }
     text
+}
+
+fn confirmed_exec(exec: &ExecResult, expected_splice_output: Option<&str>) -> bool {
+    exec.exit_status == Some(0)
+        && !exec.stdout_truncated
+        && !exec.stderr_truncated
+        && expected_splice_output.is_none_or(|expected| exec.stdout == expected.as_bytes())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -165,6 +172,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The one measured caller operation: Exec, its output check, then Commit.
     let command = case.get("command")?.to_string();
+    let expected_splice_output =
+        (case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3")
+            .then(|| {
+                Ok::<_, Box<dyn std::error::Error>>(format!(
+                    "{{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":{},\"shifted_bytes\":0}}\n",
+                    case.number("final_bytes")?
+                ))
+            })
+            .transpose()?;
     let mut edit_ns = 0u128;
     let mut commit_ns = 0u128;
     let mut status = "FAIL";
@@ -181,16 +197,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result
                 });
                 match edit {
-                    Ok(exec)
-                        if exec.exit_status == Some(0)
-                            && !exec.stdout_truncated
-                            && !exec.stderr_truncated => {}
+                    Ok(exec) if confirmed_exec(&exec, expected_splice_output.as_deref()) => {}
                     Ok(exec) => {
                         return Err(format!(
-                            "exec status {:?} truncated stdout={} stderr={} stderr={}",
+                            "exec status {:?} truncated stdout={} stderr={} expected-splice-output={} stderr={}",
                             exec.exit_status,
                             exec.stdout_truncated,
                             exec.stderr_truncated,
+                            expected_splice_output.is_some(),
                             String::from_utf8_lossy(&exec.stderr).escape_debug()
                         ))
                     }
@@ -310,4 +324,27 @@ fn case_bytes(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
         *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)?;
     }
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn splice_requires_exact_caller_proof_before_commit() {
+        let expected = "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0}\n";
+        let mut exec = ExecResult {
+            exit_status: Some(0),
+            stdout: expected.as_bytes().to_vec(),
+            stderr: Vec::new(),
+            stdout_truncated: false,
+            stderr_truncated: false,
+        };
+        assert!(confirmed_exec(&exec, Some(expected)));
+        exec.stdout = b"{\"status\":\"PASS\"}\n".to_vec();
+        assert!(!confirmed_exec(&exec, Some(expected)));
+        assert!(confirmed_exec(&exec, None));
+        exec.stdout_truncated = true;
+        assert!(!confirmed_exec(&exec, None));
+    }
 }
