@@ -134,6 +134,14 @@ The #241 liveness and capacity text uses source basis
 `31083d4316905cdb055349ffa07107f9a5a0c8d0` and the shared capacity
 correction committed with this document; it carries no performance or release
 qualification claim.
+The #241 connection diagnosis uses source basis `a8fb5697e` plus the
+observation change in this commit. The bridge exposes the existing bounded TCP
+connect and Noise authentication steps separately; the daemon records them as
+children of `daemon.service_connect` under the same absolute deadline. The
+acceptor emits at most eight immediate capacity-drop lines and one shutdown
+summary with accepted, admitted, reaped, live, peak-live and dropped counts.
+Missing shutdown summary makes that diagnostic incomplete. These observations
+do not classify the historical `Unknown` cause or change admission behavior.
 
 **Bounded Workspace control session.** `layerfs-sandbox::session` retains at
 most one authenticated control connection across rapid Workspace calls. A

@@ -84,6 +84,9 @@ impl Acceptor {
     pub(crate) fn serve(&self, stop: Stop<'_>) -> Result<(), Failure> {
         let stdin = io::stdin();
         let mut sessions: Vec<Session> = Vec::with_capacity(self.capacity);
+        let started = Instant::now();
+        let (mut accepted, mut admitted, mut reaped, mut capacity_dropped, mut peak_live) =
+            (0u64, 0u64, 0u64, 0u64, 0usize);
         let result = (|| {
             loop {
                 if let Stop::Flag(flag) = &stop {
@@ -96,6 +99,7 @@ impl Acceptor {
                     if sessions[i].worker.is_finished() {
                         let session = sessions.swap_remove(i);
                         let _ = session.worker.join();
+                        reaped = reaped.saturating_add(1);
                     } else {
                         i += 1;
                     }
@@ -124,7 +128,15 @@ impl Acceptor {
                     Err(e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                     Err(_) => return Err(Code::Io.into()),
                 };
+                accepted = accepted.saturating_add(1);
                 if sessions.len() == self.capacity {
+                    capacity_dropped = capacity_dropped.saturating_add(1);
+                    if capacity_dropped <= 8 {
+                        layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
+                            "layerfs-server acceptor drop at_ms={} live={} capacity={} dropped={}\n",
+                            started.elapsed().as_millis(), sessions.len(), self.capacity, capacity_dropped
+                        ));
+                    }
                     drop(stream);
                     continue;
                 }
@@ -150,9 +162,12 @@ impl Acceptor {
                     socket,
                     worker: handle,
                 });
+                admitted = admitted.saturating_add(1);
+                peak_live = peak_live.max(sessions.len());
             }
             Ok(())
         })();
+        let live_at_stop = sessions.len();
         // Stop admission, then interrupt handshake/input/output on every live
         // owner. Shutdown clones share sockets; they are not extra slots.
         for session in &sessions {
@@ -175,7 +190,13 @@ impl Acceptor {
         }
         for session in sessions {
             let _ = session.worker.join();
+            reaped = reaped.saturating_add(1);
         }
+        layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
+            "layerfs-server acceptor summary accepted={accepted} admitted={admitted} live_at_stop={live_at_stop} peak_live={peak_live} reaped={reaped} capacity_dropped={capacity_dropped} capacity={} elapsed_ms={}\n",
+            self.capacity,
+            started.elapsed().as_millis()
+        ));
         result
     }
 }

@@ -19,7 +19,10 @@
 //! - Request identifiers stay monotone across the whole session because the
 //!   native `Client` carries its own `previous` marker.
 use layerfs_bridge::{
-    adapters::native::{client::Client, connection::connect_until},
+    adapters::native::{
+        client::Client,
+        connection::{authenticate_until, connect_tcp_until},
+    },
     contract::{Failure, Request, Response, Source},
 };
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -85,14 +88,13 @@ impl Transport {
             self.session = None;
         }
         if self.session.is_none() {
-            let connection = scope.child("daemon.service_connect").run(|_| {
-                connect_until(
-                    self.address,
-                    self.selector,
-                    &self.private,
-                    &self.server,
-                    deadline,
-                )
+            let connection = scope.child("daemon.service_connect").run(|connect_scope| {
+                let stream = connect_scope
+                    .child("daemon.service_tcp_connect")
+                    .run(|_| connect_tcp_until(self.address, deadline))?;
+                connect_scope.child("daemon.service_noise_auth").run(|_| {
+                    authenticate_until(stream, self.selector, &self.private, &self.server, deadline)
+                })
             })?;
             let client = scope
                 .child("daemon.service_hello")

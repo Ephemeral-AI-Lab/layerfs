@@ -1,7 +1,9 @@
 #![cfg(feature = "native")]
 //! Real authenticated socket lifecycle, independent of OS buffer-size policy.
 use layerfs_bridge::adapters::native::{
-    connection::{accept, connect, connect_until, Peer, VerifiedPeer},
+    connection::{
+        accept, authenticate_until, connect, connect_tcp_until, connect_until, Peer, VerifiedPeer,
+    },
     listen,
     protocol::{Frame, Kind},
 };
@@ -79,8 +81,14 @@ fn repeated_native_connections_authenticate_with_ordinary_tcp() {
             }
         });
         for index in 0..64 {
-            let mut connection = connect(address, 1, &private, &public)
-                .unwrap_or_else(|error| panic!("connect {index}: {error}"));
+            let opened = if index == 0 {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                connect_tcp_until(address, deadline)
+                    .and_then(|stream| authenticate_until(stream, 1, &private, &public, deadline))
+            } else {
+                connect(address, 1, &private, &public)
+            };
+            let mut connection = opened.unwrap_or_else(|error| panic!("connect {index}: {error}"));
             connection
                 .send
                 .write(&Frame {
