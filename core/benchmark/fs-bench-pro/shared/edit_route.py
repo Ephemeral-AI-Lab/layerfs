@@ -75,17 +75,25 @@ def compatibility_key(identity, fixture):
 
 
 def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000):
-    """Prepares (or reuses) the one closed master Store/history pair for a size."""
+    """Prepares (or reuses) the one closed master Store/history pair for a size.
+
+    The master directory is keyed by the compatibility key's own digest, so a
+    source, harness, registry or fixture change can never silently reuse an
+    incompatible master: it prepares a new one and leaves the earlier one on
+    disk as evidence.
+    """
     root = Path(root)
     fixture = prepare_fixture(root, size)
-    directory = root / f"master-{size}"
-    record_path = directory / "master.json"
     key = compatibility_key(identity, fixture)
+    key_digest = hashlib.sha256(
+        json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
+    directory = root / f"master-{size}-{key_digest}"
+    record_path = directory / "master.json"
     if record_path.is_file():
         record = json.loads(record_path.read_text())
         if record.get("compatibility_key") == key:
             return {**record, "reuse": "exact-compatibility-key"}
-        raise ValueError(f"prepared master {size} is incompatible with this source")
+        raise ValueError(f"prepared master {size} does not match its own key digest")
     directory.mkdir(parents=True, exist_ok=True)
     store = directory / "store.sqlite"
     history = directory / "history.sqlite"
@@ -120,6 +128,7 @@ def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000)
         "store_bytes": store.stat().st_size,
         "history_bytes": history.stat().st_size,
         "compatibility_key": key,
+        "compatibility_key_sha256": key_digest,
         "route": contract.ROUTE,
         "init_receipt": created,
     }
