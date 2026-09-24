@@ -2,6 +2,8 @@
 use layerfs_server::{HistoryMode, Server, ServerConfig};
 use layerfs_telemetry::runtime::Runtime;
 use std::{
+    io::{Read, Write},
+    net::TcpStream,
     path::PathBuf,
     process::{Command, Stdio},
     thread,
@@ -27,7 +29,7 @@ fn process_cpu() -> Duration {
     Duration::from_micros(micros)
 }
 
-fn observe_closed_stdin() {
+fn server() -> (Temp, Server) {
     let root = std::env::temp_dir().join(format!(
         "layerfs-acceptor-idle-{}-{}",
         std::process::id(),
@@ -37,7 +39,7 @@ fn observe_closed_stdin() {
             .as_nanos()
     ));
     std::fs::create_dir(&root).unwrap();
-    let _temp = Temp(root.clone());
+    let temp = Temp(root.clone());
     let server = Server::create(ServerConfig {
         store_path: root.join("store.sqlite"),
         history_path: root.join("history.sqlite"),
@@ -50,6 +52,11 @@ fn observe_closed_stdin() {
         telemetry_run: None,
     })
     .unwrap();
+    (temp, server)
+}
+
+fn observe_closed_stdin() {
+    let (_temp, server) = server();
     server.listen().unwrap();
     let before = process_cpu();
     let started = Instant::now();
@@ -61,6 +68,43 @@ fn observe_closed_stdin() {
         cpu.as_nanos() * 4 < elapsed.as_nanos(),
         "closed-stdin Flag acceptor burned {cpu:?} CPU in {elapsed:?} wall"
     );
+}
+
+#[test]
+fn default_session_limit_includes_two_readers() {
+    let (_temp, server) = server();
+    let endpoint = server.listen().unwrap();
+    let capacity = layerfs_bridge::contract::session_capacity(2);
+    assert_eq!(capacity, 4);
+    let mut held = Vec::new();
+    for _ in 0..capacity {
+        let mut socket = TcpStream::connect(endpoint).unwrap();
+        socket.write_all(&1u32.to_be_bytes()).unwrap();
+        held.push(socket);
+    }
+    // Ten acceptor poll periods, still below the five-second handshake limit.
+    thread::sleep(Duration::from_secs(1));
+    for socket in &held {
+        socket.set_nonblocking(true).unwrap();
+        let result = socket.peek(&mut [0]);
+        assert!(
+            result
+                .as_ref()
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock),
+            "held handshake closed early: {result:?}"
+        );
+    }
+    let mut refused = TcpStream::connect(endpoint).unwrap();
+    refused
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let mut byte = [0];
+    match refused.read(&mut byte) {
+        Ok(0) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+        result => panic!("excess session was not refused: {result:?}"),
+    }
+    server.shutdown();
 }
 
 #[test]

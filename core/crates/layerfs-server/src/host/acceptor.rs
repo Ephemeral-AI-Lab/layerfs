@@ -30,7 +30,7 @@ use std::{
 /// whole write budget plus the service read bound. A smaller cap would be an
 /// accidental ceiling under the configured writer setting.
 pub(crate) fn session_capacity(max_concurrent_writes: u8) -> usize {
-    usize::from(max_concurrent_writes) + 64
+    layerfs_bridge::contract::session_capacity(max_concurrent_writes)
 }
 
 /// How the acceptor learns that admission must stop.

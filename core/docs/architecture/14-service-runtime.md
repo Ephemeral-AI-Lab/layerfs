@@ -120,10 +120,10 @@ sessions omit the first two children. The owner records
 `owner.shell_ready` inside Create, which previously reported one undivided
 window. These are ordinary product telemetry: they add no test-only branch and
 change no result.
-The #241 liveness update here uses source basis
-`fa1c0774c9d12cd6e58f730118164140fa04fa22` and the transport timing and
-acceptor changes committed with this document; it carries no performance or
-release qualification claim.
+The #241 liveness and capacity text uses source basis
+`31083d4316905cdb055349ffa07107f9a5a0c8d0` and the shared capacity
+correction committed with this document; it carries no performance or release
+qualification claim.
 
 **Bounded Workspace control session.** `layerfs-sandbox::session` retains at
 most one authenticated control connection across rapid Workspace calls. A
@@ -402,7 +402,8 @@ Body/data frames contain 1..=16384 bytes; metadata is <=32768 bytes. No empty-bo
 frame, in-band cancellation, per-chunk ACK or object RPC is accepted. Local stdin
 uses the same plaintext frame schema; credentials never come from those frames.
 
-The transport admits `session_capacity(budget) = budget + MAX_READ_OPERATIONS`
+The host acceptor uses the bridge contract's
+`session_capacity(budget) = budget + MAX_READ_OPERATIONS` for
 persistent/handshaking/closing sessions, plus one synchronous accept/refusal
 socket slot. At the default budget of two that is four sessions and **five
 application connection resources in total**, as before; a raised writer budget
