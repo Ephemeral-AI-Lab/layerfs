@@ -1185,7 +1185,16 @@ fn baseline_exec_liveness_diagnostic() {
         "schema\tissue241-baseline-exec-liveness-diagnostic-v1"
     )
     .unwrap();
-    writeln!(receipt, "command\tprintf baseline > .position-baseline").unwrap();
+    let exec_count = std::env::var("LAYERFS_EXEC_PROBE_COUNT")
+        .ok()
+        .map_or(1, |value| value.parse::<usize>().unwrap());
+    assert!((1..=128).contains(&exec_count));
+    writeln!(
+        receipt,
+        "command_template\tprintf baseline > .position-baseline[-NNN]"
+    )
+    .unwrap();
+    writeln!(receipt, "planned_exec_count\t{exec_count}").unwrap();
     writeln!(
         receipt,
         "cache\tfunctional-uncontrolled;admission-ineligible"
@@ -1260,18 +1269,30 @@ fn baseline_exec_liveness_diagnostic() {
             std::thread::sleep(Duration::from_millis(200));
         }
         writeln!(receipt, "held_incomplete_handshakes\t{held_count}").unwrap();
-        let started = Instant::now();
-        let exec = api.exec(&mount.id, "printf baseline > .position-baseline");
-        writeln!(
-            receipt,
-            "exec_elapsed_ms\t{}",
-            started.elapsed().as_millis()
-        )
-        .unwrap();
-        writeln!(receipt, "exec\t{exec:?}").unwrap();
-        failed = !exec
-            .as_ref()
-            .is_ok_and(|result| result.exit_status == Some(0));
+        failed = false;
+        for index in 0..exec_count {
+            let command = if exec_count == 1 {
+                "printf baseline > .position-baseline".to_owned()
+            } else {
+                format!("printf baseline > .position-baseline-{index:03}")
+            };
+            let started = Instant::now();
+            let exec = api.exec(&mount.id, &command);
+            writeln!(receipt, "exec_{index:03}_command\t{command}").unwrap();
+            writeln!(
+                receipt,
+                "exec_{index:03}_elapsed_ms\t{}",
+                started.elapsed().as_millis()
+            )
+            .unwrap();
+            writeln!(receipt, "exec_{index:03}_result\t{exec:?}").unwrap();
+            failed = !exec
+                .as_ref()
+                .is_ok_and(|result| result.exit_status == Some(0));
+            if failed {
+                break;
+            }
+        }
         drop(held);
         let container = format!("layerfs-{sandbox}");
         for (name, args) in [
