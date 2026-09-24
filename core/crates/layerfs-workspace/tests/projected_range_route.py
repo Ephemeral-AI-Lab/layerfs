@@ -6,6 +6,7 @@ import stage_route as driver
 driver.CASES = {
     'semantics': ['semantics'],
     'notification_failure': ['notification_failure'],
+    'nonroot_mode': ['nonroot_mode'],
 }
 driver.REQUIREMENTS = {case: ['S-15'] for case in driver.CASES}
 driver.TEST_SOURCE = Path(__file__).with_name('projected_range.rs')

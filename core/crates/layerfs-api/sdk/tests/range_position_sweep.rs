@@ -222,6 +222,7 @@ fn verify_mounted_windows(
     source: &Path,
     case: &Case,
     payload: Option<&[u8]>,
+    expect_baseline: bool,
 ) -> Result<(), String> {
     let size = if payload.is_some() {
         case.size - case.delete_len + case.insert_len
@@ -230,21 +231,7 @@ fn verify_mounted_windows(
     };
     let windows = [0, case.offset.saturating_sub(16), size.saturating_sub(4096)]
         .map(|start| (start.min(size - 1), (size - start.min(size - 1)).min(4096)));
-    let mut command = String::from("stat -c %s payload.bin");
-    for (start, len) in windows {
-        let block = start / 4096;
-        let within = start % 4096;
-        let blocks = (within + len).div_ceil(4096);
-        assert!(blocks <= 2);
-        command.push_str(&format!(
-            "; dd if=payload.bin bs=4096 skip={block} count={blocks} 2>/dev/null | tail -c +{} | head -c {len} | sha256sum",
-            within + 1
-        ));
-    }
-    command.push_str(&format!(
-        "; dd if=payload.bin bs=4096 skip={} count=1 2>/dev/null | wc -c",
-        size / 4096
-    ));
+    let command = mounted_window_command(size, windows, expect_baseline);
     let result = api
         .exec(id, &command)
         .map_err(|error| format!("bounded mounted read: {error:?}"))?;
@@ -269,6 +256,31 @@ fn verify_mounted_windows(
     Ok(())
 }
 
+fn mounted_window_command(size: u64, windows: [(u64, u64); 3], expect_baseline: bool) -> String {
+    let mut command = String::from(
+        "set -o pipefail || exit 1; set -e; tmp=$(mktemp /tmp/layerfs-position.XXXXXX); trap 'rm -f \"$tmp\"' 0; stat -c %s payload.bin",
+    );
+    for (start, len) in windows {
+        let block = start / 4096;
+        let within = start % 4096;
+        let blocks = (within + len).div_ceil(4096);
+        assert!(blocks <= 2);
+        command.push_str(&format!(
+            "; dd if=payload.bin of=\"$tmp\" bs=4096 skip={block} count={blocks} 2>/dev/null; dd if=\"$tmp\" bs=1 skip={within} count={len} 2>/dev/null | sha256sum"
+        ));
+    }
+    command.push_str(&format!(
+        "; dd if=payload.bin of=\"$tmp\" bs=4096 skip={} count=1 2>/dev/null; wc -c < \"$tmp\"",
+        size / 4096
+    ));
+    if expect_baseline {
+        command.push_str("; marker=$(cat .position-baseline); test \"$marker\" = baseline; test \"$(wc -c < .position-baseline)\" -eq 8");
+    } else {
+        command.push_str("; test ! -e .position-baseline; test ! -L .position-baseline");
+    }
+    command
+}
+
 fn with_mount<T>(
     api: &layerfs_sdk::WorkspaceApi<'_>,
     sandbox: layerfs_api_core::SandboxId,
@@ -278,9 +290,21 @@ fn with_mount<T>(
     on_unmount: impl FnOnce(&Result<(), String>),
     f: impl FnOnce(&layerfs_api_core::WorkspaceId) -> Result<T, String>,
 ) -> Result<T, String> {
-    let mount = api
-        .mount(sandbox, project, branch, commit)
-        .map_err(|error| format!("mount: {error:?}"))?;
+    let mount = match api.mount(sandbox, project, branch, commit) {
+        Ok(mount) => mount,
+        Err(error) => {
+            if let layerfs_api_core::WorkspaceError::UncertainMount { id, .. }
+            | layerfs_api_core::WorkspaceError::Retained { id, .. } = &error
+            {
+                let unmount = api
+                    .unmount(id)
+                    .map_err(|cleanup| format!("unmount: {cleanup:?}"));
+                on_unmount(&unmount);
+                return Err(format!("mount: {error:?}; retained cleanup: {unmount:?}"));
+            }
+            return Err(format!("mount: {error:?}"));
+        }
+    };
     let result = f(&mount.id);
     let unmount = api
         .unmount(&mount.id)
@@ -447,11 +471,13 @@ fn hex_array<const N: usize>(text: &str) -> [u8; N] {
     std::array::from_fn(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).unwrap())
 }
 
-fn public_branch_head(
+type BranchState = (Option<[u8; 33]>, [u8; 33], [u8; 32]);
+
+fn public_branch_state(
     history_path: &Path,
     cursor_key: [u8; 32],
     branch: [u8; 17],
-) -> Result<Option<[u8; 33]>, String> {
+) -> Result<BranchState, String> {
     use layerfs_history::HistoryCatalog;
     let catalog =
         layerfs_history::sqlite::open_read_only(history_path, b"layerfs-bench-pro", cursor_key)
@@ -459,9 +485,15 @@ fn public_branch_head(
     let id = layerfs_history::BranchId::from_bytes(branch)
         .map_err(|error| format!("branch id: {error:?}"))?;
     catalog
-        .branch(id)
+        .branch_snapshot(id)
         .map_err(|error| format!("branch read: {error:?}"))?
-        .map(|record| record.head_commit.map(|head| head.to_bytes()))
+        .map(|snapshot| {
+            (
+                snapshot.branch.head_commit.map(|head| head.to_bytes()),
+                snapshot.branch.base_layer.to_bytes(),
+                snapshot.effective_root.to_bytes(),
+            )
+        })
         .ok_or_else(|| "missing branch".into())
 }
 
@@ -651,7 +683,7 @@ fn run_case(
                 .projection_count("read")
                 .ok_or("missing read counter")?;
             let mounted =
-                verify_mounted_windows(context.api, id, context.source, case, Some(inserted));
+                verify_mounted_windows(context.api, id, context.source, case, Some(inserted), true);
             let after = context.api.status(id);
             let read_after = after
                 .as_ref()
@@ -679,7 +711,8 @@ fn run_case(
     if old.commit == new.commit || old.root == new.root {
         return Err("old/new Commit identical".into());
     }
-    if public_branch_head(context.history_path, context.cursor_key, branch.id)? != Some(new.commit)
+    if public_branch_state(context.history_path, context.cursor_key, branch.id)?.0
+        != Some(new.commit)
     {
         return Err("published Branch head differs from Commit".into());
     }
@@ -701,10 +734,10 @@ fn run_case(
             "retained old Commit oracle {old_root}/{old_count}/{old_size}"
         ));
     }
-    for (label, selected_branch, commit, edited) in [
-        ("fresh", branch.id, None, true),
-        ("old", branch.id, Some(old.commit), false),
-        ("source", context.source_branch, None, false),
+    for (label, selected_branch, commit, edited, expect_baseline) in [
+        ("fresh", branch.id, None, true, true),
+        ("old", branch.id, Some(old.commit), false, true),
+        ("source", context.source_branch, None, false, false),
     ] {
         with_fresh_sandbox_mount(
             context,
@@ -720,18 +753,18 @@ fn run_case(
                     context.source,
                     case,
                     if edited { Some(inserted) } else { None },
+                    expect_baseline,
                 )
             },
         )?;
     }
-    if public_branch_head(
+    let source_state = public_branch_state(
         context.history_path,
         context.cursor_key,
         context.source_branch,
-    )?
-    .is_some()
-    {
-        return Err("pristine source Branch moved".into());
+    )?;
+    if source_state != (None, context.project.genesis_layer, context.project.root) {
+        return Err(format!("pristine source Branch moved: {source_state:?}"));
     }
     Ok(format!("new_commit={:?}\told_commit={:?}\tsha256={expected_sha}\tcanonical_root={root}\tcanonical_count={count}\tfinal_bytes={expected_size}\tverifier_read_callbacks={verifier_read_callbacks}", new.commit, old.commit))
 }
@@ -1055,6 +1088,71 @@ fn bounded_oracle_maps_prefix_replacement_and_suffix() {
     );
     assert_eq!(expected_window(&source, None, 4, 5), b"efghi");
     std::fs::remove_file(source).unwrap();
+}
+
+fn mounted_oracle_test_dir(name: &str) -> PathBuf {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("issue241-{name}-{}-{nonce}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::write(dir.join("payload.bin"), vec![b'a'; 4096]).unwrap();
+    dir
+}
+
+fn mounted_shell_output(dir: &Path, command: &str) -> std::process::Output {
+    // The live image uses GNU-style stat; macOS hosts need this local size shim.
+    let command = format!(
+        "stat() {{ [ \"$1\" = -c ] && [ \"$2\" = %s ] || return 2; wc -c < \"$3\"; }}; {command}"
+    );
+    Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .current_dir(dir)
+        .output()
+        .unwrap()
+}
+
+fn mounted_shell_passes(dir: &Path, command: &str) -> bool {
+    mounted_shell_output(dir, command).status.success()
+}
+
+#[test]
+fn mounted_oracle_rejects_eof_read_error() {
+    let dir = mounted_oracle_test_dir("eof-error");
+    let bytes: Vec<_> = (0..8192).map(|index| (index % 251) as u8).collect();
+    std::fs::write(dir.join("payload.bin"), &bytes).unwrap();
+    let command = mounted_window_command(8192, [(0, 4096), (3758, 4096), (4096, 4096)], false);
+    let failed_eof = format!(
+        "dd() {{ for arg in \"$@\"; do [ \"$arg\" = skip=2 ] && return 74; done; command dd \"$@\"; }}; {command}"
+    );
+    let output = mounted_shell_output(&dir, &command);
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8(output.stdout).unwrap();
+    let seam_sha = format!("{:x}", Sha256::digest(&bytes[3758..3758 + 4096]));
+    assert_eq!(
+        text.lines().nth(2).unwrap().split_whitespace().next(),
+        Some(seam_sha.as_str())
+    );
+    assert!(!mounted_shell_passes(&dir, &failed_eof));
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn mounted_oracle_distinguishes_old_commit_from_pristine_source() {
+    let dir = mounted_oracle_test_dir("old-marker");
+    let windows = [(0, 4096); 3];
+    let source = mounted_window_command(4096, windows, false);
+    let old = mounted_window_command(4096, windows, true);
+    assert!(mounted_shell_passes(&dir, &source));
+    assert!(!mounted_shell_passes(&dir, &old));
+    std::fs::write(dir.join(".position-baseline"), b"baseline").unwrap();
+    assert!(!mounted_shell_passes(&dir, &source));
+    assert!(mounted_shell_passes(&dir, &old));
+    std::fs::write(dir.join(".position-baseline"), b"baseline\n").unwrap();
+    assert!(!mounted_shell_passes(&dir, &old));
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

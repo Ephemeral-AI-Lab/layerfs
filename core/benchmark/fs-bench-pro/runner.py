@@ -430,7 +430,8 @@ def recheck_exec_edit(out):
         raise ValueError("no retained raw LFT1 to re-derive from")
     telemetry = edit_route.edit_telemetry_check(raw.splitlines())
     _, row = edit_selection(receipt["scenario_id"])
-    receipt = {**receipt, "telemetry": telemetry}
+    receipt = {**receipt, "telemetry": telemetry,
+               "verification": retained_edit_verification(out, receipt, row)}
     outcome = edit_route.terminal_status(receipt, row)
     write_json(out / "telemetry-check.json", {
         "schema": "core-fs-bench-pro-exec-fuse-edit-telemetry-recheck-v1",
@@ -449,6 +450,30 @@ def recheck_exec_edit(out):
         "outcome": outcome,
     })
     return json.dumps({"telemetry": telemetry["status"], "outcome": outcome["status"]})
+
+
+def edit_verification_record(run_root, receipt):
+    """Read the original inline or later separate verifier without changing it."""
+    verification = receipt.get("verification") or {}
+    retained = Path(run_root) / "verification.json"
+    if retained.is_file():
+        verification = json.loads(retained.read_text())
+    return verification
+
+
+def retained_edit_verification(run_root, receipt, row):
+    """Derive the current gate from the retained verifier's raw result."""
+    verification = edit_verification_record(run_root, receipt)
+    if verification.get("status") in ("PASS", "FAIL", "TIMEOUT"):
+        status, identity_match, within_budget = edit_route.verifier_result(
+            verification.get("exit_code"), verification.get("timeout"),
+            verification.get("wall_ns"), verification.get("child"), row,
+            receipt.get("driver") or {}, receipt.get("store"), receipt.get("history"))
+        if verification.get("scenario_id") != row["scenario_id"]:
+            status = "FAIL"
+        verification = {**verification, "status": status,
+                        "identity_match": identity_match, "within_budget": within_budget}
+    return verification
 
 
 def verify_exec_edit(out):
@@ -610,6 +635,7 @@ EDIT_REPORT_COLUMNS = (
     "lft1_root_ns", "lft1_edit_ns", "lft1_commit_ns", "lft1_cpu_user_ns", "lft1_cpu_system_ns",
     "lft1_sampled_max_rss", "lft1_resource_status", "lft1_scope", "projection_counts",
     "upstream_calls", "unmount_ok", "sandbox_delete_ok", "evidence",
+    "recorded_terminal", "derived_verification_gate", "current_admission_status",
 )
 
 
@@ -625,7 +651,9 @@ def edit_report_row(row, folder):
     run_file = Path(folder) / "run.json"
     if not run_file.is_file():
         values.update({"terminal": "NOT_RUN", "goal": "NOT_RUN",
-                       "verification": "NOT_RUN"})
+                       "verification": "NOT_RUN", "recorded_terminal": "NOT_RUN",
+                       "derived_verification_gate": "NOT_RUN",
+                       "current_admission_status": "NOT_RUN"})
         return values
     run = json.loads(run_file.read_text())
     receipt = run.get("receipt") or {}
@@ -634,7 +662,10 @@ def edit_report_row(row, folder):
             receipt.get("scenario_id") != row["scenario_id"] or
             (run.get("image") or {}).get("registry_sha256") != edit_insert_v3.REGISTRY_SHA256):
         values.update({"terminal": "INVALID_EVIDENCE", "goal": "INELIGIBLE",
-                       "verification": "INELIGIBLE", "invalid_reason": "v3 selection/image identity mismatch"})
+                       "verification": "INELIGIBLE", "recorded_terminal": receipt.get("status"),
+                       "derived_verification_gate": "INELIGIBLE",
+                       "current_admission_status": "INVALID_EVIDENCE",
+                       "invalid_reason": "v3 selection/image identity mismatch"})
         return values
     driver = receipt.get("driver") or {}
     telemetry = receipt.get("telemetry") or {}
@@ -642,10 +673,19 @@ def edit_report_row(row, folder):
     # The identity-matched verification is a separate command with its own
     # retained receipt; the performance receipt keeps the SKIPPED marker it was
     # collected with, so the report reads both without repeating either.
-    verification = receipt.get("verification") or {}
-    retained = folder / "verification.json"
-    if retained.is_file():
-        verification = json.loads(retained.read_text())
+    raw_verification = edit_verification_record(folder, receipt)
+    verification = retained_edit_verification(folder, receipt, row)
+    effective = {**receipt, "verification": verification}
+    recorded_terminal = receipt.get("status")
+    current_admission_status = (recorded_terminal if recorded_terminal == "NOT_RUN" else
+                                edit_route.terminal_status(effective, row)["status"])
+    if receipt.get("status") == "FAIL":
+        current_admission_status = "FAIL"
+    # Historical v2 receipts have no gate profile. Keep their displayed terminal
+    # unchanged while exposing the corrected audit decision in its own column.
+    current_profile = (row["scenario_version"] == 3 or
+                       receipt.get("gate_profile") == "post-verifier-cleanup-v1")
+    terminal = current_admission_status if current_profile else recorded_terminal
     observed = receipt.get("edit_commit_ns")
     target = row["g2_target_ms"] * 1_000_000
     values.update({
@@ -653,16 +693,19 @@ def edit_report_row(row, folder):
         "completed": 1 if driver.get("status") == "COMPLETE" else 0,
         "driver_exit": receipt.get("driver_exit_code"),
         "timeout": bool(receipt.get("driver_timeout")),
-        "verification": verification.get("status"),
+        "verification": (verification if current_profile else raw_verification).get("status"),
+        "derived_verification_gate": verification.get("status"),
         "verifier_wall_ns": verification.get("wall_ns"),
         "verification_coverage": (verification.get("child") or {}).get("coverage"),
         "full_file_bytes_verified": (verification.get("child") or {}).get(
             "full_file_bytes_verified"),
         "raw_vs_target": (None if not isinstance(observed, int)
                           else "AT_OR_BELOW" if observed <= target else "ABOVE"),
-        "terminal": receipt.get("status"),
+        "terminal": terminal,
+        "recorded_terminal": recorded_terminal,
+        "current_admission_status": current_admission_status,
         "edit_commit_ns": receipt.get("edit_commit_ns"),
-        "goal": receipt.get("status"),
+        "goal": terminal,
         "master_reuse": master.get("reuse"),
         "clone_copy_ns": receipt.get("clone_copy_wall_ns"),
         "cache_ns": receipt.get("cache_wall_ns"),
@@ -684,12 +727,6 @@ def edit_report_row(row, folder):
         "unmount_ok": driver.get("unmount_ok"),
         "sandbox_delete_ok": driver.get("sandbox_delete_ok"),
     })
-    if receipt.get("status") in ("GOAL_MET", "TARGET_MISS"):
-        values["goal"] = receipt["status"]
-    elif receipt.get("status") == "INELIGIBLE":
-        values["goal"] = "INELIGIBLE"
-    elif receipt.get("status") == "FAIL":
-        values["goal"] = "FAIL"
     return values
 
 
@@ -711,7 +748,8 @@ def report_edit(campaign, out=None, scenario_version=2):
     counts = {}
     for name in ("attempted", "completed"):
         counts[name] = sum(int(row[name] or 0) for row in rows)
-    for name in ("verification", "terminal", "goal"):
+    for name in ("verification", "terminal", "goal", "derived_verification_gate",
+                 "current_admission_status"):
         tally = {}
         for row in rows:
             key = str(row[name])

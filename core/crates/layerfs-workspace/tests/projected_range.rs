@@ -5,11 +5,13 @@ mod support;
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::support::{deadline, Fixture, Gate};
+    use super::support::{deadline, Fixture, Gate, Native};
     use layerfs_workspace::{
-        CoherenceStatus, FileAccess, FileOpenOptions, RangeEdit, ReferenceScope, WorkspaceError,
+        CoherenceStatus, FileAccess, FileOpenOptions, PortableAttributes, RangeEdit,
+        ReferenceScope, WorkspaceAccess, WorkspaceConfig, WorkspaceError, WorkspaceHost,
+        DEFAULT_MEMORY_BUDGET_BYTES,
     };
-    use std::{io, sync::Arc};
+    use std::{fs, io, os::unix::fs::PermissionsExt, path::PathBuf, sync::Arc};
 
     fn open(f: &Fixture, serial: u64, access: FileAccess, append: bool) -> u64 {
         f.workspace
@@ -24,6 +26,40 @@ mod linux {
                 deadline(),
             )
             .unwrap()
+    }
+
+    fn nonroot_fixture() -> Fixture {
+        let native = Native::new(Gate::None);
+        let root = PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap())
+            .join("projected-range-owner");
+        for path in [&root, &root.join("workspace")] {
+            fs::create_dir(path).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+            std::os::unix::fs::chown(path, Some(1000), Some(1000)).unwrap();
+        }
+        let host = WorkspaceHost::new(
+            WorkspaceConfig {
+                root,
+                max_count: 3,
+                memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+                disk_budget_bytes: Some(64 * 1024 * 1024),
+            },
+            native.delivery(),
+        )
+        .unwrap();
+        let mut options = Fixture::options("stage", 31, WorkspaceAccess::LocalEdit);
+        options.owner_uid = 1000;
+        options.owner_gid = 1000;
+        let workspace = host.attach(options, deadline()).unwrap();
+        println!(
+            "PROJECTED_RANGE_OWNER configured_uid=1000 process_uid={} scope=native-configured-owner",
+            nix::unistd::geteuid()
+        );
+        Fixture {
+            host,
+            workspace,
+            native,
+        }
     }
 
     #[test]
@@ -141,6 +177,64 @@ mod linux {
         drop((insert, empty, delete));
         f.workspace.close_clean().unwrap();
         println!("PROJECTED_RANGE_CHECK semantics PASS");
+    }
+
+    #[test]
+    #[ignore = "requires root-owned native fixture and a non-root configured Workspace owner"]
+    fn projected_range_nonroot_mode() {
+        let f = nonroot_fixture();
+        let file = f.lookup(b"data.bin");
+        let mode = |value| PortableAttributes {
+            mode: Some(value),
+            ..PortableAttributes::default()
+        };
+        f.workspace
+            .set_attributes(file.serial, mode(0o400), deadline())
+            .unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        assert_eq!(
+            f.workspace.getattr(file.serial).unwrap().mode & 0o777,
+            0o400
+        );
+        f.workspace
+            .set_attributes(file.serial, mode(0o600), deadline())
+            .unwrap();
+        assert_eq!(
+            f.workspace.getattr(file.serial).unwrap().mode & 0o777,
+            0o600
+        );
+
+        let mut mount = f.workspace.reserve_mount().unwrap();
+        mount.bind_invalidation(Arc::new(|_, _, _| Ok(()))).unwrap();
+        let handle = open(&f, file.serial, FileAccess::ReadWrite, false);
+        let stamp = f
+            .workspace
+            .projected_range_state(handle, file.serial)
+            .unwrap()
+            .stamp;
+        let edit = RangeEdit {
+            start: 0,
+            end: 0,
+            replacement: f.own(b"Z"),
+        };
+        let mut permit = f.workspace.begin_projection_mutation(deadline()).unwrap();
+        assert_eq!(
+            permit
+                .edit_file_range(handle, stamp, &edit, deadline())
+                .unwrap()
+                .accepted_bytes,
+            1
+        );
+        drop(permit);
+        assert_eq!(f.read(handle, 0, 1), b"Z");
+        f.workspace.release(handle).unwrap();
+        mount.finish().unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        f.workspace
+            .forget(file.serial, u64::MAX, ReferenceScope::Local);
+        drop(edit);
+        f.workspace.close_clean().unwrap();
+        println!("PROJECTED_RANGE_CHECK nonroot_mode PASS");
     }
 
     #[test]

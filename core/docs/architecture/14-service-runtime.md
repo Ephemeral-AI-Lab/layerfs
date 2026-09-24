@@ -153,6 +153,19 @@ physical suffix payload bytes copied; a piece splice records zero shifted
 bytes even when the logical suffix is large. An edit that publishes but later
 fails notification remains counted as accepted.
 
+The Linux projected range EDIT checks the held descriptor's writable,
+nonappend state and current stamp under a mutation permit before acquiring
+private replacement payload bytes. Workspace repeats the stamp and handle
+checks at preparation and final publication, so the early refusal avoids
+backing work for an already stale request without weakening the final CAS.
+Source basis for these corrections: `11e08d9ac` plus the same-commit
+`layerfs-fuse/src/range_ioctl.rs` and `layerfs-workspace/src/filesystem/write.rs`
+changes.
+Projected range edits use the writable descriptor's admitted rights and repeat
+its handle/stamp checks at publication; a mode change does not revoke an
+already-open writable descriptor. Path-based edits and handleless size changes
+retain their separate permission check.
+
 The daemon status wire carries the same counts in the fixed
 `layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,
 `range_accepted_payload_bytes` and `range_shifted_suffix_bytes`,

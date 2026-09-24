@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -66,9 +67,18 @@ class InsertV3(unittest.TestCase):
         master = {"project_id": "a" * 66, "genesis_layer": "b" * 66,
                   "genesis_root": "c" * 64, "genesis_root_serial": 1,
                   "fixture_canonical_root": "d" * 64, "fixture_extent_count": 54}
-        case = edit_route.case_record(row, master, "e" * 32)
+        with self.assertRaisesRegex(ValueError, "expected canonical root/count absent"):
+            edit_route.case_record(row, master, "e" * 32)
+        # These test-only values exercise binding; production values must come
+        # from final-source functional receipts before any registered sample.
+        bound_row = {**row, "canonical_root_expected": "f" * 64,
+                     "canonical_count_expected": 56}
+        case = edit_route.case_record(bound_row, master, "e" * 32)
         self.assertEqual(case["operation_contract_id"], v3.OPERATION_CONTRACT_ID)
         self.assertEqual(case["carrier_protocol"], v3.ABI["contract"])
+        self.assertEqual(case["full_file_digest"], 1)
+        self.assertEqual(case["canonical_root_expected"], "f" * 64)
+        self.assertEqual(case["canonical_count_expected"], "56")
         identity = {"product_seal": "p", "harness_seal": "h", "cargo_lock_sha256": "l"}
         fixture = {"bytes": row["fixture_bytes"], "sha256": row["fixture_sha256"]}
         key = edit_route.compatibility_key(identity, fixture, row, "init-binary-hash")
@@ -94,12 +104,51 @@ class InsertV3(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "image"):
                 runner.require_edit_image({**image, **changed}, v3, row, identity)
 
+    def test_all_v3_sizes_require_full_digest_and_pinned_root_count(self):
+        master = {"project_id": "a" * 66, "genesis_layer": "b" * 66,
+                  "genesis_root": "c" * 64, "genesis_root_serial": 1,
+                  "fixture_canonical_root": "d" * 64, "fixture_extent_count": 54}
+        for row in self.rows:
+            with self.subTest(size=row["fixture_bytes"]):
+                with self.assertRaisesRegex(ValueError, "expected canonical root/count absent"):
+                    edit_route.case_record(row, master, "e" * 32)
+                ready = {**row, "canonical_root_expected": "f" * 64,
+                         "canonical_count_expected": 56}
+                self.assertEqual(edit_route.case_record(ready, master, "e" * 32)
+                                 ["full_file_digest"], 1)
+                for invalid in ({"canonical_root_expected": "-"},
+                                {"canonical_count_expected": 0}):
+                    with self.assertRaisesRegex(ValueError, "expected canonical root/count absent"):
+                        edit_route.case_record({**ready, **invalid}, master, "e" * 32)
+
+    def test_release_verifier_refuses_incomplete_v3_case_before_store_open(self):
+        verifier = runner.CORE / "target/release/examples/verify_edit"
+        if not verifier.is_file():
+            self.skipTest("build the locked release verify_edit example first")
+        with tempfile.TemporaryDirectory() as scratch:
+            case = Path(scratch) / "case.txt"
+            for fields, expected in (
+                ({"full_file_digest": "0", "canonical_root_expected": "-",
+                  "canonical_count_expected": "-"}, "full-file digest"),
+                ({"full_file_digest": "1", "canonical_root_expected": "-",
+                  "canonical_count_expected": "1"}, "canonical root"),
+                ({"full_file_digest": "1", "canonical_root_expected": "f" * 64,
+                  "canonical_count_expected": "0"}, "canonical count"),
+            ):
+                case.write_text("operation_contract_id=workspace-exec-fuse-range-splice-commit-v3\n"
+                                + "".join(f"{key}={value}\n" for key, value in fields.items()))
+                result = subprocess.run([str(verifier), str(case), "/absent/store",
+                                         "/absent/history"], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+
     def test_v3_route_counts_fail_closed(self):
         row = self.rows[0]
         driver = {key: row[key] for key in ("scenario_id", "route", "operation_contract_id",
                     "fixture_bytes", "edit_start", "delete_len", "replacement_len",
                     "replacement_sha256", "final_bytes")}
-        driver.update(status="COMPLETE", edit_commit_ns=1_000_000, sandbox_delete_ok=True,
+        driver.update(status="COMPLETE", edit_commit_ns=1_000_000, unmount_ok=True,
+                      sandbox_delete_ok=True,
                       projection_counts="range_state=2,range_edit=1,write=0,read=3",
                       range_accepted_payload_bytes=4096, range_shifted_suffix_bytes=0)
         receipt = {"complete_command_status": "PASS", "driver": driver,
@@ -107,12 +156,71 @@ class InsertV3(unittest.TestCase):
                    "cache": {"macos-store": {"status": "PASS"},
                              "linux-fuse-backing": {"status": "INELIGIBLE"}}}
         self.assertEqual(edit_route.terminal_status(receipt, row)["status"], "INELIGIBLE")
+        skipped = {**receipt, "verification": {"status": "SKIPPED"}}
+        self.assertEqual(edit_route.terminal_status(skipped, row)["status"], "INCOMPLETE")
         for key, value in (("projection_counts", "range_edit=0,range_state=2,write=0"),
                            ("range_shifted_suffix_bytes", 1),
-                           ("operation_contract_id", "wrong")):
+                           ("operation_contract_id", "wrong"),
+                           ("unmount_ok", False)):
             with self.subTest(key=key):
                 failed = {**receipt, "driver": {**driver, key: value}}
                 self.assertEqual(edit_route.terminal_status(failed, row)["status"], "FAIL")
+
+    def test_verifier_requires_bounded_wall_and_exact_commit_identity(self):
+        row = self.rows[0]
+        driver = {"branch_id": "branch", "head_commit": "head"}
+        child = {"status": "PASS", "scenario_id": row["scenario_id"],
+                 "branch_id": "branch", "head_commit": "head",
+                 "store": "/case/store", "history": "/case/history"}
+        def outcome(value=child, wall=14_000_000_000, code=0):
+            return edit_route.verifier_result(code, False, wall, value, row, driver,
+                                              "/case/store", "/case/history")[0]
+        self.assertEqual(outcome(), "PASS")
+        self.assertEqual(outcome(wall=15_000_000_001), "FAIL")
+        self.assertEqual(outcome(value={**child, "scenario_id": "other"}), "FAIL")
+        self.assertEqual(outcome(value={**child, "head_commit": "other"}), "FAIL")
+        self.assertEqual(outcome(value={**child, "store": "/other/store"}), "FAIL")
+        self.assertEqual(outcome(code=1), "FAIL")
+
+    def test_verifier_refuses_to_replace_retained_attempt(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            folder = Path(scratch)
+            (folder / "verifier-case.txt").write_text("prior attempt")
+            with self.assertRaisesRegex(ValueError, "already retained"):
+                edit_route.verify(folder, {}, folder / "case.txt", folder / "store",
+                                  folder / "history", self.rows[0], {}, "unused")
+
+    def test_report_reclassifies_later_verifier_failure(self):
+        row = self.rows[0]
+        driver = {key: row[key] for key in ("scenario_id", "route", "operation_contract_id",
+                    "fixture_bytes", "edit_start", "delete_len", "replacement_len",
+                    "replacement_sha256", "final_bytes")}
+        driver.update(status="COMPLETE", edit_commit_ns=1_000_000, unmount_ok=True,
+                      sandbox_delete_ok=True, projection_counts="range_state=2,range_edit=1,write=0",
+                      range_accepted_payload_bytes=4096, range_shifted_suffix_bytes=0,
+                      branch_id="branch", head_commit="head")
+        receipt = {"scenario_id": row["scenario_id"], "status": "INCOMPLETE",
+                   "complete_command_status": "PASS", "driver": driver,
+                   "telemetry": {"status": "PASS"}, "verification": {"status": "SKIPPED"},
+                   "store": "/case/store", "history": "/case/history",
+                   "cache": {"macos-store": {"status": "PASS"},
+                             "linux-fuse-backing": {"status": "INELIGIBLE"}}}
+        with tempfile.TemporaryDirectory() as scratch:
+            folder = Path(scratch)
+            (folder / "run.json").write_text(json.dumps({
+                "selection": row["scenario_id"], "receipt": receipt,
+                "image": {"registry_sha256": v3.REGISTRY_SHA256}}))
+            (folder / "verification.json").write_text(json.dumps({
+                "status": "FAIL", "scenario_id": row["scenario_id"],
+                "exit_code": 1, "timeout": False, "wall_ns": 1_000_000,
+                "child": None}))
+            reported = runner.edit_report_row(row, folder)
+            self.assertEqual(reported["verification"], "FAIL")
+            self.assertEqual(reported["terminal"], "FAIL")
+            self.assertEqual(reported["goal"], "FAIL")
+            self.assertEqual(reported["recorded_terminal"], "INCOMPLETE")
+            self.assertEqual(reported["derived_verification_gate"], "FAIL")
+            self.assertEqual(reported["current_admission_status"], "FAIL")
 
     def test_master_seal_rejects_corruption_and_incomplete_entries(self):
         size = self.rows[0]["fixture_bytes"]

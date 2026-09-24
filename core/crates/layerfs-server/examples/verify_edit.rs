@@ -115,6 +115,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("case store history required".into());
     }
     let case = Case::load(Path::new(&args[1]))?;
+    let v3 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3";
+    if v3 {
+        if case.get("full_file_digest")? != "1" {
+            return Err("v3 requires a full-file digest".into());
+        }
+        let expected_root = case.get("canonical_root_expected")?;
+        if expected_root.len() != 64 || !expected_root.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err("v3 expected canonical root is absent or malformed".into());
+        }
+        if case.get("canonical_count_expected")?.parse::<u64>()? == 0 {
+            return Err("v3 expected canonical count is zero".into());
+        }
+    }
     let cursor: [u8; 32] = {
         let text = std::env::var("LAYERFS_HISTORY_CURSOR_KEY")?;
         let raw: Vec<u8> = (0..text.len())
@@ -161,15 +175,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if canonical_root == fixture_root {
         return Err("published root equals the pristine fixture root; nothing was edited".into());
     }
-    // Bounded coverage is declared; a full-file digest is only taken when the
-    // declared result fits inside the frozen full-digest bound. Otherwise every
-    // declared oracle window is read and checked, and the coverage string names
-    // exactly how many windows were covered.
+    // V3 requires a full digest at every size. Historical v2 cases retain their
+    // declared full-digest or bounded-window coverage.
     let content_root = ObjectId::from_bytes(&hex_to_bytes(&canonical_root)?)?;
     let full_digest = case.get("full_file_digest")? == "1";
     let window_count = case.number("window_count")?;
     let mut window_report = String::from("[]");
-    let (coverage, observed, expected, full_covered, content_ok) = if full_digest {
+    let (coverage, observed, expected, full_covered, read_bytes, content_ok) = if full_digest {
         let mut sink = DigestWriter {
             hash: Sha256::new(),
             bytes: 0,
@@ -186,13 +198,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .0?;
         let observed = hex(&sink.hash.finalize());
         let expected = case.get("final_sha256")?.to_string();
-        let matched = observed == expected;
-        (String::from("full-file"), observed, expected, true, matched)
+        let matched = sink.bytes == final_bytes && observed == expected;
+        (
+            String::from("full-file"),
+            observed,
+            expected,
+            true,
+            sink.bytes,
+            matched,
+        )
     } else {
         let count = window_count;
         let mut entries: Vec<String> = Vec::new();
         let mut first = (String::new(), String::new());
         let mut matched = true;
+        let mut read_bytes = 0_u64;
         for index in 0..count {
             let offset = case.number(&format!("window{index}_offset"))?;
             let length = case.number(&format!("window{index}_bytes"))?;
@@ -211,6 +231,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
             })
             .0?;
+            read_bytes = read_bytes
+                .checked_add(sink.bytes)
+                .ok_or("window read byte overflow")?;
             let observed = hex(&sink.hash.finalize());
             let window_ok = observed == expected;
             matched &= window_ok;
@@ -229,6 +252,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             first.0,
             first.1,
             false,
+            read_bytes,
             matched,
         )
     };
@@ -264,7 +288,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let receipt = format!(
         "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-verification-v2\",\"status\":\"{status}\",\
 \"scenario_id\":\"{}\",\"observed_bytes\":{bytes},\"declared_bytes\":{final_bytes},\
-\"coverage\":\"{coverage}\",\"full_file_bytes_verified\":{full_covered},\
+\"coverage\":\"{coverage}\",\"full_file_bytes_verified\":{full_covered},\"read_bytes\":{read_bytes},\
 \"window_count\":{window_count},\"windows\":{window_report},\
 \"observed_digest\":\"{observed}\",\"expected_digest\":\"{expected}\",\
 \"content_match\":{content_ok},\"canonical_root\":\"{canonical_root}\",\

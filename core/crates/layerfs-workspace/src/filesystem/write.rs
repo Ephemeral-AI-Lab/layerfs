@@ -525,7 +525,7 @@ impl Workspace {
         }
         if matches!(
             mutation,
-            FileMutation::Range { .. }
+            FileMutation::Range { handle: None, .. }
                 | FileMutation::Attributes {
                     handle: None,
                     request: PortableAttributes { size: Some(_), .. },

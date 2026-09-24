@@ -166,6 +166,16 @@ pub(crate) fn dispatch(
             });
             let result = permit.as_mut().map_err(|error| *error).and_then(|permit| {
                 let edit = parsed.as_ref().map_err(|error| *error)?;
+                let current = adapter
+                    .workspace
+                    .projected_range_state(fh.0, serial(ino, adapter.root()))
+                    .map_err(errno)?;
+                if !current.writable {
+                    return Err(Errno::EBADF);
+                }
+                if current.stamp != edit.stamp {
+                    return Err(Errno::ESTALE);
+                }
                 let payload = adapter
                     .workspace
                     .own_payload(edit.data.len() as u64, &mut &edit.data[..], deadline)

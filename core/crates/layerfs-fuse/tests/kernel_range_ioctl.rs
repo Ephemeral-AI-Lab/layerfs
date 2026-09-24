@@ -191,10 +191,15 @@ mod linux {
                 initial[4099]
             ]
         );
+        let backing = f.workspace.backing_status().unwrap();
         assert_eq!(
             call_edit(&file, &mut edit(&before, 4094, 4, b"WXYZ")),
             Err(libc::ESTALE)
         );
+        let after_stale = f.workspace.backing_status().unwrap();
+        assert_eq!(after_stale.payloads, backing.payloads);
+        assert_eq!(after_stale.allocated_bytes, backing.allocated_bytes);
+        assert_eq!(after_stale.reserved_bytes, backing.reserved_bytes);
         assert_eq!(state(&file), after_overwrite);
 
         let append = OpenOptions::new()

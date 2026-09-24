@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -182,7 +183,8 @@ class Route(unittest.TestCase):
         row = self.case
         receipt = {
             "complete_command_status": "PASS",
-            "driver": {"status": "COMPLETE", "edit_commit_ns": 1_000_000, "sandbox_delete_ok": True},
+            "driver": {"status": "COMPLETE", "edit_commit_ns": 1_000_000,
+                       "unmount_ok": True, "sandbox_delete_ok": True},
             "telemetry": {"status": "PASS"},
             "verification": {"status": "PASS"},
             "cache": {"macos-store": {"status": "PASS"},
@@ -198,6 +200,38 @@ class Route(unittest.TestCase):
         self.assertEqual(edit_route.terminal_status(receipt, row)["status"], "TARGET_MISS")
         receipt["verification"]["status"] = "FAIL"
         self.assertEqual(edit_route.terminal_status(receipt, row)["status"], "FAIL")
+        receipt["verification"]["status"] = "PASS"
+        receipt["driver"]["unmount_ok"] = False
+        self.assertEqual(edit_route.terminal_status(receipt, row)["status"], "FAIL")
+        receipt["driver"]["unmount_ok"] = True
+        receipt["verification"]["status"] = "SKIPPED"
+        self.assertEqual(edit_route.terminal_status(receipt, row)["status"], "INCOMPLETE")
+
+    def test_historical_v2_terminal_is_retained_but_failed_verifier_is_audited(self):
+        row = self.case
+        receipt = {"status": "INELIGIBLE", "scenario_id": row["scenario_id"],
+                   "complete_command_status": "PASS",
+                   "driver": {"status": "COMPLETE", "edit_commit_ns": 1_000_000,
+                              "unmount_ok": True, "sandbox_delete_ok": True,
+                              "branch_id": "branch", "head_commit": "head"},
+                   "telemetry": {"status": "PASS"},
+                   "verification": {"status": "SKIPPED"},
+                   "store": "/case/store", "history": "/case/history",
+                   "cache": {"macos-store": {"status": "PASS"},
+                             "linux-fuse-backing": {"status": "INELIGIBLE"}}}
+        with tempfile.TemporaryDirectory() as scratch:
+            folder = Path(scratch)
+            (folder / "run.json").write_text(json.dumps({"receipt": receipt}))
+            (folder / "verification.json").write_text(json.dumps({
+                "status": "PASS", "scenario_id": row["scenario_id"],
+                "exit_code": 0, "timeout": False, "wall_ns": 1_000_000,
+                "child": None}))
+            reported = runner.edit_report_row(row, folder)
+            self.assertEqual(reported["terminal"], "INELIGIBLE")
+            self.assertEqual(reported["recorded_terminal"], "INELIGIBLE")
+            self.assertEqual(reported["current_admission_status"], "FAIL")
+            self.assertEqual(reported["verification"], "PASS")
+            self.assertEqual(reported["derived_verification_gate"], "FAIL")
 
     def test_runner_registers_the_edit_route_without_a_second_system(self):
         rows = {row["scenario_id"]: row for row in contract.registry()}

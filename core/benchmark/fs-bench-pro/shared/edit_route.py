@@ -281,7 +281,15 @@ def case_record(row, master_record, branch_body):
     replacement = contract.payload_bytes(row["payload_seed"], replacement_len,
                                         row["replacement_kind"])
     final = row["final_bytes"]
-    full_digest = final <= contract.FULL_DIGEST_MAX_BYTES
+    v3 = row["scenario_version"] == 3
+    if v3:
+        expected_root = row.get("canonical_root_expected")
+        expected_count = row.get("canonical_count_expected")
+        if (not isinstance(expected_root, str) or len(expected_root) != 64 or
+                any(byte not in "0123456789abcdef" for byte in expected_root) or
+                type(expected_count) is not int or expected_count <= 0):
+            raise ValueError(f"{row['scenario_id']}: v3 expected canonical root/count absent")
+    full_digest = v3 or final <= contract.FULL_DIGEST_MAX_BYTES
     windows = {}
     for index, window in enumerate(row["oracle"]["windows"]):
         observed = contract.result_window(row["fixture_bytes"], start, row["delete_len"],
@@ -369,6 +377,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "operation_surface": row["operation_surface"],
         "operation_entrypoint": row["operation_entrypoint"],
         "acknowledgement_boundary": row["acknowledgement_boundary"],
+        "gate_profile": "post-verifier-cleanup-v1",
         "repetition": row["repetition"],
         "sample_count": 0,
         "case_file": str(case_path),
@@ -533,6 +542,11 @@ def edit_telemetry_check(lines):
 def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key, output=None):
     """Runs the independent bounded verifier once, under its hard cap."""
     output = Path(output or folder)
+    bound = folder / "verifier-case.txt"
+    for path in (bound, output / "verifier.stdout", output / "verifier.stderr",
+                 output / "verification.json"):
+        if path.exists():
+            raise ValueError(f"verifier attempt already retained: {path}")
     driver = receipt.get("driver") or {}
     record = dict(line.split("=", 1) for line in Path(case_path).read_text().splitlines() if line)
     # The Branch identity and its published head exist only after the fork and
@@ -540,7 +554,6 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
     # and checks them against the reopened history.
     record["branch_id"] = driver.get("branch_id", "")
     record["expected_head_commit"] = driver.get("head_commit", "")
-    bound = folder / "verifier-case.txt"
     bound.write_text("".join(f"{key}={value}\n" for key, value in sorted(record.items())))
     command = [str(binaries[VERIFIER]), str(bound), str(store), str(history)]
     environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
@@ -560,8 +573,8 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
         child = json.loads(stdout.decode().strip().splitlines()[-1]) if stdout else None
     except (ValueError, IndexError):
         child = None
-    status = "PASS" if code == 0 and child and child.get("status") == "PASS" else (
-        "TIMEOUT" if timed_out else "FAIL")
+    status, identity_match, within_budget = verifier_result(
+        code, timed_out, wall, child, row, driver, store, history)
     receipt_json = {
         "status": status,
         "wall_ns": wall,
@@ -572,9 +585,29 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
         "child": child,
         "stderr": stderr[:4096].decode(errors="replace"),
         "scenario_id": row["scenario_id"],
+        "identity_match": identity_match,
+        "within_budget": within_budget,
     }
     (output / "verification.json").write_text(json.dumps(receipt_json, indent=2, sort_keys=True) + "\n")
     return receipt_json
+
+
+def verifier_result(code, timed_out, wall, child, row, driver, store, history):
+    """Recheck the verifier's own result, wall and selected Commit identity."""
+    identity_match = (
+        isinstance(child, dict) and bool(driver.get("branch_id"))
+        and bool(driver.get("head_commit")) and all((
+            child.get("scenario_id") == row["scenario_id"],
+            child.get("branch_id") == driver.get("branch_id"),
+            child.get("head_commit") == driver.get("head_commit"),
+            child.get("store") == str(store),
+            child.get("history") == str(history),
+        ))
+    )
+    within_budget = isinstance(wall, int) and 0 <= wall <= contract.VERIFIER_HARD_BUDGET_NS
+    status = ("TIMEOUT" if timed_out else "PASS" if code == 0 and within_budget
+              and identity_match and child.get("status") == "PASS" else "FAIL")
+    return status, identity_match, within_budget
 
 
 def terminal_status(receipt, row):
@@ -608,17 +641,20 @@ def terminal_status(receipt, row):
     verification = (receipt.get("verification") or {}).get("status")
     if verification not in ("PASS", "SKIPPED"):
         reasons.append("independent verification did not pass")
-    if verification == "SKIPPED":
-        reasons.append("independent verification not run on this sample")
+    verification_skipped = verification == "SKIPPED"
+    if driver.get("unmount_ok") is not True:
+        reasons.append("Workspace unmount was not confirmed")
     if driver.get("sandbox_delete_ok") is not True:
         reasons.append("sandbox cleanup was not confirmed")
     if (cache.get("macos-store") or {}).get("status") != "PASS":
         reasons.append("macOS Store domain is not cold-qualified")
     fuse_warm = (cache.get("linux-fuse-backing") or {}).get("status") != "PASS"
-    if verification == "SKIPPED":
-        reasons.remove("independent verification not run on this sample")
     if reasons:
         return {"status": "FAIL", "status_reasons": reasons}
+    if verification_skipped:
+        return {"status": "INCOMPLETE",
+                "status_reasons": ["independent verification not run on this sample"],
+                "raw_edit_commit_ns": driver.get("edit_commit_ns")}
     if fuse_warm:
         return {"status": "INELIGIBLE",
                 "status_reasons": [contract.ELIGIBILITY_INELIGIBLE_REASON],

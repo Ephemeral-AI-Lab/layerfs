@@ -9,7 +9,7 @@
 //! preparation are outside it and reported separately.
 use layerfs_sdk::{
     CommitOutcomeWire, ExecResult, HistoryMode, Project, ProjectApi, SandboxApi, Server,
-    ServerConfig, WorkspaceApi,
+    ServerConfig, WorkspaceApi, WorkspaceError,
 };
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},
@@ -143,6 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         root_serial: case.number("genesis_root_serial")?,
     };
+    let v3 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -157,34 +158,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sandbox = match sandboxes.create(&image, &sandbox_name) {
         Ok(id) => id,
         Err(error) => {
+            let cleanup = error.sandbox.map(|id| sandboxes.delete(id));
             println!(
-                "RECEIPT\t{{\"status\":\"FAIL\",\"stage\":\"sandbox_create\",\"sandbox\":\"{}\",\"retained\":{},\"cause\":\"{:?}\",\"preparation_ns\":{}}}",
+                "RECEIPT\t{{\"status\":\"FAIL\",\"stage\":\"sandbox_create\",\"sandbox\":\"{}\",\"retained\":{},\"cause\":\"{:?}\",\"sandbox_delete_ok\":{},\"sandbox_delete_result\":\"{}\",\"preparation_ns\":{}}}",
                 error.sandbox.map(|id| id.to_string()).unwrap_or_default(),
                 error.retained,
                 error.cause,
+                cleanup.as_ref().is_some_and(Result::is_ok),
+                format!("{cleanup:?}").escape_debug(),
                 prepared.elapsed().as_nanos()
             );
+            drop(owner);
+            server.shutdown();
             return Err("sandbox create failed".into());
         }
     };
-    let mount = workspaces.mount(sandbox, &project, branch.id, None)?;
+    let mount = match workspaces.mount(sandbox, &project, branch.id, None) {
+        Ok(mount) => mount,
+        Err(error) => {
+            let mount_id = match &error {
+                WorkspaceError::UncertainMount { id, .. } | WorkspaceError::Retained { id, .. } => {
+                    Some(id)
+                }
+                _ => None,
+            };
+            let preparation_ns = prepared.elapsed().as_nanos();
+            let cleanup_started = Instant::now();
+            let unmount = mount_id.map(|id| workspaces.unmount(id));
+            let delete = sandboxes.delete(sandbox);
+            let cleanup_ns = cleanup_started.elapsed().as_nanos();
+            println!(
+                "RECEIPT\t{{\"status\":\"FAIL\",\"stage\":\"workspace_mount\",\
+\"scenario_id\":\"{}\",\"sandbox\":\"{sandbox}\",\"mount_id\":\"{}\",\
+\"mount_error\":\"{}\",\"unmount_attempted\":{},\"unmount_ok\":{},\
+\"unmount_result\":\"{}\",\"sandbox_delete_ok\":{},\"sandbox_delete_result\":\"{}\",\
+\"preparation_ns\":{},\"cleanup_ns\":{cleanup_ns}}}",
+                case.get("scenario_id")?,
+                mount_id.map_or("", |id| id.0.as_str()),
+                format!("{error:?}").escape_debug(),
+                unmount.is_some(),
+                unmount.as_ref().is_some_and(Result::is_ok),
+                format!("{unmount:?}").escape_debug(),
+                delete.is_ok(),
+                format!("{delete:?}").escape_debug(),
+                preparation_ns,
+            );
+            drop(owner);
+            server.shutdown();
+            return Err("Workspace Mount failed; cleanup outcomes retained".into());
+        }
+    };
     let preparation_ns = prepared.elapsed().as_nanos();
 
     // The one measured caller operation: Exec, its output check, then Commit.
     let command = case.get("command")?.to_string();
-    let expected_splice_output =
-        (case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3")
-            .then(|| {
-                Ok::<_, Box<dyn std::error::Error>>(format!(
-                    "{{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":{},\"shifted_bytes\":0}}\n",
-                    case.number("final_bytes")?
-                ))
-            })
-            .transpose()?;
+    let expected_splice_output = v3
+        .then(|| {
+            Ok::<_, Box<dyn std::error::Error>>(format!(
+                "{{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":{},\"shifted_bytes\":0}}\n",
+                case.number("final_bytes")?
+            ))
+        })
+        .transpose()?;
     let mut edit_ns = 0u128;
     let mut commit_ns = 0u128;
     let mut status = "FAIL";
-    let detail;
+    let mut detail;
     let started = Instant::now();
     let (result, diagnostic) =
         runtime
@@ -244,6 +283,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let unmount = workspaces.unmount(&mount.id);
     let delete = sandboxes.delete(sandbox);
     let cleanup_ns = cleanup_started.elapsed().as_nanos();
+    if unmount.is_err() || delete.is_err() {
+        status = "FAIL";
+        detail = format!("{detail}; cleanup failed: unmount={unmount:?} delete={delete:?}");
+    }
     let projection = post_status
         .as_ref()
         .map(|value| {
