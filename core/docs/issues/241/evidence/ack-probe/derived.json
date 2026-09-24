@@ -1,0 +1,23 @@
+[
+  {
+    "case": "ack_success",
+    "complete_command_wall_ns": 109900500,
+    "ioctl_callbacks": 1,
+    "decision": "SUCCESS",
+    "events_sha256": "bc665ebda6debfe98e3247233b00c64388c721d523539b48e197e07953cb02b3"
+  },
+  {
+    "case": "ack_suppressed",
+    "complete_command_wall_ns": 81009833,
+    "ioctl_callbacks": 1,
+    "decision": "UNCERTAIN",
+    "events_sha256": "694094793e3db4e6f586a7f9be67934aaf4f6a2208cb45c975a540e34069d789"
+  },
+  {
+    "case": "ack_lost_reply",
+    "complete_command_wall_ns": 92446125,
+    "ioctl_callbacks": 1,
+    "decision": "UNCERTAIN",
+    "events_sha256": "f4175307148edd836bc5222e76c32a9ad918a162a1335d83ab4aa7f7ce068416"
+  }
+]

@@ -1,0 +1,19 @@
+
+running 1 test
+
+running 1 test
+initial_size=8192 initial_mtime=1700000000
+ioctl=Ok(()) errno=None
+fstat=Ok((12288, 1700000001))
+boundary=Ok("4a4b4c000102030405060708090a0b0c")
+eof=Ok("")
+decision=SUCCESS ioctl_calls=1 retry_calls=0
+test linux::probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+PROBE_CASE ack_success PASS
+test linux::probe ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
