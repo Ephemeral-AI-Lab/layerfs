@@ -23,7 +23,11 @@ const INIT_WORKERS: usize = 4;
 struct Job {
     index: usize,
     path: PathBuf,
-    metadata: Metadata,
+    dev: u64,
+    ino: u64,
+    len: u64,
+    mtime: i64,
+    mtime_nsec: i64,
 }
 
 pub(crate) fn scan_and_save(
@@ -77,7 +81,11 @@ pub(crate) fn scan_and_save(
                     jobs.push(Job {
                         index: entries.len(),
                         path: path.clone(),
-                        metadata: metadata.clone(),
+                        dev: metadata.dev(),
+                        ino: metadata.ino(),
+                        len: metadata.len(),
+                        mtime: metadata.mtime(),
+                        mtime_nsec: metadata.mtime_nsec(),
                     });
                 }
                 let index = entries.len();
@@ -190,7 +198,7 @@ fn construct_file(
     }
     let mut file = File::open(&job.path)?;
     let opened = file.metadata()?;
-    if opened.dev() != job.metadata.dev() || opened.ino() != job.metadata.ino() {
+    if opened.dev() != job.dev || opened.ino() != job.ino {
         return Err(Code::InvalidInput.into());
     }
     let (result, _) = Timing::disabled("history.import_file", |scope| {
@@ -204,10 +212,10 @@ fn construct_file(
     });
     let built = result.map_err(content)?;
     let after = file.metadata()?;
-    if built.logical_len != job.metadata.len()
-        || after.len() != job.metadata.len()
-        || after.mtime() != job.metadata.mtime()
-        || after.mtime_nsec() != job.metadata.mtime_nsec()
+    if built.logical_len != job.len
+        || after.len() != job.len
+        || after.mtime() != job.mtime
+        || after.mtime_nsec() != job.mtime_nsec
     {
         return Err(Code::InvalidInput.into());
     }

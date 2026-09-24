@@ -1,0 +1,15 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "control": "core/docs/issues/237/evidence/c3-phase-memory-20260924",
+  "output": "benchmark-results/fs-bench-pro/issue237-job-metadata-20260924-01",
+  "profile": "Cargo locked release",
+  "purpose": "compact Job metadata candidate versus retained C3 phase diagnostic; no speed arm",
+  "sha256": {
+    "candidate_and_instrument_diff": "16087649a405008d7ff70e8bdf1f0c09c433b74aa4de89b469984b6ca64cf534",
+    "driver": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+    "master_manifest": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "runner": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f"
+  },
+  "source_commit": "102b61a004621dcbadf6aa9e2472b05fb8a965d1",
+  "status": "FROZEN_BEFORE_BUILD"
+}

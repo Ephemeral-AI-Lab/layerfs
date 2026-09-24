@@ -42,6 +42,10 @@ records SQLite cache and source-inventory reservation evidence.
 The [C3 peak-memory phase diagnostic](c3-memory-phase-cause-result-20260924.md)
 locates new high-waters in scan, file Save and namespace construction;
 its separate receipt is not another performance sample.
+The [compact-Job memory treatment](c3-job-metadata-memory-result-20260924.md)
+narrows each file job's scanned metadata while retaining source
+identity checks; its one-shot release memory diagnostic and full
+oracle are separate from the earlier C3 rows.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

@@ -127,3 +127,11 @@ receipt and full oracle; use its result to decide whether the larger
 C1 interface change is justified. Do not increase workers, change
 cache policy, or relax the #229 sparse-history gate to make a memory
 number pass.
+
+**Later treatment, 2026-09-24:** the prospectively frozen
+[compact-Job result](c3-job-metadata-memory-result-20260924.md)
+replaced the full cloned `Metadata` in each Job with the five fields
+the worker actually checks. It cut Job vector reservation by
+13,631,488 B and the candidate's one-shot public-call peak RSS by
+11,763,712 B relative to this phase diagnostic, with full readback
+PASS. The namespace peak remains; neither original receipt changes.
