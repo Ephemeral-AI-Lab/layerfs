@@ -230,37 +230,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(error) = &post_status {
         eprintln!("DIAG post_status failed: {error:?}");
     }
-    // The daemon forwards its own LFT1 records on its stderr, which the harness
-    // cannot otherwise reach once the container is removed.
-    if let Ok(listed) = std::process::Command::new("docker")
-        .args([
-            "ps",
-            "-a",
-            "--filter",
-            "label=io.layerfs.owner=agent-sdk",
-            "--format",
-            "{{.ID}}",
-        ])
-        .output()
-    {
-        for id in String::from_utf8_lossy(&listed.stdout).lines() {
-            if let Ok(logs) = std::process::Command::new("docker")
-                .args(["logs", id])
-                .output()
-            {
-                eprint!("{}", String::from_utf8_lossy(&logs.stderr));
-            }
-        }
-    }
-    if let Ok(logs) = std::process::Command::new("docker")
-        .args(["logs", &sandbox_name])
-        .output()
-    {
-        eprintln!("DIAG daemon stderr follows");
-        eprint!("{}", String::from_utf8_lossy(&logs.stderr));
-    }
-    let unmount = workspaces.unmount(&mount.id);
-    let delete = sandboxes.delete(sandbox);
     let cleanup_ns = cleanup_started.elapsed().as_nanos();
     let projection = post_status
         .as_ref()

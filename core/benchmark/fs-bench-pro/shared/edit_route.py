@@ -19,6 +19,33 @@ sys.path.insert(0, str(BENCH))
 from shared import edit_cache, edit_contract as contract  # noqa: E402
 
 CURSOR_KEY_ENV = "LAYERFS_HISTORY_CURSOR_KEY"
+# The daemon forwards its own LFT1 records on the container's stderr. Nothing
+# else reaches that stream: the sandbox launch consumes the daemon's first
+# output and later records go to a container log the runner never read, so a
+# sample retained the caller's telemetry but not the sandbox's.
+OWNER_LABEL = "io.layerfs.owner=agent-sdk"
+
+
+def daemon_log_stream():
+    """Streams every owned sandbox's log for the life of one sample.
+
+    A labelled diagnostic instrument: it reads a container log and never
+    touches the product route. The stream is started before the driver and
+    stopped after it, so the daemon's records land in `daemon.log` beside the
+    sample's own telemetry.
+    """
+    since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    process = subprocess.Popen(
+        ["docker", "ps", "-a", "--filter", f"label={OWNER_LABEL}", "--format", "{{.ID}}"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    ids = process.communicate()[0].decode().split()
+    if not ids:
+        return None
+    command = ["docker", "logs", "--follow", "--since", since]
+    for container in ids:
+        command += ["--timestamps", container]
+    return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
 DRIVER = "benchmark_edit"
 VERIFIER = "verify_edit"
 BINDING_KEY = b"layerfs-bench-pro"
@@ -255,6 +282,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         command = [str(binaries[DRIVER]), case_spec(record), str(store), str(history), image,
                    f"exec-{row['scenario_id'][:40]}"]
         environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
+        daemon_log = daemon_log_stream()
         started = time.monotonic_ns()
         try:
             result = subprocess.run(command, capture_output=True, timeout=COMPLETE_COMMAND_TIMEOUT_S,
@@ -263,6 +291,14 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         except subprocess.TimeoutExpired as error:
             stdout, stderr, code, timed_out = error.stdout or b"", error.stderr or b"", None, True
         wall = time.monotonic_ns() - started
+        if daemon_log is not None:
+            daemon_log.terminate()
+            try:
+                sandbox_log = daemon_log.communicate(timeout=5)[0]
+            except subprocess.TimeoutExpired:
+                daemon_log.kill()
+                sandbox_log = daemon_log.communicate()[0]
+            (folder / "daemon.log").write_bytes(sandbox_log)
         # The telemetry crate forwards LFT1 records on stderr; the driver's own
         # receipt is one tagged stdout line. Both streams are retained whole.
         lft1 = [line for line in stderr.splitlines() if line.startswith(b"LFT1 ")]
