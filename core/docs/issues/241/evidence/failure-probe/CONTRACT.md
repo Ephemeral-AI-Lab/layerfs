@@ -24,3 +24,16 @@ to the semantic failure observations. The complete Docker-exec wall is recorded
 for operations accounting only, with no numerical pass gate. If a case cannot
 reach its intended kernel/provider state safely, mark it `INCOMPLETE`, not
 `PASS`. No test injection may be mislabeled as a spontaneous failure.
+
+## Prospective correction after the first four attempts
+
+The first `lost_reply` attempt exposed a harness defect: its callback logged a
+`published` marker but had not written an inspectable accepted state. Its
+assertion also omitted the observed `ECONNABORTED` errno 103. Keep that raw
+attempt `INCOMPLETE`; do not rerun it. Add one distinct case,
+`lost_reply_state`, at a new source/binary identity. Its callback writes a
+test-only 12,288-byte accepted-state artifact with the exact 4 KiB insertion,
+then exits before replying. The caller must observe an error, the daemon exit
+code must be 23, and the parent must verify the artifact's entire contents and
+absence of an automatic retry. This proves test-only custody across deliberate
+reply loss, not Workspace publication or crash durability. One attempt only.
