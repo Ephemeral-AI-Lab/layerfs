@@ -6,10 +6,11 @@ use layerfs_workspace::Workspace;
 use nix::{
     errno::Errno,
     fcntl::{fcntl, FcntlArg, OFlag},
+    poll::{poll, PollFd, PollFlags},
     unistd::read,
 };
 use std::{
-    os::unix::process::CommandExt,
+    os::{fd::AsFd, unix::process::CommandExt},
     process::{ChildStderr, ChildStdout, Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -97,7 +98,21 @@ pub(crate) fn execute(
                     ..Code::Deadline.into()
                 });
             }
-            thread::sleep(Duration::from_millis(5));
+            let mut ready = Vec::with_capacity(2);
+            if let Some(pipe) = stdout.as_ref() {
+                ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
+            }
+            if let Some(pipe) = stderr.as_ref() {
+                ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
+            }
+            if ready.is_empty() {
+                thread::sleep(Duration::from_millis(5));
+            } else {
+                match poll(&mut ready, 5u16) {
+                    Ok(_) | Err(Errno::EINTR) => {}
+                    Err(_) => return Err(Code::Io.into()),
+                }
+            }
         }
     })();
     let status = match result {

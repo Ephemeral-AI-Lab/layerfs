@@ -76,6 +76,11 @@ the existing explicit Workspace Commit operation does. Unmount detaches FUSE
 but keeps dirty Workspace ownership. A daemon instance change invalidates old
 Workspace bindings; a Sandbox ID alone grants no control authority. These
 operations have no benchmark receipt or performance qualification here.
+The Exec readiness refinement after source commit
+`61431f3e0` polls the child stdout/stderr pipes for output or closure rather
+than parking for a fixed 5 ms while either pipe remains open. The deadline,
+8 KiB stream caps and process-group cleanup stay the same. If both pipes close
+before the child exits, the bounded 5 ms process-status wait remains.
 The control acceptor revision after source commit
 `00e7374ff1e6d86d176aab90379bf040a3cf036f` waits for listener readiness
 instead of sleeping for a fixed 10 ms when no connection is queued. Its poll
