@@ -76,6 +76,11 @@ the existing explicit Workspace Commit operation does. Unmount detaches FUSE
 but keeps dirty Workspace ownership. A daemon instance change invalidates old
 Workspace bindings; a Sandbox ID alone grants no control authority. These
 operations have no benchmark receipt or performance qualification here.
+The control acceptor revision after source commit
+`00e7374ff1e6d86d176aab90379bf040a3cf036f` waits for listener readiness
+instead of sleeping for a fixed 10 ms when no connection is queued. Its poll
+still checks stop admission within 10 ms, and it retains the single live or
+closing session limit and immediate refusal of excess connections.
 
 The sandbox owner now accepts an optional telemetry run identity at assembly.
 When present, it forwards the existing daemon telemetry stream and supplies a

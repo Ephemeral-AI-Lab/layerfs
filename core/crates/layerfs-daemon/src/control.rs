@@ -11,9 +11,11 @@ use layerfs_bridge::{
     },
 };
 use layerfs_fuse::MountError;
+use nix::poll::{poll, PollFd, PollFlags};
 use std::{
     io::{self, Read},
     net::{Shutdown, TcpListener, TcpStream},
+    os::fd::AsFd,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, TryLockError,
@@ -114,7 +116,8 @@ fn run(
             let stream = match listener.accept() {
                 Ok((stream, _)) => stream,
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    thread::park_timeout(Duration::from_millis(10));
+                    let mut ready = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
+                    poll(&mut ready, 10u16).map_err(|_| Code::Io)?;
                     continue;
                 }
                 Err(_) => return Err(Code::Io.into()),
