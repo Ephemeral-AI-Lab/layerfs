@@ -1,0 +1,10 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-delete-band03
+operation	delete
+offset	206873
+status	STARTED
+verifier_read_callbacks	5
+status	FAIL	fresh: mount: Failure(Failure { code: Busy, unknown: false, cleanup: None, history: None })
+sandbox_delete	Ok(())
+sandbox_absent	true

@@ -148,6 +148,8 @@ This pinned hash seed and rule choose a reproducible, approximately uniform
 offset within each equal-width band. No alignment or selection after seeing
 outcomes is allowed. **Materialize and publish all 192 exact offsets and IDs
 in an identity-hashed manifest before running any check.**
+The [frozen functional manifest](POSITION_MANIFEST.md) materializes those 192
+band offsets and 72 named edge checks before the mounted sweep.
 
 Add separately named exact-edge checks at offset 0, midpoint, last legal
 offset, and selected actual pristine canonical-chunk boundaries (including
