@@ -1,0 +1,28 @@
+{
+  "status": "FAIL",
+  "mode": "functional-mounted-range-ioctl",
+  "case": "insert_commit",
+  "checks": [
+    {
+      "id": "mounted-projected-insert-Commit",
+      "status": "NOT_RUN"
+    }
+  ],
+  "packet_requirement_ids": [
+    "W-04",
+    "W-07",
+    "W-11",
+    "S-18"
+  ],
+  "requirement_scope": "Actual Linux STATE/EDIT through projected Workspace and explicit Commit",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "position sweep, independent old-Commit oracle, public SDK Exec, performance/cache admission"
+  ],
+  "failure": "FileNotFoundError(2, 'No such file or directory')",
+  "command_wall_seconds": 0.016454875003546476
+}

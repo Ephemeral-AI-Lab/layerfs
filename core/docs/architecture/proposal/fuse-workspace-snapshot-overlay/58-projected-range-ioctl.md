@@ -1,7 +1,10 @@
 # Linux projected range ioctl
 
-> **Status:** Source route implemented for #241; actual product mounted proof,
-> public Exec tool and Edit→Commit selection remain separate gates.
+> **Status:** Actual Linux mounted product insert, variants, refusal and
+> lower-layer notification-failure functional proofs passed
+> ([retained receipts](../../../issues/241/evidence/product-functional/REPORT.md)).
+> Public SDK Exec and the registered four-case Edit→Commit selection remain
+> separate gates.
 > Implementation parent: `93fe2ee41` (status profile 4 integrated before
 > this FUSE adapter change). The frozen Linux ABI is
 > [`RANGE_IOCTL_ABI.md`](../../../issues/241/RANGE_IOCTL_ABI.md).
@@ -48,9 +51,9 @@ retains a `CoherenceFailure` receipt when notification fails. Exact public
 reconciliation after a lost reply is not implemented here.
 
 The route is Linux-only. The ABI does not imply 64 KiB atomic edits, macFUSE
-or WinFsp support. Functional product tests must still prove mounted
-old-FD/alias bytes, size, mtime, EOF, later WRITE, stale/read-only refusals,
-Commit and old-root retention. The later public SDK Exec tool and four-case
-timed selection must include STATE, EDIT, caller confirmation and Commit work
-inside their declared boundaries, and cannot inherit a cold-cache or latency
-PASS from the carrier probes.
+or WinFsp support. The 8 KiB mounted product tests proved old-FD/alias bytes,
+size, mtime, EOF, later WRITE, stale/read-only refusals and canonical Commit.
+They did not prove retained old-root readback or the 1–500 MiB position range.
+The public SDK Exec tool and four-case timed selection must include STATE,
+EDIT, caller confirmation and Commit work inside their declared boundaries,
+and cannot inherit a cold-cache or latency PASS from these functional checks.
