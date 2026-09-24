@@ -5,6 +5,8 @@
 > locked release binaries before this cohort. These are four new one-shot
 > receipts under the [release-only contract](SDK-RELEASE-FOUR-TIER-20260924.md).
 > Historical debug receipts remain unchanged.
+> The later owner-approved [lite verifier result](SDK-VERIFIER-LITE-RESULTS-20260924.md)
+> has a narrower content-proof scope and its own release-v5-lite receipts.
 
 ## Identity and operation
 

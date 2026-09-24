@@ -13,6 +13,9 @@ retains one fresh observation per case and does not clear that gate.
 Owner direction now requires release binaries for new SDK Init rows; the
 [release-only four-tier result](issue-231/SDK-RELEASE-FOUR-TIER-RESULTS-20260924.md)
 also leaves the gate open.
+The owner-approved [lite verifier follow-up](issue-231/SDK-VERIFIER-LITE-RESULTS-20260924.md)
+passes sampled content verification on all four tiers while leaving
+performance eligibility open.
 The [handoff prompt](issue-231/HANDOFF.md) lists what an implementation agent
 must read, do and avoid; the new Init family test path and separate full
 verifier are specified there and in the first-pass spec.
