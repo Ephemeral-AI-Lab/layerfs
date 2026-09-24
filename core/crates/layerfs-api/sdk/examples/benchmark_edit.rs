@@ -245,11 +245,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.upstream_calls)
         .unwrap_or(0);
+    let range_accepted_payload_bytes = post_status
+        .as_ref()
+        .map(|value| value.range_accepted_payload_bytes)
+        .unwrap_or(0);
+    let range_shifted_suffix_bytes = post_status
+        .as_ref()
+        .map(|value| value.range_shifted_suffix_bytes)
+        .unwrap_or(0);
     let receipt =
         format!(
         "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-performance-v1\",\"status\":\"{status}\",\
 \"detail\":\"{}\",\"family_id\":\"{}\",\"scenario_id\":\"{}\",\"route\":\"{}\",\
-\"operation_contract_id\":\"workspace-exec-fuse-edit-commit-v1\",\
+\"operation_contract_id\":\"{}\",\
 \"operation_surface\":\"workspace-posix-fuse\",\"operation_entrypoint\":\"WorkspaceApi::exec\",\
 \"acknowledgement_boundary\":\"WorkspaceApi::commit\",\"fixture_bytes\":{},\"edit_start\":{},\
 \"delete_len\":{},\"replacement_len\":{},\"replacement_sha256\":\"{}\",\"final_bytes\":{},\
@@ -257,6 +265,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"edit_commit_ns\":{edit_commit_ns},\"preparation_ns\":{preparation_ns},\
 \"cleanup_ns\":{cleanup_ns},\"branch_id\":\"{}\",\"head_commit\":\"{head_commit}\",\
 \"projection_counts\":\"{projection}\",\"upstream_calls\":{upstream},\
+\"range_accepted_payload_bytes\":{range_accepted_payload_bytes},\
+\"range_shifted_suffix_bytes\":{range_shifted_suffix_bytes},\
 \"unmount_ok\":{},\"sandbox_delete_ok\":{},\"sandbox_delete_container_removed\":{},\
 \"sandbox_delete_volume_removed\":{},\"store\":\"{}\",\"history\":\"{}\",\
 \"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false}}",
@@ -264,6 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         case.get("family_id")?,
         case.get("scenario_id")?,
         case.get("route")?,
+        case.get("operation_contract_id")?,
         case.number("fixture_bytes")?,
         case.number("edit_start")?,
         case.number("delete_len")?,
