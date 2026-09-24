@@ -1,0 +1,3 @@
+length=10489856 ioctl=1 input_bytes=4128 read=0 write=0 write_bytes=0
+init Version(7, 41)
+cmd=0x5020f541 ino=2 fh=40 in=4128 out=0 offset=5242880 deleted=0 inserted=4096
