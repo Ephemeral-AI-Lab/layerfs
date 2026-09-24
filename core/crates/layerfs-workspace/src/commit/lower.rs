@@ -188,6 +188,12 @@ impl Workspace {
             (state.pending.ok_or(WorkspaceError::Io)?, state.result_slot)
         };
         let metadata = entry.metadata.ok_or(WorkspaceError::Io)?;
+        eprintln!(
+            "DIAG persist serial={} content={} metadata={}",
+            entry.serial,
+            entry.content[0],
+            metadata[0]
+        );
         let next = old.map_or(0, |slot| 1 - slot);
         let target = &submission.results[next];
         let host = self

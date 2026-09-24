@@ -221,6 +221,14 @@ pub fn mutate(
         })(),
         _ => Err(Code::Unsupported.into()),
     };
+    if let Ok((root, _, metadata)) = &built {
+        eprintln!(
+            "DIAG built op={} root0={} metadata0={:?}",
+            r.operation.label(),
+            root[0],
+            metadata.map(|m| *m.as_bytes().first().unwrap_or(&0))
+        );
+    }
     let retained = handoff.take_failure();
     drop(handoff);
     let result = match retained {
