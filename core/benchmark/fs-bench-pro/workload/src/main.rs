@@ -6,7 +6,7 @@
 //! match the declared pre-state. The bytes it writes pass through the mounted
 //! FUSE projection because that is the only filesystem it can see.
 //!
-//! Four declared algorithms are implemented:
+//! Five declared algorithms are implemented:
 //!
 //! * `pwrite` — one positional overwrite (`open`, `fstat`, `pwrite`, `close`);
 //! * `truncate` / `extend` — one size change via `ftruncate`;
@@ -17,6 +17,7 @@
 //!   declared replacement bytes over the stale window. Memory stays bounded by
 //!   one block for every input size: no full-file copy, no temporary file and
 //!   no host-side path is used.
+//! * `splice` — one bounded Linux FUSE range ioctl and caller confirmation.
 use std::{
     fmt::Write as _,
     fs::File,
@@ -25,6 +26,9 @@ use std::{
     os::unix::fs::FileExt,
     path::PathBuf,
 };
+
+#[cfg(target_os = "linux")]
+mod splice;
 
 /// One shift block. FROZEN: this value is part of the declared algorithm and is
 /// recorded in the case registry; it matches the projection's declared maximum
@@ -46,7 +50,7 @@ struct Options {
 fn usage() -> Error {
     Error::new(
         ErrorKind::InvalidInput,
-        "usage: layerfs-edit-tool <pwrite|truncate|extend|shift> --file P --expect-size N \
+        "usage: layerfs-edit-tool <pwrite|truncate|extend|shift|splice> --file P --expect-size N \
          [--offset N --length N --payload P | --offset N --delete-length N --length N \
          --direction grow|shrink [--payload P] | --size N]",
     )
@@ -91,7 +95,10 @@ fn opened(options: &Options) -> Result<File, Error> {
     if actual != options.expect_size {
         return Err(Error::new(
             ErrorKind::InvalidInput,
-            format!("pre-state size {actual} != declared {}", options.expect_size),
+            format!(
+                "pre-state size {actual} != declared {}",
+                options.expect_size
+            ),
         ));
     }
     Ok(file)
@@ -116,7 +123,10 @@ fn read_exact_at(file: &File, mut offset: u64, mut into: &mut [u8]) -> Result<()
     while !into.is_empty() {
         let read = file.read_at(into, offset)?;
         if read == 0 {
-            return Err(Error::new(ErrorKind::UnexpectedEof, "short positional read"));
+            return Err(Error::new(
+                ErrorKind::UnexpectedEof,
+                "short positional read",
+            ));
         }
         offset += read as u64;
         into = &mut into[read..];
@@ -236,6 +246,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             file.set_len(options.size)?;
         }
         "shift" => shifted = shift(&options, &file)?,
+        "splice" => {
+            #[cfg(target_os = "linux")]
+            splice::run(&options, &file)?;
+            #[cfg(not(target_os = "linux"))]
+            return Err(
+                Error::new(ErrorKind::Unsupported, "splice requires Linux FUSE ioctl").into(),
+            );
+        }
         other => {
             return Err(format!("unknown operation {other}").into());
         }
