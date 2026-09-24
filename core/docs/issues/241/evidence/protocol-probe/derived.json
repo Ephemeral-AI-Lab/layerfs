@@ -1,0 +1,42 @@
+[
+  {
+    "case": "state_exact",
+    "ioctl_callbacks": 1,
+    "publications": 0,
+    "decision": "STATE_ONLY",
+    "complete_command_wall_ns": 95473417,
+    "events_sha256": "19ed74b8f3a42ac82ab0d6a29edd20b792f63961ea176efb550f9d4669641bc1"
+  },
+  {
+    "case": "edit_state",
+    "ioctl_callbacks": 3,
+    "publications": 1,
+    "decision": "SUCCESS",
+    "complete_command_wall_ns": 85806125,
+    "events_sha256": "994c0b32d44a53ccc606940ce2d237e6755f8c9169b5cdbbf6173f11e416e058"
+  },
+  {
+    "case": "stale_refusal",
+    "ioctl_callbacks": 3,
+    "publications": 0,
+    "decision": "DEFINITE_REFUSAL",
+    "complete_command_wall_ns": 89681792,
+    "events_sha256": "389435f37404b681b54759f497324825d654c1a18d46f8a9e8e86629438b958c"
+  },
+  {
+    "case": "suppressed_unknown",
+    "ioctl_callbacks": 3,
+    "publications": 1,
+    "decision": "UNKNOWN",
+    "complete_command_wall_ns": 81549167,
+    "events_sha256": "47a3ceb81ec1a629dc2859ea0e6e0995e882b5bf7eca6ff90751cce6c247459e"
+  },
+  {
+    "case": "lost_reply_unknown",
+    "ioctl_callbacks": 2,
+    "publications": 1,
+    "decision": "UNKNOWN",
+    "complete_command_wall_ns": 68959958,
+    "events_sha256": "f3af6157708c86c2253ebe456311fc3289e675ebce11e038f928f2d0c3779dfb"
+  }
+]

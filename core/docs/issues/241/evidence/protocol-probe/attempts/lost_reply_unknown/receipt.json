@@ -1,0 +1,26 @@
+{
+  "case": "lost_reply_unknown",
+  "command": [
+    "docker",
+    "exec",
+    "-e",
+    "PROBE_CASE=lost_reply_unknown",
+    "-e",
+    "PROBE_ROOT=/probe/lost_reply_unknown",
+    "layerfs-241-final-protocol-e508f8d1",
+    "/runner/range_ioctl_final_protocol_probe-5e5983577f430f80",
+    "--ignored",
+    "--exact",
+    "linux::probe",
+    "--nocapture"
+  ],
+  "started_unix_ns": 1790253229814699000,
+  "complete_command_wall_ns": 68959958,
+  "exit_code": 0,
+  "timed_out": false,
+  "docker_cp_exit_code": 0,
+  "cache_state": "uncontrolled; semantic diagnostic only",
+  "source_commit": "e508f8d138ce1cb63a221a1b2b5435081f897978",
+  "source_sha256": "ad2b809213453fff91f38d345b2515112384ca51b8c8e74a42d62f2e8ae1eab2",
+  "binary_sha256": "24469b9ba5ece62139ecb6fcb20d1517d5811eb11ddc6fa90ddcadd977d78da8"
+}
