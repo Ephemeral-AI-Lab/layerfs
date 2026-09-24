@@ -21,6 +21,7 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 from shared import edit_contract as edit  # noqa: E402
+from shared import edit_insert_v3  # noqa: E402
 from shared import edit_route  # noqa: E402
 
 CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
@@ -94,6 +95,13 @@ def seal(paths):
         hash_.update(str(path.relative_to(ROOT)).encode() + b"\0")
         hash_.update(path.read_bytes())
     return hash_.hexdigest()
+
+
+def edit_workload_seal():
+    workload = HERE / "workload"
+    paths = list((workload / "src").rglob("*.rs"))
+    paths += [workload / "Cargo.toml", workload / "Cargo.lock"]
+    return seal(paths)
 
 
 def identities():
@@ -365,6 +373,47 @@ EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify
                      "benchmark_init": "benchmark_init"}
 
 
+def edit_selection(scenario_id):
+    """Resolve a case against its own sealed registry, never the other version."""
+    contracts = (edit_insert_v3,) if scenario_id.endswith("-exec-v3") else (edit,)
+    for contract in contracts:
+        rows = {row["scenario_id"]: row for row in contract.registry()}
+        if scenario_id in rows:
+            path = HERE / contract.REGISTRY_PATH
+            if digest(path) != contract.REGISTRY_SHA256:
+                raise ValueError("committed edit registry hash differs from frozen identity")
+            if contract is edit_insert_v3:
+                contract.validate_registry()
+            return contract, rows[scenario_id]
+    raise ValueError("unregistered Exec/FUSE scenario")
+
+
+def require_edit_image(image, contract, row, identity=None):
+    """Reject an image from another registry, build profile or payload recipe."""
+    expected_schema = ("core-fs-bench-pro-exec-fuse-insert-image-v3" if
+                       contract is edit_insert_v3 else
+                       "core-fs-bench-pro-exec-fuse-edit-image-v1")
+    payload = row["payload_source"].rsplit("/", 1)[-1] if row["payload_source"] else None
+    payload_ok = (payload is None or (image.get("payloads") or {}).get(payload) ==
+                  {"bytes": row["replacement_len"], "sha256": row["replacement_sha256"]})
+    identity = identity or identities()
+    if (image.get("schema") != expected_schema or
+            image.get("registry_sha256") != contract.REGISTRY_SHA256 or
+            (contract is edit_insert_v3 and
+             (image.get("scenario_version") != 3 or image.get("carrier_abi") != contract.ABI)) or
+            image.get("profile") != "release" or
+            image.get("target") != "aarch64-unknown-linux-musl" or
+            image.get("lockfile_sha256") != digest(CORE / "Cargo.lock") or
+            image.get("cargo_config_sha256") != digest(ROOT / ".cargo/config.toml") or
+            image.get("product_seal") != identity["product_seal"] or
+            image.get("workload_source_seal") != edit_workload_seal() or
+            not payload_ok or
+            not re.fullmatch(r"sha256:[0-9a-f]{64}", str(image.get("image_id", ""))) or
+            any(not re.fullmatch(r"[0-9a-f]{64}", str(image.get(name, ""))) for name in
+                ("daemon_sha256", "edit_tool_sha256", "dockerfile_sha256"))):
+        raise ValueError("sealed image does not match selected edit registry and inputs")
+
+
 def recheck_exec_edit(out):
     """Re-derives the telemetry verdict from one receipt's retained raw LFT1.
 
@@ -380,8 +429,7 @@ def recheck_exec_edit(out):
     if not raw:
         raise ValueError("no retained raw LFT1 to re-derive from")
     telemetry = edit_route.edit_telemetry_check(raw.splitlines())
-    rows = {row["scenario_id"]: row for row in edit.registry()}
-    row = rows[receipt["scenario_id"]]
+    _, row = edit_selection(receipt["scenario_id"])
     receipt = {**receipt, "telemetry": telemetry}
     outcome = edit_route.terminal_status(receipt, row)
     write_json(out / "telemetry-check.json", {
@@ -416,8 +464,7 @@ def verify_exec_edit(out):
             raise ValueError(f"retained evidence is missing: {path}")
     if (receipt.get("verification") or {}).get("status") != "SKIPPED":
         raise ValueError("this receipt already carries a verification result; verify it once")
-    rows = {row["scenario_id"]: row for row in edit.registry()}
-    row = rows[receipt["scenario_id"]]
+    _, row = edit_selection(receipt["scenario_id"])
     build = json.loads((out / "build.json").read_text())
     binaries = {name: entry["path"] for name, entry in build["binaries"].items()}
     cursor_key = (out / "cursor-key.txt").read_text().strip()
@@ -494,7 +541,8 @@ def build_exec_edit(out, target, identity):
 
 
 def run_exec_edit(selection, out, verification="inline"):
-    """One #232 performance sample; never a rerun of the same arm."""
+    """One registered Exec/FUSE performance sample; never a rerun of an arm."""
+    contract, row = edit_selection(selection)
     out = owned(out)
     identity = identities()
     if identity["source_dirty"]:
@@ -503,16 +551,17 @@ def run_exec_edit(selection, out, verification="inline"):
     out.mkdir(parents=True)
     build_receipt = build_exec_edit(out, target, identity)
     write_json(out / "build.json", build_receipt)
-    image_path = CORE / "target/exec-fuse-edit/image.json"
+    image_path = CORE / ("target/exec-fuse-insert-v3/image.json" if
+                         contract is edit_insert_v3 else "target/exec-fuse-edit/image.json")
     if not image_path.is_file():
         raise ValueError("build the sealed edit image before sampling")
     image = json.loads(image_path.read_text())
-    if image.get("registry_sha256") != edit.REGISTRY_SHA256:
-        raise ValueError("sealed image was built from a different registry")
-    rows = {row["scenario_id"]: row for row in edit.registry()}
-    if selection not in rows:
-        raise ValueError("unregistered Exec/FUSE scenario")
-    row = rows[selection]
+    require_edit_image(image, contract, row, identity)
+    actual_image = subprocess.check_output(
+        ["docker", "image", "inspect", image["image_id"], "--format", "{{.Id}}"],
+        text=True).strip()
+    if actual_image != image["image_id"]:
+        raise ValueError("sealed edit image ID is not present locally")
     if row["registration_status"] != "REGISTERED":
         receipt = {"status": "NOT_RUN", "sample_count": 0, "reason": row["not_run_reason"]}
         write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
@@ -534,7 +583,8 @@ def run_exec_edit(selection, out, verification="inline"):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         receipt = edit_route.sample(results, row, binaries, image["image_id"], identity,
                                     cursor_key, telemetry_run,
-                                    os.urandom(16).hex(), verification)
+                                    os.urandom(16).hex(), verification,
+                                    attempt_root=out if contract is edit_insert_v3 else None)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
                                   "selection": selection, "identity": identity,
                                   "selection_mode": "registered-case", "image": image,
@@ -579,6 +629,13 @@ def edit_report_row(row, folder):
         return values
     run = json.loads(run_file.read_text())
     receipt = run.get("receipt") or {}
+    if row["scenario_version"] == 3 and (
+            run.get("selection") != row["scenario_id"] or
+            receipt.get("scenario_id") != row["scenario_id"] or
+            (run.get("image") or {}).get("registry_sha256") != edit_insert_v3.REGISTRY_SHA256):
+        values.update({"terminal": "INVALID_EVIDENCE", "goal": "INELIGIBLE",
+                       "verification": "INELIGIBLE", "invalid_reason": "v3 selection/image identity mismatch"})
+        return values
     driver = receipt.get("driver") or {}
     telemetry = receipt.get("telemetry") or {}
     master = receipt.get("master") or {}
@@ -636,11 +693,16 @@ def edit_report_row(row, folder):
     return values
 
 
-def report_edit(campaign, out=None):
-    """The complete 56-row #232 campaign report; every registered row appears."""
+def report_edit(campaign, out=None, scenario_version=2):
+    """Complete report for exactly one registered scenario version."""
     campaign = Path(campaign)
-    rows = [edit_report_row(row, campaign / row["scenario_id"]) for row in edit.registry()]
-    if len(rows) != 56:
+    contract = edit_insert_v3 if scenario_version == 3 else edit
+    if scenario_version == 3:
+        contract.validate_registry()
+    elif digest(HERE / edit.REGISTRY_PATH) != edit.REGISTRY_SHA256:
+        raise ValueError("v2 registry identity changed")
+    rows = [edit_report_row(row, campaign / row["scenario_id"]) for row in contract.registry()]
+    if len(rows) != (4 if scenario_version == 3 else 56):
         raise ValueError("every registered row must appear in the report")
     header = "\t".join(EDIT_REPORT_COLUMNS)
     body = "\n".join("\t".join("" if row[name] is None else str(row[name])
@@ -664,6 +726,7 @@ def report_edit(campaign, out=None):
     counts["raw_at_or_below_target"] = sum(1 for row in rows
                                            if row["raw_vs_target"] == "AT_OR_BELOW")
     document = {"schema": "core-fs-bench-pro-exec-fuse-edit-campaign-report-v1",
+                "scenario_version": scenario_version, "registry_sha256": contract.REGISTRY_SHA256,
                 "campaign": str(campaign), "counts": counts, "rows": rows}
     if out:
         Path(out).mkdir(parents=True, exist_ok=True)
@@ -691,8 +754,12 @@ def main():
     report_edit_parser = commands.add_parser("report-edit")
     report_edit_parser.add_argument("--runs", required=True)
     report_edit_parser.add_argument("--out")
+    report_edit_parser.add_argument("--scenario-version", type=int, choices=[2, 3], default=2)
     args = parser.parse_args()
-    edit_registry = edit.registry()
+    edit_registry = (edit.registry() + edit_insert_v3.registry() if args.command == "list" else
+                     edit_insert_v3.registry() if args.command == "run" and args.case and
+                     args.case.endswith("-exec-v3") else
+                     edit.registry() if args.command == "run" else [])
     edit_rows = {row["scenario_id"]: row for row in edit_registry}
     edit_families = {row["family_id"] for row in edit_registry}
     if args.command == "list":
@@ -726,7 +793,8 @@ def main():
     elif args.command == "recheck-edit":
         print(recheck_exec_edit(owned(args.run, existing=True)))
     elif args.command == "report-edit":
-        table, document = report_edit(owned(args.runs, existing=True), args.out)
+        table, document = report_edit(owned(args.runs, existing=True), args.out,
+                                      args.scenario_version)
         print(table, end="")
         print(json.dumps(document["counts"], sort_keys=True))
     else:

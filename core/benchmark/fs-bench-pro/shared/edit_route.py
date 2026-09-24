@@ -16,7 +16,7 @@ import time
 
 BENCH = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BENCH))
-from shared import edit_cache, edit_contract as contract  # noqa: E402
+from shared import edit_cache, edit_contract as contract, edit_insert_v3  # noqa: E402
 
 CURSOR_KEY_ENV = "LAYERFS_HISTORY_CURSOR_KEY"
 DRIVER = "benchmark_edit"
@@ -60,31 +60,45 @@ def prepare_fixture(root, size):
             "sha256": digest, "bytes": payload.stat().st_size}
 
 
-def compatibility_key(identity, fixture):
+def compatibility_key(identity, fixture, row=None, init_binary_sha256=None):
     """The master compatibility key: unknown compatibility fails closed."""
+    if row and row["scenario_version"] == 3:
+        if not init_binary_sha256:
+            raise ValueError("v3 master needs the exact preparation binary hash")
+        return {
+            "fixture_bytes": fixture["bytes"],
+            "fixture_sha256": fixture["sha256"],
+            "fixture_generator_seed": contract.FIXTURE_GENERATOR_SEED,
+            "benchmark_init_sha256": init_binary_sha256,
+            "cargo_lock_sha256": identity["cargo_lock_sha256"],
+        }
     return {
         "fixture_bytes": fixture["bytes"],
         "fixture_sha256": fixture["sha256"],
         "fixture_generator_seed": contract.FIXTURE_GENERATOR_SEED,
-        "registry_sha256": contract.REGISTRY_SHA256,
+        "registry_sha256": (edit_insert_v3.REGISTRY_SHA256 if row and
+                            row["scenario_version"] == 3 else contract.REGISTRY_SHA256),
         "cargo_lock_sha256": identity["cargo_lock_sha256"],
         "product_seal": identity["product_seal"],
         "harness_seal": identity["harness_seal"],
-        "route": contract.ROUTE,
+        "route": (row or {}).get("route", contract.ROUTE),
     }
 
 
-def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000):
+def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000, row=None):
     """Prepares (or reuses) the one closed master Store/history pair for a size.
 
-    The master directory is keyed by the compatibility key's own digest, so a
-    source, harness, registry or fixture change can never silently reuse an
-    incompatible master: it prepares a new one and leaves the earlier one on
-    disk as evidence.
+    The master directory is keyed by the compatibility key's own digest. V3
+    keys preparation inputs and the exact Init binary, so a harness-only or
+    registry-only change can reuse the same closed master. V2 keeps its
+    historical broader key. Every mismatch prepares a new master and retains
+    the earlier one as evidence.
     """
     root = Path(root)
     fixture = prepare_fixture(root, size)
-    key = compatibility_key(identity, fixture)
+    key = compatibility_key(identity, fixture, row,
+                            sha256(binaries["benchmark_init"]) if row and
+                            row["scenario_version"] == 3 else None)
     key_digest = hashlib.sha256(
         json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
     directory = root / f"master-{size}-{key_digest}"
@@ -129,7 +143,7 @@ def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000)
         "history_bytes": history.stat().st_size,
         "compatibility_key": key,
         "compatibility_key_sha256": key_digest,
-        "route": contract.ROUTE,
+        "route": (row or {}).get("route", contract.ROUTE),
         "init_receipt": created,
     }
     record_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -157,6 +171,7 @@ def case_record(row, master_record, branch_body):
         "family_id": row["family_id"],
         "scenario_id": row["scenario_id"],
         "route": row["route"],
+        "operation_contract_id": row["operation_contract_id"],
         "fixture_bytes": row["fixture_bytes"],
         "edit_start": start,
         "delete_len": row["delete_len"],
@@ -182,6 +197,8 @@ def case_record(row, master_record, branch_body):
         "canonical_count_expected": (str(row["canonical_count_expected"])
                                      if "canonical_count_expected" in row else "-"),
     }
+    if row.get("carrier_protocol"):
+        record["carrier_protocol"] = row["carrier_protocol"]
     record.update(windows)
     return record
 
@@ -201,12 +218,12 @@ def case_spec(record):
 
 
 def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, branch_body,
-           verification="inline"):
+           verification="inline", attempt_root=None):
     """Runs one performance sample and its separate verification."""
-    folder = Path(run_root) / "sdk-exec-fuse" / row["family_id"] / row["scenario_id"]
-    folder.mkdir(parents=True, exist_ok=True)
+    folder = Path(attempt_root or run_root) / "sdk-exec-fuse" / row["family_id"] / row["scenario_id"]
+    folder.mkdir(parents=True, exist_ok=False)
     master_record = master(Path(run_root).parent / "prepared", row["fixture_bytes"], binaries,
-                           identity, cursor_key)
+                           identity, cursor_key, row=row)
     record = case_record(row, master_record, branch_body)
     record["telemetry_run"] = telemetry_run
     store = folder / "store.sqlite"
@@ -222,13 +239,13 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "schema": "core-fs-bench-pro-exec-fuse-edit-receipt-v1",
         "family_id": row["family_id"],
         "scenario_id": row["scenario_id"],
-        "scenario_version": contract.SCENARIO_VERSION,
-        "route": contract.ROUTE,
-        "operation_contract_id": contract.OPERATION_CONTRACT_ID,
-        "operation_surface": contract.OPERATION_SURFACE,
-        "operation_entrypoint": contract.OPERATION_ENTRYPOINT,
-        "acknowledgement_boundary": contract.ACKNOWLEDGEMENT_BOUNDARY,
-        "repetition": contract.REPETITION,
+        "scenario_version": row["scenario_version"],
+        "route": row["route"],
+        "operation_contract_id": row["operation_contract_id"],
+        "operation_surface": row["operation_surface"],
+        "operation_entrypoint": row["operation_entrypoint"],
+        "acknowledgement_boundary": row["acknowledgement_boundary"],
+        "repetition": row["repetition"],
         "sample_count": 0,
         "case_file": str(case_path),
         "folder": str(folder),
@@ -239,9 +256,9 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "master": {key: master_record[key] for key in
                    ("fixture_bytes", "fixture_sha256", "first_use_wall_ns", "reuse",
                     "compatibility_key", "store_bytes", "history_bytes")},
-        "clone_method": contract.CLONE_METHOD,
+        "clone_method": row["clone_method"],
         "clone_copy_wall_ns": copy_wall_ns,
-        "cache_contract": contract.CACHE_CONTRACT,
+        "cache_contract": row["cache_contract"],
         "cache": {},
         "g2_target_ms": row["g2_target_ms"],
         "performance_gate": row["performance_gate"],
@@ -279,7 +296,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         (folder / "driver.stderr").write_bytes(residual)
         receipt.update(
             command=command,
-            sample_count=1 if code == 0 else 0,
+            sample_count=1 if row["scenario_version"] == 3 or code == 0 else 0,
             driver_exit_code=code,
             driver_timeout=timed_out,
             complete_command_wall_ns=wall,
@@ -436,6 +453,23 @@ def terminal_status(receipt, row):
         reasons.append("complete command did not finish inside its budget")
     if driver.get("status") != "COMPLETE":
         reasons.append("the measured attempt did not complete")
+    if row["scenario_version"] == 3:
+        for name in ("scenario_id", "route", "operation_contract_id", "fixture_bytes",
+                     "edit_start", "delete_len", "replacement_len", "replacement_sha256",
+                     "final_bytes"):
+            if driver.get(name) != row[name]:
+                reasons.append(f"v3 driver {name} differs from registered case")
+        try:
+            counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(","))
+            if (counts.get("range_state") != str(row["expected_range_state_callbacks"]) or
+                    counts.get("range_edit") != str(row["expected_range_callbacks"]) or
+                    counts.get("write") != str(row["expected_write_callbacks"]) or
+                    driver.get("range_accepted_payload_bytes") != row["replacement_len"] or
+                    driver.get("range_shifted_suffix_bytes") !=
+                    row["expected_shifted_suffix_bytes"]):
+                reasons.append("v3 range route counts or bytes differ from one bounded splice")
+        except (KeyError, ValueError, AttributeError):
+            reasons.append("v3 range route counts are unavailable")
     if (receipt.get("telemetry") or {}).get("status") != "PASS":
         reasons.append("caller LFT1 root/children missing")
     verification = (receipt.get("verification") or {}).get("status")

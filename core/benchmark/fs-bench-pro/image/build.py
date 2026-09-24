@@ -20,6 +20,8 @@ ROOT = BENCH.parents[2]
 CORE = ROOT / "core"
 sys.path.insert(0, str(BENCH))
 from shared import edit_contract as contract  # noqa: E402
+from shared import edit_insert_v3  # noqa: E402
+from runner import edit_workload_seal, identities  # noqa: E402
 from families import (edit_canonical_chunk_count as canonical,  # noqa: E402
                       edit_length_changing as changing,
                       edit_length_preserving as preserving)
@@ -38,11 +40,23 @@ def run(command, **kwargs):
     return result.stdout
 
 
-def payload_files():
+def payload_files(context, scenario_version):
     """Writes one replacement payload per registered operation, from the recipe."""
-    directory = CONTEXT / "payloads"
+    directory = context / "payloads"
     directory.mkdir(parents=True, exist_ok=True)
     written = {}
+    if scenario_version == 3:
+        rows = edit_insert_v3.registry()
+        if len({row["replacement_sha256"] for row in rows}) != 1:
+            raise SystemExit("v3 rows disagree on replacement identity")
+        row = rows[0]
+        data = contract.payload_bytes(row["payload_seed"], row["replacement_len"],
+                                      row["replacement_kind"])
+        path = directory / row["payload_source"].rsplit("/", 1)[-1]
+        if hashlib.sha256(data).hexdigest() != row["replacement_sha256"]:
+            raise SystemExit("v3 payload recipe mismatch")
+        path.write_bytes(data)
+        return {path.name: {"bytes": len(data), "sha256": SHA(path)}}
     for family in (preserving, changing, canonical):
         for operation in family.OPERATIONS:
             length = operation["replacement_len"]
@@ -60,9 +74,19 @@ def payload_files():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default=str(CORE / "target/exec-fuse-edit/image.json"))
+    parser.add_argument("--out")
+    parser.add_argument("--scenario-version", type=int, choices=[2, 3], default=2)
     parser.add_argument("--debug-daemon", action="store_true")
     arguments = parser.parse_args()
+    selected = edit_insert_v3 if arguments.scenario_version == 3 else contract
+    if selected is edit_insert_v3:
+        selected.validate_registry()
+    elif SHA(BENCH / contract.REGISTRY_PATH) != contract.REGISTRY_SHA256:
+        raise SystemExit("v2 registry identity changed")
+    context = (CORE / "target/exec-fuse-insert-v3/image" if arguments.scenario_version == 3
+               else CONTEXT)
+    tag = ("layerfs-exec-fuse-insert:issue241" if arguments.scenario_version == 3 else TAG)
+    output = Path(arguments.out or context.parent / "image.json")
     profile = ["--release"]
     profile_dir = "release"
     run(["cargo", "+1.85.1", "zigbuild", "--manifest-path", "core/Cargo.toml", "--locked",
@@ -72,38 +96,43 @@ def main():
          "--target", TARGET, *profile], cwd=ROOT)
     daemon = CORE / f"target/{TARGET}/{profile_dir}/layerfs-daemon"
     tool = BENCH / f"workload/target/{TARGET}/{profile_dir}/layerfs-edit-tool"
-    CONTEXT.mkdir(parents=True, exist_ok=True)
+    context.mkdir(parents=True, exist_ok=True)
     for source, name in ((daemon, "layerfs-daemon"), (tool, "layerfs-edit-tool")):
-        (CONTEXT / name).write_bytes(source.read_bytes())
-        (CONTEXT / name).chmod(0o755)
-    (CONTEXT / "layerfs-edit-tool").replace(CONTEXT / "layerfs-edit-tool")
-    payloads = payload_files()
-    dockerfile = CONTEXT / "Dockerfile"
+        (context / name).write_bytes(source.read_bytes())
+        (context / name).chmod(0o755)
+    payloads = payload_files(context, arguments.scenario_version)
+    dockerfile = context / "Dockerfile"
     dockerfile.write_text(
         f"FROM {BASE}\n"
         "COPY layerfs-daemon /layerfs-daemon\n"
         "COPY layerfs-edit-tool /layerfs-bench/bin/layerfs-edit-tool\n"
         "COPY payloads /layerfs-bench/payloads\n"
         'ENTRYPOINT ["/layerfs-daemon"]\n')
-    run(["docker", "build", "-q", "-t", TAG, str(CONTEXT)])
-    image = run(["docker", "image", "inspect", TAG, "--format", "{{.Id}}"]).strip()
+    run(["docker", "build", "-q", "-t", tag, str(context)])
+    image = run(["docker", "image", "inspect", tag, "--format", "{{.Id}}"]).strip()
     record = {
-        "schema": "core-fs-bench-pro-exec-fuse-edit-image-v1",
+        "schema": ("core-fs-bench-pro-exec-fuse-insert-image-v3" if
+                   arguments.scenario_version == 3 else
+                   "core-fs-bench-pro-exec-fuse-edit-image-v1"),
         "base": BASE,
-        "tag": TAG,
+        "tag": tag,
         "image_id": image,
         "profile": profile_dir,
         "target": TARGET,
         "lockfile_sha256": SHA(CORE / "Cargo.lock"),
         "cargo_config_sha256": SHA(ROOT / ".cargo/config.toml"),
+        "product_seal": identities()["product_seal"],
+        "workload_source_seal": edit_workload_seal(),
         "dockerfile_sha256": SHA(dockerfile),
-        "daemon_sha256": SHA(CONTEXT / "layerfs-daemon"),
-        "edit_tool_sha256": SHA(CONTEXT / "layerfs-edit-tool"),
-        "registry_sha256": contract.REGISTRY_SHA256,
+        "daemon_sha256": SHA(context / "layerfs-daemon"),
+        "edit_tool_sha256": SHA(context / "layerfs-edit-tool"),
+        "registry_sha256": selected.REGISTRY_SHA256,
+        "scenario_version": arguments.scenario_version,
+        "carrier_abi": (edit_insert_v3.ABI if arguments.scenario_version == 3 else None),
         "payloads": payloads,
     }
-    Path(arguments.out).write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"image_id": image, "out": arguments.out}, sort_keys=True))
+    output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
+    print(json.dumps({"image_id": image, "out": str(output)}, sort_keys=True))
     raise SystemExit(0)
 
 
