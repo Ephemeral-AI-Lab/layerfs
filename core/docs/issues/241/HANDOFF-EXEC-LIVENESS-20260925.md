@@ -1,5 +1,13 @@
 # Next-agent handoff: resolve the baseline SDK Exec `Unknown` in #241
 
+> **2026-09-25 focused continuation on `codex/issue241-exec-liveness`:**
+> The [final one-shot public SDK diagnostic](evidence/exec-liveness-final-v1/REPORT.md)
+> passes after coordinated native, daemon transport and outer delivery changes.
+> Both missing-path Inspect refusals and ReserveInodes now share one Service
+> connection. The historical v3 `Unknown,true` receipt is unchanged, and its
+> TCP-versus-Noise cause remains unmeasured. The position and release gates
+> below remain open; this continuation did not rerun passing position slices.
+
 **Decision:** Continue the Linux ioctl/range-splice path. Its carrier and
 edit/Commit function have passed many positions, including full 10 MiB,
 100 MiB and capped 500 MiB v3 slices. Keep Phase 3 and release/latency
