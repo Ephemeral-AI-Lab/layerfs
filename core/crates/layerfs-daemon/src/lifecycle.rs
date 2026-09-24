@@ -305,14 +305,18 @@ fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), Works
 
 fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Response, Failure> {
     let local = workspace.status().map_err(|error| failure_code(&error))?;
-    eprintln!(
-        "DIAG status id={} upstream={} calls={} bytes={} histogram={}",
-        selected.id.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>(),
-        local.upstream_calls,
-        local.projection_calls.len(),
-        local.projection_bytes.len(),
-        local.projection_histogram.len(),
-    );
+    std::fs::write(
+        "/layerfs/diag-status.txt",
+        format!(
+            "id={} upstream={} calls={} bytes={} histogram={}\n",
+            selected.id.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            local.upstream_calls,
+            local.projection_calls.len(),
+            local.projection_bytes.len(),
+            local.projection_histogram.len(),
+        ),
+    )
+    .ok();
     let result = WorkspaceStatusWire {
         workspace: selected.id.as_bytes().into(),
         incarnation: selected.incarnation,
