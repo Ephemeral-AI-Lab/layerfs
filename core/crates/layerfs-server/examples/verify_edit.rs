@@ -162,10 +162,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("published root equals the pristine fixture root; nothing was edited".into());
     }
     // Bounded coverage is declared; a full-file digest is only taken when the
-    // declared result fits inside the frozen full-digest bound.
+    // declared result fits inside the frozen full-digest bound. Otherwise every
+    // declared oracle window is read and checked, and the coverage string names
+    // exactly how many windows were covered.
     let content_root = ObjectId::from_bytes(&hex_to_bytes(&canonical_root)?)?;
     let full_digest = case.get("full_file_digest")? == "1";
-    let (coverage, observed, full_covered) = if full_digest {
+    let window_count = case.number("window_count")?;
+    let mut window_report = String::from("[]");
+    let (coverage, observed, expected, full_covered, content_ok) = if full_digest {
         let mut sink = DigestWriter {
             hash: Sha256::new(),
             bytes: 0,
@@ -180,32 +184,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         })
         .0?;
-        ("full-file", hex(&sink.hash.finalize()), true)
+        let observed = hex(&sink.hash.finalize());
+        let expected = case.get("final_sha256")?.to_string();
+        let matched = observed == expected;
+        (String::from("full-file"), observed, expected, true, matched)
     } else {
-        let offset = case.number("window_offset")?;
-        let length = case.number("window_bytes")?;
-        let mut sink = DigestWriter {
-            hash: Sha256::new(),
-            bytes: 0,
-        };
-        Timing::disabled("read", |timer| {
-            read_range(
-                &provider,
-                content_root,
-                offset..offset + length,
-                &mut sink,
-                timer.child("file"),
-            )
-        })
-        .0?;
-        ("bounded-window", hex(&sink.hash.finalize()), false)
+        let count = window_count;
+        let mut entries: Vec<String> = Vec::new();
+        let mut first = (String::new(), String::new());
+        let mut matched = true;
+        for index in 0..count {
+            let offset = case.number(&format!("window{index}_offset"))?;
+            let length = case.number(&format!("window{index}_bytes"))?;
+            let expected = case.get(&format!("window{index}_sha256"))?.to_string();
+            let mut sink = DigestWriter {
+                hash: Sha256::new(),
+                bytes: 0,
+            };
+            Timing::disabled("read", |timer| {
+                read_range(
+                    &provider,
+                    content_root,
+                    offset..offset + length,
+                    &mut sink,
+                    timer.child("file"),
+                )
+            })
+            .0?;
+            let observed = hex(&sink.hash.finalize());
+            let window_ok = observed == expected;
+            matched &= window_ok;
+            if entries.is_empty() {
+                first = (observed.clone(), expected.clone());
+            }
+            entries.push(format!(
+                "{{\"index\":{index},\"offset\":{offset},\"bytes\":{length},\
+\"observed_digest\":\"{observed}\",\"expected_digest\":\"{expected}\",\
+\"match\":{window_ok}}}"
+            ));
+        }
+        window_report = format!("[{}]", entries.join(","));
+        (format!("bounded-windows-{count}"), first.0, first.1, false, matched)
     };
-    let expected = if full_digest {
-        case.get("final_sha256")?.to_string()
-    } else {
-        case.get("window_sha256")?.to_string()
-    };
-    let content_ok = observed == expected;
     let canonical_ok = match case.get("canonical_root_expected")? {
         "-" => true,
         value => value == canonical_root,
@@ -236,9 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "FAIL"
     };
     let receipt = format!(
-        "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-verification-v1\",\"status\":\"{status}\",\
+        "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-verification-v2\",\"status\":\"{status}\",\
 \"scenario_id\":\"{}\",\"observed_bytes\":{bytes},\"declared_bytes\":{final_bytes},\
 \"coverage\":\"{coverage}\",\"full_file_bytes_verified\":{full_covered},\
+\"window_count\":{window_count},\"windows\":{window_report},\
 \"observed_digest\":\"{observed}\",\"expected_digest\":\"{expected}\",\
 \"content_match\":{content_ok},\"canonical_root\":\"{canonical_root}\",\
 \"canonical_root_expected\":\"{}\",\"canonical_root_match\":{canonical_ok},\

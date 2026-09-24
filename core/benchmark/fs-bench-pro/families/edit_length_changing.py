@@ -1,13 +1,19 @@
 """#232 Workspace Exec/FUSE length-changing family: 32 registered cases.
 
-Twelve of the thirty-two cases are feasible with the declared POSIX size
-operations (`append-tail-4k`, `truncate-tail-4k`, `zero-extend-tail-4k`). The
-twenty structural cases (insert/delete/prepend/replace-grow/replace-shrink) stay
-registered and visible as NOT_RUN under the frozen
-`structural-shift-algorithm-unfrozen` reason: no authentic POSIX/FUSE algorithm
-is frozen for them yet, their in-place window shift would move up to hundreds of
-MiB through the projection, and a temporary-file-and-rename save needs up to
-500 MiB against a 16 MiB `/tmp` and a 1 GiB Workspace disk budget.
+Module name follows the owner's v0.1.6 family style; the Exec/FUSE identity is
+carried by the route, operation-contract, entrypoint and scenario-version fields
+of every row and receipt, so no historical `edit_*` PASS is inherited.
+
+Eight operations cover the historical shapes: `append-tail-4k`,
+`truncate-tail-4k` and `zero-extend-tail-4k` use one declared size or positional
+operation, and the five structural cases (`insert-middle-4k`,
+`delete-middle-4k`, `prepend-head-4k`, `replace-grow-middle-2k-to-4k`,
+`replace-shrink-middle-4k-to-2k`) now use the frozen bounded-memory in-place
+window shift: grow extends the file and moves the affected suffix backward,
+shrink moves the suffix forward and truncates, and either direction writes the
+declared replacement over the stale window in 128 KiB blocks. Scenario version 1
+kept those five `NOT_RUN` under `structural-shift-algorithm-unfrozen`; version 2
+registers them and never reinterprets the version 1 receipts.
 
 The five 500 MiB `result-capped-v2` selections keep their v0.1.6 smaller input
 sizes (four at 524,283,904 bytes and one at 524,285,952 bytes); no capped-v1
@@ -19,13 +25,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared import edit_contract as contract  # noqa: E402
 
-FAMILY_ID = "workspace_exec_edit_length_changing"
+FAMILY_ID = "edit_length_changing"
 HISTORICAL_FAMILY = "edit_length_changing"
 
 OPERATIONS = [
     {
         "key": "insert-middle-4k",
-        "algorithm": "structural-shift",
+        "algorithm": "shift",
         "replacement_kind": "inline",
         "replacement_len": 4096,
         "payload_seed": 6_313_238_748_831_594_097,
@@ -36,7 +42,7 @@ OPERATIONS = [
     },
     {
         "key": "delete-middle-4k",
-        "algorithm": "structural-shift",
+        "algorithm": "shift",
         "replacement_kind": "inline",
         "replacement_len": 0,
         "payload_seed": 14_631_710_363_380_426_233,
@@ -58,7 +64,7 @@ OPERATIONS = [
     },
     {
         "key": "prepend-head-4k",
-        "algorithm": "structural-shift",
+        "algorithm": "shift",
         "replacement_kind": "inline",
         "replacement_len": 4096,
         "payload_seed": 11_539_886_650_128_519_955,
@@ -69,7 +75,7 @@ OPERATIONS = [
     },
     {
         "key": "replace-grow-middle-2k-to-4k",
-        "algorithm": "structural-shift",
+        "algorithm": "shift",
         "replacement_kind": "inline",
         "replacement_len": 4096,
         "payload_seed": 6_297_716_278_452_303_078,
@@ -80,7 +86,7 @@ OPERATIONS = [
     },
     {
         "key": "replace-shrink-middle-4k-to-2k",
-        "algorithm": "structural-shift",
+        "algorithm": "shift",
         "replacement_kind": "inline",
         "replacement_len": 2048,
         "payload_seed": 1_824_427_086_451_703_536,
@@ -112,14 +118,6 @@ OPERATIONS = [
         "capped_labels": ("500",),
     },
 ]
-
-STRUCTURAL_KEYS = (
-    "insert-middle-4k",
-    "delete-middle-4k",
-    "prepend-head-4k",
-    "replace-grow-middle-2k-to-4k",
-    "replace-shrink-middle-4k-to-2k",
-)
 
 TARGETS_MS = {
     "append-tail-4k-on-1mib-ops-1": 5.76,
@@ -158,4 +156,4 @@ TARGETS_MS = {
 
 
 def registry():
-    return contract.family_registry(FAMILY_ID, OPERATIONS, TARGETS_MS, STRUCTURAL_KEYS)
+    return contract.family_registry(FAMILY_ID, OPERATIONS, TARGETS_MS)

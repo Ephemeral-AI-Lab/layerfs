@@ -447,12 +447,27 @@ def exec_edit_cursor_key():
 
 
 def build_exec_edit(out, target, identity):
-    """Builds the release examples this route needs, sealed by hash."""
+    """Builds the release examples this route needs, sealed by hash.
+
+    An unchanged product seal reuses the immutable archived binaries by digest,
+    exactly as the SDK Init path does: build reuse is required setup economy and
+    never reaches inside a timed operation.
+    """
     # Only a performance driver must use the public SDK for every product
     # operation; the independent verifier reads public C1/C2/C5 readers instead.
     for name in EXEC_EDIT_BINARIES:
         if name.startswith("benchmark_"):
             require_sdk_driver(name)
+    cache = RESULTS / "exec-edit-build.json"
+    prior = json.loads(cache.read_text()) if cache.exists() else None
+    if prior and prior.get("product_seal") == identity["product_seal"] and all(
+        Path(prior["binaries"][name]["path"]).is_file() and
+        digest(prior["binaries"][name]["path"]) == prior["binaries"][name]["sha256"]
+        for name in EXEC_EDIT_BINARIES
+    ):
+        return {"status": "PASS", "mode": "exact-binary-reuse", "profile": "release",
+                "wall_ns": 0, "command": None, "binaries": prior["binaries"],
+                "target": str(target)}
     started = time.monotonic_ns()
     with (out / "build.log").open("wb") as log:
         process = subprocess.run(EXEC_EDIT_BUILD, cwd=ROOT,
@@ -473,6 +488,8 @@ def build_exec_edit(out, target, identity):
                 shutil.copy2(source, archive)
                 archive.chmod(0o555)
             record["binaries"][name] = {"path": str(archive), "sha256": binary_sha}
+        write_json(cache, {"product_seal": identity["product_seal"],
+                           "binaries": record["binaries"]})
     return record
 
 
@@ -520,7 +537,8 @@ def run_exec_edit(selection, out, verification="inline"):
                                     os.urandom(16).hex(), verification)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
                                   "selection": selection, "identity": identity,
-                                  "image": image, "receipt": receipt})
+                                  "selection_mode": "registered-case", "image": image,
+                                  "receipt": receipt})
     (out / "report.txt").write_text(
         f"{selection}\t{receipt.get('status')}\tsamples={receipt.get('sample_count')}\t"
         f"edit_commit_ns={receipt.get('edit_commit_ns')}\t"
@@ -532,6 +550,104 @@ def run_exec_edit(selection, out, verification="inline"):
     return out
 
 
+EDIT_REPORT_COLUMNS = (
+    "scenario_id", "family_id", "fixture_bytes", "final_bytes", "editor_algorithm",
+    "attempted", "completed", "driver_exit", "timeout", "verification", "terminal",
+    "edit_commit_ns", "g2_target_ms", "goal", "master_reuse", "clone_copy_ns", "cache_ns",
+    "driver_preparation_ns", "complete_command_wall_ns", "complete_command_status",
+    "lft1_root_ns", "lft1_edit_ns", "lft1_commit_ns", "lft1_cpu_user_ns", "lft1_cpu_system_ns",
+    "lft1_sampled_max_rss", "lft1_resource_status", "projection_counts", "upstream_calls",
+    "unmount_ok", "sandbox_delete_ok", "evidence",
+)
+
+
+def edit_report_row(row, folder):
+    """One registered row of the campaign report, from retained evidence only."""
+    values = {name: None for name in EDIT_REPORT_COLUMNS}
+    values.update({"scenario_id": row["scenario_id"], "family_id": row["family_id"],
+                   "fixture_bytes": row["fixture_bytes"], "final_bytes": row["final_bytes"],
+                   "editor_algorithm": row["editor_algorithm"],
+                   "g2_target_ms": row["g2_target_ms"], "attempted": 0, "completed": 0,
+                   "evidence": str(folder)})
+    run_file = Path(folder) / "run.json"
+    if not run_file.is_file():
+        values.update({"terminal": "NOT_RUN", "goal": "NOT_RUN",
+                       "verification": "NOT_RUN"})
+        return values
+    run = json.loads(run_file.read_text())
+    receipt = run.get("receipt") or {}
+    driver = receipt.get("driver") or {}
+    telemetry = receipt.get("telemetry") or {}
+    master = receipt.get("master") or {}
+    values.update({
+        "attempted": 1 if receipt.get("sample_count") or driver else 0,
+        "completed": 1 if driver.get("status") == "COMPLETE" else 0,
+        "driver_exit": receipt.get("driver_exit_code"),
+        "timeout": bool(receipt.get("driver_timeout")),
+        "verification": (receipt.get("verification") or {}).get("status"),
+        "terminal": receipt.get("status"),
+        "edit_commit_ns": receipt.get("edit_commit_ns"),
+        "goal": receipt.get("status"),
+        "master_reuse": master.get("reuse"),
+        "clone_copy_ns": receipt.get("clone_copy_wall_ns"),
+        "cache_ns": receipt.get("cache_wall_ns"),
+        "driver_preparation_ns": receipt.get("preparation_ns"),
+        "complete_command_wall_ns": receipt.get("complete_command_wall_ns"),
+        "complete_command_status": receipt.get("complete_command_status"),
+        "lft1_root_ns": telemetry.get("root_elapsed_ns"),
+        "lft1_edit_ns": telemetry.get("child_elapsed_ns", {}).get("edit"),
+        "lft1_commit_ns": telemetry.get("child_elapsed_ns", {}).get("commit"),
+        "lft1_cpu_user_ns": (telemetry.get("root_cpu_shared_ns") or [None, None])[0],
+        "lft1_cpu_system_ns": (telemetry.get("root_cpu_shared_ns") or [None, None])[1],
+        "lft1_sampled_max_rss": telemetry.get("root_sampled_max_rss"),
+        "lft1_resource_status": telemetry.get("root_resource_status"),
+        "projection_counts": driver.get("projection_counts"),
+        "upstream_calls": driver.get("upstream_calls"),
+        "unmount_ok": driver.get("unmount_ok"),
+        "sandbox_delete_ok": driver.get("sandbox_delete_ok"),
+    })
+    if receipt.get("status") in ("GOAL_MET", "TARGET_MISS"):
+        values["goal"] = receipt["status"]
+    elif receipt.get("status") == "INELIGIBLE":
+        values["goal"] = "INELIGIBLE"
+    elif receipt.get("status") == "FAIL":
+        values["goal"] = "FAIL"
+    return values
+
+
+def report_edit(campaign, out=None):
+    """The complete 56-row #232 campaign report; every registered row appears."""
+    campaign = Path(campaign)
+    rows = [edit_report_row(row, campaign / row["scenario_id"]) for row in edit.registry()]
+    if len(rows) != 56:
+        raise ValueError("every registered row must appear in the report")
+    header = "\t".join(EDIT_REPORT_COLUMNS)
+    body = "\n".join("\t".join("" if row[name] is None else str(row[name])
+                                for name in EDIT_REPORT_COLUMNS) for row in rows)
+    table = header + "\n" + body + "\n"
+    counts = {}
+    for name in ("attempted", "completed"):
+        counts[name] = sum(int(row[name] or 0) for row in rows)
+    for name in ("verification", "terminal", "goal"):
+        tally = {}
+        for row in rows:
+            key = str(row[name])
+            tally[key] = tally.get(key, 0) + 1
+        counts[name] = tally
+    counts["rows"] = len(rows)
+    counts["timeouts"] = sum(1 for row in rows if row["timeout"])
+    counts["complete_command_slow"] = sum(
+        1 for row in rows if row["complete_command_status"] == "COMMAND_SLOW")
+    counts["target_misses"] = sum(1 for row in rows if row["goal"] == "TARGET_MISS")
+    document = {"schema": "core-fs-bench-pro-exec-fuse-edit-campaign-report-v1",
+                "campaign": str(campaign), "counts": counts, "rows": rows}
+    if out:
+        Path(out).mkdir(parents=True, exist_ok=True)
+        (Path(out) / "report-edit.tsv").write_text(table)
+        write_json(Path(out) / "report-edit.json", document)
+    return table, document
+
+
 def main():
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -539,15 +655,18 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "workspace_exec_edit_length_preserving",
-                                               "workspace_exec_edit_length_changing",
-                                               "workspace_exec_edit_canonical_chunk_count"])
+    selector.add_argument("--family", choices=["init_namespace", "edit_length_preserving",
+                                               "edit_length_changing",
+                                               "edit_canonical_chunk_count"])
     run_parser.add_argument("--out", required=True)
     run_parser.add_argument("--verification", choices=["inline", "skipped"], default="inline")
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     commands.add_parser("verify-edit").add_argument("--run", required=True)
     commands.add_parser("recheck-edit").add_argument("--run", required=True)
+    report_edit_parser = commands.add_parser("report-edit")
+    report_edit_parser.add_argument("--runs", required=True)
+    report_edit_parser.add_argument("--out")
     args = parser.parse_args()
     edit_rows = {row["scenario_id"]: row for row in edit.registry()}
     edit_families = {row["family_id"] for row in edit.registry()}
@@ -581,6 +700,10 @@ def main():
         print(verify_exec_edit(owned(args.run, existing=True)))
     elif args.command == "recheck-edit":
         print(recheck_exec_edit(owned(args.run, existing=True)))
+    elif args.command == "report-edit":
+        table, document = report_edit(owned(args.runs, existing=True), args.out)
+        print(table, end="")
+        print(json.dumps(document["counts"], sort_keys=True))
     else:
         print(report(owned(args.run, existing=True)), end="")
 

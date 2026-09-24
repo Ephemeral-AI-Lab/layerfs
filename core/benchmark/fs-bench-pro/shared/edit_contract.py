@@ -1,4 +1,4 @@
-"""Frozen #232 Workspace Exec/FUSE edit contract (scenario version 1).
+"""Frozen #232 Workspace Exec/FUSE edit contract (scenario version 2).
 
 This module is the single source of truth for the 56 registered
 `sdk-exec-fuse-edit-commit-v1` cases. It freezes, before any benchmark driver or
@@ -8,13 +8,23 @@ timed sample exists:
 * the six reusable pristine fixture sizes and their byte recipe, including the
   capped 500 MiB inputs and repetition 1,
 * each case's command template, editor algorithm and allowed syscalls,
-* each case's pre/post identity (size, payload digest, bounded oracle window),
+* each case's pre/post identity (size, payload digest, bounded oracle windows),
 * the per-case historical G2 engineering target taken from the #152 final
   report's C1/G2 column (0.01 ms precision),
 * the declared cache method and the eligibility rule.
 
+Scenario version 2 registers all 56 cases with their frozen structural shift
+algorithm; version 1 kept the twenty structural rows `NOT_RUN` under
+`structural-shift-algorithm-unfrozen` and pinned registry
+`registry/workspace-exec-edit-v1.json`
+(`e4b4d2fc67cb1630dc8f15283db3085663466071bb373c829a6026ffddb66aab`). That
+registry, its receipts and the Phase 4 sample taken under it remain historical
+evidence: version 2 never reinterprets, relabels or overwrites them. The route
+name `sdk-exec-fuse-edit-commit-v1` is unchanged because the measured route is
+unchanged; the case identity carries the new scenario version.
+
 Run `python3 shared/edit_contract.py` from this directory to regenerate
-`registry/workspace-exec-edit-v1.json` and print its SHA-256.
+`registry/workspace-exec-edit-v2.json` and print its SHA-256.
 """
 import hashlib
 import json
@@ -24,10 +34,15 @@ HERE = Path(__file__).resolve().parent
 BENCH = HERE.parent
 ROUTE = "sdk-exec-fuse-edit-commit-v1"
 # SHA-256 of the committed registry document; regenerate with this module.
-REGISTRY_SHA256 = "e4b4d2fc67cb1630dc8f15283db3085663466071bb373c829a6026ffddb66aab"
-SCENARIO_VERSION = 1
+REGISTRY_SHA256 = "05a133b543db33729d60cc321cc88682046c16bfb1761daec6a57c5df3b11823"
+REGISTRY_PATH = "registry/workspace-exec-edit-v2.json"
+SCENARIO_VERSION = 2
+SCENARIO_SUFFIX = "-exec-v2"
+HISTORICAL_REGISTRY_PATH = "registry/workspace-exec-edit-v1.json"
+HISTORICAL_REGISTRY_SHA256 = (
+    "e4b4d2fc67cb1630dc8f15283db3085663466071bb373c829a6026ffddb66aab")
 REPETITION = 1
-OPERATION_CONTRACT_ID = "workspace-exec-fuse-edit-commit-v1"
+OPERATION_CONTRACT_ID = "workspace-exec-fuse-edit-commit-v2"
 OPERATION_SURFACE = "workspace-posix-fuse"
 OPERATION_ENTRYPOINT = "WorkspaceApi::exec"
 ACKNOWLEDGEMENT_BOUNDARY = "WorkspaceApi::commit"
@@ -136,15 +151,14 @@ VERIFIER_DESIGN_GOAL_NS = 10_000_000_000
 BOUNDED_ORACLE_BYTES = 196_608
 BOUNDED_ORACLE_WINDOW = 65_536
 FULL_DIGEST_MAX_BYTES = 104_857_600
-STRUCTURAL_NOT_RUN_REASON = (
-    "structural-shift-algorithm-unfrozen: no authentic POSIX/FUSE algorithm is frozen yet for "
-    "insert/delete/prepend/replace-grow/replace-shrink; an in-place window shift moves up to "
-    "hundreds of MiB through the projection and a temporary-file-and-rename save needs up to "
-    "500 MiB against a 16 MiB /tmp and a 1 GiB Workspace disk budget; the case stays registered "
-    "and visible as NOT_RUN"
-)
 
-# Declared editor algorithms. Each entry names the algorithm and the syscalls it may use.
+# Declared editor algorithms. Each entry names the algorithm, the syscalls it
+# may use and the operation shape it is allowed to have. `shift-grow` and
+# `shift-shrink` are the two directions of the one frozen bounded-memory
+# in-place window shift; `SHIFT_BLOCK_BYTES` is part of the algorithm identity
+# and matches the projection's declared maximum transfer, so one block is one
+# projection request.
+SHIFT_BLOCK_BYTES = 128 * 1024
 ALGORITHMS = {
     "positional-write": {
         "name": "single-positional-write",
@@ -161,12 +175,35 @@ ALGORITHMS = {
         "syscalls": ["open", "fstat", "ftruncate", "close"],
         "shape": "extends the file to the declared final size with zero bytes",
     },
-    "structural-shift": {
-        "name": "unfrozen-in-place-window-shift",
-        "syscalls": [],
-        "shape": "not frozen: the structural length-changing cases remain NOT_RUN",
+    "shift-grow": {
+        "name": "in-place-window-shift-grow",
+        "syscalls": ["open", "fstat", "ftruncate", "pread", "pwrite", "close"],
+        "block_bytes": SHIFT_BLOCK_BYTES,
+        "shape": "extends the file by replacement_len - delete_len, then moves the affected "
+                 "suffix [start + delete_len, initial) backward from the old end in "
+                 "block_bytes blocks and writes the replacement over the stale window",
+    },
+    "shift-shrink": {
+        "name": "in-place-window-shift-shrink",
+        "syscalls": ["open", "fstat", "pread", "pwrite", "ftruncate", "close"],
+        "block_bytes": SHIFT_BLOCK_BYTES,
+        "shape": "moves the affected suffix [start + delete_len, initial) forward in "
+                 "block_bytes blocks, truncates to the declared final size and writes the "
+                 "replacement over the stale window",
     },
 }
+
+
+def shift_command(start, delete_len, replacement_len, initial, direction, payload_name):
+    """The frozen command of one structural shift case."""
+    parts = [TOOL_PATH, "shift", "--file", FIXTURE_PATH, "--offset", str(start),
+             "--delete-length", str(delete_len), "--length", str(replacement_len),
+             "--direction", direction, "--expect-size", str(initial)]
+    if replacement_len:
+        parts += ["--payload", PAYLOAD_DIRECTORY + "/" + payload_name]
+    return " ".join(parts)
+
+
 COMMAND_TEMPLATE = {
     "positional-write": (TOOL_PATH + " pwrite --file " + FIXTURE_PATH +
                          " --offset {start} --length {replacement_len} "
@@ -175,7 +212,6 @@ COMMAND_TEMPLATE = {
                       "--expect-size {initial}"),
     "size-extend": (TOOL_PATH + " extend --file " + FIXTURE_PATH + " --size {final} "
                     "--expect-size {initial}"),
-    "structural-shift": None,
 }
 
 
@@ -276,13 +312,27 @@ def result_window(size, start, delete_len, replacement, offset, length):
     return bytes(out)
 
 
-def boundary_window(start, delete_len, replacement_len, final):
-    """The declared bounded oracle window: the edit plus one window either side."""
-    begin = max(0, start - BOUNDED_ORACLE_WINDOW)
-    end = min(final, start + delete_len + replacement_len + BOUNDED_ORACLE_WINDOW)
-    if end - begin > BOUNDED_ORACLE_BYTES:
-        end = begin + BOUNDED_ORACLE_BYTES
-    return begin, end - begin
+def boundary_windows(start, delete_len, replacement_len, final):
+    """The declared bounded oracle windows, at most BOUNDED_ORACLE_BYTES total.
+
+    Window 0 covers the splice itself with one window of margin on each side and
+    is capped so that window 1 still fits the frozen budget. Window 1 is the tail
+    of the result, which is where a structural shift ends and where a truncation
+    or extension is observed; it is declared only when it does not overlap
+    window 0. Both windows are declared byte ranges with a pinned digest, never
+    a substitute for the pristine expected bytes.
+    """
+    windows = []
+    seam_begin = max(0, start - BOUNDED_ORACLE_WINDOW)
+    seam_end = min(final, start + max(delete_len, replacement_len) + BOUNDED_ORACLE_WINDOW)
+    seam_cap = BOUNDED_ORACLE_BYTES - BOUNDED_ORACLE_WINDOW
+    if seam_end - seam_begin > seam_cap:
+        seam_end = min(final, seam_begin + seam_cap)
+    windows.append((seam_begin, seam_end - seam_begin))
+    tail_begin = max(0, final - BOUNDED_ORACLE_WINDOW)
+    if tail_begin >= seam_begin + windows[0][1]:
+        windows.append((tail_begin, final - tail_begin))
+    return windows
 
 
 def payload_bytes(seed, length, kind):
@@ -298,7 +348,7 @@ def historical_id(operation, label):
     return f"{operation['key']}-on-{label}mib-ops-1"
 
 
-def case_row(family_id, operation, fixture_bytes, label, target_ms, structural=False):
+def case_row(family_id, operation, fixture_bytes, label, target_ms):
     start, delete_len = operation["locate"](fixture_bytes)
     replacement_len = operation["replacement_len"]
     final = fixture_bytes - delete_len + replacement_len
@@ -308,12 +358,32 @@ def case_row(family_id, operation, fixture_bytes, label, target_ms, structural=F
     if payload_sha256 != operation["payload_sha256"]:
         raise ValueError(f"{family_id}/{operation['key']} payload recipe mismatch")
     historical = historical_id(operation, label)
-    algorithm = ALGORITHMS[operation["algorithm"]]
-    begin, length = boundary_window(start, delete_len, replacement_len, final)
+    direction = None
+    key = operation["algorithm"]
+    if key == "shift":
+        direction = "grow" if final > fixture_bytes else "shrink"
+        if final == fixture_bytes:
+            raise ValueError(f"{family_id}/{operation['key']} shift changes no size")
+        key = f"shift-{direction}"
+    algorithm = ALGORITHMS[key]
+    windows = boundary_windows(start, delete_len, replacement_len, final)
+    if sum(length for _, length in windows) > BOUNDED_ORACLE_BYTES:
+        raise ValueError(f"{family_id}/{operation['key']} oracle budget")
+    payload_name = operation["key"] + ".bin"
+    if key == "positional-write":
+        command = COMMAND_TEMPLATE[key].format(
+            start=start, replacement_len=replacement_len, initial=fixture_bytes, final=final,
+            payload_name=payload_name)
+    elif key in ("size-truncate", "size-extend"):
+        command = COMMAND_TEMPLATE[key].format(initial=fixture_bytes, final=final)
+    else:
+        command = shift_command(start, delete_len, replacement_len, fixture_bytes, direction,
+                                payload_name)
+    full_digest = final <= FULL_DIGEST_MAX_BYTES
     return {
         "family_id": family_id,
         "operation_key": operation["key"],
-        "scenario_id": historical + "-exec-v1",
+        "scenario_id": historical + SCENARIO_SUFFIX,
         "historical_selection_id": historical,
         "scenario_version": SCENARIO_VERSION,
         "route": ROUTE,
@@ -337,24 +407,27 @@ def case_row(family_id, operation, fixture_bytes, label, target_ms, structural=F
         "replacement_sha256": payload_sha256,
         "payload_seed": operation["payload_seed"],
         "final_bytes": final,
-        "final_sha256": None if structural else final_sha256(fixture_bytes, start, delete_len,
-                                                             replacement),
+        "final_sha256": final_sha256(fixture_bytes, start, delete_len, replacement),
         "editor_algorithm": algorithm["name"],
         "editor_syscalls": algorithm["syscalls"],
         "editor_shape": algorithm["shape"],
-        "payload_source": (PAYLOAD_DIRECTORY + "/" + operation["key"] + ".bin"
+        "editor_direction": direction,
+        "editor_block_bytes": algorithm.get("block_bytes"),
+        "payload_source": (PAYLOAD_DIRECTORY + "/" + payload_name
                            if replacement_len else None),
-        "command": (None if structural else
-                    COMMAND_TEMPLATE[operation["algorithm"]].format(
-                        start=start, replacement_len=replacement_len,
-                        initial=fixture_bytes, final=final,
-                        payload_name=operation["key"] + ".bin")),
+        "command": command,
         "oracle": {
             "final_bytes": final,
-            "bounded_window_offset": begin,
-            "bounded_window_bytes": length,
-            "full_file_digest": (not structural) and final <= FULL_DIGEST_MAX_BYTES,
-            "full_file_bytes_verified": (not structural) and final <= FULL_DIGEST_MAX_BYTES,
+            "windows": [
+                {"offset": offset, "bytes": length,
+                 "sha256": hashlib.sha256(
+                     result_window(fixture_bytes, start, delete_len, replacement, offset,
+                                   length)).hexdigest()}
+                for offset, length in windows
+            ],
+            "bounded_window_bytes": sum(length for _, length in windows),
+            "full_file_digest": full_digest,
+            "full_file_bytes_verified": full_digest,
             "canonical_root_source": "public C1/C5 reader after the timed child exits",
             "branch_head_and_historical_root": True,
         },
@@ -365,12 +438,12 @@ def case_row(family_id, operation, fixture_bytes, label, target_ms, structural=F
         "clone_method": CLONE_METHOD,
         "cache_domains": ["macos-store", "linux-fuse-backing"],
         "eligibility_rule": ELIGIBILITY_INELIGIBLE_REASON,
-        "registration_status": "NOT_RUN" if structural else "REGISTERED",
-        "not_run_reason": STRUCTURAL_NOT_RUN_REASON if structural else None,
+        "registration_status": "REGISTERED",
+        "not_run_reason": None,
     }
 
 
-def family_registry(family_id, operations, targets, structural_keys=()):
+def family_registry(family_id, operations, targets):
     rows = []
     for operation in operations:
         for label, size in SIZE_LABELS:
@@ -379,7 +452,7 @@ def family_registry(family_id, operations, targets, structural_keys=()):
             if historical not in targets:
                 raise ValueError(f"{family_id}: no frozen G2 target for {historical}")
             rows.append(case_row(family_id, operation, fixture_bytes, label,
-                                 targets[historical], operation["key"] in structural_keys))
+                                 targets[historical]))
     return rows
 
 
@@ -387,9 +460,9 @@ def registry():
     import sys as _sys
     if str(BENCH) not in _sys.path:
         _sys.path.insert(0, str(BENCH))
-    from families import (workspace_exec_edit_canonical_chunk_count as canonical,
-                          workspace_exec_edit_length_changing as changing,
-                          workspace_exec_edit_length_preserving as preserving)
+    from families import (edit_canonical_chunk_count as canonical,
+                          edit_length_changing as changing,
+                          edit_length_preserving as preserving)
     rows = preserving.registry() + changing.registry() + canonical.registry()
     if len(rows) != 56:
         raise ValueError("registered Exec/FUSE edit cardinality")
@@ -397,29 +470,36 @@ def registry():
     if len(ids) != 56:
         raise ValueError("registered Exec/FUSE edit scenario identity")
     for row in rows:
+        if row["registration_status"] != "REGISTERED":
+            raise ValueError(f"{row['scenario_id']}: every case is registered")
+        if row["command"] is None or not row["editor_syscalls"]:
+            raise ValueError(f"{row['scenario_id']}: registered row needs a command")
         if row["fixture_bytes"] not in PREPARED_SIZES:
             raise ValueError(f"{row['scenario_id']}: fixture size")
         if row["fixture_sha256"] != FIXTURE_SHA256[row["fixture_bytes"]]:
             raise ValueError(f"{row['scenario_id']}: fixture digest")
-        if row["registration_status"] == "REGISTERED":
-            if row["command"] is None or not row["editor_syscalls"]:
-                raise ValueError(f"{row['scenario_id']}: registered row needs a command")
-            if row["edit_start"] + row["delete_len"] > row["fixture_bytes"]:
-                raise ValueError(f"{row['scenario_id']}: edit bounds")
-            if row["final_bytes"] != (row["fixture_bytes"] - row["delete_len"]
-                                      + row["replacement_len"]):
-                raise ValueError(f"{row['scenario_id']}: final size")
-        elif row["not_run_reason"] != STRUCTURAL_NOT_RUN_REASON:
-            raise ValueError(f"{row['scenario_id']}: NOT_RUN needs the frozen reason")
+        if row["edit_start"] + row["delete_len"] > row["fixture_bytes"]:
+            raise ValueError(f"{row['scenario_id']}: edit bounds")
+        if row["final_bytes"] != (row["fixture_bytes"] - row["delete_len"]
+                                  + row["replacement_len"]):
+            raise ValueError(f"{row['scenario_id']}: final size")
+        if row["editor_direction"] is None:
+            if row["delete_len"] == 0 and row["replacement_len"] == 0:
+                raise ValueError(f"{row['scenario_id']}: case changes nothing")
+        elif (row["final_bytes"] > row["fixture_bytes"]) != (row["editor_direction"] == "grow"):
+            raise ValueError(f"{row['scenario_id']}: shift direction")
+        if len(row["final_sha256"]) != 64:
+            raise ValueError(f"{row['scenario_id']}: final digest")
     return rows
 
 
 def document():
     rows = registry()
     return {
-        "schema": "core-fs-bench-pro-exec-fuse-edit-registry-v1",
+        "schema": "core-fs-bench-pro-exec-fuse-edit-registry-v2",
         "route": ROUTE,
         "scenario_version": SCENARIO_VERSION,
+        "scenario_suffix": SCENARIO_SUFFIX,
         "repetition": REPETITION,
         "operation_contract_id": OPERATION_CONTRACT_ID,
         "operation_surface": OPERATION_SURFACE,
@@ -428,6 +508,9 @@ def document():
         "telemetry_key": TELEMETRY_KEY,
         "clock_id": CLOCK_ID,
         "capped_v1_duplicates_added": 0,
+        "historical_registry": {"path": HISTORICAL_REGISTRY_PATH,
+                                "sha256": HISTORICAL_REGISTRY_SHA256,
+                                "scenario_version": 1},
         "prepared_sizes": PREPARED_SIZES,
         "fixture_recipe": {
             "generator_seed": FIXTURE_GENERATOR_SEED,
@@ -467,7 +550,7 @@ def registry_sha256():
 
 
 def main():
-    out = BENCH / "registry/workspace-exec-edit-v1.json"
+    out = BENCH / REGISTRY_PATH
     body = registry_body()
     digest = hashlib.sha256(body).hexdigest()
     if "--check" in __import__("sys").argv:

@@ -1,5 +1,9 @@
 """#232 Workspace Exec/FUSE canonical-chunk-count family: 12 registered cases.
 
+Module name follows the owner's v0.1.6 family style; the Exec/FUSE identity is
+carried by the route, operation-contract, entrypoint and scenario-version fields
+of every row and receipt.
+
 The declared edit is one 64 KiB positional overwrite at offset 147,456 on
 1/10/100/500 MiB inputs, chosen in v0.1.6 so that the resulting canonical chunk
 count decreases, increases or is preserved. The historical G2 table pins the
@@ -14,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared import edit_contract as contract  # noqa: E402
 
-FAMILY_ID = "workspace_exec_edit_canonical_chunk_count"
+FAMILY_ID = "edit_canonical_chunk_count"
 HISTORICAL_FAMILY = "edit_canonical_chunk_count"
 START = 147_456
 LEN = 65_536

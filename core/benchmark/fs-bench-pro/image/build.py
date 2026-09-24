@@ -20,9 +20,9 @@ ROOT = BENCH.parents[2]
 CORE = ROOT / "core"
 sys.path.insert(0, str(BENCH))
 from shared import edit_contract as contract  # noqa: E402
-from families import (workspace_exec_edit_canonical_chunk_count as canonical,  # noqa: E402
-                      workspace_exec_edit_length_changing as changing,
-                      workspace_exec_edit_length_preserving as preserving)
+from families import (edit_canonical_chunk_count as canonical,  # noqa: E402
+                      edit_length_changing as changing,
+                      edit_length_preserving as preserving)
 
 BASE = "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8"
 TARGET = "aarch64-unknown-linux-musl"

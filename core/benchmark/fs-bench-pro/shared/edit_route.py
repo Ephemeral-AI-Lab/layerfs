@@ -144,10 +144,16 @@ def case_record(row, master_record, branch_body):
                                         row["replacement_kind"])
     final = row["final_bytes"]
     full_digest = final <= contract.FULL_DIGEST_MAX_BYTES
-    begin, length = contract.boundary_window(start, row["delete_len"], replacement_len, final)
-    window = contract.result_window(row["fixture_bytes"], start, row["delete_len"], replacement,
-                                   begin, length)
-    return {
+    windows = {}
+    for index, window in enumerate(row["oracle"]["windows"]):
+        observed = contract.result_window(row["fixture_bytes"], start, row["delete_len"],
+                                          replacement, window["offset"], window["bytes"])
+        if hashlib.sha256(observed).hexdigest() != window["sha256"]:
+            raise ValueError(f"{row['scenario_id']}: declared oracle window {index}")
+        windows[f"window{index}_offset"] = window["offset"]
+        windows[f"window{index}_bytes"] = window["bytes"]
+        windows[f"window{index}_sha256"] = window["sha256"]
+    record = {
         "family_id": row["family_id"],
         "scenario_id": row["scenario_id"],
         "route": row["route"],
@@ -171,13 +177,13 @@ def case_record(row, master_record, branch_body):
         "fixture_extent_count": master_record["fixture_extent_count"],
         "branch_body": branch_body,
         "full_file_digest": 1 if full_digest else 0,
-        "window_offset": begin,
-        "window_bytes": length,
-        "window_sha256": hashlib.sha256(window).hexdigest(),
+        "window_count": len(row["oracle"]["windows"]),
         "canonical_root_expected": row.get("canonical_root_expected", "-"),
         "canonical_count_expected": (str(row["canonical_count_expected"])
                                      if "canonical_count_expected" in row else "-"),
     }
+    record.update(windows)
+    return record
 
 
 def case_file(path, record):
@@ -207,8 +213,10 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
     history = folder / "history.sqlite"
     # One independent writable byte copy per case; a clone is setup reuse and is
     # never treated as a cold claim.
+    copy_started = time.monotonic_ns()
     shutil.copyfile(master_record["store"], store)
     shutil.copyfile(master_record["history"], history)
+    copy_wall_ns = time.monotonic_ns() - copy_started
     case_path = case_file(folder / "case.txt", record)
     receipt = {
         "schema": "core-fs-bench-pro-exec-fuse-edit-receipt-v1",
@@ -232,6 +240,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
                    ("fixture_bytes", "fixture_sha256", "first_use_wall_ns", "reuse",
                     "compatibility_key", "store_bytes", "history_bytes")},
         "clone_method": contract.CLONE_METHOD,
+        "clone_copy_wall_ns": copy_wall_ns,
         "cache_contract": contract.CACHE_CONTRACT,
         "cache": {},
         "g2_target_ms": row["g2_target_ms"],
@@ -239,8 +248,10 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "admission_eligible": False,
     }
     try:
+        cache_started = time.monotonic_ns()
         receipt["cache"]["macos-store"] = edit_cache.qualify_store([store, history])
         receipt["cache"]["linux-fuse-backing"] = edit_cache.qualify_fuse_backing()
+        receipt["cache_wall_ns"] = time.monotonic_ns() - cache_started
         command = [str(binaries[DRIVER]), case_spec(record), str(store), str(history), image,
                    f"exec-{row['scenario_id'][:40]}"]
         environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
@@ -339,6 +350,7 @@ def edit_telemetry_check(lines):
         timing = root[0].get("timing") or {}
         for child in timing.get("children", []):
             labels.append(child.get("name"))
+    cpu = (root[0].get("cpu_shared_ns") if root else None) or [None, None]
     report = {
         "operation_records": sum(len(value) for value in records.values()),
         "malformed_lines": malformed,
@@ -347,6 +359,12 @@ def edit_telemetry_check(lines):
         "root_label": (root[0].get("timing") or {}).get("name") if root else None,
         "root_success": root[0].get("success") if root else None,
         "root_resource_status": root[0].get("resource_status") if root else None,
+        "root_elapsed_ns": (root[0].get("timing") or {}).get("elapsed_ns") if root else None,
+        "root_cpu_shared_ns": cpu,
+        "root_sampled_max_rss": root[0].get("sampled_max_rss") if root else None,
+        "root_samples": root[0].get("samples") if root else None,
+        "root_gaps": root[0].get("gaps") if root else None,
+        "root_incarnation": root[0].get("incarnation") if root else None,
         "child_elapsed_ns": {child.get("name"): child.get("elapsed_ns")
                              for child in (root[0].get("timing") or {}).get("children", [])}
         if root else {},

@@ -1,5 +1,10 @@
 """#232 Workspace Exec/FUSE length-preserving family: 12 registered cases.
 
+Module name follows the owner's v0.1.6 family style. The family ID, the file and
+the class of edit match the historical direct-SDK family; the Exec/FUSE identity
+is carried by the route, operation-contract, entrypoint and scenario-version
+fields of every row and receipt, so no historical `edit_*` PASS is inherited.
+
 The semantic shape (overwrite head/middle/tail with a 4 KiB payload on
 1/10/100/500 MiB inputs) and every payload, offset and historical G2 target come
 from the v0.1.6 `edit_length_preserving` family. The scenarios are separately
@@ -12,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from shared import edit_contract as contract  # noqa: E402
 
-FAMILY_ID = "workspace_exec_edit_length_preserving"
+FAMILY_ID = "edit_length_preserving"
 HISTORICAL_FAMILY = "edit_length_preserving"
 
 OPERATIONS = [
