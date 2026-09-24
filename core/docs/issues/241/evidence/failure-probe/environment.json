@@ -1,0 +1,37 @@
+{
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "host_machine": "arm64",
+  "container_id": "3a636e6d3d1de3dd7df229e1607897220e366a3934db539cbc70cb9e0702bc90",
+  "image_id": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "image_repo_digests": [
+    "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8"
+  ],
+  "privileged": true,
+  "memory_limit_bytes": 0,
+  "nano_cpus": 0,
+  "mounts": [
+    {
+      "Type": "bind",
+      "Source": "/Users/yifanxu/.codex/worktrees/issue241-failure-probe/layerfs/core/target/aarch64-unknown-linux-musl/release/deps",
+      "Destination": "/runner",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    },
+    {
+      "Type": "volume",
+      "Name": "layerfs-241-failure-probe-d7ade911",
+      "Source": "/var/lib/docker/volumes/layerfs-241-failure-probe-d7ade911/_data",
+      "Destination": "/probe",
+      "Driver": "local",
+      "Mode": "z",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "kernel": "Linux 3a636e6d3d1d 6.12.76-linuxkit #1 SMP Wed May 13 14:27:36 UTC 2026 aarch64 Linux",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "fuser_version": "0.18.0",
+  "lockfile_sha256": "791a62b55b22d18ce827d49e500326d68a163384629e9c2865b893d8c5914efe",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9"
+}

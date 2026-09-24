@@ -1,0 +1,25 @@
+{
+  "case": "lost_reply_state",
+  "command": [
+    "docker",
+    "exec",
+    "-e",
+    "PROBE_CASE=lost_reply_state",
+    "-e",
+    "PROBE_ROOT=/probe/lost_reply_state",
+    "layerfs-241-failure-probe-d7ade911",
+    "/runner/range_ioctl_failure_probe-66c5fa7842234956",
+    "--ignored",
+    "--exact",
+    "linux::probe",
+    "--nocapture"
+  ],
+  "started_unix_ns": 1790250236581645000,
+  "complete_command_wall_ns": 77266042,
+  "exit_code": 0,
+  "timed_out": false,
+  "docker_cp_exit_code": 0,
+  "cache_state": "uncontrolled; no cold/performance claim",
+  "source_commit": "62d2ba3f8fda4ab26a24cf627ebcf49fbdc05308",
+  "binary_sha256": "d74bb477668fd9e462889d99360504734ea4e2569be45622622ba9c6c54da997"
+}
