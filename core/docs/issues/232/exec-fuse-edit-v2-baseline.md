@@ -275,7 +275,21 @@ seal they were collected with.
 * No optimization was attempted in this session: the measured causes are
   recorded here for a separately approved product change.
 
-## 8. Evidence package
+## 8. Checks
+
+At the handoff identity (commit `d99ef2bf7df0592c6e3c2bc3ea9c745da36cf52c`, clean tree) the owning Core checks ran
+once: `core/tools/check_product_boundary.py` PASS (290 production files),
+`python3 -m unittest discover -s core/tools -p 'test_*.py'` 9 tests OK,
+`cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check` clean after
+one formatting fix in the verifier example,
+`cargo +1.85.1 clippy --manifest-path core/Cargo.toml --locked --all-targets -- -D warnings`
+clean, and `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked` exit 0
+with 726 passed / 0 failed / 3 documented ignores across 171 test binaries,
+including the live SDK route binary `tests/agent_route.rs`. The harness checks
+are `python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests`
+(37 tests, OK). Exact output: `checks.txt` in the evidence package.
+
+## 9. Evidence package
 
 | file | content |
 |---|---|
@@ -284,4 +298,5 @@ seal they were collected with.
 | `evidence/exec-fuse-edit-v2-baseline-20260924-01/receipts.jsonl` | one compact line per registered case, in registry order |
 | `evidence/exec-fuse-edit-v2-baseline-20260924-01/shift-scaling.tsv` | structural shift blocks, wall and per-block cost |
 | `evidence/exec-fuse-edit-v2-baseline-20260924-01/summary.json` | identity, counts, coverage and findings |
-| `evidence/exec-fuse-edit-v2-baseline-20260924-01/issue-comment.md` | the #232 status comment |
+| `evidence/exec-fuse-edit-v2-baseline-20260924-01/issue-comment.md` | the #232 status comment (posted as [issue comment 5810037673](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232#issuecomment-5810037673)) |
+| `evidence/exec-fuse-edit-v2-baseline-20260924-01/checks.txt` | the owning Core checks at the handoff identity |
