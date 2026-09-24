@@ -4,7 +4,7 @@
 #[path = "support/range_exec_gate.rs"]
 mod range_exec_gate;
 
-use layerfs_api_core::{SandboxId, WorkspaceId};
+use layerfs_api_core::{ExecResult, SandboxId, WorkspaceId};
 use layerfs_bridge::contract::CommitOutcomeWire;
 use layerfs_sandbox::SandboxOwner;
 use layerfs_sdk::{HistoryMode, ProjectApi, SandboxApi, Server, ServerConfig, WorkspaceApi};
@@ -39,10 +39,35 @@ impl Drop for Cleanup<'_> {
 }
 
 #[test]
-fn only_confirmed_exit_is_commit_eligible() {
-    assert!(range_exec_gate::confirmed_exit(Some(0)));
+fn only_complete_frozen_tool_pass_is_commit_eligible() {
+    let mut exec = ExecResult {
+        exit_status: Some(0),
+        stdout: b"{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0}\n".to_vec(),
+        stderr: Vec::new(),
+        stdout_truncated: false,
+        stderr_truncated: false,
+    };
+    let eligible = |result: &ExecResult| range_exec_gate::confirmed_tool_result(result, 12288);
+    assert!(eligible(&exec));
     for status in [Some(75), Some(1), None] {
-        assert!(!range_exec_gate::confirmed_exit(status));
+        exec.exit_status = status;
+        assert!(!eligible(&exec), "exit {status:?} must omit Commit");
+    }
+    exec.exit_status = Some(0);
+    exec.stdout_truncated = true;
+    assert!(!eligible(&exec), "truncated stdout must omit Commit");
+    exec.stdout_truncated = false;
+    exec.stderr_truncated = true;
+    assert!(!eligible(&exec), "truncated stderr must omit Commit");
+    exec.stderr_truncated = false;
+    for output in [
+        b"not JSON\n".as_slice(),
+        b"{\"status\":\"FAIL\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0}\n",
+        b"{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12287,\"shifted_bytes\":0}\n",
+        b"{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":1}\n",
+    ] {
+        exec.stdout = output.to_vec();
+        assert!(!eligible(&exec), "invalid tool output must omit Commit");
     }
 }
 
@@ -102,23 +127,15 @@ fn mounted_sdk_exec_confirms_before_explicit_commit() {
 
     let command = "/layerfs-bench/bin/layerfs-edit-tool splice --file data.bin --expect-size 8192 --offset 4093 --delete-length 0 --length 4096 --payload payload.bin";
     let (exec, commit) =
-        range_exec_gate::exec_and_commit_on_success(&api, &mount.id, command).unwrap();
+        range_exec_gate::exec_and_commit_on_success(&api, &mount.id, command, 12288).unwrap();
     assert_eq!(
         exec.exit_status,
         Some(0),
         "stderr: {}",
         String::from_utf8_lossy(&exec.stderr)
     );
-    assert!(!exec.stdout_truncated && !exec.stderr_truncated);
+    assert!(range_exec_gate::confirmed_tool_result(&exec, 12288));
     let output = String::from_utf8(exec.stdout).unwrap();
-    assert!(
-        output.contains("\"status\":\"PASS\",\"operation\":\"splice\""),
-        "{output}"
-    );
-    assert!(
-        output.contains("\"final_bytes\":12288,\"shifted_bytes\":0"),
-        "{output}"
-    );
     let commit = commit.expect("confirmed Exec must precede explicit Commit");
     assert!(matches!(commit.outcome, CommitOutcomeWire::Committed(_)));
     println!("SDK_RANGE_TOOL {}", output.trim());
@@ -138,7 +155,7 @@ fn mounted_sdk_exec_confirms_before_explicit_commit() {
     );
 
     let (unknown, omitted) =
-        range_exec_gate::exec_and_commit_on_success(&api, &mount.id, "exit 75").unwrap();
+        range_exec_gate::exec_and_commit_on_success(&api, &mount.id, "exit 75", 12288).unwrap();
     assert_eq!(unknown.exit_status, Some(75));
     assert!(omitted.is_none(), "UNKNOWN exit must not call Commit");
     println!(
