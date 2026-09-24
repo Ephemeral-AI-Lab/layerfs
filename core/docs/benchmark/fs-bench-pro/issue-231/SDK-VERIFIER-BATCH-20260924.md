@@ -1,5 +1,10 @@
 # #231: batch authenticated file-root reads in the full verifier
 
+> **Superseded before implementation.** Owner direction selected the
+> [lightweight sampled verifier](SDK-VERIFIER-LITE-20260924.md) instead.
+> No batch-root candidate was built or measured; this plan is retained to
+> explain the decision sequence.
+
 > Frozen before implementation or a new sample. The preceding
 > [traversal-overlap attempt](SDK-VERIFIER-PIPELINE-RESULTS-20260924.md)
 > missed its 9.5-second verifier gate and remains a failed receipt. Do not
