@@ -1,0 +1,69 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 1104,
+      "sha256": "41c787c822ac9e767c00cc85d6bc2f409aec285693d21ff8db92ba653e1a64b6"
+    },
+    "build.log": {
+      "bytes": 985,
+      "sha256": "9bd4c4fd7f10b9a9994d0323dc45de262867437918d69cd21020fd9e7dbc9c27"
+    },
+    "report.txt": {
+      "bytes": 429,
+      "sha256": "ddeb5dd24356a54e02663b9c52fd3ff7d4a8f4d066b80562230b913f0925aaa1"
+    },
+    "run.json": {
+      "bytes": 853,
+      "sha256": "219f7a5880ce987678ef890110898ae4049cd6f11623010afb1926bc670f0150"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/driver.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/driver.stdout": {
+      "bytes": 320,
+      "sha256": "3da8cae04319f0bdd1440ce92c6f6f80cdb5050e578b7887b92de9ab9e6b7666"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "41ac625bbd0e46f3e7e432ad79fc713d1a287acecfd9d382effb863ff0f19662"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/perf.jsonl": {
+      "bytes": 333,
+      "sha256": "cee0bf6092415a84ab942730beae7908d239838d5fd56e78a8f26d4081c6207c"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "bytes": 6652,
+      "sha256": "79b6a12c313a7ec9721e04054a19f7b7de8d6bcc762e0f887def42f12b6bd616"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/store.sqlite": {
+      "bytes": 5496832,
+      "sha256": "67791996869dcfd72ad5372031cfd2c857e5e7fdfe0208781a363785883f3983"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verification.json": {
+      "bytes": 1446,
+      "sha256": "a64c7795da5f2e84aa2143af134cccc86975c0b211cc715a6550be3ccf572ec0"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stderr": {
+      "bytes": 94,
+      "sha256": "d4b26d280dfc396f13f11e6dd76ea85e174859f4818f31f3ea7dfa5f89fb2e4d"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stdout": {
+      "bytes": 274,
+      "sha256": "5879eedd329017e11e1ce8b337d1b99d28a6bf731214495fd764387c999acde0"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "bytes": 200,
+      "sha256": "c46297b1dd74794aa6d897005e0e40a30eddbbabdb942758f10093775c8b35f3"
+    },
+    "sdk-host/init_namespace/namespace-10000/receipt.json": {
+      "bytes": 243,
+      "sha256": "58d63fe3b46a00f44d9767c89004dfc4e002df9306b0e7abe9714fbf4c83bd4b"
+    },
+    "sdk-host/init_namespace/namespace-100000/receipt.json": {
+      "bytes": 244,
+      "sha256": "0df90e67b4b2c3ec3270693936b9b621c66b00f8bd51f6ba78c69fd76bf2467a"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

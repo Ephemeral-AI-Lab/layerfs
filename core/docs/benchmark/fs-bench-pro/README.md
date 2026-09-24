@@ -8,6 +8,8 @@ The [shared substrate #235](https://github.com/Ephemeral-AI-Lab/layerfs/issues/2
 precedes the [#231 first-pass spec](issue-231/SPEC.md): one run each for 100,
 1,000 and 10,000 native Init files. The 100,000 row remains `NOT_RUN` and the
 original four-tier final gate remains open.
+The later [four-tier SDK diagnostic](issue-231/SDK-FOUR-TIER-RESULTS-20260924.md)
+retains one fresh observation per case and does not clear that gate.
 The [handoff prompt](issue-231/HANDOFF.md) lists what an implementation agent
 must read, do and avoid; the new Init family test path and separate full
 verifier are specified there and in the first-pass spec.
