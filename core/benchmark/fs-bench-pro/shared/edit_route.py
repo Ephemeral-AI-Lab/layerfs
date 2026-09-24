@@ -338,13 +338,18 @@ def edit_telemetry_check(lines):
     if len(root) == 1:
         timing = root[0].get("timing") or {}
         for child in timing.get("children", []):
-            labels.append(child.get("label"))
+            labels.append(child.get("name"))
     report = {
         "operation_records": sum(len(value) for value in records.values()),
         "malformed_lines": malformed,
         "caller_root_present": len(root) == 1,
         "root_count": len(root),
-        "root_label": (root[0].get("timing") or {}).get("label") if root else None,
+        "root_label": (root[0].get("timing") or {}).get("name") if root else None,
+        "root_success": root[0].get("success") if root else None,
+        "root_resource_status": root[0].get("resource_status") if root else None,
+        "child_elapsed_ns": {child.get("name"): child.get("elapsed_ns")
+                             for child in (root[0].get("timing") or {}).get("children", [])}
+        if root else {},
         "child_labels": labels,
         "edit_child": "edit" in labels,
         "commit_child": "commit" in labels,
@@ -352,6 +357,7 @@ def edit_telemetry_check(lines):
     report["status"] = ("PASS" if report["caller_root_present"]
                         and report["root_label"] == "sdk.edit_commit.fuse"
                         and report["edit_child"] and report["commit_child"]
+                        and report["root_success"] is True
                         and report["malformed_lines"] == 0 else "UNAVAILABLE")
     return report
 

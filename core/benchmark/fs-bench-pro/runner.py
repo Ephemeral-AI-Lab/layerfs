@@ -365,6 +365,44 @@ EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify
                      "benchmark_init": "benchmark_init"}
 
 
+def recheck_exec_edit(out):
+    """Re-derives the telemetry verdict from one receipt's retained raw LFT1.
+
+    This is evidence re-reading, not another sample: the raw `telemetry.lft1`
+    file is unchanged and the re-derived verdict is written beside it, bound to
+    the same receipt. It exists because a parser defect must never force a rerun
+    of an arm whose raw evidence is already complete.
+    """
+    run = json.loads((out / "run.json").read_text())
+    receipt = run.get("receipt") or {}
+    folder = Path(receipt.get("folder", ""))
+    raw = (folder / "telemetry.lft1").read_bytes()
+    if not raw:
+        raise ValueError("no retained raw LFT1 to re-derive from")
+    telemetry = edit_route.edit_telemetry_check(raw.splitlines())
+    rows = {row["scenario_id"]: row for row in edit.registry()}
+    row = rows[receipt["scenario_id"]]
+    receipt = {**receipt, "telemetry": telemetry}
+    outcome = edit_route.terminal_status(receipt, row)
+    write_json(out / "telemetry-check.json", {
+        "schema": "core-fs-bench-pro-exec-fuse-edit-telemetry-recheck-v1",
+        "scenario_id": receipt["scenario_id"],
+        "raw_lft1": str(folder / "telemetry.lft1"),
+        "raw_lft1_sha256": edit_route.sha256(folder / "telemetry.lft1"),
+        "resample": False,
+        "telemetry": telemetry,
+    })
+    write_json(out / "status-rechecked.json", {
+        "schema": "core-fs-bench-pro-exec-fuse-edit-status-recheck-v1",
+        "scenario_id": receipt["scenario_id"],
+        "resample": False,
+        "raw_edit_commit_ns": receipt.get("edit_commit_ns"),
+        "g2_target_ms": row["g2_target_ms"],
+        "outcome": outcome,
+    })
+    return json.dumps({"telemetry": telemetry["status"], "outcome": outcome["status"]})
+
+
 def verify_exec_edit(out):
     """Verifies one retained #232 receipt without repeating its measurement."""
     run = json.loads((out / "run.json").read_text())
@@ -509,6 +547,7 @@ def main():
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
     commands.add_parser("verify-edit").add_argument("--run", required=True)
+    commands.add_parser("recheck-edit").add_argument("--run", required=True)
     args = parser.parse_args()
     edit_rows = {row["scenario_id"]: row for row in edit.registry()}
     edit_families = {row["family_id"] for row in edit.registry()}
@@ -540,6 +579,8 @@ def main():
         print(verify_run(owned(args.run, existing=True)))
     elif args.command == "verify-edit":
         print(verify_exec_edit(owned(args.run, existing=True)))
+    elif args.command == "recheck-edit":
+        print(recheck_exec_edit(owned(args.run, existing=True)))
     else:
         print(report(owned(args.run, existing=True)), end="")
 
