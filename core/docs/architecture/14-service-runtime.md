@@ -132,8 +132,12 @@ own cause. The public SDK surface is unchanged.
 
 **Projection counts.** `layerfs-workspace::filesystem::projection_counters`
 holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,
-`read`, `write`, `readdir`, `open`, `setattr`, `rename`, `other`) and of upstream
-host Service calls issued by that Workspace. The FUSE adapter records each
+`read`, `write`, `readdir`, `open`, `setattr`, `rename`, `other`, `range_state`,
+`range_edit`) and of upstream host Service calls issued by that Workspace.
+`record_range_publication` separately saturates accepted replacement payload
+bytes and physical suffix payload bytes copied; a piece splice supplies zero
+shifted bytes even if its logical suffix is large. These new counts are
+available for #241 ingress to record at the publication point. The FUSE adapter records each
 callback at its single entry point, `setattr` and `rename` included, and
 `Workspace::remote_call` counts each upstream call. The counts appear in
 `WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
