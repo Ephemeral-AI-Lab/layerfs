@@ -309,7 +309,12 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         "/layerfs/diag-status.txt",
         format!(
             "id={} upstream={} calls={} bytes={} histogram={}\n",
-            selected.id.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            selected
+                .id
+                .as_bytes()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>(),
             local.upstream_calls,
             local.projection_calls.len(),
             local.projection_bytes.len(),

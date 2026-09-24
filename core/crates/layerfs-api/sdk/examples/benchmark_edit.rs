@@ -227,9 +227,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Untimed cleanup and post-timer observation, each separately reported.
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
-    if let Err(error) = &post_status {
-        eprintln!("DIAG post_status failed: {error:?}");
-    }
+    let unmount = workspaces.unmount(&mount.id);
+    let delete = sandboxes.delete(sandbox);
     let cleanup_ns = cleanup_started.elapsed().as_nanos();
     let projection = post_status
         .as_ref()
