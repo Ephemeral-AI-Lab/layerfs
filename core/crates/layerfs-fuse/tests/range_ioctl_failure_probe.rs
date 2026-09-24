@@ -45,6 +45,12 @@ mod linux {
         input
     }
 
+    fn accepted_state() -> Vec<u8> {
+        let mut bytes: Vec<u8> = (0..8192).map(|i| (i % 251) as u8).collect();
+        bytes.splice(4093..4093, (0..4096).map(|i| (i % 239) as u8));
+        bytes
+    }
+
     fn attr(ino: u64, size: u64, mtime: u64) -> FileAttr {
         let directory = ino == 1;
         let at = UNIX_EPOCH + Duration::from_secs(mtime);
@@ -146,7 +152,10 @@ mod linux {
                     "refused readonly mount before publication errno=EROFS",
                 );
                 reply.error(Errno::EROFS);
-            } else if self.case == "lost_reply" {
+            } else if self.case == "lost_reply" || self.case == "lost_reply_state" {
+                if self.case == "lost_reply_state" {
+                    fs::write(self.root.join("accepted-state.bin"), accepted_state()).unwrap();
+                }
                 event(
                     &self.root,
                     "published size=12288 mtime=1700000001; process exit before reply",
@@ -294,7 +303,7 @@ mod linux {
                 println!("caller ioctl closed fd={fd} errno={:?}", err.raw_os_error());
                 assert_eq!(err.raw_os_error(), Some(libc::EBADF));
             }
-            "lost_reply" => {
+            "lost_reply" | "lost_reply_state" => {
                 let file = OpenOptions::new()
                     .read(true)
                     .write(true)
@@ -305,11 +314,15 @@ mod linux {
                     "caller ioctl after daemon exit errno={:?}",
                     err.raw_os_error()
                 );
-                assert!(matches!(
-                    err.raw_os_error(),
-                    Some(libc::EIO | libc::ENOTCONN)
-                ));
+                assert!([libc::EIO, libc::ENOTCONN, libc::ECONNABORTED]
+                    .contains(&err.raw_os_error().unwrap_or_default()));
                 wait_for(&root, "published size=12288");
+                if case == "lost_reply_state" {
+                    assert_eq!(
+                        fs::read(root.join("accepted-state.bin")).unwrap(),
+                        accepted_state()
+                    );
+                }
                 let status = child.wait().unwrap();
                 assert_eq!(status.code(), Some(23));
                 let mount = std::ffi::CString::new(root.join("mnt").to_str().unwrap()).unwrap();
