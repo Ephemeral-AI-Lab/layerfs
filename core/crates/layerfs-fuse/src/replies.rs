@@ -6,6 +6,7 @@ use std::time::{Duration, UNIX_EPOCH};
 pub(crate) fn errno(error: WorkspaceError) -> Errno {
     match error {
         WorkspaceError::InvalidInput => Errno::EINVAL,
+        WorkspaceError::StaleStamp => Errno::ESTALE,
         WorkspaceError::Capacity => Errno::ENOSPC,
         WorkspaceError::Busy => Errno::EBUSY,
         WorkspaceError::Closed => Errno::ENODEV,

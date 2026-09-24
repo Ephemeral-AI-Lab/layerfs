@@ -38,10 +38,10 @@ pub(crate) struct Adapter {
 }
 
 impl Adapter {
-    fn root(&self) -> u64 {
+    pub(crate) fn root(&self) -> u64 {
         self.workspace.root().serial
     }
-    fn guard(&self, req: &Request) -> Result<(), Errno> {
+    pub(crate) fn guard(&self, req: &Request) -> Result<(), Errno> {
         if self.stopping.load(Ordering::Acquire) {
             return Err(Errno::ENODEV);
         }
@@ -50,7 +50,7 @@ impl Adapter {
         }
         Ok(())
     }
-    fn handle(&self, ino: INodeNo, fh: FileHandle) -> Result<(), Errno> {
+    pub(crate) fn handle(&self, ino: INodeNo, fh: FileHandle) -> Result<(), Errno> {
         let attrs = self.workspace.handle_attributes(fh.0).map_err(errno)?;
         if attrs.serial != serial(ino, self.root()) {
             return Err(Errno::EBADF);
@@ -579,6 +579,20 @@ impl Filesystem for Adapter {
             Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
             Err(error) => reply.error(error),
         }
+    }
+
+    fn ioctl(
+        &self,
+        req: &Request,
+        ino: INodeNo,
+        fh: FileHandle,
+        flags: IoctlFlags,
+        cmd: u32,
+        input: &[u8],
+        out_size: u32,
+        reply: ReplyIoctl,
+    ) {
+        crate::range_ioctl::dispatch(self, req, ino, fh, flags, cmd, input, out_size, reply);
     }
 
     fn mknod(
