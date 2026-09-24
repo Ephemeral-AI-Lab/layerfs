@@ -305,23 +305,30 @@ fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), Works
 
 fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Response, Failure> {
     let local = workspace.status().map_err(|error| failure_code(&error))?;
-    std::fs::write(
-        "/layerfs/diag-status.txt",
-        format!(
-            "id={} upstream={} calls={} bytes={} histogram={}\n",
-            selected
-                .id
-                .as_bytes()
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
-            local.upstream_calls,
-            local.projection_calls.len(),
-            local.projection_bytes.len(),
-            local.projection_histogram.len(),
-        ),
-    )
-    .ok();
+    let mut diag = format!(
+        "id={} upstream={} calls={} bytes={} histogram={}\n",
+        selected
+            .id
+            .as_bytes()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>(),
+        local.upstream_calls,
+        local.projection_calls.len(),
+        local.projection_bytes.len(),
+        local.projection_histogram.len(),
+    );
+    diag.push_str(&format!(
+        "counts={:?}\nbytes={:?}\nhist={:?}\n",
+        local.projection_calls, local.projection_bytes, local.projection_histogram
+    ));
+    diag.push_str(&format!("counts_err={:?}\n", projection_counts(&local).err()));
+    diag.push_str(&format!("bytes_err={:?}\n", projection_bytes(&local).err()));
+    diag.push_str(&format!(
+        "read_err={:?}\nwrite_err={:?}\n",
+        projection_sizes(&local.projection_histogram, "read").err(),
+        projection_sizes(&local.projection_histogram, "write").err(),
+    ));
     let result = WorkspaceStatusWire {
         workspace: selected.id.as_bytes().into(),
         incarnation: selected.incarnation,
