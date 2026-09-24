@@ -206,30 +206,6 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                 e.u64(v.replacement)?;
             }
         }
-        Operation::EditFileWithMetadata {
-            root,
-            base_length,
-            edits,
-            metadata,
-            kind,
-            mode,
-            mtime_seconds,
-            mtime_nanoseconds,
-        } => {
-            e.put(root)?;
-            e.u64(*base_length)?;
-            e.count(edits.len())?;
-            for v in edits {
-                e.u64(v.start)?;
-                e.u64(v.end)?;
-                e.u64(v.replacement)?;
-            }
-            e.put(metadata)?;
-            e.u8(*kind)?;
-            e.u32(*mode)?;
-            e.u64(*mtime_seconds as u64)?;
-            e.u32(*mtime_nanoseconds)?;
-        }
         Operation::UpdatePreparedFilesystem {
             base,
             scope,
@@ -867,29 +843,6 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             mtime_seconds: d.u64()? as i64,
             mtime_nanoseconds: d.u32()?,
         },
-        EDIT_FILE_WITH_METADATA_OPCODE => {
-            let root = d.root()?;
-            let base_length = d.u64()?;
-            let count = d.count(256, 24)?;
-            let mut edits = Vec::with_capacity(count);
-            for _ in 0..count {
-                edits.push(Edit {
-                    start: d.u64()?,
-                    end: d.u64()?,
-                    replacement: d.u64()?,
-                });
-            }
-            Operation::EditFileWithMetadata {
-                root,
-                base_length,
-                edits,
-                metadata: d.root()?,
-                kind: d.u8()?,
-                mode: d.u32()?,
-                mtime_seconds: d.u64()? as i64,
-                mtime_nanoseconds: d.u32()?,
-            }
-        }
         CONSTRUCT_PORTABLE_METADATA_OPCODE => Operation::ConstructPortableMetadata {
             kind: d.u8()?,
             mode: d.u32()?,

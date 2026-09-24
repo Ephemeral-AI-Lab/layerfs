@@ -2,11 +2,10 @@
 use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
-    EDIT_FILE_WITH_METADATA_OPCODE, HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES,
-    MANIFEST_TARGET_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE,
-    STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_ATTACH_OPCODE,
-    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE, WORKSPACE_EXEC_OPCODE,
-    WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
+    HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES,
+    PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
+    WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
+    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
     WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
@@ -82,26 +81,6 @@ pub enum Operation {
         root: Root,
         base_length: u64,
         edits: Vec<Edit>,
-    },
-    /// Edits content and stamps the resulting inode's portable metadata.
-    ///
-    /// One dirty file needs one publication, not two: the content root this
-    /// operation produces is the base its portable fields are patched onto, so
-    /// both objects are emitted under a single save owner.
-    EditFileWithMetadata {
-        root: Root,
-        base_length: u64,
-        edits: Vec<Edit>,
-        /// The published sibling inode whose portable fields these replace,
-        /// exactly as the separate `UpdatePortableMetadata` request names it.
-        ///
-        /// That root is a file root, not the attributes root it names: the
-        /// patch reads the portable fields through it and rebuilds them.
-        metadata: Root,
-        kind: u8,
-        mode: u32,
-        mtime_seconds: i64,
-        mtime_nanoseconds: u32,
     },
     UpdatePreparedFilesystem {
         base: Root,
@@ -235,7 +214,6 @@ impl Operation {
             Self::ConstructFile { .. } => 3,
             Self::ConstructSymlink { .. } => CONSTRUCT_SYMLINK_OPCODE,
             Self::EditFile { .. } => 4,
-            Self::EditFileWithMetadata { .. } => EDIT_FILE_WITH_METADATA_OPCODE,
             Self::UpdatePreparedFilesystem { .. } => 5,
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
@@ -259,7 +237,6 @@ impl Operation {
             Self::ConstructFile { .. } => "ConstructFile",
             Self::ConstructSymlink { .. } => "ConstructSymlink",
             Self::EditFile { .. } => "EditFile",
-            Self::EditFileWithMetadata { .. } => "EditFileWithMetadata",
             Self::UpdatePreparedFilesystem { .. } => "UpdatePreparedFilesystem",
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
@@ -287,7 +264,6 @@ impl Operation {
             Self::ConstructFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
-            | Self::EditFileWithMetadata { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -308,7 +284,6 @@ impl Operation {
             Self::ConstructFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
-            | Self::EditFileWithMetadata { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -367,7 +342,6 @@ impl Operation {
             | Self::ConstructFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::EditFile { .. }
-            | Self::EditFileWithMetadata { .. }
             | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -389,11 +363,9 @@ impl Operation {
     pub fn input_length(&self) -> Result<u64, Failure> {
         match self {
             Self::ConstructFile { length } => Ok(*length),
-            Self::EditFile { edits, .. } | Self::EditFileWithMetadata { edits, .. } => {
-                edits.iter().try_fold(0u64, |sum, e| {
-                    sum.checked_add(e.replacement).ok_or(Code::Capacity.into())
-                })
-            }
+            Self::EditFile { edits, .. } => edits.iter().try_fold(0u64, |sum, e| {
+                sum.checked_add(e.replacement).ok_or(Code::Capacity.into())
+            }),
             _ => Ok(0),
         }
     }

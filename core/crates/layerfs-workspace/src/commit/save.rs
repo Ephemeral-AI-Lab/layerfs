@@ -83,11 +83,11 @@ impl Workspace {
                     .map_err(|_| WorkspaceError::Io)?
                     .status
                     .saved_files += 1;
-                (root, None)
+                root
             } else {
                 let plan = self.lower_file(submission, inode, deadline)?;
                 if plan.edits.is_empty() && !inode.fresh {
-                    (inode.base, None)
+                    inode.base
                 } else {
                     submission.phase(StagePhase::FileSave, Some(serial))?;
                     let mut source =
@@ -95,10 +95,6 @@ impl Workspace {
                     let remote = first_remote
                         .take()
                         .map_or_else(|| self.begin(true, deadline), Ok)?;
-                    // One dirty file is one publication: a published file
-                    // carries its portable fields in the same request, so the
-                    // route pays one crossing instead of two. A fresh file has
-                    // no base root to patch, so its metadata stays separate.
                     let response = self.remote_call(
                         (self.inner.store, captured.generation),
                         if inode.fresh {
@@ -106,15 +102,10 @@ impl Workspace {
                                 length: inode.length,
                             }
                         } else {
-                            Operation::EditFileWithMetadata {
+                            Operation::EditFile {
                                 root: inode.base,
                                 base_length: inode.base_length,
                                 edits: plan.edits,
-                                metadata: inode.metadata,
-                                kind,
-                                mode: inode.mode,
-                                mtime_seconds: inode.seconds,
-                                mtime_nanoseconds: inode.nanos,
                             }
                         },
                         &mut source,
@@ -130,19 +121,10 @@ impl Workspace {
                             .map_err(|_| WorkspaceError::Io)?
                             .source_failure = Some(failure);
                     }
-                    let Response::Saved {
-                        root,
-                        length,
-                        metadata,
-                        ..
-                    } = response?
-                    else {
+                    let Response::Saved { root, length, .. } = response? else {
                         return Err(WorkspaceError::InvalidInput);
                     };
                     if length != inode.length || !source.complete() {
-                        return Err(WorkspaceError::InvalidInput);
-                    }
-                    if metadata.is_some() == inode.fresh {
                         return Err(WorkspaceError::InvalidInput);
                     }
                     submission
@@ -151,10 +133,9 @@ impl Workspace {
                         .map_err(|_| WorkspaceError::Io)?
                         .status
                         .saved_files += 1;
-                    (root, metadata)
+                    root
                 }
             };
-            let (content, merged) = content;
             {
                 let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
                 state.pending = Some(SavedInode {
@@ -164,19 +145,6 @@ impl Workspace {
                     content,
                     metadata: None,
                 });
-            }
-            if let Some(metadata) = merged {
-                // The merged save already stamped this inode's portable fields
-                // under the same save owner, so no second request is needed.
-                let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
-                state.pending.as_mut().ok_or(WorkspaceError::Io)?.metadata = Some(metadata);
-                state.status.saved_metadata += 1;
-                submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
-                self.persist_saved(submission, deadline)?;
-                submission.phase(StagePhase::LocalBookkeeping, None)?;
-                after = serial;
-                count += 1;
-                continue;
             }
             submission.phase(StagePhase::MetadataSave, Some(serial))?;
             let remote = first_remote

@@ -70,9 +70,6 @@ pub enum Response {
         length: u64,
         inserted: u64,
         reused: u64,
-        /// The portable-metadata root the same save produced, when the request
-        /// asked for content and metadata together.
-        metadata: Option<Root>,
     },
     FilesystemSaved {
         root: Root,

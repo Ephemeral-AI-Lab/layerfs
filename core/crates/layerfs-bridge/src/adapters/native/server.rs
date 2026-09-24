@@ -74,27 +74,12 @@ pub fn serve(
                 Err(e) => Err(e),
             }
         };
-        eprintln!(
-            "DIAG server result ok={} input_complete={}",
-            result.is_ok(),
-            input.complete()
-        );
         match result {
-            Ok(response) => {
-                let bytes = match encode_response(&response) {
-                    Ok(bytes) => bytes,
-                    Err(error) => {
-                        eprintln!("DIAG server encode failed {error:?}");
-                        return Err(error);
-                    }
-                };
-                eprintln!("DIAG server sending {} bytes", bytes.len());
-                connection.send.write(&Frame {
-                    kind: Kind::Success,
-                    id: request.id,
-                    bytes,
-                })?
-            }
+            Ok(response) => connection.send.write(&Frame {
+                kind: Kind::Success,
+                id: request.id,
+                bytes: encode_response(&response)?,
+            })?,
             Err(error) => {
                 let _ = connection.send.write(&Frame {
                     kind: Kind::Failure,

@@ -21,7 +21,6 @@ fn saved(length: u64) -> Response {
         length,
         inserted: 7,
         reused: 8,
-        metadata: None,
     }
 }
 
@@ -54,16 +53,12 @@ fn constructor_has_exact_bounds_opaque_target_and_shared_content_grant() {
         assert_eq!(decode_request(1, &bytes).unwrap(), r);
         let response = saved(target.len() as u64);
         let bytes = encode_response(&response).unwrap();
-        // The saved result ends with the optional portable-metadata root the
-        // merged content-and-metadata save may carry; absent, it is one zero
-        // presence byte.
-        assert_eq!(bytes.len(), 58);
+        assert_eq!(bytes.len(), 57);
         assert_eq!(bytes[0], 2);
         assert_eq!(&bytes[1..33], &[2; 32]);
         assert_eq!(&bytes[33..41], &(target.len() as u64).to_be_bytes());
         assert_eq!(&bytes[41..49], &7u64.to_be_bytes());
         assert_eq!(&bytes[49..57], &8u64.to_be_bytes());
-        assert_eq!(bytes[57], 0);
         assert_eq!(decode_response(&bytes).unwrap(), response);
     }
 }

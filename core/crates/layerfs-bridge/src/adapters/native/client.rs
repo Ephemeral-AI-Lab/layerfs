@@ -157,9 +157,6 @@ impl Client {
                     if frame.id != r.id || frames > frame_budget(r.response_bytes) {
                         return Err(delivery(r));
                     }
-                    if r.operation.label() == "EditFileWithMetadata" {
-                        eprintln!("DIAG frame kind={:?} id={} len={}", frame.kind, frame.id, frame.bytes.len());
-                    }
                     match frame.kind {
                         Kind::ResultData => {
                             if matches!(
@@ -191,16 +188,7 @@ impl Client {
                                 }
                             }
                             if !matches_response(r, &response, bytes) {
-                                eprintln!(
-                                    "DIAG response rejected op={} bytes={bytes} response={response:?}",
-                                    r.operation.label()
-                                );
                                 return Err(delivery(r));
-                            }
-                            if r.operation.label() == "EditFileWithMetadata" {
-                                eprintln!(
-                                    "DIAG merged accepted bytes={bytes} response={response:?}"
-                                );
                             }
                             return Ok(response);
                         }
@@ -519,30 +507,11 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             Operation::EditFile {
                 base_length, edits, ..
             },
-            Response::Saved {
-                length, metadata, ..
-            },
+            Response::Saved { length, .. },
         ) => {
             edits.iter().try_fold(*base_length, |n, e| {
                 n.checked_sub(e.end - e.start)?.checked_add(e.replacement)
             }) == Some(*length)
-                && metadata.is_none()
-                && bytes == 0
-        }
-        (
-            Operation::EditFileWithMetadata {
-                base_length, edits, ..
-            },
-            Response::Saved {
-                length, metadata, ..
-            },
-        ) => {
-            // The merged save promises the portable root it produced, so a
-            // reply without one is not this operation's answer.
-            edits.iter().try_fold(*base_length, |n, e| {
-                n.checked_sub(e.end - e.start)?.checked_add(e.replacement)
-            }) == Some(*length)
-                && metadata.is_some()
                 && bytes == 0
         }
         (Operation::UpdatePreparedFilesystem { .. }, Response::FilesystemSaved { .. }) => {

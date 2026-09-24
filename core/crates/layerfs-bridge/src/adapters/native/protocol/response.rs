@@ -35,14 +35,12 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             length,
             inserted,
             reused,
-            metadata,
         } => {
             e.u8(2)?;
             e.put(root)?;
             e.u64(*length)?;
             e.u64(*inserted)?;
             e.u64(*reused)?;
-            put_optional(&mut e, metadata.as_ref())?;
         }
         Response::FilesystemSaved {
             root,
@@ -601,7 +599,6 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             length: d.u64()?,
             inserted: d.u64()?,
             reused: d.u64()?,
-            metadata: take_optional::<32>(&mut d)?,
         },
         3 => Response::File {
             length: d.u64()?,
