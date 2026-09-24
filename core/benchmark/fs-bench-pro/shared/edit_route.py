@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import threading
 import time
 
 BENCH = Path(__file__).resolve().parent.parent
@@ -31,6 +32,25 @@ def owned_containers():
         ["docker", "ps", "-a", "--filter", f"label={OWNER_LABEL}", "--format", "{{.ID}}"],
         capture_output=True)
     return process.stdout.decode().split()
+
+
+def daemon_diag_snapshot(folder, deadline_s=15.0):
+    """Copies the daemon's labelled status diagnostic out of the sandbox.
+
+    A labelled diagnostic instrument: it reads one file the daemon writes for
+    this investigation and never touches the product route. The file lives in
+    the sandbox's own named volume, which teardown removes, so it is copied
+    while the container is still up.
+    """
+    deadline = time.monotonic() + deadline_s
+    while time.monotonic() < deadline:
+        for container in owned_containers():
+            process = subprocess.run(["docker", "cp", f"{container}:/layerfs/diag-status.txt",
+                                      str(folder / "daemon-status.txt")], capture_output=True)
+            if process.returncode == 0:
+                return True
+        time.sleep(0.02)
+    return False
 
 
 def daemon_log_stream(deadline_s=10.0):
@@ -294,6 +314,8 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
                    f"exec-{row['scenario_id'][:40]}"]
         environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
         daemon_log = daemon_log_stream()
+        diag = threading.Thread(target=daemon_diag_snapshot, args=(folder,), daemon=True)
+        diag.start()
         started = time.monotonic_ns()
         try:
             result = subprocess.run(command, capture_output=True, timeout=COMPLETE_COMMAND_TIMEOUT_S,
