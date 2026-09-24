@@ -16,6 +16,9 @@ also leaves the gate open.
 The owner-approved [lite verifier follow-up](issue-231/SDK-VERIFIER-LITE-RESULTS-20260924.md)
 passes sampled content verification on all four tiers while leaving
 performance eligibility open.
+The later [owner ruling](issue-231/FUNCTIONAL-COMPLETION-20260924.md) closes
+#231 on the release-only functional result. It does not clear #230's cold
+performance admission gate.
 The [handoff prompt](issue-231/HANDOFF.md) lists what an implementation agent
 must read, do and avoid; the new Init family test path and separate full
 verifier are specified there and in the first-pass spec.

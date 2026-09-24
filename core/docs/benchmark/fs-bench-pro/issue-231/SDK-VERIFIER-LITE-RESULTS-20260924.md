@@ -4,7 +4,9 @@
 > replaced per-file full-content benchmark readback with complete namespace
 > inventory plus a deterministic file sample. This result does **not** claim
 > all file payloads were read. Performance admission and #231 closure remain
-> open under the uncontrolled source-cache/numeric-gate contract.
+> open under the uncontrolled source-cache/numeric-gate contract at the time
+> of this measurement. The later [owner ruling](FUNCTIONAL-COMPLETION-20260924.md)
+> closes #231 on functional completion without changing these receipts.
 
 ## Identity and scope
 
@@ -73,5 +75,7 @@ All rows still declare `source-cache-uncontrolled-v1` and
 `admission_eligible=false`, with no frozen numeric SDK latency target.
 The owner-approved lighter verifier resolves the **verification-time**
 blocker, but cannot turn these raw public-call observations into #231's
-four eligible performance PASS rows. Do not merge the treatment PR to
-remote `main` or close #231 solely on this cohort.
+four eligible performance PASS rows. The later
+[owner ruling](FUNCTIONAL-COMPLETION-20260924.md) narrows #231's closure
+criterion to functional completion without changing these performance labels
+or #230's broader gate.

@@ -5,6 +5,10 @@
 > performance receipt. Freeze and commit the applicable case contract before
 > building its driver or collecting its first sample.
 
+The later [owner ruling](FUNCTIONAL-COMPLETION-20260924.md) revises #231's
+completion criterion to the four-tier release-only functional result. This
+historical proposal retains its original performance requirements for #230.
+
 **Fast-lane amendment, 2026-09-23:** `run` skips the independent full
 verifier by default. `run --verify` requests it after the same single timed
 operation. A default row records `verification=SKIPPED` and is diagnostic
