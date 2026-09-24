@@ -507,11 +507,30 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             Operation::EditFile {
                 base_length, edits, ..
             },
-            Response::Saved { length, .. },
+            Response::Saved {
+                length, metadata, ..
+            },
         ) => {
             edits.iter().try_fold(*base_length, |n, e| {
                 n.checked_sub(e.end - e.start)?.checked_add(e.replacement)
             }) == Some(*length)
+                && metadata.is_none()
+                && bytes == 0
+        }
+        (
+            Operation::EditFileWithMetadata {
+                base_length, edits, ..
+            },
+            Response::Saved {
+                length, metadata, ..
+            },
+        ) => {
+            // The merged save promises the portable root it produced, so a
+            // reply without one is not this operation's answer.
+            edits.iter().try_fold(*base_length, |n, e| {
+                n.checked_sub(e.end - e.start)?.checked_add(e.replacement)
+            }) == Some(*length)
+                && metadata.is_some()
                 && bytes == 0
         }
         (Operation::UpdatePreparedFilesystem { .. }, Response::FilesystemSaved { .. }) => {
