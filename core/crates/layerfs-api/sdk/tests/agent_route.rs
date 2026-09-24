@@ -20,10 +20,12 @@ use layerfs_telemetry::{
     runtime::{Configuration, MonitorConfig, Runtime},
     timer::Timing,
 };
+use nix::poll::{poll, PollFd, PollFlags};
 use std::{
     fs::OpenOptions,
     io::{Cursor, Write},
     net::TcpListener,
+    os::fd::AsFd,
     path::PathBuf,
     process::Command,
     sync::{
@@ -240,6 +242,14 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
     };
     let thread = thread::spawn(move || {
         while !stopping.load(Ordering::Acquire) {
+            let mut fds = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
+            poll(&mut fds, 10u16).unwrap();
+            if !fds[0]
+                .revents()
+                .is_some_and(|flags| flags.contains(PollFlags::POLLIN))
+            {
+                continue;
+            }
             match listener.accept() {
                 Ok((stream, _)) => {
                     let server = server.clone();
@@ -256,9 +266,7 @@ fn init_mount_exec_commit_unmount_and_historical_conflict() {
                         }
                     });
                 }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(10))
-                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
                 Err(error) => panic!("service accept: {error}"),
             }
         }

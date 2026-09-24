@@ -16,4 +16,5 @@ layerfs-storage = { path = "../../layerfs-storage" }
 layerfs-telemetry = { path = "../../layerfs-telemetry", features = ["native"] }
 
 [dev-dependencies]
+nix = { version = "=0.31.3", features = ["poll"] }
 sha2 = "=0.10.9"
