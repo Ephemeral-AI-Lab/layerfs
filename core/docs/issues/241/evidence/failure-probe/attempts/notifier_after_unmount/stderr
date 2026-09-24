@@ -1,0 +1,8 @@
+
+thread 'linux::probe' panicked at crates/layerfs-fuse/tests/range_ioctl_failure_probe.rs:220:13:
+notifier unexpectedly succeeded after unmount
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'linux::probe' panicked at crates/layerfs-fuse/tests/range_ioctl_failure_probe.rs:329:9:
+assertion failed: child.wait().unwrap().success()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,37 @@
+[
+  {
+    "case": "ro_mount",
+    "exit_code": 0,
+    "ioctl_callbacks": 1,
+    "complete_command_wall_ns": 96379459,
+    "events_sha256": "e58af77fd9ffff655a86839d3035422b7d38727f923ad864224263c77a687283"
+  },
+  {
+    "case": "closed_fd",
+    "exit_code": 0,
+    "ioctl_callbacks": 0,
+    "complete_command_wall_ns": 89023833,
+    "events_sha256": "8976fe5e7c5f329e9d42a4ca96e9c1be80585341be3f039ab2e954a5cbd1ea4e"
+  },
+  {
+    "case": "lost_reply",
+    "exit_code": 101,
+    "ioctl_callbacks": 1,
+    "complete_command_wall_ns": 86586125,
+    "events_sha256": "fa267bec39ef8aa3c231218c41679ab6e6670ee7af24b8c58860485ab846c139"
+  },
+  {
+    "case": "notifier_after_unmount",
+    "exit_code": 101,
+    "ioctl_callbacks": 0,
+    "complete_command_wall_ns": 73598125,
+    "events_sha256": "9b80a202d8ce5aae1069c5f0428be7d14db38a2489b4539db65fe507efeca3e7"
+  },
+  {
+    "case": "lost_reply_state",
+    "exit_code": 0,
+    "ioctl_callbacks": 1,
+    "complete_command_wall_ns": 77266042,
+    "events_sha256": "6b29d10a523f29dbb9d63554de538edd6a9f105f972873586fb64509aea1bf70"
+  }
+]

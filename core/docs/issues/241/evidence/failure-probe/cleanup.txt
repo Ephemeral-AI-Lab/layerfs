@@ -1,0 +1,8 @@
+docker exec layerfs-241-failure-probe-d7ade911 umount -l /probe/lost_reply/mnt
+exit=0
+docker exec layerfs-241-failure-probe-d7ade911 sh -c grep-check-both-mounts
+exit=0; no matching mountinfo lines
+docker rm -f layerfs-241-failure-probe-d7ade911
+exit=0; owned container removed
+docker volume rm layerfs-241-failure-probe-d7ade911
+exit=0; owned volume removed after raw copy
