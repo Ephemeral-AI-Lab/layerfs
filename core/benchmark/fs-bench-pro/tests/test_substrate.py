@@ -28,6 +28,15 @@ class Substrate(unittest.TestCase):
         for backend in ("layerfs_bridge", "layerfs_history", "layerfs_service", "layerfs_storage"):
             self.assertNotIn(f"use {backend}", driver)
 
+    def test_explicit_large_cases_remain_separate_from_default_family(self):
+        self.assertEqual(len(runner.init.SELECTED), 2)
+        for case in tuple(runner.init.CASES)[2:]:
+            with self.subTest(case=case), patch.object(runner, "run", return_value=Path("receipt")) as run:
+                with patch.object(sys, "argv", ["runner.py", "run", "--case", case, "--out", "fresh"]):
+                    with redirect_stdout(io.StringIO()):
+                        runner.main()
+                run.assert_called_once_with(case, "fresh")
+
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):

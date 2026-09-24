@@ -163,6 +163,8 @@ def case_run(out, case, binaries, identity):
     folder = out / "sdk-host" / "init_namespace" / case.id
     folder.mkdir(parents=True)
     receipt = {"schema": "core-fs-bench-pro-sdk-init-v2", "case": case.id,
+               "benchmark_registration": ("REGISTERED_SDK_V2" if case.id in init.SELECTED
+                                          else "UNREGISTERED_DIAGNOSTIC"),
                "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 2,
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "operation_contract_id": "sdk-init-project-host-v1",
@@ -318,6 +320,8 @@ def run(selection, out):
                     case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v2", "selection": selection,
+        "benchmark_registration": ("UNREGISTERED_DIAGNOSTIC" if selection in init.CASES
+                                   and selection not in init.SELECTED else "REGISTERED_SDK_V2"),
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})
@@ -344,7 +348,7 @@ def main():
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
     elif args.command == "run":
         selection = args.case or args.family
-        if selection not in (*init.SELECTED, "init_namespace"):
+        if selection not in (*init.CASES, "init_namespace"):
             parser.error("unknown or deferred SDK case")
         print(run(selection, args.out))
     elif args.command == "verify":
