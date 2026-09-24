@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-sample SDK Init runner with append-only two-case evidence."""
+"""One-sample release-only SDK Init runner with append-only evidence."""
 import argparse
 import fcntl
 import hashlib
@@ -20,8 +20,10 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 
-CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
-BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
+CONTRACT_COMMIT = "23787205938e075d8ec4f7a9af841843f31e4778"
+BUILD_PROFILE = "release"
+BINARY_DIR = "release/examples"
+BUILD = ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
 BINARIES = ("benchmark_init", "verify_namespace")
@@ -83,19 +85,19 @@ def identities():
     return {"source_commit": source, "source_tree": tree, "source_dirty": bool(dirty),
             "dirty_paths": dirty.splitlines(), "product_seal": seal(product),
             "harness_seal": seal(harness), "cargo_lock_sha256": digest(CORE / "Cargo.lock"),
-            "contract_commit": CONTRACT_COMMIT}
+            "contract_commit": CONTRACT_COMMIT, "build_profile": BUILD_PROFILE}
 
 
 def build(out, target, identity):
-    cache = RESULTS / "sdk-build.json"
+    cache = RESULTS / "sdk-build-release.json"
     prior = json.loads(cache.read_text()) if cache.exists() else None
-    if prior and prior.get("product_seal") == identity["product_seal"] and all(
+    if prior and prior.get("build_profile") == BUILD_PROFILE and prior.get("product_seal") == identity["product_seal"] and all(
         Path(prior["binaries"][name]["path"]).is_file() and
         digest(prior["binaries"][name]["path"]) == prior["binaries"][name]["sha256"]
         for name in BINARIES
     ):
         return {"status": "PASS", "mode": "exact-binary-reuse", "wall_ns": 0,
-                "command": None, "binaries": prior["binaries"]}
+                "command": None, "build_profile": BUILD_PROFILE, "binaries": prior["binaries"]}
     started = time.monotonic_ns()
     with (out / "build.log").open("wb") as log:
         process = subprocess.run(BUILD, cwd=ROOT,
@@ -106,11 +108,11 @@ def build(out, target, identity):
               "mode": "changed-product" if prior else "first-use", "wall_ns": wall,
               "budget_ns": 30_000_000_000, "exit_code": process.returncode,
               "compiled_units": (out / "build.log").read_text(errors="replace").count("Compiling "),
-              "command": BUILD, "target": str(target)}
+              "command": BUILD, "target": str(target), "build_profile": BUILD_PROFILE}
     if process.returncode == 0:
         binaries = {}
         for name in BINARIES:
-            source = target / "debug/examples" / name
+            source = target / BINARY_DIR / name
             binary_sha = digest(source)
             archive = RESULTS / "binary-archive" / binary_sha / name
             archive.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +122,8 @@ def build(out, target, identity):
             binaries[name] = {"path": str(archive), "sha256": binary_sha}
         record["binaries"] = binaries
         if record["status"] == "PASS":
-            write_json(cache, {"product_seal": identity["product_seal"], "binaries": binaries})
+            write_json(cache, {"product_seal": identity["product_seal"],
+                               "build_profile": BUILD_PROFILE, "binaries": binaries})
     return record
 
 
@@ -162,10 +165,11 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
 def case_run(out, case, binaries, identity):
     folder = out / "sdk-host" / "init_namespace" / case.id
     folder.mkdir(parents=True)
-    receipt = {"schema": "core-fs-bench-pro-sdk-init-v2", "case": case.id,
-               "benchmark_registration": ("REGISTERED_SDK_V2" if case.id in init.SELECTED
+    receipt = {"schema": "core-fs-bench-pro-sdk-init-release-v3", "case": case.id,
+               "build_profile": BUILD_PROFILE,
+               "benchmark_registration": ("REGISTERED_SDK_RELEASE_V3" if case.id in init.SELECTED
                                           else "UNREGISTERED_DIAGNOSTIC"),
-               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 2,
+               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 3,
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "operation_contract_id": "sdk-init-project-host-v1",
                "operation_surface": "layerfs-sdk", "operation_entrypoint": "Client::init_project",
@@ -292,6 +296,7 @@ def fill_not_run(out, selection, blocked=None):
         selected = selection == "init_namespace" and case.id in init.SELECTED or selection == case.id
         reason = blocked if selected and blocked else "not selected" if case.id in init.SELECTED else init.NOT_RUN_REASON
         write_json(folder / "receipt.json", {"case": case.id, "status": "NOT_RUN", "sample_count": 0,
+                                           "build_profile": BUILD_PROFILE,
                                            "functional_status": "NOT_RUN", "cache_contract": "source-cache-uncontrolled-v1",
                                            "reason": reason})
 
@@ -319,9 +324,10 @@ def run(selection, out):
                 for case in cases:
                     case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
-    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-v2", "selection": selection,
+    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-release-v3", "selection": selection,
+        "build_profile": BUILD_PROFILE,
         "benchmark_registration": ("UNREGISTERED_DIAGNOSTIC" if selection in init.CASES
-                                   and selection not in init.SELECTED else "REGISTERED_SDK_V2"),
+                                   and selection not in init.SELECTED else "REGISTERED_SDK_RELEASE_V3"),
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})

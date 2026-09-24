@@ -1,9 +1,10 @@
 # v0.1.7 SDK Init benchmark workflow
 
 Read repository `AGENTS.md`, `core/AGENTS.md`, the general benchmark rules,
-and [the #236 SDK route contract](../../docs/benchmark/fs-bench-pro/issue-236-sdk-init/SPEC.md)
+and [the current release-only SDK contract](../../docs/benchmark/fs-bench-pro/issue-231/SDK-RELEASE-FOUR-TIER-20260924.md)
 before changing this tree or sampling. The older #231 `daemon-host` receipts
-and specification remain historical evidence; do not rewrite or relabel them.
+and the #236 debug SDK receipts remain historical evidence; do not rewrite
+or relabel them.
 
 `runner.py` is the sole `init_namespace` runner. `families/init_namespace.py`
 owns the case registry, sealed source preparation, and invocation of the
@@ -14,21 +15,22 @@ route may supply a new Init number. MCP and CLI remain outside this benchmark.
 
 The default family selection is exactly the 100- and 1,000-file cases, seed 1,
 one sample each, in that order. The 10,000- and 100,000-file cases remain
-visible as `NOT_RUN`. Verification is mandatory and separate from the timer.
+visible as `NOT_RUN` in that default selection and may be run explicitly
+under the release-only four-tier contract. Verification is mandatory and
+separate from the timer.
 Never resample a case at the same identity, retry a miss, select a best result,
 or change a deadline, worker count, fixture, or cache contract to get a pass.
 Retain every failed or ineligible attempt in a fresh output directory.
 
 Use a worktree-local Cargo target, prepared masters, Store, scratch and result
 root. Build only needed binaries with `--locked` and record a 30 s build budget.
-**Use the default Cargo debug profile only** for this SDK Init selection:
-`runner.py` must build without `--release`, and the SDK driver and independent
-verifier must come from `target/debug/examples/`. Do not substitute a release
-binary, an optimization flag, or a release diagnostic receipt to improve a row.
-Keep the historical 10k release diagnostic separate from the registered debug
-cases and do not compare debug SDK timings with release daemon-host timings as
-a regression claim. A different profile requires its own frozen selection and
-new receipts; it never relabels these v2 observations.
+**Use locked Cargo release binaries only** for every new SDK Init measurement:
+`runner.py` must build with `--release`, and the SDK driver and independent
+verifier must come from `target/release/examples/`. No debug option, debug
+fallback or reuse of an old unmarked/debug build cache is allowed. Keep all
+older debug v2 and release research receipts under their original identities;
+never promote them into the new release selection. A source/cache/operation
+change requires its own frozen identity and fresh receipts.
 The complete performance command has a 15 s budget; the independent verifier
 has a 5 s budget. The two-case cycle has a recommended 30 s budget. Hold the
 nonblocking worktree-local run lock while fixtures and result files are mutable;

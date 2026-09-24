@@ -6,6 +6,8 @@
 > 1,000-file rows passed functional proof but remain performance-ineligible;
 > the 10,000-file verifier timed out, and the 100,000-file command timed out.
 > These are not the historical daemon-host #231 route or cold Init evidence.
+> **These debug-profile misses are not evidence of an algorithm-speed
+> regression against earlier release-profile rows.**
 
 ## Identity and method
 
@@ -48,6 +50,37 @@ It produced no confirmed `operation_ns` or root, so its receipt has
 `sample_count=0` despite the attempted call. Its partially written Store was
 515,268,608 B apparent, and an empty ordering scratch directory remained;
 the runner correctly reports cleanup `UNKNOWN`. Neither case was retried.
+
+## Why these times differ from earlier results
+
+At this cohort's collection, the historical
+[#236 SDK contract](../issue-236-sdk-init/SPEC.md) required Cargo's
+default **debug** profile. The earlier 1.1–1.4 s 10k observations and the
+roughly 5–6 s 100k observations were made with **release** binaries. The
+[post-merge profile check](../../../issues/237/sdk-merge-check-20260924.md)
+already measured the same earlier SDK source at **6.140 s debug** and
+**1.289 s release** for 10k, with full verification at **8.287 s debug**
+and **2.166 s release**. This cohort's 6.212 s debug 10k call is close to
+that earlier debug observation; the receipts do not establish a new 5×
+product slowdown. The current Core product source under `core/crates/` is
+unchanged from the retained direct-inode release diagnostic's product
+source (`git diff c52e5eba4 6a94a5124 -- core/crates core/Cargo.toml
+.cargo/config.toml` is empty). That earlier 100k release SDK call completed
+in **5.410 s** with full readback PASS in **9.179 s**
+([receipt](../../../issues/237/evidence/c3-inode-fusion-20260924/candidate/receipt.json)).
+The current 100k **debug** call has no confirmed result by 15 s; its exact
+debug completion time is unknown. The profile difference is a strong
+explanation, not a measured debug-to-release ratio for this 100k pair.
+
+The historical v0.1.6 release report lists **1.101 s** for 10k and
+**4.986 s** for 100k ([report](../../../../../docs/roadmap/0.1/0.1.6/evidence/issue152-final-report.md)).
+Those are different public/build/cache identities, and their times cannot
+be used as baselines for this debug SDK cohort. The fixed verifier/command
+misses in the table are real **contract gate misses**, independent of any
+claim about an algorithm regression. No additional sample was taken for
+this profile audit. Owner direction subsequently
+[banned debug for new SDK Init measurements](SDK-RELEASE-FOUR-TIER-20260924.md);
+these receipts keep their original profile and status.
 
 The raw result directories are under
 `benchmark-results/fs-bench-pro/issue231-sdk-four-tier-6a94a5124-{100,1000,10000,100000}/`

@@ -4,6 +4,9 @@
 > explicit follow-up to the two-case [#236 v2 SDK contract](../issue-236-sdk-init/SPEC.md),
 > requested for #231 on 2026-09-24. It does not replace the historical
 > daemon-host rows or establish #231 performance admission.
+> **Historical debug cohort:** subsequent owner direction requires
+> [release-only SDK Init](SDK-RELEASE-FOUR-TIER-20260924.md). The receipts
+> from this selection remain immutable.
 
 Run the exact seed-1 `core-sdk-init-fixture-v2` shapes for
 `namespace-100-compact-v3` (100 files/5 MB),
