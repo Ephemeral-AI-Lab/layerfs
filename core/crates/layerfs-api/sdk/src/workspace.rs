@@ -50,7 +50,7 @@ impl<'a> WorkspaceApi<'a> {
                     commit: commit_id,
                 },
             )
-            .map_err(WorkspaceError::Failure)
+            .map_err(route_error)
             .map_err(|error| match error {
                 WorkspaceError::Failure(cause) if cause.unknown => WorkspaceError::UncertainMount {
                     id: id.clone(),
@@ -80,7 +80,7 @@ impl<'a> WorkspaceApi<'a> {
                 incarnation,
                 command: command.as_bytes().to_vec(),
             })
-            .map_err(WorkspaceError::Failure)?;
+            .map_err(route_error)?;
         let Response::WorkspaceExec(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -102,7 +102,7 @@ impl<'a> WorkspaceApi<'a> {
                 workspace,
                 incarnation,
             })
-            .map_err(WorkspaceError::Failure)?;
+            .map_err(route_error)?;
         let Response::WorkspaceCommit(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -121,7 +121,7 @@ impl<'a> WorkspaceApi<'a> {
                 workspace,
                 incarnation,
             })
-            .map_err(WorkspaceError::Failure)?;
+            .map_err(route_error)?;
         let Response::WorkspaceUnmount(result) = response else {
             return Err(Code::Integrity.into());
         };

@@ -122,11 +122,13 @@ most one authenticated control connection across rapid Workspace calls. A
 retained socket is handed back only after a Hello on that same socket confirms
 the live daemon still reports the instance the caller validated, so a restarted
 daemon cannot answer an operation addressed to its predecessor; a socket the
-restart closed fails that check and the caller performs a fresh checked lookup,
-which is where `Stale` is raised. Only a successful operation retains the
-session, so a broken or uncertain operation is never resent, and the idle bound
-stays inside the control server's five-second idle timeout and one-session
-admission. The public SDK surface is unchanged.
+restart closed fails that check and the caller performs a fresh checked lookup.
+Only a successful operation retains the session, so a broken or uncertain
+operation is never resent, and the idle bound stays inside the control server's
+five-second idle timeout and one-session admission. A refused operation is
+reported as `Stale` only when the live daemon is reachable and reports a
+different instance than the route was bound to; every other refusal keeps its
+own cause. The public SDK surface is unchanged.
 
 **Projection counts.** `layerfs-workspace::filesystem::projection_counters`
 holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,

@@ -387,7 +387,7 @@ impl SandboxOwner {
         route: ControlRoute,
         deadline_ms: u32,
         operation: impl FnOnce() -> Operation,
-    ) -> Result<Response, Failure> {
+    ) -> Result<Response, RouteError> {
         let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
         let mut lease = self
             .sessions
@@ -414,7 +414,8 @@ impl SandboxOwner {
                         route.sandbox,
                     )
                 })
-            })?;
+            })
+            .map_err(RouteError::Failure)?;
         let result = crate::session::call(&mut lease.client, lease.id, deadline_ms, operation());
         match result {
             Ok(response) => {
@@ -424,9 +425,38 @@ impl SandboxOwner {
             }
             Err(failure) => {
                 self.sessions.discard();
-                Err(failure)
+                // A refusal is only a stale route when the live daemon no
+                // longer reports the instance this route was bound to. An
+                // ordinary operation failure keeps its own cause.
+                if self.daemon_moved(&route) {
+                    return Err(RouteError::Stale);
+                }
+                Err(RouteError::Failure(failure))
             }
         }
+    }
+
+    /// True when the sandbox's live daemon reports a different instance than
+    /// `route` was bound to. An unreachable or unreadable daemon is not proof
+    /// of a move, so it reports false and the caller keeps its own failure.
+    fn daemon_moved(&self, route: &ControlRoute) -> bool {
+        let Ok(record) = self
+            .registry
+            .lock()
+            .map(|registry| registry.sandboxes.get(&route.sandbox).cloned())
+        else {
+            return false;
+        };
+        let Some(record) = record else {
+            return false;
+        };
+        readiness::hello(
+            record.endpoint,
+            &self.config.control_private,
+            &record.daemon_public,
+            route.sandbox,
+        )
+        .is_ok_and(|hello| hello.instance != route.instance)
     }
 
     pub fn bind_workspace(
