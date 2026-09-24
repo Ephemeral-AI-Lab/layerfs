@@ -1,0 +1,23 @@
+{
+  "coverage": "full-file",
+  "edit_commit_ns": 35236334,
+  "fresh_reopen": true,
+  "full_file_bytes_verified": true,
+  "identity": {
+    "cargo_lock_sha256": "d6fb4800e048346f87b6c825bdc2f2d446f50e33a2ead40799147408b8dc7e9b",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "86a88760c505ceb63038b34abf063571cbe759418668045eaaeb2227d14dad49",
+    "product_seal": "a9917820c34ce0cfe46163078f6aba18b602e3df707fdd364840b5dd1e7d0716",
+    "source_commit": "6c7d8eda008b9bdbc2e8b4b47384794fbd885ee0",
+    "source_dirty": false,
+    "source_tree": "49ee2491db9b2816934f0223099cbfb6bd2a31a7"
+  },
+  "image_id": "sha256:d49fb9e2e40d18346ec6debbc636138cb93c752894283e4906f9eeddc34a6eb3",
+  "performance_command_wall_ns": 887085792,
+  "performance_run": "/Users/yifanxu/.codex/worktrees/issue232-roundtrip-1mib/layerfs/benchmark-results/fs-bench-pro/issue232-roundtrip-final-01/overwrite-middle-4k-on-1mib-ops-1-exec-v2",
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v2",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-verification-binding-v1",
+  "verification_status": "PASS",
+  "verification_wall_ns": 670595458
+}
