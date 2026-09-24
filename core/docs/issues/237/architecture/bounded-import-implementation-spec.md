@@ -27,6 +27,16 @@ reduced whole-call peak RSS by only **2.42 MiB**, below the 8-MiB gate.
 It passed full readback and was reverted. Namespace still sets the peak;
 the remaining bound needs input ownership and a builder-level design.
 
+**Compact-record prototype outcome, 2026-09-24:** after the record-custody
+[plan](native-record-fresh-builder-plan.md), an isolated native-only C1
+builder passed exact-root and reopened-oracle checks. Its one-shot
+[diagnostic](../native-record-fresh-builder-result-20260924.md) observed
+10.47 MiB less process RSS but owned 8.32 MB of scratch; charging the
+entire scratch reservation leaves a 2.53-MiB numeric reduction, below
+the frozen 8-MiB target. The source path lengths differed, and scratch
+cache was unqualified. The prototype was not adopted. The scan and job
+planner remain whole-vector, so this is not a full bounded import.
+
 ## Review verdict
 
 The measured maximum occurs during namespace construction, after the full
