@@ -224,7 +224,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ));
         }
         window_report = format!("[{}]", entries.join(","));
-        (format!("bounded-windows-{count}"), first.0, first.1, false, matched)
+        (
+            format!("bounded-windows-{count}"),
+            first.0,
+            first.1,
+            false,
+            matched,
+        )
     };
     let canonical_ok = match case.get("canonical_root_expected")? {
         "-" => true,
