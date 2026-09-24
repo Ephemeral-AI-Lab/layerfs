@@ -114,7 +114,7 @@ pub(crate) fn build_namespace(
     provider: &dyn AuthenticatedObjects,
     scope: InodeScope,
     root_serial: u64,
-    entries: &[PreparedEntry],
+    entries: Vec<PreparedEntry>,
     files_just_imported: bool,
     progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
@@ -129,7 +129,7 @@ pub(crate) fn build_namespace(
     let (metadata, content_roots) = prerequisites(
         store,
         provider,
-        entries,
+        &entries,
         files_just_imported,
         progress,
         timer,
@@ -153,7 +153,8 @@ pub(crate) fn build_namespace(
             })
         })
         .collect::<Result<_, Failure>>()?;
-    let directories = directory_updates(entries, &serials)?;
+    let directories = directory_updates(&entries, &serials)?;
+    drop(entries);
     let input = FilesystemInput {
         base: None,
         scope,

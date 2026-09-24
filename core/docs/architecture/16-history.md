@@ -24,6 +24,10 @@ Implementation specification and its pre-publication audit:
 - **#237 native Job metadata treatment:** base product at
   `d455ad42cdc59de7224259722f1f3153c3ec3ab6` plus the same-commit
   `save/import/scan.rs` change described below; older sections keep their pins.
+- **#237 native entry lifetime treatment:** base product at
+  `00c677489f813d6157a72e245203e74123e732f6` plus the same-commit
+  `save/import/namespace.rs` ownership change described below; older sections
+  keep their pins.
 - **Init ordering-backing correction:** product commit
   `0042a909ac3f16a5041aa51d76f96522a58352c8`.
 - **#237 unmerged research prototype:** the same-commit `history_bootstrap.rs`
@@ -322,6 +326,11 @@ mtime fields it checks after opening and reading, instead of cloning the full
 `std::fs::Metadata`. The same source-identity checks run; the scan still retains
 one entry and one job per file, so this narrows their representation without
 claiming constant-memory Init.
+The Service now transfers ownership of the completed entry vector into the
+namespace builder. After prerequisite roots, inode values and directory
+updates have been constructed, it releases the entry vector before C1 checks
+and builds the tree. This changes an in-memory lifetime, not canonical output,
+C2 Save boundaries or C5 allocation order.
 For this long-running command only, the Service can flush one authenticated
 one-byte progress record per second while work advances. The client consumes
 the marker without treating it as result data; the absolute request deadline
