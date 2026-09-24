@@ -138,6 +138,7 @@ mod linux {
         f.workspace.commit(deadline()).unwrap();
         f.workspace
             .forget(file.serial, u64::MAX, ReferenceScope::Local);
+        drop((insert, empty, delete));
         f.workspace.close_clean().unwrap();
         println!("PROJECTED_RANGE_CHECK semantics PASS");
     }
@@ -194,6 +195,7 @@ mod linux {
         f.workspace.commit(deadline()).unwrap();
         f.workspace
             .forget(file.serial, u64::MAX, ReferenceScope::Local);
+        drop(edit);
         f.workspace.close_clean().unwrap();
         println!("PROJECTED_RANGE_CHECK notification_failure PASS");
     }
