@@ -1,0 +1,5 @@
+selected	66
+attempted	30
+cleanup	true
+sandbox_list	Ok([])
+failures	["100mib-overwrite-band13 @89962450: source sandbox create: CreateError { sandbox: Some(SandboxId([219, 167, 35, 251, 79, 168, 177, 2, 160, 17, 105, 251, 217, 106, 14, 76])), cause: Failure { code: Io, unknown: false, cleanup: None, history: None }, retained: true }"]

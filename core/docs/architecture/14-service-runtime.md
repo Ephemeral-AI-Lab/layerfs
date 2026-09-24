@@ -51,13 +51,20 @@ The control-session refinement after source commit
 `f61f575f4c5355fefdde347e68294329bc28545c` retains the authenticated
 connection used by checked `SandboxHello` and sends the Workspace operation as
 the next request on that connection. It still checked the Docker-published port
-on every lookup at that revision. The fixed-port refinement after source commit
-`c45e93d4a7eb2a8f41d1803f704a881f41fe5282` selects a free loopback port
-at Create, configures Docker with that exact mapping and verifies it once. The
-owner retains that endpoint, so a Workspace call no longer launches `docker
-port`; it still authenticates Hello and checks the daemon instance before
-mutation. A failed port bind retains the assigned Sandbox ID for inspection and
-does not retry or silently choose another route.
+on every lookup at that revision. The original fixed-port refinement after
+source commit `c45e93d4a7eb2a8f41d1803f704a881f41fe5282` selected a free
+loopback port at Create, released its reservation, and then requested that
+mapping from Docker. The #241 correction based on source
+`a23507d1303d82c4a96595c4f1db01a113ee84ea` lets Docker allocate a loopback
+port with container launch. The owner retains the assigned Sandbox ID before
+launch, records the endpoint only after one checked `docker port` query, and
+refuses routes while that endpoint is pending. Workspace calls use the recorded
+endpoint and still authenticate Hello and check the daemon instance before
+mutation. Docker may assign a different port after container restart; if the
+recorded endpoint fails, a changed published mapping classifies the old route
+as stale without replaying its operation or changing the recorded endpoint.
+A failed launch or port query retains the Sandbox ID for cleanup; it does not
+retry or choose another route.
 The fixed deployment profile uses two CPUs, 512 MiB memory/swap, 64 PIDs,
 a read-only image root with a 16 MiB `/tmp`, `/dev/fuse` and `SYS_ADMIN`, and
 a separate writable Workspace volume. The image digest must contain both the

@@ -1,0 +1,26 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	100mib-insert-band00
+operation	insert
+offset	4065514
+status	STARTED
+edit_sandbox_id	1d8037a9173a38a562091072ac70f4d2
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	23613917
+baseline_exec_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+verifier_read_callbacks	8
+fresh_sandbox_id	717371ce805a6fced307681f1940e90e
+fresh_unmount	Ok(())
+fresh_sandbox_delete	Ok(())
+fresh_sandbox_absent	true
+old_sandbox_id	a9fd90836fc7d14cc2ded97689249c25
+old_unmount	Ok(())
+old_sandbox_delete	Ok(())
+old_sandbox_absent	true
+source_sandbox_id	85f62cc42c6775516c051ab2a403f0d1
+source_unmount	Ok(())
+source_sandbox_delete	Ok(())
+source_sandbox_absent	true
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	PASS	new_commit=[18, 14, 99, 123, 21, 13, 239, 63, 132, 114, 51, 228, 187, 239, 143, 24, 22, 122, 53, 204, 126, 192, 81, 234, 207, 62, 24, 198, 112, 234, 172, 180, 236]	old_commit=[18, 58, 188, 170, 254, 4, 109, 9, 220, 252, 94, 123, 74, 116, 88, 200, 223, 10, 47, 28, 135, 222, 98, 138, 107, 72, 254, 45, 78, 63, 130, 162, 71]	sha256=8cf197e4c5807aeb0c679237e4d6e76b7e1c478116baecbccb0241fabee5d393	canonical_root=c3fdf8042b7095701af8568e72ca7fca106f5c3a933d2f8626650d8e3904a54f	canonical_count=5396	final_bytes=104861696	verifier_read_callbacks=8

@@ -15,7 +15,15 @@ use layerfs_telemetry::{
     output::{Identity, OutputConfig},
     runtime::{Configuration, MonitorConfig, Runtime},
 };
-use std::{fs::OpenOptions, io::Write, path::PathBuf, process::Command, thread, time::Duration};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    net::{Ipv4Addr, SocketAddr},
+    path::PathBuf,
+    process::Command,
+    thread,
+    time::Duration,
+};
 
 const BRANCH: [u8; 16] = [36; 16];
 const RETIRED_IMAGE: &str =
@@ -230,7 +238,8 @@ fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
     assert_eq!(sandboxes.list().unwrap()[0].id, primary);
 
     // A restarted daemon is a stale, uncertain route: refused, never replayed.
-    let original_port = published_port(&primary);
+    let original_port: SocketAddr = published_port(&primary).trim().parse().unwrap();
+    assert_eq!(original_port.ip(), Ipv4Addr::LOCALHOST);
     assert!(Command::new("docker")
         .args(["restart", &format!("layerfs-{primary}")])
         .output()
@@ -255,7 +264,8 @@ fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
         );
         thread::sleep(Duration::from_millis(25));
     }
-    assert_eq!(published_port(&primary), original_port);
+    let restarted_port: SocketAddr = published_port(&primary).trim().parse().unwrap();
+    assert_eq!(restarted_port.ip(), Ipv4Addr::LOCALHOST);
     assert!(matches!(
         workspaces.exec(&mount.id, "cat note"),
         Err(WorkspaceError::Stale)

@@ -29,7 +29,6 @@ pub(crate) fn launch(
     name: &str,
     id: SandboxId,
     container: &str,
-    host_port: u16,
 ) -> Result<(), Failure> {
     let image_actual = run(&["image", "inspect", "--format", "{{.Id}}", image])?;
     if !valid_image(image_actual.trim()) {
@@ -38,7 +37,6 @@ pub(crate) fn launch(
     let control_public = VerifiedPeer::from_private(&config.control_private)?;
     let peers = format!("1,{},{},255", hex(control_public.public_key()), u64::MAX);
     let mount_root = format!("type=volume,src={container}-root,dst=/layerfs");
-    let publish = format!("127.0.0.1:{host_port}:23456");
     let mut command = Command::new("docker");
     command.args([
         "run",
@@ -73,7 +71,7 @@ pub(crate) fn launch(
         "--mount",
         &mount_root,
         "--publish",
-        &publish,
+        "127.0.0.1::23456",
         "--entrypoint",
         "/layerfs-daemon",
     ]);

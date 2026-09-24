@@ -9,7 +9,7 @@ use std::{
     collections::BTreeMap,
     fs::File,
     io::Read,
-    net::{SocketAddr, TcpListener},
+    net::SocketAddr,
     sync::Mutex,
     time::{Duration, Instant},
 };
@@ -95,8 +95,16 @@ struct Record {
     name: String,
     container: String,
     daemon_public: [u8; 32],
-    endpoint: SocketAddr,
+    endpoint: Option<SocketAddr>,
     instance: Option<[u8; 32]>,
+}
+impl Record {
+    /// A changed Docker mapping invalidates the original daemon route.
+    fn endpoint_moved(&self) -> bool {
+        self.endpoint.is_some_and(|endpoint| {
+            docker::port(&self.container).is_ok_and(|published| published != endpoint)
+        })
+    }
 }
 
 #[derive(Default)]
@@ -161,23 +169,7 @@ impl SandboxOwner {
             cause: Code::Io.into(),
             retained: false,
         })?;
-        let reservation =
-            TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).map_err(|cause| CreateError {
-                sandbox: None,
-                cause: cause.into(),
-                retained: false,
-            })?;
-        let endpoint = reservation.local_addr().map_err(|cause| CreateError {
-            sandbox: None,
-            cause: cause.into(),
-            retained: false,
-        })?;
-        if registry.sandboxes.contains_key(&id)
-            || registry
-                .sandboxes
-                .values()
-                .any(|record| record.endpoint == endpoint)
-        {
+        if registry.sandboxes.contains_key(&id) {
             return Err(CreateError {
                 sandbox: None,
                 cause: Code::Busy.into(),
@@ -190,21 +182,13 @@ impl SandboxOwner {
                 name: name.into(),
                 container: container.clone(),
                 daemon_public,
-                endpoint,
+                endpoint: None,
                 instance: None,
             },
         );
         drop(registry);
-        drop(reservation);
         if let Err(cause) = self.observe(2003, "owner.docker_launch", || {
-            docker::launch(
-                &self.config,
-                image_id,
-                name,
-                id,
-                &container,
-                endpoint.port(),
-            )
+            docker::launch(&self.config, image_id, name, id, &container)
         }) {
             return Err(CreateError {
                 sandbox: Some(id),
@@ -212,20 +196,39 @@ impl SandboxOwner {
                 retained: true,
             });
         }
-        let published = self
+        let endpoint = self
             .observe(2004, "owner.docker_port", || docker::port(&container))
             .map_err(|cause| CreateError {
                 sandbox: Some(id),
                 cause,
                 retained: true,
             })?;
-        if published != endpoint {
+        let mut registry = self.registry.lock().map_err(|_| CreateError {
+            sandbox: Some(id),
+            cause: Code::Io.into(),
+            retained: true,
+        })?;
+        if registry
+            .sandboxes
+            .values()
+            .any(|record| record.endpoint == Some(endpoint))
+        {
             return Err(CreateError {
                 sandbox: Some(id),
-                cause: Code::Integrity.into(),
+                cause: Code::Busy.into(),
                 retained: true,
             });
         }
+        registry
+            .sandboxes
+            .get_mut(&id)
+            .ok_or_else(|| CreateError {
+                sandbox: Some(id),
+                cause: Code::Io.into(),
+                retained: true,
+            })?
+            .endpoint = Some(endpoint);
+        drop(registry);
         let hello = self
             .observe(2005, "owner.daemon_ready", || {
                 readiness::wait(endpoint, &self.config.control_private, &daemon_public, id)
@@ -340,15 +343,17 @@ impl SandboxOwner {
             .map(|(id, record)| {
                 let status = if !docker::running(&record.container)? {
                     SandboxStatus::Stopped
-                } else if let Some(instance) = record.instance {
+                } else if let (Some(instance), Some(endpoint)) = (record.instance, record.endpoint)
+                {
                     match readiness::hello(
-                        record.endpoint,
+                        endpoint,
                         &self.config.control_private,
                         &record.daemon_public,
                         *id,
                     ) {
                         Ok(hello) if hello.instance == instance => SandboxStatus::Ready,
                         Ok(_) => SandboxStatus::Stale,
+                        Err(_) if record.endpoint_moved() => SandboxStatus::Stale,
                         Err(_) => SandboxStatus::Unconfirmed,
                     }
                 } else {
@@ -386,12 +391,15 @@ impl SandboxOwner {
         let instance = record
             .instance
             .ok_or(RouteError::Failure(Code::Busy.into()))?;
+        let endpoint = record
+            .endpoint
+            .ok_or(RouteError::Failure(Code::Busy.into()))?;
         Ok((
             Binding {
                 sandbox: id,
                 instance,
             },
-            record.endpoint,
+            endpoint,
         ))
     }
 
@@ -405,14 +413,22 @@ impl SandboxOwner {
             .get(&id)
             .cloned()
             .ok_or(RouteError::NotFound)?;
-        let (hello, client) = self.observe(2002, "owner.hello", || {
+        let endpoint = record
+            .endpoint
+            .ok_or(RouteError::Failure(Code::Busy.into()))?;
+        let attempt = self.observe(2002, "owner.hello", || {
             readiness::hello_session(
-                record.endpoint,
+                endpoint,
                 &self.config.control_private,
                 &record.daemon_public,
                 id,
             )
-        })?;
+        });
+        let (hello, client) = match attempt {
+            Ok(result) => result,
+            Err(_) if record.endpoint_moved() => return Err(RouteError::Stale),
+            Err(failure) => return Err(RouteError::Failure(failure)),
+        };
         if record
             .instance
             .is_some_and(|instance| hello.instance != instance)
@@ -461,7 +477,7 @@ impl SandboxOwner {
         operation: impl FnOnce() -> Operation,
     ) -> Result<Response, RouteError> {
         let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
-        let mut lease = self
+        let attempt = self
             .sessions
             .lease(route.sandbox, route.instance, deadline, || {
                 let record = self
@@ -472,22 +488,24 @@ impl SandboxOwner {
                     .get(&route.sandbox)
                     .cloned()
                     .ok_or_else(|| Failure::from(Code::NotFound))?;
-                if record
-                    .instance
-                    .is_some_and(|instance| instance != route.instance)
-                {
+                if record.instance != Some(route.instance) {
                     return Err(Code::Denied.into());
                 }
+                let endpoint = record.endpoint.ok_or(Code::Busy)?;
                 self.observe(2002, "owner.hello", || {
                     readiness::hello_session(
-                        record.endpoint,
+                        endpoint,
                         &self.config.control_private,
                         &record.daemon_public,
                         route.sandbox,
                     )
                 })
-            })
-            .map_err(RouteError::Failure)?;
+            });
+        let mut lease = match attempt {
+            Ok(lease) => lease,
+            Err(_) if self.daemon_moved(&route) => return Err(RouteError::Stale),
+            Err(failure) => return Err(RouteError::Failure(failure)),
+        };
         let result = crate::session::call(&mut lease.client, lease.id, deadline_ms, operation());
         match result {
             Ok(response) => {
@@ -508,9 +526,9 @@ impl SandboxOwner {
         }
     }
 
-    /// True when the sandbox's live daemon reports a different instance than
-    /// `route` was bound to. An unreachable or unreadable daemon is not proof
-    /// of a move, so it reports false and the caller keeps its own failure.
+    /// True when Docker moved the published port or the live daemon reports a
+    /// different instance. An unreachable daemon with an unchanged mapping is
+    /// not proof of a move, so the caller keeps its original failure.
     fn daemon_moved(&self, route: &ControlRoute) -> bool {
         let Ok(record) = self
             .registry
@@ -522,8 +540,14 @@ impl SandboxOwner {
         let Some(record) = record else {
             return false;
         };
+        let Some(endpoint) = record.endpoint else {
+            return false;
+        };
+        if record.endpoint_moved() {
+            return true;
+        }
         readiness::hello(
-            record.endpoint,
+            endpoint,
             &self.config.control_private,
             &record.daemon_public,
             route.sandbox,

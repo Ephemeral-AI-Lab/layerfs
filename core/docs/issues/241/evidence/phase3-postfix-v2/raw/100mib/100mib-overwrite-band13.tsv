@@ -1,0 +1,35 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	100mib-overwrite-band13
+operation	overwrite
+offset	89962450
+status	STARTED
+edit_sandbox_id	2ef1519f2976835242688eab1baf4cd4
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	25645750
+baseline_exec_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+verifier_read_callbacks	8
+fresh_sandbox_id	204265aff4720238ed373734ffd4130f
+fresh_unmount	Ok(())
+fresh_sandbox_delete	Ok(())
+fresh_sandbox_absent	true
+old_sandbox_id	81885962c06988727e6f0785cd0c0164
+old_unmount	Ok(())
+old_sandbox_delete	Ok(())
+old_sandbox_absent	true
+100mib-overwrite-band13-source-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-source-docker-top_exit	ExitStatus(unix_wait_status(256))
+100mib-overwrite-band13-source-daemon_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-source_observation_wait_ns	6005169959
+100mib-overwrite-band13-source-docker-top-late_exit	ExitStatus(unix_wait_status(256))
+100mib-overwrite-band13-source-daemon-late_exit	ExitStatus(unix_wait_status(0))
+source_retained_sandbox_delete	Ok(())
+100mib-overwrite-band13-edit-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-edit-docker-top_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-edit-daemon_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-edit_observation_wait_ns	6005046500
+100mib-overwrite-band13-edit-docker-top-late_exit	ExitStatus(unix_wait_status(0))
+100mib-overwrite-band13-edit-daemon-late_exit	ExitStatus(unix_wait_status(0))
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	FAIL	source sandbox create: CreateError { sandbox: Some(SandboxId([219, 167, 35, 251, 79, 168, 177, 2, 160, 17, 105, 251, 217, 106, 14, 76])), cause: Failure { code: Io, unknown: false, cleanup: None, history: None }, retained: true }

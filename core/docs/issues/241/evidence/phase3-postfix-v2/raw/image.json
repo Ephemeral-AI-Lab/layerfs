@@ -1,0 +1,48 @@
+{
+  "base": "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "carrier_abi": {
+    "caller_order": [
+      "open",
+      "STATE",
+      "EDIT",
+      "STATE",
+      "fstat",
+      "bounded-readback"
+    ],
+    "contract": "linux-projected-range-request-v2",
+    "edit": {
+      "command": "0x5060f541",
+      "input_bytes": 4192,
+      "magic": "LFE2",
+      "max_replacement_bytes": 4096,
+      "output_bytes": 0
+    },
+    "state": {
+      "command": "0xc058f540",
+      "input_bytes": 88,
+      "magic": "LFS2",
+      "output_bytes": 88
+    },
+    "version": 2
+  },
+  "daemon_sha256": "1bbcf8a420e4c2eb4d06fabd109c68977b7dbb56e51e25b7ebcd0ee0324e47bb",
+  "dockerfile_sha256": "8f79cbd61204e34e892c21f991814f8a39ad6e2d576bfbf2ee118a8794b6a330",
+  "edit_tool_sha256": "6bf715665058b1a7800a00a700c4639de69973af9d3eb32914de404e715aab7f",
+  "image_id": "sha256:3cf51669252a499135d5d7dad3028a20fe6f83debe634c67f95c037bd30d9b2c",
+  "lockfile_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+  "payloads": {
+    "insert-middle-4k.bin": {
+      "bytes": 4096,
+      "sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616"
+    }
+  },
+  "product_seal": "afbe3f8fc57c4faa688593984f63c8e83cd0156ea8560f3cf4f991fee88c47fc",
+  "profile": "release",
+  "registry_sha256": "a11be713e3f7151b5586e4c7899361d33fadf77f06b9caf1ec8ad2ca5141e167",
+  "scenario_version": 3,
+  "schema": "core-fs-bench-pro-exec-fuse-insert-image-v3",
+  "tag": "layerfs-exec-fuse-insert:issue241",
+  "target": "aarch64-unknown-linux-musl",
+  "workload_source_seal": "3c8cc6cd461d037e1649c9dea05792c17533b330d7b6e798df9f332a40628b25"
+}
