@@ -65,3 +65,8 @@ positions unqualified. The full 264-case Phase 3 gate is **not PASS**.
 The four registered release Edit→Commit cases and their separate verifiers
 have not been sampled. The earlier carrier timings remain diagnostic and
 cache-ineligible.
+
+The prospective [baseline Exec liveness diagnostic](../../EXEC_LIVENESS_DIAGNOSTIC.md)
+specifies the request-scoped event counts needed to locate this Unknown
+before changing product progress handling or making another qualification
+claim.
