@@ -26,23 +26,34 @@ CURSOR_KEY_ENV = "LAYERFS_HISTORY_CURSOR_KEY"
 OWNER_LABEL = "io.layerfs.owner=agent-sdk"
 
 
-def daemon_log_stream():
+def owned_containers():
+    process = subprocess.run(
+        ["docker", "ps", "-a", "--filter", f"label={OWNER_LABEL}", "--format", "{{.ID}}"],
+        capture_output=True)
+    return process.stdout.decode().split()
+
+
+def daemon_log_stream(deadline_s=10.0):
     """Streams every owned sandbox's log for the life of one sample.
 
     A labelled diagnostic instrument: it reads a container log and never
-    touches the product route. The stream is started before the driver and
-    stopped after it, so the daemon's records land in `daemon.log` beside the
-    sample's own telemetry.
+    touches the product route. The sandbox does not exist until the driver
+    creates it, so the stream attaches as soon as one appears and is stopped
+    after the driver exits; `--since` replays whatever the daemon already
+    wrote, so no record is lost to the attach.
     """
     since = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-    process = subprocess.Popen(
-        ["docker", "ps", "-a", "--filter", f"label={OWNER_LABEL}", "--format", "{{.ID}}"],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    ids = process.communicate()[0].decode().split()
-    if not ids:
+    deadline = time.monotonic() + deadline_s
+    containers = []
+    while time.monotonic() < deadline:
+        containers = owned_containers()
+        if containers:
+            break
+        time.sleep(0.02)
+    if not containers:
         return None
     command = ["docker", "logs", "--follow", "--since", since]
-    for container in ids:
+    for container in containers:
         command += ["--timestamps", container]
     return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
