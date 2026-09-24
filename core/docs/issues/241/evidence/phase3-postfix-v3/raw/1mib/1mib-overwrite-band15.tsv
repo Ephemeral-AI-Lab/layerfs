@@ -1,0 +1,19 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-overwrite-band15
+operation	overwrite
+offset	1016765
+status	STARTED
+edit_sandbox_id	73a5d689e1fbdfff41937e0e37d23b21
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	5044964542
+baseline_exec_result	Err(Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }))
+1mib-overwrite-band15-edit-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+1mib-overwrite-band15-edit-docker-top_exit	ExitStatus(unix_wait_status(0))
+1mib-overwrite-band15-edit-daemon_exit	ExitStatus(unix_wait_status(0))
+1mib-overwrite-band15-edit_observation_wait_ns	6002221541
+1mib-overwrite-band15-edit-docker-top-late_exit	ExitStatus(unix_wait_status(0))
+1mib-overwrite-band15-edit-daemon-late_exit	ExitStatus(unix_wait_status(0))
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	FAIL	baseline exec: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None })

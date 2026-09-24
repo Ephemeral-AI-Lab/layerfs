@@ -1,0 +1,15 @@
+{
+  "cache_contract": "functional; no performance claim",
+  "case": "sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup",
+  "construction_workers": 1,
+  "image_id": "sha256:4a6aee843eef31f760016892e5d97cfd5d80183044341350ae68d4d99cac4c47",
+  "image_receipt": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-v3-sealed-image-01.json",
+  "image_receipt_sha256": "14ed7f7a2c4c6c692157025e88e21b21993945f90ea9aeffb68bc13cbb77db43",
+  "schema": "issue241-v3-live-port-route-plan-v1",
+  "source_commit": "c1dc56acab406b2911dc1f67e515f2c5c9f0d9b6",
+  "source_tree": "ce0fb20c17bea8a9b272a893d10a5eb38779852f",
+  "stderr": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-v3-port-route-01.stderr",
+  "stdout": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-v3-port-route-01.stdout",
+  "test_binary": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/release/deps/agent_route-f9a426736f194392",
+  "test_binary_sha256": "996599f7473db0b195fc764997580929a4e20fcfa448cd681f722f25ba3119f6"
+}

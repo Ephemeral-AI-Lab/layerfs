@@ -1,0 +1,6 @@
+schema	issue241-v3-read-only-store-policy-observation-v1
+source_private_store	/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-v3-position-1mib-01/private-state/store.sqlite
+source_store_sha256_after_run	d4deb7e4c98f4afe270b4b376999cdccff879639a788318e66d99e2cf6bdaa6d
+query	SELECT max_concurrent_writes FROM store_policy
+max_concurrent_writes	2
+timing	read-only observation after frozen selection; private Store copy excluded from Git evidence

@@ -10,7 +10,7 @@ Run the same 264-case
 `e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a`:
 66 cases each at 1 MiB, 10 MiB, 100 MiB and capped 500 MiB. The prospective
 product correction lets Docker allocate a loopback host port, reads the
-assigned mapping, and publishes the Sandbox endpoint only after readiness.
+assigned mapping, and makes the Sandbox route available only after readiness.
 Do not retry a failed Sandbox create or change the selected cases, source
 fixture, one-construction-worker setting, cache policy, or timeouts.
 
