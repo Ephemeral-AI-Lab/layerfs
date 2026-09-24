@@ -1,0 +1,11 @@
+
+running 1 test
+SDK_RANGE_TOOL {"status":"PASS","operation":"splice","direction":"-","final_bytes":12288,"shifted_bytes":0}
+SDK_RANGE_COMMIT Committed(CommitWire { commit: [18, 113, 55, 39, 235, 71, 53, 145, 139, 139, 80, 6, 42, 144, 220, 128, 76, 91, 242, 116, 244, 154, 165, 241, 56, 137, 140, 85, 234, 43, 132, 130, 148], stack: [49, 23, 3, 122, 74, 187, 106, 216, 58, 108, 9, 121, 233, 241, 56, 69, 101], root: [162, 33, 32, 138, 130, 186, 82, 227, 217, 100, 159, 175, 132, 91, 105, 119, 7, 181, 4, 16, 7, 65, 9, 226, 14, 153, 213, 166, 192, 63, 67, 188], parent: None, base_layer: [50, 134, 59, 62, 201, 93, 106, 85, 108, 7, 157, 22, 43, 124, 68, 11, 82, 83, 111, 123, 155, 219, 43, 238, 166, 246, 31, 37, 228, 244, 105, 110, 66] })
+SDK_RANGE_STATUS mounted=true state=2 edit=1 accepted=4096 shifted=0
+SDK_RANGE_UNKNOWN exit=Some(75) commit=omitted
+SDK_RANGE_GATE success-then-Commit PASS; exit-75 Commit omitted PASS
+test mounted_sdk_exec_confirms_before_explicit_commit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.79s
+

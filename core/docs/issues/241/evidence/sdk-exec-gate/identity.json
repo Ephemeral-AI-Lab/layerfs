@@ -1,0 +1,17 @@
+{
+  "source_commit": "8493d8f8b59216438468758b51e4c5d3b296e9d4",
+  "source_tree": "ce6c70a5b925390c2e0c0137a64f760ec650e87f",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "image_id": "sha256:b5f63144fd930441365ee222db547c11214550c44f6c64bfbba236946b418ffc",
+  "image_architecture": "arm64",
+  "image_base": "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "daemon_sha256": "a0b83dbda014305300c9126755dc327b60865dd99017806e6b5e7c3f43e9f5f4",
+  "tool_sha256": "6bf715665058b1a7800a00a700c4639de69973af9d3eb32914de404e715aab7f",
+  "dockerfile_sha256": "dcf3bb20df6a52301713f0b885a7356337ce123b4d362b4aade4af255e6b3095",
+  "core_lock_sha256": "791a62b55b22d18ce827d49e500326d68a163384629e9c2865b893d8c5914efe",
+  "workload_lock_sha256": "4c8a10339c3ad29e1a5f28b3f1f36db75634f84e73045598b1618024db488d78",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "test_source_sha256": "96dccbe66afe3f10f52f4dbca8750644939009925911e513016421b53ae8032e",
+  "gate_source_sha256": "0d870ca5c372b4cc09df1fd903213a9ffda52448ce8923f25133eaa5bc3b0db1",
+  "cache_state": "uncontrolled; functional diagnostic only"
+}

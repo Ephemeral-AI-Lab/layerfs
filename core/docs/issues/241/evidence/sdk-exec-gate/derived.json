@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "image_id": "sha256:b5f63144fd930441365ee222db547c11214550c44f6c64bfbba236946b418ffc",
+  "tool": {
+    "status": "PASS",
+    "operation": "splice",
+    "direction": "-",
+    "final_bytes": 12288,
+    "shifted_bytes": 0
+  },
+  "complete_command_wall_ns": 2899247583,
+  "unknown_exit": 75,
+  "unknown_commit": "omitted"
+}
