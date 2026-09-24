@@ -243,16 +243,20 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         except subprocess.TimeoutExpired as error:
             stdout, stderr, code, timed_out = error.stdout or b"", error.stderr or b"", None, True
         wall = time.monotonic_ns() - started
-        lft1 = [line for line in stdout.splitlines() if line.startswith(b"LFT1 ")]
+        # The telemetry crate forwards LFT1 records on stderr; the driver's own
+        # receipt is one tagged stdout line. Both streams are retained whole.
+        lft1 = [line for line in stderr.splitlines() if line.startswith(b"LFT1 ")]
         receipts = [line[len(b"RECEIPT\t"):] for line in stdout.splitlines()
                     if line.startswith(b"RECEIPT\t")]
         other = b"\n".join(line for line in stdout.splitlines()
                            if not line.startswith((b"LFT1 ", b"RECEIPT\t")))
+        residual = b"\n".join(line for line in stderr.splitlines()
+                              if not line.startswith(b"LFT1 "))
         (folder / "telemetry.lft1").write_bytes(b"\n".join(lft1) + (b"\n" if lft1 else b""))
         (folder / "driver.stdout").write_bytes(other)
         if receipts:
             (folder / "driver-receipt.json").write_bytes(receipts[-1] + b"\n")
-        (folder / "driver.stderr").write_bytes(stderr)
+        (folder / "driver.stderr").write_bytes(residual)
         receipt.update(
             command=command,
             sample_count=1 if code == 0 else 0,
@@ -276,6 +280,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
             receipt["commit_ns"] = driver.get("commit_ns")
             (folder / "perf.jsonl").write_text(json.dumps(driver, sort_keys=True) + "\n")
         receipt["telemetry"] = edit_telemetry_check(lft1)
+        receipt["telemetry_raw_lines"] = len(lft1)
         if verification == "inline":
             receipt["verification"] = verify(folder, binaries, case_path, store, history, row,
                                             receipt, cursor_key)
@@ -296,28 +301,49 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
 
 
 def edit_telemetry_check(lines):
-    """Label/cardinality check of the one caller root and its two children."""
+    """Label and cardinality check of the one caller root and its two children.
+
+    The root must be exactly one `sdk.edit_commit.fuse` record under the expected
+    key, carrying exactly the `edit` and `commit` children. A missing, duplicated
+    or differently-labeled record is a route failure, not a fast row.
+    """
     import re
-    roots = []
+    records = {}
+    malformed = 0
     for line in lines:
         text = line.decode(errors="replace")
-        match = re.search(r'"kind":"operation","key":(\d+),"timing":(.*)\}$', text)
+        match = re.match(r"LFT1 (\{.*\})$", text)
         if not match:
+            malformed += 1
             continue
-        roots.append((int(match.group(1)), match.group(2)))
-    root = [body for key, body in roots if key == 232_000]
-    children = {name: body for key, body in roots for name in ()}
+        try:
+            record = json.loads(match.group(1))
+        except ValueError:
+            malformed += 1
+            continue
+        if record.get("kind") != "operation":
+            continue
+        records.setdefault(record.get("key"), []).append(record)
+    root = records.get(232_000, [])
+    labels = []
+    if len(root) == 1:
+        timing = root[0].get("timing") or {}
+        for child in timing.get("children", []):
+            labels.append(child.get("label"))
     report = {
+        "operation_records": sum(len(value) for value in records.values()),
+        "malformed_lines": malformed,
         "caller_root_present": len(root) == 1,
         "root_count": len(root),
-        "edit_child": '"edit"' in (root[0] if root else ""),
-        "commit_child": '"commit"' in (root[0] if root else ""),
-        "non_operation_lines": sum(1 for line in lines if b'"kind":"operation"' not in line),
-        "status": "PENDING",
+        "root_label": (root[0].get("timing") or {}).get("label") if root else None,
+        "child_labels": labels,
+        "edit_child": "edit" in labels,
+        "commit_child": "commit" in labels,
     }
-    del children
-    report["status"] = ("PASS" if report["caller_root_present"] and report["edit_child"]
-                        and report["commit_child"] else "UNAVAILABLE")
+    report["status"] = ("PASS" if report["caller_root_present"]
+                        and report["root_label"] == "sdk.edit_commit.fuse"
+                        and report["edit_child"] and report["commit_child"]
+                        and report["malformed_lines"] == 0 else "UNAVAILABLE")
     return report
 
 
