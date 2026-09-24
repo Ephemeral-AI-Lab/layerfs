@@ -232,7 +232,7 @@ impl Lifecycle {
 /// Maps the Workspace's labeled projection counts into the fixed wire classes.
 ///
 /// A class the Workspace does not report is a contract mismatch, not a zero.
-fn projection_counts(
+pub fn projection_counts(
     local: &layerfs_workspace::WorkspaceStatus,
 ) -> Result<[u64; PROJECTION_CLASSES], Failure> {
     let mut counts = [0u64; PROJECTION_CLASSES];
@@ -252,7 +252,7 @@ fn projection_counts(
 /// Maps the Workspace's labeled byte totals into the fixed wire order.
 ///
 /// A label the Workspace does not report is a contract mismatch, not a zero.
-fn projection_bytes(
+pub fn projection_bytes(
     local: &layerfs_workspace::WorkspaceStatus,
 ) -> Result<[u64; PROJECTION_BYTES], Failure> {
     let mut totals = [0u64; PROJECTION_BYTES];
@@ -270,24 +270,29 @@ fn projection_bytes(
 }
 
 /// Maps one direction's labeled request-size histogram into the fixed wire order.
-fn projection_sizes(
+///
+/// The Workspace reports both directions in one labeled list, so this selects
+/// the rows that name this direction and requires exactly one per bucket. A
+/// label outside the declared set is a contract mismatch, not a zero.
+pub fn projection_sizes(
     rows: &[(String, u64)],
     direction: &str,
 ) -> Result<[u64; PROJECTION_SIZE_BUCKETS], Failure> {
     let mut counts = [0u64; PROJECTION_SIZE_BUCKETS];
+    let mut seen = 0usize;
     let prefix = format!("{direction}:");
     for (label, count) in rows {
-        let bucket = label
-            .strip_prefix(prefix.as_str())
-            .and_then(|name| {
-                PROJECTION_SIZE_LABELS
-                    .iter()
-                    .position(|entry| *entry == name)
-            })
+        let Some(name) = label.strip_prefix(prefix.as_str()) else {
+            continue;
+        };
+        let bucket = PROJECTION_SIZE_LABELS
+            .iter()
+            .position(|entry| *entry == name)
             .ok_or(Code::Integrity)?;
         counts[bucket] = *count;
+        seen += 1;
     }
-    if rows.len() != PROJECTION_SIZE_BUCKETS {
+    if seen != PROJECTION_SIZE_BUCKETS {
         return Err(Code::Integrity.into());
     }
     Ok(counts)
@@ -305,38 +310,6 @@ fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), Works
 
 fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Response, Failure> {
     let local = workspace.status().map_err(|error| failure_code(&error))?;
-    let mut diag = format!(
-        "id={} upstream={} calls={} bytes={} histogram={}\n",
-        selected
-            .id
-            .as_bytes()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>(),
-        local.upstream_calls,
-        local.projection_calls.len(),
-        local.projection_bytes.len(),
-        local.projection_histogram.len(),
-    );
-    diag.push_str(&format!(
-        "counts={:?}\nbytes={:?}\nhist={:?}\n",
-        local.projection_calls, local.projection_bytes, local.projection_histogram
-    ));
-    diag.push_str(&format!("counts_err={:?}\n", projection_counts(&local).err()));
-    diag.push_str(&format!("bytes_err={:?}\n", projection_bytes(&local).err()));
-    diag.push_str(&format!(
-        "read_err={:?}\nwrite_err={:?}\n",
-        projection_sizes(&local.projection_histogram, "read").err(),
-        projection_sizes(&local.projection_histogram, "write").err(),
-    ));
-    diag.push_str(&format!(
-        "access={:?} mounted={} closed={} nodes={}\n",
-        workspace.access_mode(),
-        local.mounted,
-        local.closed,
-        local.nodes,
-    ));
-    std::fs::write("/layerfs/diag-status.txt", &diag).ok();
     let result = WorkspaceStatusWire {
         workspace: selected.id.as_bytes().into(),
         incarnation: selected.incarnation,

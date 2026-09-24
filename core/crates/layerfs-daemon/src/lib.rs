@@ -9,4 +9,5 @@ mod lifecycle;
 mod run;
 mod transport;
 
+pub use lifecycle::{projection_bytes, projection_counts, projection_sizes};
 pub use run::run;
