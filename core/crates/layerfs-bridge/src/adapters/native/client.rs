@@ -157,6 +157,9 @@ impl Client {
                     if frame.id != r.id || frames > frame_budget(r.response_bytes) {
                         return Err(delivery(r));
                     }
+                    if r.operation.label() == "EditFileWithMetadata" {
+                        eprintln!("DIAG frame kind={:?} id={} len={}", frame.kind, frame.id, frame.bytes.len());
+                    }
                     match frame.kind {
                         Kind::ResultData => {
                             if matches!(
