@@ -978,6 +978,155 @@ fn bounded_oracle_maps_prefix_replacement_and_suffix() {
 }
 
 #[test]
+fn baseline_exec_liveness_diagnostic() {
+    use layerfs_sdk::{
+        HistoryMode, Project, ProjectApi, SandboxApi, Server, ServerConfig, WorkspaceApi,
+    };
+    use layerfs_telemetry::{
+        output::{Identity, OutputConfig},
+        runtime::{Configuration, MonitorConfig, Runtime},
+    };
+    use std::time::Instant;
+
+    let Ok(output) = std::env::var("LAYERFS_EXEC_PROBE_OUTPUT") else {
+        return;
+    };
+    let image = std::env::var("LAYERFS_TEST_IMAGE").expect("diagnostic image");
+    let state = PathBuf::from(std::env::var("LAYERFS_EXEC_PROBE_STATE").expect("diagnostic copy"));
+    let run = std::env::var("LAYERFS_EXEC_PROBE_RUN")
+        .expect("telemetry run identity")
+        .parse::<u128>()
+        .expect("numeric telemetry run identity");
+    let cursor_key =
+        hex_array::<32>(&std::env::var("LAYERFS_HISTORY_CURSOR_KEY").expect("history cursor key"));
+    let output = PathBuf::from(output);
+    std::fs::create_dir(&output).expect("fresh diagnostic output");
+    let mut receipt = File::create_new(output.join("receipt.tsv")).unwrap();
+    writeln!(
+        receipt,
+        "schema\tissue241-baseline-exec-liveness-diagnostic-v1"
+    )
+    .unwrap();
+    writeln!(receipt, "command\tprintf baseline > .position-baseline").unwrap();
+    writeln!(
+        receipt,
+        "cache\tfunctional-uncontrolled;admission-ineligible"
+    )
+    .unwrap();
+    writeln!(receipt, "status\tSTARTED").unwrap();
+    let master = read_master_spec(&state.join("master-spec.tsv"));
+    let telemetry = Runtime::start(Configuration {
+        enabled: true,
+        timing: true,
+        monitor: MonitorConfig {
+            cpu: true,
+            memory: true,
+            interval_ms: 10,
+            history: 600,
+            windows: 32,
+        },
+        output: OutputConfig::forward(),
+        identity: Identity {
+            run,
+            pid: std::process::id(),
+            role: 1,
+            namespace: 1,
+        },
+    })
+    .unwrap();
+    let server = Server::open(ServerConfig {
+        store_path: state.join("store.sqlite"),
+        history_path: state.join("history.sqlite"),
+        binding_key: b"layerfs-bench-pro".to_vec(),
+        incarnation: 1,
+        cursor_key,
+        history: HistoryMode::OpenWritable,
+        service_host: "host.docker.internal".into(),
+        runtime: telemetry,
+        telemetry_run: Some(run),
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let api = WorkspaceApi::new(&owner);
+    let project = Project {
+        id: hex_array(&master["project_id"]),
+        genesis_layer: hex_array(&master["genesis_layer"]),
+        root: hex_array(&master["genesis_root"]),
+        root_serial: master["genesis_root_serial"].parse().unwrap(),
+    };
+    let branch = projects
+        .fork(&project, [241; 16], "baseline-exec-liveness-diagnostic")
+        .unwrap();
+    let sandbox = sandboxes
+        .create(&image, "baseline-exec-liveness-diagnostic")
+        .unwrap();
+    writeln!(receipt, "sandbox_id\t{sandbox}").unwrap();
+    let mount = api.mount(sandbox, &project, branch.id, None);
+    writeln!(receipt, "mount\t{mount:?}").unwrap();
+    let mut failed;
+    if let Ok(mount) = mount {
+        let started = Instant::now();
+        let exec = api.exec(&mount.id, "printf baseline > .position-baseline");
+        writeln!(
+            receipt,
+            "exec_elapsed_ms\t{}",
+            started.elapsed().as_millis()
+        )
+        .unwrap();
+        writeln!(receipt, "exec\t{exec:?}").unwrap();
+        failed = !exec
+            .as_ref()
+            .is_ok_and(|result| result.exit_status == Some(0));
+        if failed {
+            let container = format!("layerfs-{sandbox}");
+            for (name, args) in [
+                ("inspect", vec!["inspect", container.as_str()]),
+                ("top", vec!["top", container.as_str()]),
+                ("logs", vec!["logs", container.as_str()]),
+            ] {
+                let snapshot = Command::new("docker").args(&args).output().unwrap();
+                File::create_new(output.join(format!("docker-{name}.stdout")))
+                    .unwrap()
+                    .write_all(&snapshot.stdout)
+                    .unwrap();
+                File::create_new(output.join(format!("docker-{name}.stderr")))
+                    .unwrap()
+                    .write_all(&snapshot.stderr)
+                    .unwrap();
+                writeln!(receipt, "docker_{name}_status\t{:?}", snapshot.status).unwrap();
+            }
+        }
+        let unmount = api.unmount(&mount.id);
+        writeln!(receipt, "unmount\t{unmount:?}").unwrap();
+        failed |= unmount.is_err();
+    } else {
+        failed = true;
+    }
+    let deleted = sandboxes.delete(sandbox);
+    let listed = sandboxes.list();
+    let absent = listed
+        .as_ref()
+        .is_ok_and(|entries| entries.iter().all(|entry| entry.id != sandbox));
+    writeln!(receipt, "sandbox_delete\t{deleted:?}").unwrap();
+    writeln!(receipt, "sandbox_absent\t{absent}").unwrap();
+    writeln!(
+        receipt,
+        "status\t{}",
+        if failed || !absent { "FAIL" } else { "PASS" }
+    )
+    .unwrap();
+    server.shutdown();
+    assert!(absent, "diagnostic Sandbox cleanup failed: {listed:?}");
+    assert!(
+        !failed,
+        "diagnostic SDK control sequence failed; see receipt"
+    );
+}
+
+#[test]
 fn derive_validated_pristine_chunk_boundaries() {
     let (Ok(source_dir), Ok(output)) = (
         std::env::var("LAYERFS_POSITION_SOURCE_DIR"),
