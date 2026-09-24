@@ -143,6 +143,14 @@ impl<'a> WorkspaceApi<'a> {
             || status.projection_read_sizes.len() != PROJECTION_SIZE_LABELS.len()
             || status.projection_write_sizes.len() != PROJECTION_SIZE_LABELS.len()
         {
+            eprintln!(
+                "DIAG status lengths calls={} bytes={} read={} write={} upstream={}",
+                status.projection.len(),
+                status.projection_bytes.len(),
+                status.projection_read_sizes.len(),
+                status.projection_write_sizes.len(),
+                status.upstream_calls,
+            );
             return Err(Code::Integrity.into());
         }
         let histogram = [
