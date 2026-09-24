@@ -27,7 +27,12 @@ pub(crate) struct Publication {
 }
 #[derive(Clone, Copy)]
 pub(crate) enum FileMutation<'a> {
-    Range(&'a RangeEdit),
+    Range {
+        edit: &'a RangeEdit,
+        handle: Option<HandleId>,
+        expected: Option<RangeStamp>,
+        origin: MutationOrigin,
+    },
     Attributes {
         request: PortableAttributes,
         handle: Option<HandleId>,
@@ -43,8 +48,9 @@ pub(crate) enum FileMutation<'a> {
 impl FileMutation<'_> {
     pub(crate) fn origin(self) -> MutationOrigin {
         match self {
-            Self::Write { origin, .. } | Self::Attributes { origin, .. } => origin,
-            Self::Range(_) => MutationOrigin::Local,
+            Self::Write { origin, .. }
+            | Self::Attributes { origin, .. }
+            | Self::Range { origin, .. } => origin,
         }
     }
     fn is_metadata_only(self) -> bool {
@@ -52,6 +58,60 @@ impl FileMutation<'_> {
     }
 }
 impl Workspace {
+    /// Reads a projected descriptor's current stamp and visible metadata together.
+    pub fn projected_range_state(
+        &self,
+        handle: HandleId,
+        inode: u64,
+    ) -> Result<RangeState, WorkspaceError> {
+        let state = self.state()?;
+        self.available(&state)?;
+        if !state.mounted {
+            return Err(WorkspaceError::Closed);
+        }
+        let opened = state.handle(handle, false)?;
+        if opened.scope != ReferenceScope::Projection || opened.serial != inode {
+            return Err(WorkspaceError::BadHandle);
+        }
+        let attr = state.presented(state.node(inode)?.attr);
+        if attr.kind != NodeKind::File {
+            return Err(WorkspaceError::BadHandle);
+        }
+        let writable = self.inner.access == WorkspaceAccess::LocalEdit
+            && opened.options.access != FileAccess::ReadOnly
+            && !opened.options.append
+            && state
+                .projection
+                .as_ref()
+                .is_some_and(|projection| projection.status == CoherenceStatus::Ready);
+        Ok(RangeState {
+            stamp: RangeStamp {
+                inode,
+                incarnation: self.inner.incarnation,
+                generation: state.generation,
+                revision: state.revision,
+            },
+            length: attr.size,
+            mtime_seconds: attr.mtime_seconds,
+            mtime_nanoseconds: attr.mtime_nanoseconds,
+            writable,
+        })
+    }
+    fn check_range_stamp(
+        &self,
+        state: &State,
+        inode: u64,
+        expected: RangeStamp,
+    ) -> Result<(), WorkspaceError> {
+        if expected.inode != inode
+            || expected.incarnation != self.inner.incarnation
+            || expected.generation != state.generation
+            || expected.revision != state.revision
+        {
+            return Err(WorkspaceError::StaleStamp);
+        }
+        Ok(())
+    }
     fn check_payload_owner(&self, replacement: &OwnedPayload) -> Result<(), WorkspaceError> {
         if replacement.record.directory.incarnation != self.inner.incarnation
             || !Arc::ptr_eq(
@@ -103,12 +163,22 @@ impl Workspace {
         let handle = match mutation {
             FileMutation::Write { handle, .. } => Some(handle),
             FileMutation::Attributes { handle, .. } => handle,
-            FileMutation::Range(_) => None,
+            FileMutation::Range { handle, .. } => handle,
         };
         if let Some(handle) = handle {
             let handle = self.write_handle(state, handle, origin)?;
             if handle.serial != serial {
                 return Err(WorkspaceError::BadHandle);
+            }
+            if matches!(mutation, FileMutation::Range { .. }) && handle.options.append {
+                return Err(WorkspaceError::Unsupported);
+            }
+            if let FileMutation::Range {
+                expected: Some(expected),
+                ..
+            } = mutation
+            {
+                self.check_range_stamp(state, serial, expected)?;
             }
             return Ok(origin.append(handle.options.append));
         }
@@ -326,7 +396,69 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let original = self.edit_original(path, deadline, &mut operation)?;
-        self.mutate_file(original, FileMutation::Range(edit), deadline, None)
+        self.mutate_file(
+            original,
+            FileMutation::Range {
+                edit,
+                handle: None,
+                expected: None,
+                origin: MutationOrigin::Local,
+            },
+            deadline,
+            None,
+        )
+        .map(|published| published.receipt)
+    }
+    pub(crate) fn edit_file_range_from(
+        &self,
+        handle: HandleId,
+        expected: RangeStamp,
+        edit: &RangeEdit,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        if self.inner.access != WorkspaceAccess::LocalEdit {
+            return Err(WorkspaceError::ReadOnly);
+        }
+        let deadline = Self::callback_deadline(deadline);
+        let mut operation = self.begin(false, deadline)?;
+        if edit.start > edit.end || (edit.start == edit.end && edit.replacement.is_empty()) {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        if edit.replacement.len() > 8 * 1024 * 1024 {
+            return Err(WorkspaceError::Capacity);
+        }
+        let mutation = FileMutation::Range {
+            edit,
+            handle: Some(handle),
+            expected: Some(expected),
+            origin: MutationOrigin::ProjectionRange,
+        };
+        let serial = {
+            let state = self.state()?;
+            self.available(&state)?;
+            let opened = self.write_handle(&state, handle, MutationOrigin::ProjectionRange)?;
+            self.mutation_handle(&state, mutation, opened.serial)?;
+            let length = state.presented(state.node(opened.serial)?.attr).size;
+            if edit.end > length {
+                return Err(WorkspaceError::InvalidInput);
+            }
+            if length
+                .checked_sub(edit.end - edit.start)
+                .and_then(|left| left.checked_add(edit.replacement.len()))
+                .is_none_or(|result| result > MAX_FILE)
+            {
+                return Err(WorkspaceError::Capacity);
+            }
+            opened.serial
+        };
+        self.check_payload_owner(&edit.replacement)?;
+        let original = self.serial_original(serial, deadline, &mut operation)?;
+        {
+            let state = self.state()?;
+            self.available(&state)?;
+            self.mutation_handle(&state, mutation, serial)?;
+        }
+        self.mutate_file(original, mutation, deadline, None)
             .map(|published| published.receipt)
     }
     pub(super) fn truncate_open(
@@ -393,7 +525,7 @@ impl Workspace {
         }
         if matches!(
             mutation,
-            FileMutation::Range(_)
+            FileMutation::Range { .. }
                 | FileMutation::Attributes {
                     handle: None,
                     request: PortableAttributes { size: Some(_), .. },
@@ -469,12 +601,12 @@ impl Workspace {
             custody: PageRef::NULL,
         }; 2];
         let payload = match mutation {
-            FileMutation::Range(edit) => Some(&edit.replacement),
+            FileMutation::Range { edit, .. } => Some(&edit.replacement),
             FileMutation::Write { replacement, .. } => Some(replacement),
             FileMutation::Attributes { .. } => None,
         };
         let (start, end, accepted_bytes) = match mutation {
-            FileMutation::Range(edit) => {
+            FileMutation::Range { edit, .. } => {
                 if edit.start > edit.end || edit.end > inode.length {
                     return Err(WorkspaceError::InvalidInput);
                 }
@@ -762,6 +894,17 @@ impl Workspace {
         }
         state.overlay = Some(candidate);
         state.revision = revision;
+        if let FileMutation::Range {
+            edit,
+            origin: MutationOrigin::ProjectionRange,
+            ..
+        } = mutation
+        {
+            // Piece metadata redirects the suffix; no suffix payload is copied.
+            state
+                .counters
+                .record_range_publication(edit.replacement.len(), 0);
+        }
         if !already_dirty {
             state.dirty_inodes += 1;
         }
