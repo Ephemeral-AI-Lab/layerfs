@@ -253,7 +253,7 @@ def execute(case, report, client, controller, name, control_port, service_port,
             elif case == 'attach_failed':
                 service_pid = report['service_pid']
                 process = subprocess.check_output(['ps', '-p', str(service_pid), '-o', 'ppid=,command='], text=True).strip().split(None, 1)
-                assert process == [str(os.getpid()), str(driver.route.BIN / 'layerfs-service')], process
+                assert process == [str(os.getpid()), str(driver.route.BIN / 'layerfs-server')], process
                 os.kill(service_pid, signal.SIGSTOP); paused = True
                 pid, stopped = os.waitpid(service_pid, os.WUNTRACED)
                 assert pid == service_pid and os.WIFSTOPPED(stopped)

@@ -37,7 +37,7 @@ def main():
               'cache_claim': None, 'hard_budget_seconds': 60, 'filesystem_root': root.hex(),
               'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'product_inputs_sha256': payload.product_inputs(), 'driver_sha256': sha(Path(__file__)),
-              'binaries': {name: sha(route.BIN / name) for name in ('layerfs-service', 'layerfs-daemon', 'examples/public_key')},
+              'binaries': {name: sha(route.BIN / name) for name in ('layerfs-server', 'layerfs-daemon', 'examples/public_key')},
               'fixture': {'store': str(args.store), 'sha256': sha(args.store), 'clone_method': 'independent-byte-copy',
                           'use': 'read-only saved objects; no resumed history authority'}, 'rows': []}
     start = time.monotonic(); service = daemon = None

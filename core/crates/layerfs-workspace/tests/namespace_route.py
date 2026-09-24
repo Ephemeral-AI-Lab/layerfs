@@ -71,7 +71,7 @@ def execute(args, report, started):
                LAYERFS_HISTORY_CREATE='1', LAYERFS_HISTORY_BINDING='pair1-stage',
                LAYERFS_HISTORY_INCARNATION='1', LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(),
                LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([shared.route.BIN / 'layerfs-service'], env=env,
+    service = subprocess.Popen([shared.route.BIN / 'layerfs-server'], env=env,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     created = made_volume = False
     readiness = ''

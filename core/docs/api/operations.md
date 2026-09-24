@@ -21,7 +21,7 @@ The implementation reuses the production native-directory importer. The
 current [command](../../crates/layerfs-bridge/src/contract/history.rs) is
 `HistoryCommand::ImportNativeDirectory`; the similarly named `InitLayerStack`
 uses a pathless manifest with pre-saved file roots and cannot implement this
-method. The current [Service](../../crates/layerfs-service/src/owner.rs) has a
+method. The current [Service](../../crates/layerfs-server/src/service/handler.rs) has a
 single startup-bound `import_root`; the host-direct SDK passes a validated
 source binding to one authorized call without changing that field. Source
 scan, file reads, construction, saves and C5 publication stay inside the

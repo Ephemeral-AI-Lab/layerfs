@@ -104,7 +104,7 @@ def execute(args, report):
         LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'),
         LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_CREATE='0',
         LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([driver.route.BIN / 'layerfs-service'], env=environment,
+    service = subprocess.Popen([driver.route.BIN / 'layerfs-server'], env=environment,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-attach-startup-' + uuid.uuid4().hex[:12]
     daemon = None

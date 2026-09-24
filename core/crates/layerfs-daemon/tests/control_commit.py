@@ -626,7 +626,7 @@ def execute(args, report):
         LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
         LAYERFS_HISTORY_BINDING='pair1-stage', LAYERFS_HISTORY_INCARNATION='1',
         LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([driver.route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+    service = subprocess.Popen([driver.route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-control-commit-' + uuid.uuid4().hex[:12]
     daemon = client = witness = proxy = live_files = None

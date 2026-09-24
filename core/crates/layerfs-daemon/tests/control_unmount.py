@@ -158,7 +158,7 @@ def execute(args, report):
         LAYERFS_STORE=str(service_dir / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0', LAYERFS_TELEMETRY='off',
         LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_BINDING='pair1-mounted-read',
         LAYERFS_HISTORY_CREATE='0', LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=environment, stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=environment, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     report['service_pid'] = service.pid
     name = 'layerfs-unmount-' + uuid.uuid4().hex[:12]
@@ -449,7 +449,7 @@ def main():
         'control_mount_driver_sha256':sha(Path(__file__).with_name('control_mount.py')),
         'caller_dependencies_sha256': dict(sorted(caller_dependencies.items())),
         'linux_binary_sha256':sha(args.linux_daemon),
-        'host_binary_sha256':{name:sha(route.BIN/name) for name in ('layerfs-service','layerfs-daemon','examples/public_key')},
+        'host_binary_sha256':{name:sha(route.BIN/name) for name in ('layerfs-server','layerfs-daemon','examples/public_key')},
         'not_run':NOT_RUN}
     try:
         space=isolation.namespace()

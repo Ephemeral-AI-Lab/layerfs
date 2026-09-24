@@ -2,7 +2,7 @@
 use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig, LayerStackId};
 use layerfs_sdk::{Client, Error, Host, Project};
-use layerfs_service::{Grant, Service, StoreAccess};
+use layerfs_server::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
 use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
 use sha2::{Digest, Sha256};

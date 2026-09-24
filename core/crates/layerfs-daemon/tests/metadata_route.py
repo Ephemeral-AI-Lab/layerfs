@@ -155,7 +155,7 @@ def run(args, report):
                LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(directory / 'history.sqlite'),
                LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_CREATE='0',
                LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     client = failed = None
     readiness = ''
@@ -286,7 +286,7 @@ def main():
                       product_inputs_sha256=mount.product_inputs(),
                       driver_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                       binary_sha256={name: hashlib.sha256((route.BIN / name).read_bytes()).hexdigest()
-                                     for name in ('layerfs-daemon', 'layerfs-service')})
+                                     for name in ('layerfs-daemon', 'layerfs-server')})
         run(args, report)
         report['status'] = 'PASS'
     except BaseException as error:

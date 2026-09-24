@@ -2,7 +2,7 @@
 """External history-route driver: real service, real daemon, real frames.
 
 This is a functional deployment proof, not a benchmark. It starts the production
-`layerfs-service` with a configured history catalog, starts the production
+`layerfs-server` with a configured history catalog, starts the production
 `layerfs-daemon` as the client (on the host by default, in Linux Docker with
 `--image`), and drives the daemon's own stdin/stdout frames. Nothing here
 re-implements a service body, a codec or a history transition: the frames are the
@@ -219,7 +219,7 @@ def start_service(temp, port, server_key, peers):
                LAYERFS_HISTORY_CATALOG=str(Path(temp) / "history.sqlite"),
                LAYERFS_HISTORY_BINDING="layerfs-history-route", LAYERFS_HISTORY_CREATE="1",
                LAYERFS_HISTORY_INCARNATION="1", LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex())
-    child = subprocess.Popen([BIN / "layerfs-service"], env=env, stdin=subprocess.PIPE,
+    child = subprocess.Popen([BIN / "layerfs-server"], env=env, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     line = child.stderr.readline()
     assert b"ready" in line, line
@@ -406,7 +406,7 @@ def main():
             }
             service, ready = start_service(temp, port, server_key, peers)
             evidence["service_ready"] = ready
-            evidence["binaries"] = {str(BIN / "layerfs-service"): hashlib.sha256((BIN / "layerfs-service").read_bytes()).hexdigest()}
+            evidence["binaries"] = {str(BIN / "layerfs-server"): hashlib.sha256((BIN / "layerfs-server").read_bytes()).hexdigest()}
 
             # A legacy grant mask of 31 must not reach a history opcode.
             legacy, name = start_daemon(temp, port, legacy_key, server_public, 2, args.image)

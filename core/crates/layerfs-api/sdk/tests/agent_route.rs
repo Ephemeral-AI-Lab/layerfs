@@ -13,7 +13,7 @@ use layerfs_bridge::{
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
 use layerfs_sandbox::{OwnerConfig, SandboxOwner};
 use layerfs_sdk::{ProjectApi, SandboxApi, WorkspaceApi};
-use layerfs_service::{Grant, Service, StoreAccess};
+use layerfs_server::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},

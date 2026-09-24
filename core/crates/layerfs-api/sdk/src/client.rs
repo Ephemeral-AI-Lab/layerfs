@@ -2,7 +2,7 @@
 use crate::project::ProjectApi;
 use layerfs_api_core::{Error, Project};
 use layerfs_bridge::adapters::native::connection::VerifiedPeer;
-use layerfs_service::Service;
+use layerfs_server::Service;
 use std::path::Path;
 
 pub struct Client<'a> {

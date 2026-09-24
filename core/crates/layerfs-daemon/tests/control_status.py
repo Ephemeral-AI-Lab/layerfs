@@ -112,7 +112,7 @@ def run(args, report):
                        LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(service_dir/'history.sqlite'),
                        LAYERFS_HISTORY_BINDING='pair1-mounted-read',LAYERFS_HISTORY_CREATE='0',
                        LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([route.BIN/'layerfs-service'],env=service_env,stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN/'layerfs-server'],env=service_env,stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     daemon = client = reader = None
     name = f'layerfs-status-{os.getpid()}'

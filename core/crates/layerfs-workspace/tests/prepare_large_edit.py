@@ -49,7 +49,7 @@ def main():
         raise TimeoutError('large fixture preparation exceeded its 60-second budget')
     signal.signal(signal.SIGALRM, expired); signal.alarm(60)
     try:
-        report['binary_sha256'] = {name: sha(route.BIN / name) for name in ('layerfs-daemon', 'layerfs-service', 'examples/public_key')}
+        report['binary_sha256'] = {name: sha(route.BIN / name) for name in ('layerfs-daemon', 'layerfs-server', 'examples/public_key')}
         data = args.output / 'service'; data.mkdir()
         report['store_master_sha256'] = sha(args.store_master)
         shutil.copyfile(args.store_master, data / 'store.sqlite')
@@ -63,7 +63,7 @@ def main():
                    LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_INCARNATION='1',
                    LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_TELEMETRY='off',
                    LAYERFS_CONSTRUCTION_WORKERS='1')
-        service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+        service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         readiness = mounted.line_until(service, timeout=10)
         assert 'ready' in readiness

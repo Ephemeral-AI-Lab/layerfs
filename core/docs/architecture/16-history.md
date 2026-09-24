@@ -72,7 +72,7 @@ layerfs-history ──► layerfs-content   (scalar identity types only)
                  ──► blake3           (domain-separated derivation)
                  ──► rusqlite         (optional, `native` feature)
 
-layerfs-history ◄── layerfs-service   (composition, authorization, bootstrap)
+layerfs-history ◄── layerfs-server    (composition, authorization, bootstrap)
 layerfs-bridge  does not depend on layerfs-history at all
 ```
 

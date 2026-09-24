@@ -551,7 +551,7 @@ dependencies = [
  "layerfs-bridge",
  "layerfs-history",
  "layerfs-sandbox",
- "layerfs-service",
+ "layerfs-server",
  "layerfs-storage",
  "layerfs-telemetry",
  "nix",
@@ -559,12 +559,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerfs-service"
+name = "layerfs-server"
 version = "0.1.6"
 dependencies = [
+ "layerfs-api-core",
  "layerfs-bridge",
  "layerfs-content",
  "layerfs-history",
+ "layerfs-sandbox",
  "layerfs-storage",
  "layerfs-telemetry",
  "nix",

@@ -23,7 +23,7 @@ from families import init_namespace as init  # noqa: E402
 
 CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
 BUILD = ["cargo", "+1.85.1", "build", "--manifest-path", "core/Cargo.toml", "--locked",
-         "-p", "layerfs-sdk", "-p", "layerfs-service",
+         "-p", "layerfs-sdk", "-p", "layerfs-server",
          "--example", "benchmark_init", "--example", "verify_namespace"]
 BINARIES = ("benchmark_init", "verify_namespace")
 

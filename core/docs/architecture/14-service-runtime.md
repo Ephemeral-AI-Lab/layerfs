@@ -241,12 +241,23 @@ No request carries a native Store path or independent construction capacities.
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
 
-The Service source follows the same request flow: `service.rs` owns admission
-and dispatch; `read/` holds content and catalog queries; `save/` holds content
-and catalog mutations plus shared filesystem construction. `save/import/` owns
-native scanning and namespace construction, with bounded producer messages in
-`save/import/batch/`. `server/` contains process configuration and socket
-serving. `project.rs` exposes request-scoped Project Init to the SDK.
+The Service source follows the same request flow inside the
+`layerfs-server` package: `service/handler.rs` owns admission and dispatch;
+`service/read/` holds content and catalog queries; `service/save/` holds content
+and catalog mutations plus shared filesystem construction;
+`service/save/import/` owns native scanning and namespace construction, with
+bounded producer messages in `service/save/import/batch/`;
+`service/init_project.rs` exposes request-scoped Project Init to the SDK. Native
+assembly is grouped separately: `host/config.rs` reads operator configuration,
+`host/store.rs` builds Stores, catalogs, grants and the acceptor's session bound,
+`host/acceptor.rs` is the single bounded connection acceptor used by both entry
+points, and `host/assembly.rs` is the one concrete `Server` that binds a Store,
+its history catalog, the authorized `Service`, the loopback listener and the
+sandbox owner together. `src/bin/layerfs-server.rs` is the only process
+entrypoint: it calls `host::run`, which is the operator-configured assembly over
+the same acceptor. The package was renamed from `layerfs-service` and its
+listener moved from `server/` to `host/` as a source relocation; no second
+acceptor exists.
 `records.rs` converts catalog identities and wire records. The
 `lib.rs` and `mod.rs` files only declare or export these modules.
 
@@ -996,3 +1007,24 @@ cache state; the full prepared tree, its one complete upload Commit, incremental
 Commits and matched R6 remain unqualified, and Round43's capacity failure stays
 open. [Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md)
 records the selectors, the diagnostic trace and the open failure.
+
+## 14.4 SDK-only product route assembly
+
+Source basis: the commit that introduces this section
+(`git log -1 --format=%H -- core/docs/architecture/14-service-runtime.md`).
+
+The replacement-product package `layerfs-server` now owns both the authorized
+operation code under `src/service/` and native assembly under `src/host/`.
+`layerfs-sdk` depends on it and never the reverse, so the dependency direction
+stays acyclic. `Server::create` prepares a fresh Store for a first Init and
+`Server::open` opens a prepared Store clone; both build the same authority from
+an explicit `ServerConfig`: the Store, its history catalog, the authorized
+`Service` with host and daemon peer grants, the loopback acceptor the sandbox
+calls back on, and `Server::owner()`, which assembles the `SandboxOwner` bound to
+that listener. The SDK constructs `ProjectApi` from a borrowed `Server`,
+`ProjectApi::fork` publishes a Branch through the ordinary authorized Service,
+and `SandboxApi`/`WorkspaceApi` are constructed from the borrowed `SandboxOwner`.
+The former SDK `Host` and forwarding `Client` are retired; every Init caller now
+calls `ProjectApi::init` directly. Existing #236 receipts keep their original
+source and build identity because this is a relocation and a new composition
+surface, not a measured change.

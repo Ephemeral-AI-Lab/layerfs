@@ -334,7 +334,7 @@ def execute(args, report, route, mount):
         LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'),
         LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_CREATE='0',
         LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=environment,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=environment,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-startup-' + uuid.uuid4().hex[:12]
     made_volume = made_container = False
@@ -443,7 +443,7 @@ def main():
         'mount_driver_sha256': sha(Path(mount.__file__)), 'route_driver_sha256': sha(Path(route.__file__)),
         'caller_dependencies_sha256': dict(sorted(caller_dependencies.items())),
         'linux_binary_sha256': sha(args.linux_daemon),
-        'host_binary_sha256': {name: sha(route.BIN / name) for name in ('layerfs-service', 'examples/public_key')},
+        'host_binary_sha256': {name: sha(route.BIN / name) for name in ('layerfs-server', 'examples/public_key')},
         'hard_budget_seconds': 60, 'performance_claim': False, 'cache_claim': None,
         'runtime_security_profile': 'SYS_ADMIN + SYS_PTRACE; AppArmor/seccomp unconfined; child installs declared writev USER_NOTIF filter',
         'not_run': ['constructor-error dependency cleanup proof', 'writable startup/control',

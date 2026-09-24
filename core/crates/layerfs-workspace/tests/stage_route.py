@@ -177,7 +177,7 @@ def execute(args, report, started):
                LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
     if denied_key:
         env['LAYERFS_PEERS'] += f';2,{route.public_key(denied_key)},{int(time.time())+3600},63'
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-stage-' + uuid.uuid4().hex[:16]; volume = name + '-data'
     made_volume = created = stopped = killed = False; readiness = ''; child = None; proxy = None
@@ -342,7 +342,7 @@ def main():
                       test_source_sha256=sha(TEST_SOURCE), entrypoint_sha256=sha(ENTRY_SOURCE),
                       helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
                       test_binary_sha256=sha(args.test_binary),
-                      binaries={name: sha(route.BIN / name) for name in ('layerfs-service', 'layerfs-daemon', 'examples/public_key')},
+                      binaries={name: sha(route.BIN / name) for name in ('layerfs-server', 'layerfs-daemon', 'examples/public_key')},
                       image=payload.command(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).stdout.strip())
         space = isolation.namespace()
         for path in (args.output, args.fixture, args.test_binary, route.BIN): space.assert_owned(path, 'functional proof input/output')

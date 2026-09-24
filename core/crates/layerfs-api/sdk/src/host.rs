@@ -5,7 +5,7 @@ use layerfs_bridge::{
     contract::{permission_bit, COMMAND_OPCODE},
 };
 use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig};
-use layerfs_service::{Grant, Service, StoreAccess};
+use layerfs_server::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
 use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
 use std::{error::Error, path::Path, sync::Arc};

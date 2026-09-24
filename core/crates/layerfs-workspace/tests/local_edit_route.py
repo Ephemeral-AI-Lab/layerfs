@@ -114,7 +114,7 @@ def run(args, report, start):
                LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(directory / 'history.sqlite'),
                LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_CREATE='0',
                LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-edit-' + uuid.uuid4().hex[:16]; volume = name + '-data'
     created = made_volume = False; readiness = ''
@@ -205,7 +205,7 @@ def main():
                       product_inputs_sha256=payload.product_inputs(), driver_sha256=sha(Path(__file__)),
                       test_source_sha256=sha(TEST_SOURCE), entrypoint_sha256=sha(ENTRY_SOURCE),
                       helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
-                      test_binary_sha256=sha(args.test_binary), service_binary_sha256=sha(route.BIN / 'layerfs-service'),
+                      test_binary_sha256=sha(args.test_binary), service_binary_sha256=sha(route.BIN / 'layerfs-server'),
                       image=payload.command(['docker', 'image', 'inspect', args.image, '--format', '{{.Id}}']).stdout.strip())
         space = isolation.namespace()
         for path in (args.output, args.fixture, args.test_binary, route.BIN):
