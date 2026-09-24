@@ -9,7 +9,7 @@ pub const WORKSPACE_COMMIT_OPCODE: u8 = 14;
 pub const WORKSPACE_COMMIT_MAX_MS: u32 = MAX_OPERATION_MS;
 pub const WORKSPACE_COMMIT_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_COMMIT_RESULT_BYTES: usize = 1590;
-pub const WORKSPACE_WRITABLE_STATUS_RESULT_BYTES: usize = 405;
+pub const WORKSPACE_WRITABLE_STATUS_RESULT_BYTES: usize = 437;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceCommitWire {

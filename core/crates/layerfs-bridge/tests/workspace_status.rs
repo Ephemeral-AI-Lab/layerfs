@@ -29,12 +29,16 @@ fn status() -> WorkspaceStatusWire {
         consumer_accounted_bytes: 5,
         projection: [7; PROJECTION_CLASSES],
         upstream_calls: 11,
+        range_accepted_payload_bytes: 13,
+        range_shifted_suffix_bytes: 17,
     }
 }
 
 #[test]
 fn status_profile_is_bounded_and_has_no_store_permission() {
     let mut r = request();
+    assert_eq!(WORKSPACE_STATUS_PROFILE, 4);
+    assert_eq!(&PROJECTION_CLASS_LABELS[9..], ["range_state", "range_edit"]);
     assert_eq!(r.operation.opcode(), 8);
     assert!(r.operation.read_only());
     assert!(!r.operation.mutation());
@@ -43,7 +47,7 @@ fn status_profile_is_bounded_and_has_no_store_permission() {
     assert_eq!(r.operation.input_length().unwrap(), 0);
     assert_eq!(permission_bit(r.operation.opcode()), None);
     assert_eq!(decode_request(1, &encode_request(&r).unwrap()).unwrap(), r);
-    for profile in [1, 2, 4] {
+    for profile in [1, 2, 3] {
         r.profile = profile;
         assert_eq!(r.validate().unwrap_err().code, Code::Unsupported);
     }

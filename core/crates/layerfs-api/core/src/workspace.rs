@@ -60,6 +60,10 @@ pub struct WorkspaceStatus {
     pub projection: Vec<(String, u64)>,
     /// Upstream host Service calls this Workspace issued.
     pub upstream_calls: u64,
+    /// Replacement payload bytes accepted by published range edits.
+    pub range_accepted_payload_bytes: u64,
+    /// Physical suffix payload bytes copied by published range edits.
+    pub range_shifted_suffix_bytes: u64,
 }
 
 impl WorkspaceStatus {

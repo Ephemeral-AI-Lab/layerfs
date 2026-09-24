@@ -133,26 +133,31 @@ own cause. The public SDK surface is unchanged.
 **Projection counts.** `layerfs-workspace::filesystem::projection_counters`
 holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,
 `read`, `write`, `readdir`, `open`, `setattr`, `rename`, `other`, `range_state`,
-`range_edit`) and of upstream host Service calls issued by that Workspace.
-`record_range_publication` separately saturates accepted replacement payload
-bytes and physical suffix payload bytes copied; a piece splice supplies zero
-shifted bytes even if its logical suffix is large. These new counts are
-available for #241 ingress to record at the publication point. The FUSE adapter records each
+`range_edit`) and of upstream
+host Service calls issued by that Workspace. The FUSE adapter records each
 callback at its single entry point, `setattr` and `rename` included, and
 `Workspace::remote_call` counts each upstream call. The counts appear in
 `WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
 diagnostic product telemetry and never gate an operation; no cache, backing or
-write path changes, and FUSE edits are still written locally.
+write path is altered by counting. Published range
+edits also saturating-count their accepted replacement payload bytes and
+physical suffix payload bytes copied; a piece splice records zero shifted
+bytes even when the logical suffix is large. An edit that publishes but later
+fails notification remains counted as accepted.
 
 The daemon status wire carries the same counts in the fixed
 `layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,
+`range_accepted_payload_bytes` and `range_shifted_suffix_bytes`,
 so a caller reads bounded classes rather than a variable-length map. A Workspace
 that does not report exactly those classes is refused as `Integrity` instead of
 being read as zeros. The public SDK exposes one read-only route for them,
 `WorkspaceApi::status`, which accepts either the plain status response or the
 local-edit writable observation for the same request. The counts describe what
-the kernel asked the mounted projection for; they are not byte totals and the
-status call is never part of an acknowledgement boundary.
+the kernel asked the mounted projection for; the two separate range fields
+describe accepted physical byte work. Status profile 4 fails closed on profile
+3 requests because the fixed response grew from 219 to 251 bytes (writable
+status 405 to 437). The status call is never part of an acknowledgement
+boundary.
 
 The sandbox owner now accepts an optional telemetry run identity at assembly.
 When present, it forwards the existing daemon telemetry stream and supplies a
@@ -315,7 +320,7 @@ List still returns names/serials rather than complete child attributes. A consum
 requiring per-entry kinds issues bounded Attributes calls for its page under one
 remaining callback deadline. This establishes no batching or request-count gain.
 
-`WorkspaceStatus` is a separate daemon-control operation: profile 3, opcode 8,
+`WorkspaceStatus` is a separate daemon-control operation: current profile 4, opcode 8,
 positive request ID, zero Store/generation/result-body fields and at most 5,000 ms.
 It supplies a 1–63-byte managed ID and nonzero 32-byte producer incarnation. Its
 metadata is at most 124 bytes and it accepts no input or ResultData body. The
@@ -326,7 +331,9 @@ the exact Workspace/incarnation. Service grants never confer that authority.
 
 Response tag 10 encodes the echoed ID/incarnation, three state flags and five
 u64 observations: active operations, nodes, handles, cookies and aggregate
-`consumer_accounted_bytes`. Its maximum is 139 bytes including the tag. Reserved
+`consumer_accounted_bytes`, followed by the fixed projection/upstream counts
+and two physical range-byte totals described above. Its current maximum is
+251 bytes including the tag. Reserved
 flag bits and inconsistent closed-state counts are rejected. Native matching
 requires the exact request ID/incarnation binding and no output body. This is
 current local state, never an earlier edit/Commit receipt or recovery protocol.

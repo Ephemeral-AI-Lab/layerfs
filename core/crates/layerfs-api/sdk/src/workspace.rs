@@ -155,6 +155,8 @@ impl<'a> WorkspaceApi<'a> {
                 .map(|(label, count)| ((*label).to_string(), count))
                 .collect(),
             upstream_calls: status.upstream_calls,
+            range_accepted_payload_bytes: status.range_accepted_payload_bytes,
+            range_shifted_suffix_bytes: status.range_shifted_suffix_bytes,
         })
     }
 

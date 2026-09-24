@@ -1,16 +1,26 @@
 //! Daemon-targeted control; service grants confer no control authority.
 use super::{Code, Failure, Root};
 
-pub const WORKSPACE_STATUS_PROFILE: u16 = 3;
+pub const WORKSPACE_STATUS_PROFILE: u16 = 4;
 pub const WORKSPACE_STATUS_OPCODE: u8 = 8;
 pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
-pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 219;
+pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 251;
 /// Fixed, bounded projection callback classes reported by status.
-pub const PROJECTION_CLASSES: usize = 9;
+pub const PROJECTION_CLASSES: usize = 11;
 pub const PROJECTION_CLASS_LABELS: [&str; PROJECTION_CLASSES] = [
-    "lookup", "getattr", "read", "write", "readdir", "open", "setattr", "rename", "other",
+    "lookup",
+    "getattr",
+    "read",
+    "write",
+    "readdir",
+    "open",
+    "setattr",
+    "rename",
+    "other",
+    "range_state",
+    "range_edit",
 ];
 pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
@@ -142,10 +152,14 @@ pub struct WorkspaceStatusWire {
     /// Bounded projection callback counts in `PROJECTION_CLASS_LABELS` order.
     ///
     /// These are ordinary product counts of what the kernel asked the mounted
-    /// projection for; they are not byte totals and never gate an operation.
+    /// projection for; they never gate an operation.
     pub projection: [u64; PROJECTION_CLASSES],
     /// Upstream host Service calls this Workspace has issued.
     pub upstream_calls: u64,
+    /// Replacement payload bytes accepted by published range edits.
+    pub range_accepted_payload_bytes: u64,
+    /// Physical suffix payload bytes copied by published range edits.
+    pub range_shifted_suffix_bytes: u64,
 }
 
 impl WorkspaceStatusWire {

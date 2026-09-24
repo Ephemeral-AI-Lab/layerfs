@@ -17,7 +17,9 @@ pub(super) fn put_status(e: &mut Encoder, status: &WorkspaceStatusWire) -> Resul
     for count in status.projection {
         e.u64(count)?;
     }
-    e.u64(status.upstream_calls)
+    e.u64(status.upstream_calls)?;
+    e.u64(status.range_accepted_payload_bytes)?;
+    e.u64(status.range_shifted_suffix_bytes)
 }
 pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Failure> {
     let workspace = d.blob(WORKSPACE_ID_BYTES)?;
@@ -45,6 +47,8 @@ pub(super) fn take_status(d: &mut Decoder<'_>) -> Result<WorkspaceStatusWire, Fa
             counts
         },
         upstream_calls: d.u64()?,
+        range_accepted_payload_bytes: d.u64()?,
+        range_shifted_suffix_bytes: d.u64()?,
     };
     status.validate()?;
     Ok(status)
