@@ -12,6 +12,7 @@ use std::{
     io::{Cursor, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::Command,
+    time::{Duration, Instant},
 };
 
 #[path = "support/range_exec_gate.rs"]
@@ -292,6 +293,73 @@ fn with_mount<T>(
     }
 }
 
+fn docker_snapshot(output: &Path, stem: &str, args: &[&str], receipt: &mut File) {
+    match Command::new("docker").args(args).output() {
+        Ok(observed) => {
+            File::create_new(output.join(format!("{stem}.stdout")))
+                .unwrap()
+                .write_all(&observed.stdout)
+                .unwrap();
+            File::create_new(output.join(format!("{stem}.stderr")))
+                .unwrap()
+                .write_all(&observed.stderr)
+                .unwrap();
+            writeln!(receipt, "{stem}_exit\t{:?}", observed.status).unwrap();
+        }
+        Err(error) => writeln!(receipt, "{stem}_error\t{error:?}").unwrap(),
+    }
+}
+
+fn observe_failed_sandbox(
+    output: &Path,
+    case: &Case,
+    stage: &str,
+    sandbox: layerfs_api_core::SandboxId,
+    receipt: &mut File,
+) {
+    let container = format!("layerfs-{sandbox}");
+    let prefix = format!("{}-{stage}", case.id);
+    docker_snapshot(
+        output,
+        &format!("{prefix}-docker-inspect"),
+        &["inspect", &container],
+        receipt,
+    );
+    docker_snapshot(
+        output,
+        &format!("{prefix}-docker-top"),
+        &["top", &container],
+        receipt,
+    );
+    // Keep the original daemon log filenames as the first snapshot.
+    docker_snapshot(
+        output,
+        &format!("{prefix}-daemon"),
+        &["logs", &container],
+        receipt,
+    );
+    let observation = Instant::now();
+    std::thread::sleep(Duration::from_secs(6));
+    writeln!(
+        receipt,
+        "{prefix}_observation_wait_ns\t{}",
+        observation.elapsed().as_nanos()
+    )
+    .unwrap();
+    docker_snapshot(
+        output,
+        &format!("{prefix}-docker-top-late"),
+        &["top", &container],
+        receipt,
+    );
+    docker_snapshot(
+        output,
+        &format!("{prefix}-daemon-late"),
+        &["logs", &container],
+        receipt,
+    );
+}
+
 fn with_fresh_sandbox_mount<T>(
     context: &SweepContext<'_>,
     stage: &str,
@@ -308,6 +376,7 @@ fn with_fresh_sandbox_mount<T>(
         Ok(id) => id,
         Err(error) => {
             if let Some(id) = error.sandbox {
+                observe_failed_sandbox(context.output, case, stage, id, receipt);
                 writeln!(
                     receipt,
                     "{stage}_retained_sandbox_delete\t{:?}",
@@ -331,27 +400,7 @@ fn with_fresh_sandbox_mount<T>(
         f,
     );
     if result.is_err() {
-        let logs = Command::new("docker")
-            .args(["logs", &format!("layerfs-{sandbox}")])
-            .output();
-        if let Ok(logs) = logs {
-            File::create_new(
-                context
-                    .output
-                    .join(format!("{}-{stage}-daemon.stdout", case.id)),
-            )
-            .unwrap()
-            .write_all(&logs.stdout)
-            .unwrap();
-            File::create_new(
-                context
-                    .output
-                    .join(format!("{}-{stage}-daemon.stderr", case.id)),
-            )
-            .unwrap()
-            .write_all(&logs.stderr)
-            .unwrap();
-        }
+        observe_failed_sandbox(context.output, case, stage, sandbox, receipt);
     }
     let deleted = context.sandboxes.delete(sandbox);
     let listed = context.sandboxes.list();
@@ -534,7 +583,8 @@ fn run_case(
     };
     let expected_sha = expected_digest(context.source, case, inserted);
     let expected_size = case.size - case.delete_len + case.insert_len;
-    let (old, new, verifier_read_callbacks) = with_mount(
+    let mut baseline_observation = None;
+    let mounted = with_mount(
         context.api,
         sandbox,
         context.project,
@@ -544,10 +594,10 @@ fn run_case(
             writeln!(receipt, "edit_unmount\t{unmount:?}").unwrap();
         },
         |id| {
-            let initial = context
-                .api
-                .exec(id, "printf baseline > .position-baseline")
-                .map_err(|error| format!("baseline exec: {error:?}"))?;
+            let started = Instant::now();
+            let initial = context.api.exec(id, "printf baseline > .position-baseline");
+            baseline_observation = Some((started.elapsed().as_nanos(), format!("{initial:?}")));
+            let initial = initial.map_err(|error| format!("baseline exec: {error:?}"))?;
             if initial.exit_status != Some(0) {
                 return Err(format!("baseline status: {initial:?}"));
             }
@@ -614,7 +664,12 @@ fn run_case(
                 .ok_or_else(|| format!("verifier read counter unavailable: {after:?}"))?;
             Ok((old, new, read_delta))
         },
-    )?;
+    );
+    if let Some((elapsed, result)) = baseline_observation {
+        writeln!(receipt, "baseline_exec_elapsed_ns\t{elapsed}").unwrap();
+        writeln!(receipt, "baseline_exec_result\t{result}").unwrap();
+    }
+    let (old, new, verifier_read_callbacks) = mounted?;
     writeln!(
         receipt,
         "verifier_read_callbacks\t{verifier_read_callbacks}"
@@ -685,6 +740,10 @@ fn mounted_public_sdk_position_sweep() {
     use layerfs_sdk::{
         HistoryMode, Project, ProjectApi, SandboxApi, Server, ServerConfig, WorkspaceApi,
     };
+    use layerfs_telemetry::{
+        output::{Identity, OutputConfig},
+        runtime::{Configuration, MonitorConfig, Runtime},
+    };
     const ENV: [&str; 7] = [
         "LAYERFS_TEST_IMAGE",
         "LAYERFS_POSITION_SIZE",
@@ -721,6 +780,37 @@ fn mounted_public_sdk_position_sweep() {
     writeln!(run_receipt, "master_sha256\t{master_sha}").unwrap();
     writeln!(run_receipt, "size\t{label}").unwrap();
     writeln!(run_receipt, "status\tSTARTED").unwrap();
+    let diagnostic_run = std::env::var("LAYERFS_POSITION_DIAGNOSTIC_RUN")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<u128>()
+                .expect("numeric diagnostic run identity")
+        });
+    let telemetry = if let Some(run) = diagnostic_run {
+        writeln!(run_receipt, "diagnostic_telemetry_run\t{run}").unwrap();
+        Runtime::start(Configuration {
+            enabled: true,
+            timing: true,
+            monitor: MonitorConfig {
+                cpu: true,
+                memory: true,
+                interval_ms: 10,
+                history: 600,
+                windows: 32,
+            },
+            output: OutputConfig::forward(),
+            identity: Identity {
+                run,
+                pid: std::process::id(),
+                role: 1,
+                namespace: 1,
+            },
+        })
+        .unwrap()
+    } else {
+        Runtime::disabled()
+    };
     let state = output.join("private-state");
     let prepared = Command::new("python3")
         .arg(concat!(
@@ -775,8 +865,8 @@ fn mounted_public_sdk_position_sweep() {
         cursor_key,
         history: HistoryMode::OpenWritable,
         service_host: "host.docker.internal".into(),
-        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
-        telemetry_run: None,
+        runtime: telemetry,
+        telemetry_run: diagnostic_run,
     })
     .unwrap();
     server.listen().unwrap();
@@ -837,6 +927,7 @@ fn mounted_public_sdk_position_sweep() {
                 let message = format!("edit sandbox create: {error:?}");
                 writeln!(receipt, "status\tFAIL\t{message}").unwrap();
                 if let Some(id) = error.sandbox {
+                    observe_failed_sandbox(&output, case, "edit", id, &mut receipt);
                     writeln!(
                         receipt,
                         "retained_sandbox_delete\t{:?}",
@@ -861,19 +952,7 @@ fn mounted_public_sdk_position_sweep() {
             Err(format!("test panic: {message}"))
         });
         if result.is_err() {
-            if let Ok(logs) = Command::new("docker")
-                .args(["logs", &format!("layerfs-{sandbox}")])
-                .output()
-            {
-                File::create_new(output.join(format!("{}-edit-daemon.stdout", case.id)))
-                    .unwrap()
-                    .write_all(&logs.stdout)
-                    .unwrap();
-                File::create_new(output.join(format!("{}-edit-daemon.stderr", case.id)))
-                    .unwrap()
-                    .write_all(&logs.stderr)
-                    .unwrap();
-            }
+            observe_failed_sandbox(&output, case, "edit", sandbox, &mut receipt);
         }
         let deleted = sandboxes.delete(sandbox);
         let listed = sandboxes.list();
