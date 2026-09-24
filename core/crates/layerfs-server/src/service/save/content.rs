@@ -91,6 +91,7 @@ pub fn mutate(
             root,
             base_length,
             edits,
+            metadata: metadata_base,
             kind,
             mode,
             mtime_seconds,
@@ -118,11 +119,14 @@ pub fn mutate(
                     scope.child("service.edit"),
                 )
                 .map_err(content)?;
-                // The edited content root is the base the portable fields are
-                // patched onto, so both objects land in this one save.
+                // The portable fields patch the published base root, exactly
+                // as the separate metadata request did, so the address
+                // authority still comes from `read_portable` and not from the
+                // root this edit just produced.
+                let _ = file.root;
                 let metadata = metadata::patch_portable(
                     &mut FilesystemObjects::new(&provider, &mut handoff),
-                    id(file.root.as_bytes()),
+                    id(metadata_base),
                     InodeKind::from_code(*kind).map_err(content)?,
                     layerfs_content::filesystem::attributes::PortableMetadata {
                         mode: *mode,

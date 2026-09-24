@@ -110,6 +110,7 @@ impl Workspace {
                                 root: inode.base,
                                 base_length: inode.base_length,
                                 edits: plan.edits,
+                                metadata: inode.metadata,
                                 kind,
                                 mode: inode.mode,
                                 mtime_seconds: inode.seconds,

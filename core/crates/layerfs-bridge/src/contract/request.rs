@@ -92,6 +92,9 @@ pub enum Operation {
         root: Root,
         base_length: u64,
         edits: Vec<Edit>,
+        /// The published portable-metadata root these fields patch, exactly as
+        /// the separate `UpdatePortableMetadata` request names it.
+        metadata: Root,
         kind: u8,
         mode: u32,
         mtime_seconds: i64,

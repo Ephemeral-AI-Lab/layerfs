@@ -210,6 +210,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             root,
             base_length,
             edits,
+            metadata,
             kind,
             mode,
             mtime_seconds,
@@ -223,6 +224,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                 e.u64(v.end)?;
                 e.u64(v.replacement)?;
             }
+            e.put(metadata)?;
             e.u8(*kind)?;
             e.u32(*mode)?;
             e.u64(*mtime_seconds as u64)?;
@@ -881,6 +883,7 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 root,
                 base_length,
                 edits,
+                metadata: d.root()?,
                 kind: d.u8()?,
                 mode: d.u32()?,
                 mtime_seconds: d.u64()? as i64,
