@@ -240,7 +240,7 @@ impl Workspace {
     ) -> Result<CommitReport, WorkspaceError> {
         attempt.phase(submission, CommitPhase::CommitStaged)?;
         let stage = attempt.stage.as_ref().ok_or(WorkspaceError::Io)?.stage();
-        let response = self.host.call_input(
+        let response = self.remote_call(
             (self.inner.store, stage.generation),
             Operation::HistoryCommand(HistoryCommand::CommitStaged {
                 workspace: stage.workspace,

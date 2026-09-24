@@ -1,16 +1,14 @@
 //! Native process/connection assembly; filesystem semantics stay in Workspace.
+use crate::transport::Transport;
 use layerfs_bridge::{
-    adapters::native::{
-        client::Client,
-        connection::{connect, connect_until},
-        pipe,
-    },
+    adapters::native::{client::Client, connection::connect, pipe},
     contract::*,
 };
 use layerfs_workspace::{OperationDelivery, WorkspaceHost};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
+    sync::{Arc, Mutex},
+    thread::ThreadId,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -98,20 +96,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     signals.add(nix::sys::signal::Signal::SIGTERM);
     signals.thread_block()?;
     let control_telemetry = telemetry.clone();
+    // One reusable session per delivery thread. A session serves only that
+    // thread's own sequential calls, so unrelated concurrent FUSE requests
+    // never contend on it and cannot be serialized by it.
+    let sessions = Mutex::new(std::collections::HashMap::<ThreadId, Transport>::new());
     let delivery: OperationDelivery = Arc::new(move |request, input, output, deadline| {
-        // Every call is one attempt. The existing server closes on any failure,
-        // including PathNotFound; a later independent lookup needs a new session.
+        // Every call is one attempt. A failure closes its session, so a later
+        // independent lookup starts a fresh authenticated connection.
         let result = telemetry
             .recorder()
             .run(request.id, request.operation.label(), |_| {
-                let mut client = Client::new(connect_until(
-                    connection.address,
-                    connection.selector,
-                    &connection.private,
-                    &connection.server,
-                    deadline,
-                )?)?;
-                client.call_until(request, input, output, deadline)
+                let thread = std::thread::current().id();
+                let mut sessions = sessions.lock().map_err(|_| Failure::from(Code::Io))?;
+                let transport = sessions.entry(thread).or_insert_with(|| {
+                    Transport::new(
+                        connection.address,
+                        connection.selector,
+                        connection.private,
+                        connection.server,
+                    )
+                });
+                let result = transport.call(request, input, output, deadline);
+                if result.is_err() {
+                    sessions.remove(&thread);
+                }
+                result
             });
         telemetry.publish(result.1);
         result.0

@@ -263,7 +263,7 @@ impl std::fmt::Display for WorkspaceError {
 }
 impl std::error::Error for WorkspaceError {}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct WorkspaceStatus {
     pub submission: Option<SubmissionStatus>,
     pub generation: u64,
@@ -278,6 +278,10 @@ pub struct WorkspaceStatus {
     pub handles: usize,
     pub projection_handles: usize,
     pub projection_replies: usize,
+    /// Bounded per-operation projection callback counts for this Workspace.
+    pub projection_calls: Vec<(&'static str, u64)>,
+    /// Upstream host Service calls this Workspace has issued.
+    pub upstream_calls: u64,
     pub coherence: Option<CoherenceStatus>,
     pub cookies: usize,
     pub accounted_bytes: usize,

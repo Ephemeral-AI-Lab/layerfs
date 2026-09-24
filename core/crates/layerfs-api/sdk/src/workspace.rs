@@ -1,16 +1,9 @@
 use layerfs_api_core::{ExecResult, Mount, Project, SandboxId, WorkspaceError, WorkspaceId};
-use layerfs_bridge::{
-    adapters::native::client::Client,
-    contract::{
-        Code, Operation, Request, Response, WorkspaceAttachOutcome, WorkspaceCommitOutcome,
-        WorkspaceCommitReportWire, WorkspaceLifecycleOutcome, WORKSPACE_STATUS_PROFILE,
-    },
+use layerfs_bridge::contract::{
+    Code, Operation, Response, WorkspaceAttachOutcome, WorkspaceCommitOutcome,
+    WorkspaceCommitReportWire, WorkspaceLifecycleOutcome,
 };
-use layerfs_sandbox::{RouteError, SandboxOwner};
-use std::{
-    io,
-    time::{Duration, Instant},
-};
+use layerfs_sandbox::{ControlRoute, RouteError, SandboxOwner};
 
 pub struct WorkspaceApi<'a> {
     owner: &'a SandboxOwner,
@@ -27,7 +20,7 @@ impl<'a> WorkspaceApi<'a> {
         branch: [u8; 17],
         commit_id: Option<[u8; 33]>,
     ) -> Result<Mount, WorkspaceError> {
-        let (binding, client) = self.owner.lookup(sandbox).map_err(route_error)?;
+        let (binding, _) = self.owner.lookup_route(sandbox).map_err(route_error)?;
         let random = layerfs_sandbox::random::<16>()?;
         let mut id = String::with_capacity(32);
         for byte in random {
@@ -39,25 +32,32 @@ impl<'a> WorkspaceApi<'a> {
         self.owner
             .bind_workspace(&binding, id.clone(), incarnation)
             .map_err(route_error)?;
-        let response = call(
-            client,
-            15_000,
-            Operation::WorkspaceOpen {
-                workspace: id.0.as_bytes().to_vec(),
-                incarnation,
-                instance: binding.instance,
-                project: project.id,
-                branch,
-                commit: commit_id,
-            },
-        )
-        .map_err(|error| match error {
-            WorkspaceError::Failure(cause) if cause.unknown => WorkspaceError::UncertainMount {
-                id: id.clone(),
-                cause,
-            },
-            other => other,
-        })?;
+        let response = self
+            .owner
+            .control_call(
+                ControlRoute {
+                    sandbox,
+                    instance: binding.instance,
+                    workspace: None,
+                },
+                15_000,
+                || Operation::WorkspaceOpen {
+                    workspace: id.0.as_bytes().to_vec(),
+                    incarnation,
+                    instance: binding.instance,
+                    project: project.id,
+                    branch,
+                    commit: commit_id,
+                },
+            )
+            .map_err(WorkspaceError::Failure)
+            .map_err(|error| match error {
+                WorkspaceError::Failure(cause) if cause.unknown => WorkspaceError::UncertainMount {
+                    id: id.clone(),
+                    cause,
+                },
+                other => other,
+            })?;
         let Response::WorkspaceAttach(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -71,16 +71,16 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn exec(&self, id: &WorkspaceId, command: &str) -> Result<ExecResult, WorkspaceError> {
-        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
-        let response = call(
-            client,
-            30_000,
-            Operation::WorkspaceExec {
-                workspace: id.0.as_bytes().to_vec(),
-                incarnation: route.incarnation,
+        let route = self.owner.workspace(id).map_err(route_error)?;
+        let (workspace, incarnation) = route.selector()?;
+        let response = self
+            .owner
+            .control_call(route, 30_000, || Operation::WorkspaceExec {
+                workspace,
+                incarnation,
                 command: command.as_bytes().to_vec(),
-            },
-        )?;
+            })
+            .map_err(WorkspaceError::Failure)?;
         let Response::WorkspaceExec(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -94,15 +94,15 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn commit(&self, id: &WorkspaceId) -> Result<WorkspaceCommitReportWire, WorkspaceError> {
-        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
-        let response = call(
-            client,
-            600_000,
-            Operation::WorkspaceCommit {
-                workspace: id.0.as_bytes().to_vec(),
-                incarnation: route.incarnation,
-            },
-        )?;
+        let route = self.owner.workspace(id).map_err(route_error)?;
+        let (workspace, incarnation) = route.selector()?;
+        let response = self
+            .owner
+            .control_call(route, 600_000, || Operation::WorkspaceCommit {
+                workspace,
+                incarnation,
+            })
+            .map_err(WorkspaceError::Failure)?;
         let Response::WorkspaceCommit(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -113,15 +113,15 @@ impl<'a> WorkspaceApi<'a> {
     }
 
     pub fn unmount(&self, id: &WorkspaceId) -> Result<(), WorkspaceError> {
-        let (_, route, client) = self.owner.workspace(id).map_err(route_error)?;
-        let response = call(
-            client,
-            5_000,
-            Operation::WorkspaceUnmount {
-                workspace: id.0.as_bytes().to_vec(),
-                incarnation: route.incarnation,
-            },
-        )?;
+        let route = self.owner.workspace(id).map_err(route_error)?;
+        let (workspace, incarnation) = route.selector()?;
+        let response = self
+            .owner
+            .control_call(route, 5_000, || Operation::WorkspaceUnmount {
+                workspace,
+                incarnation,
+            })
+            .map_err(WorkspaceError::Failure)?;
         let Response::WorkspaceUnmount(result) = response else {
             return Err(Code::Integrity.into());
         };
@@ -141,23 +141,4 @@ fn route_error(error: RouteError) -> WorkspaceError {
         RouteError::Stale => WorkspaceError::Stale,
         RouteError::NotFound => Code::NotFound.into(),
     }
-}
-
-fn call(
-    mut client: Client,
-    deadline_ms: u32,
-    operation: Operation,
-) -> Result<Response, WorkspaceError> {
-    let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
-    let request = Request {
-        // Checked lookup sent SandboxHello as request 1 on this connection.
-        id: 2,
-        generation: 0,
-        store: 0,
-        profile: WORKSPACE_STATUS_PROFILE,
-        deadline_ms,
-        response_bytes: 0,
-        operation,
-    };
-    Ok(client.call_until(&request, &mut &[][..], &mut io::sink(), deadline)?)
 }

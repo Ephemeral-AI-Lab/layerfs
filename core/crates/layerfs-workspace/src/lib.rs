@@ -5,7 +5,7 @@
 mod backing;
 mod commit;
 mod commit_types;
-mod filesystem;
+pub mod filesystem;
 mod overlay;
 mod runtime;
 mod types;

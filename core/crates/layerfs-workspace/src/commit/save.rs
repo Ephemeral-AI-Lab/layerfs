@@ -62,7 +62,7 @@ impl Workspace {
                             state.source_failure = Some(failure.clone());
                         }
                     })?;
-                let response = self.host.call_input(
+                let response = self.remote_call(
                     (self.inner.store, captured.generation),
                     Operation::ConstructSymlink { target },
                     &mut &[][..],
@@ -95,7 +95,7 @@ impl Workspace {
                     let remote = first_remote
                         .take()
                         .map_or_else(|| self.begin(true, deadline), Ok)?;
-                    let response = self.host.call_input(
+                    let response = self.remote_call(
                         (self.inner.store, captured.generation),
                         if inode.fresh {
                             Operation::ConstructFile {
@@ -150,7 +150,7 @@ impl Workspace {
             let remote = first_remote
                 .take()
                 .map_or_else(|| self.begin(true, deadline), Ok)?;
-            let response = self.host.call_input(
+            let response = self.remote_call(
                 (self.inner.store, captured.generation),
                 if inode.fresh {
                     Operation::ConstructPortableMetadata {
@@ -278,7 +278,7 @@ impl Workspace {
         let captured = submission.capture()?;
         submission.phase(StagePhase::StageChanges, None)?;
         let remote = first_remote.take().ok_or(WorkspaceError::Io)?;
-        let response = self.host.call_input(
+        let response = self.remote_call(
             (self.inner.store, captured.generation),
             Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
             &mut &[][..],

@@ -2,6 +2,7 @@
 use layerfs_bridge::contract::{
     Code, Failure, Response, WorkspaceExecWire, WORKSPACE_EXEC_OUTPUT_BYTES,
 };
+use layerfs_telemetry::timer::{Active, TimingScope};
 use layerfs_workspace::Workspace;
 use nix::{
     errno::Errno,
@@ -54,24 +55,27 @@ pub(crate) fn execute(
     incarnation: &[u8; 32],
     command: &[u8],
     deadline: Instant,
+    scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     let command = std::str::from_utf8(command).map_err(|_| Code::InvalidInput)?;
-    let mut child = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(command)
-        .current_dir(workspace.mount_path())
-        .process_group(0)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                Code::Unsupported
-            } else {
-                Code::Io
-            }
-        })?;
+    let mut child = scope.child("daemon.exec_spawn").run(|_| {
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(command)
+            .current_dir(workspace.mount_path())
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    Code::Unsupported
+                } else {
+                    Code::Io
+                }
+            })
+    })?;
     let pid = child.id() as i32;
     let mut stdout: Option<ChildStdout> = child.stdout.take();
     let mut stderr: Option<ChildStderr> = child.stderr.take();
@@ -79,42 +83,44 @@ pub(crate) fn execute(
     let mut err = Vec::new();
     let mut out_truncated = false;
     let mut err_truncated = false;
-    let result = (|| -> Result<_, Failure> {
-        nonblocking(stdout.as_ref().ok_or(Code::Io)?)?;
-        nonblocking(stderr.as_ref().ok_or(Code::Io)?)?;
-        let mut status = None;
-        loop {
-            drain(&mut stdout, &mut out, &mut out_truncated)?;
-            drain(&mut stderr, &mut err, &mut err_truncated)?;
-            if status.is_none() {
-                status = child.try_wait()?;
-            }
-            if status.is_some() && stdout.is_none() && stderr.is_none() {
-                return Ok(status);
-            }
-            if Instant::now() >= deadline {
-                return Err(Failure {
-                    unknown: true,
-                    ..Code::Deadline.into()
-                });
-            }
-            let mut ready = Vec::with_capacity(2);
-            if let Some(pipe) = stdout.as_ref() {
-                ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
-            }
-            if let Some(pipe) = stderr.as_ref() {
-                ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
-            }
-            if ready.is_empty() {
-                thread::sleep(Duration::from_millis(5));
-            } else {
-                match poll(&mut ready, 5u16) {
-                    Ok(_) | Err(Errno::EINTR) => {}
-                    Err(_) => return Err(Code::Io.into()),
+    let result = scope.child("daemon.exec_output").run(|_| {
+        (|| -> Result<_, Failure> {
+            nonblocking(stdout.as_ref().ok_or(Code::Io)?)?;
+            nonblocking(stderr.as_ref().ok_or(Code::Io)?)?;
+            let mut status = None;
+            loop {
+                drain(&mut stdout, &mut out, &mut out_truncated)?;
+                drain(&mut stderr, &mut err, &mut err_truncated)?;
+                if status.is_none() {
+                    status = child.try_wait()?;
+                }
+                if status.is_some() && stdout.is_none() && stderr.is_none() {
+                    return Ok(status);
+                }
+                if Instant::now() >= deadline {
+                    return Err(Failure {
+                        unknown: true,
+                        ..Code::Deadline.into()
+                    });
+                }
+                let mut ready = Vec::with_capacity(2);
+                if let Some(pipe) = stdout.as_ref() {
+                    ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
+                }
+                if let Some(pipe) = stderr.as_ref() {
+                    ready.push(PollFd::new(pipe.as_fd(), PollFlags::POLLIN));
+                }
+                if ready.is_empty() {
+                    thread::sleep(Duration::from_millis(5));
+                } else {
+                    match poll(&mut ready, 5u16) {
+                        Ok(_) | Err(Errno::EINTR) => {}
+                        Err(_) => return Err(Code::Io.into()),
+                    }
                 }
             }
-        }
-    })();
+        })()
+    });
     let status = match result {
         Ok(status) => status,
         Err(mut failure) => {

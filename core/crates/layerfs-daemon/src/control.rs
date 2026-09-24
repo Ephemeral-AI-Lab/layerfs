@@ -11,6 +11,7 @@ use layerfs_bridge::{
     },
 };
 use layerfs_fuse::MountError;
+use layerfs_telemetry::timer::{Active, TimingScope};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::{
     io::{self, Read},
@@ -140,7 +141,7 @@ fn run(
                             let (result, diagnostic) = target.telemetry.recorder().run(
                                 request.id,
                                 request.operation.label(),
-                                |_| {
+                                |scope| {
                                     dispatch(
                                         &target,
                                         &config.grants,
@@ -148,6 +149,7 @@ fn run(
                                         request,
                                         input,
                                         deadline,
+                                        scope,
                                     )
                                 },
                             );
@@ -192,6 +194,7 @@ fn dispatch(
     request: &Request,
     input: &mut dyn Read,
     deadline: Instant,
+    scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     request.validate()?;
     if Instant::now() >= deadline {
@@ -326,17 +329,19 @@ fn dispatch(
         ..
     } = &request.operation
     {
-        let attached = target.lifecycle.attach_selected(
-            &mut slot,
-            requested_workspace,
-            *requested_incarnation,
-            layerfs_workspace::Base::BranchAt {
-                project: *project,
-                branch: *branch,
-                commit: *commit,
-            },
-            native_deadline,
-        )?;
+        let attached = scope.child("daemon.workspace_attach").run(|_| {
+            target.lifecycle.attach_selected(
+                &mut slot,
+                requested_workspace,
+                *requested_incarnation,
+                layerfs_workspace::Base::BranchAt {
+                    project: *project,
+                    branch: *branch,
+                    commit: *commit,
+                },
+                native_deadline,
+            )
+        })?;
         let Response::WorkspaceAttach(mut result) = attached else {
             return Err(Code::Integrity.into());
         };
@@ -346,7 +351,10 @@ fn dispatch(
                 .as_ref()
                 .and_then(|s| s.workspace.as_ref())
                 .ok_or(Code::Io)?;
-            match crate::lifecycle::mount(workspace, native_deadline) {
+            let mounted = scope
+                .child("daemon.fuse_mount")
+                .run(|_| crate::lifecycle::mount(workspace, native_deadline));
+            match mounted {
                 Ok(mount) => slot.mount = Some(mount),
                 Err(mut failure) => {
                     slot.mount = failure.retained.take();
@@ -372,6 +380,7 @@ fn dispatch(
             requested_incarnation,
             command,
             native_deadline,
+            scope,
         );
     }
     if operation == 16 {
@@ -385,7 +394,9 @@ fn dispatch(
     if operation == 32 {
         let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
         let workspace = selected.workspace.as_ref().ok_or(Code::Busy)?;
-        return crate::control_commit::commit(selected, workspace, native_deadline);
+        return scope
+            .child("daemon.commit")
+            .run(|_| crate::control_commit::commit(selected, workspace, native_deadline));
     }
     let outcome = if operation == 2 {
         match slot.mount.as_mut() {

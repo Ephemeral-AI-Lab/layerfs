@@ -468,6 +468,7 @@ impl WorkspaceHost {
                     carried: Vec::new(),
                     closed: false,
                     active: 0,
+                    counters: Default::default(),
                     tables: Some(tables),
                 }),
             });

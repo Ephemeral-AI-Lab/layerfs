@@ -87,6 +87,56 @@ instead of sleeping for a fixed 10 ms when no connection is queued. Its poll
 still checks stop admission within 10 ms, and it retains the single live or
 closing session limit and immediate refusal of excess connections.
 
+The #236 route speed alignment is based on product checkpoint
+`bad49805cb4cacdd29ed15ed5f44e20274e63a3a` plus the changes in this commit. It
+changes transport lifetimes, adds bounded diagnostic spans and counts, and
+alters no format, bound or authorization rule.
+
+**Daemon-to-host transport reuse.** The daemon delivery closure previously
+opened a fresh authenticated Service connection per upstream request, so a
+Mount that issues `HistoryQuery` and `Inspect`, and a Commit that issues
+`EditFile`, `UpdatePortableMetadata` and `HistoryCommand`, each paid a TCP
+connect and a Noise handshake. The native server already admits many successful
+requests per connection. `layerfs-daemon::transport` now retains one session
+per delivery thread and serves that thread's consecutive upstream calls on it.
+Reuse is bounded and failure-closed: a session is dropped on any error,
+including a remote refusal, so an uncertain mutation is never resent; a session
+idle beyond two seconds is closed and replaced, staying well inside the
+server's five-second idle limit; and because the session belongs to one thread,
+unrelated concurrent FUSE requests never contend on it. Request identifiers
+stay monotone across the session because the native `Client` carries its own
+previous-identifier marker, and authorization, deadlines, response bounds and
+existing operation counts are unchanged.
+
+**Daemon and owner spans.** Bounded child timing scopes now divide the real
+route: `daemon.workspace_attach` and `daemon.fuse_mount` inside selected
+Workspace Open, `daemon.exec_spawn` and `daemon.exec_output` inside Exec, and
+`daemon.commit` around native Commit. The owner records
+`owner.docker_launch`, `owner.docker_port`, `owner.daemon_ready` and
+`owner.shell_ready` inside Create, which previously reported one undivided
+window. These are ordinary product telemetry: they add no test-only branch and
+change no result.
+
+**Bounded Workspace control session.** `layerfs-sandbox::session` retains at
+most one authenticated control connection across rapid Workspace calls. A
+retained socket is handed back only after a Hello on that same socket confirms
+the live daemon still reports the instance the caller validated, so a restarted
+daemon cannot answer an operation addressed to its predecessor; a socket the
+restart closed fails that check and the caller performs a fresh checked lookup,
+which is where `Stale` is raised. Only a successful operation retains the
+session, so a broken or uncertain operation is never resent, and the idle bound
+stays inside the control server's five-second idle timeout and one-session
+admission. The public SDK surface is unchanged.
+
+**Projection counts.** `layerfs-workspace::filesystem::projection_counters`
+holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,
+`read`, `write`, `readdir`, `open`, `other`) and of upstream host Service calls
+issued by that Workspace. The FUSE adapter records each callback at its single
+entry point and `Workspace::remote_call` counts each upstream call. The counts
+appear in `WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
+diagnostic product telemetry and never gate an operation; no cache, backing or
+write path changes, and FUSE edits are still written locally.
+
 The sandbox owner now accepts an optional telemetry run identity at assembly.
 When present, it forwards the existing daemon telemetry stream and supplies a
 10 ms monitor interval and a sandbox-specific namespace. The daemon's one

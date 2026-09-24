@@ -2,8 +2,8 @@
 use crate::replies::{attributes, errno, inode, kind, serial};
 use fuser::*;
 use layerfs_workspace::{
-    FileAccess, FileCreateOptions, FileOpenOptions, ProjectionReplyPermit, ReferenceScope,
-    Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+    filesystem::projection_counters::ProjectionOp, FileAccess, FileCreateOptions, FileOpenOptions,
+    ProjectionReplyPermit, ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
 };
 use std::{
     ffi::OsStr,
@@ -57,9 +57,10 @@ impl Adapter {
         }
         Ok(())
     }
-    fn observe(&self, req: &Request) -> Result<ProjectionReplyPermit, Errno> {
+    fn observe(&self, req: &Request, op: ProjectionOp) -> Result<ProjectionReplyPermit, Errno> {
         // Callbacks retain this guard in their outer scope through reply emission.
         self.guard(req)?;
+        self.workspace.record_projection_call(op);
         self.workspace
             .begin_projection_reply(Instant::now() + CALLBACK_BUDGET)
             .map_err(errno)
@@ -132,7 +133,7 @@ impl Filesystem for Adapter {
     }
 
     fn lookup(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Lookup);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .lookup(
@@ -161,7 +162,7 @@ impl Filesystem for Adapter {
     }
 
     fn getattr(&self, req: &Request, ino: INodeNo, fh: Option<FileHandle>, reply: ReplyAttr) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Getattr);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             let value = match fh {
                 Some(handle) => {
@@ -181,7 +182,7 @@ impl Filesystem for Adapter {
     }
 
     fn access(&self, req: &Request, ino: INodeNo, mask: AccessFlags, reply: ReplyEmpty) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             if !self.writable && mask.bits() & 2 != 0 {
                 return Err(Errno::EROFS);
@@ -202,7 +203,7 @@ impl Filesystem for Adapter {
     }
 
     fn open(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Open);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -246,7 +247,7 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Read);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -269,7 +270,7 @@ impl Filesystem for Adapter {
     }
 
     fn readlink(&self, req: &Request, ino: INodeNo, reply: ReplyData) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .readlink(serial(ino, self.root()), Instant::now() + CALLBACK_BUDGET)
@@ -316,7 +317,7 @@ impl Filesystem for Adapter {
     }
 
     fn opendir(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -340,7 +341,7 @@ impl Filesystem for Adapter {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Readdir);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -534,6 +535,7 @@ impl Filesystem for Adapter {
         reply: ReplyWrite,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -587,6 +589,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -635,6 +638,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -670,6 +674,7 @@ impl Filesystem for Adapter {
     }
     fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -691,6 +696,7 @@ impl Filesystem for Adapter {
     }
     fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -718,6 +724,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -804,6 +811,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -842,6 +850,7 @@ impl Filesystem for Adapter {
         reply: ReplyCreate,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);

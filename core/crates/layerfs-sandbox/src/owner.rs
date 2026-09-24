@@ -2,7 +2,7 @@ use crate::{docker, readiness};
 use layerfs_api_core::{SandboxId, SandboxInfo, SandboxStatus, WorkspaceId};
 use layerfs_bridge::{
     adapters::native::client::Client,
-    contract::{Code, Failure},
+    contract::{Code, Failure, Operation, Response},
 };
 use layerfs_telemetry::runtime::Runtime;
 use std::{
@@ -11,6 +11,7 @@ use std::{
     io::Read,
     net::{SocketAddr, TcpListener},
     sync::Mutex,
+    time::{Duration, Instant},
 };
 
 #[derive(Clone)]
@@ -25,6 +26,31 @@ pub struct OwnerConfig {
     pub telemetry_run: Option<u128>,
     /// Host process recorder shared with the application Service and SDK.
     pub telemetry: Runtime,
+}
+
+/// The validated routing identity one control operation is addressed to.
+///
+/// `instance` is the daemon instance the sandbox was admitted with and is
+/// revalidated before every operation. `workspace` and `incarnation` are set
+/// for a bound Workspace and are the selector the daemon checks.
+#[derive(Clone)]
+pub struct ControlRoute {
+    pub sandbox: SandboxId,
+    pub instance: [u8; 32],
+    pub workspace: Option<(WorkspaceId, [u8; 32])>,
+}
+impl ControlRoute {
+    /// The Workspace selector and incarnation this route is bound to.
+    ///
+    /// A route resolved for a sandbox alone has no bound Workspace; an
+    /// operation that needs one refuses instead of inventing a selector.
+    pub fn selector(&self) -> Result<(Vec<u8>, [u8; 32]), Failure> {
+        let (id, incarnation) = self
+            .workspace
+            .as_ref()
+            .ok_or_else(|| Failure::from(Code::InvalidInput))?;
+        Ok((id.0.as_bytes().to_vec(), *incarnation))
+    }
 }
 
 #[derive(Clone)]
@@ -79,6 +105,7 @@ struct Registry {
 pub struct SandboxOwner {
     config: OwnerConfig,
     registry: Mutex<Registry>,
+    sessions: crate::session::Sessions,
 }
 impl SandboxOwner {
     pub fn new(config: OwnerConfig) -> Result<Self, Failure> {
@@ -91,6 +118,7 @@ impl SandboxOwner {
         Ok(Self {
             config,
             registry: Mutex::new(Registry::default()),
+            sessions: crate::session::Sessions::default(),
         })
     }
 
@@ -165,25 +193,29 @@ impl SandboxOwner {
         );
         drop(registry);
         drop(reservation);
-        if let Err(cause) = docker::launch(
-            &self.config,
-            image_id,
-            name,
-            id,
-            &container,
-            endpoint.port(),
-        ) {
+        if let Err(cause) = self.observe(2003, "owner.docker_launch", || {
+            docker::launch(
+                &self.config,
+                image_id,
+                name,
+                id,
+                &container,
+                endpoint.port(),
+            )
+        }) {
             return Err(CreateError {
                 sandbox: Some(id),
                 cause,
                 retained: true,
             });
         }
-        let published = docker::port(&container).map_err(|cause| CreateError {
-            sandbox: Some(id),
-            cause,
-            retained: true,
-        })?;
+        let published = self
+            .observe(2004, "owner.docker_port", || docker::port(&container))
+            .map_err(|cause| CreateError {
+                sandbox: Some(id),
+                cause,
+                retained: true,
+            })?;
         if published != endpoint {
             return Err(CreateError {
                 sandbox: Some(id),
@@ -191,13 +223,19 @@ impl SandboxOwner {
                 retained: true,
             });
         }
-        let hello = readiness::wait(endpoint, &self.config.control_private, &daemon_public, id)
+        let hello = self
+            .observe(2005, "owner.daemon_ready", || {
+                readiness::wait(endpoint, &self.config.control_private, &daemon_public, id)
+            })
             .map_err(|cause| CreateError {
                 sandbox: Some(id),
                 cause,
                 retained: true,
             })?;
-        docker::shell_ready(&container).map_err(|cause| CreateError {
+        self.observe(2006, "owner.shell_ready", || {
+            docker::shell_ready(&container)
+        })
+        .map_err(|cause| CreateError {
             sandbox: Some(id),
             cause,
             retained: true,
@@ -254,6 +292,39 @@ impl SandboxOwner {
     }
 
     pub fn lookup(&self, id: SandboxId) -> Result<(Binding, Client), RouteError> {
+        let (binding, client) = self.checked_lookup(id)?;
+        Ok((binding, client))
+    }
+
+    /// Resolves one sandbox to its validated binding without opening a session.
+    ///
+    /// The binding carries the daemon instance the sandbox was admitted with,
+    /// which every later operation is validated against.
+    pub fn lookup_route(&self, id: SandboxId) -> Result<(Binding, SocketAddr), RouteError> {
+        let record = self
+            .registry
+            .lock()
+            .map_err(|_| RouteError::Failure(Code::Io.into()))?
+            .sandboxes
+            .get(&id)
+            .cloned()
+            .ok_or(RouteError::NotFound)?;
+        // A sandbox whose daemon instance was never confirmed has no validated
+        // route; the caller must complete a checked lookup first.
+        let instance = record
+            .instance
+            .ok_or(RouteError::Failure(Code::Busy.into()))?;
+        Ok((
+            Binding {
+                sandbox: id,
+                instance,
+            },
+            record.endpoint,
+        ))
+    }
+
+    /// Opens one checked control session and returns the validated binding.
+    pub fn checked_lookup(&self, id: SandboxId) -> Result<(Binding, Client), RouteError> {
         let record = self
             .registry
             .lock()
@@ -304,6 +375,60 @@ impl SandboxOwner {
         ))
     }
 
+    /// Runs one Workspace operation on a bounded active control session.
+    ///
+    /// `route` keys the retention: a session is reusable only for the same
+    /// sandbox and daemon instance, so a restarted daemon cannot answer an
+    /// operation addressed to its predecessor. The operation is one attempt:
+    /// any failure discards the session, and a successful one retains it for
+    /// the next rapid call. Nothing is ever resent.
+    pub fn control_call(
+        &self,
+        route: ControlRoute,
+        deadline_ms: u32,
+        operation: impl FnOnce() -> Operation,
+    ) -> Result<Response, Failure> {
+        let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
+        let mut lease = self
+            .sessions
+            .lease(route.sandbox, route.instance, deadline, || {
+                let record = self
+                    .registry
+                    .lock()
+                    .map_err(|_| Failure::from(Code::Io))?
+                    .sandboxes
+                    .get(&route.sandbox)
+                    .cloned()
+                    .ok_or_else(|| Failure::from(Code::NotFound))?;
+                if record
+                    .instance
+                    .is_some_and(|instance| instance != route.instance)
+                {
+                    return Err(Code::Denied.into());
+                }
+                self.observe(2002, "owner.hello", || {
+                    readiness::hello_session(
+                        record.endpoint,
+                        &self.config.control_private,
+                        &record.daemon_public,
+                        route.sandbox,
+                    )
+                })
+            })?;
+        let result = crate::session::call(&mut lease.client, lease.id, deadline_ms, operation());
+        match result {
+            Ok(response) => {
+                self.sessions
+                    .retain(route.sandbox, route.instance, lease.id + 1, lease.client);
+                Ok(response)
+            }
+            Err(failure) => {
+                self.sessions.discard();
+                Err(failure)
+            }
+        }
+    }
+
     pub fn bind_workspace(
         &self,
         binding: &Binding,
@@ -329,23 +454,44 @@ impl SandboxOwner {
         Ok(())
     }
 
-    pub fn workspace(
-        &self,
-        id: &WorkspaceId,
-    ) -> Result<(Binding, WorkspaceBinding, Client), RouteError> {
-        let route = self
+    /// Resolves one bound Workspace to its validated control route.
+    ///
+    /// The route carries the daemon instance recorded when the Workspace was
+    /// bound. A restarted daemon reports a different instance, so its
+    /// predecessor's route is rejected as stale before any operation is sent.
+    pub fn workspace(&self, id: &WorkspaceId) -> Result<ControlRoute, RouteError> {
+        let (sandbox, instance, incarnation) = {
+            let registry = self
+                .registry
+                .lock()
+                .map_err(|_| RouteError::Failure(Code::Io.into()))?;
+            let route = registry
+                .workspaces
+                .get(&id.0)
+                .cloned()
+                .ok_or(RouteError::NotFound)?;
+            (route.sandbox, route.instance, route.incarnation)
+        };
+        // The registry's recorded instance is the identity this Workspace was
+        // bound to. The daemon is authoritative about its own instance and is
+        // revalidated by the session layer before any operation runs, so a
+        // restarted container cannot be mistaken for its predecessor here.
+        let record = self
             .registry
             .lock()
             .map_err(|_| RouteError::Failure(Code::Io.into()))?
-            .workspaces
-            .get(&id.0)
+            .sandboxes
+            .get(&sandbox)
             .cloned()
             .ok_or(RouteError::NotFound)?;
-        let (binding, client) = self.lookup(route.sandbox)?;
-        if binding.instance != route.instance {
+        if record.instance.is_none_or(|live| live != instance) {
             return Err(RouteError::Stale);
         }
-        Ok((binding, route, client))
+        Ok(ControlRoute {
+            sandbox,
+            instance,
+            workspace: Some((id.clone(), incarnation)),
+        })
     }
 
     fn observe<T>(
