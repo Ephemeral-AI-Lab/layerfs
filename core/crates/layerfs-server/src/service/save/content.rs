@@ -119,10 +119,10 @@ pub fn mutate(
                     scope.child("service.edit"),
                 )
                 .map_err(content)?;
-                // The portable fields patch the published base root, exactly
-                // as the separate metadata request did, so the address
-                // authority still comes from `read_portable` and not from the
-                // root this edit just produced.
+                // The portable fields are read and rebuilt through the root
+                // the published sibling inode named, exactly as the separate
+                // metadata request did. The edited root is not addressable
+                // while this save is still open, so it is not the base.
                 let _ = file.root;
                 let metadata = metadata::patch_portable(
                     &mut FilesystemObjects::new(&provider, &mut handoff),

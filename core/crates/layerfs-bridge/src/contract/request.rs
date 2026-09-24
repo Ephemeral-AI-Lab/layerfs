@@ -92,8 +92,11 @@ pub enum Operation {
         root: Root,
         base_length: u64,
         edits: Vec<Edit>,
-        /// The published portable-metadata root these fields patch, exactly as
-        /// the separate `UpdatePortableMetadata` request names it.
+        /// The published sibling inode whose portable fields these replace,
+        /// exactly as the separate `UpdatePortableMetadata` request names it.
+        ///
+        /// That root is a file root, not the attributes root it names: the
+        /// patch reads the portable fields through it and rebuilds them.
         metadata: Root,
         kind: u8,
         mode: u32,
