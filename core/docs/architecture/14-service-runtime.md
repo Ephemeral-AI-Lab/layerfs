@@ -152,6 +152,10 @@ retain the authenticated session for the next increasing request ID. Every
 other failure, including uncertain delivery, closes it. This removes the
 confirmed reconnect between missing-path lookup and inode reservation;
 it does not establish why one historical connection stalled.
+The first mounted SDK check at `dde88f114` showed that the daemon's outer
+delivery closure still discarded the synchronized session on a known Inspect
+refusal. The follow-up source change in this document's commit applies the
+same refusal classification there and advances its retained request ID.
 
 **Bounded Workspace control session.** `layerfs-sandbox::session` retains at
 most one authenticated control connection across rapid Workspace calls. A

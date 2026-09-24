@@ -1,7 +1,7 @@
 //! Native process/connection assembly; filesystem semantics stay in Workspace.
 use crate::transport::Transport;
 use layerfs_bridge::{
-    adapters::native::{client::Client, connection::connect, pipe},
+    adapters::native::{client::Client, connection::connect, pipe, reusable_inspect_refusal},
     contract::*,
 };
 use layerfs_workspace::{OperationDelivery, WorkspaceHost};
@@ -99,8 +99,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // request IDs allocated before this lock can arrive in reverse order.
     let session = Mutex::new(None::<(u64, Transport)>);
     let delivery: OperationDelivery = Arc::new(move |request, input, output, deadline| {
-        // Every call is one attempt. A failure closes its session, so a later
-        // independent lookup starts a fresh authenticated connection.
+        // Every call is one attempt. Only a complete missing-name Inspect
+        // refusal may keep its authenticated session.
         let result = telemetry
             .recorder()
             .run(request.id, request.operation.label(), |scope| {
@@ -123,7 +123,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     )
                 });
                 let result = transport.call(request, input, output, deadline, scope);
-                if result.is_err() {
+                if result
+                    .as_ref()
+                    .err()
+                    .is_some_and(|error| !reusable_inspect_refusal(request, error))
+                {
                     *session = None;
                 } else {
                     *last_id = request.id;
