@@ -1,7 +1,7 @@
 # v0.1.7 SDK Init benchmark workflow
 
 Read repository `AGENTS.md`, `core/AGENTS.md`, the general benchmark rules,
-and [the current release-only SDK contract](../../docs/benchmark/fs-bench-pro/issue-231/SDK-RELEASE-FOUR-TIER-20260924.md)
+and [the current release-only lite-verifier contract](../../docs/benchmark/fs-bench-pro/issue-231/SDK-VERIFIER-LITE-20260924.md)
 before changing this tree or sampling. The older #231 `daemon-host` receipts
 and the #236 debug SDK receipts remain historical evidence; do not rewrite
 or relabel them.
@@ -31,8 +31,8 @@ fallback or reuse of an old unmarked/debug build cache is allowed. Keep all
 older debug v2 and release research receipts under their original identities;
 never promote them into the new release selection. A source/cache/operation
 change requires its own frozen identity and fresh receipts.
-The complete performance command has a 15 s budget; the independent full
-verifier has a prospectively fixed 9.5 s budget, strictly below 10 s.
+The complete performance command has a 15 s budget; the independent
+lite verifier has a prospectively fixed 9.5 s budget, strictly below 10 s.
 Historical 5 s receipts keep that limit. The two-case cycle has a recommended
 30 s budget. Hold the
 nonblocking worktree-local run lock while fixtures and result files are mutable;
@@ -43,9 +43,12 @@ The source cache is uncontrolled, so even a correct, under-budget row is
 `admission_eligible=false` and has no numeric latency PASS. Report the single
 raw SDK call time, complete command wall, verifier wall, exact route/fixture
 identity, external lifecycle CPU, Store/history size, cleanup and any
-interference. Do not pool SDK and historical daemon-host rows. The full oracle
-reopens Store/history and verifies every path, portable metadata value, byte
-count and SHA-256 against the sealed manifest through public readers.
+interference. Do not pool SDK and historical daemon-host rows. The current
+verifier reopens Store/history, inventories every path and inode kind, checks
+directory metadata, then checks full metadata and every byte of a declared
+deterministic file sample. Report sampled files/bytes separately from the
+manifest totals; never call this a full-content oracle. Earlier full-oracle
+receipts keep their recorded scope and status.
 
 `runner.py verify` and `runner.py report` read retained evidence only. The
 manifest hashes every retained result file. Keep existing receipts append-only,

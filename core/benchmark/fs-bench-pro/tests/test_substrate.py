@@ -71,6 +71,22 @@ class Substrate(unittest.TestCase):
             self.assertEqual(result["binaries"]["benchmark_init"]["sha256"],
                              runner.digest(target / runner.BINARY_DIR / "benchmark_init"))
 
+    def test_lite_receipt_requires_sampled_content_and_full_path_counts(self):
+        case = runner.init.CASES[runner.init.SELECTED[0]]
+        sample, fixture = {"root": "root"}, {"manifest_sha256": "manifest"}
+        child = {
+            "status": "PASS", "paths": 102, "discovered_files": 100,
+            "directories": 2, "manifest_bytes": 5_000_000,
+            "sampled_files": 66, "sampled_bytes": 1_000_000,
+            "sample_policy": runner.SAMPLE_POLICY, "workers": 4,
+            "root": "root", "manifest_sha256": "manifest",
+        }
+        self.assertTrue(runner.lite_verification_pass(child, case, sample, fixture))
+        for field in ("sampled_files", "sample_policy", "discovered_files"):
+            missing = dict(child)
+            del missing[field]
+            self.assertFalse(runner.lite_verification_pass(missing, case, sample, fixture))
+
     def test_output_and_target_refusal(self):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):

@@ -1,5 +1,9 @@
 # #231: bounded-time full SDK Init verifier
 
+> **Historical failed treatment.** The later owner-approved
+> [lightweight sampled verifier](SDK-VERIFIER-LITE-20260924.md) supersedes
+> the full-content design for new SDK benchmark receipts.
+
 > Frozen before changing the verifier or its watchdog. Owner direction on
 > 2026-09-24 allows a verifier limit above 5 seconds and strictly below
 > 10 seconds. This selection uses **9.5 seconds**. All prior five-second

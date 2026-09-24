@@ -7,6 +7,8 @@
 > **Verifier amendment:** the five-second limit below applies to this
 > historical v3 cohort. The prospective [v4 verifier treatment](SDK-VERIFIER-PIPELINE-20260924.md)
 > selects 9.5 s for new receipts; old five-second results remain unchanged.
+> Its full-content proof scope was later superseded for new receipts by the
+> owner-approved [lite verifier](SDK-VERIFIER-LITE-20260924.md).
 
 This selection uses the four exact `core-sdk-init-fixture-v2` cases from the
 [registry](../../../../benchmark/fs-bench-pro/families/init_namespace.py):

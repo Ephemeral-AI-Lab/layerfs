@@ -20,10 +20,11 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 
-CONTRACT_COMMIT = "1ab035c5cdd6ff207ad3bc93302fcfcae9c89cb0"
+CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
 BINARY_DIR = "release/examples"
 VERIFY_TIMEOUT_S = 9.5
+SAMPLE_POLICY = "stride64-size-log2-endpoints-v1"
 BUILD = ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
          "-p", "layerfs-sdk", "-p", "layerfs-service",
          "--example", "benchmark_init", "--example", "verify_namespace"]
@@ -135,7 +136,20 @@ def competing_work():
             not line.strip().startswith(str(os.getpid()) + " ")][:32]
 
 
-def verify_child(binary, folder, store, history, sample, fixture, cursor):
+def lite_verification_pass(child, case, sample, fixture):
+    return (isinstance(child, dict) and child.get("status") == "PASS"
+            and child.get("paths") == case.files + case.directories + 1
+            and child.get("discovered_files") == case.files
+            and child.get("directories") == case.directories + 1
+            and child.get("manifest_bytes") == case.logical_bytes
+            and isinstance(child.get("sampled_files"), int) and 0 < child["sampled_files"] <= 195
+            and isinstance(child.get("sampled_bytes"), int) and 0 < child["sampled_bytes"] <= case.logical_bytes
+            and child.get("sample_policy") == SAMPLE_POLICY and child.get("workers") == 4
+            and child.get("root") == sample["root"]
+            and child.get("manifest_sha256") == fixture["manifest_sha256"])
+
+
+def verify_child(binary, folder, store, history, sample, fixture, cursor, case):
     command = [binary, str(store), str(history), sample["root"], sample["stack_body"],
                fixture["manifest"], fixture["manifest_sha256"]]
     started = time.monotonic_ns()
@@ -148,7 +162,7 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
             child = json.loads(stdout) if result.returncode == 0 else None
         except (ValueError, UnicodeDecodeError):
             child = None
-        status = "PASS" if child and child.get("status") == "PASS" else "FAIL"
+        status = "PASS" if lite_verification_pass(child, case, sample, fixture) else "FAIL"
         exit_code = result.returncode
     except subprocess.TimeoutExpired as error:
         wall = time.monotonic_ns() - started
@@ -156,7 +170,8 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
         child, status, exit_code = None, "TIMEOUT", None
     (folder / "verifier.stdout").write_bytes(stdout)
     (folder / "verifier.stderr").write_bytes(stderr)
-    receipt = {"status": status, "wall_ns": wall, "budget_ns": int(VERIFY_TIMEOUT_S * 1_000_000_000),
+    receipt = {"status": status, "scope": "complete paths/kinds; sampled file metadata/content",
+               "wall_ns": wall, "budget_ns": int(VERIFY_TIMEOUT_S * 1_000_000_000),
                "exit_code": exit_code, "command": command, "child": child,
                "stderr": stderr[:4096].decode(errors="replace")}
     write_json(folder / "verification.json", receipt)
@@ -166,11 +181,13 @@ def verify_child(binary, folder, store, history, sample, fixture, cursor):
 def case_run(out, case, binaries, identity):
     folder = out / "sdk-host" / "init_namespace" / case.id
     folder.mkdir(parents=True)
-    receipt = {"schema": "core-fs-bench-pro-sdk-init-release-v4", "case": case.id,
+    receipt = {"schema": "core-fs-bench-pro-sdk-init-release-v5-lite", "case": case.id,
                "build_profile": BUILD_PROFILE,
-               "benchmark_registration": ("REGISTERED_SDK_RELEASE_V4" if case.id in init.SELECTED
+               "verification_scope": "complete paths/kinds; sampled file metadata/content",
+               "sample_policy": SAMPLE_POLICY,
+               "benchmark_registration": ("REGISTERED_SDK_RELEASE_V5_LITE" if case.id in init.SELECTED
                                           else "UNREGISTERED_DIAGNOSTIC"),
-               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 4,
+               "family_id": "init_namespace", "scenario_id": case.id, "scenario_version": 5,
                "route": init.ROUTE, "fixture_profile": init.PROFILE, "seed": 1,
                "operation_contract_id": "sdk-init-project-host-v1",
                "operation_surface": "layerfs-sdk", "operation_entrypoint": "Client::init_project",
@@ -217,7 +234,7 @@ def case_run(out, case, binaries, identity):
                            "rss_phase_peak": None, "rss_reason": "rusage peak is lifetime, not phase"})
         if complete:
             verification = verify_child(binaries["verify_namespace"]["path"],
-                                        folder, store, history, perf, fixture, cursor)
+                                        folder, store, history, perf, fixture, cursor, case)
             receipt["verification"] = verification
             receipt["functional_status"] = "PASS" if (
                 receipt["performance_command_status"] == "PASS" and
@@ -252,9 +269,10 @@ def report(run):
         rows.append(f"{case.id}\t{row['sample_count']}\t{row.get('raw_operation_ns')}\t"
                     f"{row.get('performance_command_wall_ns')}\t"
                     f"{row.get('verification', {}).get('wall_ns')}\t"
-                    f"{row.get('functional_status')}\t{row['status']}\t{row['cache_contract']}")
+                    f"{row.get('functional_status')}\t{row['status']}\t{row['cache_contract']}\t"
+                    f"{row.get('verification_scope')}")
     return ("case\tsamples\toperation_ns\tcommand_ns\tverification_ns\tfunctional\t"
-            "performance\tcache\n" + "\n".join(rows) + "\n")
+            "performance\tcache\tverification_scope\n" + "\n".join(rows) + "\n")
 
 
 def manifest_run(run):
@@ -279,6 +297,12 @@ def verify_run(run):
         receipt = json.loads((folder / "receipt.json").read_text())
         if receipt["sample_count"] not in (0, 1):
             raise ValueError("invalid one-sample cardinality")
+        if receipt.get("schema") == "core-fs-bench-pro-sdk-init-release-v5-lite" and (
+            receipt.get("build_profile") != BUILD_PROFILE
+            or receipt.get("verification_scope") != "complete paths/kinds; sampled file metadata/content"
+            or receipt.get("sample_policy") != SAMPLE_POLICY
+        ):
+            raise ValueError("invalid lite verifier identity")
         if receipt["sample_count"] == 1:
             lines = (folder / "perf.jsonl").read_text().splitlines()
             if len(lines) != 1 or json.loads(lines[0])["operation_ns"] != receipt["raw_operation_ns"]:
@@ -298,6 +322,7 @@ def fill_not_run(out, selection, blocked=None):
         reason = blocked if selected and blocked else "not selected" if case.id in init.SELECTED else init.NOT_RUN_REASON
         write_json(folder / "receipt.json", {"case": case.id, "status": "NOT_RUN", "sample_count": 0,
                                            "build_profile": BUILD_PROFILE,
+                                           "verification_scope": "complete paths/kinds; sampled file metadata/content",
                                            "functional_status": "NOT_RUN", "cache_contract": "source-cache-uncontrolled-v1",
                                            "reason": reason})
 
@@ -325,10 +350,11 @@ def run(selection, out):
                 for case in cases:
                     case_run(out, case, build_receipt["binaries"], identity)
     fill_not_run(out, selection, blocked)
-    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-release-v4", "selection": selection,
+    write_json(out / "run.json", {"schema": "core-fs-bench-pro-sdk-run-release-v5-lite", "selection": selection,
         "build_profile": BUILD_PROFILE,
+        "verification_scope": "complete paths/kinds; sampled file metadata/content",
         "benchmark_registration": ("UNREGISTERED_DIAGNOSTIC" if selection in init.CASES
-                                   and selection not in init.SELECTED else "REGISTERED_SDK_RELEASE_V4"),
+                                   and selection not in init.SELECTED else "REGISTERED_SDK_RELEASE_V5_LITE"),
         "cases": list(init.SELECTED), "identity": identity, "blocked": blocked,
         "family_cycle_wall_ns": time.monotonic_ns() - cycle_started,
         "family_cycle_budget_ns": 30_000_000_000})
