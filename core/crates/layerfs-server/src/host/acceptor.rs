@@ -87,7 +87,7 @@ impl Acceptor {
         let started = Instant::now();
         let (mut accepted, mut admitted, mut reaped, mut capacity_dropped, mut peak_live) =
             (0u64, 0u64, 0u64, 0u64, 0usize);
-        let result = (|| {
+        let result: Result<(), Failure> = (|| {
             loop {
                 if let Stop::Flag(flag) = &stop {
                     if flag.load(Ordering::Acquire) {
@@ -193,9 +193,10 @@ impl Acceptor {
             reaped = reaped.saturating_add(1);
         }
         layerfs_bridge::adapters::native::pipe::diagnostic(&format!(
-            "layerfs-server acceptor summary accepted={accepted} admitted={admitted} live_at_stop={live_at_stop} peak_live={peak_live} reaped={reaped} capacity_dropped={capacity_dropped} capacity={} elapsed_ms={}\n",
+            "layerfs-server acceptor summary accepted={accepted} admitted={admitted} live_at_stop={live_at_stop} peak_live={peak_live} reaped={reaped} capacity_dropped={capacity_dropped} capacity={} elapsed_ms={} error={:?}\n",
             self.capacity,
-            started.elapsed().as_millis()
+            started.elapsed().as_millis(),
+            result.as_ref().err().map(|error| error.code)
         ));
         result
     }

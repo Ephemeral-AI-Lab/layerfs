@@ -139,7 +139,8 @@ observation change in this commit. The bridge exposes the existing bounded TCP
 connect and Noise authentication steps separately; the daemon records them as
 children of `daemon.service_connect` under the same absolute deadline. The
 acceptor emits at most eight immediate capacity-drop lines and one shutdown
-summary with accepted, admitted, reaped, live, peak-live and dropped counts.
+summary with accepted, admitted, reaped, live, peak-live and dropped counts,
+plus the acceptor's terminal error code when it exits unexpectedly.
 Missing shutdown summary makes that diagnostic incomplete. These observations
 do not classify the historical `Unknown` cause or change admission behavior.
 

@@ -1164,7 +1164,7 @@ fn baseline_exec_liveness_diagnostic() {
         output::{Identity, OutputConfig},
         runtime::{Configuration, MonitorConfig, Runtime},
     };
-    use std::time::Instant;
+    use std::{net::TcpStream, time::Instant};
 
     let Ok(output) = std::env::var("LAYERFS_EXEC_PROBE_OUTPUT") else {
         return;
@@ -1246,6 +1246,20 @@ fn baseline_exec_liveness_diagnostic() {
     writeln!(receipt, "mount\t{mount:?}").unwrap();
     let mut failed;
     if let Ok(mount) = mount {
+        let held_count = std::env::var("LAYERFS_EXEC_PROBE_HELD_SESSIONS")
+            .ok()
+            .map_or(0, |value| value.parse::<usize>().unwrap());
+        assert!(held_count <= 3);
+        let mut held = Vec::new();
+        for _ in 0..held_count {
+            let mut socket = TcpStream::connect(server.endpoint().unwrap()).unwrap();
+            socket.write_all(&1u32.to_be_bytes()).unwrap();
+            held.push(socket);
+        }
+        if held_count > 0 {
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        writeln!(receipt, "held_incomplete_handshakes\t{held_count}").unwrap();
         let started = Instant::now();
         let exec = api.exec(&mount.id, "printf baseline > .position-baseline");
         writeln!(
@@ -1258,6 +1272,7 @@ fn baseline_exec_liveness_diagnostic() {
         failed = !exec
             .as_ref()
             .is_ok_and(|result| result.exit_status == Some(0));
+        drop(held);
         let container = format!("layerfs-{sandbox}");
         for (name, args) in [
             (
