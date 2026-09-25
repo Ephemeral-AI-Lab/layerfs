@@ -1,0 +1,27 @@
+{
+  "argv": [
+    "docker",
+    "exec",
+    "-e",
+    "PROBE_CASE=unmount",
+    "-e",
+    "PROBE_ROOT=/probe/unmount",
+    "layerfs-232-stage-d7a51448",
+    "/runner/range_ioctl_staging_probe-f90289f2e0dce2b6",
+    "--ignored",
+    "--exact",
+    "linux::probe",
+    "--nocapture"
+  ],
+  "binary_sha256": "a6a9696e9327de71580c43bae50d7c0262857a6c289b929d4b05826445543145",
+  "case": "unmount",
+  "complete_docker_exec_wall_ns": 30005200666,
+  "docker_cp_exit": 0,
+  "docker_cp_stderr": "",
+  "exit_code": null,
+  "image_id": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 Linux",
+  "source_commit": "d7a514487dc674e2663ca131e80189119e1188ef",
+  "test_source_sha256": "b96f3b5d4c310e2a767f822d873d6de29973a8dae1903143e9479e6763f2c2fe",
+  "timed_out": true
+}

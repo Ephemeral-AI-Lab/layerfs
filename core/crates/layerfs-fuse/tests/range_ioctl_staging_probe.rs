@@ -369,6 +369,12 @@ mod linux {
         let mut byte = [0];
         let _ = io::stdin().read(&mut byte);
         if case == "unmount" {
+            let mut s = state.lock().unwrap();
+            assert!(s.stage.is_some());
+            s.stage = None;
+            log(root, "unmount stage=discarded before descriptor close");
+            fs::write(root.join("unmount-stage-cleared"), "1").unwrap();
+            drop(s);
             bg.join().unwrap();
         } else {
             bg.umount_and_join().unwrap();
@@ -556,8 +562,19 @@ mod linux {
                     "caller forced-detach while staged descriptor remains open",
                 );
                 drop(child.stdin.take());
-                assert!(child.wait().unwrap().success());
+                for _ in 0..500 {
+                    if root.join("unmount-stage-cleared").exists() {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                assert!(root.join("unmount-stage-cleared").exists());
+                log(
+                    &root,
+                    "caller observed stage cleanup before descriptor close",
+                );
                 drop(file);
+                assert!(child.wait().unwrap().success());
                 println!("STAGING_PROBE {case} PASS");
                 return;
             }
