@@ -31,6 +31,10 @@ verification gate.
 - [Load-bearing case brainstorm](LOAD_BEARING_CASES.md) proposes later
   packages, large files, namespace operations and output/log scenarios without
   claiming they are already registered or passing.
+- [Phase 1 implementation handoff prompt](HANDOFF_PHASE1_PROMPT.md) gives a
+  new agent the reading order, before/after architecture, provisional file
+  ownership and LOC range, complexity model, ordinary FUSE route, and
+  verification gates.
 
 The retained [#243 Phase 2 report](../243/evidence/phase2-ordinary-shell-v1/REPORT.md)
 records a mixed-refresh functional FAIL and three functional observations with
