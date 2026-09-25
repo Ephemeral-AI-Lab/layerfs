@@ -132,6 +132,10 @@ fn metadata_expectation(case: &Case) -> Result<(u32, i64, u32, u32), Box<dyn std
     Ok((mode, seconds, nanoseconds, fixture_mode))
 }
 
+fn complexity_scenario(id: &str) -> bool {
+    id.ends_with("-complexity-v1") || id == "repeated-128-progress-proof-v1"
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 4 {
@@ -149,10 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if case.get("scenario_id")?.ends_with("-exec-v4") != v4 {
         return Err("v4 scenario and operation contract differ".into());
     }
-    if (case.get("scenario_id")?.ends_with("-complexity-v1")
-        || case.get("scenario_id")? == "repeated-128-progress-proof-v1")
-        != complexity
-    {
+    if complexity_scenario(case.get("scenario_id")?) != complexity {
         return Err("complexity scenario and operation contract differ".into());
     }
     if case.get("scenario_id")?.ends_with("-exec-ioctl-v3") != generic {
@@ -440,6 +441,14 @@ fn hex_to_bytes(text: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_proof_uses_the_complexity_oracle_only_for_its_exact_id() {
+        assert!(complexity_scenario("repeated-128-progress-proof-v1"));
+        assert!(complexity_scenario("repeated-32-complexity-v1"));
+        assert!(!complexity_scenario("repeated-128-progress-proof-v2"));
+        assert!(!complexity_scenario("repeated-128-exec-ioctl-v3"));
+    }
 
     #[test]
     fn v4_metadata_expectation_fails_closed() {

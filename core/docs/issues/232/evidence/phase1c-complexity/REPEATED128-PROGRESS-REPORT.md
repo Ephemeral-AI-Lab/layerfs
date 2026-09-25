@@ -69,6 +69,11 @@ Phase 1C contract, the exact new canonical root was observed rather than
 predeclared; the full-content digest and historical identities were checked
 independently.
 
+The verifier's exact scenario classifier now has a focused runnable regression
+check for the accepted `repeated-128-progress-proof-v1` ID and for rejected
+nearby IDs. This source-only check leaves both retained verifier outcomes and
+their binary identities unchanged; it does not trigger another product run.
+
 The pre-sample macOS Store cache check passed with zero resident pages. Linux
 FUSE backing remains **INELIGIBLE** for cold latency because invalidation and
 whole-input residency checks are absent. These timings are route diagnostics,
