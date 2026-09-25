@@ -1,4 +1,5 @@
 //! Linux LFS2/LFE2 carrier; Workspace owns the projected range mutation.
+mod wire;
 use crate::{
     adapter::{Adapter, CALLBACK_BUDGET},
     replies::{errno, serial},
@@ -113,6 +114,7 @@ pub(crate) fn dispatch(
     let op = match cmd {
         STATE_CMD => ProjectionOp::RangeState,
         EDIT_CMD => ProjectionOp::RangeEdit,
+        wire::BEGIN | wire::DATA | wire::APPLY | wire::ABORT => ProjectionOp::RangeEdit,
         _ => {
             adapter
                 .workspace
@@ -197,6 +199,12 @@ pub(crate) fn dispatch(
                 Ok(_) => reply.ioctl(0, &[]),
                 Err(error) => reply.error(error),
             }
+        }
+        wire::BEGIN | wire::DATA | wire::APPLY | wire::ABORT => {
+            let result = wire::validate(cmd, input, out_size, flags)
+                .and_then(|()| adapter.guard(req))
+                .and_then(|()| adapter.handle(ino, fh));
+            reply.error(result.err().unwrap_or(Errno::EOPNOTSUPP));
         }
         _ => unreachable!(),
     }

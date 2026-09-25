@@ -198,6 +198,14 @@ its handle/stamp checks at publication; a mode change does not revoke an
 already-open writable descriptor. Path-based edits and handleless size changes
 retain their separate permission check.
 
+The Linux adapter also validates prospective LFB3/LFD3/LFA3/LFX3 version-3
+ioctl frame lengths, magic, flags, reserved bytes and the 8 MiB logical
+replacement bound. At this source checkpoint it explicitly returns
+`EOPNOTSUPP` for a valid staged frame; no stage or Workspace mutation is
+created yet. The existing LFS2/LFE2 inline route is unchanged. Source basis:
+parent `b6327b323577d1804b466624ae109d94d9bb45dc` plus the same-commit
+`layerfs-fuse/src/range_ioctl/wire.rs` and dispatch update.
+
 The daemon status wire carries the same counts in the fixed
 `layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,
 `range_accepted_payload_bytes` and `range_shifted_suffix_bytes`,

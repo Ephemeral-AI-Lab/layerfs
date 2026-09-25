@@ -167,6 +167,27 @@ mod linux {
         let initial = read(&file, 0, 8192);
         let before = state(&file);
 
+        let mut oversized = [0u8; 128];
+        oversized[..4].copy_from_slice(b"LFB3");
+        oversized[4..6].copy_from_slice(&3u16.to_le_bytes());
+        oversized[80..88].copy_from_slice(&(8 * 1024 * 1024u64 + 1).to_le_bytes());
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    0xc080_f542u32 as _,
+                    oversized.as_mut_ptr(),
+                )
+            },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ENOSPC)
+        );
+        assert_eq!(state(&file), before);
+        assert_eq!(read(&file, 0, 8192), initial);
+
         let mut malformed = edit(&before, 4094, 0, b"ABCD");
         malformed[4191] = 1;
         assert_eq!(call_edit(&file, &mut malformed), Err(libc::EINVAL));
