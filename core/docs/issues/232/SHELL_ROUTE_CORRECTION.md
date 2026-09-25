@@ -88,21 +88,32 @@ The already retained 10 MiB shifts took about 2.7–2.8 s for 40 blocks. The
 larger cases need hundreds to thousands of blocks and exceed the replay
 limit independently of that time growth.
 
+A fresh temporary file followed by RENAME avoids the existing-file replay
+limit but does not make the capped-500 MiB tier ready. FUSE advertises a
+128 KiB maximum WRITE; the current callback acquires a separate payload
+record for each write, and adjacent Local pieces coalesce only when they
+share that payload identity. Writing 500 MiB therefore needs at least
+**4,000** callbacks and distinct pieces, while the current piece vector caps
+at **1,024**. This is another source bound, not an observed 500 MiB
+temp-file receipt. A temp-file workflow changes the registered editor
+algorithm and still needs a piece-index/product design for the largest tier.
+
 ## Five revised checkpoints
 
 | Phase | Gate, commit and verification | Current outcome |
 | --- | --- | --- |
 | 1. Establish the user-facing route | Commit `8ec08e800` records the pre-run, one public SDK mounted POSIX probe, independent full-file verifier and corrected workflow. | **PASS** for the one ordinary overwrite route; no broad command or latency claim. |
 | 2. Explain retained structural failures | `derive_v2_limits.py` checks 56 registry rows, 20 shifts, the 8 MiB source limit and exact agreement between eleven over-limit rows and eleven retained v2 failures. | **PASS** for the source-and-registry deduction; the historical observed outcome remains 5 s Exec `FAIL`. |
-| 3. Select a capacity-preserving generic POSIX design | The current in-place 10/100/500 MiB shifts cannot fit existing Workspace/Bridge replay. A temp-file-and-rename command is a different editor algorithm and needs a new case identity. The independent [Phase 1B drain diagnosis](../241/evidence/phase1b-finish-diagnostic/REPORT.md) stays valid, with no narrow optimization yet justified. | **BLOCKED on route/contract selection.** No cap, worker or timeout inflation is an acceptable shortcut. |
+| 3. Select a capacity-preserving generic POSIX design | The current in-place 10/100/500 MiB shifts cannot fit existing Workspace/Bridge replay. A temp-file-and-rename command is a different editor algorithm and also crosses the 1,024-piece limit at 500 MiB. The independent [Phase 1B drain diagnosis](../241/evidence/phase1b-finish-diagnostic/REPORT.md) stays valid, with no narrow optimization yet justified. | **BLOCKED on route/contract selection and piece-index design.** No cap, worker or timeout inflation is an acceptable shortcut. |
 | 4. Prove all 56 generic-shell cases | Freeze the selected actual shell commands, source/build/image identities, callback counts and byte oracles; then verify one fresh changed-source attempt per case. | **NOT_RUN.** The v2 POSIX baseline is 45 verified, eleven failed. The v3 ioctl campaign is a separate selection. |
 | 5. Qualify performance and release | Enforce an equal cache state for Edit-written backing bytes, retain one sample per case, independent verification and cleanup, and compare only prospective same-route targets. | **NOT_RUN.** The current FUSE backing-cache domain is ineligible for cold latency. |
 
 Phase 3 requires an explicit route decision because preserving the exact v2
 in-place commands needs a new private-overlay and replay architecture, while
 choosing ordinary temp-file-and-rename commands changes the benchmark
-operation. Either path must preserve arbitrary `WorkspaceApi::exec` semantics;
-neither may be labelled as the existing v3 ioctl result.
+operation and still needs a larger piece index for 500 MiB. Either path must
+preserve arbitrary `WorkspaceApi::exec` semantics; neither may be labelled
+as the existing v3 ioctl result.
 
 The existing opt-in ioctl remains useful for programs that choose its API.
 It is a separate capability and performance selection from arbitrary shell

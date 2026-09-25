@@ -135,6 +135,13 @@
     }
   ],
   "classification": "source-and-registry deduction; no new performance sample",
+  "fresh_file_500mib_source_bound": {
+    "current_max_pieces": 1024,
+    "file_bytes": 524288000,
+    "max_fuse_write_bytes": 131072,
+    "minimum_write_callbacks": 4000,
+    "qualification": "each current WRITE owns a distinct payload record; adjacent Local pieces require one payload identity to coalesce"
+  },
   "in_place_shift_cases": 20,
   "over_limit_matches_all_baseline_failures": true,
   "registered_cases": 56,
