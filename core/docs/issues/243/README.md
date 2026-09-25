@@ -1,6 +1,6 @@
 # #243 generic Workspace shell package refresh
 
-> **Status:** Phase 0 source retirement complete; phases 1–2 pending.
+> **Status:** Phases 0–1 implemented; Phase 2 baseline pending.
 
 Tracking: [#243](https://github.com/Ephemeral-AI-Lab/layerfs/issues/243), a
 sub-issue of [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
@@ -13,6 +13,8 @@ release-admission claim.
   correctness oracle.
 - [Implementation plan](IMPLEMENTATION_PLAN.md) defines the source, benchmark,
   verification, and decision checkpoints for the generic POSIX/FUSE path.
+- [Frozen Phase 1 contract](PHASE1_CONTRACT.md) registers the ordinary-shell
+  scenario, prepared inputs, route, oracle, limits, and custody rules.
 
 The public SDK method is `WorkspaceApi::exec(command)` and currently launches
 `/bin/sh -c` in the mounted Workspace. Its command uses normal filesystem
