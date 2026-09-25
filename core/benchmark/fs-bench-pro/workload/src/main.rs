@@ -18,6 +18,7 @@
 //!   one block for every input size: no full-file copy, no temporary file and
 //!   no host-side path is used.
 //! * `splice` — one bounded Linux FUSE range ioctl and caller confirmation.
+//! * `splice-batch` — the frozen Phase 1C sequence of checked insert ioctls.
 use std::{
     fmt::Write as _,
     fs::File,
@@ -35,6 +36,7 @@ mod splice;
 /// transfer (`MAX_READ_BYTES`) so one block is one projection request.
 const SHIFT_BLOCK_BYTES: usize = 128 * 1024;
 
+#[derive(Clone)]
 struct Options {
     operation: String,
     output_version: u64,
@@ -44,6 +46,7 @@ struct Options {
     delete_length: u64,
     length: u64,
     size: u64,
+    count: u64,
     direction: Option<String>,
     payload: Option<PathBuf>,
 }
@@ -51,9 +54,9 @@ struct Options {
 fn usage() -> Error {
     Error::new(
         ErrorKind::InvalidInput,
-        "usage: layerfs-edit-tool <pwrite|truncate|extend|shift|splice> --file P --expect-size N \
+        "usage: layerfs-edit-tool <pwrite|truncate|extend|shift|splice|splice-batch> --file P --expect-size N \
          [--offset N --length N --payload P | --offset N --delete-length N --length N \
-         --direction grow|shrink [--payload P] | --size N] [--output-version 4 for splice]",
+         --direction grow|shrink [--payload P] | --size N] [--count 1|32|128 --output-version 5 for splice-batch]",
     )
 }
 
@@ -78,7 +81,11 @@ fn parsed(args: &[String]) -> Result<Options, Error> {
         values.get(key).map(|_| number(key)).transpose()
     };
     let output_version = optional("output-version")?.unwrap_or(3);
-    if !matches!(output_version, 3 | 4) || (output_version == 4 && operation != "splice") {
+    if !matches!(output_version, 3 | 4 | 5)
+        || (output_version == 4 && operation != "splice")
+        || (output_version == 5 && operation != "splice-batch")
+        || (operation == "splice-batch" && output_version != 5)
+    {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             "unsupported output version",
@@ -93,6 +100,7 @@ fn parsed(args: &[String]) -> Result<Options, Error> {
         delete_length: optional("delete-length")?.unwrap_or(0),
         length: optional("length")?.unwrap_or(0),
         size: optional("size")?.unwrap_or(0),
+        count: optional("count")?.unwrap_or(0),
         direction: values.get("direction").cloned(),
         payload: values.get("payload").map(PathBuf::from),
     })
@@ -260,10 +268,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             shifted = shift(&options, &file)?;
             None
         }
-        "splice" => {
+        "splice" | "splice-batch" => {
             #[cfg(target_os = "linux")]
             {
-                Some(splice::run(&options, &file)?)
+                Some(if options.operation == "splice" {
+                    splice::run(&options, &file)?
+                } else {
+                    splice::run_batch(&options, &file)?
+                })
             }
             #[cfg(not(target_os = "linux"))]
             return Err(
@@ -298,13 +310,22 @@ fn result_line(
         options.direction.as_deref().unwrap_or("-")
     )
     .expect("string write");
-    if options.output_version == 4 {
+    if options.output_version >= 4 {
         let (seconds, nanoseconds) = post_state_mtime
             .ok_or_else(|| Error::new(ErrorKind::InvalidData, "missing post-EDIT STATE mtime"))?;
         line.pop();
         write!(
             line,
             ",\"mtime_seconds\":{seconds},\"mtime_nanoseconds\":{nanoseconds}}}"
+        )
+        .expect("string write");
+    }
+    if options.output_version == 5 {
+        line.pop();
+        write!(
+            line,
+            ",\"edit_count\":{},\"accepted_bytes\":4096}}",
+            options.count
         )
         .expect("string write");
     }
@@ -326,6 +347,7 @@ mod tests {
             delete_length: 0,
             length: 0,
             size: 0,
+            count: 0,
             direction: None,
             payload: None,
         };
@@ -339,5 +361,12 @@ mod tests {
             "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":5,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000}"
         );
         assert!(result_line(&options, 5, 0, None).is_err());
+        options.operation = "splice-batch".into();
+        options.output_version = 5;
+        options.count = 32;
+        assert_eq!(
+            result_line(&options, 4097, 0, Some((-2, 750_000_000))).unwrap(),
+            "{\"status\":\"PASS\",\"operation\":\"splice-batch\",\"direction\":\"-\",\"final_bytes\":4097,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000,\"edit_count\":32,\"accepted_bytes\":4096}"
+        );
     }
 }

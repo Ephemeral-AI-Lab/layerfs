@@ -119,22 +119,30 @@ fn confirmed_exec(exec: &ExecResult, expected_splice_output: Option<&str>) -> bo
         && expected_splice_output.is_none_or(|expected| exec.stdout == expected.as_bytes())
 }
 
-fn confirmed_v4(exec: &ExecResult, final_bytes: u64) -> Option<(i64, u32)> {
+fn confirmed_splice(
+    exec: &ExecResult,
+    final_bytes: u64,
+    operation: &str,
+    count: Option<u64>,
+) -> Option<(i64, u32)> {
     if exec.exit_status != Some(0) || exec.stdout_truncated || exec.stderr_truncated {
         return None;
     }
     let output = std::str::from_utf8(&exec.stdout).ok()?;
     let prefix = format!(
-        "{{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":{final_bytes},\"shifted_bytes\":0,\"mtime_seconds\":"
+        "{{\"status\":\"PASS\",\"operation\":\"{operation}\",\"direction\":\"-\",\"final_bytes\":{final_bytes},\"shifted_bytes\":0,\"mtime_seconds\":"
     );
     let (seconds, tail) = output
         .strip_prefix(&prefix)?
         .split_once(",\"mtime_nanoseconds\":")?;
-    let nanoseconds = tail.strip_suffix("}\n")?;
+    let expected_tail = count.map_or("}\n".to_string(), |count| {
+        format!(",\"edit_count\":{count},\"accepted_bytes\":4096}}\n")
+    });
+    let nanoseconds = tail.strip_suffix(&expected_tail)?;
     let seconds = seconds.parse::<i64>().ok()?;
     let nanoseconds = nanoseconds.parse::<u32>().ok()?;
     if nanoseconds >= 1_000_000_000
-        || output != format!("{prefix}{seconds},\"mtime_nanoseconds\":{nanoseconds}}}\n")
+        || output != format!("{prefix}{seconds},\"mtime_nanoseconds\":{nanoseconds}{expected_tail}")
     {
         return None;
     }
@@ -212,6 +220,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let v3 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3";
     let v4 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v4";
+    let v5 =
+        case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-batch-commit-v1";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -289,6 +299,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .transpose()?;
     let final_bytes = case.number("final_bytes")?;
+    let expected_batch_count = if v5 {
+        Some(case.number("edit_count")?)
+    } else {
+        None
+    };
     let mut edit_ns = 0u128;
     let mut commit_ns = 0u128;
     let mut observed_mtime = None;
@@ -308,11 +323,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result
                 });
                 match edit {
-                    Ok(exec) if v4 => {
-                        observed_mtime = confirmed_v4(&exec, final_bytes);
+                    Ok(exec) if v4 || v5 => {
+                        observed_mtime = confirmed_splice(
+                            &exec,
+                            final_bytes,
+                            if v5 { "splice-batch" } else { "splice" },
+                            expected_batch_count,
+                        );
                         if observed_mtime.is_none() {
                             return Err(format!(
-                                "exec v4 output not exact: status={:?} truncated stdout={} stderr={} output={}",
+                                "exec splice output not exact: status={:?} truncated stdout={} stderr={} output={}",
                                 exec.exit_status,
                                 exec.stdout_truncated,
                                 exec.stderr_truncated,
@@ -370,7 +390,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
     let unmount = workspaces.unmount(&mount.id);
-    let (delete, log_capture) = if v4 {
+    let (delete, log_capture) = if v4 || v5 {
         let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
         (delete, Some(capture))
     } else {
@@ -404,7 +424,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.range_shifted_suffix_bytes)
         .unwrap_or(0);
-    let v4_metadata = if v4 {
+    let v4_metadata = if v4 || v5 {
         let capture = log_capture.as_ref().expect("v4 captured logs");
         match observed_mtime {
             Some((seconds, nanoseconds)) => format!(
@@ -499,12 +519,25 @@ mod tests {
             stdout_truncated: false,
             stderr_truncated: false,
         };
-        assert_eq!(confirmed_v4(&exec, 12288), Some((1_700_000_000, 123)));
+        assert_eq!(
+            confirmed_splice(&exec, 12288, "splice", None),
+            Some((1_700_000_000, 123))
+        );
         exec.stdout.extend_from_slice(b"extra");
-        assert_eq!(confirmed_v4(&exec, 12288), None);
+        assert_eq!(confirmed_splice(&exec, 12288, "splice", None), None);
         exec.stdout.truncate(exec.stdout.len() - 5);
         exec.stdout_truncated = true;
-        assert_eq!(confirmed_v4(&exec, 12288), None);
+        assert_eq!(confirmed_splice(&exec, 12288, "splice", None), None);
+        exec.stdout_truncated = false;
+        exec.stdout = b"{\"status\":\"PASS\",\"operation\":\"splice-batch\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0,\"mtime_seconds\":1700000000,\"mtime_nanoseconds\":123,\"edit_count\":32,\"accepted_bytes\":4096}\n".to_vec();
+        assert_eq!(
+            confirmed_splice(&exec, 12288, "splice-batch", Some(32)),
+            Some((1_700_000_000, 123))
+        );
+        assert_eq!(
+            confirmed_splice(&exec, 12288, "splice-batch", Some(128)),
+            None
+        );
     }
 
     #[test]

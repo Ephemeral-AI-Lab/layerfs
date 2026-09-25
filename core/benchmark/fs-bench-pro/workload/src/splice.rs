@@ -120,12 +120,13 @@ fn confirm(
     (after.mtime_seconds, after.mtime_nanoseconds)
 }
 
-pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
-    let replacement = if options.length == 0 {
-        Vec::new()
-    } else {
-        payload(options)?
-    };
+fn run_with(options: &Options, file: &File, replacement: &[u8]) -> Result<(i64, u32), Error> {
+    if replacement.len() as u64 != options.length {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "replacement length mismatch",
+        ));
+    }
     if replacement.len() > MAX_REPLACEMENT || (replacement.is_empty() && options.delete_length == 0)
     {
         return Err(Error::new(
@@ -161,17 +162,51 @@ pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
     let read_start = options.offset - left_len as u64;
     let mut expected = vec![0; left_len + replacement.len() + right_len];
     read_exact_at(file, read_start, &mut expected[..left_len])?;
-    expected[left_len..left_len + replacement.len()].copy_from_slice(&replacement);
+    expected[left_len..left_len + replacement.len()].copy_from_slice(replacement);
     read_exact_at(
         file,
         tail_start,
         &mut expected[left_len + replacement.len()..],
     )?;
-    let mut bytes = request(options, &before, &replacement);
+    let mut bytes = request(options, &before, replacement);
     if unsafe { ioctl(file.as_raw_fd(), EDIT, bytes.as_mut_ptr()) } != 0 {
         unknown("edit", &before, Error::last_os_error());
     }
     Ok(confirm(file, &before, final_length, &expected, read_start))
+}
+
+pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
+    let replacement = if options.length == 0 {
+        Vec::new()
+    } else {
+        payload(options)?
+    };
+    run_with(options, file, &replacement)
+}
+
+pub(super) fn run_batch(options: &Options, file: &File) -> Result<(i64, u32), Error> {
+    if options.expect_size != 1_048_576
+        || options.offset != 524_288
+        || options.delete_length != 0
+        || options.length != 4096
+        || !matches!(options.count, 1 | 32 | 128)
+    {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "invalid Phase 1C batch",
+        ));
+    }
+    let replacement = payload(options)?;
+    let width = 4096 / options.count as usize;
+    let mut step = options.clone();
+    let mut mtime = (0, 0);
+    for i in 0..options.count as usize {
+        step.expect_size = options.expect_size + (i * width) as u64;
+        step.offset = options.offset + (i * (256 + width)) as u64;
+        step.length = width as u64;
+        mtime = run_with(&step, file, &replacement[i * width..(i + 1) * width])?;
+    }
+    Ok(mtime)
 }
 
 #[cfg(test)]
@@ -190,6 +225,7 @@ mod tests {
             delete_length: 0,
             length: 4,
             size: 0,
+            count: 0,
             direction: None,
             payload: None,
         };
