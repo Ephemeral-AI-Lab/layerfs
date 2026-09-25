@@ -2,7 +2,7 @@
 use super::wire;
 use crate::adapter::Adapter;
 use fuser::{Errno, FileHandle, INodeNo};
-use layerfs_workspace::RangeStamp;
+use layerfs_workspace::{RangePart, RangeStamp};
 use sha2::{Digest, Sha256};
 use std::{
     fs::File,
@@ -17,24 +17,19 @@ const MAX_PARTS: usize = 1024;
 const LIFETIME: Duration = Duration::from_secs(30);
 const ZERO: [u8; 4096] = [0; 4096];
 
-pub(super) enum Part {
-    Bytes(u64),
-    Zero(u64),
-}
-
-struct Stage {
+pub(super) struct Stage {
     token: [u8; 16],
     handle: u64,
-    stamp: RangeStamp,
-    start: u64,
-    end: u64,
+    pub(super) stamp: RangeStamp,
+    pub(super) start: u64,
+    pub(super) end: u64,
     logical: u64,
     literal_length: u64,
     next: u64,
     digest: [u8; 32],
     hash: Sha256,
-    bytes: Vec<u8>,
-    parts: Vec<Part>,
+    pub(super) bytes: Vec<u8>,
+    pub(super) parts: Vec<RangePart>,
     expires: Instant,
 }
 
@@ -177,7 +172,7 @@ impl Stages {
         }
         let joins_last = matches!(
             (literal > 0, stage.parts.last()),
-            (true, Some(Part::Bytes(_))) | (false, Some(Part::Zero(_)))
+            (true, Some(RangePart::Bytes(_))) | (false, Some(RangePart::Zero(_)))
         );
         if !joins_last {
             if stage.parts.len() == MAX_PARTS {
@@ -189,8 +184,8 @@ impl Stages {
             stage.hash.update(&input[128..128 + literal]);
             stage.bytes.extend_from_slice(&input[128..128 + literal]);
             match stage.parts.last_mut() {
-                Some(Part::Bytes(length)) => *length += logical,
-                _ => stage.parts.push(Part::Bytes(logical)),
+                Some(RangePart::Bytes(length)) => *length += logical,
+                _ => stage.parts.push(RangePart::Bytes(logical)),
             }
         } else {
             let mut left = logical;
@@ -200,8 +195,8 @@ impl Stages {
                 left -= take as u64;
             }
             match stage.parts.last_mut() {
-                Some(Part::Zero(length)) => *length += logical,
-                _ => stage.parts.push(Part::Zero(logical)),
+                Some(RangePart::Zero(length)) => *length += logical,
+                _ => stage.parts.push(RangePart::Zero(logical)),
             }
         }
         stage.next += logical;
@@ -219,13 +214,13 @@ impl Stages {
         Ok(())
     }
 
-    pub(super) fn apply_ready(
+    pub(super) fn take_for_apply(
         &self,
         adapter: &Adapter,
         ino: INodeNo,
         fh: FileHandle,
         input: &[u8],
-    ) -> Result<(), Errno> {
+    ) -> Result<Stage, Errno> {
         let mut stages = self.entries.lock().map_err(|_| Errno::EIO)?;
         stages.retain(|stage| stage.expires > Instant::now());
         let index = stages
@@ -236,12 +231,12 @@ impl Stages {
         drop(stages);
         if stage.next != stage.logical
             || stage.bytes.len() as u64 != stage.literal_length
-            || stage.hash.finalize()[..] != stage.digest[..]
+            || stage.hash.clone().finalize()[..] != stage.digest[..]
             || stage
                 .parts
                 .iter()
                 .map(|part| match part {
-                    Part::Bytes(length) | Part::Zero(length) => *length,
+                    RangePart::Bytes(length) | RangePart::Zero(length) => *length,
                 })
                 .sum::<u64>()
                 != stage.logical
@@ -261,6 +256,6 @@ impl Stages {
         if stage.start > stage.end || stage.end > current.length {
             return Err(Errno::EINVAL);
         }
-        Err(Errno::EOPNOTSUPP) // The next product checkpoint adds one Workspace splice.
+        Ok(stage)
     }
 }

@@ -8,6 +8,7 @@ pub(crate) mod namespace_view;
 mod open;
 mod original;
 pub mod projection_counters;
+mod range;
 mod read;
 mod remove;
 pub(crate) mod rename;

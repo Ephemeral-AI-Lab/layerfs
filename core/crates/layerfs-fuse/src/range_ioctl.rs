@@ -203,6 +203,7 @@ pub(crate) fn dispatch(
             }
         }
         wire::BEGIN | wire::DATA | wire::APPLY | wire::ABORT => {
+            let mut permit = None;
             let result = wire::validate(cmd, input, out_size, flags)
                 .and_then(|()| adapter.guard(req))
                 .and_then(|()| adapter.handle(ino, fh))
@@ -213,10 +214,40 @@ pub(crate) fn dispatch(
                     match cmd {
                         wire::BEGIN => adapter.stages.begin(adapter, ino, fh, input).map(Some),
                         wire::DATA => adapter.stages.data(fh, input).map(|()| None),
-                        wire::APPLY => adapter
-                            .stages
-                            .apply_ready(adapter, ino, fh, input)
-                            .map(|()| None),
+                        wire::APPLY => {
+                            let stage = adapter.stages.take_for_apply(adapter, ino, fh, input)?;
+                            let deadline = Instant::now() + CALLBACK_BUDGET;
+                            permit = Some(
+                                adapter
+                                    .workspace
+                                    .begin_projection_mutation(deadline)
+                                    .map_err(errno)?,
+                            );
+                            let payload = adapter
+                                .workspace
+                                .own_payload(
+                                    stage.bytes.len() as u64,
+                                    &mut &stage.bytes[..],
+                                    deadline,
+                                )
+                                .map_err(errno)?;
+                            permit
+                                .as_mut()
+                                .unwrap()
+                                .edit_file_range_stream(
+                                    fh.0,
+                                    stage.stamp,
+                                    &RangeEdit {
+                                        start: stage.start,
+                                        end: stage.end,
+                                        replacement: payload,
+                                    },
+                                    &stage.parts,
+                                    deadline,
+                                )
+                                .map(|_| None)
+                                .map_err(errno)
+                        }
                         wire::ABORT => adapter.stages.abort(fh, input).map(|()| None),
                         _ => unreachable!(),
                     }

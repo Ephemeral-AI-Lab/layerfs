@@ -362,6 +362,13 @@ pub struct RangeEdit {
     pub end: u64,
     pub replacement: crate::OwnedPayload,
 }
+/// Ordered logical replacement elements; Bytes consume the next literal bytes
+/// from one owned payload, while Zero occupies length without payload storage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RangePart {
+    Bytes(u64),
+    Zero(u64),
+}
 /// Exact mounted-file identity checked before and during projected publication.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RangeStamp {

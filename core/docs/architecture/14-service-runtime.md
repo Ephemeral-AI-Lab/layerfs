@@ -205,12 +205,16 @@ Workspace stamp, and changes no Workspace bytes. Ordered DATA stores at most
 the declared literal bytes and hashes Zero runs through a fixed scratch
 buffer; ABORT, descriptor release, mount stop, destroy and a 30-second
 deadline discard private stages. A mount-owned sweeper enforces deadline
-cleanup while idle and is joined during unmount. At this checkpoint APPLY
-validates complete length, digest and stamp, consumes the stage, then returns
-`EOPNOTSUPP` before mutation; the one-Workspace-splice integration follows.
-LFS2/LFE2 inline behavior is unchanged. Source basis: parent
-`6629951c2437970c5b9378c7e3ed018e9232d044` plus the same-commit
-FUSE staging, mount and adapter changes.
+cleanup while idle and is joined during unmount. APPLY validates complete
+length, digest and stamp, consumes the token, obtains one projection mutation
+permit, owns only the literal bytes as one Workspace payload and submits one
+ordered Bytes/Zero splice. Workspace validates the combined logical length
+against 8 MiB and the result against 4 GiB; Zero parts become sparse Zero
+pieces, while Bytes parts address successive offsets in that one payload.
+The final exact-stamp publication advances one revision; no DATA call
+publishes. LFS2/LFE2 inline behavior is unchanged. Source basis: parent
+`ae11f56e9739bcf1a0e4e603978afe32c79511e1` plus the same-commit
+FUSE and Workspace range-stream changes.
 
 The daemon status wire carries the same counts in the fixed
 `layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,

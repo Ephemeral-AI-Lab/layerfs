@@ -378,6 +378,139 @@ mod linux {
 
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_range_staged_apply() {
+        use sha2::{Digest, Sha256};
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        f.workspace.set_len(data.serial, 8192, deadline()).unwrap();
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(f.workspace.mount_path().join("data.bin"))
+            .unwrap();
+        let alias = File::open(f.workspace.mount_path().join("alias")).unwrap();
+        let original = read(&file, 0, 8192);
+        let before = state(&file);
+        let payload: Vec<u8> = (0..65536).map(|i| (i % 239) as u8).collect();
+        let mut begin = [0u8; 128];
+        begin[..4].copy_from_slice(b"LFB3");
+        begin[4..6].copy_from_slice(&3u16.to_le_bytes());
+        begin[8..64].copy_from_slice(&before[8..64]);
+        begin[64..72].copy_from_slice(&4096u64.to_le_bytes());
+        begin[80..88].copy_from_slice(&65536u64.to_le_bytes());
+        begin[88..96].copy_from_slice(&65536u64.to_le_bytes());
+        begin[96..128].copy_from_slice(&Sha256::digest(&payload));
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0xc080_f542u32 as _, begin.as_mut_ptr()) },
+            0
+        );
+        let token: [u8; 16] = begin[8..24].try_into().unwrap();
+        for (index, chunk) in payload.chunks(4096).enumerate() {
+            let mut frame = [0u8; 4224];
+            frame[..4].copy_from_slice(b"LFD3");
+            frame[4..6].copy_from_slice(&3u16.to_le_bytes());
+            frame[6..8].copy_from_slice(&1u16.to_le_bytes());
+            frame[8..24].copy_from_slice(&token);
+            frame[24..32].copy_from_slice(&((index * 4096) as u64).to_le_bytes());
+            frame[32..40].copy_from_slice(&4096u64.to_le_bytes());
+            frame[40..44].copy_from_slice(&4096u32.to_le_bytes());
+            frame[128..].copy_from_slice(chunk);
+            assert_eq!(
+                unsafe { libc::ioctl(file.as_raw_fd(), 0x5080_f543u32 as _, frame.as_mut_ptr()) },
+                0
+            );
+        }
+        assert_eq!(state(&file), before);
+        assert_eq!(read(&file, 0, 8192), original);
+        let mut apply = [0u8; 128];
+        apply[..4].copy_from_slice(b"LFA3");
+        apply[4..6].copy_from_slice(&3u16.to_le_bytes());
+        apply[8..24].copy_from_slice(&token);
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x4080_f544u32 as _, apply.as_mut_ptr()) },
+            0
+        );
+        let after = state(&file);
+        assert_eq!(number(&after, 56), number(&before, 56) + 1);
+        assert_eq!(number(&after, 64), 8192 + 65536);
+        assert_eq!(file.metadata().unwrap().len(), 8192 + 65536);
+        assert_eq!(alias.metadata().unwrap().len(), 8192 + 65536);
+        assert_eq!(read(&file, 4096, 65536), payload);
+        assert!(read(&alias, 8192 + 65536, 1).is_empty());
+
+        let mut zero_begin = [0u8; 128];
+        zero_begin[..4].copy_from_slice(b"LFB3");
+        zero_begin[4..6].copy_from_slice(&3u16.to_le_bytes());
+        zero_begin[8..64].copy_from_slice(&after[8..64]);
+        zero_begin[64..72].copy_from_slice(&(8192u64 + 65536).to_le_bytes());
+        zero_begin[80..88].copy_from_slice(&4096u64.to_le_bytes());
+        zero_begin[96..128].copy_from_slice(&Sha256::digest([0u8; 4096]));
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    0xc080_f542u32 as _,
+                    zero_begin.as_mut_ptr(),
+                )
+            },
+            0
+        );
+        let zero_token: [u8; 16] = zero_begin[8..24].try_into().unwrap();
+        let mut zero_data = [0u8; 4224];
+        zero_data[..4].copy_from_slice(b"LFD3");
+        zero_data[4..6].copy_from_slice(&3u16.to_le_bytes());
+        zero_data[6..8].copy_from_slice(&2u16.to_le_bytes());
+        zero_data[8..24].copy_from_slice(&zero_token);
+        zero_data[32..40].copy_from_slice(&4096u64.to_le_bytes());
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    file.as_raw_fd(),
+                    0x5080_f543u32 as _,
+                    zero_data.as_mut_ptr(),
+                )
+            },
+            0
+        );
+        apply[8..24].copy_from_slice(&zero_token);
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x4080_f544u32 as _, apply.as_mut_ptr()) },
+            0
+        );
+        let final_state = state(&file);
+        assert_eq!(number(&final_state, 56), number(&before, 56) + 2);
+        assert_eq!(number(&final_state, 64), 8192 + 65536 + 4096);
+        assert_eq!(read(&alias, 8192 + 65536, 4096), vec![0; 4096]);
+        assert!(read(&file, 8192 + 65536 + 4096, 1).is_empty());
+        assert_eq!(
+            f.workspace.status().unwrap().range_accepted_payload_bytes,
+            65536
+        );
+
+        let report = f.workspace.commit(deadline()).unwrap();
+        let root = match report.outcome {
+            layerfs_bridge::contract::CommitOutcomeWire::Committed(committed) => committed.root,
+            other => panic!("{other:?}"),
+        };
+        let committed = super::support::attr(f.native.attributes(root, b"data.bin"));
+        let mut expected = original[..4096].to_vec();
+        expected.extend(payload);
+        expected.extend(&original[4096..]);
+        expected.extend([0; 4096]);
+        assert_eq!(committed.2, expected.len() as u64);
+        assert_eq!(f.native.bytes(committed.1, 0, expected.len()), expected);
+        drop(file);
+        drop(alias);
+        mount.unmount(deadline()).unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK staged-apply PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_range_read_only() {
         let f = Fixture::new(Gate::None);
         let data = f.lookup(b"data.bin");

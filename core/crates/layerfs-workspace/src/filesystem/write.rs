@@ -29,6 +29,7 @@ pub(crate) struct Publication {
 pub(crate) enum FileMutation<'a> {
     Range {
         edit: &'a RangeEdit,
+        parts: Option<&'a [RangePart]>,
         handle: Option<HandleId>,
         expected: Option<RangeStamp>,
         origin: MutationOrigin,
@@ -112,7 +113,10 @@ impl Workspace {
         }
         Ok(())
     }
-    fn check_payload_owner(&self, replacement: &OwnedPayload) -> Result<(), WorkspaceError> {
+    pub(super) fn check_payload_owner(
+        &self,
+        replacement: &OwnedPayload,
+    ) -> Result<(), WorkspaceError> {
         if replacement.record.directory.incarnation != self.inner.incarnation
             || !Arc::ptr_eq(
                 &replacement.host,
@@ -126,7 +130,7 @@ impl Workspace {
         }
         Ok(())
     }
-    fn write_handle(
+    pub(super) fn write_handle(
         &self,
         state: &State,
         id: HandleId,
@@ -150,7 +154,7 @@ impl Workspace {
         }
         Ok(handle)
     }
-    fn mutation_handle(
+    pub(super) fn mutation_handle(
         &self,
         state: &State,
         mutation: FileMutation<'_>,
@@ -377,90 +381,6 @@ impl Workspace {
         }
         self.mutate_file(original?, mutation, deadline, None)
     }
-    pub fn edit_file_range(
-        &self,
-        path: &WorkspacePath,
-        edit: &RangeEdit,
-        deadline: Instant,
-    ) -> Result<MutationReceipt, WorkspaceError> {
-        if self.inner.access != WorkspaceAccess::LocalEdit {
-            return Err(WorkspaceError::ReadOnly);
-        }
-        let deadline = Self::callback_deadline(deadline);
-        let mut operation = self.begin(false, deadline)?;
-        self.check_payload_owner(&edit.replacement)?;
-        if edit.start > edit.end {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        if edit.replacement.len() > 8 * 1024 * 1024 {
-            return Err(WorkspaceError::Capacity);
-        }
-        let original = self.edit_original(path, deadline, &mut operation)?;
-        self.mutate_file(
-            original,
-            FileMutation::Range {
-                edit,
-                handle: None,
-                expected: None,
-                origin: MutationOrigin::Local,
-            },
-            deadline,
-            None,
-        )
-        .map(|published| published.receipt)
-    }
-    pub(crate) fn edit_file_range_from(
-        &self,
-        handle: HandleId,
-        expected: RangeStamp,
-        edit: &RangeEdit,
-        deadline: Instant,
-    ) -> Result<MutationReceipt, WorkspaceError> {
-        if self.inner.access != WorkspaceAccess::LocalEdit {
-            return Err(WorkspaceError::ReadOnly);
-        }
-        let deadline = Self::callback_deadline(deadline);
-        let mut operation = self.begin(false, deadline)?;
-        if edit.start > edit.end || (edit.start == edit.end && edit.replacement.is_empty()) {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        if edit.replacement.len() > 8 * 1024 * 1024 {
-            return Err(WorkspaceError::Capacity);
-        }
-        let mutation = FileMutation::Range {
-            edit,
-            handle: Some(handle),
-            expected: Some(expected),
-            origin: MutationOrigin::ProjectionRange,
-        };
-        let serial = {
-            let state = self.state()?;
-            self.available(&state)?;
-            let opened = self.write_handle(&state, handle, MutationOrigin::ProjectionRange)?;
-            self.mutation_handle(&state, mutation, opened.serial)?;
-            let length = state.presented(state.node(opened.serial)?.attr).size;
-            if edit.end > length {
-                return Err(WorkspaceError::InvalidInput);
-            }
-            if length
-                .checked_sub(edit.end - edit.start)
-                .and_then(|left| left.checked_add(edit.replacement.len()))
-                .is_none_or(|result| result > MAX_FILE)
-            {
-                return Err(WorkspaceError::Capacity);
-            }
-            opened.serial
-        };
-        self.check_payload_owner(&edit.replacement)?;
-        let original = self.serial_original(serial, deadline, &mut operation)?;
-        {
-            let state = self.state()?;
-            self.available(&state)?;
-            self.mutation_handle(&state, mutation, serial)?;
-        }
-        self.mutate_file(original, mutation, deadline, None)
-            .map(|published| published.receipt)
-    }
     pub(super) fn truncate_open(
         &self,
         reserved: &mut super::open::OpenReservation,
@@ -605,17 +525,27 @@ impl Workspace {
             FileMutation::Write { replacement, .. } => Some(replacement),
             FileMutation::Attributes { .. } => None,
         };
-        let (start, end, accepted_bytes) = match mutation {
-            FileMutation::Range { edit, .. } => {
+        let (start, end, accepted_bytes, inserted) = match mutation {
+            FileMutation::Range { edit, parts, .. } => {
                 if edit.start > edit.end || edit.end > inode.length {
                     return Err(WorkspaceError::InvalidInput);
                 }
-                (edit.start, edit.end, edit.replacement.len())
+                (
+                    edit.start,
+                    edit.end,
+                    edit.replacement.len(),
+                    super::range::logical_length(edit, parts)?,
+                )
             }
             FileMutation::Attributes { request, .. } => {
                 let length = request.size.unwrap_or(inode.length);
                 replacement[0].length = length.saturating_sub(inode.length);
-                (length.min(inode.length), inode.length, 0)
+                (
+                    length.min(inode.length),
+                    inode.length,
+                    0,
+                    replacement[0].length,
+                )
             }
             FileMutation::Write {
                 offset,
@@ -636,6 +566,7 @@ impl Workspace {
                     offset.min(inode.length),
                     end.min(inode.length),
                     payload.len(),
+                    replacement[0].length + payload.len(),
                 )
             }
         };
@@ -683,11 +614,16 @@ impl Workspace {
                     .map_or(PageRef { slot: 1, epoch: 1 }, |(_, r)| r),
             };
         }
+        let stream_pieces = match mutation {
+            FileMutation::Range {
+                parts: Some(parts), ..
+            } => Some(super::range::replacement_pieces(parts, replacement[1])?),
+            _ => None,
+        };
         let length = inode
             .length
             .checked_sub(end - start)
-            .and_then(|n| n.checked_add(replacement[0].length))
-            .and_then(|n| n.checked_add(replacement[1].length))
+            .and_then(|n| n.checked_add(inserted))
             .ok_or(WorkspaceError::Capacity)?;
         if length > MAX_FILE {
             return Err(WorkspaceError::Capacity);
@@ -769,7 +705,7 @@ impl Workspace {
                 &old_pieces,
                 start,
                 end,
-                &replacement,
+                stream_pieces.as_deref().unwrap_or(&replacement),
                 inode.base_length,
                 inode.constructs_file(),
             )?
