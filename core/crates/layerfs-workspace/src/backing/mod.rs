@@ -1,6 +1,7 @@
 pub mod budget;
 pub mod directory;
 pub mod metadata;
+pub mod metadata_cursor;
 pub(crate) mod metadata_index;
 pub mod metadata_pages;
 pub mod metadata_pieces;

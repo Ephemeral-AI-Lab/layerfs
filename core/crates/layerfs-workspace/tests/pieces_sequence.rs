@@ -3,7 +3,10 @@
 //! Every case drives the same traversal the mounted Workspace uses, with the
 //! pages written into a bounded in-memory store that speaks the identical page
 //! format, so boundaries, holes, append, truncate, overlap, old generations and
-//! refusal behaviour are checkable without a mount, a Store or a service.
+//! refusal behaviour are checkable without a mount, a Store or a service. The
+//! implicit-base cases pin the mounted shape of a first local edit of an
+//! existing file; the shared-subtree cases pin multi-leaf trees, which a
+//! single-leaf fixture can never reach.
 #![cfg(target_os = "linux")]
 use layerfs_bridge::contract::MAX_FILE;
 use layerfs_workspace::{
@@ -146,6 +149,7 @@ impl Fixture {
         start: u64,
         end: u64,
         old_base: u64,
+        old_replacement: u64,
         length: u64,
         pieces: &[Piece],
     ) -> Result<metadata_pieces::Pieces, WorkspaceError> {
@@ -162,6 +166,7 @@ impl Fixture {
                     start,
                     end,
                     old_base,
+                    old_replacement,
                     length,
                 },
                 &mut parts,
@@ -244,7 +249,7 @@ fn overwrites_inside_one_extent_without_touching_its_neighbours() {
     // 8 bytes at offset 1020: the tail of the first base, 8 payload bytes, and
     // the untouched local edit plus the rest of the canonical file all survive.
     let second = f
-        .splice(root, 1020, 1028, 2064, 2064, &[local(0, 8, 9, 10)])
+        .splice(root, 1020, 1028, 2064, 16, 2064, &[local(0, 8, 9, 10)])
         .unwrap();
     assert_eq!(second.length, 2064);
     assert_eq!(
@@ -264,6 +269,7 @@ fn covers_a_hole_and_a_position_past_the_end() {
             0,
             0,
             0,
+            0,
             200,
             &[zero(100), local(0, 100, 11, 12)],
         )
@@ -272,7 +278,15 @@ fn covers_a_hole_and_a_position_past_the_end() {
     assert_eq!(f.render(grown.root, 200), "0:Z:0:100 100:L:0:100");
     // Replacing the tail of that payload keeps the hole and the retained head.
     let replaced = f
-        .splice(grown.root, 150, 200, 0, 200, &[local(0, 50, 13, 14)])
+        .splice(
+            grown.root,
+            150,
+            200,
+            0,
+            grown.replacement,
+            200,
+            &[local(0, 50, 13, 14)],
+        )
         .unwrap();
     assert_eq!(replaced.length, 200);
     assert_eq!(
@@ -281,7 +295,15 @@ fn covers_a_hole_and_a_position_past_the_end() {
     );
     // Truncating to the hole's own end keeps exactly those bytes.
     let truncated = f
-        .splice(replaced.root, 100, 200, 0, 100, &[] as &[Piece])
+        .splice(
+            replaced.root,
+            100,
+            200,
+            0,
+            replaced.replacement,
+            100,
+            &[] as &[Piece],
+        )
         .unwrap();
     assert_eq!(truncated.length, 100);
     assert_eq!(f.render(truncated.root, 100), "0:Z:0:100");
@@ -292,11 +314,19 @@ fn appends_at_the_end_and_extends_with_zeros() {
     let f = Fixture::new();
     let root = f.build(&[base(0, 512)], 512).unwrap();
     let appended = f
-        .splice(root, 512, 512, 512, 768, &[local(0, 256, 13, 14)])
+        .splice(root, 512, 512, 512, 0, 768, &[local(0, 256, 13, 14)])
         .unwrap();
     assert_eq!(f.render(appended.root, 768), "0:B:0:512 512:L:0:256");
     let extended = f
-        .splice(appended.root, 768, 768, 512, 1024, &[zero(256)])
+        .splice(
+            appended.root,
+            768,
+            768,
+            512,
+            appended.replacement,
+            1024,
+            &[zero(256)],
+        )
         .unwrap();
     assert_eq!(
         f.render(extended.root, 1024),
@@ -312,13 +342,13 @@ fn refuses_a_replacement_beyond_the_base_or_past_max_file() {
     let root = f.build(&[base(0, 4096)], 4096).unwrap();
     // A retained canonical read that reaches past the recorded base is refused.
     assert!(f
-        .splice(root, 4096, 4096, 4096, 8192, &[base(0, 4096)])
+        .splice(root, 4096, 4096, 4096, 0, 8192, &[base(0, 4096)])
         .is_err());
     // A length past the logical ceiling is refused before any page is written.
     f.store.reset();
     let writes = f.store.written();
     assert!(f
-        .splice(root, 4096, 4096, 4096, MAX_FILE + 1, &[base(4096, 4096)])
+        .splice(root, 4096, 4096, 4096, 0, MAX_FILE + 1, &[base(4096, 4096)])
         .is_err());
     assert_eq!(f.store.written(), writes);
 }
@@ -347,7 +377,7 @@ fn an_unchanged_old_generation_stays_readable_after_a_splice() {
         .unwrap();
     let before = f.render(first, 8192 + 64 + 8192);
     let second = f
-        .splice(first, 8224, 8224, 16448, 16464, &[local(0, 16, 23, 24)])
+        .splice(first, 8224, 8224, 16448, 64, 16464, &[local(0, 16, 23, 24)])
         .unwrap();
     assert_ne!(second.root, first);
     // The older root still reads exactly the sequence it published.
@@ -368,7 +398,7 @@ fn a_shared_subtree_is_not_rewritten() {
     let before = f.store.page_ids();
     f.store.reset();
     let changed = f
-        .splice(root, 0, 64, length, length, &[local(0, 64, 31, 32)])
+        .splice(root, 0, 64, length, 0, length, &[local(0, 64, 31, 32)])
         .unwrap();
     assert_eq!(changed.length, length);
     // Only the first leaf and its ancestors are written; every other page of the
@@ -460,10 +490,193 @@ fn a_refused_splice_leaves_the_published_sequence_unchanged() {
     let pages = f.store.page_ids();
     f.store.reset();
     // A retained canonical read beyond the recorded base is refused.
-    let refused = f.splice(root, 1088, 1088, 1088, 1600, &[base(0, 512)]);
+    let refused = f.splice(root, 1088, 1088, 1088, 0, 1600, &[base(0, 512)]);
     assert!(refused.is_err());
     // The old root still reads its own sequence, and the refusal published no
     // new tree: the store holds exactly the pages the first build wrote.
     assert_eq!(f.render(root, 1088), before);
     assert_eq!(f.store.page_ids(), pages);
+}
+
+#[test]
+fn a_first_edit_folds_into_one_implicit_base_read() {
+    let f = Fixture::new();
+    // A base-backed version with no stored sequence is exactly one base read of
+    // its selected content: the first local edit folds into that implicit base.
+    // This is the mounted shape of a one-byte overwrite of an existing file.
+    let first = f
+        .splice(PageRef::NULL, 0, 1, 6, 0, 6, &[local(0, 1, 3, 4)])
+        .unwrap();
+    assert_eq!(first.length, 6);
+    assert_eq!(first.edits, 1);
+    assert_eq!(first.replacement, 1);
+    assert_eq!(f.render(first.root, 6), "0:L:0:1 1:B:1:5");
+    // A second edit of the same version replaces bytes; it never deletes them.
+    let second = f
+        .splice(
+            first.root,
+            2,
+            4,
+            6,
+            first.replacement,
+            6,
+            &[local(0, 2, 5, 6)],
+        )
+        .unwrap();
+    assert_eq!(second.length, 6);
+    assert_eq!(second.replacement, 3);
+    assert_eq!(f.render(second.root, 6), "0:L:0:1 1:B:1:1 2:L:0:2 4:B:4:2");
+}
+
+#[test]
+fn a_first_edit_inside_an_implicit_base_retains_both_sides() {
+    let f = Fixture::new();
+    let middle = f
+        .splice(PageRef::NULL, 2, 4, 6, 0, 6, &[local(0, 2, 5, 6)])
+        .unwrap();
+    assert_eq!(middle.edits, 1);
+    assert_eq!(f.render(middle.root, 6), "0:B:0:2 2:L:0:2 4:B:4:2");
+    // A whole-file replacement of the implicit base is one replacement run.
+    let whole = f
+        .splice(PageRef::NULL, 0, 6, 6, 0, 6, &[local(0, 6, 7, 8)])
+        .unwrap();
+    assert_eq!(whole.edits, 1);
+    assert_eq!(whole.replacement, 6);
+    assert_eq!(f.render(whole.root, 6), "0:L:0:6");
+}
+
+#[test]
+fn an_implicit_base_append_past_eof_fills_the_gap() {
+    let f = Fixture::new();
+    // A write that starts past the end of a never-edited file keeps the whole
+    // base, fills the gap with zeros and appends its payload.
+    let appended = f
+        .splice(
+            PageRef::NULL,
+            6,
+            6,
+            6,
+            0,
+            11,
+            &[zero(4), local(0, 1, 9, 10)],
+        )
+        .unwrap();
+    assert_eq!(appended.edits, 1);
+    assert_eq!(appended.replacement, 5);
+    assert_eq!(f.render(appended.root, 11), "0:B:0:6 6:Z:0:4 10:L:0:1");
+}
+
+#[test]
+fn an_implicit_base_truncate_and_extension_are_exact() {
+    let f = Fixture::new();
+    // A truncation is one trailing deletion edit: the retained prefix is one
+    // base read and the tail is gone.
+    let shrunk = f.splice(PageRef::NULL, 4, 6, 6, 0, 4, &[]).unwrap();
+    assert_eq!(shrunk.length, 4);
+    assert_eq!(shrunk.edits, 1);
+    assert_eq!(shrunk.replacement, 0);
+    assert_eq!(f.render(shrunk.root, 4), "0:B:0:4");
+    // A logical extension owns zero bytes past the base's end.
+    let grown = f.splice(PageRef::NULL, 6, 6, 6, 0, 8, &[zero(2)]).unwrap();
+    assert_eq!(grown.edits, 1);
+    assert_eq!(grown.replacement, 2);
+    assert_eq!(f.render(grown.root, 8), "0:B:0:6 6:Z:0:2");
+}
+
+#[test]
+fn an_empty_sequence_after_a_full_shrink_takes_a_whole_rewrite() {
+    let f = Fixture::new();
+    // Truncating an implicit base to nothing publishes an empty sequence: a
+    // NULL root, exactly as a fresh file with no content.
+    let empty = f.splice(PageRef::NULL, 0, 6, 6, 0, 0, &[]).unwrap();
+    assert_eq!(empty.length, 0);
+    assert_eq!(empty.root, PageRef::NULL);
+    assert_eq!(empty.edits, 1);
+    // Rewriting that empty version replaces no base bytes even though the
+    // version still records one: the result is exactly the replacement.
+    let rewritten = f
+        .splice(PageRef::NULL, 0, 0, 6, 0, 30, &[local(0, 30, 15, 16)])
+        .unwrap();
+    assert_eq!(rewritten.length, 30);
+    assert_eq!(rewritten.edits, 1);
+    assert_eq!(rewritten.replacement, 30);
+    assert_eq!(f.render(rewritten.root, 30), "0:L:0:30");
+}
+
+#[test]
+fn an_implicit_base_replacement_beyond_the_base_is_refused() {
+    let f = Fixture::new();
+    let pages = f.store.page_ids();
+    f.store.reset();
+    // The replaced interval must stay inside the implicit base read.
+    let refused = f.splice(PageRef::NULL, 0, 7, 6, 0, 6, &[local(0, 7, 11, 12)]);
+    assert!(matches!(refused, Err(WorkspaceError::Io)));
+    // A refusal publishes no page.
+    assert_eq!(f.store.written(), 0);
+    assert_eq!(f.store.page_ids(), pages);
+}
+
+#[test]
+fn a_shared_subtree_records_the_unknown_count_and_the_exact_total() {
+    let f = Fixture::new();
+    // 300 extents with distinct payloads never merge, so the built tree holds
+    // three leaves under one branch: a splice in the middle shares the two
+    // leaves it does not touch.
+    let pieces: Vec<Piece> = (0..300)
+        .map(|index| local(index * 64, 64, index as u64 + 1, (index + 1) as u32))
+        .collect();
+    let length = 300 * 64;
+    let root = f.build(&pieces, length).unwrap();
+    let before = f.render(root, length);
+    let pages = f.store.page_ids();
+    f.store.reset();
+    // Piece 128 covers [8192, 8256); replacing it shares the first and last
+    // leaves and folds only the middle one.
+    let changed = f
+        .splice(
+            root,
+            8192,
+            8256,
+            0,
+            19_200,
+            length,
+            &[local(0, 64, 999, 888)],
+        )
+        .unwrap();
+    assert_eq!(changed.length, length);
+    // The exact edit count is unavailable to a splice that shared a subtree.
+    assert_eq!(changed.edits, u16::MAX);
+    // The replacement total still carries exactly: 19_200 dropped 64, added 64.
+    assert_eq!(changed.replacement, 19_200);
+    // Only the folded leaf and its branch were written; the shared leaves are
+    // still the pages the previous root owns.
+    assert!(
+        f.store.written() <= 2,
+        "rewrote {} pages",
+        f.store.written()
+    );
+    assert_eq!(f.store.page_ids().len(), pages.len() + f.store.written());
+    // The older root still reads exactly the sequence it published, and the
+    // new one replaced exactly piece 128.
+    assert_eq!(f.render(root, length), before);
+    let read = f.walk(changed.root, length);
+    assert_eq!(read.len(), 300);
+    assert_eq!(read[128].0, 8192);
+    assert_eq!(read[128].1.payload, 999);
+    assert_eq!(read[127].1.payload, 128);
+    assert_eq!(read[129].1.payload, 130);
+    // A second shared splice keeps the totals exact across generations.
+    let again = f
+        .splice(
+            changed.root,
+            0,
+            64,
+            0,
+            changed.replacement,
+            length,
+            &[local(0, 64, 777, 887)],
+        )
+        .unwrap();
+    assert_eq!(again.edits, u16::MAX);
+    assert_eq!(again.replacement, 19_200);
 }

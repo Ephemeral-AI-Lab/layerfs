@@ -51,12 +51,15 @@ pub trait PieceStore {
 /// itself established about the sequence it published.
 pub struct Pieces {
     pub root: PageRef,
-    /// Number of stored extents in the published sequence.
+    /// Stored extents the splice itself placed or saw. Partial when a subtree
+    /// was shared; never a recorded figure.
     pub extents: u64,
-    /// Maximal replacement runs, or `u16::MAX` when a shared subtree made the
-    /// exact figure unavailable to this splice.
+    /// Maximal replacement runs the splice counted, or `u16::MAX` when a
+    /// shared subtree made the exact figure unavailable to this splice.
     pub edits: u16,
-    /// Replacement bytes the fold itself accounted for.
+    /// The sequence's exact replacement bytes: the replaced sequence's
+    /// recorded total, minus what the interval dropped, plus what this splice
+    /// inserted.
     pub replacement: u64,
     /// Logical byte length of the published sequence.
     pub length: u64,
@@ -148,6 +151,10 @@ pub struct Splice {
     pub end: u64,
     /// Base length that retained `Base` offsets must stay inside.
     pub old_base: u64,
+    /// Replacement bytes the replaced sequence already recorded. A splice that
+    /// shares an untouched subtree cannot see those bytes again, so the result's
+    /// exact total is derived from this figure: `old - removed + inserted`.
+    pub old_replacement: u64,
     /// Required logical length of the result.
     pub length: u64,
 }
@@ -224,9 +231,22 @@ impl Fold {
             .ok_or(WorkspaceError::Io)?;
         Ok(())
     }
-    /// Counts a trailing run of replacement bytes.
-    pub fn close(&mut self) -> Result<(), WorkspaceError> {
-        if self.pending != 0 {
+    /// Charges one shared subtree's logical length. Its extents stay unread,
+    /// so the fold cannot count them; only the length the result must cover
+    /// moves.
+    pub fn carry(&mut self, length: u64) -> Result<(), WorkspaceError> {
+        self.length = self
+            .length
+            .checked_add(length)
+            .filter(|length| *length <= MAX_FILE)
+            .ok_or(WorkspaceError::Io)?;
+        Ok(())
+    }
+    /// Counts the sequence's trailing deviation from its base: a final run of
+    /// replacement bytes, or a tail that ends short of the recorded base — a
+    /// truncation lowering later derives as one deletion edit.
+    pub fn close(&mut self, base_bound: u64) -> Result<(), WorkspaceError> {
+        if self.pending != 0 || self.base < base_bound {
             self.edits = self.edits.checked_add(1).ok_or(WorkspaceError::Io)?;
         }
         Ok(())
@@ -263,6 +283,7 @@ pub fn build<S: PieceStore + ?Sized>(
             start: 0,
             end: 0,
             old_base: 0,
+            old_replacement: 0,
             length,
         },
         &mut replacement.into_parts(),
@@ -273,7 +294,8 @@ pub fn build<S: PieceStore + ?Sized>(
 
 /// Replaces `old[start..end]` with every part of `replacement`, sharing every
 /// subtree the interval does not touch and copying only the ancestors of the
-/// leaves it folds. `old == NULL` builds a new sequence.
+/// leaves it folds. A NULL `old` folds into the sequence the version already
+/// is: one implicit base read of its selected content, or an empty sequence.
 pub fn replace<S: PieceStore + ?Sized>(
     store: &S,
     old: PageRef,
@@ -286,12 +308,11 @@ pub fn replace<S: PieceStore + ?Sized>(
     }
     let complete = splice.start == 0 && splice.end == 0 && splice.old_base == 0;
     let declared = replacement.declared()?;
-    if splice
-        .length
-        .checked_sub(splice.end - splice.start)
-        .and_then(|span| span.checked_add(declared))
-        .is_none_or(|total| total > MAX_FILE)
-    {
+    // One replacement cannot declare more bytes than a file may hold; the
+    // result's own length is bounded separately above. A net-shrinking splice
+    // (a deletion) is as legitimate as an insertion, so the interval never
+    // bounds the declared parts.
+    if declared > MAX_FILE {
         return Err(WorkspaceError::Capacity);
     }
     // A sequence with no canonical base at all - a fresh file's construction or
@@ -302,13 +323,55 @@ pub fn replace<S: PieceStore + ?Sized>(
         splice.old_base
     };
     let declared_parts = replacement.declare()?;
+    let inserted = declared_parts.iter().try_fold(0u64, |sum, piece| {
+        if piece.kind == PieceKind::Base {
+            Ok(sum)
+        } else {
+            sum.checked_add(piece.length)
+                .ok_or(WorkspaceError::Capacity)
+        }
+    })?;
     let mut walk = Walk::new(store, window, base_length, declared_parts);
     let mut level = if old == PageRef::NULL {
-        if splice.start != 0 || splice.end != 0 {
+        // A NULL root is either a version that is exactly one base read of its
+        // selected content, or a sequence that is empty; both fold without a
+        // tree. `current` is the length of the sequence being replaced.
+        let current = splice
+            .length
+            .checked_add(splice.end - splice.start)
+            .and_then(|span| span.checked_sub(declared))
+            .ok_or(WorkspaceError::Io)?;
+        if current == 0 {
+            // An empty sequence, or a construction with no base at all: the
+            // result is exactly the replacement.
+            if splice.start != 0 || splice.end != 0 {
+                return Err(WorkspaceError::Io);
+            }
+            walk.insert()?;
+        } else if current == splice.old_base {
+            // One base read of the selected content: the splice folds into
+            // that implicit base, so the retained prefix and tail read the
+            // base exactly as a stored leaf would.
+            if splice.end > splice.old_base {
+                return Err(WorkspaceError::Io);
+            }
+            if splice.start > 0 {
+                walk.emit(Piece::base(splice.start))?;
+            }
+            walk.insert()?;
+            if splice.end < splice.old_base {
+                walk.emit(Piece {
+                    kind: PieceKind::Base,
+                    length: splice.old_base - splice.end,
+                    offset: splice.end,
+                    payload: 0,
+                    custody: PageRef::NULL,
+                })?;
+            }
+        } else {
+            // A NULL root with a partially edited sequence cannot exist.
             return Err(WorkspaceError::Io);
         }
-        // A sequence built from no old root is exactly its replacement.
-        walk.insert()?;
         Vec::new()
     } else {
         let (level, covered) = walk.descend(old, splice, 0, 0)?;
@@ -322,26 +385,40 @@ pub fn replace<S: PieceStore + ?Sized>(
         level
     };
     walk.close_leaf()?;
-    if walk.removed != 0 {
-        // The replaced interval reached past the sequence it selected.
-        return Err(WorkspaceError::Io);
-    }
-    walk.fold.close()?;
+    let dropped = walk.dropped;
+    let shared = walk.shared;
+    walk.fold.close(splice.old_base)?;
     let fold = walk.fold;
-    if fold.length() != splice.length
-        || (fold.extents() == 0) != (splice.length == 0)
-        || walk.line != splice.length
-    {
+    if fold.length() != splice.length || walk.line != splice.length {
         eprintln!(
-            "LFS_PIECES_MISMATCH fold_length={} splice_length={} extents={} line={}",
+            "LFS_PIECES_MISMATCH fold_length={} splice_length={} line={}",
             fold.length(),
             splice.length,
-            fold.extents(),
             walk.line
         );
         return Err(WorkspaceError::Io);
     }
-    if fold.edits() > 256 || (!complete && fold.replacement() > MAX_REPLAY) {
+    // The exact replacement total carries over from the figure the replaced
+    // sequence recorded: a shared subtree's bytes are untouched by the
+    // interval, so only the bytes the folded leaves dropped and the bytes this
+    // splice inserted move it.
+    let total = splice
+        .old_replacement
+        .checked_sub(dropped)
+        .ok_or(WorkspaceError::Io)?
+        .checked_add(inserted)
+        .ok_or(WorkspaceError::Capacity)?;
+    if !shared && fold.replacement() != total {
+        // With every extent folded, the emitted bytes and the carried total
+        // must agree exactly.
+        eprintln!(
+            "LFS_PIECES_TOTAL emitted={} carried={}",
+            fold.replacement(),
+            total
+        );
+        return Err(WorkspaceError::Io);
+    }
+    if fold.edits() > 256 || (!complete && total > MAX_REPLAY) {
         return Err(WorkspaceError::Capacity);
     }
     level.extend(std::mem::take(&mut walk.leaves));
@@ -350,15 +427,10 @@ pub fn replace<S: PieceStore + ?Sized>(
     Ok(Pieces {
         root,
         extents: fold.extents(),
-        edits: fold.edits(),
-        replacement: fold.replacement(),
+        edits: if shared { u16::MAX } else { fold.edits() },
+        replacement: total,
         length: fold.length(),
     })
-}
-
-/// The arena's own page reads have no root owner to charge.
-fn clock(deadline: Instant) -> Result<(), WorkspaceError> {
-    crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)
 }
 
 /// The production page store: one file's pages live in an arena that the
@@ -390,8 +462,12 @@ struct Walk<'a, 'w, S: PieceStore + ?Sized> {
     window: &'w mut Window,
     /// The replacement extents, merged into the sequence in order.
     replacement: Vec<Piece>,
-    /// Replaced bytes still to be skipped from the retained sequence.
-    removed: u64,
+    /// Non-Base bytes the replaced interval dropped from the old sequence.
+    dropped: u64,
+    /// Whether any subtree the interval does not touch was shared by
+    /// reference: the fold then saw only part of the result, so the exact edit
+    /// count is unavailable to this splice.
+    shared: bool,
     fold: Fold,
     /// Records of the leaf currently open for writing.
     records: Vec<PieceRecord>,
@@ -399,7 +475,7 @@ struct Walk<'a, 'w, S: PieceStore + ?Sized> {
     leaves: Vec<ChildRef>,
     /// The last extent placed, for merging with the next one.
     last: Option<Piece>,
-    /// Logical length of every byte placed.
+    /// Logical length of every byte placed or carried.
     line: u64,
     base_length: u64,
 }
@@ -414,7 +490,8 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             store,
             window,
             replacement,
-            removed: 0,
+            dropped: 0,
+            shared: false,
             fold: Fold::new(),
             records: Vec::new(),
             leaves: Vec::new(),
@@ -442,7 +519,22 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             // exactly as it stands and placed by the lengths on its own path.
             // A subtree ending exactly where the interval begins is carried the
             // same way: the replacement is merged at the boundary above it.
-            return Ok((vec![ChildRef { page, length }], upper.min(splice.start)));
+            // The fold charges only the length; the subtree's own extents and
+            // replacement bytes stay unread, so the exact edit count is no
+            // longer available to this splice. The open leaf closes first: a
+            // folded sibling's records must become a page before this shared
+            // page, or the parent would place them out of order.
+            self.close_leaf()?;
+            self.shared = true;
+            self.fold.carry(length)?;
+            self.line = self
+                .line
+                .checked_add(length)
+                .filter(|line| *line <= MAX_FILE)
+                .ok_or(WorkspaceError::Capacity)?;
+            let mut pages = std::mem::take(&mut self.leaves);
+            pages.push(ChildRef { page, length });
+            return Ok((pages, upper.min(splice.start)));
         }
         if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces {
             return Err(WorkspaceError::Io);
@@ -469,7 +561,9 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                 covered = stop;
                 reads = reads.checked_add(child.length).ok_or(WorkspaceError::Io)?;
             }
-            Ok((level, covered))
+            // The merge point the parent folds at: the subtree's end, or the
+            // interval's start when the subtree reaches past it.
+            Ok((level, covered.min(splice.start)))
         }
     }
     /// Folds one leaf: the retained prefix, the replacement, then the retained
@@ -496,6 +590,12 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                 // reading its own origin from one byte past the overlap.
                 let from = at.max(splice.start);
                 let to = stop.min(splice.end);
+                if piece.kind != PieceKind::Base {
+                    self.dropped = self
+                        .dropped
+                        .checked_add(to - from)
+                        .ok_or(WorkspaceError::Io)?;
+                }
                 if from > at {
                     self.emit(Piece {
                         length: from - at,
@@ -622,227 +722,9 @@ impl RootOwner {
     }
 }
 
-/// A bounded ordered cursor over one file's extents, positioned at `offset`.
-pub fn cursor<'a, S: PieceStore + ?Sized>(
-    store: &'a S,
-    root: PageRef,
-    offset: u64,
-    length: u64,
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<Cursor<'a, S>, WorkspaceError> {
-    Cursor::seek(store, root, offset, length, window, deadline)
-}
-
-/// The extent of `root` that covers `offset`, with its derived logical start.
-pub fn piece_at<S: PieceStore + ?Sized>(
-    store: &S,
-    root: PageRef,
-    offset: u64,
-    length: u64,
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<(u64, Piece), WorkspaceError> {
-    Cursor::seek(store, root, offset, length, window, deadline)?.piece_at(offset, window)
-}
-
-/// A bounded ordered cursor over one file's extents. The Workspace's backing
-/// operations are deadline-bounded, so the cursor carries the operation's own
-/// deadline and checks it between its page reads.
-pub struct Cursor<'a, S: PieceStore + ?Sized> {
-    store: &'a S,
-    deadline: Instant,
-    stack: [Frame; MAX_HEIGHT as usize],
-    depth: usize,
-    leaf: Vec<PieceRecord>,
-    at: usize,
-    point: u64,
-}
-#[derive(Clone, Copy)]
-struct Frame {
-    page: PageRef,
-    count: u16,
-    index: u16,
-}
-impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
-    /// Positions a cursor at `offset`, which must be inside a sequence that
-    /// covers `length` bytes.
-    pub fn seek(
-        store: &'a S,
-        root: PageRef,
-        offset: u64,
-        length: u64,
-        window: &mut Window,
-        deadline: Instant,
-    ) -> Result<Self, WorkspaceError> {
-        let mut cursor = Self {
-            store,
-            deadline,
-            stack: [Frame {
-                page: PageRef::NULL,
-                count: 0,
-                index: 0,
-            }; MAX_HEIGHT as usize],
-            depth: 0,
-            leaf: Vec::new(),
-            at: 0,
-            point: 0,
-        };
-        if root == PageRef::NULL {
-            return if offset == 0 && length == 0 {
-                Ok(cursor)
-            } else {
-                Err(WorkspaceError::Io)
-            };
-        }
-        let mut page = root;
-        let mut lower = 0u64;
-        loop {
-            if cursor.depth == MAX_HEIGHT as usize {
-                return Err(WorkspaceError::Io);
-            }
-            let bytes = store.read(page, window)?;
-            if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces {
-                return Err(WorkspaceError::Io);
-            }
-            if bytes[48] == 0 {
-                let records = metadata_pages::decode_pieces_leaf(
-                    store.incarnation(),
-                    page,
-                    &bytes,
-                    MAX_FILE,
-                )?;
-                let mut at = 0;
-                while at < records.len() {
-                    let end = lower
-                        .checked_add(records[at].length)
-                        .ok_or(WorkspaceError::Io)?;
-                    if end > offset {
-                        break;
-                    }
-                    lower = end;
-                    at += 1;
-                }
-                if at == records.len() && offset != length {
-                    return Err(WorkspaceError::Io);
-                }
-                cursor.leaf = records;
-                cursor.at = at;
-                cursor.point = lower;
-                return Ok(cursor);
-            }
-            let (level, children) =
-                metadata_pages::decode_pieces_branch(store.incarnation(), page, &bytes, MAX_FILE)?;
-            if usize::from(level) != (MAX_HEIGHT as usize) - cursor.depth {
-                return Err(WorkspaceError::Io);
-            }
-            let mut selected = children.len() - 1;
-            for (index, child) in children.iter().enumerate() {
-                if offset < lower + child.length {
-                    selected = index;
-                    break;
-                }
-            }
-            lower = children[..selected].iter().try_fold(lower, |sum, c| {
-                sum.checked_add(c.length).ok_or(WorkspaceError::Io)
-            })?;
-            cursor.stack[cursor.depth] = Frame {
-                page: children[selected].page,
-                count: children.len() as u16,
-                index: selected as u16,
-            };
-            cursor.depth += 1;
-            page = children[selected].page;
-        }
-    }
-    /// The next extent in sequence order, with its derived logical start.
-    pub fn next(&mut self, window: &mut Window) -> Result<Option<(u64, Piece)>, WorkspaceError> {
-        loop {
-            clock(self.deadline)?;
-            if self.at < self.leaf.len() {
-                let record = self.leaf[self.at];
-                let start = self.point;
-                self.point = self
-                    .point
-                    .checked_add(record.length)
-                    .ok_or(WorkspaceError::Io)?;
-                self.at += 1;
-                return Ok(Some((start, Piece::from_record(record)?)));
-            }
-            if !self.advance(window)? {
-                return Ok(None);
-            }
-        }
-    }
-    /// The extent that covers `offset`, with its derived logical start.
-    pub fn piece_at(
-        mut self,
-        offset: u64,
-        window: &mut Window,
-    ) -> Result<(u64, Piece), WorkspaceError> {
-        clock(self.deadline)?;
-        let (start, piece) = self.next(window)?.ok_or(WorkspaceError::Io)?;
-        if offset < start || offset >= start.checked_add(piece.length).ok_or(WorkspaceError::Io)? {
-            return Err(WorkspaceError::Io);
-        }
-        Ok((start, piece))
-    }
-    /// Moves to the next leaf, if the sequence holds one.
-    fn advance(&mut self, window: &mut Window) -> Result<bool, WorkspaceError> {
-        clock(self.deadline)?;
-        while self.depth > 0 {
-            self.depth -= 1;
-            let frame = self.stack[self.depth];
-            let next = frame.index.saturating_add(1);
-            if next < frame.count {
-                self.stack[self.depth].index = next;
-                return self.descend(window).map(|()| true);
-            }
-        }
-        Ok(false)
-    }
-    /// Descends the leftmost path from the current frame down to one leaf.
-    fn descend(&mut self, window: &mut Window) -> Result<(), WorkspaceError> {
-        loop {
-            clock(self.deadline)?;
-            if self.depth >= MAX_HEIGHT as usize {
-                return Err(WorkspaceError::Io);
-            }
-            let page = self.stack[self.depth].page;
-            let bytes = self.store.read(page, window)?;
-            if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces {
-                return Err(WorkspaceError::Io);
-            }
-            if bytes[48] == 0 {
-                self.leaf = metadata_pages::decode_pieces_leaf(
-                    self.store.incarnation(),
-                    page,
-                    &bytes,
-                    MAX_FILE,
-                )?;
-                self.at = 0;
-                return Ok(());
-            }
-            let (level, children) = metadata_pages::decode_pieces_branch(
-                self.store.incarnation(),
-                page,
-                &bytes,
-                MAX_FILE,
-            )?;
-            if usize::from(level) != (MAX_HEIGHT as usize) - self.depth {
-                return Err(WorkspaceError::Io);
-            }
-            self.depth += 1;
-            self.stack[self.depth - 1].count = children.len() as u16;
-            self.stack[self.depth - 1].index = 0;
-            self.stack[self.depth] = Frame {
-                page: children[0].page,
-                count: 0,
-                index: 0,
-            };
-        }
-    }
-}
+/// The bounded reader for one file's extents, re-exported so the splice engine
+/// and its callers stay on one module path.
+pub use super::metadata_cursor::{cursor, piece_at, Cursor};
 
 /// Writes every branch level above the folded and shared leaves. Every
 /// non-root branch keeps at least two children, so the tree stays canonical.

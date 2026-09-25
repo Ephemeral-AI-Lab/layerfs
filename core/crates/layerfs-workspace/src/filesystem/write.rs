@@ -672,17 +672,13 @@ impl Workspace {
             inode.replacement = 0;
             previous = PageRef::NULL;
         }
+        // The replacement extents of this mutation, in order. A version whose
+        // sequence is one implicit base read folds them into that base inside
+        // the splice itself; a stored sequence takes them as the interval's
+        // replacement, and a fresh construction takes them as the whole result.
         let mut parts = metadata_pieces::Replacement::new();
-        if previous == PageRef::NULL {
-            // A fresh incomplete file constructs its content and has no
-            // canonical base at all; every other version without a stored
-            // sequence is exactly one base read of its selected content.
-            if inode.length > 0 && !inode.fresh {
-                parts.extend(Piece::base(inode.length));
-            }
-            for piece in stream_pieces.as_deref().unwrap_or(&replacement) {
-                parts.extend(*piece);
-            }
+        for piece in stream_pieces.as_deref().unwrap_or(&replacement) {
+            parts.extend(*piece);
         }
         let candidate = host.candidate(arena, generation, needs_completion, parent)?;
         let mut portions = parts.into_parts();
@@ -704,6 +700,7 @@ impl Workspace {
                     start,
                     end,
                     old_base: inode.base_length,
+                    old_replacement: inode.replacement,
                     length,
                 },
                 &mut portions,

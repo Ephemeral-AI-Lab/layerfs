@@ -821,6 +821,14 @@ impl RootOwner {
         }
         let r = self.arena.allocate_slot(self, window, deadline)?;
         let state = encode(r, &mut window.0[..PAGE])?;
+        // A page's edges are declared by the page itself, and the window is the
+        // only place the encoded bytes exist: the ledger write below reuses the
+        // same window page, so the edges must be taken before it.
+        let edges = super::metadata_index::edges_raw(
+            self.arena.directory.incarnation,
+            r,
+            &window.0[..PAGE],
+        )?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
         self.arena.set_owner(
             r,
@@ -850,11 +858,6 @@ impl RootOwner {
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .edge_progress = Some((r, 0));
-        let edges = super::metadata_index::edges_raw(
-            self.arena.directory.incarnation,
-            r,
-            &window.0[..PAGE],
-        )?;
         for (index, edge) in edges.into_iter().enumerate() {
             self.arena.change_refs(edge, 1, window, deadline)?;
             self.state

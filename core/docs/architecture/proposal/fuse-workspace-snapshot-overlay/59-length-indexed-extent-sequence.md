@@ -52,9 +52,12 @@ A **pieces leaf** (`level == 0`) holds packed 32-byte records:
 | 28..32 | zero |
 
 A **pieces branch** (`level > 0`) holds 16-byte child references: an 8-byte page
-identity and an 8-byte subtree logical length. Every non-root branch keeps at
-least two children, so the tree is canonical and its height is exactly what the
-extent count requires.
+identity and an 8-byte subtree logical length. Levels are **relative**: a branch
+directly above the leaves declares `1`, and every branch declares exactly one
+below its parent, so the root declares the tree's height. A reader accepts a
+root at any declared level `1 ..= 7` and requires each deeper branch to declare
+one below its parent. Every non-root branch keeps at least two children, so the
+tree is canonical and its height is exactly what the extent count requires.
 
 `MAX_EXTENT` is `2^24 - 1`. A larger extent is stored as several adjacent parts,
 which is a page boundary and never a new logical byte. The declared level
@@ -69,7 +72,10 @@ represented inside those bounds fails with `Capacity`.
    from its own child lengths (and its canonical read offset from the extents).
 2. Share every subtree the replaced interval does not touch, by reference. A
    subtree that ends exactly where the interval begins is carried the same way;
-   the replacement is merged at the boundary above it.
+   the replacement is merged at the boundary above it. A shared subtree's
+   declared length is charged to the result, but its extents and replacement
+   bytes stay unread, and the open leaf closes before the shared page so the
+   parent places every page in order.
 3. In the leaves the interval touches, retain the bytes before it, drop the
    overlap, and retain the bytes after it. An extent that straddles a boundary is
    split; its retained part keeps reading its own origin from one byte past what
@@ -78,10 +84,36 @@ represented inside those bounds fails with `Capacity`.
 5. Pack the folded leaves and every branch level above them; the result is a new
    root that shares all untouched pages with the old one.
 
+A **NULL old root** folds into the sequence the version already is. The length
+of the sequence being replaced is derived from the splice arithmetic: a version
+that is exactly one base read of its selected content (a never-edited file, or a
+version a capture just converted) folds the interval into that implicit base —
+the retained prefix and tail are base extents exactly as a stored leaf would
+hold them; an empty sequence (a fresh file, or a version truncated to nothing)
+takes the replacement as its whole result. Any other NULL-root length cannot
+exist and is refused.
+
 `Fold` charges each published extent before the page that names it is written,
 validating length, shape, canonical offsets inside the recorded base length and
-the running edit count. A refused splice publishes no root and leaves the
-previous sequence exactly as it was.
+the running edit count. The count includes the sequence's trailing deviation
+from its base — a final run of replacement bytes, or a tail that ends short of
+it (a truncation, which lowering later derives as one deletion edit).
+
+Two figures are **recorded** on the inode for the Commit walk:
+
+- `edits`: the maximal replacement runs the splice itself counted, or `u16::MAX`
+  when a shared subtree made the exact figure unavailable. Lowering always
+  derives the exact count from the sequence and cross-checks it, except for the
+  `u16::MAX` marker, which lowering resolves and `save` never reuses a base for.
+- `replacement`: the sequence's **exact** replacement bytes, carried by
+  arithmetic from the figure the replaced sequence recorded — minus what the
+  interval dropped, plus what this splice inserted. A shared subtree's bytes
+  are untouched by the interval, so they carry over without being read; when
+  nothing was shared the fold's own emitted total must agree with the carried
+  figure exactly, or the splice is refused.
+
+A refused splice publishes no root and leaves the previous sequence exactly as
+it was.
 
 ## 4. Bounded cursor
 
