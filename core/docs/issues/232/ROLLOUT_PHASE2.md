@@ -1,9 +1,14 @@
 # #232 Phase 2: complete and optimize the Exec/FUSE edit families
 
 > **Status:** Current planning checklist; no release candidate exists.
-> The all-ioctl route is prospective; no #232 performance admission exists.
+> The all-ioctl v3 route has 56/56 completed, independently verified cases;
+> every cold latency row is cache-ineligible. No #232 performance admission exists.
 
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
+The [retained 56-case v3 report](evidence/phase2-all-ioctl/REPORT.md) and
+[complete row derivation](evidence/phase2-all-ioctl/derived.json) record the
+functional rollout, cache classification, raw aim miss and remaining admission
+gap. Historical v2 and #241 v4 receipts remain unchanged.
 The [#241 four-case report](https://github.com/Ephemeral-AI-Lab/layerfs/blob/87b10ab1b2144f1d7fb54f1be9419095f891fea0/core/docs/issues/241/evidence/phase4-v4-admission/REPORT.md)
 records four completed, independently verified public SDK Exec → FUSE ioctl →
 Commit middle inserts and a separate 264/264 position proof. Its raw

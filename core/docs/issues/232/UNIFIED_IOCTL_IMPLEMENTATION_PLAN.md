@@ -1,8 +1,8 @@
 # #232 unified mounted range edit: implementation plan
 
-> **Status: Current planning checklist; no release candidate exists.**
-> Drafted 2026-09-25 after adversarial source and receipt review. No new
-> carrier experiment, product implementation or benchmark sample has run.
+> **Status: Implementation and functional campaign complete; no release candidate.**
+> The 56-case v3 campaign is independently verified but cache-ineligible for
+> cold latency; the capped-500 MiB raw insert aim also misses.
 
 The owner selected **one ioctl range-replace route for all 56 registered
 #232 edits**. One replacement is limited to **8 MiB**, matching the current
@@ -185,40 +185,41 @@ Clippy, formatting and product-boundary guard once at the frozen final
 source. Keep all failures and receipts append-only, with no unchanged
 performance-arm rerun.
 
-- [ ] **0 — Contract:** commit the all-ioctl route amendment, one semantic
+- [x] **0 — Contract:** commit the all-ioctl route amendment, one semantic
   operation, 8 MiB/4 GiB limits, no automatic fallback, cache policy,
   versioned ABI, new scenario IDs and provisional targets. Documentation
   only; production LOC delta 0.
-- [ ] **1 — Kernel carrier proof:** commit the focused unmodified-fuser
+- [x] **1 — Kernel carrier proof:** commit the focused unmodified-fuser
   experiment and its raw GO/NO-GO result. Test bounded frames, 64 KiB
   ordering, no partial publication and cleanup. No benchmark speed claim.
-- [ ] **2 — Phase 1B attribution:** in one product commit add bounded LFT1
+- [x] **2 — Phase 1B attribution:** in one product commit add bounded LFT1
   children and counts without optimizing; in a separate evidence commit
   collect one labelled 1 MiB and capped-500 MiB diagnostic at the new
   source. Use only layerfs-telemetry for reported wall/CPU/RSS.
-- [ ] **3 — Phase 1B causal fix and proof, if supported:** change only the
-  measured finalization substep with focused test and same-commit
-  architecture update. At a new frozen source, run the four public SDK
-  ioctl cases once, independently verify and report cache eligibility.
-  If no fix is justified, record the cause and do not repeat unchanged arms.
-- [ ] **4 — Versioned staged carrier:** commit wire validation and private
+- [x] **3 — Phase 1B causal decision: no product change.** The retained
+  diagnostic located growth at batch drain but did not isolate a safe
+  substep fix; unchanged #241 arms were not repeated.
+- [x] **4 — Versioned staged carrier:** commit wire validation and private
   stage lifecycle separately from one-APPLY Workspace integration.
   Prove 4 KiB inline, 64 KiB staged and 8 MiB boundary operations,
   definite refusal above 8 MiB, one revision, open-FD/fstat/read/EOF
   coherence, unknown APPLY custody and no silent POSIX fallback.
-- [ ] **5 — Generic tool and new 56-case registry:** use only offset,
+- [x] **5 — Generic tool and new 56-case registry:** use only offset,
   delete length and replacement stream in the tool; freeze exact command,
   tool/image/source hashes, callback bounds, oracle and cache treatment for
   each row. Every product operation uses public SDK; every measured edit
   uses mounted ioctl. Keep v2 evidence unchanged.
-- [ ] **6 — Phase 1C count decision:** one frozen 1/32/128 semantic-edit
+- [x] **6 — Phase 1C count decision:** one frozen 1/32/128 semantic-edit
   diagnostic, C1 locality and cutoff edges. A piece-index change needs
   superlinear visits **and** material LFT1 wall share; keep product,
   architecture, focused proof and evidence in separate commits. Do not
   rewrite C1 merely because v0.1.6 was fast.
-- [ ] **7 — Final 56-case qualification:** at the frozen clean source,
+- [ ] **7 — Final 56-case latency qualification remains open.** At the frozen clean source,
   attempt each locked-release SDK Exec→ioctl→Commit selection once;
   enforce complete-command ≤15 s, one construction worker, LFT1-only
   operation wall/CPU/RSS, declared cache state, independent verification
   and confirmed Sandbox Delete. Report every GOAL_MET, TARGET_MISS, FAIL,
   INELIGIBLE, INCOMPLETE and NOT_RUN cell, without a G2 speed ratio.
+  The [retained v3 campaign](evidence/phase2-all-ioctl/REPORT.md) completed
+  all 56 functional and verifier routes, but all 56 cold latency rows are
+  `INELIGIBLE` and the capped-500 MiB raw insert aim missed.
