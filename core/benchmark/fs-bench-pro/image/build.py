@@ -22,6 +22,7 @@ sys.path.insert(0, str(BENCH))
 from shared import edit_contract as contract  # noqa: E402
 from shared import edit_insert_v3  # noqa: E402
 from shared import edit_insert_v4  # noqa: E402
+from shared import edit_all_ioctl_v3  # noqa: E402
 from runner import edit_workload_seal, identities  # noqa: E402
 from families import (edit_canonical_chunk_count as canonical,  # noqa: E402
                       edit_length_changing as changing,
@@ -41,11 +42,31 @@ def run(command, **kwargs):
     return result.stdout
 
 
-def payload_files(context, scenario_version):
+def payload_files(context, scenario_version, all_ioctl=False):
     """Writes one replacement payload per registered operation, from the recipe."""
     directory = context / "payloads"
     directory.mkdir(parents=True, exist_ok=True)
     written = {}
+    if all_ioctl:
+        operations = {operation["key"]: operation for family in
+                      (preserving, changing, canonical) for operation in family.OPERATIONS}
+        for row in edit_all_ioctl_v3.registry()["cases"]:
+            element = row["replacement_stream"][0]
+            if element["kind"] != "bytes":
+                continue
+            operation = operations[row["operation_key"]]
+            data = contract.payload_bytes(operation["payload_seed"],
+                                          row["expected_accepted_literal_bytes"],
+                                          operation["replacement_kind"])
+            name = Path(element["payload_path"]).name
+            if hashlib.sha256(data).hexdigest() != row["replacement_sha256"]:
+                raise SystemExit(f"all-ioctl payload mismatch: {row['scenario_id']}")
+            path = directory / name
+            if path.exists() and path.read_bytes() != data:
+                raise SystemExit(f"all-ioctl payload name collision: {name}")
+            path.write_bytes(data)
+            written[name] = {"bytes": len(data), "sha256": SHA(path)}
+        return written
     if scenario_version in (3, 4):
         rows = (edit_insert_v4 if scenario_version == 4 else edit_insert_v3).registry()
         if len({row["replacement_sha256"] for row in rows}) != 1:
@@ -78,19 +99,27 @@ def main():
     parser.add_argument("--out")
     parser.add_argument("--scenario-version", type=int, choices=[2, 3, 4], default=2)
     parser.add_argument("--complexity-diagnostic", action="store_true")
+    parser.add_argument("--all-ioctl", action="store_true")
     parser.add_argument("--debug-daemon", action="store_true")
     arguments = parser.parse_args()
     if arguments.complexity_diagnostic and arguments.scenario_version != 4:
         raise SystemExit("complexity image requires the published v4 inline carrier")
-    selected = ({3: edit_insert_v3, 4: edit_insert_v4}.get(arguments.scenario_version, contract))
-    if selected is not contract:
+    if arguments.all_ioctl and (arguments.complexity_diagnostic or arguments.scenario_version != 2):
+        raise SystemExit("all-ioctl image is a distinct #232 v3 selection")
+    selected = (edit_all_ioctl_v3 if arguments.all_ioctl else
+                {3: edit_insert_v3, 4: edit_insert_v4}.get(arguments.scenario_version, contract))
+    if selected is edit_all_ioctl_v3:
+        selected.registry()
+    elif selected is not contract:
         selected.validate_registry()
     elif SHA(BENCH / contract.REGISTRY_PATH) != contract.REGISTRY_SHA256:
         raise SystemExit("v2 registry identity changed")
-    context = (CORE / "target/exec-fuse-complexity-v1/image" if arguments.complexity_diagnostic
+    context = (CORE / "target/exec-fuse-all-ioctl-v3/image" if arguments.all_ioctl
+               else CORE / "target/exec-fuse-complexity-v1/image" if arguments.complexity_diagnostic
                else CORE / f"target/exec-fuse-insert-v{arguments.scenario_version}/image"
                if selected is not contract else CONTEXT)
-    tag = ("layerfs-exec-fuse-complexity-v1:issue232" if arguments.complexity_diagnostic
+    tag = ("layerfs-exec-fuse-all-ioctl-v3:issue232" if arguments.all_ioctl
+           else "layerfs-exec-fuse-complexity-v1:issue232" if arguments.complexity_diagnostic
            else f"layerfs-exec-fuse-insert-v{arguments.scenario_version}:issue241"
            if arguments.scenario_version == 4 else
            "layerfs-exec-fuse-insert:issue241" if arguments.scenario_version == 3 else TAG)
@@ -108,7 +137,7 @@ def main():
     for source, name in ((daemon, "layerfs-daemon"), (tool, "layerfs-edit-tool")):
         (context / name).write_bytes(source.read_bytes())
         (context / name).chmod(0o755)
-    payloads = payload_files(context, arguments.scenario_version)
+    payloads = payload_files(context, arguments.scenario_version, arguments.all_ioctl)
     dockerfile = context / "Dockerfile"
     dockerfile.write_text(
         f"FROM {BASE}\n"
@@ -120,7 +149,8 @@ def main():
     run(["docker", "build", "-q", "-t", tag, str(context)])
     image = run(["docker", "image", "inspect", tag, "--format", "{{.Id}}"]).strip()
     record = {
-        "schema": ("core-fs-bench-pro-complexity-image-v1" if arguments.complexity_diagnostic
+        "schema": ("core-fs-bench-pro-all-ioctl-image-v3" if arguments.all_ioctl
+                   else "core-fs-bench-pro-complexity-image-v1" if arguments.complexity_diagnostic
                    else f"core-fs-bench-pro-exec-fuse-insert-image-v{arguments.scenario_version}" if
                    selected is not contract else
                    "core-fs-bench-pro-exec-fuse-edit-image-v1"),
@@ -137,9 +167,11 @@ def main():
         "daemon_sha256": SHA(context / "layerfs-daemon"),
         "edit_tool_sha256": SHA(context / "layerfs-edit-tool"),
         "registry_sha256": selected.REGISTRY_SHA256,
-        "scenario_version": arguments.scenario_version,
-        "carrier_abi": (selected.ABI if selected is not contract else None),
+        "scenario_version": 3 if arguments.all_ioctl else arguments.scenario_version,
+        "carrier_abi": ("LFS2/LFE2+LFB3/LFD3/LFA3" if arguments.all_ioctl else
+                        selected.ABI if selected is not contract else None),
         "complexity_diagnostic": arguments.complexity_diagnostic,
+        "all_ioctl": arguments.all_ioctl,
         "payloads": payloads,
     }
     output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")

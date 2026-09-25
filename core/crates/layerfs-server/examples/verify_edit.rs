@@ -145,15 +145,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "workspace-exec-fuse-range-splice-batch-commit-v1"
             | "workspace-exec-fuse-range-splice-complexity-commit-v1"
     );
+    let generic = contract == "workspace-exec-mounted-range-replace-v3";
     if case.get("scenario_id")?.ends_with("-exec-v4") != v4 {
         return Err("v4 scenario and operation contract differ".into());
     }
     if case.get("scenario_id")?.ends_with("-complexity-v1") != complexity {
         return Err("complexity scenario and operation contract differ".into());
     }
+    if case.get("scenario_id")?.ends_with("-exec-ioctl-v3") != generic {
+        return Err("all-ioctl scenario and operation contract differ".into());
+    }
     let checked_splice =
-        v4 || complexity || contract == "workspace-exec-fuse-range-splice-commit-v3";
-    let expected_metadata = (v4 || complexity)
+        v4 || complexity || generic || contract == "workspace-exec-fuse-range-splice-commit-v3";
+    let expected_metadata = (v4 || complexity || generic)
         .then(|| metadata_expectation(&case))
         .transpose()?;
     if checked_splice {
@@ -161,14 +165,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("range splice requires a full-file digest".into());
         }
         let expected_root = case.get("canonical_root_expected")?;
-        if (expected_root != "-" || !complexity)
+        if (expected_root != "-" || !(complexity || generic))
             && (expected_root.len() != 64
                 || !expected_root.bytes().all(|byte| byte.is_ascii_hexdigit()))
         {
             return Err("range splice expected canonical root is absent or malformed".into());
         }
         let expected_count = case.get("canonical_count_expected")?;
-        if (expected_count != "-" || !complexity) && expected_count.parse::<u64>()? == 0 {
+        if (expected_count != "-" || !(complexity || generic))
+            && expected_count.parse::<u64>()? == 0
+        {
             return Err("range splice expected canonical count is zero".into());
         }
     }

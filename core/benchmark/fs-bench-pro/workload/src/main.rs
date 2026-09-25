@@ -49,6 +49,7 @@ struct Options {
     count: u64,
     direction: Option<String>,
     payload: Option<PathBuf>,
+    stream: Option<String>,
 }
 
 fn usage() -> Error {
@@ -56,7 +57,8 @@ fn usage() -> Error {
         ErrorKind::InvalidInput,
         "usage: layerfs-edit-tool <pwrite|truncate|extend|shift|splice|splice-batch> --file P --expect-size N \
          [--offset N --length N --payload P | --offset N --delete-length N --length N \
-         --direction grow|shrink [--payload P] | --size N] [--count 1|32|128 --output-version 5 for splice-batch]",
+         --direction grow|shrink [--payload P] | --size N] [--stream bytes:P|zero:N|empty \
+         --output-version 5 for generic splice] [--count 1|32|128 for splice-batch]",
     )
 }
 
@@ -83,7 +85,7 @@ fn parsed(args: &[String]) -> Result<Options, Error> {
     let output_version = optional("output-version")?.unwrap_or(3);
     if !matches!(output_version, 3 | 4 | 5)
         || (output_version == 4 && operation != "splice")
-        || (output_version == 5 && operation != "splice-batch")
+        || (output_version == 5 && !matches!(operation.as_str(), "splice" | "splice-batch"))
         || (operation == "splice-batch" && output_version != 5)
     {
         return Err(Error::new(
@@ -103,6 +105,7 @@ fn parsed(args: &[String]) -> Result<Options, Error> {
         count: optional("count")?.unwrap_or(0),
         direction: values.get("direction").cloned(),
         payload: values.get("payload").map(PathBuf::from),
+        stream: values.get("stream").cloned(),
     })
 }
 
@@ -243,6 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = parsed(&args)?;
     let file = opened(&options)?;
     let mut shifted = 0u64;
+    let mut generic = None;
     let post_state_mtime = match options.operation.as_str() {
         "pwrite" => {
             let bytes = payload(&options)?;
@@ -272,7 +276,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(target_os = "linux")]
             {
                 Some(if options.operation == "splice" {
-                    splice::run(&options, &file)?
+                    if options.output_version == 5 {
+                        let (mtime, logical, literal, ioctls) =
+                            splice::run_generic(&options, &file)?;
+                        generic = Some((logical, literal, ioctls));
+                        mtime
+                    } else {
+                        splice::run(&options, &file)?
+                    }
                 } else {
                     splice::run_batch(&options, &file)?
                 })
@@ -287,7 +298,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let final_size = file.metadata()?.len();
-    let line = result_line(&options, final_size, shifted, post_state_mtime)?;
+    let line = result_line(&options, final_size, shifted, post_state_mtime, generic)?;
     println!("{line}");
     // The descriptor is closed by drop; no fsync is issued, because the product
     // makes no durability promise about Workspace backing.
@@ -300,6 +311,7 @@ fn result_line(
     final_size: u64,
     shifted: u64,
     post_state_mtime: Option<(i64, u32)>,
+    generic: Option<(u64, u64, u64)>,
 ) -> Result<String, Error> {
     let mut line = String::new();
     write!(
@@ -320,12 +332,20 @@ fn result_line(
         )
         .expect("string write");
     }
-    if options.output_version == 5 {
+    if options.output_version == 5 && options.operation == "splice-batch" {
         line.pop();
         write!(
             line,
             ",\"edit_count\":{},\"accepted_bytes\":4096}}",
             options.count
+        )
+        .expect("string write");
+    }
+    if let Some((logical, literal, ioctls)) = generic {
+        line.pop();
+        write!(
+            line,
+            ",\"logical_bytes\":{logical},\"literal_bytes\":{literal},\"ioctl_calls\":{ioctls}}}"
         )
         .expect("string write");
     }
@@ -350,23 +370,29 @@ mod tests {
             count: 0,
             direction: None,
             payload: None,
+            stream: None,
         };
         assert_eq!(
-            result_line(&options, 5, 0, None).unwrap(),
+            result_line(&options, 5, 0, None, None).unwrap(),
             "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":5,\"shifted_bytes\":0}"
         );
         options.output_version = 4;
         assert_eq!(
-            result_line(&options, 5, 0, Some((-2, 750_000_000))).unwrap(),
+            result_line(&options, 5, 0, Some((-2, 750_000_000)), None).unwrap(),
             "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":5,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000}"
         );
-        assert!(result_line(&options, 5, 0, None).is_err());
+        assert!(result_line(&options, 5, 0, None, None).is_err());
         options.operation = "splice-batch".into();
         options.output_version = 5;
         options.count = 32;
         assert_eq!(
-            result_line(&options, 4097, 0, Some((-2, 750_000_000))).unwrap(),
+            result_line(&options, 4097, 0, Some((-2, 750_000_000)), None).unwrap(),
             "{\"status\":\"PASS\",\"operation\":\"splice-batch\",\"direction\":\"-\",\"final_bytes\":4097,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000,\"edit_count\":32,\"accepted_bytes\":4096}"
+        );
+        options.operation = "splice".into();
+        assert_eq!(
+            result_line(&options, 4097, 0, Some((-2, 750_000_000)), Some((65536, 0, 3))).unwrap(),
+            "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":4097,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000,\"logical_bytes\":65536,\"literal_bytes\":0,\"ioctl_calls\":3}"
         );
     }
 }

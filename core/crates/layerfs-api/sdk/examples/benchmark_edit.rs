@@ -124,6 +124,7 @@ fn confirmed_splice(
     final_bytes: u64,
     operation: &str,
     count: Option<u64>,
+    generic: Option<(u64, u64, u64)>,
 ) -> Option<(i64, u32)> {
     if exec.exit_status != Some(0) || exec.stdout_truncated || exec.stderr_truncated {
         return None;
@@ -135,9 +136,15 @@ fn confirmed_splice(
     let (seconds, tail) = output
         .strip_prefix(&prefix)?
         .split_once(",\"mtime_nanoseconds\":")?;
-    let expected_tail = count.map_or("}\n".to_string(), |count| {
-        format!(",\"edit_count\":{count},\"accepted_bytes\":4096}}\n")
-    });
+    let expected_tail = if let Some((logical, literal, ioctls)) = generic {
+        format!(
+            ",\"logical_bytes\":{logical},\"literal_bytes\":{literal},\"ioctl_calls\":{ioctls}}}\n"
+        )
+    } else {
+        count.map_or("}\n".to_string(), |count| {
+            format!(",\"edit_count\":{count},\"accepted_bytes\":4096}}\n")
+        })
+    };
     let nanoseconds = tail.strip_suffix(&expected_tail)?;
     let seconds = seconds.parse::<i64>().ok()?;
     let nanoseconds = nanoseconds.parse::<u32>().ok()?;
@@ -224,6 +231,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-batch-commit-v1";
     let complexity_single = case.get("operation_contract_id")?
         == "workspace-exec-fuse-range-splice-complexity-commit-v1";
+    let generic_ioctl =
+        case.get("operation_contract_id")? == "workspace-exec-mounted-range-replace-v3";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -306,6 +315,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+    let expected_generic = if generic_ioctl {
+        Some((
+            case.number("expected_accepted_logical_bytes")?,
+            case.number("expected_accepted_literal_bytes")?,
+            case.number("expected_ioctl_calls")?,
+        ))
+    } else {
+        None
+    };
     let mut edit_ns = 0u128;
     let mut commit_ns = 0u128;
     let mut observed_mtime = None;
@@ -325,12 +343,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result
                 });
                 match edit {
-                    Ok(exec) if v4 || v5 || complexity_single => {
+                    Ok(exec) if v4 || v5 || complexity_single || generic_ioctl => {
                         observed_mtime = confirmed_splice(
                             &exec,
                             final_bytes,
                             if v5 { "splice-batch" } else { "splice" },
                             expected_batch_count,
+                            expected_generic,
                         );
                         if observed_mtime.is_none() {
                             return Err(format!(
@@ -392,7 +411,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
     let unmount = workspaces.unmount(&mount.id);
-    let (delete, log_capture) = if v4 || v5 || complexity_single {
+    let (delete, log_capture) = if v4 || v5 || complexity_single || generic_ioctl {
         let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
         (delete, Some(capture))
     } else {
@@ -426,7 +445,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.range_shifted_suffix_bytes)
         .unwrap_or(0);
-    let v4_metadata = if v4 || v5 || complexity_single {
+    let v4_metadata = if v4 || v5 || complexity_single || generic_ioctl {
         let capture = log_capture.as_ref().expect("v4 captured logs");
         match observed_mtime {
             Some((seconds, nanoseconds)) => format!(
@@ -522,22 +541,31 @@ mod tests {
             stderr_truncated: false,
         };
         assert_eq!(
-            confirmed_splice(&exec, 12288, "splice", None),
+            confirmed_splice(&exec, 12288, "splice", None, None),
             Some((1_700_000_000, 123))
         );
         exec.stdout.extend_from_slice(b"extra");
-        assert_eq!(confirmed_splice(&exec, 12288, "splice", None), None);
+        assert_eq!(confirmed_splice(&exec, 12288, "splice", None, None), None);
         exec.stdout.truncate(exec.stdout.len() - 5);
         exec.stdout_truncated = true;
-        assert_eq!(confirmed_splice(&exec, 12288, "splice", None), None);
+        assert_eq!(confirmed_splice(&exec, 12288, "splice", None, None), None);
         exec.stdout_truncated = false;
         exec.stdout = b"{\"status\":\"PASS\",\"operation\":\"splice-batch\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0,\"mtime_seconds\":1700000000,\"mtime_nanoseconds\":123,\"edit_count\":32,\"accepted_bytes\":4096}\n".to_vec();
         assert_eq!(
-            confirmed_splice(&exec, 12288, "splice-batch", Some(32)),
+            confirmed_splice(&exec, 12288, "splice-batch", Some(32), None),
             Some((1_700_000_000, 123))
         );
         assert_eq!(
-            confirmed_splice(&exec, 12288, "splice-batch", Some(128)),
+            confirmed_splice(&exec, 12288, "splice-batch", Some(128), None),
+            None
+        );
+        exec.stdout = b"{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0,\"mtime_seconds\":1700000000,\"mtime_nanoseconds\":123,\"logical_bytes\":65536,\"literal_bytes\":0,\"ioctl_calls\":3}\n".to_vec();
+        assert_eq!(
+            confirmed_splice(&exec, 12288, "splice", None, Some((65536, 0, 3))),
+            Some((1_700_000_000, 123))
+        );
+        assert_eq!(
+            confirmed_splice(&exec, 12288, "splice", None, Some((65536, 0, 18))),
             None
         );
     }
