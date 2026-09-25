@@ -1,0 +1,102 @@
+{
+  "binaries": {
+    "benchmark_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/binary-archive/repeated128-liveness/benchmark_edit",
+      "sha256": "83f77b060ef5e64e5271a7db7ddf6b6b5b792e2d969ec130654fbbf5514e45ec"
+    },
+    "verify_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/binary-archive/repeated128-liveness/verify_edit",
+      "sha256": "db289e3171f06c4fb261a6daeb3e711babf7f78d9419987805a75560c9a6256b"
+    }
+  },
+  "cache_contract": "macOS Store mincore; Linux FUSE backing INELIGIBLE",
+  "cargo_lock_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+  "clone_method": "independent-writable-byte-copy",
+  "complete_command_budget_ns": 15000000000,
+  "construction_workers": 1,
+  "cursor_key_sha256": "21630ef1e2fb70244266edb4212454c1c0d13fb539629c2fb2dad22a27ef762c",
+  "diagnostic_code_commit": "aaf4dde930e44cfc7994049ecbc3d8f7c48e697f",
+  "diagnostic_scenario_id": "repeated-128-liveness-diagnostic-v1",
+  "harness_seal": "3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a",
+  "image": {
+    "all_ioctl": false,
+    "base": "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "base_image_id": "sha256:c1f7103daef16afedb4dfd0d3d058bb5d413a980a706c3ac2bd103fbf1ac825a",
+    "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "carrier_abi": {
+      "caller_order": [
+        "open",
+        "STATE",
+        "EDIT",
+        "STATE",
+        "fstat",
+        "bounded-readback"
+      ],
+      "contract": "linux-projected-range-request-v2",
+      "edit": {
+        "command": "0x5060f541",
+        "input_bytes": 4192,
+        "magic": "LFE2",
+        "max_replacement_bytes": 4096,
+        "output_bytes": 0
+      },
+      "state": {
+        "command": "0xc058f540",
+        "input_bytes": 88,
+        "magic": "LFS2",
+        "output_bytes": 88
+      },
+      "version": 2
+    },
+    "complexity_diagnostic": true,
+    "daemon_sha256": "c594fadca186f88b86d516a92342ddb991c1f182a803e1357b1fde5f8265b801",
+    "diagnostic_dockerfile_sha256": "2051e50a0da6be4eae1a7f70607b6c67cc08f5d00f792a8d679e90c5a5bb1834",
+    "dockerfile_sha256": "767d0fa0da1e8e842618a4a9c88f50e5f5444e374d6591e8690f76f48fa07267",
+    "edit_tool_sha256": "bc5b2272457ca987d020bbc49741521e82896e3c632cff076f51d6b90be0b376",
+    "image_id": "sha256:259986fc83211d81968db634c429f9485a556335b95f6f45337a5fe5e1c42037",
+    "liveness_diagnostic": true,
+    "lockfile_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+    "payloads": {
+      "insert-middle-4k.bin": {
+        "bytes": 4096,
+        "sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616"
+      }
+    },
+    "product_seal": "0945f62bbd3a8532b2fe08cac8b7962d9774c9d66f23e1ab61f7b315e8402aa9",
+    "profile": "release",
+    "registry_sha256": "9decc295b688083db7b1f6899ebbc315eeeddfa28d0fafe68537507d12394fbb",
+    "scenario_version": 4,
+    "schema": "core-fs-bench-pro-complexity-image-v1",
+    "tag": "layerfs-repeated128-liveness:issue232",
+    "target": "aarch64-unknown-linux-musl",
+    "workload_source_seal": "b58e5a3e1cad1bd259917bcd117cf8f4888efa0f49eb5ecc9669423afed7b36b"
+  },
+  "masters": {
+    "1048576": {
+      "fixture_bytes": 1048576,
+      "fixture_canonical_root": "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
+      "fixture_extent_count": 54,
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "genesis_layer": "3299b27c8bdd13d2925a3b78b0de3d97154f969c4e24280aa569910aeb937d5d52",
+      "genesis_root": "0f41d6ff0e5b85b25280d83adeb34403a69f5d4eb3744a807cf791f8ec2958e7",
+      "genesis_root_serial": 1,
+      "history": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/prepared/repeated128-liveness/history.sqlite",
+      "history_sha256": "d4a8b08c9845ac029532d2bbb72e7635213390e7f76131ebe9a7a399f38d1f9a",
+      "project_id": "31ce8c6d6e39be89a941b5f97020069e96",
+      "store": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/prepared/repeated128-liveness/store.sqlite",
+      "store_sha256": "d57c2d300c4bc3e0b90df27073b931436937383bf63e3f6d65cf54f63bd73ec8"
+    }
+  },
+  "one_diagnostic_attempt": true,
+  "outputs": {
+    "repeated-128": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-liveness-diagnostic-01"
+  },
+  "payload_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+  "product_seal": "0945f62bbd3a8532b2fe08cac8b7962d9774c9d66f23e1ab61f7b315e8402aa9",
+  "registry_sha256": "670973c95d747828fe2db02c82323a4df4f585bc3d9ed011e2c378159a731cad",
+  "schema": "issue232-repeated128-liveness-pre-run-v1",
+  "source_tree": "942e7e5db29119fffd1dd5a57a9f9c85e64a0475",
+  "status": "PROSPECTIVE",
+  "verifier_budget_ns": 10000000000,
+  "workload_source_seal": "b58e5a3e1cad1bd259917bcd117cf8f4888efa0f49eb5ecc9669423afed7b36b"
+}
