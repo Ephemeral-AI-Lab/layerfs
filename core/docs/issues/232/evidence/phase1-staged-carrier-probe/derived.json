@@ -1,0 +1,27 @@
+{
+  "carrier_verdict": "GO_TEST_ONLY",
+  "data_callbacks_for_64k": 16,
+  "frame_lengths": [
+    4096,
+    8192,
+    12288,
+    16368
+  ],
+  "passed_initial_cases": [
+    "frames",
+    "success",
+    "wrong_order",
+    "bad_digest",
+    "stale_stamp",
+    "close",
+    "abort",
+    "lost_reply"
+  ],
+  "performance_claim": false,
+  "product_or_sdk_proof": false,
+  "unmount_attempts": [
+    "FAIL_EBUSY",
+    "FAIL_TIMEOUT",
+    "PASS_SOURCE_CHANGED"
+  ]
+}
