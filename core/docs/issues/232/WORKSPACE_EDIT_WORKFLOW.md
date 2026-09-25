@@ -2,12 +2,13 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 
-This diagram shows the implemented #241 Linux **4 KiB inline range ioctl**
-route and the publication boundary for #232. The public SDK method is
-`WorkspaceApi::exec(command)`; the daemon currently launches `/bin/sh -c`
-with the mounted Workspace as its working directory. A cooperating tool opens
-the mounted file and issues the ioctl. LayerFS does not infer a range edit
-from shell text or automatically convert an ordinary POSIX write.
+This diagram shows the **generic shell-command route** and the publication
+boundary. The public SDK method is currently `WorkspaceApi::exec(command)`;
+there is no separate `WorkspaceApi::shell` method. The daemon launches
+`/bin/sh -c` with the mounted Workspace as its working directory. FUSE sees
+the file syscalls made by that command, but neither the kernel nor LayerFS
+infers a range-replacement intent from its shell text. The #241 ioctl route
+is a separate opt-in path used by a cooperating benchmark tool.
 
 ```text
 HOST / SDK                                      SANDBOX / DOCKER CONTAINER
@@ -20,23 +21,27 @@ WorkspaceApi::mount(..., commit_id=None)
                                                    and mounts FUSE at
                                                    /layerfs/workspace/<id>
 
-WorkspaceApi::exec("edit-tool ...")
+WorkspaceApi::exec("arbitrary shell command ...")
        │
        └── SandboxOwner control call ──────────> daemon: WorkspaceExec
                                                    │
-                                                   └── /bin/sh -c "edit-tool ..."
+                                                   └── /bin/sh -c "command ..."
                                                        cwd = mounted Workspace
                                                                │
-                         tool opens /layerfs/workspace/<id>/note
-                         tool requests STATE, then range EDIT ioctl
-                         tool checks STATE, fstat and boundary readback
+                         command opens /layerfs/workspace/<id>/note
+                         command chooses its own file syscalls:
+                           write/pwrite  → FUSE WRITE
+                           truncate     → FUSE SETATTR/size path
+                           rename       → FUSE RENAME
+                           explicit ioctl → FUSE IOCTL (opt-in only)
                                                                │
                                                                ▼
                                                    Linux VFS → FUSE callback
                                                                │
-                                                   check handle and stamp
+                                                   check operation and handle
                                                                │
-                                                   Workspace range splice
+                                                   update private Workspace
+                                                   according to that callback
                                                                │
                                                                ▼
                                              PRIVATE WORKSPACE OVERLAY
@@ -88,17 +93,16 @@ Read through FUSE:
   Zero  → synthesized zero bytes
 ```
 
-The splice changes the mounted Workspace view and increments its local
-revision; it does **not** publish a Commit or move the Branch head. Commit
+Successful FUSE mutations change the mounted Workspace view and its local
+revision; they do **not** publish a Commit or move the Branch head. Commit
 captures the private view, saves changed content and metadata through the
 host Service, and advances History only if the expected Branch head still
 matches. An unmount detaches FUSE; Sandbox deletion removes the owned
 container and its named volume through the public SDK.
 
-The [#232 unified plan](UNIFIED_IOCTL_IMPLEMENTATION_PLAN.md) proposes a
-versioned staged carrier for replacements above the current 4 KiB inline
-limit. Staged DATA fragments would remain private until one APPLY creates one
-Workspace edit. That carrier and the new all-56-case scenario are **planned,
-not implemented**. The proposed ioctl replacement limit is 8 MiB; the
-file/result limit remains 4 GiB. The [#241 rollout](../241/ROLLOUT_PHASE1.md)
-records the implemented Linux proof and its performance-evidence limits.
+The [#241 rollout](../241/ROLLOUT_PHASE1.md) records the separate Linux
+**4 KiB opt-in ioctl** proof. The later [#232 v3 campaign](evidence/phase2-all-ioctl/REPORT.md)
+used a cooperating tool and an implemented staged ioctl for larger payloads.
+Its 56 functional results do not establish arbitrary-shell performance. The
+[mounted POSIX diagnostic and corrected phases](SHELL_ROUTE_CORRECTION.md)
+show the ordinary WRITE route and keep the two claims separate.

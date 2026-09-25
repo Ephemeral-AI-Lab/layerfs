@@ -4,6 +4,14 @@
 > The 56-case v3 campaign is independently verified but cache-ineligible for
 > cold latency; the capped-500 MiB raw insert aim also misses.
 
+> **Scope correction, 2026-09-25:** This is the implemented cooperating-tool
+> ioctl plan. The owner intends arbitrary Workspace shell commands as the
+> user-facing edit route. Ordinary POSIX writes do not issue this ioctl, so
+> this plan cannot provide generic-shell admission. See the mounted
+> [route proof and revised phases](SHELL_ROUTE_CORRECTION.md). Retain this
+> document as the opt-in route history; do not extend its all-ioctl campaign
+> to stand in for arbitrary commands.
+
 The owner selected **one ioctl range-replace route for all 56 registered
 #232 edits**. One replacement is limited to **8 MiB**, matching the current
 Workspace, Commit and Bridge replay contract; a file and its result may be

@@ -4,6 +4,11 @@
 > Frozen before staged-carrier product work or a new timed sample. A failed
 > provider probe requires a new contract identity; it cannot silently alter this one.
 
+> **Historical scope:** This frozen v3 selection measures a cooperating
+> program that explicitly issues mounted-file ioctls. Its 56 completed rows
+> remain [opt-in evidence](evidence/phase2-all-ioctl/REPORT.md); the owner's
+> arbitrary-shell route is [separately assessed](SHELL_ROUTE_CORRECTION.md).
+
 This is the prospective `workspace-exec-edit-v3` parent scenario. The
 [immutable registry](../../../benchmark/fs-bench-pro/registry/workspace-exec-edit-v3.json)
 inherits the 56 fixture, replacement and oracle identities from the untouched

@@ -3,8 +3,15 @@
 > **Status:** Current planning checklist; no release candidate exists.
 > The 2026-09-24 scenario-v2 baseline has 56 receipts: 45 completed and
 > verified, 11 product-side `FAIL`; see the
-> [baseline report](exec-fuse-edit-v2-baseline.md). The new all-ioctl scenario
-> is planning only and has no performance admission.
+> [baseline report](exec-fuse-edit-v2-baseline.md). The later all-ioctl v3
+> scenario completed 56/56 functional rows, all cache-ineligible.
+
+> **Owner route correction, 2026-09-25:** The intended user-facing route is
+> an arbitrary Workspace shell command. The completed v3 ioctl selection
+> requires a cooperating command that explicitly issues ioctl; it does not
+> establish generic shell-command performance. The route proof and revised
+> phases are in [the shell correction](SHELL_ROUTE_CORRECTION.md). The ioctl
+> decision immediately below is retained as the historical opt-in contract.
 
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
 Read with the [benchmark rules](../../../../docs/general/benchmark_rules.md),
@@ -13,9 +20,9 @@ Read with the [benchmark rules](../../../../docs/general/benchmark_rules.md),
 owner amendment selects an **SDK-only Workspace Exec/FUSE edit** route; the
 original direct SDK range-edit text and its 56 rows remain historical.
 
-## Current owner route decision — 2026-09-25
+## Historical opt-in ioctl route decision — 2026-09-25
 
-The current prospective #232 route uses **one mounted ioctl range-replace
+The completed v3 opt-in route uses **one mounted ioctl range-replace
 interface for all 56 cases**, reached by a cooperating program inside public
 `WorkspaceApi::exec`, followed by public `WorkspaceApi::commit`. The
 performance driver uses public SDK APIs for every product operation. The

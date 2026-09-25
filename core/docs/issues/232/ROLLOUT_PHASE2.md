@@ -4,6 +4,12 @@
 > The all-ioctl v3 route has 56/56 completed, independently verified cases;
 > every cold latency row is cache-ineligible. No #232 performance admission exists.
 
+> **Owner route correction, 2026-09-25:** The intended user-facing edit is
+> an arbitrary Workspace shell command. The 56-case v3 result below is an
+> opt-in ioctl result from a cooperating tool, and the all-ioctl phases below
+> are historical for that route. Continue with the [revised generic-shell
+> phases](SHELL_ROUTE_CORRECTION.md#revised-phases); retain all receipts.
+
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
 The [retained 56-case v3 report](evidence/phase2-all-ioctl/REPORT.md) and
 [complete row derivation](evidence/phase2-all-ioctl/derived.json) record the

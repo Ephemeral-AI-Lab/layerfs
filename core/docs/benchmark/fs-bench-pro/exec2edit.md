@@ -2,6 +2,13 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 
+> **Route correction, 2026-09-25:** The user-facing Workspace shell route
+> accepts arbitrary commands. An explicit range ioctl from a cooperating
+> tool is a separate opt-in workload; its 56-case v3 functional result does
+> not qualify generic shell edits. See the [mounted POSIX proof and revised
+> phases](../../issues/232/SHELL_ROUTE_CORRECTION.md). The POSIX contract
+> below remains the generic route baseline.
+
 This guideline is the prospective #232 agent-edit route. It does not register
 cases, set numeric gates, authorize collection, or relabel the 56 historical
 direct SDK range-edit cases. Freeze a new family specification and update
