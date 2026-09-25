@@ -524,7 +524,6 @@ dependencies = [
  "layerfs-telemetry",
  "layerfs-workspace",
  "libc",
- "sha2",
 ]
 
 [[package]]

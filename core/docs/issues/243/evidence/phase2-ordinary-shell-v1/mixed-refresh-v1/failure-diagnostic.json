@@ -1,0 +1,22 @@
+{
+  "classification": "read-only post-attempt diagnostic, not a second performance sample",
+  "command": [
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/case.failure-diagnostic",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/store.sqlite",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/history.sqlite",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/package.tsv",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/package.tsv"
+  ],
+  "exit_code": 0,
+  "observed": {
+    "head_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+    "new_tree": null,
+    "old_bytes": 1114501,
+    "old_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+    "old_files": 9,
+    "old_paths": 17,
+    "status": "PASS"
+  },
+  "wall_ns": 50664125
+}

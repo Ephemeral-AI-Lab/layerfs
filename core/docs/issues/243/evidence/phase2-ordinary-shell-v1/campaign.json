@@ -1,0 +1,33 @@
+{
+  "prepared": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/prepared.json",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "rows": [
+    {
+      "row_status": "FAIL",
+      "scenario_id": "mixed-refresh-v1"
+    },
+    {
+      "row_status": "INELIGIBLE",
+      "scenario_id": "overwrite-4k-v1"
+    },
+    {
+      "row_status": "INELIGIBLE",
+      "scenario_id": "repeated-one-byte-v1"
+    },
+    {
+      "row_status": "INELIGIBLE",
+      "scenario_id": "failed-command-no-commit-v1"
+    }
+  ],
+  "schema": "issue243-shell-campaign-v1",
+  "source": {
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+    "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+    "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+    "source_dirty": false,
+    "source_tree": "98285433d132d646be9fd0a4295256f21857977c"
+  }
+}
