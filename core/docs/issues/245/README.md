@@ -35,6 +35,11 @@ verification gate.
   new agent the reading order, before/after architecture, provisional file
   ownership and LOC range, complexity model, ordinary FUSE route, and
   verification gates.
+- [Phase 1B implementation handoff](HANDOFF_PHASE1B_IMPLEMENTATION.md) carries
+  that assignment forward from the completed repair round: what Phase 1A
+  already proved and must not be redone, the exact code sites of every remaining
+  gap, the work packages and their stop conditions, the operational playbook for
+  mounted diagnostics, and the reporting requirements.
 
 The first repair round is recorded in
 [Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md):
