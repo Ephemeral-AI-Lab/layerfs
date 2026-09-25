@@ -12,6 +12,11 @@ payload and reused prepared master. Its product and harness seals still matched
 at execution; the intervening pre-run-manifest commit changed documentation
 only. The Store/history were independent writable byte copies. The [raw
 receipt, logs and hashes](liveness-diagnostic-01/) are append-only evidence.
+Before the run, a Dockerfile using a bare `sha256:` image in `FROM` failed to
+resolve; no measurement started. An older local image was also assembled but
+discarded before sampling when its product seal differed from this branch.
+The sampled image was rebuilt from this branch's daemon, and its verified base
+and final image digests are in the pre-run manifest.
 
 The caller's LFT1 Exec failed at **5,040.202 ms** with `Unknown`, while daemon
 LFT1 `WorkspaceExec` completed successfully at **7,369.822 ms**. No Exec
