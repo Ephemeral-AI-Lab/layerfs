@@ -140,21 +140,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let case = Case::load(Path::new(&args[1]))?;
     let contract = case.get("operation_contract_id")?;
     let v4 = contract == "workspace-exec-fuse-range-splice-commit-v4";
+    let complexity = matches!(
+        contract,
+        "workspace-exec-fuse-range-splice-batch-commit-v1"
+            | "workspace-exec-fuse-range-splice-complexity-commit-v1"
+    );
     if case.get("scenario_id")?.ends_with("-exec-v4") != v4 {
         return Err("v4 scenario and operation contract differ".into());
     }
-    let v3_or_v4 = v4 || contract == "workspace-exec-fuse-range-splice-commit-v3";
-    let expected_metadata = v4.then(|| metadata_expectation(&case)).transpose()?;
-    if v3_or_v4 {
+    if case.get("scenario_id")?.ends_with("-complexity-v1") != complexity {
+        return Err("complexity scenario and operation contract differ".into());
+    }
+    let checked_splice =
+        v4 || complexity || contract == "workspace-exec-fuse-range-splice-commit-v3";
+    let expected_metadata = (v4 || complexity)
+        .then(|| metadata_expectation(&case))
+        .transpose()?;
+    if checked_splice {
         if case.get("full_file_digest")? != "1" {
             return Err("range splice requires a full-file digest".into());
         }
         let expected_root = case.get("canonical_root_expected")?;
-        if expected_root.len() != 64 || !expected_root.bytes().all(|byte| byte.is_ascii_hexdigit())
+        if (expected_root != "-" || !complexity)
+            && (expected_root.len() != 64
+                || !expected_root.bytes().all(|byte| byte.is_ascii_hexdigit()))
         {
             return Err("range splice expected canonical root is absent or malformed".into());
         }
-        if case.get("canonical_count_expected")?.parse::<u64>()? == 0 {
+        let expected_count = case.get("canonical_count_expected")?;
+        if (expected_count != "-" || !complexity) && expected_count.parse::<u64>()? == 0 {
             return Err("range splice expected canonical count is zero".into());
         }
     }
@@ -304,11 +318,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             layerfs_history::LayerId::from_bytes(genesis).map_err(|_| "genesis layer identity")?,
         )?
         .ok_or("missing genesis layer")?;
-    let (fixture_bytes, fixture_observed, fixture_extents, _) =
+    let (fixture_bytes, fixture_observed, fixture_extents, fixture_chunked) =
         shape(&provider, layer.root, &path)?;
     let fixture_ok = fixture_bytes == case.number("fixture_bytes")?
-        && fixture_observed == fixture_root
-        && fixture_extents == case.number("fixture_extent_count")?;
+        && (fixture_root == "-" && complexity || fixture_observed == fixture_root)
+        && (case.get("fixture_extent_count")? == "-" && complexity
+            || fixture_extents == case.number("fixture_extent_count")?);
+    let fixture_digest_ok = if complexity && fixture_root == "-" {
+        let mut sink = DigestWriter {
+            hash: Sha256::new(),
+            bytes: 0,
+        };
+        let old_root = ObjectId::from_bytes(&hex_to_bytes(&fixture_observed)?)?;
+        Timing::disabled("old", |timer| {
+            read_all_bounded(
+                &provider,
+                old_root,
+                u64::MAX,
+                &mut sink,
+                timer.child("file"),
+            )
+        })
+        .0?;
+        sink.bytes == fixture_bytes && hex(&sink.hash.finalize()) == case.get("fixture_sha256")?
+    } else {
+        true
+    };
+    let cutoff_ok = if complexity {
+        let expected = case.number("expected_chunked")?;
+        chunked == expected && (fixture_root != "-" || fixture_chunked == expected)
+    } else {
+        true
+    };
     let mut metadata_match = true;
     let mut metadata_report = String::new();
     if let Some((expected_mode, expected_seconds, expected_nanoseconds, fixture_mode)) =
@@ -339,7 +380,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             old.mtime_nanoseconds,
         );
     }
-    let status = if content_ok && canonical_ok && count_ok && fixture_ok && metadata_match {
+    let status = if content_ok
+        && canonical_ok
+        && count_ok
+        && fixture_ok
+        && fixture_digest_ok
+        && cutoff_ok
+        && metadata_match
+    {
         "PASS"
     } else {
         "FAIL"
@@ -356,6 +404,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"head_commit\":\"{}\",\"branch_id\":\"{}\",\"genesis_root\":\"{}\",\
 \"fixture_bytes\":{fixture_bytes},\"fixture_canonical_root_observed\":\"{fixture_observed}\",\
 \"fixture_extent_count_observed\":{fixture_extents},\"historical_root_match\":{fixture_ok},\
+\"fixture_digest_match\":{fixture_digest_ok},\"cutoff_match\":{cutoff_ok},\
 \"store\":\"{}\",\"history\":\"{}\"{metadata_report}}}",
         case.get("scenario_id")?,
         case.get("canonical_root_expected")?,

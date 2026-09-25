@@ -77,16 +77,21 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out")
     parser.add_argument("--scenario-version", type=int, choices=[2, 3, 4], default=2)
+    parser.add_argument("--complexity-diagnostic", action="store_true")
     parser.add_argument("--debug-daemon", action="store_true")
     arguments = parser.parse_args()
+    if arguments.complexity_diagnostic and arguments.scenario_version != 4:
+        raise SystemExit("complexity image requires the published v4 inline carrier")
     selected = ({3: edit_insert_v3, 4: edit_insert_v4}.get(arguments.scenario_version, contract))
     if selected is not contract:
         selected.validate_registry()
     elif SHA(BENCH / contract.REGISTRY_PATH) != contract.REGISTRY_SHA256:
         raise SystemExit("v2 registry identity changed")
-    context = (CORE / f"target/exec-fuse-insert-v{arguments.scenario_version}/image"
+    context = (CORE / "target/exec-fuse-complexity-v1/image" if arguments.complexity_diagnostic
+               else CORE / f"target/exec-fuse-insert-v{arguments.scenario_version}/image"
                if selected is not contract else CONTEXT)
-    tag = (f"layerfs-exec-fuse-insert-v{arguments.scenario_version}:issue241"
+    tag = ("layerfs-exec-fuse-complexity-v1:issue232" if arguments.complexity_diagnostic
+           else f"layerfs-exec-fuse-insert-v{arguments.scenario_version}:issue241"
            if arguments.scenario_version == 4 else
            "layerfs-exec-fuse-insert:issue241" if arguments.scenario_version == 3 else TAG)
     output = Path(arguments.out or context.parent / "image.json")
@@ -107,14 +112,16 @@ def main():
     dockerfile = context / "Dockerfile"
     dockerfile.write_text(
         f"FROM {BASE}\n"
-        "COPY layerfs-daemon /layerfs-daemon\n"
+        + ("ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n" if arguments.complexity_diagnostic else "")
+        + "COPY layerfs-daemon /layerfs-daemon\n"
         "COPY layerfs-edit-tool /layerfs-bench/bin/layerfs-edit-tool\n"
         "COPY payloads /layerfs-bench/payloads\n"
         'ENTRYPOINT ["/layerfs-daemon"]\n')
     run(["docker", "build", "-q", "-t", tag, str(context)])
     image = run(["docker", "image", "inspect", tag, "--format", "{{.Id}}"]).strip()
     record = {
-        "schema": (f"core-fs-bench-pro-exec-fuse-insert-image-v{arguments.scenario_version}" if
+        "schema": ("core-fs-bench-pro-complexity-image-v1" if arguments.complexity_diagnostic
+                   else f"core-fs-bench-pro-exec-fuse-insert-image-v{arguments.scenario_version}" if
                    selected is not contract else
                    "core-fs-bench-pro-exec-fuse-edit-image-v1"),
         "base": BASE,
@@ -132,6 +139,7 @@ def main():
         "registry_sha256": selected.REGISTRY_SHA256,
         "scenario_version": arguments.scenario_version,
         "carrier_abi": (selected.ABI if selected is not contract else None),
+        "complexity_diagnostic": arguments.complexity_diagnostic,
         "payloads": payloads,
     }
     output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")

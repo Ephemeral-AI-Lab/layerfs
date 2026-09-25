@@ -23,6 +23,12 @@ source files contain the deterministic prepared-master bytes from the existing
 fs-bench-pro generator; new cutoff masters are prepared once and sealed before
 the first attempt. Each attempt uses `--setup clone` semantics: an independent
 writable byte copy of a closed, validated master outside the operation timer.
+The resulting [registry](../../../../benchmark/fs-bench-pro/registry/workspace-exec-complexity-v1.json)
+has SHA-256 `670973c95d747828fe2db02c82323a4df4f585bc3d9ed011e2c378159a731cad`.
+Its command, fixture and result hashes, callback counts and payload identity
+are exact per row; [the generator](../../../../benchmark/fs-bench-pro/shared/edit_complexity_v1.py)
+rechecks its bytes. The mounted batch command uses `splice-batch --count R
+--output-version 5`; single-edit commands use `splice --output-version 4`.
 
 | Group | Pristine bytes | Mounted mutation | Expected result bytes |
 | --- | ---: | --- | ---: |

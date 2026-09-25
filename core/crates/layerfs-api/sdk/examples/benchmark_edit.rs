@@ -222,6 +222,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let v4 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v4";
     let v5 =
         case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-batch-commit-v1";
+    let complexity_single = case.get("operation_contract_id")?
+        == "workspace-exec-fuse-range-splice-complexity-commit-v1";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -323,7 +325,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result
                 });
                 match edit {
-                    Ok(exec) if v4 || v5 => {
+                    Ok(exec) if v4 || v5 || complexity_single => {
                         observed_mtime = confirmed_splice(
                             &exec,
                             final_bytes,
@@ -390,7 +392,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
     let unmount = workspaces.unmount(&mount.id);
-    let (delete, log_capture) = if v4 || v5 {
+    let (delete, log_capture) = if v4 || v5 || complexity_single {
         let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
         (delete, Some(capture))
     } else {
@@ -424,7 +426,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.range_shifted_suffix_bytes)
         .unwrap_or(0);
-    let v4_metadata = if v4 || v5 {
+    let v4_metadata = if v4 || v5 || complexity_single {
         let capture = log_capture.as_ref().expect("v4 captured logs");
         match observed_mtime {
             Some((seconds, nanoseconds)) => format!(
