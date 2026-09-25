@@ -1,8 +1,9 @@
 # #232 Phase 1C: complexity screen before the 56-case rollout
 
 > **Status:** Current planning checklist; no release candidate exists.
-> Phase 1A's ioctl proof is complete; Phase 1B's `service.finish` diagnosis
-> is pending. No Phase 1C diagnostic or optimization has run.
+> Phase 1A's ioctl proof is complete; Phase 1B's retained diagnostic locates
+> `service.finish` growth at batch drain without a justified product change.
+> No Phase 1C diagnostic or optimization has run.
 
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
 Run this small screen after [Phase 1B](../241/ROLLOUT_PHASE1.md#phase-1a-exit-and-phase-1b-work)

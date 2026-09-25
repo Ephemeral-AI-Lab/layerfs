@@ -2,7 +2,8 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 > Phase 1A's Linux ioctl mechanism and four-case functional proof are complete.
-> Phase 1B will diagnose remaining Commit growth before #232's 56-case rollout.
+> Phase 1B has located remaining Commit growth at batch drain; its inner cause
+> remains open and no product optimization was selected.
 > Raw v4 timing is cache-ineligible; prior receipts remain unchanged.
 
 Tracking: [#241](https://github.com/Ephemeral-AI-Lab/layerfs/issues/241), child of [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232). Read the [specification](SPEC.md), [implementation and optimization handoff](IMPLEMENTATION_PLAN.md), [Phase 2 plan](../232/ROLLOUT_PHASE2.md), [benchmark rules](../../../../docs/general/benchmark_rules.md) and [Core harness rules](../../../benchmark/fs-bench-pro/AGENTS.md).
@@ -42,6 +43,11 @@ The original v4 performance receipts remain INCOMPLETE because the first telemet
 **Phase 1A's Linux mechanism exit is achieved:** kernel delivery, mounted coherence, functional position sweep, four public SDK Exec→Commit completions, independent verification, cleanup, bounded callback/byte counts and no suffix-proportional tool/FUSE work. It does **not** close #232, prove a cold speed gain, or advertise macFUSE/WinFsp support. Each future adapter needs its own live mounted proof; unsupported capabilities fail explicitly. Third-party packages remain published and unmodified.
 
 **Phase 1B** starts with a new-identity, count-driven `service.finish` diagnostic at 1 and capped-500 MiB. Split batch drain, pack seal, index flush/copy, publication and SQLite commit with bounded LFT1 children; record object, statement, page and physical-read counts. Fix only the substep shown to cause the growth. Do not change the ioctl, piece representation, cache policy, deadline or worker count to improve a number. The [implementation handoff](IMPLEMENTATION_PLAN.md#next-decisions-in-order) proposes raw engineering caps of ≤55 ms at 1/10 MiB, ≤60 ms at 100 MiB and ≤70 ms at capped 500 MiB (≤65 ms stretch), with 500-minus-1 MiB `service.finish` growth ≤15 ms, under an equal declared cache state. These are **prospective proposals**, not retroactive v4 gates or speed PASS claims. A new committed specification/scenario identity must freeze any numeric acceptance target before candidate optimization or sampling; a cold speed PASS also requires an enforceable cache contract.
+
+The [retained Phase 1B diagnostic](evidence/phase1b-finish-diagnostic/REPORT.md)
+attributes 30.496 ms of a 31.309 ms finish increase to batch drain. Its
+inner SQLite/validation/read/write cause is unresolved by the available
+counts, so no product change or four-case resample follows this checkpoint.
 
 Phase 1B exits when the growth has a retained cause attribution and a decision on the measured substep. If a narrow product fix is justified, prove it with focused correctness checks and a newly frozen four-case SDK Exec→Commit selection, independent verification, cleanup and zero suffix I/O. Report every raw duration and cache status, including a target miss or `INELIGIBLE`; neither is turned into PASS by rerunning. If counts show no justified product change, record that decision and the remaining growth explicitly **without repeating the unchanged four arms**. The [#232 Phase 1C complexity screen](../232/ROLLOUT_PHASE1C.md) follows this decision; its [Phase 2 rollout](../232/ROLLOUT_PHASE2.md) owns all 56 SDK Exec/FUSE edit families under the [unified ioctl contract](../232/UNIFIED_IOCTL_IMPLEMENTATION_PLAN.md).
 

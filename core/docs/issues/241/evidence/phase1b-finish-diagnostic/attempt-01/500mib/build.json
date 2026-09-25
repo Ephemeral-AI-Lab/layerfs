@@ -1,0 +1,22 @@
+{
+  "binaries": {
+    "benchmark_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/2cd11af2f87661abb5ce9a9aed71e035306f1017f662d26e8b01bd774fc59620/benchmark_edit",
+      "sha256": "2cd11af2f87661abb5ce9a9aed71e035306f1017f662d26e8b01bd774fc59620"
+    },
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/47510b3ddefb7d4573462a79b60df706ea8c27c2b99ce14711756c5e043b7895/benchmark_init",
+      "sha256": "47510b3ddefb7d4573462a79b60df706ea8c27c2b99ce14711756c5e043b7895"
+    },
+    "verify_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/de0d2c6b08c251ecb5de5d8b5cad73beed65f8ab39a331af3ecba69082a67458/verify_edit",
+      "sha256": "de0d2c6b08c251ecb5de5d8b5cad73beed65f8ab39a331af3ecba69082a67458"
+    }
+  },
+  "command": null,
+  "mode": "exact-binary-reuse",
+  "profile": "release",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target",
+  "wall_ns": 0
+}
