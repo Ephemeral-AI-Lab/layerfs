@@ -1,0 +1,11 @@
+{
+  "first_verifier_status": "FAIL",
+  "full_local_run_path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01",
+  "history_bytes": 86016,
+  "history_sha256": "fc0675ca6e25294311635243531771eb0866e184a9f574aade82111873017846",
+  "performance_status": "FAIL",
+  "repaired_verifier_status": "PASS",
+  "schema": "issue232-repeated128-progress-post-run-v1",
+  "store_bytes": 4276224,
+  "store_sha256": "1e7def24c21ce5395efe65eea379f76f5104a39d09aba4b0d57b8945c7cca89b"
+}

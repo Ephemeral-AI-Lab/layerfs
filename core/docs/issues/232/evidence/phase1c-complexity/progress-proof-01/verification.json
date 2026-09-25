@@ -1,0 +1,13 @@
+{
+  "child": null,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/binary-archive/db289e3171f06c4fb261a6daeb3e711babf7f78d9419987805a75560c9a6256b/verify_edit",
+    "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/case.txt",
+    "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/history.sqlite"
+  ],
+  "exit_code": 1,
+  "status": "FAIL",
+  "timeout": false,
+  "wall_ns": 578343958
+}
