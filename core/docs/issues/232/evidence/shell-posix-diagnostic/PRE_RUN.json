@@ -1,5 +1,7 @@
 {
   "cache_contract": "uncontrolled / diagnostic only / performance INELIGIBLE",
+  "compiled_product_source_ref": "codex/issue232-all-ioctl-v3",
+  "compiled_harness_seal": "83af2b85b21db55110580b03ec68efe115a52726c45d800aa67e004dca0030cf",
   "cargo_lock_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
   "command": "printf 'ABCD' | dd of=payload.bin bs=4 seek=131072 conv=notrunc 2>/dev/null",
   "command_interpretation": "/bin/sh -c in mounted Workspace; dd seeks to byte 524288 and writes four bytes through ordinary POSIX file operations",
