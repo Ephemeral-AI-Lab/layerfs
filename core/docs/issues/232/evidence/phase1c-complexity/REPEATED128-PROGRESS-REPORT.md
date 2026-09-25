@@ -9,6 +9,13 @@ Store/history. The attempt's original combined receipt remains **FAIL** because
 its first verifier rejected the new scenario ID before reading the Store. No
 performance or cold-latency PASS is claimed.
 
+This selection is the **opt-in cooperating `splice-batch` ioctl carrier**. It
+does not qualify arbitrary shell commands through `WorkspaceApi::exec`: an
+ordinary editor or shell command may use different POSIX operations, and a
+command without a published Workspace revision still reaches the native
+no-progress boundary. The generic-shell route has its own proof and performance
+questions.
+
 The [proof contract](REPEATED128-PROGRESS-PROOF-CONTRACT.md) was committed before
 sampling. The [pre-run manifest](REPEATED128-PROGRESS-PRE_RUN.json) pins the
 closed prepared master, independent writable clone, binaries, payload, source

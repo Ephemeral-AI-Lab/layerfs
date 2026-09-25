@@ -6,6 +6,8 @@ control-progress change based on `7137cd7ecc8d6d44c24eccbd277a1366269d62ee`.
 It does not replace either failed historical receipt or reopen the completed
 56 single-edit campaign. The performance timer is diagnostic and cold-latency
 admission remains unavailable for Linux FUSE backing.
+The selected mutation is the opt-in cooperating `splice-batch` ioctl tool; this
+proof makes no claim about arbitrary shell-command editing through Exec.
 
 Use the sealed 1,048,576-byte Phase 1C master (Store SHA-256
 `d57c2d300c4bc3e0b90df27073b931436937383bf63e3f6d65cf54f63bd73ec8`,

@@ -6,6 +6,8 @@ declared diagnostic ran at source `449f30bb5fb17003f74a3bd725090f49163fa0f1`
 with product seal `0945f62bbd3a8532b2fe08cac8b7962d9774c9d66f23e1ab61f7b315e8402aa9`,
 harness seal `3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a`,
 and image `sha256:259986fc83211d81968db634c429f9485a556335b95f6f45337a5fe5e1c42037`.
+This diagnostic exercises the opt-in cooperating `splice-batch` ioctl tool,
+not arbitrary shell-command editing through Exec.
 The [contract](REPEATED128-LIVENESS-CONTRACT.md) preceded the run; the
 [pre-run manifest](REPEATED128-PRE_RUN.json) pins the host binaries, workload,
 payload and reused prepared master. Its product and harness seals still matched
