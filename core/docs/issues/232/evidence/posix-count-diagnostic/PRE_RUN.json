@@ -1,0 +1,266 @@
+{
+  "binaries": {
+    "benchmark_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/1278794213c25ba78abaac8d553b4587ed9744657c00fe451d2a29c57797ecb0/benchmark_edit",
+      "sha256": "1278794213c25ba78abaac8d553b4587ed9744657c00fe451d2a29c57797ecb0"
+    },
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/4318dcaf0381984586be7382f556ae1a3ba83db6e5f4fbe188eceaa37027fbac/benchmark_init",
+      "sha256": "4318dcaf0381984586be7382f556ae1a3ba83db6e5f4fbe188eceaa37027fbac"
+    },
+    "verify_edit": {
+      "path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/db289e3171f06c4fb261a6daeb3e711babf7f78d9419987805a75560c9a6256b/verify_edit",
+      "sha256": "db289e3171f06c4fb261a6daeb3e711babf7f78d9419987805a75560c9a6256b"
+    }
+  },
+  "cache_contract": "uncontrolled Linux FUSE backing; cause-finding only; cold latency INELIGIBLE",
+  "cargo_lock_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+  "cases": {
+    "10mib": {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool shift --file payload.bin --offset 5242880 --delete-length 0 --length 4096 --direction grow --expect-size 10485760 --payload /layerfs-bench/payloads/insert-middle-4k.bin",
+      "delete_len": 0,
+      "edit_start": 5242880,
+      "editor_algorithm": "in-place-window-shift-grow",
+      "editor_block_bytes": 131072,
+      "editor_direction": "grow",
+      "editor_shape": "extends the file by replacement_len - delete_len, then moves the affected suffix [start + delete_len, initial) backward from the old end in block_bytes blocks and writes the replacement over the stale window",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ftruncate",
+        "pread",
+        "pwrite",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "family_id": "edit_length_changing",
+      "final_bytes": 10489856,
+      "final_sha256": "c81fc21208ec31821ae0a4bbfa07c1d82f30b765fd8d091b5226bd1b141c46af",
+      "fixture_bytes": 10485760,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "10mib",
+      "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 6.4,
+      "historical_selection_id": "insert-middle-4k-on-10mib-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 544,
+      "mutation_executor": "workspace-exec-posix-edit-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-edit-commit-v2",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 10489856,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 5177344,
+            "sha256": "2eff6c9f90bde49566cc18a953838d3be319726188c7def1aa9e42c4c6ac0345"
+          },
+          {
+            "bytes": 65536,
+            "offset": 10424320,
+            "sha256": "8a79128294984862d189b256886bc959de7c792f2e9347aff8a54e3fb1f87e7b"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-edit-commit-v1",
+      "scenario_id": "insert-middle-4k-on-10mib-ops-1-exec-v2",
+      "scenario_version": 2
+    },
+    "1mib": {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool shift --file payload.bin --offset 524288 --delete-length 0 --length 4096 --direction grow --expect-size 1048576 --payload /layerfs-bench/payloads/insert-middle-4k.bin",
+      "delete_len": 0,
+      "edit_start": 524288,
+      "editor_algorithm": "in-place-window-shift-grow",
+      "editor_block_bytes": 131072,
+      "editor_direction": "grow",
+      "editor_shape": "extends the file by replacement_len - delete_len, then moves the affected suffix [start + delete_len, initial) backward from the old end in block_bytes blocks and writes the replacement over the stale window",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ftruncate",
+        "pread",
+        "pwrite",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "family_id": "edit_length_changing",
+      "final_bytes": 1052672,
+      "final_sha256": "a95ad28f6fb8fecf9670fcbb1ed044ce88bb406ee1be5cd899078a54bba1c78b",
+      "fixture_bytes": 1048576,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "1mib",
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 5.3,
+      "historical_selection_id": "insert-middle-4k-on-1mib-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 54,
+      "mutation_executor": "workspace-exec-posix-edit-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-edit-commit-v2",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 1052672,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 458752,
+            "sha256": "17a968e35b8a97b3bac76564126bd89f7653ab8750e8dd54e6ad0a698371dfe4"
+          },
+          {
+            "bytes": 65536,
+            "offset": 987136,
+            "sha256": "3f414f5fa2c24dad7fa317375ee2b5b793299b88477a228503ef39c171975566"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-edit-commit-v1",
+      "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v2",
+      "scenario_version": 2
+    }
+  },
+  "clone_method": "independent-writable-byte-copy",
+  "complete_command_budget_ns": 15000000000,
+  "construction_workers": 1,
+  "cursor_key_sha256": "21630ef1e2fb70244266edb4212454c1c0d13fb539629c2fb2dad22a27ef762c",
+  "harness_seal": "3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a",
+  "image": {
+    "all_ioctl": false,
+    "base": "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "carrier_abi": {
+      "caller_order": [
+        "open",
+        "STATE",
+        "EDIT",
+        "STATE",
+        "fstat",
+        "bounded-readback"
+      ],
+      "contract": "linux-projected-range-request-v2",
+      "edit": {
+        "command": "0x5060f541",
+        "input_bytes": 4192,
+        "magic": "LFE2",
+        "max_replacement_bytes": 4096,
+        "output_bytes": 0
+      },
+      "state": {
+        "command": "0xc058f540",
+        "input_bytes": 88,
+        "magic": "LFS2",
+        "output_bytes": 88
+      },
+      "version": 2
+    },
+    "complexity_diagnostic": true,
+    "daemon_sha256": "690e5d9b38fcb906649848318cc5031637b9d1d8546bdca36db23ba0299a812b",
+    "dockerfile_sha256": "767d0fa0da1e8e842618a4a9c88f50e5f5444e374d6591e8690f76f48fa07267",
+    "edit_tool_sha256": "1794b2d89023fbd69ea3d500c97cc2d030bb52cfa16c146594ef80c6d7e82c48",
+    "image_id": "sha256:a925ad7893bf64b0d854e28ad2dd827dc9febbb6710c3e5cbf22d6e044c5e88c",
+    "lockfile_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+    "payloads": {
+      "insert-middle-4k.bin": {
+        "bytes": 4096,
+        "sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616"
+      }
+    },
+    "product_seal": "d125b8b35848b84288b30b954153419e33c2c9cf2fadf62876305279ee051e0f",
+    "profile": "release",
+    "registry_sha256": "9decc295b688083db7b1f6899ebbc315eeeddfa28d0fafe68537507d12394fbb",
+    "scenario_version": 4,
+    "schema": "core-fs-bench-pro-complexity-image-v1",
+    "tag": "layerfs-exec-fuse-complexity-v1:issue232",
+    "target": "aarch64-unknown-linux-musl",
+    "workload_source_seal": "5eee8b3112d17b84b20fb37bcb75ed78ba383b80fe368a28eb2745b62f8a5ef4"
+  },
+  "masters": {
+    "1048576": {
+      "fixture_bytes": 1048576,
+      "fixture_canonical_root": "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
+      "fixture_extent_count": 54,
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "genesis_layer": "3299b27c8bdd13d2925a3b78b0de3d97154f969c4e24280aa569910aeb937d5d52",
+      "genesis_root": "0f41d6ff0e5b85b25280d83adeb34403a69f5d4eb3744a807cf791f8ec2958e7",
+      "genesis_root_serial": 1,
+      "history": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/prepared/master-v3-1048576-befc7061820e9733/history.sqlite",
+      "history_sha256": "d4a8b08c9845ac029532d2bbb72e7635213390e7f76131ebe9a7a399f38d1f9a",
+      "project_id": "31ce8c6d6e39be89a941b5f97020069e96",
+      "store": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/prepared/master-v3-1048576-befc7061820e9733/store.sqlite",
+      "store_sha256": "d57c2d300c4bc3e0b90df27073b931436937383bf63e3f6d65cf54f63bd73ec8"
+    },
+    "10485760": {
+      "fixture_bytes": 10485760,
+      "fixture_canonical_root": "dd79a6666e83927d787c8a7679b06f4c98ca5f80b6abd48d94b5e8f84aad1c85",
+      "fixture_extent_count": 544,
+      "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+      "genesis_layer": "320488f539272a80f3a4950933b1996e8b652c1e6895be880ee6dacc5f3f769242",
+      "genesis_root": "9168dc7cefb55c66041d276c4c40679db9fe5bf032465a5dca8051f15b619dbe",
+      "genesis_root_serial": 1,
+      "history": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/prepared/master-v3-10485760-6a21e5a31b8bdb26/history.sqlite",
+      "history_sha256": "8a77d01f4139be54291c5dc0285b84ce9b5aa9aba697c865ddfffd65fe4562b8",
+      "project_id": "31a8f0398260183e876f7d5051fc23e342",
+      "store": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/prepared/master-v3-10485760-6a21e5a31b8bdb26/store.sqlite",
+      "store_sha256": "172838a7058ddba35faa73112317f33fdc4aa44b26e4a787e3299cd5a7b54509"
+    }
+  },
+  "one_attempt_per_case": true,
+  "outputs": {
+    "10mib": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/posix-count-diagnostic/10mib",
+    "1mib": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/posix-count-diagnostic/1mib"
+  },
+  "product_seal": "d125b8b35848b84288b30b954153419e33c2c9cf2fadf62876305279ee051e0f",
+  "registry_sha256": "05a133b543db33729d60cc321cc88682046c16bfb1761daec6a57c5df3b11823",
+  "schema": "issue232-posix-count-pre-run-v1",
+  "source_before_pre_run_commit": "35c108501437e2e19474751e6ba5f77d7daf94fe",
+  "status": "PROSPECTIVE",
+  "verifier_budget_ns": 10000000000
+}
