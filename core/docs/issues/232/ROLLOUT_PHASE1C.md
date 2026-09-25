@@ -3,7 +3,9 @@
 > **Status:** Current planning checklist; no release candidate exists.
 > Phase 1A's ioctl proof is complete; Phase 1B's retained diagnostic locates
 > `service.finish` growth at batch drain without a justified product change.
-> No Phase 1C diagnostic or optimization has run.
+> Phase 1C's nine one-shot count attempts are retained: eight verified routes
+> are cache-ineligible for latency and the 128-edit route failed before Commit.
+> No product algorithm optimization was selected.
 
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
 Run this small screen after [Phase 1B](../241/ROLLOUT_PHASE1.md#phase-1a-exit-and-phase-1b-work)
@@ -105,6 +107,14 @@ public SDK route proof. No unchanged performance arm is repeated. The
 Phase 1C counts and correctness do not substitute for its eligible latency,
 independent verifier or cleanup gates.
 
+The [retained Phase 1C report](evidence/phase1c-complexity/REPORT.md) records
+superlinear 1/32/128 piece visits (7/3,200/49,664) and a 128-edit FAIL at the
+bridge progress deadline without Commit. Piece-scan wall share was not
+isolated, so a tree is not justified by this receipt. C1 locality counts
+remain bounded at 1/100/capped-500 MiB; the three cutoff edge verifiers pass.
+All eight completed routes remain `INELIGIBLE` for cold latency. This is an
+open repeated-edit disposition, not a claim of complete multi-edit performance.
+
 ## Commit checkpoints for Phase 1C
 
 Make each checkpoint a separate commit on an isolated worktree based on the
@@ -113,26 +123,21 @@ first-parent production LOC before/after/delta in every commit, including a
 zero delta for docs/evidence-only commits. A changed algorithm and its
 architecture document land in the same commit.
 
-- [ ] **C0 — Freeze the count contract.** Commit the 1/32/128 offsets and
+- [x] **C0 — Freeze the count contract.** Commit the 1/32/128 offsets and
   payloads, fixed total replacement bytes, expected ioctl/SDK calls, C1
   locality and cutoff-edge cases, cache label, output paths and acceptance
   questions before implementing or attempting a diagnostic.
-- [ ] **C1 — Add diagnostic tool support only.** Extend the existing mounted
+- [x] **C1 — Add diagnostic tool support only.** Extend the existing mounted
   splice tool and public SDK driver to run the declared multi-edit command;
   add focused route/receipt checks. Do not expose Workspace internals or add
   a direct SDK edit method. Preserve the one-Exec, one-Commit boundary.
-- [ ] **C2 — Retain one count result per declared case.** Collect piece
+- [x] **C2 — Retain one count result per declared case.** Collect piece
   visits/pages, CDC bytes, touched extent paths, object counts, LFT1 wall and
   resource coverage, verifier and cleanup. Classify each suspected scaling
   term with source and count evidence; retain `FAIL`, `INELIGIBLE` and
   `NOT_RUN` outcomes. Do not substitute these diagnostics for #232 rows.
-- [ ] **C3 — Conditional product algorithm commit.** If C2 shows a material
-  avoidable cost, change only its owning Workspace or C1 path. Preserve
-  stamped ioctl authorization, canonical roots, old Commit readback and
-  one-worker construction. Add a focused regression check and update the
-  matching architecture document. A bounded, accepted term needs no code.
-- [ ] **C4 — New-source proof if C3 changed product.** Freeze a new identity,
-  run the affected public SDK Exec→ioctl→Commit proof once, verify
-  independently and confirm unmount/Sandbox Delete. Report count reduction,
-  raw LFT1, cache eligibility and any target miss. If C3 made no product
-  change, do not repeat unchanged performance arms.
+- [x] **C3 — Conditional product algorithm decision: no change.** C2 did not
+  establish a material piece-scan wall share, and locality/cutoff remained
+  bounded in the observed shapes. The 128-edit failure stays open.
+- [x] **C4 — No changed-source proof required.** C3 made no algorithm change;
+  unchanged performance arms are not repeated.

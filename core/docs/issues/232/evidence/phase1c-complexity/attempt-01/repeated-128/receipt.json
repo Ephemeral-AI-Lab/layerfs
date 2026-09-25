@@ -1,0 +1,111 @@
+{
+  "cache": {
+    "linux-fuse-backing": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "linux-fuse-backing",
+      "method": "declared-warm-not-invalidatable-v1",
+      "reason": "the per-case sandbox creates a fresh backing directory and spool inside the container; no host-side or product-side invalidation exists, and a benchmark-only eviction between Edit and Commit is forbidden, so Commit may read the bytes Edit just wrote from resident backing pages",
+      "status": "INELIGIBLE"
+    },
+    "macos-store": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "macos-store",
+      "files": {
+        "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/history.sqlite": {
+          "bytes": 86016,
+          "pages": 6,
+          "resident_pages": 0
+        },
+        "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/store.sqlite": {
+          "bytes": 2691072,
+          "pages": 165,
+          "resident_pages": 0
+        }
+      },
+      "method": "darwin-mmap-msync-invalidate-mincore-v1",
+      "pages_checked": 171,
+      "resident_pages": 0,
+      "resident_pages_before": 0,
+      "status": "PASS"
+    }
+  },
+  "clone_method": "independent-writable-byte-copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/binary-archive/86f3ca176eb4e74fcca2bcf6ef2e1881f39ca84ddb9376031e8c3843e1529370/benchmark_edit",
+    "branch_body=119eba07db3c1572a97fa0b6c8a18ef1;canonical_count_expected=-;canonical_root_expected=-;command=/layerfs-bench/bin/layerfs-edit-tool splice-batch --file payload.bin --offset 524288 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 1048576 --count 128 --output-version 5;delete_len=0;edit_count=128;edit_start=524288;expected_chunked=1;expected_mode=416;family_id=phase1c_repeated;final_bytes=1052672;final_sha256=9895e8e40eb779da8c84625c77bed9a335fbe06a62c85cdb03c5846592949153;fixture_bytes=1048576;fixture_canonical_root=8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078;fixture_extent_count=54;fixture_mode=416;fixture_sha256=d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc;full_file_digest=1;g2_target_ms=0;genesis_layer=3299b27c8bdd13d2925a3b78b0de3d97154f969c4e24280aa569910aeb937d5d52;genesis_root=0f41d6ff0e5b85b25280d83adeb34403a69f5d4eb3744a807cf791f8ec2958e7;genesis_root_serial=1;operation_contract_id=workspace-exec-fuse-range-splice-batch-commit-v1;project_id=31ce8c6d6e39be89a941b5f97020069e96;replacement_len=4096;replacement_sha256=568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616;route=sdk-exec-fuse-range-splice-commit-v1;scenario_id=repeated-128-complexity-v1;stack_body=ce8c6d6e39be89a941b5f97020069e96;telemetry_run=160989390124175398221545923411705953355;window_count=0",
+    "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/history.sqlite",
+    "sha256:571e34b0b2e439eddd5a1931d17fbcf5e8891485ec5f0fdcac1c1737459fc298",
+    "phase1c-repeated-128"
+  ],
+  "complete_command_status": "FAIL",
+  "complete_command_wall_ns": 10950328458,
+  "driver": {
+    "acknowledgement_boundary": "WorkspaceApi::commit",
+    "branch_id": "11119eba07db3c1572a97fa0b6c8a18ef1",
+    "caller_pid": 37243,
+    "cleanup_ns": 5560088083,
+    "commit_ns": 0,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 361666,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "delete_len": 0,
+    "detail": "exec failed: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); cleanup failed: unmount=Err(Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })) delete=Ok(())",
+    "edit_commit_ns": 5033576500,
+    "edit_ns": 5033564584,
+    "edit_start": 524288,
+    "family_id": "phase1c_repeated",
+    "final_bytes": 1052672,
+    "fixture_bytes": 1048576,
+    "g2_target_ms": 0,
+    "head_commit": "",
+    "history": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/history.sqlite",
+    "image": "sha256:571e34b0b2e439eddd5a1931d17fbcf5e8891485ec5f0fdcac1c1737459fc298",
+    "observed_mtime_nanoseconds": null,
+    "observed_mtime_seconds": null,
+    "operation_contract_id": "workspace-exec-fuse-range-splice-batch-commit-v1",
+    "operation_entrypoint": "WorkspaceApi::exec",
+    "operation_surface": "workspace-posix-fuse",
+    "preparation_ns": 298930584,
+    "process_disk_read_bytes_after": null,
+    "process_disk_read_bytes_before": null,
+    "process_disk_read_bytes_delta": null,
+    "process_disk_read_source": "proc_pid_rusage_v2_process_wide",
+    "projection_counts": "",
+    "range_accepted_payload_bytes": 0,
+    "range_shifted_suffix_bytes": 0,
+    "replacement_len": 4096,
+    "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+    "replay": false,
+    "route": "sdk-exec-fuse-range-splice-commit-v1",
+    "sandbox": "0ad8578c7aceda9052372d92c6db9924",
+    "sandbox_delete_container_removed": false,
+    "sandbox_delete_ok": true,
+    "sandbox_delete_volume_removed": false,
+    "scenario_id": "repeated-128-complexity-v1",
+    "schema": "core-fs-bench-pro-exec-fuse-edit-performance-v1",
+    "service_endpoint_port": 55406,
+    "status": "FAIL",
+    "store": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-128-01/store.sqlite",
+    "telemetry_run": "791d6dc063adbfffb5dc2b9be2617c4b",
+    "unmount_ok": false,
+    "upstream_calls": 0
+  },
+  "driver_exit_code": 1,
+  "driver_timeout": false,
+  "harness_seal": "bce60d62bc9fd528d152157707d2113d8d4ea3b601af98c68876b4c9eae83c24",
+  "image_id": "sha256:571e34b0b2e439eddd5a1931d17fbcf5e8891485ec5f0fdcac1c1737459fc298",
+  "product_seal": "a71196edd7797f19f90beafa0c81201b7593465c644859ec06337a7b13327ea0",
+  "registry_sha256": "670973c95d747828fe2db02c82323a4df4f585bc3d9ed011e2c378159a731cad",
+  "route_ok": false,
+  "sample_count": 1,
+  "scenario_id": "repeated-128-complexity-v1",
+  "schema": "issue232-phase1c-count-receipt-v1",
+  "source_commit": "66c702a08fd916f08a1839bbd1bc8256a4e42903",
+  "status": "FAIL",
+  "verification": {
+    "reason": "driver did not complete",
+    "status": "NOT_RUN"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "cursor_key": "retained locally, mode 0600; omitted from committed evidence",
+  "files": {
+    "history.sqlite": {
+      "boundary": "post attempt and verifier; Store-wide, not a timed phase",
+      "bytes": 86016,
+      "page_count": 21,
+      "page_size": 4096,
+      "sha256": "858ad083b074730ce617f75c12bdc4986c47f3c79127edc712594d6bd6d6e632"
+    },
+    "store.sqlite": {
+      "boundary": "post attempt and verifier; Store-wide, not a timed phase",
+      "bytes": 3215360,
+      "page_count": 785,
+      "page_size": 4096,
+      "sha256": "1df17947687f811eabdbdc44058d30ee5fbf4fca87fc25e61158c88d67fef0af"
+    }
+  },
+  "full_local_run_path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-cutoff-at-01",
+  "status": "INELIGIBLE"
+}
