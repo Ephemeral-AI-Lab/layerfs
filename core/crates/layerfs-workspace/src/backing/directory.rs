@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-pub(crate) struct Directory {
+pub struct Directory {
     pub path: Box<Path>,
     pub incarnation: [u8; 32],
     state: Mutex<State>,

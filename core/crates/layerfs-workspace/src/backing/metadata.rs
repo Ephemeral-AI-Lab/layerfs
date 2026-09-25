@@ -20,6 +20,7 @@ pub const CANDIDATE_BYTES: u64 = 137 * 4096;
 pub const ESCROW: u64 = 208 * 4096;
 pub const WORKING: usize = 640 * 1024;
 const RETAINED: usize = 128 * 1024;
+/// Not part of the public API.
 pub type MetadataCharge = (Charge, Charge);
 pub const MAX_ROOTS: usize = 32;
 pub struct MetadataHost {
@@ -237,7 +238,7 @@ impl MetadataHost {
     /// on `owner` is a delta against. One generation may publish more than one
     /// root, so the operation's own base is the candidate's parent, never the
     /// root it is about to publish.
-    pub(crate) fn anchor(owner: Option<&Arc<RootOwner>>) -> Option<Arc<RootOwner>> {
+    pub fn anchor(owner: Option<&Arc<RootOwner>>) -> Option<Arc<RootOwner>> {
         owner.and_then(|owner| owner.parent.clone())
     }
     pub fn candidate(

@@ -86,7 +86,10 @@ impl Workspace {
                 root
             } else {
                 let plan = self.lower_file(submission, inode, deadline)?;
-                if plan.edits.is_empty() && !inode.fresh {
+                // An exact zero is a version whose selected content is its
+                // own base; a splice that shared an untouched subtree records
+                // `u16::MAX` instead and is always lowered.
+                if plan.edits.is_empty() && inode.edits == 0 && !inode.fresh {
                     inode.base
                 } else {
                     submission.phase(StagePhase::FileSave, Some(serial))?;

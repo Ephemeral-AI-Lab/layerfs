@@ -169,7 +169,10 @@ impl Workspace {
         let mut completed = 0;
         while completed < bytes.len() {
             let position = offset + completed as u64;
-            let piece = {
+            // One bounded lookup per step: the cursor seeks to the extent that
+            // covers this position, reads only the pages on its path, and
+            // derives the extent's logical start from those pages.
+            let (start, piece) = {
                 let _view = self
                     .host
                     .metadata
@@ -180,11 +183,12 @@ impl Workspace {
                 root.arena.piece_at(
                     inode.pieces,
                     position,
+                    inode.length,
                     lease.window.as_mut().ok_or(WorkspaceError::Io)?,
                     deadline,
                 )?
             };
-            let skip = position - piece.start;
+            let skip = position - start;
             let count = (piece.length - skip).min((bytes.len() - completed) as u64) as usize;
             if piece.kind == crate::overlay::pieces::PieceKind::Zero {
                 bytes[completed..completed + count].fill(0);

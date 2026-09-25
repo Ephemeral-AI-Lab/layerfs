@@ -1,14 +1,13 @@
 //! One ordered COW page index, shared by inode, generation-dirty and piece roots.
 use super::{
     metadata::{Arena, RootOwner},
-    metadata_pages::{Cell, PageData, PageRef, HEADER, MAX_CELLS, MIN_BODY, PAGE},
+    metadata_pages::{
+        self, Cell, PageData, PageKind, PageRef, PieceRecord, HEADER, MAX_CELLS, MIN_BODY, PAGE,
+    },
     segments::Window,
 };
 use crate::{
-    overlay::{
-        directories::Directory,
-        pieces::{Inode, Piece, PieceKind},
-    },
+    overlay::{directories::Directory, pieces::Inode},
     WorkspaceError,
 };
 use std::time::Instant;
@@ -21,12 +20,50 @@ pub fn vector<T>(capacity: usize) -> Result<Vec<T>, WorkspaceError> {
     }
     Ok(out)
 }
-pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
-    // One cell owns at most two pages: a maintained directory's entry page and
-    // the removal page that shadows the name its origin still binds. Both are
-    // references of the record, so both must be counted here; a page whose only
-    // reference is a record field would otherwise never reach zero and never be
-    // freed.
+/// Every page reference one already-encoded page body holds: the child pages of
+/// a branch, and — for a piece leaf — the custody page of each `Local` extent.
+/// A responsibility edge must be counted once for every field that names it, or
+/// a page whose only reference is such a field never reaches zero and is never
+/// freed.
+pub fn edges_raw(
+    incarnation: [u8; 32],
+    r: PageRef,
+    bytes: &[u8],
+) -> Result<Vec<PageRef>, WorkspaceError> {
+    match PageKind::of(bytes)? {
+        PageKind::Cells => cells_edges(&PageData::decode(incarnation, r, bytes)?),
+        PageKind::Pieces => {
+            if bytes[48] == 0 {
+                let records = metadata_pages::decode_pieces_leaf(
+                    incarnation,
+                    r,
+                    bytes,
+                    layerfs_bridge::contract::MAX_FILE,
+                )?;
+                let mut refs = vector(records.len())?;
+                for record in records {
+                    if record.kind == PieceRecord::LOCAL {
+                        refs.push(record.custody);
+                    }
+                }
+                Ok(refs)
+            } else {
+                let (_, children) = metadata_pages::decode_pieces_branch(
+                    incarnation,
+                    r,
+                    bytes,
+                    layerfs_bridge::contract::MAX_FILE,
+                )?;
+                let mut refs = vector(children.len())?;
+                for child in children {
+                    refs.push(child.page);
+                }
+                Ok(refs)
+            }
+        }
+    }
+}
+fn cells_edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
     let mut refs = vector(page.cells.len() * 2)?;
     for cell in &page.cells {
         let r = if page.level > 0 {
@@ -45,19 +82,10 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
         } else if cell.key_len >= 2 && cell.key()[0] == b'T' && cell.value() == [1] {
             crate::overlay::directories::tombstone(cell.key())?;
             PageRef::NULL
-        } else if cell.key_len == 8 && cell.value_len == 64 {
-            let piece = Piece::parse(
-                u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
-                cell.value(),
-            )?;
-            if piece.kind == PieceKind::Local {
-                piece.custody
-            } else {
-                PageRef::NULL
-            }
         } else if (cell.key_len == 9 && cell.key()[0] == b'R' && cell.value_len == 80)
             || (cell.key_len == 17 && cell.key()[0] == b'D' && cell.value() == [1])
         {
+            // A result record and a dirty marker name no page of their own.
             PageRef::NULL
         } else {
             return Err(WorkspaceError::Io);
@@ -67,6 +95,9 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
         }
     }
     Ok(refs)
+}
+pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
+    cells_edges(page)
 }
 /// The declared level ceiling of one metadata key kind. Every metadata key is a
 /// one-byte kind followed by its identity, except a name kind's cursor bound,
@@ -154,197 +185,32 @@ impl Arena {
         }
         Err(WorkspaceError::Io)
     }
-    pub fn pieces(
+}
+impl Arena {
+    /// One file's extent that covers `offset`, with its derived logical start.
+    pub fn piece_at(
         &self,
         root: PageRef,
-        count: u16,
+        offset: u64,
         length: u64,
         window: &mut Window,
         deadline: Instant,
-    ) -> Result<Vec<Piece>, WorkspaceError> {
-        let mut out = vector(1024)?;
-        if root != PageRef::NULL {
-            self.collect_pieces(root, None, &mut out, window, deadline)?;
-        }
-        if out.len() != usize::from(count) {
-            return Err(WorkspaceError::Io);
-        }
-        let mut position = 0u64;
-        for p in &out {
-            if p.start != position {
-                return Err(WorkspaceError::Io);
-            }
-            position = position.checked_add(p.length).ok_or(WorkspaceError::Io)?;
-        }
-        if position != length {
-            return Err(WorkspaceError::Io);
-        }
-        Ok(out)
+    ) -> Result<(u64, crate::overlay::pieces::Piece), WorkspaceError> {
+        crate::backing::metadata_pieces::piece_at(self, root, offset, length, window, deadline)
     }
-    fn collect_pieces(
+    /// A bounded ordered cursor over one file's extents.
+    pub fn cursor(
         &self,
-        r: PageRef,
-        expected: Option<u8>,
-        out: &mut Vec<Piece>,
-        window: &mut Window,
-        deadline: Instant,
-    ) -> Result<(), WorkspaceError> {
-        let page = self.load(r, window, deadline)?;
-        if page.level > 1 || expected.is_some_and(|n| n != page.level || page.body() < MIN_BODY) {
-            return Err(WorkspaceError::Io);
-        }
-        for cell in page.cells {
-            if page.level == 0 {
-                if out.len() == 1024 {
-                    return Err(WorkspaceError::Capacity);
-                }
-                out.push(Piece::parse(
-                    u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
-                    cell.value(),
-                )?);
-            } else {
-                self.collect_pieces(
-                    PageRef::parse(cell.value())?,
-                    Some(page.level - 1),
-                    out,
-                    window,
-                    deadline,
-                )?;
-                let maximum =
-                    u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?);
-                if out.last().is_none_or(|p| p.start + p.length - 1 != maximum) {
-                    return Err(WorkspaceError::Io);
-                }
-            }
-        }
-        Ok(())
-    }
-    pub fn piece_at(
-        &self,
-        mut root: PageRef,
+        root: PageRef,
         offset: u64,
+        length: u64,
         window: &mut Window,
         deadline: Instant,
-    ) -> Result<Piece, WorkspaceError> {
-        let key = offset.to_be_bytes();
-        let mut expected = None;
-        let mut coverage: Option<(u64, u64)> = None;
-        for _ in 0..2 {
-            let page = self.load(root, window, deadline)?;
-            if expected.is_some_and(|n| n != page.level || page.body() < MIN_BODY) || page.level > 1
-            {
-                return Err(WorkspaceError::Io);
-            }
-            if page.level == 0 {
-                if let Some((start, end)) = coverage {
-                    let first = page.cells.first().ok_or(WorkspaceError::Io)?;
-                    let last = page.cells.last().ok_or(WorkspaceError::Io)?;
-                    let first = Piece::parse(
-                        u64::from_be_bytes(first.key().try_into().map_err(|_| WorkspaceError::Io)?),
-                        first.value(),
-                    )?;
-                    let last = Piece::parse(
-                        u64::from_be_bytes(last.key().try_into().map_err(|_| WorkspaceError::Io)?),
-                        last.value(),
-                    )?;
-                    if first.start != start || last.start + last.length - 1 != end {
-                        return Err(WorkspaceError::Io);
-                    }
-                }
-                let cell = page
-                    .cells
-                    .iter()
-                    .rev()
-                    .find(|c| c.key() <= key.as_slice())
-                    .ok_or(WorkspaceError::Io)?;
-                let p = Piece::parse(
-                    u64::from_be_bytes(cell.key().try_into().map_err(|_| WorkspaceError::Io)?),
-                    cell.value(),
-                )?;
-                if offset >= p.start + p.length {
-                    return Err(WorkspaceError::Io);
-                }
-                return Ok(p);
-            }
-            let at = page
-                .cells
-                .iter()
-                .position(|c| c.key() >= key.as_slice())
-                .unwrap_or(page.cells.len() - 1);
-            let start = if at == 0 {
-                0
-            } else {
-                u64::from_be_bytes(
-                    page.cells[at - 1]
-                        .key()
-                        .try_into()
-                        .map_err(|_| WorkspaceError::Io)?,
-                )
-                .checked_add(1)
-                .ok_or(WorkspaceError::Io)?
-            };
-            let end = u64::from_be_bytes(
-                page.cells[at]
-                    .key()
-                    .try_into()
-                    .map_err(|_| WorkspaceError::Io)?,
-            );
-            coverage = Some((start, end));
-            root = PageRef::parse(page.cells[at].value())?;
-            expected = Some(page.level - 1);
-        }
-        Err(WorkspaceError::Io)
+    ) -> Result<crate::backing::metadata_pieces::Cursor<'_, Self>, WorkspaceError> {
+        crate::backing::metadata_pieces::cursor(self, root, offset, length, window, deadline)
     }
 }
 impl RootOwner {
-    pub fn build_pieces(
-        &self,
-        pieces: &[Piece],
-        window: &mut Window,
-        deadline: Instant,
-    ) -> Result<PageRef, WorkspaceError> {
-        if pieces.is_empty() {
-            return Ok(PageRef::NULL);
-        }
-        let leaves = pieces.len().div_ceil(52);
-        let each = pieces.len().div_ceil(leaves);
-        let mut branches = vector(leaves)?;
-        for chunk in pieces.chunks(each) {
-            let mut cells = vector(chunk.len())?;
-            for p in chunk {
-                cells.push(Cell::new(&p.start.to_be_bytes(), &p.value())?)
-            }
-            let last = chunk.last().ok_or(WorkspaceError::Io)?;
-            let maximum = (last.start + last.length - 1).to_be_bytes();
-            let r = self.write_page(PageData { level: 0, cells }, window, deadline)?;
-            branches.push(Cell::new(&maximum, &r.bytes())?);
-        }
-        if branches.len() == 1 {
-            if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
-                eprintln!(
-                    "LFS_PIECE_PAGES v=1 pieces={} written={leaves}",
-                    pieces.len()
-                );
-            }
-            return PageRef::parse(branches[0].value());
-        }
-        let root = self.write_page(
-            PageData {
-                level: 1,
-                cells: branches,
-            },
-            window,
-            deadline,
-        )?;
-        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
-            eprintln!(
-                "LFS_PIECE_PAGES v=1 pieces={} written={}",
-                pieces.len(),
-                leaves + 1
-            );
-        }
-        Ok(root)
-    }
     pub fn update(
         &self,
         root: PageRef,

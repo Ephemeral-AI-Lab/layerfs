@@ -514,16 +514,14 @@ impl Workspace {
                     inode.pieces = candidate.build_pieces(
                         &[Piece {
                             kind: PieceKind::Base,
-                            start: 0,
                             length: inode.length,
                             offset: 0,
                             payload: 0,
                             custody: PageRef::NULL,
                         }],
+                        inode.length,
                         window,
-                        deadline,
                     )?;
-                    inode.count = 1;
                 }
                 updates.push(Cell::new(
                     &metadata_pages::inode_key(serial),
@@ -542,16 +540,14 @@ impl Workspace {
                 inode.pieces = candidate.build_pieces(
                     &[Piece {
                         kind: PieceKind::Local,
-                        start: 0,
                         length: payload.len(),
                         offset: 0,
                         payload: payload.record.id,
                         custody,
                     }],
+                    inode.length,
                     window,
-                    deadline,
                 )?;
-                inode.count = 1;
                 inode.edits = 1;
             }
             updates.push(Cell::new(

@@ -93,7 +93,7 @@ impl ReplacementSource {
                 }
                 return Ok(0);
             }
-            let piece = {
+            let (start, piece) = {
                 let host = self
                     .workspace
                     .host
@@ -105,11 +105,12 @@ impl ReplacementSource {
                 self.root.arena.piece_at(
                     self.inode.pieces,
                     self.position,
+                    self.inode.length,
                     window.window.as_mut().ok_or(WorkspaceError::Io)?,
                     deadline,
                 )?
             };
-            if piece.start != self.position {
+            if start != self.position {
                 return Err(WorkspaceError::Io);
             }
             self.position = self

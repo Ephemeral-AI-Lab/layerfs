@@ -299,16 +299,14 @@ impl Workspace {
                 inode.pieces = candidate.build_pieces(
                     &[crate::overlay::pieces::Piece {
                         kind: crate::overlay::pieces::PieceKind::Base,
-                        start: 0,
                         length: inode.length,
                         offset: 0,
                         payload: 0,
                         custody: PageRef::NULL,
                     }],
+                    inode.length,
                     window,
-                    deadline,
                 )?;
-                inode.count = 1;
             }
             updates.push(Cell::new(
                 &metadata_pages::inode_key(child.serial),
