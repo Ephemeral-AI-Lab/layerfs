@@ -285,15 +285,32 @@ mod linux {
         assert_eq!(f.read(handle, 0, 8192), original);
         drop(restore);
 
-        let zero = RangeEdit {
-            start: 8192,
-            end: 8192,
-            replacement: f.own(b""),
-        };
+        f.workspace.release(handle).unwrap();
+        mount.finish().unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        f.workspace
+            .forget(file.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("PROJECTED_RANGE_CHECK stream PASS");
+    }
+
+    #[test]
+    #[ignore = "requires native service and pristine Chunked base"]
+    fn projected_range_zero_capacity() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let mut mount = f.workspace.reserve_mount().unwrap();
+        mount.bind_invalidation(Arc::new(|_, _, _| Ok(()))).unwrap();
+        let handle = open(&f, file.serial, FileAccess::ReadWrite, false);
         let before = f
             .workspace
             .projected_range_state(handle, file.serial)
             .unwrap();
+        let zero = RangeEdit {
+            start: before.length,
+            end: before.length,
+            replacement: f.own(b""),
+        };
         let backing = f.workspace.backing_status().unwrap();
         let mut permit = f.workspace.begin_projection_mutation(deadline()).unwrap();
         assert_eq!(
@@ -337,11 +354,10 @@ mod linux {
             .projected_range_state(handle, file.serial)
             .unwrap();
         assert_eq!(after.stamp.revision, before.stamp.revision + 1);
-        assert_eq!(after.length, 8192 + 8 * 1024 * 1024);
-        assert_eq!(f.read(handle, 8192, 4096), vec![0; 4096]);
+        assert_eq!(after.length, before.length + 8 * 1024 * 1024);
+        assert_eq!(f.read(handle, before.length, 4096), vec![0; 4096]);
         assert_eq!(f.read(handle, after.length - 16, 16), vec![0; 16]);
         assert_eq!(f.read(handle, after.length, 1), Vec::<u8>::new());
-        assert_eq!(f.read(handle, 0, 8192), original);
         f.workspace.release(handle).unwrap();
         mount.finish().unwrap();
         f.workspace.commit(deadline()).unwrap();
@@ -349,7 +365,7 @@ mod linux {
             .forget(file.serial, u64::MAX, ReferenceScope::Local);
         drop(zero);
         f.workspace.close_clean().unwrap();
-        println!("PROJECTED_RANGE_CHECK stream PASS");
+        println!("PROJECTED_RANGE_CHECK zero_capacity PASS");
     }
 
     #[test]

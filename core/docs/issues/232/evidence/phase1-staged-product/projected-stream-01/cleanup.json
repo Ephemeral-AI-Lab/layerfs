@@ -1,0 +1,8 @@
+{
+  "container_removed_with": "docker rm -f layerfs-stage-96280948955e42cf",
+  "post_cleanup_inspect_exit_codes": {
+    "container": 1,
+    "volume": 1
+  },
+  "volume_removed_with": "docker volume rm layerfs-stage-96280948955e42cf-data"
+}

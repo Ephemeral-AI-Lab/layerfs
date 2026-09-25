@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "mode": "prepared-local-edit-large-fixture",
+  "logical_bytes": 67108864,
+  "recipe": "byte at absolute offset i is i % 251",
+  "performance_claim": false,
+  "cache_claim": null,
+  "producer_source": "a1f745221121b27ed0d828bd50501282c154ddeb",
+  "producer_product_inputs_sha256": "79b6724fa41f2fc3b91739dbf9aa3321ad94be82901cc5078c04a544592bc1e9",
+  "driver_sha256": "0f64979e759268af510f6dd006d36522193165b9ff4deb209deb8e462c9c7444",
+  "hard_budget_seconds": 60,
+  "binary_sha256": {
+    "layerfs-daemon": "017ed05535243782185a6ff993b45d9afbb95ab08bc6fadc5409921e62039569",
+    "layerfs-server": "8a581249eeb8fd6b0ce76f7ffb4bdf94231146c81b118c9778f86a35e72bd116",
+    "examples/public_key": "55a461a07b94c77451b75e6e3931e77f3eddd050064551af927944cf19bee352"
+  },
+  "store_master_sha256": "ba6fb9f1a0a83e5b9f05014e208792520d3ebf918ad2e26672dfe839307b1fba",
+  "clone_method": "independent-byte-copy of closed Store; fresh history catalog",
+  "input_sha256": "98dc891b284e4d84ac25b0c0a24fdbe39a7f0dbd643ad5e8aa06e02fc6258254",
+  "file_root": "ea17b152bec37892b51b9aa27a5acabc81304aee108d4869e6c5615804bfd133",
+  "root": "22923acceef8a0f55c4b13714be0bfffe9aab3f9a70d5bf9971dac79a0a96a5f",
+  "branch": "1192929292929292929292929292929292",
+  "root_serial": 1,
+  "closed_master_sha256": {
+    "store.sqlite": "ab407775eb91e037c11d299e9c2848e5bc770da2f7862de001829cdb60986607",
+    "history.sqlite": "2055f9b18a78427c71fe57d00de2abf6e84519fafdbc6cc13328f80655620541"
+  },
+  "cleanup": "PASS: producer processes exited; closed master retained for byte-copy reuse",
+  "command_wall_seconds": 4.629932417003147
+}

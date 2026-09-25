@@ -1,0 +1,2 @@
+layerfs-server ready 0.0.0.0:63392
+layerfs-server acceptor summary accepted=8 admitted=8 live_at_stop=1 peak_live=2 reaped=8 capacity_dropped=0 capacity=4 elapsed_ms=2599 error=None

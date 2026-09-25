@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::projected_range_stream ... FAILED
+
+failures:
+
+failures:
+    linux::projected_range_stream
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.05s
+

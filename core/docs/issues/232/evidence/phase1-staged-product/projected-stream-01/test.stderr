@@ -1,0 +1,4 @@
+
+thread 'linux::projected_range_stream' panicked at crates/layerfs-workspace/tests/projected_range.rs:330:18:
+called `Result::unwrap()` on an `Err` value: Capacity
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

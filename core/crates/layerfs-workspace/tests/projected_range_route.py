@@ -8,6 +8,7 @@ driver.CASES = {
     'notification_failure': ['notification_failure'],
     'nonroot_mode': ['nonroot_mode'],
     'stream': ['stream'],
+    'zero_capacity': ['zero_capacity'],
 }
 driver.REQUIREMENTS = {case: ['S-15'] for case in driver.CASES}
 driver.TEST_SOURCE = Path(__file__).with_name('projected_range.rs')
