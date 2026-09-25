@@ -1,0 +1,405 @@
+{
+  "acknowledgement_boundary": "WorkspaceApi::commit",
+  "cache_contract": "exec-fuse-edit-cache-v1",
+  "cache_domains": {
+    "linux-fuse-backing": {
+      "acquisition": "the per-case Sandbox and Mount create a fresh backing directory and spool inside the sandbox container; no host-side or product-side invalidation exists",
+      "check": "not checkable without a benchmark-only eviction between Edit and Commit, which the contract forbids; a post-Commit probe cannot qualify the measured Commit",
+      "domain": "linux-fuse-backing",
+      "eligibility": "INELIGIBLE for a cold claim: Commit may read the bytes Edit just wrote from resident backing pages, so the raw number is a declared-warm diagnostic",
+      "method": "declared-warm-not-invalidatable-v1"
+    },
+    "macos-store": {
+      "acquisition": "map the case's independent Store copy and history catalog read-only, instantiate resident pages, msync(MS_INVALIDATE|MS_SYNC) them away, then read residency with mincore without faulting data pages",
+      "check": "non-faulting mincore over every page of the Store copy and history catalog",
+      "domain": "macos-store",
+      "eligibility": "PASS only when the reported resident page count is 0 for the whole domain",
+      "method": "darwin-mmap-msync-invalidate-mincore-v1"
+    }
+  },
+  "carrier_abi": {
+    "caller_order": [
+      "open",
+      "STATE",
+      "EDIT",
+      "STATE",
+      "fstat",
+      "bounded-readback"
+    ],
+    "contract": "linux-projected-range-request-v2",
+    "edit": {
+      "command": "0x5060f541",
+      "input_bytes": 4192,
+      "magic": "LFE2",
+      "max_replacement_bytes": 4096,
+      "output_bytes": 0
+    },
+    "state": {
+      "command": "0xc058f540",
+      "input_bytes": 88,
+      "magic": "LFS2",
+      "output_bytes": 88
+    },
+    "version": 2
+  },
+  "cases": [
+    {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "canonical_count_expected": 56,
+      "canonical_root_expected": "9f557d08f00e034cac5eab1d3a3a7e86d69c560f1fa7c502d4234f52b3ab5984",
+      "carrier_protocol": "linux-projected-range-request-v2",
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool splice --file payload.bin --offset 524288 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 1048576 --output-version 4",
+      "delete_len": 0,
+      "edit_start": 524288,
+      "editor_algorithm": "linux-fuse-ioctl-range-splice-v2",
+      "editor_block_bytes": null,
+      "editor_direction": null,
+      "editor_shape": "STATE, one bounded EDIT, then STATE/fstat/bounded readback; no suffix copy or fallback",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ioctl",
+        "pread",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "expected_range_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "expected_write_callbacks": 0,
+      "family_id": "edit_length_changing",
+      "file_mode": 416,
+      "final_bytes": 1052672,
+      "final_sha256": "a95ad28f6fb8fecf9670fcbb1ed044ce88bb406ee1be5cd899078a54bba1c78b",
+      "fixture_bytes": 1048576,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "1mib",
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 5.3,
+      "historical_selection_id": "insert-middle-4k-on-1mib-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 54,
+      "mutation_executor": "workspace-exec-linux-fuse-range-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 1052672,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 458752,
+            "sha256": "17a968e35b8a97b3bac76564126bd89f7653ab8750e8dd54e6ad0a698371dfe4"
+          },
+          {
+            "bytes": 65536,
+            "offset": 987136,
+            "sha256": "3f414f5fa2c24dad7fa317375ee2b5b793299b88477a228503ef39c171975566"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-range-splice-commit-v1",
+      "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v4",
+      "scenario_version": 4,
+      "tool_output_version": 4
+    },
+    {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "canonical_count_expected": 546,
+      "canonical_root_expected": "4911a494f8c0e267e9bb7d1f9afe53d8dc753dc71565864242f7e40a6c080275",
+      "carrier_protocol": "linux-projected-range-request-v2",
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool splice --file payload.bin --offset 5242880 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 10485760 --output-version 4",
+      "delete_len": 0,
+      "edit_start": 5242880,
+      "editor_algorithm": "linux-fuse-ioctl-range-splice-v2",
+      "editor_block_bytes": null,
+      "editor_direction": null,
+      "editor_shape": "STATE, one bounded EDIT, then STATE/fstat/bounded readback; no suffix copy or fallback",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ioctl",
+        "pread",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "expected_range_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "expected_write_callbacks": 0,
+      "family_id": "edit_length_changing",
+      "file_mode": 416,
+      "final_bytes": 10489856,
+      "final_sha256": "c81fc21208ec31821ae0a4bbfa07c1d82f30b765fd8d091b5226bd1b141c46af",
+      "fixture_bytes": 10485760,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "10mib",
+      "fixture_sha256": "29c89128c748e4404f31b0147d447bd524d7b75afc98d56ac4debac762ee4b79",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 6.4,
+      "historical_selection_id": "insert-middle-4k-on-10mib-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 544,
+      "mutation_executor": "workspace-exec-linux-fuse-range-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 10489856,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 5177344,
+            "sha256": "2eff6c9f90bde49566cc18a953838d3be319726188c7def1aa9e42c4c6ac0345"
+          },
+          {
+            "bytes": 65536,
+            "offset": 10424320,
+            "sha256": "8a79128294984862d189b256886bc959de7c792f2e9347aff8a54e3fb1f87e7b"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-range-splice-commit-v1",
+      "scenario_id": "insert-middle-4k-on-10mib-ops-1-exec-v4",
+      "scenario_version": 4,
+      "tool_output_version": 4
+    },
+    {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "canonical_count_expected": 5396,
+      "canonical_root_expected": "f4b508184e8ee3d894266b6e043c2534f6cae2337726d1447102f58c62927086",
+      "carrier_protocol": "linux-projected-range-request-v2",
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool splice --file payload.bin --offset 52428800 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 104857600 --output-version 4",
+      "delete_len": 0,
+      "edit_start": 52428800,
+      "editor_algorithm": "linux-fuse-ioctl-range-splice-v2",
+      "editor_block_bytes": null,
+      "editor_direction": null,
+      "editor_shape": "STATE, one bounded EDIT, then STATE/fstat/bounded readback; no suffix copy or fallback",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ioctl",
+        "pread",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "expected_range_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "expected_write_callbacks": 0,
+      "family_id": "edit_length_changing",
+      "file_mode": 416,
+      "final_bytes": 104861696,
+      "final_sha256": "d94b7edae7887d4863ce05fc66d7e8322f63664eafa9f265db02ef6e62e5ce3a",
+      "fixture_bytes": 104857600,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "100mib",
+      "fixture_sha256": "1bb2d79d54f72ae15eb0bb76ad715b9aafeba8ff8f9aa4f47bad3e3f101885bd",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 6.25,
+      "historical_selection_id": "insert-middle-4k-on-100mib-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 5394,
+      "mutation_executor": "workspace-exec-linux-fuse-range-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 104861696,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 52363264,
+            "sha256": "e6f260bbd4b9a0b56ff4959409c8a3e76ed1e04ea0f06fdb7e1914e84d154317"
+          },
+          {
+            "bytes": 65536,
+            "offset": 104796160,
+            "sha256": "ed5c8d2e36c953a5906b4c124d91e5456dad88ec81be3ae2f5c46f1fbb5bf01c"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-range-splice-commit-v1",
+      "scenario_id": "insert-middle-4k-on-100mib-ops-1-exec-v4",
+      "scenario_version": 4,
+      "tool_output_version": 4
+    },
+    {
+      "acknowledgement_boundary": "WorkspaceApi::commit",
+      "cache_contract": "exec-fuse-edit-cache-v1",
+      "cache_domains": [
+        "macos-store",
+        "linux-fuse-backing"
+      ],
+      "canonical_count_expected": 26996,
+      "canonical_root_expected": "8a5534a728677961df1b83b226137ab82fa236b620e8f87c06919c2338770901",
+      "carrier_protocol": "linux-projected-range-request-v2",
+      "clone_method": "independent-writable-byte-copy",
+      "command": "/layerfs-bench/bin/layerfs-edit-tool splice --file payload.bin --offset 262141952 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 524283904 --output-version 4",
+      "delete_len": 0,
+      "edit_start": 262141952,
+      "editor_algorithm": "linux-fuse-ioctl-range-splice-v2",
+      "editor_block_bytes": null,
+      "editor_direction": null,
+      "editor_shape": "STATE, one bounded EDIT, then STATE/fstat/bounded readback; no suffix copy or fallback",
+      "editor_syscalls": [
+        "open",
+        "fstat",
+        "ioctl",
+        "pread",
+        "close"
+      ],
+      "eligibility_rule": "fuse-backing-domain-served-by-resident-pages-not-invalidatable",
+      "expected_range_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "expected_write_callbacks": 0,
+      "family_id": "edit_length_changing",
+      "file_mode": 416,
+      "final_bytes": 524288000,
+      "final_sha256": "5a61a7ffedad3ccc18ecacffb38a35e330009d345c237c83881ce68b7db028b4",
+      "fixture_bytes": 524283904,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_label": "500mib-capped-26k994",
+      "fixture_sha256": "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f",
+      "g2_source": "#152 final report, C1/G2 candidate column, 0.01 ms precision",
+      "g2_target_ms": 7.76,
+      "historical_selection_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1",
+      "implementation_route": "layerfs-daemon-fuse-workspace-commit",
+      "initial_count": 26994,
+      "mutation_executor": "workspace-exec-linux-fuse-range-tool",
+      "not_run_reason": null,
+      "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+      "operation_entrypoint": "WorkspaceApi::exec",
+      "operation_key": "insert-middle-4k",
+      "operation_surface": "workspace-posix-fuse",
+      "oracle": {
+        "bounded_window_bytes": 196608,
+        "branch_head_and_historical_root": true,
+        "canonical_root_source": "public C1/C5 reader after the timed child exits",
+        "final_bytes": 524288000,
+        "full_file_bytes_verified": true,
+        "full_file_digest": true,
+        "windows": [
+          {
+            "bytes": 131072,
+            "offset": 262076416,
+            "sha256": "2f8858e45dae4c84113e0027d6cd2a71e60850d809db5318ec29ce94a8af9272"
+          },
+          {
+            "bytes": 65536,
+            "offset": 524222464,
+            "sha256": "764d72a0cccd9ae56adbbb622fc25797eda5ded41c2fa0f7664abd091c99f29e"
+          }
+        ]
+      },
+      "orchestration_executor": "layerfs-sdk release benchmark driver",
+      "payload_seed": 6313238748831594097,
+      "payload_source": "/layerfs-bench/payloads/insert-middle-4k.bin",
+      "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+      "registration_status": "REGISTERED",
+      "repetition": 1,
+      "replacement_kind": "inline",
+      "replacement_len": 4096,
+      "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+      "route": "sdk-exec-fuse-range-splice-commit-v1",
+      "scenario_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4",
+      "scenario_version": 4,
+      "tool_output_version": 4
+    }
+  ],
+  "clone_method": "independent-writable-byte-copy",
+  "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+  "operation_entrypoint": "WorkspaceApi::exec",
+  "operation_surface": "workspace-posix-fuse",
+  "route": "sdk-exec-fuse-range-splice-commit-v1",
+  "scenario_version": 4,
+  "schema": "core-fs-bench-pro-exec-fuse-insert-registry-v4",
+  "source_registry": {
+    "path": "registry/workspace-exec-insert-v3.json",
+    "sha256": "a11be713e3f7151b5586e4c7899361d33fadf77f06b9caf1ec8ad2ca5141e167"
+  },
+  "telemetry_key": "sdk.edit_commit.fuse",
+  "tool_output_contract": {
+    "fields": [
+      "status",
+      "operation",
+      "direction",
+      "final_bytes",
+      "shifted_bytes",
+      "mtime_seconds",
+      "mtime_nanoseconds"
+    ],
+    "flag": "--output-version 4",
+    "format": "one untruncated JSON line",
+    "mtime_source": "post-EDIT STATE, checked against same-descriptor fstat"
+  }
+}

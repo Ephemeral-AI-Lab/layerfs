@@ -19,7 +19,7 @@ import time
 
 BENCH = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BENCH))
-from shared import edit_cache, edit_contract as contract, edit_insert_v3  # noqa: E402
+from shared import edit_cache, edit_contract as contract, edit_insert_v3, edit_telemetry_v4  # noqa: E402
 
 CURSOR_KEY_ENV = "LAYERFS_HISTORY_CURSOR_KEY"
 DRIVER = "benchmark_edit"
@@ -71,7 +71,7 @@ def prepare_fixture(root, size):
 
 def compatibility_key(identity, fixture, row=None, init_binary_sha256=None):
     """The master compatibility key: unknown compatibility fails closed."""
-    if row and row["scenario_version"] == 3:
+    if row and row["scenario_version"] in (3, 4):
         if not init_binary_sha256:
             raise ValueError("v3 master needs the exact preparation binary hash")
         return {
@@ -217,12 +217,12 @@ def master(root, size, binaries, identity, cursor_key, budget_ns=60_000_000_000,
     the earlier one as evidence.
     """
     root = Path(root)
-    if row and row["scenario_version"] == 3:
+    if row and row["scenario_version"] in (3, 4):
         return _master_v3(root, size, binaries, identity, cursor_key, row, budget_ns)
     fixture = prepare_fixture(root, size)
     key = compatibility_key(identity, fixture, row,
                             sha256(binaries["benchmark_init"]) if row and
-                            row["scenario_version"] == 3 else None)
+                            row["scenario_version"] in (3, 4) else None)
     key_digest = hashlib.sha256(
         json.dumps(key, sort_keys=True).encode()).hexdigest()[:16]
     directory = root / f"master-{size}-{key_digest}"
@@ -281,15 +281,15 @@ def case_record(row, master_record, branch_body):
     replacement = contract.payload_bytes(row["payload_seed"], replacement_len,
                                         row["replacement_kind"])
     final = row["final_bytes"]
-    v3 = row["scenario_version"] == 3
-    if v3:
+    sealed_splice = row["scenario_version"] in (3, 4)
+    if sealed_splice:
         expected_root = row.get("canonical_root_expected")
         expected_count = row.get("canonical_count_expected")
         if (not isinstance(expected_root, str) or len(expected_root) != 64 or
                 any(byte not in "0123456789abcdef" for byte in expected_root) or
                 type(expected_count) is not int or expected_count <= 0):
-            raise ValueError(f"{row['scenario_id']}: v3 expected canonical root/count absent")
-    full_digest = v3 or final <= contract.FULL_DIGEST_MAX_BYTES
+            raise ValueError(f"{row['scenario_id']}: expected canonical root/count absent")
+    full_digest = sealed_splice or final <= contract.FULL_DIGEST_MAX_BYTES
     windows = {}
     for index, window in enumerate(row["oracle"]["windows"]):
         observed = contract.result_window(row["fixture_bytes"], start, row["delete_len"],
@@ -331,6 +331,11 @@ def case_record(row, master_record, branch_body):
     }
     if row.get("carrier_protocol"):
         record["carrier_protocol"] = row["carrier_protocol"]
+    if row["scenario_version"] == 4:
+        if row.get("file_mode") != 416:
+            raise ValueError(f"{row['scenario_id']}: expected fixture mode absent")
+        record["fixture_mode"] = row["file_mode"]
+        record["expected_mode"] = row["file_mode"]
     record.update(windows)
     return record
 
@@ -390,7 +395,7 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
                    ("fixture_bytes", "fixture_sha256", "first_use_wall_ns", "reuse",
                     "compatibility_key", "store_bytes", "history_bytes") +
                    (("store_sha256", "history_sha256", "manifest_sha256")
-                    if row["scenario_version"] == 3 else ())},
+                    if row["scenario_version"] in (3, 4) else ())},
         "clone_method": row["clone_method"],
         "clone_copy_wall_ns": copy_wall_ns,
         "cache_contract": row["cache_contract"],
@@ -399,10 +404,10 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         "performance_gate": row["performance_gate"],
         "admission_eligible": False,
     }
-    if row["scenario_version"] == 3:
+    if row["scenario_version"] in (3, 4):
         receipt["clone_sha256_verified"] = False
     try:
-        if row["scenario_version"] == 3:
+        if row["scenario_version"] in (3, 4):
             receipt["clone_sha256"], receipt["clone_sha256_verified"] = _clone_seals(
                 store, history, master_record)
             if not receipt["clone_sha256_verified"]:
@@ -432,13 +437,15 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
         residual = b"\n".join(line for line in stderr.splitlines()
                               if not line.startswith(b"LFT1 "))
         (folder / "telemetry.lft1").write_bytes(b"\n".join(lft1) + (b"\n" if lft1 else b""))
+        if row["scenario_version"] == 4:
+            (folder / "driver.raw.stderr").write_bytes(stderr)
         (folder / "driver.stdout").write_bytes(other)
         if receipts:
             (folder / "driver-receipt.json").write_bytes(receipts[-1] + b"\n")
         (folder / "driver.stderr").write_bytes(residual)
         receipt.update(
             command=command,
-            sample_count=1 if row["scenario_version"] == 3 or code == 0 else 0,
+            sample_count=1 if row["scenario_version"] in (3, 4) or code == 0 else 0,
             driver_exit_code=code,
             driver_timeout=timed_out,
             complete_command_wall_ns=wall,
@@ -458,7 +465,9 @@ def sample(run_root, row, binaries, image, identity, cursor_key, telemetry_run, 
             receipt["edit_ns"] = driver.get("edit_ns")
             receipt["commit_ns"] = driver.get("commit_ns")
             (folder / "perf.jsonl").write_text(json.dumps(driver, sort_keys=True) + "\n")
-        receipt["telemetry"] = edit_telemetry_check(lft1)
+        receipt["telemetry"] = (edit_telemetry_v4.check(stderr, receipt.get("driver") or {},
+                              f"{telemetry_run:032x}") if row["scenario_version"] == 4 else
+                              edit_telemetry_check(lft1))
         receipt["telemetry_raw_lines"] = len(lft1)
         if verification == "inline":
             receipt["verification"] = verify(folder, binaries, case_path, store, history, row,
@@ -554,6 +563,14 @@ def verify(folder, binaries, case_path, store, history, row, receipt, cursor_key
     # and checks them against the reopened history.
     record["branch_id"] = driver.get("branch_id", "")
     record["expected_head_commit"] = driver.get("head_commit", "")
+    if row["scenario_version"] == 4:
+        seconds = driver.get("observed_mtime_seconds")
+        nanoseconds = driver.get("observed_mtime_nanoseconds")
+        if (type(seconds) is not int or type(nanoseconds) is not int or
+                not 0 <= nanoseconds < 1_000_000_000):
+            raise ValueError("v4 driver did not retain checked post-EDIT STATE mtime")
+        record["expected_mtime_seconds"] = seconds
+        record["expected_mtime_nanoseconds"] = nanoseconds
     bound.write_text("".join(f"{key}={value}\n" for key, value in sorted(record.items())))
     command = [str(binaries[VERIFIER]), str(bound), str(store), str(history)]
     environment = {**os.environ, CURSOR_KEY_ENV: cursor_key}
@@ -604,6 +621,21 @@ def verifier_result(code, timed_out, wall, child, row, driver, store, history):
             child.get("history") == str(history),
         ))
     )
+    if row["scenario_version"] == 4:
+        identity_match = identity_match and all((
+            child.get("full_file_bytes_verified") is True,
+            child.get("content_match") is True,
+            child.get("canonical_root_match") is True,
+            child.get("canonical_count_match") is True,
+            child.get("canonical_root") == row["canonical_root_expected"],
+            child.get("extent_count") == row["canonical_count_expected"],
+            child.get("published_metadata_match") is True,
+            child.get("historical_metadata_match") is True,
+            child.get("expected_mode") == row["file_mode"],
+            child.get("fixture_mode") == row["file_mode"],
+            child.get("expected_mtime_seconds") == driver.get("observed_mtime_seconds"),
+            child.get("expected_mtime_nanoseconds") == driver.get("observed_mtime_nanoseconds"),
+        ))
     within_budget = isinstance(wall, int) and 0 <= wall <= contract.VERIFIER_HARD_BUDGET_NS
     status = ("TIMEOUT" if timed_out else "PASS" if code == 0 and within_budget
               and identity_match and child.get("status") == "PASS" else "FAIL")
@@ -619,12 +651,12 @@ def terminal_status(receipt, row):
         reasons.append("complete command did not finish inside its budget")
     if driver.get("status") != "COMPLETE":
         reasons.append("the measured attempt did not complete")
-    if row["scenario_version"] == 3:
+    if row["scenario_version"] in (3, 4):
         for name in ("scenario_id", "route", "operation_contract_id", "fixture_bytes",
                      "edit_start", "delete_len", "replacement_len", "replacement_sha256",
                      "final_bytes"):
             if driver.get(name) != row[name]:
-                reasons.append(f"v3 driver {name} differs from registered case")
+                reasons.append(f"driver {name} differs from registered case")
         try:
             counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(","))
             if (counts.get("range_state") != str(row["expected_range_state_callbacks"]) or
@@ -633,11 +665,18 @@ def terminal_status(receipt, row):
                     driver.get("range_accepted_payload_bytes") != row["replacement_len"] or
                     driver.get("range_shifted_suffix_bytes") !=
                     row["expected_shifted_suffix_bytes"]):
-                reasons.append("v3 range route counts or bytes differ from one bounded splice")
+                reasons.append("range route counts or bytes differ from one bounded splice")
         except (KeyError, ValueError, AttributeError):
-            reasons.append("v3 range route counts are unavailable")
-    if (receipt.get("telemetry") or {}).get("status") != "PASS":
+            reasons.append("range route counts are unavailable")
+    telemetry_pass = (receipt.get("telemetry") or {}).get("status") == "PASS"
+    if not telemetry_pass and row["scenario_version"] != 4:
         reasons.append("caller LFT1 root/children missing")
+    capture_incomplete = row["scenario_version"] == 4 and (
+        driver.get("daemon_log_attempted") is not True or
+        driver.get("daemon_log_truncated") is not False or
+        driver.get("daemon_log_error") != "None" or
+        type(driver.get("daemon_log_bytes")) is not int or
+        driver["daemon_log_bytes"] == 0)
     verification = (receipt.get("verification") or {}).get("status")
     if verification not in ("PASS", "SKIPPED"):
         reasons.append("independent verification did not pass")
@@ -651,6 +690,12 @@ def terminal_status(receipt, row):
     fuse_warm = (cache.get("linux-fuse-backing") or {}).get("status") != "PASS"
     if reasons:
         return {"status": "FAIL", "status_reasons": reasons}
+    if capture_incomplete:
+        return {"status": "INCOMPLETE", "status_reasons": ["daemon log capture incomplete"],
+                "raw_edit_commit_ns": driver.get("edit_commit_ns")}
+    if row["scenario_version"] == 4 and not telemetry_pass:
+        return {"status": "INCOMPLETE", "status_reasons": ["caller/Service/daemon LFT1 incomplete"],
+                "raw_edit_commit_ns": driver.get("edit_commit_ns")}
     if verification_skipped:
         return {"status": "INCOMPLETE",
                 "status_reasons": ["independent verification not run on this sample"],

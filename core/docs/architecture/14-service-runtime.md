@@ -1130,5 +1130,12 @@ Four product surfaces complete that route:
   container; a retained `CreateError.sandbox` ID is deletable even when
   readiness never completed. Dropping a `Server` or an owner is not a cleanup
   receipt.
+  The #241 diagnostic `delete_with_logs` uses the same owned route. After a
+  successful bounded stop and before container removal it streams up to 8 MiB
+  of raw daemon stderr into the caller's sink, with a separate capture result
+  for command/write failure or truncation. Log collection has a 3 s command
+  bound and cannot skip container or volume cleanup; ordinary `delete` does
+  not collect logs. This addition is based on the #241 Phase 4 source change
+  after `cb1bdb70e97628c2c38055ff2600e070e742010e`.
 * `WorkspaceApi::status` exposes the bounded projection and upstream counts
   described above after the acknowledgement, never between Edit and Commit.

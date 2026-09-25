@@ -22,6 +22,7 @@ sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 from shared import edit_contract as edit  # noqa: E402
 from shared import edit_insert_v3  # noqa: E402
+from shared import edit_insert_v4  # noqa: E402
 from shared import edit_route  # noqa: E402
 
 CONTRACT_COMMIT = "05fb205d391d551a17bde86a00c969310b6e7406"
@@ -375,14 +376,15 @@ EXEC_EDIT_BINARIES = {"benchmark_edit": "benchmark_edit", "verify_edit": "verify
 
 def edit_selection(scenario_id):
     """Resolve a case against its own sealed registry, never the other version."""
-    contracts = (edit_insert_v3,) if scenario_id.endswith("-exec-v3") else (edit,)
+    contracts = ((edit_insert_v4,) if scenario_id.endswith("-exec-v4") else
+                 (edit_insert_v3,) if scenario_id.endswith("-exec-v3") else (edit,))
     for contract in contracts:
         rows = {row["scenario_id"]: row for row in contract.registry()}
         if scenario_id in rows:
             path = HERE / contract.REGISTRY_PATH
             if digest(path) != contract.REGISTRY_SHA256:
                 raise ValueError("committed edit registry hash differs from frozen identity")
-            if contract is edit_insert_v3:
+            if contract in (edit_insert_v3, edit_insert_v4):
                 contract.validate_registry()
             return contract, rows[scenario_id]
     raise ValueError("unregistered Exec/FUSE scenario")
@@ -390,8 +392,8 @@ def edit_selection(scenario_id):
 
 def require_edit_image(image, contract, row, identity=None):
     """Reject an image from another registry, build profile or payload recipe."""
-    expected_schema = ("core-fs-bench-pro-exec-fuse-insert-image-v3" if
-                       contract is edit_insert_v3 else
+    expected_schema = (f"core-fs-bench-pro-exec-fuse-insert-image-v{contract.SCENARIO_VERSION}" if
+                       contract in (edit_insert_v3, edit_insert_v4) else
                        "core-fs-bench-pro-exec-fuse-edit-image-v1")
     payload = row["payload_source"].rsplit("/", 1)[-1] if row["payload_source"] else None
     payload_ok = (payload is None or (image.get("payloads") or {}).get(payload) ==
@@ -399,8 +401,9 @@ def require_edit_image(image, contract, row, identity=None):
     identity = identity or identities()
     if (image.get("schema") != expected_schema or
             image.get("registry_sha256") != contract.REGISTRY_SHA256 or
-            (contract is edit_insert_v3 and
-             (image.get("scenario_version") != 3 or image.get("carrier_abi") != contract.ABI)) or
+            (contract in (edit_insert_v3, edit_insert_v4) and
+             (image.get("scenario_version") != contract.SCENARIO_VERSION or
+              image.get("carrier_abi") != contract.ABI)) or
             image.get("profile") != "release" or
             image.get("target") != "aarch64-unknown-linux-musl" or
             image.get("lockfile_sha256") != digest(CORE / "Cargo.lock") or
@@ -425,19 +428,24 @@ def recheck_exec_edit(out):
     run = json.loads((out / "run.json").read_text())
     receipt = run.get("receipt") or {}
     folder = Path(receipt.get("folder", ""))
-    raw = (folder / "telemetry.lft1").read_bytes()
+    _, row = edit_selection(receipt["scenario_id"])
+    raw_path = folder / ("driver.raw.stderr" if row["scenario_version"] == 4 else
+                         "telemetry.lft1")
+    raw = raw_path.read_bytes()
     if not raw:
         raise ValueError("no retained raw LFT1 to re-derive from")
-    telemetry = edit_route.edit_telemetry_check(raw.splitlines())
-    _, row = edit_selection(receipt["scenario_id"])
+    telemetry = (edit_route.edit_telemetry_v4.check(
+        raw, receipt.get("driver") or {},
+        (receipt.get("driver") or {}).get("telemetry_run", ""))
+        if row["scenario_version"] == 4 else edit_route.edit_telemetry_check(raw.splitlines()))
     receipt = {**receipt, "telemetry": telemetry,
                "verification": retained_edit_verification(out, receipt, row)}
     outcome = edit_route.terminal_status(receipt, row)
     write_json(out / "telemetry-check.json", {
         "schema": "core-fs-bench-pro-exec-fuse-edit-telemetry-recheck-v1",
         "scenario_id": receipt["scenario_id"],
-        "raw_lft1": str(folder / "telemetry.lft1"),
-        "raw_lft1_sha256": edit_route.sha256(folder / "telemetry.lft1"),
+        "raw_lft1": str(raw_path),
+        "raw_lft1_sha256": edit_route.sha256(raw_path),
         "resample": False,
         "telemetry": telemetry,
     })
@@ -576,8 +584,9 @@ def run_exec_edit(selection, out, verification="inline"):
     out.mkdir(parents=True)
     build_receipt = build_exec_edit(out, target, identity)
     write_json(out / "build.json", build_receipt)
-    image_path = CORE / ("target/exec-fuse-insert-v3/image.json" if
-                         contract is edit_insert_v3 else "target/exec-fuse-edit/image.json")
+    image_path = CORE / (f"target/exec-fuse-insert-v{contract.SCENARIO_VERSION}/image.json"
+                         if contract in (edit_insert_v3, edit_insert_v4) else
+                         "target/exec-fuse-edit/image.json")
     if not image_path.is_file():
         raise ValueError("build the sealed edit image before sampling")
     image = json.loads(image_path.read_text())
@@ -609,7 +618,8 @@ def run_exec_edit(selection, out, verification="inline"):
         receipt = edit_route.sample(results, row, binaries, image["image_id"], identity,
                                     cursor_key, telemetry_run,
                                     os.urandom(16).hex(), verification,
-                                    attempt_root=out if contract is edit_insert_v3 else None)
+                                    attempt_root=out if contract in (edit_insert_v3, edit_insert_v4)
+                                    else None)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
                                   "selection": selection, "identity": identity,
                                   "selection_mode": "registered-case", "image": image,
@@ -634,6 +644,10 @@ EDIT_REPORT_COLUMNS = (
     "verification_coverage", "full_file_bytes_verified",
     "lft1_root_ns", "lft1_edit_ns", "lft1_commit_ns", "lft1_cpu_user_ns", "lft1_cpu_system_ns",
     "lft1_sampled_max_rss", "lft1_resource_status", "lft1_scope", "projection_counts",
+    "lft1_status", "lft1_raw_sha256", "lft1_boundary_covered",
+    "daemon_workspace_exec_ns", "daemon_cpu_user_ns", "daemon_cpu_system_ns",
+    "daemon_sampled_max_rss", "daemon_resource_status", "daemon_boundary_covered",
+    "recorded_telemetry_status", "lft1_partial_coverage",
     "upstream_calls", "unmount_ok", "sandbox_delete_ok", "evidence",
     "recorded_terminal", "derived_verification_gate", "current_admission_status",
 )
@@ -657,25 +671,45 @@ def edit_report_row(row, folder):
         return values
     run = json.loads(run_file.read_text())
     receipt = run.get("receipt") or {}
-    if row["scenario_version"] == 3 and (
+    image = run.get("image") or {}
+    if row["scenario_version"] in (3, 4) and (
             run.get("selection") != row["scenario_id"] or
             receipt.get("scenario_id") != row["scenario_id"] or
-            (run.get("image") or {}).get("registry_sha256") != edit_insert_v3.REGISTRY_SHA256):
+            image.get("registry_sha256") !=
+            (edit_insert_v4 if row["scenario_version"] == 4 else
+             edit_insert_v3).REGISTRY_SHA256 or
+            (row["scenario_version"] == 4 and
+             (image.get("schema") != "core-fs-bench-pro-exec-fuse-insert-image-v4" or
+              image.get("scenario_version") != 4 or
+              image.get("carrier_abi") != edit_insert_v4.ABI))):
         values.update({"terminal": "INVALID_EVIDENCE", "goal": "INELIGIBLE",
                        "verification": "INELIGIBLE", "recorded_terminal": receipt.get("status"),
                        "derived_verification_gate": "INELIGIBLE",
                        "current_admission_status": "INVALID_EVIDENCE",
-                       "invalid_reason": "v3 selection/image identity mismatch"})
+                       "invalid_reason": "splice selection/image identity mismatch"})
         return values
     driver = receipt.get("driver") or {}
-    telemetry = receipt.get("telemetry") or {}
+    recorded_telemetry = receipt.get("telemetry") or {}
+    telemetry = recorded_telemetry
+    if row["scenario_version"] == 4:
+        raw_path = Path(receipt.get("folder", "")) / "driver.raw.stderr"
+        if not raw_path.is_file() or edit_route.sha256(raw_path) != recorded_telemetry.get("raw_sha256"):
+            values.update({"terminal": "INVALID_EVIDENCE", "goal": "INELIGIBLE",
+                           "recorded_terminal": receipt.get("status"),
+                           "invalid_reason": "v4 raw telemetry is missing or differs from its receipt"})
+            return values
+        telemetry = edit_route.edit_telemetry_v4.check(
+            raw_path.read_bytes(), driver, driver.get("telemetry_run", ""))
+    v4_coverage = (telemetry.get("coverage") or {}) if row["scenario_version"] == 4 else {}
+    host_window = v4_coverage.get("edit_commit") or {}
+    daemon_window = v4_coverage.get("workspace_exec") or {}
     master = receipt.get("master") or {}
     # The identity-matched verification is a separate command with its own
     # retained receipt; the performance receipt keeps the SKIPPED marker it was
     # collected with, so the report reads both without repeating either.
     raw_verification = edit_verification_record(folder, receipt)
     verification = retained_edit_verification(folder, receipt, row)
-    effective = {**receipt, "verification": verification}
+    effective = {**receipt, "verification": verification, "telemetry": telemetry}
     recorded_terminal = receipt.get("status")
     current_admission_status = (recorded_terminal if recorded_terminal == "NOT_RUN" else
                                 edit_route.terminal_status(effective, row)["status"])
@@ -715,13 +749,34 @@ def edit_report_row(row, folder):
         "driver_preparation_ns": receipt.get("preparation_ns"),
         "complete_command_wall_ns": receipt.get("complete_command_wall_ns"),
         "complete_command_status": receipt.get("complete_command_status"),
-        "lft1_root_ns": telemetry.get("root_elapsed_ns"),
-        "lft1_edit_ns": telemetry.get("child_elapsed_ns", {}).get("edit"),
-        "lft1_commit_ns": telemetry.get("child_elapsed_ns", {}).get("commit"),
-        "lft1_cpu_user_ns": (telemetry.get("root_cpu_shared_ns") or [None, None])[0],
-        "lft1_cpu_system_ns": (telemetry.get("root_cpu_shared_ns") or [None, None])[1],
-        "lft1_sampled_max_rss": telemetry.get("root_sampled_max_rss"),
-        "lft1_resource_status": telemetry.get("root_resource_status"),
+        "lft1_root_ns": (telemetry.get("edit_commit_elapsed_ns") if row["scenario_version"] == 4
+                         else telemetry.get("root_elapsed_ns")),
+        "lft1_edit_ns": ((telemetry.get("children") or {}).get("edit") or {}).get("elapsed_ns")
+        if row["scenario_version"] == 4 else telemetry.get("child_elapsed_ns", {}).get("edit"),
+        "lft1_commit_ns": ((telemetry.get("children") or {}).get("commit") or {}).get("elapsed_ns")
+        if row["scenario_version"] == 4 else telemetry.get("child_elapsed_ns", {}).get("commit"),
+        "lft1_cpu_user_ns": ((host_window.get("cpu_shared_ns") or [None, None])[0]
+                             if row["scenario_version"] == 4 else
+                             (telemetry.get("root_cpu_shared_ns") or [None, None])[0]),
+        "lft1_cpu_system_ns": ((host_window.get("cpu_shared_ns") or [None, None])[1]
+                               if row["scenario_version"] == 4 else
+                               (telemetry.get("root_cpu_shared_ns") or [None, None])[1]),
+        "lft1_sampled_max_rss": (host_window.get("sampled_max_rss")
+                                 if row["scenario_version"] == 4 else
+                                 telemetry.get("root_sampled_max_rss")),
+        "lft1_resource_status": (host_window.get("status") if row["scenario_version"] == 4 else
+                                  telemetry.get("root_resource_status")),
+        "lft1_status": telemetry.get("status"),
+        "recorded_telemetry_status": recorded_telemetry.get("status"),
+        "lft1_partial_coverage": "; ".join(telemetry.get("partial") or []),
+        "lft1_raw_sha256": telemetry.get("raw_sha256"),
+        "lft1_boundary_covered": host_window.get("boundary_covered"),
+        "daemon_workspace_exec_ns": telemetry.get("workspace_exec_elapsed_ns"),
+        "daemon_cpu_user_ns": (daemon_window.get("cpu_shared_ns") or [None, None])[0],
+        "daemon_cpu_system_ns": (daemon_window.get("cpu_shared_ns") or [None, None])[1],
+        "daemon_sampled_max_rss": daemon_window.get("sampled_max_rss"),
+        "daemon_resource_status": daemon_window.get("status"),
+        "daemon_boundary_covered": daemon_window.get("boundary_covered"),
         "projection_counts": driver.get("projection_counts"),
         "upstream_calls": driver.get("upstream_calls"),
         "unmount_ok": driver.get("unmount_ok"),
@@ -733,13 +788,13 @@ def edit_report_row(row, folder):
 def report_edit(campaign, out=None, scenario_version=2):
     """Complete report for exactly one registered scenario version."""
     campaign = Path(campaign)
-    contract = edit_insert_v3 if scenario_version == 3 else edit
-    if scenario_version == 3:
+    contract = {3: edit_insert_v3, 4: edit_insert_v4}.get(scenario_version, edit)
+    if scenario_version in (3, 4):
         contract.validate_registry()
     elif digest(HERE / edit.REGISTRY_PATH) != edit.REGISTRY_SHA256:
         raise ValueError("v2 registry identity changed")
     rows = [edit_report_row(row, campaign / row["scenario_id"]) for row in contract.registry()]
-    if len(rows) != (4 if scenario_version == 3 else 56):
+    if len(rows) != (4 if scenario_version in (3, 4) else 56):
         raise ValueError("every registered row must appear in the report")
     header = "\t".join(EDIT_REPORT_COLUMNS)
     body = "\n".join("\t".join("" if row[name] is None else str(row[name])
@@ -792,9 +847,12 @@ def main():
     report_edit_parser = commands.add_parser("report-edit")
     report_edit_parser.add_argument("--runs", required=True)
     report_edit_parser.add_argument("--out")
-    report_edit_parser.add_argument("--scenario-version", type=int, choices=[2, 3], default=2)
+    report_edit_parser.add_argument("--scenario-version", type=int, choices=[2, 3, 4], default=2)
     args = parser.parse_args()
-    edit_registry = (edit.registry() + edit_insert_v3.registry() if args.command == "list" else
+    edit_registry = (edit.registry() + edit_insert_v3.registry() + edit_insert_v4.registry()
+                     if args.command == "list" else
+                     edit_insert_v4.registry() if args.command == "run" and args.case and
+                     args.case.endswith("-exec-v4") else
                      edit_insert_v3.registry() if args.command == "run" and args.case and
                      args.case.endswith("-exec-v3") else
                      edit.registry() if args.command == "run" else [])

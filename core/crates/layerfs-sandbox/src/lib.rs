@@ -3,6 +3,7 @@ mod docker;
 mod owner;
 mod readiness;
 mod session;
+pub use docker::LogCapture;
 pub use layerfs_api_core::DeleteError;
 pub use owner::random;
 pub use owner::{

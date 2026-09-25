@@ -8,7 +8,7 @@ use layerfs_telemetry::runtime::Runtime;
 use std::{
     collections::BTreeMap,
     fs::File,
-    io::Read,
+    io::{Read, Write},
     net::SocketAddr,
     sync::Mutex,
     time::{Duration, Instant},
@@ -268,6 +268,27 @@ impl SandboxOwner {
     /// confirmed before the matching registry bindings are dropped. A partial
     /// outcome keeps its bindings and reports which resources remain.
     pub fn delete(&self, id: SandboxId) -> Result<(), DeleteError> {
+        self.delete_inner(id, None)
+    }
+
+    /// Delete an owned sandbox and stream its stopped daemon's raw stderr to
+    /// `output` before removing the container. Capture and cleanup outcomes
+    /// are independent; a failed or truncated capture never skips cleanup.
+    pub fn delete_with_logs(
+        &self,
+        id: SandboxId,
+        output: &mut (dyn Write + Send),
+    ) -> (Result<(), DeleteError>, docker::LogCapture) {
+        let mut capture = docker::LogCapture::default();
+        let cleanup = self.delete_inner(id, Some((output, &mut capture)));
+        (cleanup, capture)
+    }
+
+    fn delete_inner(
+        &self,
+        id: SandboxId,
+        capture: Option<(&mut (dyn Write + Send), &mut docker::LogCapture)>,
+    ) -> Result<(), DeleteError> {
         let record = self
             .registry
             .lock()
@@ -297,6 +318,9 @@ impl SandboxOwner {
             container_removed: false,
             volume_removed: false,
         })?;
+        if let Some((output, status)) = capture {
+            *status = docker::logs_stderr(&record.container, output);
+        }
         self.observe(2008, "owner.docker_remove", || {
             docker::remove_container(&record.container)
         })

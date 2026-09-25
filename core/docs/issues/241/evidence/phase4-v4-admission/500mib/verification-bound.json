@@ -1,0 +1,23 @@
+{
+  "coverage": "full-file",
+  "edit_commit_ns": 81680083,
+  "fresh_reopen": true,
+  "full_file_bytes_verified": true,
+  "identity": {
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "9e9d56ea7540e38c99f6d69c7a1abeedc1524aefb413a09bf815e3ce73d782fd",
+    "product_seal": "adff3c732ba428e243799464737f458763c8fa194db9df0127eb0df1e1b0e2d6",
+    "source_commit": "374e9636abb9ae10a041e0f71b1c07e84f2128f4",
+    "source_dirty": false,
+    "source_tree": "41a7518625205173875e3317260d35abb95b6b16"
+  },
+  "image_id": "sha256:9f24110e647ba22a4d0d995df6d25ec414552aef4222a5f4ca9ad82785a6edda",
+  "performance_command_wall_ns": 927817375,
+  "performance_run": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-500mib-a1",
+  "scenario_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-verification-binding-v1",
+  "verification_status": "PASS",
+  "verification_wall_ns": 2496897750
+}

@@ -1,7 +1,8 @@
 //! Sandbox custody through the composed owner.
 use layerfs_api_core::{DeleteError, SandboxId, SandboxInfo};
 use layerfs_bridge::contract::Failure;
-use layerfs_sandbox::{CreateError, SandboxOwner};
+use layerfs_sandbox::{CreateError, LogCapture, SandboxOwner};
+use std::io::Write;
 
 pub struct SandboxApi<'a> {
     owner: &'a SandboxOwner,
@@ -27,5 +28,15 @@ impl<'a> SandboxApi<'a> {
     /// owner admitted. A partial outcome reports which resources remain.
     pub fn delete(&self, id: SandboxId) -> Result<(), DeleteError> {
         self.owner.delete(id)
+    }
+
+    /// Delete an owned sandbox, capturing up to 8 MiB of raw daemon stderr
+    /// after stop. Capture status and cleanup status are independent.
+    pub fn delete_with_logs(
+        &self,
+        id: SandboxId,
+        output: &mut (dyn Write + Send),
+    ) -> (Result<(), DeleteError>, LogCapture) {
+        self.owner.delete_with_logs(id, output)
     }
 }

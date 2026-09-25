@@ -4,7 +4,131 @@ use layerfs_bridge::{
     adapters::native::connection::VerifiedPeer,
     contract::{Code, Failure},
 };
-use std::{net::SocketAddr, process::Command};
+use std::{
+    io::{Read, Write},
+    net::SocketAddr,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
+
+/// The number of raw daemon stderr bytes retained by one diagnostic deletion.
+const LOG_LIMIT: u64 = 8 * 1024 * 1024;
+const LOG_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LogCapture {
+    pub attempted: bool,
+    pub bytes: u64,
+    pub truncated: bool,
+    pub error: Option<Failure>,
+}
+
+/// Read Docker's daemon-stderr stream in fixed-size chunks. The command runs
+/// after daemon stop and never enters an Edit or Commit timer.
+pub(crate) fn logs_stderr(container: &str, output: &mut (dyn Write + Send)) -> LogCapture {
+    let mut capture = LogCapture {
+        attempted: true,
+        ..LogCapture::default()
+    };
+    let mut child = match Command::new("docker")
+        .args(["logs", container])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            capture.error = Some(error.into());
+            return capture;
+        }
+    };
+    let Some(stderr) = child.stderr.take() else {
+        capture.error = Some(Code::Io.into());
+        let _ = child.kill();
+        let _ = child.wait();
+        return capture;
+    };
+    thread::scope(|scope| {
+        let reader = scope.spawn(move || {
+            let mut stderr = stderr;
+            let mut buffer = [0u8; 8192];
+            let mut capture = LogCapture {
+                attempted: true,
+                ..LogCapture::default()
+            };
+            loop {
+                let count = match stderr.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(count) => count,
+                    Err(error) => {
+                        capture.error.get_or_insert(error.into());
+                        break;
+                    }
+                };
+                let remaining = (LOG_LIMIT - capture.bytes) as usize;
+                let kept = count.min(remaining);
+                if kept > 0 && capture.error.is_none() {
+                    let mut written = 0;
+                    while written < kept {
+                        match output.write(&buffer[written..kept]) {
+                            Ok(0) => {
+                                capture.error = Some(Code::Io.into());
+                                break;
+                            }
+                            Ok(count) => {
+                                written += count;
+                                capture.bytes += count as u64;
+                            }
+                            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                            Err(error) => {
+                                capture.error = Some(error.into());
+                                break;
+                            }
+                        }
+                    }
+                }
+                capture.truncated |= count > kept;
+            }
+            if capture.truncated && capture.error.is_none() {
+                capture.error = Some(Code::Capacity.into());
+            }
+            capture
+        });
+        let deadline = Instant::now() + LOG_TIMEOUT;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break Ok(status),
+                Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+                Ok(None) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(Code::Deadline);
+                }
+                Err(_) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(Code::Io);
+                }
+            }
+        };
+        let mut capture = reader.join().unwrap_or(LogCapture {
+            attempted: true,
+            error: Some(Code::Io.into()),
+            ..LogCapture::default()
+        });
+        match status {
+            Ok(status) if !status.success() => {
+                capture.error.get_or_insert(Code::Io.into());
+            }
+            Err(code) => {
+                capture.error.get_or_insert(code.into());
+            }
+            _ => {}
+        }
+        capture
+    })
+}
 
 fn run(args: &[&str]) -> Result<String, Failure> {
     let output = Command::new("docker").args(args).output()?;
