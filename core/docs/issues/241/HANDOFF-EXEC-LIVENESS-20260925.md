@@ -5,8 +5,11 @@
 > passes after coordinated native, daemon transport and outer delivery changes.
 > Both missing-path Inspect refusals and ReserveInodes now share one Service
 > connection. The historical v3 `Unknown,true` receipt is unchanged, and its
-> TCP-versus-Noise cause remains unmeasured. The position and release gates
-> below remain open; this continuation did not rerun passing position slices.
+> TCP-versus-Noise cause remains unmeasured. The subsequent [prospective v4
+> position selection](evidence/phase3-postfix-v4/REPORT.md) completed **264 PASS /
+> 0 FAIL / 0 NOT_RUN** at the new source, with all Sandbox cleanup confirmed.
+> The separate four-case release Edit→Commit and independent verifier gates
+> remain open. Earlier instructions below describe the state before v4.
 
 **Decision:** Continue the Linux ioctl/range-splice path. Its carrier and
 edit/Commit function have passed many positions, including full 10 MiB,

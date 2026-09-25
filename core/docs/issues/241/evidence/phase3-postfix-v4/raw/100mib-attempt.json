@@ -1,0 +1,12 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/1d8b/layerfs/core/target/release/deps/range_position_sweep-634d6bdd4c63998a",
+    "--exact",
+    "mounted_public_sdk_position_sweep",
+    "--nocapture"
+  ],
+  "exit_code": 0,
+  "label": "100mib",
+  "status": "FINISHED",
+  "wall_ns": 290492522750
+}

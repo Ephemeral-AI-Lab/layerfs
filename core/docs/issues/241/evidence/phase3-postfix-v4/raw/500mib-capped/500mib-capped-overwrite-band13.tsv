@@ -1,0 +1,26 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	500mib-capped-overwrite-band13
+operation	overwrite
+offset	446796579
+status	STARTED
+edit_sandbox_id	0af5f51ce25e3305547c19188a8b099c
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	19932834
+baseline_exec_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+verifier_read_callbacks	8
+fresh_sandbox_id	19d7af8cf70f6aefd4ab54de85aae519
+fresh_unmount	Ok(())
+fresh_sandbox_delete	Ok(())
+fresh_sandbox_absent	true
+old_sandbox_id	78db35c14f83c1addad517f49ef78424
+old_unmount	Ok(())
+old_sandbox_delete	Ok(())
+old_sandbox_absent	true
+source_sandbox_id	01d1a34adde1d91d27f705cd32009ecd
+source_unmount	Ok(())
+source_sandbox_delete	Ok(())
+source_sandbox_absent	true
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	PASS	new_commit=[18, 163, 49, 193, 45, 217, 164, 143, 28, 240, 7, 213, 195, 70, 226, 39, 192, 65, 151, 202, 69, 206, 99, 36, 123, 241, 122, 24, 64, 117, 108, 89, 0]	old_commit=[18, 58, 25, 156, 124, 189, 130, 226, 79, 92, 148, 63, 124, 192, 152, 216, 252, 186, 218, 87, 254, 146, 73, 240, 153, 31, 134, 186, 106, 81, 151, 94, 159]	sha256=d825221adb4572d487983d93e1d3bfa04558e77265c69db10d35507c259adbf4	canonical_root=581da733a9cc2bdfed9c959d5dde5e63838a4fcd7f83a6a7dea9647ae9281135	canonical_count=26996	final_bytes=524283904	verifier_read_callbacks=8
