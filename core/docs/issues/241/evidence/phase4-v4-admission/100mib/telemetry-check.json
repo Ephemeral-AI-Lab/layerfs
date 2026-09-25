@@ -1,0 +1,87 @@
+{
+  "raw_lft1": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-100mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-100mib-ops-1-exec-v4/driver.raw.stderr",
+  "raw_lft1_sha256": "c09f389800e84a46e96dadc1458c75abe074717adaa77fbe51b001bc932a750c",
+  "resample": false,
+  "scenario_id": "insert-middle-4k-on-100mib-ops-1-exec-v4",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-telemetry-recheck-v1",
+  "telemetry": {
+    "children": {
+      "commit": {
+        "cpu_rss_attribution": "UNAVAILABLE; root is process-shared",
+        "elapsed_ns": 31414792
+      },
+      "edit": {
+        "cpu_rss_attribution": "UNAVAILABLE; root is process-shared",
+        "elapsed_ns": 27859459
+      }
+    },
+    "coverage": {
+      "edit_commit": {
+        "boundary_covered": false,
+        "clock": "local-monitor",
+        "cpu_shared_ns": [
+          9580000,
+          12100000
+        ],
+        "cpu_status": "SAMPLED",
+        "gaps": 0,
+        "largest_gap_ns": 12173000,
+        "rss_status": "SAMPLED",
+        "sampled_max_rss": 32145408,
+        "samples": 6,
+        "scope": "process-shared",
+        "source_status": "sampled",
+        "status": "SAMPLED"
+      },
+      "workspace_exec": {
+        "boundary_covered": false,
+        "clock": "local-monitor",
+        "cpu_shared_ns": [
+          20000000,
+          10000000
+        ],
+        "cpu_status": "SAMPLED",
+        "gaps": 0,
+        "largest_gap_ns": 10023500,
+        "rss_status": "SAMPLED",
+        "sampled_max_rss": 36093952,
+        "samples": 4,
+        "scope": "process-shared",
+        "source_status": "sampled",
+        "status": "SAMPLED"
+      }
+    },
+    "edit_commit_elapsed_ns": 59279916,
+    "errors": [],
+    "partial": [
+      "edit_commit: sampled CPU/RSS window does not cover both boundaries",
+      "workspace_exec: sampled CPU/RSS window does not cover both boundaries"
+    ],
+    "producers": {
+      "daemon": {
+        "bytes": 13964,
+        "events": 23,
+        "lines": 23,
+        "negative_inspect": 0,
+        "pid": 1,
+        "resource_unavailable_events": 0,
+        "sha256": "db734d29dd1ce2e0eff7ef3c48fb2f348d00a6bfd2d3363a84a2a04584f9da20"
+      },
+      "host": {
+        "bytes": 17291,
+        "events": 21,
+        "lines": 21,
+        "negative_inspect": 0,
+        "pid": 3625,
+        "resource_unavailable_events": 0,
+        "sha256": "9232048b2210311364653e1892b5e329456c7924f74a6bbcf2411936929f23d5"
+      }
+    },
+    "raw_bytes": 31437,
+    "raw_sha256": "c09f389800e84a46e96dadc1458c75abe074717adaa77fbe51b001bc932a750c",
+    "reasons": [],
+    "status": "PASS",
+    "unavailable": [],
+    "workspace_exec_elapsed_ns": 26459292
+  }
+}
