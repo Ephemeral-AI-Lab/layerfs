@@ -1,14 +1,10 @@
 # #232 implementation specification: SDK Exec/FUSE edit families
 
 > **Status:** Current planning checklist; no release candidate exists.
-> Written 2026-09-24. This is an implementation plan and a prospective speed
-> target, not a performance receipt or an admission PASS.
-> Scenario-version-2 baseline collected 2026-09-24: all 56 registered cases are
-> implemented and receipted; see
-> [the baseline report](exec-fuse-edit-v2-baseline.md) for the 45 completed and
-> verified rows, the 11 product-side `FAIL` rows and the open blockers. Freeze the case and
-> cache contract described below before implementing the benchmark driver or
-> collecting a timed row.
+> The 2026-09-24 scenario-v2 baseline has 56 receipts: 45 completed and
+> verified, 11 product-side `FAIL`; see the
+> [baseline report](exec-fuse-edit-v2-baseline.md). The new all-ioctl scenario
+> is planning only and has no performance admission.
 
 Tracking: [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
 Read with the [benchmark rules](../../../../docs/general/benchmark_rules.md),
@@ -16,6 +12,46 @@ Read with the [benchmark rules](../../../../docs/general/benchmark_rules.md),
 [Exec-to-edit guideline](../../benchmark/fs-bench-pro/exec2edit.md). The #232
 owner amendment selects an **SDK-only Workspace Exec/FUSE edit** route; the
 original direct SDK range-edit text and its 56 rows remain historical.
+
+## Current owner route decision — 2026-09-25
+
+The current prospective #232 route uses **one mounted ioctl range-replace
+interface for all 56 cases**, reached by a cooperating program inside public
+`WorkspaceApi::exec`, followed by public `WorkspaceApi::commit`. The
+performance driver uses public SDK APIs for every product operation. The
+command tool neither calls LayerFS private methods nor mutates a host path.
+The ioctl adapter receives the operation from the opened file descriptor;
+LayerFS does not parse shell text. An unmodified editor using ordinary POSIX
+writes is a different product workflow and cannot supply one of these 56 rows.
+
+The single semantic operation takes `(offset, delete_length,
+replacement_stream)`, with literal and zero-run segments. It applies once to
+the private Workspace and produces one revision. The current 4 KiB inline
+ioctl remains a small transport; a new versioned staged transport must carry
+the fixed 64 KiB benchmark replacements without turning them into sixteen
+visible edits. Replacement length is bounded by the existing **8 MiB replay
+contract**; the file/result length remains bounded by **4 GiB**. An ioctl
+request over 8 MiB fails explicitly before mutation. A caller may separately
+choose a normal POSIX file workflow, whose atomicity and I/O differ; the
+adapter never falls back automatically. The largest of the 56 registered
+replacements is 64 KiB, so all fit this semantic limit.
+
+This decision supersedes the direct-SDK and mixed POSIX editor proposals in
+sections 1–8 below, which remain the **historical scenario-v2 contract**.
+Their fixture shapes, Edit→Commit boundary,
+receipts and source identities stay unchanged; their old G2 targets do not
+become matched Exec-route gates. Freeze a **new** immutable 56-case registry,
+ABI proof, enforceable cache contract and per-case targets before candidate
+implementation or sampling. The [unified implementation plan](UNIFIED_IOCTL_IMPLEMENTATION_PLAN.md)
+and [Phase 2 rollout](ROLLOUT_PHASE2.md) hold the file map and checkpoints.
+The new scenario uses locked release builds, LFT1-only operation wall/CPU/RSS,
+one performance sample per case, a ≤15 s complete command and a separate
+identity-matched verifier under 10 s. No new performance admission follows
+from this planning amendment.
+
+> **Historical material below:** Sections 1–8 describe the frozen v2
+> POSIX/FUSE route and its prior proposals. Their route, target, file map and
+> implementation phases are not instructions for the new all-ioctl scenario.
 
 ## 1. Claim and timing boundary
 

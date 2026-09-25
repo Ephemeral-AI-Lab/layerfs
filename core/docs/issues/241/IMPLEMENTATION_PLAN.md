@@ -1,291 +1,123 @@
-# #241 implementation plan: projected FUSE range edit
+# #241 implementation plan and optimization handoff
 
 > **Status:** Current planning checklist; no release candidate exists.
+> Phase 1A's Linux ioctl mechanism and four-case functional selection are
+> implemented. Phase 1B investigates Commit growth before #232's full rollout.
+> This plan does not amend the frozen v4 specification, registry or receipts.
 
-Tracking: [child #241](https://github.com/Ephemeral-AI-Lab/layerfs/issues/241)
-of [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232). The
-[owner's position-sweep clarification](https://github.com/Ephemeral-AI-Lab/layerfs/issues/241#issuecomment-5811888164)
-is part of this plan. Read the [#232 specification](../232/SPEC.md),
-[baseline](../232/exec-fuse-edit-v2-baseline.md), and
-[source study](../232/generic-shell-edit-and-commit-design.md) with the
-[benchmark rules](../../../../docs/general/benchmark_rules.md) and
-[Core benchmark rules](../../../benchmark/fs-bench-pro/AGENTS.md).
+Tracking: [#241](https://github.com/Ephemeral-AI-Lab/layerfs/issues/241), child of [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232). Read the [specification](SPEC.md), [benchmark rules](../../../../docs/general/benchmark_rules.md), [Core benchmark rules](../../../benchmark/fs-bench-pro/AGENTS.md), and [#232 Phase 2 plan](../232/ROLLOUT_PHASE2.md) before new measurement work.
 
-This is an implementation sequence, not a claim that a FUSE ioctl, low latency,
-or cold-cache admission already works. The four retained scenario-v2 middle
-insert results are 155.01 ms (1 MiB), 2,905.70 ms (10 MiB), and Exec errors at
-about 5 s (100 and capped 500 MiB). The latter two have **no completed Commit
-time**. All completed scenario-v2 rows are cache-ineligible. Keep their
-registry and receipts append-only.
+## Completed route
 
-**Carrier probe status (2026-09-24):** The isolated Linux Docker/FUSE test-only
-probe found ioctl delivery, positive open-descriptor/alias coherence and
-carrier wall below its 1.0 ms diagnostic budget at all four virtual sizes.
-This is a promising route, with no demonstrated provider blocker or need for
-carrier optimization. [The append-only report](evidence/ioctl-probe-report.md)
-keeps the exact identities, attempts and limits. Phase 1 sign-off is still
-incomplete: real notifier/reply failure and mount-capability behavior, actual
-stale-handle lifecycle and sub-millisecond CPU attribution remain unproved.
-Those gaps are a focused next probe, not a failed ioctl or an Edit→Commit
-performance claim. No product splice or registered #241 case was run.
+    public WorkspaceApi::exec(command)
+      -> current launcher: /bin/sh -c
+      -> cooperating program opens mounted file and issues STATE / EDIT ioctl
+      -> Linux FUSE adapter -> authorized projected Workspace RangeEdit
+      -> bounded piece splice in private Workspace
+    public WorkspaceApi::commit -> canonical C1 edit -> C2 CAS save -> Branch
 
-**Follow-up evidence (2026-09-24):** The [mounted failure and CPU
-summary](evidence/carrier-followup-summary.md) links separate append-only
-receipts. Boundary LFT1 captured nonzero process-shared CPU for all four
-virtual ioctl sizes and the WRITE controls; cache still forbids an admitted
-latency PASS. A real read-only mount required daemon-side `EROFS` refusal, and
-deliberate daemon death after test-only publication gave the caller
-`ECONNABORTED`, confirming the need for an uncertain outcome. Most notably,
-`fuser` invalidation returned `Ok` even after unmount, so that return cannot
-by itself certify live client coherence. The candidate is still promising;
-the remaining Phase 1 decision concerns truthful product acknowledgement and
-caller-observed readback, not carrier speed optimization. No product change or
-registered Edit→Commit sample followed from these diagnostics.
+LayerFS treats command text as opaque. The **ioctl carrier** is agnostic to the shell or interpreter that launched its caller: a program invoked by bash, Python, /bin/sh, or a future direct-argv Exec could issue the same mounted-file request. The **current SDK Exec launcher itself still hardcodes /bin/sh -c**. The ioctl does not transparently accelerate an unmodified editor; ordinary positional writes, append, truncate, and rename retain their normal FUSE paths. A program that rewrites a suffix still pays for those bytes. The Linux ioctl accepts one explicit range replacement with at most 4 KiB inline data. It exposes no private Rust SDK method. Future macFUSE and WinFsp adapters require separate live capability/coherence proofs; unsupported platforms fail explicitly without a suffix-copy fallback.
 
-**Integrated product/functional update (2026-09-24):** The frozen
-[LFS2/LFE2 ABI](RANGE_IOCTL_ABI.md) now routes through Linux FUSE and the
-platform-neutral projected Workspace splice. The
-[product mounted receipts](evidence/product-functional/REPORT.md) prove
-8 KiB insert, overwrite, delete, alias/open-FD coherence, refusal paths and
-canonical Commit; the [public SDK gate](evidence/sdk-exec-gate/REPORT.md)
-proves one small mounted Exec→confirmed splice→Commit route. Its initial
-output check occurred after Commit; the corrected pre-Commit test helper and
-[addendum](evidence/sdk-exec-gate/GATE_CORRECTION.md) are retained separately.
-The four new v3 middle-insert rows and release image are frozen, and
-[atomically published integrated masters](evidence/qualified-masters-integrated/REPORT.md)
-are available. The [264-position integrated campaign](evidence/position-sweep-integrated/REPORT.md)
-has 243 PASS, one FAIL and 20 explicit NOT_RUN: the 10 MiB case failed at
-baseline SDK Exec with an Unknown outcome before range EDIT, so Phase 3
-has **not** passed. No registered four-case Edit→Commit sample or independent
-verifier has run. This is an unresolved liveness/custody investigation, not
-evidence that the range splice copied the untouched suffix or that cold
-latency met a target.
+The [v4 position proof](https://github.com/Ephemeral-AI-Lab/layerfs/blob/cb1bdb70e97628c2c38055ff2600e070e742010e/core/docs/issues/241/evidence/phase3-postfix-v4/REPORT.md) at source 8aaf623835cf1384fbf5558e868b8d1b945830bd passed **264/264** declared insert, overwrite and delete positions, including readback, old Commit and cleanup. The [v4 four-case report](https://github.com/Ephemeral-AI-Lab/layerfs/blob/87b10ab1b2144f1d7fb54f1be9419095f891fea0/core/docs/issues/241/evidence/phase4-v4-admission/REPORT.md) at source 374e9636abb9ae10a041e0f71b1c07e84f2128f4 completed all four release-built public SDK Exec→Commit routes with independent oracle and cleanup PASS. Each used two STATE callbacks, one EDIT callback, 4,096 accepted payload bytes and zero shifted suffix bytes. The original performance receipts remain **INCOMPLETE** because of the first telemetry parser; the retained-raw-log recheck derives **INELIGIBLE** for all four under the frozen Linux FUSE backing cache contract, without a new sample or receipt promotion. Their raw times are diagnostics:
 
-The Workspace range-edit semantics must remain portable product code; Linux FUSE,
-future macFUSE and future Windows WinFsp are adapters with separate capability
-and coherence proofs. #241 implements and measures the current Linux adapter,
-without claiming macOS or Windows support today. Never modify, patch, fork or
-vendor a third-party package, add Cargo `[patch]`/`[replace]`, or edit an
-installed provider. An unavailable provider capability fails explicitly;
-builds remain `--locked`.
+| Pristine size | Edit | Commit | Edit→Commit | EditFile service.finish |
+| --- | ---: | ---: | ---: | ---: |
+| 1 MiB | 25.548 ms | 22.073 ms | 47.632 ms | 1.344 ms |
+| 10 MiB | 25.342 ms | 23.062 ms | 48.413 ms | 2.151 ms |
+| 100 MiB | 27.859 ms | 31.414 ms | 59.284 ms | 9.562 ms |
+| capped 500 MiB | 28.213 ms | 53.452 ms | 81.680 ms | 33.145 ms |
 
-## Intended route and boundaries
+From 1 to capped 500 MiB, Commit rises 31.379 ms while service.finish rises 31.801 ms. This localizes the observed growth to the finish span; **four elapsed-time points do not prove an O(N) algorithm or identify its substep**. The v4 report does not publish per-save object counts; retain them with the next labelled diagnostic instead of importing counts from a different edit route. The retained Store has a bounded in-memory candidate index, so do not presume a full-Store scan from these readings. The historic v0.1.6 G2 target timed direct SDK range edit, not Exec/FUSE. Keep all v2, v3 and v4 receipts and original cache classifications append-only. Do not resample a v4 arm to select a better number.
 
-```text
-public SDK WorkspaceApi::exec(opaque command)
-  -> process launched in mounted Workspace
-  -> cooperating program opens file and issues versioned range request
-  -> kernel FUSE -> projected Workspace range mutation
-  -> Core's existing RangeEdit/piece splice -> coherent mounted inode
-public SDK WorkspaceApi::commit() -> ordinary canonical save and Branch publication
-```
+The timed 1 MiB route made one public SDK Exec and one public Commit. Caller
+control sent `Hello` before each operation; daemon-to-Service issued one
+`Inspect` and four `ReadFile` calls during Exec, then `EditFile`,
+`UpdatePortableMetadata` and `HistoryCommand` during Commit. The authenticated
+Service session was already reused. Phase 1B's local Store work should cut
+**zero transport roundtrips**. A separate combined-save experiment can cut one
+Service call, but its retained cache-ineligible overwrite row did not prove a
+latency benefit; do not bundle that protocol change into Phase 1B. Never drop
+`Hello`, `STATE` or readback solely to improve a benchmark number.
 
-The product selects behavior from filesystem operations, never command text.
-The current SDK Exec launcher uses `/bin/sh -c`, but the FUSE operation must
-also work for a binary launched by another interpreter or a future direct-argv
-Exec route. Ordinary `pwrite`, append and truncate continue through their
-normal FUSE callbacks. A program that rewrites an entire suffix still pays for
-those bytes; the new request lets a cooperating program express a local insert
-without doing that rewrite. Do not add a benchmark-only Service/Store shortcut.
+## Algorithm and resource bounds
 
-## Expected file layout and responsibility
+Let N be logical file length, k replacement bytes (0–4,096 in the current ioctl), P live Workspace pieces (at most 1,024), E canonical extents, A affected extents, and S physical Store entries.
 
-Use existing modules before adding files. The list below is a review map, not
-permission to create every optional file.
+| Stage | Time | Additional space and limit |
+| --- | --- | --- |
+| ioctl and payload custody | O(B) validation/transfer for a fixed B = 4,192-byte frame, plus O(k) owned-payload copy; one EDIT callback | O(B+k) transient request/payload space, with k ≤ 4,096; no untouched suffix copy |
+| Workspace splice | O(P+k) per request because the piece vector is rebuilt | O(P+k) transient work; existing 256-edit, 1,024-piece and 8 MiB non-base replay caps apply |
+| Repeated edits | O(sum(P_i+k_i)); can reach quadratic work in edit count if P_i grows linearly | Accepted edits remain private until Commit; later offsets address the current file |
+| Commit lowering | O(P) to traverse final pieces and derive ordered edits | O(P) descriptors, including edits to bytes inserted by earlier requests |
+| Chunked C1 | Approximately O(k + boundary work + A log E) for a localized edit; actual touched paths/chunks need counters | New chunk and path nodes; unchanged CAS identities reused; FULL/DELTA selects physical encoding |
+| WholeFile/cutoff transition | May read/construct O(N) final bytes | Exact cutoff−1/cutoff/cutoff+1 correctness remains necessary |
+| C2 service.finish | Unknown dependence on S, packs, SQL pages, locks and physical reads | Measure the substeps before changing the algorithm |
 
-| Path | Required change |
+Neither the extent tree nor one bounded splice proves whole-route O(log N). A single middle edit leaves only a few pieces; a piece-tree replacement is unjustified until a **prospective repeated-edit count diagnostic** shows material piece rebuilding. Preserve canonical roots for the same base and ordered edits, save atomicity, one construction worker, and the no-sync persistence policy. Do not change delta hints, CDC cutoffs, CAS layout, or third-party packages without cause-specific evidence. Never patch, fork, vendor, or locally modify third-party code.
+
+**Phase 1B does not promise to eliminate every linear or quadratic term.** It targets the observed growth inside C2 `service.finish`. Phase 1A removed suffix movement and repeated write callbacks for a cooperating ioctl editor; the current `O(P)` splice and possible `O(R²)` repeated-edit total remain. The #232 cases register one logical edit each, although an ordinary POSIX write may produce multiple FUSE callbacks; count those callbacks and pieces before deciding a piece tree is needed. Use the [separate repeated-edit diagnostic](../232/ROLLOUT_PHASE2.md#optimize-only-the-remaining-measured-mechanism) before proposing one.
+
+## Exact files and folders for the next change
+
+These existing paths are a review map against the v4 source tree. Touch only paths selected by counts; do not scaffold a new layer or expose private APIs to tests.
+
+| Path | Responsibility |
 | --- | --- |
-| `core/crates/layerfs-fuse/src/adapter.rs` | Add the narrow FUSE request callback, projected handle check, reply and callback count. At 938 physical lines now, delegate substantial parsing and ABI logic to a small new module to stay under the 999-line production limit. |
-| `core/crates/layerfs-fuse/src/range_ioctl.rs` **if selected** | Linux-only carrier: own one versioned request format, strict bounds/flag validation and response encoding. Reuse this product-owned ABI in the cooperating tool or assert byte-for-byte conformance; do not create a second edit engine or put ioctl values in Workspace semantics. |
-| `core/crates/layerfs-workspace/src/filesystem/write.rs` | Extend the existing platform-neutral `RangeEdit` mutation path for projected, writable-handle origin with owned payload, exact inode/version checks, mutation permit and completion/coherence. Preserve the local API and typed results. |
-| `core/crates/layerfs-workspace/src/filesystem/projection_counters.rs` | Expose a distinct bounded range callback count and accepted payload/shifted-byte evidence through the existing public status route. Count actual requests, including refusals, separately from accepted operations. |
-| `core/crates/layerfs-bridge/src/contract/control.rs`, `core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs`, `core/crates/layerfs-daemon/src/lifecycle.rs` | Extend the existing bounded projection-count wire only as needed to carry the new class into `WorkspaceApi::status`; preserve its versioned decoding rules. |
-| `core/crates/layerfs-workspace/src/overlay/pieces.rs` | Change only if one-splice profiling proves that all-piece rebuild is still material. A new tree/index is not a prerequisite for the first insert proof. |
-| `core/crates/layerfs-fuse/tests/kernel_write.rs` or a focused sibling test | Test actual mounted Linux file descriptor, alias, size, read and EOF behavior. Keep the existing Linux FUSE test harness. |
-| `core/benchmark/fs-bench-pro/workload/src/main.rs` | Add one `splice` command that opens the mounted file and issues the frozen request with exact 4 KiB owned replacement bytes. Never fall back silently to suffix shifting. |
-| `core/benchmark/fs-bench-pro/shared/edit_contract.py`, `registry/workspace-exec-insert-v3.json`, `runner.py` | Freeze only the four #241 middle-insert cases with new scenario identity, exact command/tool/image/cache hashes and one-case selection through the existing runner. Do not rewrite the 56-row v2 registry. |
-| `core/benchmark/fs-bench-pro/tests/` | Focused request, route, registry and failure-receipt checks; reuse existing test modules where clear. |
-| `core/docs/issues/241/` | Freeze ABI and position manifest before evidence; retain the four-case report and links to append-only raw receipts. |
+| core/crates/layerfs-server/src/service/save/content.rs | Retain the parent LFT1 service.finish scope and add bounded LFT1 children for any diagnosed substep used in a reported wall/CPU/RSS optimization claim. |
+| core/crates/layerfs-storage/src/cas/lifecycle.rs | Diagnose group seal, candidate flush, ownership publication, SQL commit, then **separately** the post-commit `PoolIndex` and `Candidates` shared-index clones within finish_inner. Record each index's entry count and bytes. Existing SaveProfile diagnostics can guide placement of production LFT1 children; only LFT1 supplies reported wall/CPU/RSS. The owner release/drop profile is **after** service.finish, so do not blame it for this span or presume either clone is the cause. |
+| core/crates/layerfs-storage/src/cas/placement.rs, cas/pool_lane.rs, cas/store.rs | Conditional owners of placement, index or Store work **only if** counts implicate them. No blanket CAS rewrite. |
+| core/crates/layerfs-daemon/src/execution.rs | A separate fixed Exec-cost inquiry may count spawn, output waits, FUSE calls and Service requests. Do not replace the command with a private edit method. |
+| core/crates/layerfs-workspace/src/overlay/pieces.rs, commit/lower.rs | Conditional repeated-edit optimization only after measured P growth or lowering cost. |
+| core/crates/layerfs-fuse/src/range_ioctl.rs, adapter.rs; core/crates/layerfs-workspace/src/filesystem/write.rs | Existing ioctl carrier and portable mutation. Preserve ABI, writable-handle authority, stale-version refusal, mounted coherence and reply semantics. |
+| core/benchmark/fs-bench-pro/registry/, shared/, workload/src/{main,splice}.rs, runner.py, tests/ | New prospective scenario/diagnostic only. The existing splice tool issues the documented mounted-file ioctl; the host driver uses public SDK for every Project, Branch, Sandbox and Workspace operation. Never call private LayerFS Rust methods, Service or Store directly. |
+| core/docs/issues/232/, core/docs/issues/241/evidence/ | Commit a new contract and identity before a new numeric sample; append raw receipts and all failures. Historical registries/receipts remain immutable. |
 
-Production LOC is a **planning estimate, not a measured commit comparison**:
-FUSE ABI/callback ~100–220 nonblank non-comment lines; projected Workspace
-mutation/coherence ~100–250; status wire/counters ~30–90. Thus initial product
-scope is roughly **230–560 production LOC**. The workload, tests, registry and
-docs are outside production LOC. Do not add a new UAPI crate, general command
-parser, or piece-tree replacement merely to meet this estimate. Every actual
-commit needs the AGENTS.md before/after production-LOC count for its exact staged
-tree, with Core/legacy/combined subtotals.
+The benchmark is a separately registered **SDK Exec/FUSE workflow**. It is not the direct SDK edit_workspace_file_range(s) family governed by the distinct direct-edit invariant in the benchmark rules.
 
-Future macOS/Windows adapters are not scaffolds in this change. When requested,
-add each only after its unmodified provider exposes a suitable request and
-the platform's own kernel/open-handle coherence can be tested. macFUSE lists
-`FUSE_IOCTL` among supported operations, but that is not proof that Linux's
-request bytes or invalidation behavior transfer unchanged
-([macFUSE features](https://github.com/macfuse/macfuse/wiki/FUSE-Features)).
-WinFsp offers both a FUSE compatibility layer and a native Windows API; its
-carrier must be chosen from those actual capabilities
-([WinFsp comparison](https://github.com/winfsp/winfsp/wiki/Native-API-vs-FUSE)).
-Keep one semantic test matrix shared across adapters, plus real mounted tests
-for each supported platform. Unsupported platforms refuse before mutation.
+## Next decisions, in order
 
-## Phases and exit gates
+1. **Attribute finish growth.** Under a new, labelled diagnostic identity, compare the same 1 and capped-500 MiB shapes. Use layerfs-telemetry LFT1 alone for reported wall/CPU/RSS; retain existing SaveProfile diagnostics and object/pack/lookup/statement/page/physical-read counts only to guide and explain new LFT1 child scopes. Identify whether seal, index flush/copy, publication, SQL commit, or contention grows. This is a cause-finding diagnostic, not another v4 performance sample.
+2. **Change only the measured substep.** Retain ioctl and canonical semantics. Prove the changed path with focused tests, public SDK Exec→Commit, an independent verifier and cleanup at the final identity.
+3. **Freeze any new numeric gate prospectively.** Conditional engineering aims under an equal, declared cache state: raw Edit→Commit ≤55 ms at 1/10 MiB, ≤60 ms at 100 MiB, and ≤70 ms at capped 500 MiB (≤65 ms stretch); service.finish growth, defined as 500 MiB minus 1 MiB, ≤15 ms versus v4's 31.801 ms. If the other terms stayed equal, that finish reduction would yield about 65 ms at 500 MiB; ≤70 ms allows modest variation. These are **proposals, not existing PASS gates**. A changed admission target needs a new committed specification/scenario identity before candidate optimization or sampling. If the Linux backing cache cannot be enforced and checked, classify a fast row INELIGIBLE and do not claim a latency PASS.
+4. **Close Phase 1B, then screen complexity under #232.** Retain cause attribution and the cache decision. If a narrow fix is justified, retain its new-source four-case SDK Exec→Commit result, independent verification, cleanup and zero suffix I/O. A target miss or ineligible timing remains visible. If no change is justified, record that decision instead of adding speculative code or repeating unchanged arms. The [Phase 1C screen](../232/ROLLOUT_PHASE1C.md) decides whether repeated-piece or C1 work needs a separate fix before the 56-case Phase 2 rollout. Phase 1 insert evidence does not establish performance of the other edit routes.
 
-### 0. Diagnose without changing the frozen arm
+For any new run: locked **release** binaries, one construction worker, one sample per declared case and arm, fresh append-only output, complete command ≤15 s, separate identity-matched verifier, and no warm-cache credit. Preparation may reuse closed validated masters via independent writable byte copies outside the timer, never move Edit/Commit work into setup. Preserve raw LFT1 and producer/sample-window coverage; partial CPU/RSS windows are not exact phase CPU or peak memory.
 
-From retained #232 receipts and source, tabulate suffix bytes, FUSE callbacks,
-piece counts, the 5 s progress error and edit/Commit timing for the four middle
-inserts. Inspect the actual `fuser` callback support and Linux mount behavior.
-State which observations are measured and which are source-derived. **Gate:** a
-short diagnosis identifies the suffix-copy mechanism and the exact current
-failure boundary; no rerun of scenario v2 is used to select a nicer result.
+## Commit checkpoints for Phase 1B
 
-### 1. Freeze the range-operation contract
+Keep these as separate commits on an isolated worktree based on the reviewed
+#241 v4 source. Every commit message records exact first-parent production LOC
+before/after/delta; a source algorithm change also updates its architecture
+document in the same commit. The current `bb50` tree is a planning checkout,
+not the implementation base.
 
-Choose the smallest Linux FUSE interface that reaches userspace for a
-byte-granular insert. `fallocate` insert/collapse does not reach this FUSE
-daemon on the relevant kernel; a versioned ioctl is the leading candidate,
-subject to a live-kernel proof. Specify command number/version, little-endian
-field layout, offset, deletion length, replacement length and bytes, maximum
-request, response, unsupported version/flags, overflow, stale handle, read-only
-mount, quota, deadline and partial-publication errors. The 4 KiB replacement
-must fit the validated request path. Reject malformed or oversized requests
-before ownership/publication; never interpret arbitrary ioctl bytes as a
-Workspace edit.
-
-Freeze the common byte-range replacement semantics independently from that
-Linux carrier: offset/deletion/replacement, handle authority, size/mtime,
-mutation receipt, Commit input and typed failure. Do not expose Linux ioctl
-constants through `layerfs-workspace` or the public SDK. Capability discovery
-must fail closed on a platform whose adapter cannot supply the operation; do
-not silently select a suffix-copy fallback. The Linux proof is this issue's
-implementation gate; macFUSE/WinFsp require separate adapter and mounted-test
-gates before either can be advertised as supported.
-
-Specify the atomic visibility point, size/mtime update, revision/generation
-stamp and FUSE invalidation/reply order. In particular, ioctl completion alone
-must not be assumed to refresh Linux inode size. Existing open descriptors,
-hard-link aliases, `fstat`, reads around the insertion, and EOF must observe a
-coherent result before the tool reports success. If publication happened but a
-reply or invalidation fails, return/retain an **uncertain** outcome with custody
-evidence; never retry an unknown mutation automatically. If validation or
-quota fails before publication, preserve bytes, length, metadata and Branch
-head. **Gate:** ABI and observable semantics are reviewed and frozen before
-tool, registry or timed run changes; a mounted-kernel prototype proves the
-chosen request actually reaches FUSE and can make size/old-FD state coherent.
-
-### 2. Implement one projected mutation
-
-Route the FUSE callback through the same projection ingress, writable handle
-authorization, `OwnedPayload`, mutation permit, exact version check, piece
-splice and publication accounting used by ordinary projected writes. Reuse
-Core's platform-neutral `RangeEdit`; keep Linux `fuser` types in its adapter,
-and do not call the local-path API directly from the callback
-and bypass projection admission. Keep the payload bounded and owned before
-publication. Count the one range request and prove the 500 MiB untouched suffix
-is neither read nor written by the tool/FUSE route. Preserve rollback on
-pre-publication errors and explicit uncertain/retained state on post-publication
-delivery errors. **Gate:** native unit tests and actual Linux mounted tests show
-exact bytes/size/mtime, open-FD and alias coherence, repeated edits, valid
-zero-length insert/delete variants, refusal paths, Commit, retained old Commit
-and fresh reopen. No direct Store or private Workspace API is used by the
-benchmark or live SDK end-to-end tests; those routes use the public SDK for
-product setup/edit/Commit/cleanup. Focused FUSE and Workspace package tests
-may exercise their owning lower-layer APIs directly.
-
-### 3. Prove position generality, outside the performance timer
-
-Use the pinned SHA-256 per-band offset rule in [SPEC.md](SPEC.md) and publish
-**all exact offsets before running**. For each pristine 1/10/100/500 MiB fixture and each
-of 4 KiB insert, overwrite and delete, partition the legal inclusive offset
-interval into 16 equal-width integer bands and draw one byte-granular offset
-per band. Insert permits `0..=N`; overwrite/delete permit `0..=N-4096`.
-Do not align, adjust or choose offsets from observed results. Add separately
-named exact head, midpoint, last legal offset and representative canonical
-chunk-boundary checks. This is at least 4 × 3 × 16 = **192 functional checks**,
-plus edges, not 192 performance samples.
-
-Reuse one validated, closed prepared master per fixture size. For functional
-checks, make **one private writable Store copy per size**, keep its pristine
-source Branch unchanged, and fork a fresh sibling Branch plus mount a fresh
-Workspace for each offset through the public SDK. This gives each check
-pristine input without retaining 192 full Store copies. Unmount every
-Workspace and confirm Sandbox deletion; the private per-size Store can be
-released after successful compact receipts are sealed, while failed cases
-retain their diagnostic state. Timed benchmark cases later get separate
-independent writable copies and fresh sandboxes. No previously mutated Branch
-or Workspace is a fixture.
-
-The independent oracle checks exact changed bytes, size, untouched prefix and
-suffix, old Commit, pristine source Branch, new Branch head and cleanup for
-every offset. Record every offset and outcome, including failures, in compact
-append-only evidence. **Gate:** all declared positions pass on a real mounted
-Linux route. A latency-by-position claim requires a separately registered
-prospective campaign; this functional sweep cannot be pooled with four timed
-middle inserts.
-
-### 4. Freeze and run the four-case release selection
-
-Build the SDK driver, verifier, daemon and tool with locked **release** builds;
-seal source/product/harness/tool/ABI, binary hashes, image digest, fixture and
-registry. The #236 debug Init profile remains separate. Keep the four #241
-middle-insert shapes and input sizes unchanged under new scenario IDs (v3 or
-later if v3 is already used). Run public SDK Project/Branch/Sandbox/Workspace
-setup, `WorkspaceApi::exec` then explicit `WorkspaceApi::commit`, status,
-unmount and Sandbox delete. Time **only Edit→Commit** with
-`core/crates/layerfs-telemetry` LFT1 wall/CPU/RSS. Retain producer identities:
-caller and Service share one host-process CPU/RSS window; daemon is a separate
-process, and its samples exclude the shell child. No Python timer becomes operation
-telemetry. Mount, preparation, status, cleanup and separate verification stay
-outside that operation timer and are reported.
-
-Acquire each timed case from its own independent writable byte copy of a
-validated closed master. Reuse the six #232 pristine masters only when their
-fixture/format/preparation compatibility is proved; a harness-only change must
-not force expensive re-Init when it leaves every preparation input unchanged;
-unknown compatibility must fail closed. Record the
-clone method, build/image reuse and cache state. No warm-up, read-ahead, or
-benchmark-only eviction between Edit and Commit. Recent-write page cache
-cannot credit an eligible cold PASS; a row exposed to it remains `INELIGIBLE`
-even if fast. One
-sample per case at each frozen identity, fresh append-only output, and a
-separate identity-matched verifier (target <10 s, **hard ≤15 s**). The full
-performance command, including Sandbox lifecycle and cleanup, is **≤15 s**;
-retain every timeout or failure. Keep one construction worker and all resource
-limits. **Gate:** all four cases complete Exec and Commit, pass independent
-content/root/Branch/old-Commit verification and confirmed cleanup; route counts
-show one bounded range request and no suffix-copy callbacks for the 500 MiB
-case. Report raw latency beside historical G2 targets as aspirational context,
-not a matched regression ratio. `GOAL_MET` additionally needs the frozen cache
-admission and telemetry gates; this child can establish completion without
-claiming an eligible 5.30–7.76 ms result.
-
-### 5. Diagnose Commit and liveness as separate follow-ups
-
-The projected splice should remove the size-proportional suffix movement and
-is the likely fix for the 100/500 MiB **Exec completion** failures. It does not
-by itself prove a 5.5 ms Edit→Commit route or repair cold-cache admission.
-From retained LFT1, split `service.finish` with bounded child scopes and
-count diagnostics before choosing any Store change. Preserve canonical roots,
-save atomicity and one construction worker. Change Exec progress framing only
-if the new operation still fails because a healthy silent command exceeds the
-product's five-second progress window; retain the real overall deadline and
-classify unknown publication correctly. Neither an enlarged benchmark timeout
-nor synthetic heartbeat counts as an optimization. **Gate:** each separate
-change has its own identity and focused proof; #232's remaining 56-case
-performance and cache-admission work is reported under #232, not silently
-credited to this child.
-
-## Final handoff
-
-Provide the frozen ABI and offset manifest, source/build/image/master seals,
-exact commands, all four append-only performance and independent-verification
-receipts, the per-offset functional matrix, raw LFT1, bounded FUSE counts,
-cache status, full-command/verification walls and every nonpassing line.
-State platform support explicitly: Linux live proof or failure; macFUSE and
-WinFsp remain unsupported until their own adapters and mounted tests pass.
-Record the unmodified third-party version and capability used; no provider
-patch or local fork is an acceptable proof.
-Run owning Core boundary, test, Clippy and formatting checks once at final
-source identity and state exactly which checks ran. Close #241 only when its
-four completion, correctness, cleanup and route-custody gates hold; #232 stays
-open for its full 56-case eligible performance decision.
+- [ ] **B0 — Freeze the diagnostic contract (docs/registry only).** Pin the 1
+  and capped-500 MiB shapes, cache treatment, exact source/image/tool IDs,
+  output paths, LFT1 labels, index counts and expected SDK/FUSE/Service calls
+  before the first attempt. A new numeric candidate gate and scenario identity
+  must be committed before candidate optimization or sampling. Production LOC
+  delta is 0; preserve all v4 receipts.
+- [ ] **B1 — Instrument, without optimizing.** Add bounded LFT1 children for
+  batch drain, pack seal, candidate flush, ownership publication, SQLite
+  commit, post-commit `PoolIndex` clone and post-commit `Candidates` clone.
+  Record index entry/byte counts. Focused storage tests check successful and
+  failed finish behavior, parent/child scope completeness and unchanged save
+  results. This checkpoint makes no speed claim and changes no ioctl ABI.
+- [ ] **B2 — Diagnose once at the instrumented identity.** Run the two frozen
+  release SDK Exec→ioctl→Commit diagnostics through independent writable
+  master copies. Retain raw caller/Service/daemon LFT1, callback and object
+  counts, cache status, complete-command wall, verification and cleanup;
+  identify the growing substep. This is append-only evidence, not a replacement
+  v4 performance sample. If no causal, safe optimization follows, record that
+  decision and stop Phase 1B product changes.
+- [ ] **B3 — Make one causal product change, if justified.** Edit only the
+  responsible CAS/SQL/index substep, preserving transaction atomicity,
+  canonical roots, one worker, no sync and published third-party packages.
+  Add one focused regression check and update the affected architecture doc in
+  this product commit. Do not preselect index cloning as the fix.
+- [ ] **B4 — Prove the changed source.** At the frozen new identity, run the
+  four selected release Edit→Commit cases once each through public SDK and
+  mounted ioctl, then separate identity-matched verifiers. Report raw times,
+  `service.finish` growth, CPU/RSS coverage, cache eligibility, every target
+  miss, zero suffix I/O and confirmed cleanup. If B3 was not made, do not
+  repeat the unchanged four arms.
