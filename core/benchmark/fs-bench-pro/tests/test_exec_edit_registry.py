@@ -228,6 +228,45 @@ class Registry(unittest.TestCase):
             self.assertIn("structural-shift-algorithm-unfrozen", row["not_run_reason"])
             self.assertTrue(row["scenario_id"].endswith("-exec-v1"))
 
+    def test_prospective_all_ioctl_registry_is_distinct_and_complete(self):
+        path = BENCH / "registry/workspace-exec-edit-v3.json"
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),
+                         "469bf23363083980cf2e424394eba994ed7a6009116d215b3d96c379e66b975c")
+        document = json.loads(path.read_text())
+        self.assertEqual(document["scenario_version"], 3)
+        self.assertEqual(document["historical_registry"]["sha256"], contract.REGISTRY_SHA256)
+        rows = document["cases"]
+        self.assertEqual(len(rows), 56)
+        self.assertEqual(len({row["scenario_id"] for row in rows}), 56)
+        self.assertEqual({family: sum(row["family_id"] == family for row in rows)
+                          for family in FAMILIES},
+                         {family: count for family, (_, count) in FAMILIES.items()})
+        self.assertEqual(sum(row["replacement_len"] == 65536 for row in rows), 12)
+        self.assertEqual(max(row["replacement_len"] for row in rows), 65536)
+        self.assertEqual(sum(row["phase1_selection"] for row in rows), 8)
+        self.assertEqual(set(document["minimal_phase1_selection"]),
+                         {row["scenario_id"] for row in rows if row["phase1_selection"]})
+        for row in rows:
+            old = self.by_id[row["scenario_id"].replace("-exec-ioctl-v3", "-exec-v2")]
+            for key in ("fixture_bytes", "fixture_sha256", "replacement_sha256",
+                        "final_bytes", "final_sha256", "oracle"):
+                self.assertEqual(row[key], old[key])
+            self.assertEqual(row["route"], document["route"])
+            self.assertEqual(row["operation_surface"], "workspace-linux-fuse-ioctl")
+            self.assertEqual(row["expected_workspace_revisions"], 1)
+            self.assertEqual(row["expected_callback_total"],
+                             sum(row["expected_callbacks"].values()))
+            self.assertIn(" splice ", row["command"])
+            self.assertIn(" --stream ", row["command"])
+            self.assertIn(" --output-version 5", row["command"])
+            self.assertNotIn("pwrite", row["command"])
+            self.assertEqual(row["final_bytes"], row["fixture_bytes"]
+                             - row["delete_len"] + row["replacement_len"])
+            staged = row["replacement_stream"][0]["kind"] == "zero" or row["replacement_len"] > 4096
+            self.assertEqual(row["expected_callbacks"]["begin"], int(staged))
+            self.assertEqual(row["expected_callbacks"]["apply"], int(staged))
+            self.assertEqual(row["expected_callbacks"]["inline_edit"], int(not staged))
+
 
 if __name__ == "__main__":
     unittest.main()
