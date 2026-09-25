@@ -5,8 +5,10 @@
 > required proofs. The records below are conceptual design notation, not existing
 > Rust APIs. Section 2.3's precedence rules were refreshed in the issue-179
 > documentation round against product source `f802cc124` to state the implemented
-> binding-versus-removal, shadowing, listing and re-anchor behavior; the design
-> notation elsewhere remains pinned to
+> binding-versus-removal, shadowing, listing and re-anchor behavior; the
+> binding-versus-removal rule and the metadata key bound below were extended in
+> the issue-245 repair round, whose implementation commit is `a0258cd6f`; the
+> design notation elsewhere remains pinned to
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`. No performance or memory result is
 > claimed.
 

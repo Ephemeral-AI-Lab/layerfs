@@ -1,0 +1,84 @@
+{
+  "attempt_id": "run-52-failed-command",
+  "binaries": {
+    "benchmark_init": "5d1b5c43d3e993e0c0f079d3e913491af27a84aaf9161a902320b2bc56104f19",
+    "benchmark_shell": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8",
+    "verify_shell": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+  },
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "campaign": "phase1-ordinary-shell-repair",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "a660d7b0426a8b53ff9cab471204881b0d7c97d5d4892ffffb2989881dd103b9",
+  "driver": {
+    "cleanup_ns": 5523185209,
+    "commit_called": false,
+    "commit_ns": 0,
+    "detail": "",
+    "exec_ns": 30436291,
+    "head_commit": "",
+    "operation_ns": 30444250,
+    "projection_counts": "lookup=4,getattr=7,read=0,write=1,readdir=0,open=1,setattr=1,rename=0,other=0,range_state=0,range_edit=0",
+    "sandbox_delete_ok": true,
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "expected_failure": true,
+  "field_provenance": {
+    "container memory and disk": "UNAVAILABLE",
+    "driver timings": "raw single observation, not a phase-isolated sample",
+    "fuse_callbacks": "measured (LAYERFS_FUSE_TRACE)",
+    "mknod/symlink/link callbacks": "UNAVAILABLE (not traced)",
+    "piece and commit counters": "UNAVAILABLE (LFS_PIECE_COUNT / LFS_PIECE_PAGES not enabled)",
+    "workspace_errors": "UNAVAILABLE"
+  },
+  "fixture": {
+    "history_sha256": "c543bcb6765a81c4d3a3fc944f78e2b486b4ec8091a80d787eb2c1b17d9da828",
+    "master_shape": "package",
+    "new_manifest": "package.tsv",
+    "old_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+    "old_manifest": "package.tsv",
+    "store_sha256": "10bd23e8f09fb99841535ff87a0aad5fbdfdb4b1bf1a1d265e74cb5056713864"
+  },
+  "fuse_callbacks": {
+    "setattr": 1,
+    "write": 1,
+    "write_bytes": 3
+  },
+  "fuse_callbacks_available": true,
+  "image_id": "sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1",
+  "performance_reason": "the host Store copy and the Linux FUSE backing cache are uncontrolled; no cold contract was enforced for either arm",
+  "performance_status": "INELIGIBLE",
+  "phase": "post-fix",
+  "reproduction": "python3 core/docs/issues/245/evidence/phase1-ordinary-shell-repair/run_diagnostic.py --prepared-root <retained #243 worktree> --worktree <candidate worktree> --name run-52-failed-command --shape package --old-manifest package.tsv --new-manifest package.tsv --image sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1 --command <command file> --output <fresh path> --expected-failure",
+  "route": {
+    "commit": "one explicit WorkspaceApi::commit only after a confirmed zero exit",
+    "forbidden_paths_used": [],
+    "public_method": "WorkspaceApi::exec(command)",
+    "range_accepted_payload_bytes": 0,
+    "range_edit_count": 0,
+    "range_state_count": 0,
+    "shell": "/bin/sh -c inside the mounted Workspace"
+  },
+  "scenario_id": "failed-command-no-commit-v1",
+  "schema": "issue245-shell-diagnostic-attempt-v1",
+  "shell_command_utf8": "set -eu\nprintf 'BAD' > node_modules/@fixture/core/package.json\nfalse\n",
+  "source": {
+    "candidate": "dd00c92e2 (FUSE diagnostic traces) on a0258cd6f (correctness fixes); first parent d63379b95",
+    "sealed_243_identity": {
+      "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+      "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+      "dirty_paths": [],
+      "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+      "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+      "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+      "source_dirty": false,
+      "source_tree": "98285433d132d646be9fd0a4295256f21857977c"
+    }
+  },
+  "verifier": {
+    "detail": "{\"status\":\"PASS\",\"old_commit\":\"12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e\",\"head_commit\":\"12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e\",\"old_paths\":17,\"old_files\":9,\"old_bytes\":1114501,\"new_tree\":null}",
+    "status": "PASS"
+  },
+  "workspace_errors": []
+}

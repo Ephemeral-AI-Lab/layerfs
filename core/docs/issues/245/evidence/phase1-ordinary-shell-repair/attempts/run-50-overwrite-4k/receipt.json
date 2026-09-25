@@ -1,0 +1,83 @@
+{
+  "attempt_id": "run-50-overwrite-4k",
+  "binaries": {
+    "benchmark_init": "5d1b5c43d3e993e0c0f079d3e913491af27a84aaf9161a902320b2bc56104f19",
+    "benchmark_shell": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8",
+    "verify_shell": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+  },
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "campaign": "phase1-ordinary-shell-repair",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "a660d7b0426a8b53ff9cab471204881b0d7c97d5d4892ffffb2989881dd103b9",
+  "driver": {
+    "cleanup_ns": 492327292,
+    "commit_called": true,
+    "commit_ns": 23184584,
+    "detail": "",
+    "exec_ns": 18006209,
+    "head_commit": "12387f553229c1dbdfd06a9bb43776aae5c0b9d05714889867bc417322ba910754",
+    "operation_ns": 41198125,
+    "projection_counts": "lookup=1,getattr=4,read=0,write=1,readdir=0,open=1,setattr=0,rename=0,other=0,range_state=0,range_edit=0",
+    "sandbox_delete_ok": true,
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "expected_failure": false,
+  "field_provenance": {
+    "container memory and disk": "UNAVAILABLE",
+    "driver timings": "raw single observation, not a phase-isolated sample",
+    "fuse_callbacks": "measured (LAYERFS_FUSE_TRACE)",
+    "mknod/symlink/link callbacks": "UNAVAILABLE (not traced)",
+    "piece and commit counters": "UNAVAILABLE (LFS_PIECE_COUNT / LFS_PIECE_PAGES not enabled)",
+    "workspace_errors": "UNAVAILABLE"
+  },
+  "fixture": {
+    "history_sha256": "defe8a4d3b07b0c7985a4e1ba162c528b8a973f0ee102144201eb4ee7d3a2e75",
+    "master_shape": "large",
+    "new_manifest": "overwrite-4k-v1.tsv",
+    "old_commit": "12f19e81759ed83072dc0703e3e218d6e50b1b50e734d5f2a2ec4ee9cda5e2b78b",
+    "old_manifest": "large.tsv",
+    "store_sha256": "005175a699c8b402e823ac4484971fa86ef5ed9aa4f81d668116266fa586eecd"
+  },
+  "fuse_callbacks": {
+    "write": 1,
+    "write_bytes": 4096
+  },
+  "fuse_callbacks_available": true,
+  "image_id": "sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1",
+  "performance_reason": "the host Store copy and the Linux FUSE backing cache are uncontrolled; no cold contract was enforced for either arm",
+  "performance_status": "INELIGIBLE",
+  "phase": "post-fix",
+  "reproduction": "python3 core/docs/issues/245/evidence/phase1-ordinary-shell-repair/run_diagnostic.py --prepared-root <retained #243 worktree> --worktree <candidate worktree> --name run-50-overwrite-4k --shape large --old-manifest large.tsv --new-manifest overwrite-4k-v1.tsv --image sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1 --command <command file> --output <fresh path>",
+  "route": {
+    "commit": "one explicit WorkspaceApi::commit only after a confirmed zero exit",
+    "forbidden_paths_used": [],
+    "public_method": "WorkspaceApi::exec(command)",
+    "range_accepted_payload_bytes": 0,
+    "range_edit_count": 0,
+    "range_state_count": 0,
+    "shell": "/bin/sh -c inside the mounted Workspace"
+  },
+  "scenario_id": "overwrite-4k-v1",
+  "schema": "issue245-shell-diagnostic-attempt-v1",
+  "shell_command_utf8": "dd if=/fixtures/v2/patch-4k.bin of=large.bin bs=4096 seek=1280 conv=notrunc 2>/dev/null\n",
+  "source": {
+    "candidate": "dd00c92e2 (FUSE diagnostic traces) on a0258cd6f (correctness fixes); first parent d63379b95",
+    "sealed_243_identity": {
+      "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+      "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+      "dirty_paths": [],
+      "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+      "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+      "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+      "source_dirty": false,
+      "source_tree": "98285433d132d646be9fd0a4295256f21857977c"
+    }
+  },
+  "verifier": {
+    "detail": "{\"status\":\"PASS\",\"old_commit\":\"12f19e81759ed83072dc0703e3e218d6e50b1b50e734d5f2a2ec4ee9cda5e2b78b\",\"head_commit\":\"12387f553229c1dbdfd06a9bb43776aae5c0b9d05714889867bc417322ba910754\",\"old_paths\":18,\"old_files\":10,\"old_bytes\":11600261,\"new_tree\":{\"paths\":18,\"files\":10,\"bytes\":11600261}}",
+    "status": "PASS"
+  },
+  "workspace_errors": []
+}

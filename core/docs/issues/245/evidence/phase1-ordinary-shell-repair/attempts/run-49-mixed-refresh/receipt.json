@@ -1,0 +1,102 @@
+{
+  "attempt_id": "run-49-mixed-refresh",
+  "binaries": {
+    "benchmark_init": "5d1b5c43d3e993e0c0f079d3e913491af27a84aaf9161a902320b2bc56104f19",
+    "benchmark_shell": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8",
+    "verify_shell": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+  },
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "campaign": "phase1-ordinary-shell-repair",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "a660d7b0426a8b53ff9cab471204881b0d7c97d5d4892ffffb2989881dd103b9",
+  "driver": {
+    "cleanup_ns": 578956125,
+    "commit_called": true,
+    "commit_ns": 169631334,
+    "detail": "",
+    "exec_ns": 1164387791,
+    "head_commit": "120313f97ee5fc80d89d7d7a36c745671886d47a9bdc8dfe7c5c8bb45ebac4ebe5",
+    "operation_ns": 1334027583,
+    "projection_counts": "lookup=159,getattr=198,read=0,write=36,readdir=0,open=1,setattr=0,rename=2,other=0,range_state=0,range_edit=0",
+    "sandbox_delete_ok": true,
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "expected_failure": false,
+  "field_provenance": {
+    "container memory and disk": "UNAVAILABLE",
+    "driver timings": "raw single observation, not a phase-isolated sample",
+    "fuse_callbacks": "measured (LAYERFS_FUSE_TRACE)",
+    "mknod/symlink/link callbacks": "UNAVAILABLE (not traced)",
+    "piece and commit counters": "UNAVAILABLE (LFS_PIECE_COUNT / LFS_PIECE_PAGES not enabled)",
+    "workspace_errors": "measured (LAYERFS_FUSE_ERROR_DIAGNOSTIC)"
+  },
+  "fixture": {
+    "history_sha256": "c543bcb6765a81c4d3a3fc944f78e2b486b4ec8091a80d787eb2c1b17d9da828",
+    "master_shape": "package",
+    "new_manifest": "mixed-refresh-v1.tsv",
+    "old_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+    "old_manifest": "package.tsv",
+    "store_sha256": "10bd23e8f09fb99841535ff87a0aad5fbdfdb4b1bf1a1d265e74cb5056713864"
+  },
+  "fuse_callbacks": {
+    "create": 7,
+    "mkdir": 1,
+    "rename": 2,
+    "unlink": 5,
+    "write": 23,
+    "write_bytes": 1114488
+  },
+  "fuse_callbacks_available": true,
+  "image_id": "sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1",
+  "performance_reason": "the host Store copy and the Linux FUSE backing cache are uncontrolled; no cold contract was enforced for either arm",
+  "performance_status": "INELIGIBLE",
+  "phase": "post-fix",
+  "reproduction": "python3 core/docs/issues/245/evidence/phase1-ordinary-shell-repair/run_diagnostic.py --prepared-root <retained #243 worktree> --worktree <candidate worktree> --name run-49-mixed-refresh --shape package --old-manifest package.tsv --new-manifest mixed-refresh-v1.tsv --image sha256:26e081383867ec0e59276f38470bbb2002e09167843d7eacaaca13067ed429d1 --command <command file> --output <fresh path>",
+  "route": {
+    "commit": "one explicit WorkspaceApi::commit only after a confirmed zero exit",
+    "forbidden_paths_used": [],
+    "public_method": "WorkspaceApi::exec(command)",
+    "range_accepted_payload_bytes": 0,
+    "range_edit_count": 0,
+    "range_state_count": 0,
+    "shell": "/bin/sh -c inside the mounted Workspace"
+  },
+  "scenario_id": "mixed-refresh-v1",
+  "schema": "issue245-shell-diagnostic-attempt-v1",
+  "shell_command_utf8": "set -eu\numask 022\nbase=node_modules/@fixture\nprintf '2' | dd of=\"$base/core/BUILD_ID\" bs=1 seek=0 conv=notrunc 2>/dev/null\ncp /fixtures/v2/core/package.json \"$base/core/package.json\"\ncp /fixtures/v2/parser/package.json \"$base/parser/package.json\"\ncp /fixtures/v2/parser/lib/parse.js \"$base/parser/lib/parse.js\"\nmkdir \"$base/parser/generated\"\ncp /fixtures/v2/parser/generated/tokenize.js \"$base/parser/generated/tokenize.js\"\nrm \"$base/parser/lib/legacy.js\"\ncp /fixtures/v2/ui/package.json \"$base/ui/package.json\"\ncp /fixtures/v2/ui/dist/ui.js \"$base/ui/dist/ui.js.next\"\nmv -f \"$base/ui/dist/ui.js.next\" \"$base/ui/dist/ui.js\"\ncp /fixtures/v2/package-lock.json package-lock.json.next\nmv -f package-lock.json.next package-lock.json\n",
+  "source": {
+    "candidate": "dd00c92e2 (FUSE diagnostic traces) on a0258cd6f (correctness fixes); first parent d63379b95",
+    "sealed_243_identity": {
+      "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+      "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+      "dirty_paths": [],
+      "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+      "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+      "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+      "source_dirty": false,
+      "source_tree": "98285433d132d646be9fd0a4295256f21857977c"
+    }
+  },
+  "verifier": {
+    "detail": "{\"status\":\"PASS\",\"old_commit\":\"12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e\",\"head_commit\":\"120313f97ee5fc80d89d7d7a36c745671886d47a9bdc8dfe7c5c8bb45ebac4ebe5\",\"old_paths\":17,\"old_files\":9,\"old_bytes\":1114501,\"new_tree\":{\"paths\":18,\"files\":9,\"bytes\":1114516}}",
+    "status": "PASS"
+  },
+  "workspace_errors": [
+    "NotFound",
+    "NotFound",
+    "NotFound",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, history: None })LFT1 {\"v\":1,\"namespace\":5527580606078614920,\"run\":\"54253d00a1579c662a3fc876ad4577d9\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":78,\"timing\":{  \"name\": \"Inspect\",  \"elapsed_ns\": 2393792,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"daemon.service_call\", \"elapsed_ns\": 2392042, \"outcome\": \"error\", \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":460819750,\"opened_ns\":462828417",
+    "NotFound",
+    "NotFound",
+    "NotFound",
+    "NotFound",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, LFT1 {\"v\":1,\"namespace\":5527580606078614920,\"run\":\"54253d00a1579c662a3fc876ad4577d9\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":132,\"timing\":{  \"name\": \"Inspect\",  \"elapsed_ns\": 2157666,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"daemon.service_call\", \"elapsed_ns\": 2156292, \"outcome\": \"error\", \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":731369500,\"opened_ns\":73158475history: None0,\"closed_ns\":733743500,\"last_ns\":731369500,\"incarnation\":1904,\"largest_gap_ns\":0,\"source\":\"procfs+sysconf\",\"last_probe_ns\":30333,\"selected\":3,\"sampled_max_rss\":36741120}",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, history: None })",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, history: None })LFT1 {\"v\":1,\"namespace\":5527580606078614920,\"run\":\"54253d00a1579c662a3fc876ad4577d9\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":142,\"timing\":{  \"name\": \"Inspect\",  \"elapsed_ns\": 2103458,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"daemon.service_call\", \"elapsed_ns\": 2102375, \"outcome\": \"error\", \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":1,\"gaps\":0,\"concurrency\":1,\"cpu_shared_ns\":null,\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":760831458,\"opened_ns\":76331562",
+    "Service(Failure { code: PathNotFound, unknown: LFT1 {\"v\":1,\"namespace\":5527580606078614920,\"run\":\"54253d00a1579c662a3fc876ad4577d9\",\"pid\":1,\"role\":2,\"kind\":\"operation\",\"key\":160,\"timing\":{  \"name\": \"Inspect\",  \"elapsed_ns\": 1760791,  \"outcome\": \"error\",  \"children\": [    {\"name\": \"daemon.service_call\", \"elapsed_ns\": 1759166, \"outcome\": \"error\", \"children\": []}  ]},\"success\":false,\"resource_status\":\"sampled\",\"samples\":2,\"gaps\":0,\"concurrency\":2,\"cpu_shared_ns\":[0,0],\"scope\":\"process-shared\",\"clock\":\"local-monitor\",\"first_ns\":1190611084,\"opened_ns\":120017false, cleanup3334,\"closed_ns\":1201935584,\"last_ns\":1200620750,\"incarnation\":1904,\"largest_gap_ns\":10009666,\"source\":\"procfs+sysconf\",\"last_probe_ns\":12917,\"selected\":3,\"sampled_max_rss\":36851712}",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, history: None })",
+    "Service(Failure { code: PathNotFound, unknown: false, cleanup: None, history: None })"
+  ]
+}
