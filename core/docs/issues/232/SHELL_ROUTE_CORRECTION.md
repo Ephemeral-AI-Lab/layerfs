@@ -62,23 +62,47 @@ cannot make the command's `O(M)` reads/writes disappear without changing the
 command or its filesystem semantics. Callback sequences alone do not identify
 one atomic insert/delete request.
 
-## Revised phases
+## Phase 2 feasibility finding: the eleven failures also exceed replay capacity
 
-1. Keep the independent [Phase 1B `service.finish` count and telemetry work](../241/evidence/phase1b-finish-diagnostic/REPORT.md).
-   Optimize a measured substep only when its own counts support the change.
-2. Keep v3 and the 128-edit ioctl liveness screen as opt-in evidence. Pause
-   staged all-56 ioctl work as a proposed solution to arbitrary shell edits.
-3. Use the frozen v2 POSIX commands and eleven retained failures to locate
-   actual generic-route limits. Count bytes requested by the editor, FUSE
-   callbacks, per-write piece-index work and Commit work; use cause-finding
-   diagnostics rather than resampling the same arm. Improve the shared
-   `WRITE`/`SETATTR` and Commit paths where counts justify it, preserving the
-   one-worker and 5 s progress contracts.
-4. Before new performance admission, freeze the actual shell commands,
-   editor algorithms, expected callbacks and output oracle under a new source
-   identity. Enforce an equal declared cache state, collect one sample per
-   case, retain failures and verify at the same identity. An uncontrollable
-   Edit-written FUSE backing cache leaves a numeric row `INELIGIBLE`.
+The [reproducible v2 limit derivation](evidence/shell-posix-diagnostic/derive_v2_limits.py)
+reads the frozen registry and retained baseline and produces
+[all 20 shift case counts](evidence/shell-posix-diagnostic/V2_LIMITS.json).
+It finds that **exactly the eleven retained failures** move more than the
+current 8 MiB replay limit. The 10 MiB prepend moves 10 MiB; a 100 MiB
+middle insert moves 50 MiB; a capped-500 MiB middle insert moves almost
+250 MiB. The benchmark tool reads and writes each affected byte in 128 KiB
+blocks. Every successful ordinary write owns Local replacement bytes in the
+existing file's private overlay. The current `pieces::splice` refuses an
+existing-file overlay with more than `MAX_REPLAY = 8 MiB` of non-Base pieces;
+the Bridge independently limits `EditFile` input to 8 MiB. A faster Exec
+progress path cannot make those exact in-place commands fit this contract.
+
+The *observed* failure is still the 5 s silent Exec result `Unknown` in the
+v2 receipts. None of those receipts observed a Capacity error because they
+stopped first. The capacity result is a source-and-registry deduction, not a
+relabelled outcome or a second sample. It also explains why optimizing only
+the current all-piece rebuild cannot finish the 56-case POSIX selection.
+Each WRITE currently reloads all pieces, splices over the list and rebuilds
+all piece-index pages, so the 128 KiB shift blocks add rising metadata work.
+The already retained 10 MiB shifts took about 2.7–2.8 s for 40 blocks. The
+larger cases need hundreds to thousands of blocks and exceed the replay
+limit independently of that time growth.
+
+## Five revised checkpoints
+
+| Phase | Gate, commit and verification | Current outcome |
+| --- | --- | --- |
+| 1. Establish the user-facing route | Commit `8ec08e800` records the pre-run, one public SDK mounted POSIX probe, independent full-file verifier and corrected workflow. | **PASS** for the one ordinary overwrite route; no broad command or latency claim. |
+| 2. Explain retained structural failures | `derive_v2_limits.py` checks 56 registry rows, 20 shifts, the 8 MiB source limit and exact agreement between eleven over-limit rows and eleven retained v2 failures. | **PASS** for the source-and-registry deduction; the historical observed outcome remains 5 s Exec `FAIL`. |
+| 3. Select a capacity-preserving generic POSIX design | The current in-place 10/100/500 MiB shifts cannot fit existing Workspace/Bridge replay. A temp-file-and-rename command is a different editor algorithm and needs a new case identity. The independent [Phase 1B drain diagnosis](../241/evidence/phase1b-finish-diagnostic/REPORT.md) stays valid, with no narrow optimization yet justified. | **BLOCKED on route/contract selection.** No cap, worker or timeout inflation is an acceptable shortcut. |
+| 4. Prove all 56 generic-shell cases | Freeze the selected actual shell commands, source/build/image identities, callback counts and byte oracles; then verify one fresh changed-source attempt per case. | **NOT_RUN.** The v2 POSIX baseline is 45 verified, eleven failed. The v3 ioctl campaign is a separate selection. |
+| 5. Qualify performance and release | Enforce an equal cache state for Edit-written backing bytes, retain one sample per case, independent verification and cleanup, and compare only prospective same-route targets. | **NOT_RUN.** The current FUSE backing-cache domain is ineligible for cold latency. |
+
+Phase 3 requires an explicit route decision because preserving the exact v2
+in-place commands needs a new private-overlay and replay architecture, while
+choosing ordinary temp-file-and-rename commands changes the benchmark
+operation. Either path must preserve arbitrary `WorkspaceApi::exec` semantics;
+neither may be labelled as the existing v3 ioctl result.
 
 The existing opt-in ioctl remains useful for programs that choose its API.
 It is a separate capability and performance selection from arbitrary shell
