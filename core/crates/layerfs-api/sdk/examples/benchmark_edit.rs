@@ -74,6 +74,28 @@ fn confirmed_exec(exec: &ExecResult, expected_splice_output: Option<&str>) -> bo
         && expected_splice_output.is_none_or(|expected| exec.stdout == expected.as_bytes())
 }
 
+fn confirmed_v4(exec: &ExecResult, final_bytes: u64) -> Option<(i64, u32)> {
+    if exec.exit_status != Some(0) || exec.stdout_truncated || exec.stderr_truncated {
+        return None;
+    }
+    let output = std::str::from_utf8(&exec.stdout).ok()?;
+    let prefix = format!(
+        "{{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":{final_bytes},\"shifted_bytes\":0,\"mtime_seconds\":"
+    );
+    let (seconds, tail) = output
+        .strip_prefix(&prefix)?
+        .split_once(",\"mtime_nanoseconds\":")?;
+    let nanoseconds = tail.strip_suffix("}\n")?;
+    let seconds = seconds.parse::<i64>().ok()?;
+    let nanoseconds = nanoseconds.parse::<u32>().ok()?;
+    if nanoseconds >= 1_000_000_000
+        || output != format!("{prefix}{seconds},\"mtime_nanoseconds\":{nanoseconds}}}\n")
+    {
+        return None;
+    }
+    Some((seconds, nanoseconds))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 6 {
@@ -144,6 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         root_serial: case.number("genesis_root_serial")?,
     };
     let v3 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3";
+    let v4 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v4";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -220,8 +243,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ))
         })
         .transpose()?;
+    let final_bytes = case.number("final_bytes")?;
     let mut edit_ns = 0u128;
     let mut commit_ns = 0u128;
+    let mut observed_mtime = None;
     let mut status = "FAIL";
     let mut detail;
     let started = Instant::now();
@@ -236,6 +261,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result
                 });
                 match edit {
+                    Ok(exec) if v4 => {
+                        observed_mtime = confirmed_v4(&exec, final_bytes);
+                        if observed_mtime.is_none() {
+                            return Err(format!(
+                                "exec v4 output not exact: status={:?} truncated stdout={} stderr={} output={}",
+                                exec.exit_status,
+                                exec.stdout_truncated,
+                                exec.stderr_truncated,
+                                String::from_utf8_lossy(&exec.stdout).escape_debug()
+                            ));
+                        }
+                    }
                     Ok(exec) if confirmed_exec(&exec, expected_splice_output.as_deref()) => {}
                     Ok(exec) => {
                         return Err(format!(
@@ -281,7 +318,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
     let unmount = workspaces.unmount(&mount.id);
-    let delete = sandboxes.delete(sandbox);
+    let (delete, log_capture) = if v4 {
+        let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
+        (delete, Some(capture))
+    } else {
+        (sandboxes.delete(sandbox), None)
+    };
     let cleanup_ns = cleanup_started.elapsed().as_nanos();
     if unmount.is_err() || delete.is_err() {
         status = "FAIL";
@@ -310,6 +352,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.range_shifted_suffix_bytes)
         .unwrap_or(0);
+    let v4_metadata = if v4 {
+        let capture = log_capture.as_ref().expect("v4 captured logs");
+        match observed_mtime {
+            Some((seconds, nanoseconds)) => format!(
+                ",\"observed_mtime_seconds\":{seconds},\"observed_mtime_nanoseconds\":{nanoseconds},\"sandbox\":\"{sandbox}\",\"caller_pid\":{},\"telemetry_run\":\"{run:032x}\",\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":\"{}\"",
+                std::process::id(), capture.attempted, capture.bytes, capture.truncated,
+                format!("{:?}", capture.error).escape_debug()
+            ),
+            None => format!(
+                ",\"observed_mtime_seconds\":null,\"observed_mtime_nanoseconds\":null,\"sandbox\":\"{sandbox}\",\"caller_pid\":{},\"telemetry_run\":\"{run:032x}\",\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":\"{}\"",
+                std::process::id(), capture.attempted, capture.bytes, capture.truncated,
+                format!("{:?}", capture.error).escape_debug()
+            ),
+        }
+    } else {
+        String::new()
+    };
     let receipt =
         format!(
         "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-performance-v1\",\"status\":\"{status}\",\
@@ -326,7 +385,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"range_shifted_suffix_bytes\":{range_shifted_suffix_bytes},\
 \"unmount_ok\":{},\"sandbox_delete_ok\":{},\"sandbox_delete_container_removed\":{},\
 \"sandbox_delete_volume_removed\":{},\"store\":\"{}\",\"history\":\"{}\",\
-\"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false}}",
+\"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false{v4_metadata}}}",
         detail.escape_debug(),
         case.get("family_id")?,
         case.get("scenario_id")?,
@@ -372,6 +431,23 @@ fn case_bytes(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn v4_tool_output_requires_exact_verified_mtime() {
+        let mut exec = ExecResult {
+            exit_status: Some(0),
+            stdout: b"{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":12288,\"shifted_bytes\":0,\"mtime_seconds\":1700000000,\"mtime_nanoseconds\":123}\n".to_vec(),
+            stderr: Vec::new(),
+            stdout_truncated: false,
+            stderr_truncated: false,
+        };
+        assert_eq!(confirmed_v4(&exec, 12288), Some((1_700_000_000, 123)));
+        exec.stdout.extend_from_slice(b"extra");
+        assert_eq!(confirmed_v4(&exec, 12288), None);
+        exec.stdout.truncate(exec.stdout.len() - 5);
+        exec.stdout_truncated = true;
+        assert_eq!(confirmed_v4(&exec, 12288), None);
+    }
 
     #[test]
     fn splice_requires_exact_caller_proof_before_commit() {

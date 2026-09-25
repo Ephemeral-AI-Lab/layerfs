@@ -82,7 +82,13 @@ fn unknown(phase: &str, before: &Stamp, error: impl std::fmt::Display) -> ! {
     std::process::exit(75)
 }
 
-fn confirm(file: &File, before: &Stamp, expected_length: u64, expected: &[u8], read_start: u64) {
+fn confirm(
+    file: &File,
+    before: &Stamp,
+    expected_length: u64,
+    expected: &[u8],
+    read_start: u64,
+) -> (i64, u32) {
     let after = state(file).unwrap_or_else(|error| unknown("post-state", before, error));
     if after.serial != before.serial
         || after.incarnation != before.incarnation
@@ -111,9 +117,10 @@ fn confirm(file: &File, before: &Stamp, expected_length: u64, expected: &[u8], r
     if actual != expected {
         unknown("readback", before, "boundary bytes mismatch");
     }
+    (after.mtime_seconds, after.mtime_nanoseconds)
 }
 
-pub(super) fn run(options: &Options, file: &File) -> Result<(), Error> {
+pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
     let replacement = if options.length == 0 {
         Vec::new()
     } else {
@@ -164,8 +171,7 @@ pub(super) fn run(options: &Options, file: &File) -> Result<(), Error> {
     if unsafe { ioctl(file.as_raw_fd(), EDIT, bytes.as_mut_ptr()) } != 0 {
         unknown("edit", &before, Error::last_os_error());
     }
-    confirm(file, &before, final_length, &expected, read_start);
-    Ok(())
+    Ok(confirm(file, &before, final_length, &expected, read_start))
 }
 
 #[cfg(test)]
@@ -177,6 +183,7 @@ mod tests {
     fn frozen_request_bytes() {
         let options = Options {
             operation: "splice".into(),
+            output_version: 3,
             file: PathBuf::new(),
             expect_size: 8192,
             offset: 4093,

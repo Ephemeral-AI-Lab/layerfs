@@ -5,7 +5,9 @@
 //! bytes from the fixture recipe and the declared edit plan, and checks the
 //! published head plus the retained historical root.
 use layerfs_content::{
-    filesystem::{read::FilesystemRead, root::FilesystemRootId},
+    filesystem::{
+        attributes::portable::PortableMetadata, read::FilesystemRead, root::FilesystemRootId,
+    },
     inode_leaf::InodeKind,
     read_all_bounded, read_range, FileContent, FileView, LogicalPath, ObjectId,
 };
@@ -109,24 +111,51 @@ fn shape(
     }
 }
 
+fn portable(
+    provider: &StoreProvider<'_>,
+    root: ObjectId,
+    path: &LogicalPath,
+) -> Result<PortableMetadata, String> {
+    FilesystemRead::new(provider, FilesystemRootId(root))
+        .and_then(|mut filesystem| filesystem.read_portable(path))
+        .map_err(|error| error.to_string())
+}
+
+fn metadata_expectation(case: &Case) -> Result<(u32, i64, u32, u32), Box<dyn std::error::Error>> {
+    let mode: u32 = case.get("expected_mode")?.parse()?;
+    let seconds: i64 = case.get("expected_mtime_seconds")?.parse()?;
+    let nanoseconds: u32 = case.get("expected_mtime_nanoseconds")?.parse()?;
+    let fixture_mode: u32 = case.get("fixture_mode")?.parse()?;
+    if mode != 0o640 || fixture_mode != 0o640 || nanoseconds >= 1_000_000_000 {
+        return Err("v4 mode or mtime expectation is outside the frozen fixture contract".into());
+    }
+    Ok((mode, seconds, nanoseconds, fixture_mode))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 4 {
         return Err("case store history required".into());
     }
     let case = Case::load(Path::new(&args[1]))?;
-    let v3 = case.get("operation_contract_id")? == "workspace-exec-fuse-range-splice-commit-v3";
-    if v3 {
+    let contract = case.get("operation_contract_id")?;
+    let v4 = contract == "workspace-exec-fuse-range-splice-commit-v4";
+    if case.get("scenario_id")?.ends_with("-exec-v4") != v4 {
+        return Err("v4 scenario and operation contract differ".into());
+    }
+    let v3_or_v4 = v4 || contract == "workspace-exec-fuse-range-splice-commit-v3";
+    let expected_metadata = v4.then(|| metadata_expectation(&case)).transpose()?;
+    if v3_or_v4 {
         if case.get("full_file_digest")? != "1" {
-            return Err("v3 requires a full-file digest".into());
+            return Err("range splice requires a full-file digest".into());
         }
         let expected_root = case.get("canonical_root_expected")?;
         if expected_root.len() != 64 || !expected_root.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
-            return Err("v3 expected canonical root is absent or malformed".into());
+            return Err("range splice expected canonical root is absent or malformed".into());
         }
         if case.get("canonical_count_expected")?.parse::<u64>()? == 0 {
-            return Err("v3 expected canonical count is zero".into());
+            return Err("range splice expected canonical count is zero".into());
         }
     }
     let cursor: [u8; 32] = {
@@ -175,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if canonical_root == fixture_root {
         return Err("published root equals the pristine fixture root; nothing was edited".into());
     }
-    // V3 requires a full digest at every size. Historical v2 cases retain their
+    // V3 and v4 require a full digest at every size. Historical v2 cases retain their
     // declared full-digest or bounded-window coverage.
     let content_root = ObjectId::from_bytes(&hex_to_bytes(&canonical_root)?)?;
     let full_digest = case.get("full_file_digest")? == "1";
@@ -280,7 +309,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixture_ok = fixture_bytes == case.number("fixture_bytes")?
         && fixture_observed == fixture_root
         && fixture_extents == case.number("fixture_extent_count")?;
-    let status = if content_ok && canonical_ok && count_ok && fixture_ok {
+    let mut metadata_match = true;
+    let mut metadata_report = String::new();
+    if let Some((expected_mode, expected_seconds, expected_nanoseconds, fixture_mode)) =
+        expected_metadata
+    {
+        let genesis_root = ObjectId::from_bytes(&case.hex("genesis_root")?)?;
+        let published = portable(&provider, commit.root, &path)?;
+        let old = portable(&provider, layer.root, &path)?;
+        let genesis = portable(&provider, genesis_root, &path)?;
+        let published_match = published.mode == expected_mode
+            && published.mtime_seconds == expected_seconds
+            && published.mtime_nanoseconds == expected_nanoseconds;
+        let historical_match =
+            layer.root == genesis_root && old == genesis && old.mode == fixture_mode;
+        metadata_match = published_match && historical_match;
+        metadata_report = format!(
+            ",\"published_mode\":{},\"expected_mode\":{expected_mode},\
+\"published_mtime_seconds\":{},\"expected_mtime_seconds\":{expected_seconds},\
+\"published_mtime_nanoseconds\":{},\"expected_mtime_nanoseconds\":{expected_nanoseconds},\
+\"published_metadata_match\":{published_match},\"historical_mode\":{},\
+\"fixture_mode\":{fixture_mode},\"historical_mtime_seconds\":{},\
+\"historical_mtime_nanoseconds\":{},\"historical_metadata_match\":{historical_match}",
+            published.mode,
+            published.mtime_seconds,
+            published.mtime_nanoseconds,
+            old.mode,
+            old.mtime_seconds,
+            old.mtime_nanoseconds,
+        );
+    }
+    let status = if content_ok && canonical_ok && count_ok && fixture_ok && metadata_match {
         "PASS"
     } else {
         "FAIL"
@@ -297,7 +356,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"head_commit\":\"{}\",\"branch_id\":\"{}\",\"genesis_root\":\"{}\",\
 \"fixture_bytes\":{fixture_bytes},\"fixture_canonical_root_observed\":\"{fixture_observed}\",\
 \"fixture_extent_count_observed\":{fixture_extents},\"historical_root_match\":{fixture_ok},\
-\"store\":\"{}\",\"history\":\"{}\"}}",
+\"store\":\"{}\",\"history\":\"{}\"{metadata_report}}}",
         case.get("scenario_id")?,
         case.get("canonical_root_expected")?,
         hex(&head.to_bytes()),
@@ -318,4 +377,35 @@ fn hex_to_bytes(text: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .step_by(2)
         .map(|offset| u8::from_str_radix(&text[offset..offset + 2], 16).map_err(Into::into))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn v4_metadata_expectation_fails_closed() {
+        let mut case = Case {
+            fields: BTreeMap::from([
+                ("expected_mode".into(), "416".into()),
+                ("expected_mtime_seconds".into(), "-2".into()),
+                ("expected_mtime_nanoseconds".into(), "750000000".into()),
+                ("fixture_mode".into(), "416".into()),
+            ]),
+        };
+        assert_eq!(
+            metadata_expectation(&case).unwrap(),
+            (416, -2, 750_000_000, 416)
+        );
+        case.fields.remove("expected_mtime_seconds");
+        assert!(metadata_expectation(&case).is_err());
+        case.fields
+            .insert("expected_mtime_seconds".into(), "NaN".into());
+        assert!(metadata_expectation(&case).is_err());
+        case.fields
+            .insert("expected_mtime_seconds".into(), "-2".into());
+        case.fields
+            .insert("expected_mtime_nanoseconds".into(), "1000000000".into());
+        assert!(metadata_expectation(&case).is_err());
+    }
 }

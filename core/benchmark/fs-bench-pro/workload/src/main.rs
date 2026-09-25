@@ -37,6 +37,7 @@ const SHIFT_BLOCK_BYTES: usize = 128 * 1024;
 
 struct Options {
     operation: String,
+    output_version: u64,
     file: PathBuf,
     expect_size: u64,
     offset: u64,
@@ -52,7 +53,7 @@ fn usage() -> Error {
         ErrorKind::InvalidInput,
         "usage: layerfs-edit-tool <pwrite|truncate|extend|shift|splice> --file P --expect-size N \
          [--offset N --length N --payload P | --offset N --delete-length N --length N \
-         --direction grow|shrink [--payload P] | --size N]",
+         --direction grow|shrink [--payload P] | --size N] [--output-version 4 for splice]",
     )
 }
 
@@ -76,8 +77,16 @@ fn parsed(args: &[String]) -> Result<Options, Error> {
     let optional = |key: &str| -> Result<Option<u64>, Error> {
         values.get(key).map(|_| number(key)).transpose()
     };
+    let output_version = optional("output-version")?.unwrap_or(3);
+    if !matches!(output_version, 3 | 4) || (output_version == 4 && operation != "splice") {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "unsupported output version",
+        ));
+    }
     Ok(Options {
         operation,
+        output_version,
         file: PathBuf::from(values.get("file").ok_or_else(usage)?),
         expect_size: number("expect-size")?,
         offset: optional("offset")?.unwrap_or(0),
@@ -226,7 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = parsed(&args)?;
     let file = opened(&options)?;
     let mut shifted = 0u64;
-    match options.operation.as_str() {
+    let post_state_mtime = match options.operation.as_str() {
         "pwrite" => {
             let bytes = payload(&options)?;
             if options.offset < options.expect_size
@@ -235,6 +244,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("positional write crosses the declared end of file".into());
             }
             write_all_at(&file, options.offset, &bytes)?;
+            None
         }
         "truncate" | "extend" => {
             if options.operation == "truncate" && options.size >= options.expect_size {
@@ -244,11 +254,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("extend does not lengthen the declared file".into());
             }
             file.set_len(options.size)?;
+            None
         }
-        "shift" => shifted = shift(&options, &file)?,
+        "shift" => {
+            shifted = shift(&options, &file)?;
+            None
+        }
         "splice" => {
             #[cfg(target_os = "linux")]
-            splice::run(&options, &file)?;
+            {
+                Some(splice::run(&options, &file)?)
+            }
             #[cfg(not(target_os = "linux"))]
             return Err(
                 Error::new(ErrorKind::Unsupported, "splice requires Linux FUSE ioctl").into(),
@@ -257,8 +273,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         other => {
             return Err(format!("unknown operation {other}").into());
         }
-    }
+    };
     let final_size = file.metadata()?.len();
+    let line = result_line(&options, final_size, shifted, post_state_mtime)?;
+    println!("{line}");
+    // The descriptor is closed by drop; no fsync is issued, because the product
+    // makes no durability promise about Workspace backing.
+    let _ = file.as_raw_fd();
+    Ok(())
+}
+
+fn result_line(
+    options: &Options,
+    final_size: u64,
+    shifted: u64,
+    post_state_mtime: Option<(i64, u32)>,
+) -> Result<String, Error> {
     let mut line = String::new();
     write!(
         line,
@@ -268,9 +298,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         options.direction.as_deref().unwrap_or("-")
     )
     .expect("string write");
-    println!("{line}");
-    // The descriptor is closed by drop; no fsync is issued, because the product
-    // makes no durability promise about Workspace backing.
-    let _ = file.as_raw_fd();
-    Ok(())
+    if options.output_version == 4 {
+        let (seconds, nanoseconds) = post_state_mtime
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "missing post-EDIT STATE mtime"))?;
+        line.pop();
+        write!(
+            line,
+            ",\"mtime_seconds\":{seconds},\"mtime_nanoseconds\":{nanoseconds}}}"
+        )
+        .expect("string write");
+    }
+    Ok(line)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn v4_output_adds_only_checked_state_mtime() {
+        let mut options = Options {
+            operation: "splice".into(),
+            output_version: 3,
+            file: PathBuf::new(),
+            expect_size: 1,
+            offset: 0,
+            delete_length: 0,
+            length: 0,
+            size: 0,
+            direction: None,
+            payload: None,
+        };
+        assert_eq!(
+            result_line(&options, 5, 0, None).unwrap(),
+            "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":5,\"shifted_bytes\":0}"
+        );
+        options.output_version = 4;
+        assert_eq!(
+            result_line(&options, 5, 0, Some((-2, 750_000_000))).unwrap(),
+            "{\"status\":\"PASS\",\"operation\":\"splice\",\"direction\":\"-\",\"final_bytes\":5,\"shifted_bytes\":0,\"mtime_seconds\":-2,\"mtime_nanoseconds\":750000000}"
+        );
+        assert!(result_line(&options, 5, 0, None).is_err());
+    }
 }

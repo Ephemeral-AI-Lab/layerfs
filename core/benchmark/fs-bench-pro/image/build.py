@@ -21,6 +21,7 @@ CORE = ROOT / "core"
 sys.path.insert(0, str(BENCH))
 from shared import edit_contract as contract  # noqa: E402
 from shared import edit_insert_v3  # noqa: E402
+from shared import edit_insert_v4  # noqa: E402
 from runner import edit_workload_seal, identities  # noqa: E402
 from families import (edit_canonical_chunk_count as canonical,  # noqa: E402
                       edit_length_changing as changing,
@@ -45,16 +46,16 @@ def payload_files(context, scenario_version):
     directory = context / "payloads"
     directory.mkdir(parents=True, exist_ok=True)
     written = {}
-    if scenario_version == 3:
-        rows = edit_insert_v3.registry()
+    if scenario_version in (3, 4):
+        rows = (edit_insert_v4 if scenario_version == 4 else edit_insert_v3).registry()
         if len({row["replacement_sha256"] for row in rows}) != 1:
-            raise SystemExit("v3 rows disagree on replacement identity")
+            raise SystemExit("splice rows disagree on replacement identity")
         row = rows[0]
         data = contract.payload_bytes(row["payload_seed"], row["replacement_len"],
                                       row["replacement_kind"])
         path = directory / row["payload_source"].rsplit("/", 1)[-1]
         if hashlib.sha256(data).hexdigest() != row["replacement_sha256"]:
-            raise SystemExit("v3 payload recipe mismatch")
+            raise SystemExit("splice payload recipe mismatch")
         path.write_bytes(data)
         return {path.name: {"bytes": len(data), "sha256": SHA(path)}}
     for family in (preserving, changing, canonical):
@@ -75,17 +76,19 @@ def payload_files(context, scenario_version):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out")
-    parser.add_argument("--scenario-version", type=int, choices=[2, 3], default=2)
+    parser.add_argument("--scenario-version", type=int, choices=[2, 3, 4], default=2)
     parser.add_argument("--debug-daemon", action="store_true")
     arguments = parser.parse_args()
-    selected = edit_insert_v3 if arguments.scenario_version == 3 else contract
-    if selected is edit_insert_v3:
+    selected = ({3: edit_insert_v3, 4: edit_insert_v4}.get(arguments.scenario_version, contract))
+    if selected is not contract:
         selected.validate_registry()
     elif SHA(BENCH / contract.REGISTRY_PATH) != contract.REGISTRY_SHA256:
         raise SystemExit("v2 registry identity changed")
-    context = (CORE / "target/exec-fuse-insert-v3/image" if arguments.scenario_version == 3
-               else CONTEXT)
-    tag = ("layerfs-exec-fuse-insert:issue241" if arguments.scenario_version == 3 else TAG)
+    context = (CORE / f"target/exec-fuse-insert-v{arguments.scenario_version}/image"
+               if selected is not contract else CONTEXT)
+    tag = (f"layerfs-exec-fuse-insert-v{arguments.scenario_version}:issue241"
+           if arguments.scenario_version == 4 else
+           "layerfs-exec-fuse-insert:issue241" if arguments.scenario_version == 3 else TAG)
     output = Path(arguments.out or context.parent / "image.json")
     profile = ["--release"]
     profile_dir = "release"
@@ -111,8 +114,8 @@ def main():
     run(["docker", "build", "-q", "-t", tag, str(context)])
     image = run(["docker", "image", "inspect", tag, "--format", "{{.Id}}"]).strip()
     record = {
-        "schema": ("core-fs-bench-pro-exec-fuse-insert-image-v3" if
-                   arguments.scenario_version == 3 else
+        "schema": (f"core-fs-bench-pro-exec-fuse-insert-image-v{arguments.scenario_version}" if
+                   selected is not contract else
                    "core-fs-bench-pro-exec-fuse-edit-image-v1"),
         "base": BASE,
         "tag": tag,
@@ -128,7 +131,7 @@ def main():
         "edit_tool_sha256": SHA(context / "layerfs-edit-tool"),
         "registry_sha256": selected.REGISTRY_SHA256,
         "scenario_version": arguments.scenario_version,
-        "carrier_abi": (edit_insert_v3.ABI if arguments.scenario_version == 3 else None),
+        "carrier_abi": (selected.ABI if selected is not contract else None),
         "payloads": payloads,
     }
     output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
