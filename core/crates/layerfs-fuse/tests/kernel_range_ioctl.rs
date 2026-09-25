@@ -274,7 +274,7 @@ mod linux {
 
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
-    fn kernel_range_staging_lifecycle() {
+    fn kernel_range_stage_lifecycle() {
         use sha2::{Digest, Sha256};
         let f = Fixture::new(Gate::None);
         let data = f.lookup(b"data.bin");
