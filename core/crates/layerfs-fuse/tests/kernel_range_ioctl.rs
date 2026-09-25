@@ -370,6 +370,7 @@ mod linux {
         drop(file);
         drop(other);
         mount.unmount(deadline()).unwrap();
+        f.workspace.commit(deadline()).unwrap();
         f.workspace
             .forget(data.serial, u64::MAX, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
