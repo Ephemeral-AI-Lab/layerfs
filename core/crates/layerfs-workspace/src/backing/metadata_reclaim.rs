@@ -63,8 +63,16 @@ impl RootOwner {
                 .filter(|(page, _)| *page == frame.page)
                 .map(|(_, count)| count);
             if owner.edges || partial.is_some() {
-                let data = arena.load(frame.page, window, deadline)?;
-                let edges = super::metadata_index::edges(&data)?;
+                // A page under cleanup may be keyed cells or one file's extent
+                // sequence: both declare their own edges, so the raw body and
+                // the kind-aware extraction decide them. The cell decoder would
+                // refuse an extent page and quarantine a healthy arena.
+                let bytes = arena.load_raw(frame.page, window, deadline)?;
+                let edges = super::metadata_index::edges_raw(
+                    arena.directory.incarnation,
+                    frame.page,
+                    &bytes,
+                )?;
                 let count = partial.unwrap_or(edges.len());
                 if count > edges.len() {
                     return Err(WorkspaceError::Io);
