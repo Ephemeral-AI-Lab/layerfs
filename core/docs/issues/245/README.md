@@ -40,6 +40,34 @@ verification gate.
   already proved and must not be redone, the exact code sites of every remaining
   gap, the work packages and their stop conditions, the operational playbook for
   mounted diagnostics, and the reporting requirements.
+- [D/E/F finish handoff](HANDOFF_D_E_F.md) is the current assignment: the
+  mounted write-path repair and the frozen control are done, the four gating
+  design decisions are recorded and owner-approved, and the remaining packages
+  (streaming transport, generations, the route harness, the candidate arm) are
+  specified with their gates and stop conditions.
+
+## Checkpoint (2026-09-26)
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Phase 1A root-cause repair | ✅ closed | [phase1-ordinary-shell-repair](evidence/phase1-ordinary-shell-repair/REPORT.md) |
+| Phase 1B packages A–C (format, splice, cursor) | ✅ closed | [phase1b-extent-sequence](evidence/phase1b-extent-sequence/REPORT.md) |
+| Mounted correctness of A–C (8 defects repaired) | ✅ closed this round | [phase1b-mounted-write-repair](evidence/phase1b-mounted-write-repair/REPORT.md); `76c832f0c`, `fdfc41032` |
+| Evidence blocker 1 (retained prepared state) | ✅ closed | `issue245-shell-package-v3-prepared-01` |
+| F pre-optimization control arm | ✅ collected and qualifying (4/4 functional PASS) | `issue245-shell-package-v3-control-01` |
+| ~5.5 s cleanup diagnosis | ✅ explained and fixed | cleanup ~0.5 s in every passing row |
+| Evidence blocker 2 (route harness) | ⬜ not started | chain mapped in the finish handoff §4.1 |
+| Package D (streaming transport) | ⬜ not started; design decided | finish handoff §3, §8 D-1 |
+| Package E (generations + reconcile) | ⬜ not started; fix shape decided | finish handoff §3, §8 E-1 |
+| Package F candidate arm + target freeze | ⬜ not started; target decided | finish handoff §4.0, §8 F-1 |
+
+The four decisions that gate the remaining work (D's frame protocol, E's
+reconcile shape, the harness route, F's comparative target) were made with the
+owner on 2026-09-26 and are binding for the finish round — see
+[HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). Roughly half the issue by remaining
+effort is complete: the algorithmic foundation is real and proven on the
+mounted route; what remains is the streaming wire (D), continuous generations
+(E) and the before/after proof (F's candidate).
 
 The first repair round is recorded in
 [Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md):
