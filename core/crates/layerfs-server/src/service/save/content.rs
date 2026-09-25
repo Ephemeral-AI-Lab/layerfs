@@ -89,6 +89,7 @@ pub fn mutate(
             base_length,
             edits,
         } => {
+            let cdc_input_bytes: u64 = edits.iter().map(|edit| edit.replacement).sum();
             let edits = EditStream::new(
                 *base_length,
                 edits
@@ -110,7 +111,19 @@ pub fn mutate(
                     &mut handoff,
                     scope.child("service.edit"),
                 )
-                .map(|f| (*f.root.as_bytes(), f.logical_len))
+                .map(|f| {
+                    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                        eprintln!(
+                            "LFS_C1_EDIT_COUNT v=1 cdc_input_bytes={cdc_input_bytes} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
+                            f.counters.nodes_read,
+                            f.counters.nodes_created,
+                            f.counters.payloads_created,
+                            f.counters.payload_bytes,
+                            f.counters.peak_deferred_bytes
+                        );
+                    }
+                    (*f.root.as_bytes(), f.logical_len)
+                })
                 .map_err(content)
             })
         }

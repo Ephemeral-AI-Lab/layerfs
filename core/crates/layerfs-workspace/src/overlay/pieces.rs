@@ -260,7 +260,9 @@ pub fn splice(
         new.push(p);
         Ok(())
     };
+    let mut prefix_visits = 0usize;
     for p in old {
+        prefix_visits += 1;
         if p.start >= start {
             break;
         }
@@ -315,6 +317,12 @@ pub fn splice(
     }
     if edits > 256 || bytes > if complete { MAX_FILE } else { MAX_REPLAY } {
         return Err(WorkspaceError::Capacity);
+    }
+    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+        eprintln!(
+            "LFS_PIECE_COUNT v=1 start={start} old={} new={} prefix_visits={prefix_visits} suffix_visits={} replacement_visits={} summary_visits={} edits={edits}",
+            old.len(), new.len(), old.len(), replacement.len(), new.len()
+        );
     }
     Ok((new, edits, bytes))
 }

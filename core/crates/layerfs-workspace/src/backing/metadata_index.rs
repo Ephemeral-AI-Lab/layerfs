@@ -308,16 +308,30 @@ impl RootOwner {
             branches.push(Cell::new(&maximum, &r.bytes())?);
         }
         if branches.len() == 1 {
+            if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                eprintln!(
+                    "LFS_PIECE_PAGES v=1 pieces={} written={leaves}",
+                    pieces.len()
+                );
+            }
             return PageRef::parse(branches[0].value());
         }
-        self.write_page(
+        let root = self.write_page(
             PageData {
                 level: 1,
                 cells: branches,
             },
             window,
             deadline,
-        )
+        )?;
+        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+            eprintln!(
+                "LFS_PIECE_PAGES v=1 pieces={} written={}",
+                pieces.len(),
+                leaves + 1
+            );
+        }
+        Ok(root)
     }
     pub fn update(
         &self,

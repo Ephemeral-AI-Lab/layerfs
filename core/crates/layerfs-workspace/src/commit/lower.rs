@@ -142,6 +142,7 @@ impl Workspace {
             window,
             deadline,
         )?;
+        let piece_visits = pieces.len();
         let mut edits = vector(256)?;
         let mut base = 0u64;
         let mut replacement = 0u64;
@@ -175,6 +176,12 @@ impl Workspace {
             || i128::from(inode.base_length) + delta != i128::from(inode.length)
         {
             return Err(WorkspaceError::Io);
+        }
+        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+            eprintln!(
+                "LFS_PIECE_LOWER v=1 pieces={piece_visits} edits={}",
+                edits.len()
+            );
         }
         Ok(FilePlan { inode, edits })
     }
