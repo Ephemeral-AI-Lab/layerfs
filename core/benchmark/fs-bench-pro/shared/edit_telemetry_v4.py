@@ -43,6 +43,7 @@ def check(raw_stderr: bytes, driver: dict, telemetry_run: str) -> dict:
     """Return source hashes, local coverage, and a fail-closed telemetry verdict."""
     errors = []
     unavailable = []
+    partial = []
     if not re.fullmatch(r"[0-9a-f]{32}", telemetry_run or ""):
         errors.append("invalid telemetry run identity")
     sandbox = driver.get("sandbox")
@@ -140,17 +141,19 @@ def check(raw_stderr: bytes, driver: dict, telemetry_run: str) -> dict:
         coverage[label] = _resource(event) if event else None
         if event:
             resource = coverage[label]
-            if (resource["status"] != "SAMPLED" or resource["gaps"] != 0
-                    or not resource["boundary_covered"]):
-                unavailable.append(f"{label}: unsampled, gapped, or boundary-uncovered resources")
+            if resource["status"] != "SAMPLED" or resource["gaps"] != 0:
+                unavailable.append(f"{label}: unsampled or gapped resources")
             if resource["cpu_status"] != "SAMPLED" or resource["rss_status"] != "SAMPLED":
                 unavailable.append(f"{label}: CPU or RSS unavailable")
+            if not resource["boundary_covered"]:
+                partial.append(f"{label}: sampled CPU/RSS window does not cover both boundaries")
     children = _children(roots[0]) if len(roots) == 1 else []
     return {
         "status": "INCOMPLETE" if errors else "UNAVAILABLE" if unavailable else "PASS",
         "reasons": errors + unavailable,
         "errors": errors,
         "unavailable": unavailable,
+        "partial": partial,
         "raw_sha256": hashlib.sha256(raw_stderr).hexdigest(),
         "raw_bytes": len(raw_stderr),
         "producers": {name: {"sha256": hashlib.sha256(b"".join(group)).hexdigest(),

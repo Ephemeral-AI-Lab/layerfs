@@ -647,6 +647,7 @@ EDIT_REPORT_COLUMNS = (
     "lft1_status", "lft1_raw_sha256", "lft1_boundary_covered",
     "daemon_workspace_exec_ns", "daemon_cpu_user_ns", "daemon_cpu_system_ns",
     "daemon_sampled_max_rss", "daemon_resource_status", "daemon_boundary_covered",
+    "recorded_telemetry_status", "lft1_partial_coverage",
     "upstream_calls", "unmount_ok", "sandbox_delete_ok", "evidence",
     "recorded_terminal", "derived_verification_gate", "current_admission_status",
 )
@@ -688,7 +689,17 @@ def edit_report_row(row, folder):
                        "invalid_reason": "splice selection/image identity mismatch"})
         return values
     driver = receipt.get("driver") or {}
-    telemetry = receipt.get("telemetry") or {}
+    recorded_telemetry = receipt.get("telemetry") or {}
+    telemetry = recorded_telemetry
+    if row["scenario_version"] == 4:
+        raw_path = Path(receipt.get("folder", "")) / "driver.raw.stderr"
+        if not raw_path.is_file() or edit_route.sha256(raw_path) != recorded_telemetry.get("raw_sha256"):
+            values.update({"terminal": "INVALID_EVIDENCE", "goal": "INELIGIBLE",
+                           "recorded_terminal": receipt.get("status"),
+                           "invalid_reason": "v4 raw telemetry is missing or differs from its receipt"})
+            return values
+        telemetry = edit_route.edit_telemetry_v4.check(
+            raw_path.read_bytes(), driver, driver.get("telemetry_run", ""))
     v4_coverage = (telemetry.get("coverage") or {}) if row["scenario_version"] == 4 else {}
     host_window = v4_coverage.get("edit_commit") or {}
     daemon_window = v4_coverage.get("workspace_exec") or {}
@@ -698,7 +709,7 @@ def edit_report_row(row, folder):
     # collected with, so the report reads both without repeating either.
     raw_verification = edit_verification_record(folder, receipt)
     verification = retained_edit_verification(folder, receipt, row)
-    effective = {**receipt, "verification": verification}
+    effective = {**receipt, "verification": verification, "telemetry": telemetry}
     recorded_terminal = receipt.get("status")
     current_admission_status = (recorded_terminal if recorded_terminal == "NOT_RUN" else
                                 edit_route.terminal_status(effective, row)["status"])
@@ -756,6 +767,8 @@ def edit_report_row(row, folder):
         "lft1_resource_status": (host_window.get("status") if row["scenario_version"] == 4 else
                                   telemetry.get("root_resource_status")),
         "lft1_status": telemetry.get("status"),
+        "recorded_telemetry_status": recorded_telemetry.get("status"),
+        "lft1_partial_coverage": "; ".join(telemetry.get("partial") or []),
         "lft1_raw_sha256": telemetry.get("raw_sha256"),
         "lft1_boundary_covered": host_window.get("boundary_covered"),
         "daemon_workspace_exec_ns": telemetry.get("workspace_exec_elapsed_ns"),

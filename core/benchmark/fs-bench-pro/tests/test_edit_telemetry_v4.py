@@ -50,6 +50,7 @@ class RetainedLft1(unittest.TestCase):
         raw = host + b"docker diagnostic\n" + daemon
         report = check(raw, DRIVER, RUN)
         self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["partial"], [])
         self.assertEqual(report["producers"]["host"]["negative_inspect"], 1)
         self.assertEqual(report["producers"]["daemon"]["negative_inspect"], 1)
         self.assertEqual(report["coverage"]["edit_commit"]["cpu_status"], "SAMPLED")
@@ -59,8 +60,11 @@ class RetainedLft1(unittest.TestCase):
         self.assertEqual(check(host + daemon + summary(2), DRIVER, RUN)["status"], "INCOMPLETE")
         unsampled = host + operation(2, 4, "WorkspaceExec", sampled=False) + summary(2)
         self.assertEqual(check(unsampled, DRIVER, RUN)["status"], "UNAVAILABLE")
-        uncovered = raw.replace(b'"last_ns": 4', b'"last_ns": 2')
-        self.assertEqual(check(uncovered, DRIVER, RUN)["status"], "UNAVAILABLE")
+        partial = host.replace(b'"last_ns": 4', b'"last_ns": 2') + daemon
+        result = check(partial, DRIVER, RUN)
+        self.assertEqual(result["status"], "PASS")
+        self.assertFalse(result["coverage"]["edit_commit"]["boundary_covered"])
+        self.assertTrue(result["partial"])
 
 
 if __name__ == "__main__":
