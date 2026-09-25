@@ -14,6 +14,13 @@ file, namespace and Commit interfaces that must scale before much larger
 package workloads can be claimed. No document here is a product
 implementation, performance PASS or release contract.
 
+The target keeps index pages and payloads in local private backing. A Commit
+pins one immutable generation while the same FUSE mount accepts later writes
+into the next; a second sequential Commit should do the same after the first
+is reconciled. Current source has generation capture, but successful
+reconciliation under overlapping writes remains unproven and is an explicit
+verification gate.
+
 - [Scalable range-based COW architecture](ARCHITECTURE.md) describes current
   and proposed data paths, immutable generation capture, streaming Commit,
   resource limits and unresolved concurrency invariants.

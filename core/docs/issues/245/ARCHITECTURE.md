@@ -33,7 +33,7 @@ PROPOSED
            one Branch-head publication ◀───────────────────────────────┘
 ```
 
-`G1` and `G2` name successive private metadata generations of the **same mount**. They are not directories or copied file trees. The current [`capture_submission`](../../../crates/layerfs-workspace/src/overlay/snapshot.rs) already pins a root and advances a generation; extending its scale must preserve the captured view and prove that later writes and post-Commit reconciliation do not alter it.
+`G1` and `G2` name successive private metadata generations of the **same mount**. They are not directories or copied file trees. Index pages and `Local` payloads live in the Workspace's local `private-backing/<workspace-id>/`; the shell sees the separate FUSE mount. Capturing a root reference does not copy the tree or file bytes. The current [backing layout](../../../crates/layerfs-workspace/src/runtime/host.rs) and [`capture_submission`](../../../crates/layerfs-workspace/src/overlay/snapshot.rs) provide these starting points; later writes and Commit reconciliation must not alter the captured view.
 
 ```text
                          /workspace (one FUSE mount)
@@ -56,11 +56,20 @@ The namespace path separately caps a captured frontier at **128 dirty identities
 
 ## Scalable file upper
 
-Represent each file as a persistent, paged **sequence of extents**. A leaf stores bounded `Base` / `Local` / `Zero` descriptors; each internal child records its subtree's **logical byte length** and page reference. Seeking offset `x` subtracts preceding child lengths on the way to a leaf. Split or concatenate only the affected leaves and ancestor paths; rebalance locally and merge adjacent compatible extents. Keep the maximum height, page fanout, arithmetic, and maximum file length checked.
+The proposed shape is a persistent, dynamic-height **B+ tree-style sequence
+(rope)**, rather than a binary tree. Each 4 KiB leaf packs many `Base` /
+`Local` / `Zero` extents; each internal page holds many child page references
+and their **subtree logical byte lengths**. Seeking offset `x` subtracts
+preceding child lengths on the way to a leaf. Split or concatenate only the
+affected leaves and ancestor paths; rebalance locally and merge adjacent
+compatible extents. Multiway pages keep the height and backing-page I/O small
+when thousands of pieces exist. Keep height, fanout, arithmetic, and maximum
+file length checked; the exact page format and fanout are implementation
+decisions to validate, not a current product contract.
 
 This changes the persisted piece-page format: an extent's logical start is derived by its position in the sequence, while its source offset and payload identity remain explicit. Define versioned reading or an explicit migration for retained private roots; never silently interpret an old absolute-key page as a length-indexed page.
 
-Do **not** key every page by absolute file offset. A prepend or insertion changes the logical start of every suffix extent; absolute-offset keys would require rewriting those keys and defeat local COW. Subtree lengths move the suffix logically without touching its pages. A write crossing `K` extents should visit those extents and a bounded number of tree paths, targeting work proportional to `K + log P` for `P` pieces, rather than `P` for every callback. A large contiguous replacement legitimately visits many extents. A cursor supports ordered reads and a single Commit walk without a whole-file `Vec`.
+Do **not** key every page by absolute file offset. A prepend or insertion changes the logical start of every suffix extent; absolute-offset keys would require rewriting those keys and defeat local COW. Subtree lengths move the suffix logically without touching its pages. With `P` pieces and `K` affected pieces, a local write should visit roughly `O(log P + K)` pieces/index entries and copy only affected page paths, rather than revisit all `P` pieces on every callback. A large contiguous replacement legitimately visits many extents. A cursor supports ordered reads and a single Commit walk without a whole-file `Vec`. Dynamic height and bounded leaf/branch pages remove the fixed 1,024-piece vector; bounded streaming Commit must separately remove the downstream wire limits.
 
 For each accepted FUSE `WRITE` or size mutation: resolve the current inode/root; validate offset, length, holes, and quota; create bounded private payload for the new bytes; build and seal a candidate page path; then compare the expected revision/root and publish the candidate under the existing mutation ordering. Reads after success see it through the same mount. On refusal, do not publish a partial candidate or claim bytes that were not accepted. `CREATE`, `UNLINK`, and `RENAME` remain namespace operations, including tombstones and temp-file replacement. The [current write publication](../../../crates/layerfs-workspace/src/filesystem/write.rs) is the starting point for these ordering and visibility rules.
 
@@ -70,9 +79,43 @@ The tree must preserve payload **custody** across shared roots: copied index pag
 
 At the capture boundary, pin one immutable upper root (`G1`) and let subsequent calls update a successor (`G2`) that initially sees **all** of G1's changes while sharing its pages. Stream `G1`'s changed identities and ordered pieces with bounded cursors. For an existing file, reuse canonical `Base` ranges and feed its `Local`/`Zero` replacements to a streaming file builder; for a new file, stream complete content. Untouched file roots are reused. A file that has a huge changed region still sends those bytes; bounded memory is not a claim of sublinear I/O. Canonical chunking may read neighboring bytes and persistent growth must be measured, not asserted to equal the nominal edit length.
 
+```text
+same mounted Workspace, with one Commit in flight at a time
+
+G1 active: shell/POSIX writes → local COW pages and payloads
+Commit A:  order the capture boundary, freeze G1 ──→ build/publish head B1
+G2 active: later shell/POSIX writes → new COW root sharing G1's pages
+           reads see G1 plus G2 changes while B1 is pending
+           after B1 succeeds, reconcile G2 onto B1 without losing later writes
+Commit B:  freeze G2 ────────────────────────────→ build/publish head B2
+G3 active: later writes may continue while B2 is being built
+```
+
+This is local and incremental in two senses: each accepted mutation publishes
+only new affected index paths and payload bytes, and each Commit enumerates its
+frozen changed identities and ranges rather than copying the entire Workspace.
+It does not promise that canonical storage grows by exactly the nominal edit
+length. A failed or unknown Commit keeps its frozen generation and dependent
+successor until the outcome is resolved; Commit B may not assume B1 succeeded.
+
 The change must cross **all** current request boundaries. [`lower_file`](../../../crates/layerfs-workspace/src/commit/lower.rs) presently collects the full piece vector and edit vector. [`save`](../../../crates/layerfs-workspace/src/commit/save.rs) sends one `EditFile` or `ConstructFile`; the [Bridge contract](../../../crates/layerfs-bridge/src/contract/request.rs) and [server save path](../../../crates/layerfs-server/src/service/save/content.rs) admit bounded edits and materialize replacement buffers. A streamed cursor/framed request must validate ordering, lengths, base identity, acknowledgements, and total resource charges across Workspace, Bridge, server, and the [content builder](../../../crates/layerfs-content/src/file/edit/mod.rs). Raising only one limit moves the failure to the next layer.
 
-Likewise, a larger package frontier needs paged enumeration and bounded namespace batches through Workspace lowering, Bridge, server, and content construction. The current [content namespace walk](../../../crates/layerfs-content/src/filesystem/limits.rs) has its own 4,096-entry validation ceiling to review for that later scale. Candidate objects may be built in stages, but only **one** final Branch-head update publishes the Commit. A failed or unknown publication retains its frozen root and evidence until reconciliation resolves it. `G2` must retain all changes made after capture and be rebased on the newly published canonical root without silently losing, duplicating, or reordering them. Current [Commit reconciliation](../../../crates/layerfs-workspace/src/commit/reconcile.rs) provides a starting mechanism; correctness and resource use under long, overlapping Commit are **unproven** for this design. “Non-pausing” means Store construction does not hold the mutation lock; the capture/reconcile boundaries can still briefly synchronize and must be measured.
+Likewise, a larger package frontier needs paged enumeration and bounded
+namespace batches through Workspace lowering, Bridge, server, and content
+construction. The current [content namespace walk](../../../crates/layerfs-content/src/filesystem/limits.rs)
+has its own 4,096-entry validation ceiling to review for that later scale.
+Candidate objects may be built in stages, but only **one** final Branch-head
+update publishes each Commit. A failed or unknown publication retains its
+frozen root and evidence until reconciliation resolves it. `G2` must retain
+all changes made after capture and be rebased on B1 without silently losing,
+duplicating, or reordering them. Current [Commit reconciliation](../../../crates/layerfs-workspace/src/commit/reconcile.rs)
+provides a starting mechanism, but it can return `Busy` if an active write
+advances the revision/root before successor installation. Successful
+reconciliation under writes that overlap a long Commit, followed by a second
+sequential Commit, is **unproven**. “Non-pausing” means Store construction does
+not hold the mutation lock; capture/reconcile still need short ordering
+points, and individual calls may wait for their own I/O. This is a target
+contract, not a current PASS.
 
 ## Bounds, speed target, and limits of the claim
 

@@ -55,7 +55,16 @@ new commands. The 56-shape parent gate remains open.
 | Deliberate command failure | Definite nonzero Exec, **zero Commit calls**, old head/tree unchanged, cleanup succeeds. Private mutation is not misreported as rollback. | Exact shutdown stage and retained-state reason; complete wall includes cleanup. |
 | Selected POSIX shifts | Exact final file and old Commit under independent full-file oracle; no silent `Unknown` or hidden Capacity failure. | Actual shifted FUSE bytes, callback count, piece/index growth, replay/Store bytes, and Exec progress. POSIX suffix movement remains real work. |
 
-If the implementation changes generation capture or mutable-root ownership, include a focused public behavior check that pins a Commit snapshot while a later write proceeds, then verifies both versions. This protects the continuously writable Workspace contract; it does not expand Phase 1 into a large-load performance campaign.
+The candidate's continuously writable Commit claim requires a focused
+mounted correctness check. Write version A, start Commit A and cross its
+recorded capture point, continue ordinary writes into G2, then verify that
+B1 contains exactly version A while the live Workspace contains A plus
+post-capture changes. After Commit A reconciles, start sequential Commit B
+and write into G3; verify B2, G3 and both older heads. Record the exact
+capture/reconcile ordering, any `Busy` or unknown result, retained backing,
+and cleanup. Do not claim a successful non-pausing Commit if reconciliation
+fails after Store publication. This is one prospective correctness case,
+separate from the Phase 1 latency comparison and later package-scale tests.
 
 ## Timing, admission, and custody
 
