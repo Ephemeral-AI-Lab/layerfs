@@ -1,6 +1,6 @@
 # #243 generic Workspace shell package refresh
 
-> **Status:** Phases 0–1 implemented; Phase 2 baseline pending.
+> **Status:** Phases 0–2 attempted; mixed package refresh failed and latency is ineligible.
 
 Tracking: [#243](https://github.com/Ephemeral-AI-Lab/layerfs/issues/243), a
 sub-issue of [#232](https://github.com/Ephemeral-AI-Lab/layerfs/issues/232).
@@ -15,6 +15,9 @@ release-admission claim.
   verification, and decision checkpoints for the generic POSIX/FUSE path.
 - [Frozen Phase 1 contract](PHASE1_CONTRACT.md) registers the ordinary-shell
   scenario, prepared inputs, route, oracle, limits, and custody rules.
+- [Phase 2 one-attempt report](evidence/phase2-ordinary-shell-v1/REPORT.md)
+  records the mixed rename failure, three verified functional observations,
+  raw wall/CPU/RSS, and receipt/cold-cache limitations.
 
 The public SDK method is `WorkspaceApi::exec(command)` and currently launches
 `/bin/sh -c` in the mounted Workspace. Its command uses normal filesystem

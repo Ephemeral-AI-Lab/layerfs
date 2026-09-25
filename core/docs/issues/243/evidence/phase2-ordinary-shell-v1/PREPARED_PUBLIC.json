@@ -1,0 +1,126 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/5d1b5c43d3e993e0c0f079d3e913491af27a84aaf9161a902320b2bc56104f19/benchmark_init",
+      "sha256": "5d1b5c43d3e993e0c0f079d3e913491af27a84aaf9161a902320b2bc56104f19"
+    },
+    "benchmark_shell": {
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8/benchmark_shell",
+      "sha256": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8"
+    },
+    "verify_shell": {
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+      "sha256": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+    }
+  },
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "cursor_key_status": "redacted from published copy; exact original retained at local prepared path",
+  "daemon_sha256": "33580c6f7504833ef9a0235e9e3cc695a5e230b2b7f0ddfe697b4e69a6cc52ab",
+  "dockerfile_sha256": "4d3a3a99c8c86367666bec28d41df0f19f4623df43f71be2dfdcb46f93dd8e7f",
+  "image_id": "sha256:8405f00c4f318f2fffdedc5cec3ec2bb81f8b378bad45e76b881ecdcbbfcf71a",
+  "image_tag": "layerfs-shell-package-v1:issue243",
+  "manifests": {
+    "failed-command-no-commit-v1.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "large.tsv": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+    "mixed-refresh-v1.tsv": "4c3ab6f0c9e5e1a001eab18b9ff1ef726a13e8cbbb27b654e0a31eebf6e3d8a9",
+    "overwrite-4k-v1.tsv": "5491c0e2ed73a4f368fdfaf30b2bf1fd368d36d1fdabb3e7fd362dc7a2b93156",
+    "package.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "repeated-one-byte-v1.tsv": "2cd281ac0eef71c75570d08c1a336adde29ac15b166cbd2bb7e318ec4ab7c42e",
+    "repeated.tsv": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540"
+  },
+  "masters": {
+    "large": {
+      "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+      "genesis_layer": "325f706337eb144b9e9ae54638962b4b328b7ed32b43d3fcf31b86075322801550",
+      "genesis_root": "61e1c1bbd0c158ccc4d7c16b31a87778167fb8fbf3e21c427c75cf204c199391",
+      "genesis_root_serial": 1,
+      "history_sha256": "defe8a4d3b07b0c7985a4e1ba162c528b8a973f0ee102144201eb4ee7d3a2e75",
+      "init_wall_ns": 41605209,
+      "old_commit": "12f19e81759ed83072dc0703e3e218d6e50b1b50e734d5f2a2ec4ee9cda5e2b78b",
+      "old_manifest_sha256": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/masters/large",
+      "project_id": "313bbc1b82784d30dc1b2eb664957040c6",
+      "seed_wall_ns": 904582458,
+      "store_sha256": "005175a699c8b402e823ac4484971fa86ef5ed9aa4f81d668116266fa586eecd",
+      "verify_wall_ns": 85922041
+    },
+    "package": {
+      "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+      "genesis_layer": "32b805e68abf05b1b2d3a45b74d98fb9c221ddc6d978b039be8d7a793dc2b4756b",
+      "genesis_root": "957da0cdd541bd24262a8127fb0c80b1ab31813b10315edaabe1c3aed41f3724",
+      "genesis_root_serial": 1,
+      "history_sha256": "c543bcb6765a81c4d3a3fc944f78e2b486b4ec8091a80d787eb2c1b17d9da828",
+      "init_wall_ns": 1960699208,
+      "old_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+      "old_manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/masters/package",
+      "project_id": "310831b65bf6730c5449ceb85b107d84c4",
+      "seed_wall_ns": 1635848667,
+      "store_sha256": "10bd23e8f09fb99841535ff87a0aad5fbdfdb4b1bf1a1d265e74cb5056713864",
+      "verify_wall_ns": 691113250
+    },
+    "repeated": {
+      "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+      "genesis_layer": "32835065a7cdd815339d13130e1a4ace3b09494d7a954297794eaabe62622475ff",
+      "genesis_root": "302433ba12b11f0bbb30db7d5358455aeca9e883786ec230cb041cd5f2b917f6",
+      "genesis_root_serial": 1,
+      "history_sha256": "34a028cd7c4d833c01c842c0f2e33780703e9c260c8b094e428995672c4db36a",
+      "init_wall_ns": 24511666,
+      "old_commit": "12791ee8cd12c7e109901821ea45981bfdf270e881e533206f69d85e4033f2a730",
+      "old_manifest_sha256": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+      "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/masters/repeated",
+      "project_id": "31b4e2a93c0ccfde3aa4b67b2e7330ccef",
+      "seed_wall_ns": 899729834,
+      "store_sha256": "df6fa9029ffe81b93c1868d8b410302170f9267e1dc60a8fb8824a555fb3ad8d",
+      "verify_wall_ns": 52678667
+    }
+  },
+  "original_prepared_sha256": "9b8ac1bb33e875c495cdbbaf973a1cc36ad3639444cd05f6a561a4233c8bf521",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "schema": "issue243-shell-prepared-v1",
+  "source": {
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+    "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+    "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+    "source_dirty": false,
+    "source_tree": "98285433d132d646be9fd0a4295256f21857977c"
+  },
+  "v2_files": {
+    "core/package.json": {
+      "sha256": "a80af2b9778ab0d3d70a8cb1741d20918cef1cdc542b27cd955bd826e8ada79f",
+      "size": 43
+    },
+    "package-lock.json": {
+      "sha256": "6bce3148321ae7af2e066e6b17a580343dcfa19d703b78ad02bfadb9af864cc7",
+      "size": 203
+    },
+    "parser/generated/tokenize.js": {
+      "sha256": "98e633e62acced41620b996613dbb44bfab655d0cc5da79bf297f1bd00b88763",
+      "size": 43
+    },
+    "parser/lib/parse.js": {
+      "sha256": "c795572611319db15a0295234595f10e094ac27d7b95a60618a4aa202c4b1874",
+      "size": 65536
+    },
+    "parser/package.json": {
+      "sha256": "8e8bcde33a21c47de9bd78e3e8d43b5d410d85b16b2a3da4eb9be42ecd36d42b",
+      "size": 45
+    },
+    "patch-4k.bin": {
+      "sha256": "26b7e40be0bcf3e6667020b3acf6e07faa17585b21b2936305dd6c9ad3860b15",
+      "size": 4096
+    },
+    "ui/dist/ui.js": {
+      "sha256": "e51f1269253dd16031ab59c9a386c7f4d84b124bf174ca0283a74042ae1ea408",
+      "size": 1048576
+    },
+    "ui/package.json": {
+      "sha256": "5e72ba14dc582da9fc6bed008b4a2dcedfb226553c264812e31f2cc4b918948b",
+      "size": 41
+    }
+  }
+}
