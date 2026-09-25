@@ -149,7 +149,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if case.get("scenario_id")?.ends_with("-exec-v4") != v4 {
         return Err("v4 scenario and operation contract differ".into());
     }
-    if case.get("scenario_id")?.ends_with("-complexity-v1") != complexity {
+    if (case.get("scenario_id")?.ends_with("-complexity-v1")
+        || case.get("scenario_id")? == "repeated-128-progress-proof-v1")
+        != complexity
+    {
         return Err("complexity scenario and operation contract differ".into());
     }
     if case.get("scenario_id")?.ends_with("-exec-ioctl-v3") != generic {
