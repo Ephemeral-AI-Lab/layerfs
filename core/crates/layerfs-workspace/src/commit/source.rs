@@ -54,61 +54,81 @@ impl ReplacementSource {
         if out.is_empty() {
             return Ok(0);
         }
-        loop {
-            if self.zero {
-                let count = self.left.min(out.len().min(MAX_READ_BYTES) as u64) as usize;
-                if count == 0 {
-                    return Err(WorkspaceError::Io);
-                }
-                out[..count].fill(0);
-                self.left -= count as u64;
-                self.emitted += count as u64;
-                self.zero = self.left != 0;
-                return Ok(count);
+        let mut filled = 0usize;
+        // One extent may span several pulls, so the piece already in progress
+        // drains first and the walk then continues from its end.
+        if self.zero {
+            let count =
+                self.left
+                    .min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
+            if count == 0 {
+                return Err(WorkspaceError::Io);
             }
-            if let Some(reader) = &mut self.reader {
-                let limit = self.left.min(out.len().min(MAX_READ_BYTES) as u64) as usize;
-                let count =
-                    Source::read(reader, &mut out[..limit], deadline, cancel).map_err(|error| {
-                        error
-                            .get_ref()
-                            .and_then(|inner| inner.downcast_ref::<BackingFailure>())
-                            .map_or(WorkspaceError::Io, |failure| {
-                                WorkspaceError::Backing(failure.clone())
-                            })
-                    })?;
-                if count == 0 {
-                    return Err(WorkspaceError::Io);
-                }
-                self.left -= count as u64;
-                self.emitted += count as u64;
-                if self.left == 0 {
-                    self.reader = None;
-                }
-                return Ok(count);
+            out[filled..filled + count].fill(0);
+            self.left -= count as u64;
+            self.emitted += count as u64;
+            self.zero = self.left != 0;
+            filled += count;
+        } else if let Some(reader) = &mut self.reader {
+            let limit =
+                self.left
+                    .min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
+            let count = Source::read(reader, &mut out[filled..filled + limit], deadline, cancel)
+                .map_err(|error| {
+                    error
+                        .get_ref()
+                        .and_then(|inner| inner.downcast_ref::<BackingFailure>())
+                        .map_or(WorkspaceError::Io, |failure| {
+                            WorkspaceError::Backing(failure.clone())
+                        })
+                })?;
+            if count == 0 {
+                return Err(WorkspaceError::Io);
             }
-            if self.position == self.inode.length {
-                if !self.complete() {
-                    return Err(WorkspaceError::Io);
-                }
-                return Ok(0);
+            self.left -= count as u64;
+            self.emitted += count as u64;
+            filled += count;
+            if self.left == 0 {
+                self.reader = None;
             }
-            let (start, piece) = {
-                let host = self
-                    .workspace
-                    .host
-                    .metadata
-                    .as_ref()
-                    .ok_or(WorkspaceError::Unsupported)?;
-                let _view = host.writer()?;
-                let mut window = host.payloads.window(1, 3)?;
-                self.root.arena.piece_at(
-                    self.inode.pieces,
-                    self.position,
-                    self.inode.length,
-                    window.window.as_mut().ok_or(WorkspaceError::Io)?,
-                    deadline,
-                )?
+        }
+        if filled == out.len() {
+            return Ok(filled);
+        }
+        if self.position == self.inode.length {
+            if filled > 0 {
+                return Ok(filled);
+            }
+            if !self.complete() {
+                return Err(WorkspaceError::Io);
+            }
+            return Ok(0);
+        }
+        // The frozen sequence is walked by one bounded cursor per pull: it
+        // steps forward through the leaves in order and the buffer fills from
+        // every non-base extent it passes, so the walk visits each page of its
+        // path once — exactly like the lowering walk — instead of re-seeking
+        // per extent.
+        let root = self.root.clone();
+        let host = self
+            .workspace
+            .host
+            .metadata
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let _view = host.writer()?;
+        let mut lease = host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let mut cursor = root.arena.cursor(
+            self.inode.pieces,
+            self.position,
+            self.inode.length,
+            window,
+            deadline,
+        )?;
+        while filled < out.len() {
+            let Some((start, piece)) = cursor.next(window)? else {
+                break;
             };
             if start != self.position {
                 return Err(WorkspaceError::Io);
@@ -121,16 +141,58 @@ impl ReplacementSource {
             match piece.kind {
                 PieceKind::Base => continue,
                 PieceKind::Zero => {
-                    self.left = piece.length;
-                    self.zero = true;
+                    let mut left = piece.length;
+                    while left > 0 && filled < out.len() {
+                        let count =
+                            left.min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
+                        out[filled..filled + count].fill(0);
+                        left -= count as u64;
+                        self.emitted += count as u64;
+                        filled += count;
+                    }
+                    if left > 0 {
+                        self.left = left;
+                        self.zero = true;
+                        break;
+                    }
                 }
                 PieceKind::Local => {
-                    let payload = self.root.arena.payload(piece.payload, piece.custody)?;
-                    self.left = piece.length;
-                    self.reader = Some(payload.reader(piece.offset..piece.offset + piece.length)?);
+                    let payload = root.arena.payload(piece.payload, piece.custody)?;
+                    let mut reader = payload.reader(piece.offset..piece.offset + piece.length)?;
+                    let mut left = piece.length;
+                    while left > 0 && filled < out.len() {
+                        let limit =
+                            left.min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
+                        let count = Source::read(
+                            &mut reader,
+                            &mut out[filled..filled + limit],
+                            deadline,
+                            cancel,
+                        )
+                        .map_err(|error| {
+                            error
+                                .get_ref()
+                                .and_then(|inner| inner.downcast_ref::<BackingFailure>())
+                                .map_or(WorkspaceError::Io, |failure| {
+                                    WorkspaceError::Backing(failure.clone())
+                                })
+                        })?;
+                        if count == 0 {
+                            return Err(WorkspaceError::Io);
+                        }
+                        left -= count as u64;
+                        self.emitted += count as u64;
+                        filled += count;
+                    }
+                    if left > 0 {
+                        self.left = left;
+                        self.reader = Some(reader);
+                        break;
+                    }
                 }
             }
         }
+        Ok(filled)
     }
 }
 impl Source for ReplacementSource {

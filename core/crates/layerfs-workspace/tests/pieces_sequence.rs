@@ -8,7 +8,7 @@
 //! existing file; the shared-subtree cases pin multi-leaf trees, which a
 //! single-leaf fixture can never reach.
 #![cfg(target_os = "linux")]
-use layerfs_bridge::contract::MAX_FILE;
+use layerfs_bridge::contract::{MAX_EDITS_PER_OPERATION, MAX_FILE};
 use layerfs_workspace::{
     sequence::{
         metadata_pages::{self, PageRef, MAX_EXTENT},
@@ -598,6 +598,89 @@ fn an_implicit_base_longer_than_one_extent_folds_into_split_parts() {
     let spliced = f.piece_at(second.root, 14 + ceiling, base).unwrap();
     assert_eq!(spliced.1.kind, PieceKind::Zero);
     assert_eq!(spliced.1.length, 2);
+}
+
+#[test]
+fn an_insertion_shifts_the_base_tail_and_the_next_edit_still_splices() {
+    let f = Fixture::new();
+    // An insertion moves every later byte, so the retained base tail keeps
+    // its own origin and a base origin is no longer its logical position.
+    // The next splice must still fold that shifted sequence: the walk checks
+    // the leaf's base reads never go backwards, not that they stayed aligned.
+    let first = f
+        .splice(PageRef::NULL, 0, 0, 6, 0, 7, &[(local(0, 1, 5, 6))])
+        .unwrap();
+    assert_eq!(f.render(first.root, 7), "0:L:0:1 1:B:0:6");
+    let second = f.splice(first.root, 3, 5, 6, 1, 7, &[(zero(2))]).unwrap();
+    assert_eq!(second.length, 7);
+    assert_eq!(second.edits, 2);
+    assert_eq!(second.replacement, 3);
+    assert_eq!(f.render(second.root, 7), "0:L:0:1 1:B:0:2 3:Z:0:2 5:B:4:2");
+}
+
+#[test]
+fn the_edit_budget_accepts_its_full_count_and_refuses_one_more() {
+    let f = Fixture::new();
+    // The per-operation edit budget is explicit and shared by the splice, the
+    // lowering and the transport: one splice may fold a replacement whose
+    // result carries exactly that many base-delimited replacement runs, and
+    // one run more is refused with Capacity before a root is published. Each
+    // run is one local byte delimited by one base byte, so nothing merges and
+    // the count is exact.
+    let budget = MAX_EDITS_PER_OPERATION as usize;
+    let old: Vec<Piece> = (0..budget as u64)
+        .flat_map(|at| [base(at, 1), local(0, 1, at + 1, at as u32 + 1)])
+        .collect();
+    let root = f.build(&old, 2 * budget as u64).unwrap();
+    // `count` replacement runs: all but the last are delimited by a following
+    // base byte, and the last is the trailing deviation, so the fold counts
+    // exactly `count` runs.
+    let runs = |count: usize| -> Vec<Piece> {
+        (0..count - 1)
+            .flat_map(|at| {
+                let value = at as u64;
+                [
+                    local(0, 1, value % 251 + 1, (value as u32) % 250 + 1),
+                    base(value, 1),
+                ]
+            })
+            .chain(std::iter::once(local(
+                0,
+                1,
+                (count as u64) % 251 + 1,
+                (count as u32) % 250 + 1,
+            )))
+            .collect()
+    };
+    let at_budget = budget as u64;
+    let full = f
+        .splice(
+            root,
+            0,
+            2 * at_budget,
+            2 * at_budget,
+            at_budget,
+            2 * at_budget - 1,
+            &runs(budget),
+        )
+        .unwrap();
+    assert_eq!(full.length, 2 * at_budget - 1);
+    assert_eq!(full.edits, MAX_EDITS_PER_OPERATION as u16);
+    assert_eq!(full.replacement, at_budget);
+    let walked = f.walk(full.root, 2 * at_budget - 1);
+    assert_eq!(walked.len(), 2 * budget - 1);
+    assert_eq!(walked[0].1.kind, PieceKind::Local);
+    assert_eq!(walked[1].1.kind, PieceKind::Base);
+    let over = f.splice(
+        root,
+        0,
+        2 * at_budget,
+        2 * at_budget,
+        at_budget,
+        2 * at_budget + 1,
+        &runs(budget + 1),
+    );
+    assert!(matches!(over, Err(WorkspaceError::Capacity)));
 }
 
 #[test]

@@ -138,11 +138,15 @@ ceiling remains 4 GiB.
 
 ## 6. What this does not yet do
 
-- Commit lowering streams the sequence through the cursor, but the replacement
-  extents of one call are still materialized before the splice. A complete-file
-  construction is therefore bounded by the file, not by a frame.
-- The Branch request, server save and C1 builder still enforce the 256-edit,
-  8 MiB replay and 1,024-piece ceilings. Removing them requires the coordinated
-  streaming transport of #245 package D, not a local limit change.
+- Commit lowering streams the sequence through the cursor and packs the derived
+  edit list as the descriptor prefix of the operation's body stream; the
+  replacement bytes follow through the existing bounded `Source`. A version's
+  replacement total is bounded by the file ceiling, and its recorded edit count
+  by the explicit per-operation edit budget (4,096) the transport declares —
+  the retired 256-edit and 8 MiB replay caps were removed together with that
+  streaming transport (#245 package D), not by moving a ceiling elsewhere. The
+  remaining bound is the one the file itself sets: the replacement extents of
+  one call are still materialized before the splice, so a complete-file
+  construction is bounded by the file, not by a frame.
 - No continuously writable generation proof (package E) and no frozen
   performance selection (package F) exists.

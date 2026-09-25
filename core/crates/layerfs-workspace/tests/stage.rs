@@ -285,18 +285,18 @@ mod linux {
         assert_eq!(f.branch(), branch);
         f.counts(1);
         let observed = f.native.observations.lock().unwrap();
-        let edits = observed
+        let replacement = observed
             .operations
             .iter()
             .find_map(|op| {
-                if let Operation::EditFile { edits, .. } = op {
-                    Some(edits)
+                if let Operation::EditFile { replacement, .. } = op {
+                    Some(*replacement)
                 } else {
                     None
                 }
             })
             .unwrap();
-        assert_eq!(edits.iter().map(|e| e.replacement).sum::<u64>(), 8);
+        assert_eq!(replacement, 8);
         drop(observed);
         check("normalized-splice-lowering-and-streamed-exact-input");
         stage_retained(&f, selector);

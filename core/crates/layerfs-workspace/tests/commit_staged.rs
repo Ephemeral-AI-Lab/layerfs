@@ -151,8 +151,11 @@ mod linux {
         let changes: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile { root, edits, .. } = op {
-                    Some((*root, edits))
+                if let Operation::EditFile {
+                    root, replacement, ..
+                } = op
+                {
+                    Some((*root, *replacement))
                 } else {
                     None
                 }
@@ -160,7 +163,7 @@ mod linux {
             .collect();
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].0, first_root);
-        assert_eq!(changes[0].1.iter().map(|e| e.replacement).sum::<u64>(), 1);
+        assert_eq!(changes[0].1, 1);
         drop(observed);
         assert_eq!(f.read(handle, 10, 3), b"AxA");
         assert_eq!(old_reply.as_ref(), b"AAAA");
@@ -224,9 +227,10 @@ mod linux {
                     root,
                     base_length,
                     edits,
+                    replacement,
                 } = op
                 {
-                    Some((*root, *base_length, edits))
+                    Some((*root, *base_length, *edits, *replacement))
                 } else {
                     None
                 }
@@ -235,14 +239,7 @@ mod linux {
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].0, saved_root);
         assert_eq!(changes[0].1, data.size);
-        assert_eq!(
-            changes[0].2,
-            &vec![Edit {
-                start: 10,
-                end: 14,
-                replacement: 1
-            }]
-        );
+        assert_eq!((changes[0].2, changes[0].3), (1, 1));
         drop(observed);
         let saved = attr(
             f.native

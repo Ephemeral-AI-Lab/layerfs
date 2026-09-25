@@ -711,7 +711,8 @@ fn classification_is_exhaustive_and_semantic() {
         Operation::EditFile {
             root: [0; 32],
             base_length: 1,
-            edits: Vec::new(),
+            edits: 0,
+            replacement: 0,
         },
         Operation::UpdatePreparedFilesystem {
             directory_metadata: Vec::new(),

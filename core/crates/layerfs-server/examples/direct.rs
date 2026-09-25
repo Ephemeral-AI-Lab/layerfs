@@ -23,6 +23,20 @@ fn hex(root: &Root) -> String {
         .unwrap()
         .to_string()
 }
+/// Packs one edit list into the wire descriptor block: 24 bytes per edit
+/// (start, end, replacement; each big-endian u64), followed here by the
+/// replacement bytes - exactly the EditFile body stream.
+fn edit_stream_input(edits: &[(u64, u64, u64)], replacement: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (start, end, bytes) in edits {
+        out.extend_from_slice(&start.to_be_bytes());
+        out.extend_from_slice(&end.to_be_bytes());
+        out.extend_from_slice(&bytes.to_be_bytes());
+    }
+    out.extend_from_slice(replacement);
+    out
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 5 {
@@ -91,14 +105,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Operation::EditFile {
                     root,
                     base_length: length,
-                    edits: vec![Edit {
-                        start: 10,
-                        end: 15,
-                        replacement: 3,
-                    }],
+                    edits: 1,
+                    replacement: 3,
                 },
             ),
-            &mut Cursor::new(b"new"),
+            &mut Cursor::new(edit_stream_input(&[(10, 15, 3)], b"new")),
             &mut std::io::sink(),
         )
         .0?;

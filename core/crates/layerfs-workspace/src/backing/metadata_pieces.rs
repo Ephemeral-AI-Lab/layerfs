@@ -18,7 +18,7 @@ use crate::{
     overlay::pieces::{Piece, PieceKind},
     WorkspaceError,
 };
-use layerfs_bridge::contract::{MAX_FILE, MAX_REPLAY};
+use layerfs_bridge::contract::{MAX_EDITS_PER_OPERATION, MAX_FILE};
 use std::time::{Duration, Instant};
 
 /// Leaf capacity in extent records: the whole payload area of one page.
@@ -306,7 +306,6 @@ pub fn replace<S: PieceStore + ?Sized>(
     if splice.end < splice.start || splice.length > MAX_FILE || splice.old_base > MAX_FILE {
         return Err(WorkspaceError::Io);
     }
-    let complete = splice.start == 0 && splice.end == 0 && splice.old_base == 0;
     let declared = replacement.declared()?;
     // One replacement cannot declare more bytes than a file may hold; the
     // result's own length is bounded separately above. A net-shrinking splice
@@ -424,7 +423,7 @@ pub fn replace<S: PieceStore + ?Sized>(
         );
         return Err(WorkspaceError::Io);
     }
-    if fold.edits() > 256 || (!complete && total > MAX_REPLAY) {
+    if usize::from(fold.edits()) > MAX_EDITS_PER_OPERATION as usize || total > MAX_FILE {
         return Err(WorkspaceError::Capacity);
     }
     level.extend(std::mem::take(&mut walk.leaves));
@@ -562,8 +561,30 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                 let stop = covered
                     .checked_add(child.length)
                     .ok_or(WorkspaceError::Io)?;
-                let (nested, _) = self.descend(child.page, splice, covered, reads)?;
-                level.extend(nested);
+                if stop <= splice.start || covered >= splice.end {
+                    // The replaced interval does not touch this child. The
+                    // branch page already names the child and its subtree
+                    // length, so sharing it by reference reads no page of it:
+                    // descending here would visit every extent of the sequence
+                    // on every splice instead of the path the interval touches.
+                    self.close_leaf()?;
+                    self.shared = true;
+                    self.fold.carry(child.length)?;
+                    self.line = self
+                        .line
+                        .checked_add(child.length)
+                        .filter(|line| *line <= MAX_FILE)
+                        .ok_or(WorkspaceError::Capacity)?;
+                    // Any folded leaf pages become pages of this level before
+                    // the shared child, exactly as a shared subtree's own
+                    // descent would have placed them, so the parent keeps
+                    // every page in sequence order.
+                    level.append(&mut self.leaves);
+                    level.push(child);
+                } else {
+                    let (nested, _) = self.descend(child.page, splice, covered, reads)?;
+                    level.extend(nested);
+                }
                 covered = stop;
                 reads = reads.checked_add(child.length).ok_or(WorkspaceError::Io)?;
             }
@@ -580,10 +601,22 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
         let records =
             metadata_pages::decode_pieces_leaf(self.store.incarnation(), r, bytes, MAX_FILE)?;
         let mut at = source;
+        // The high-water end of the base reads seen so far. A base extent's
+        // origin offset is its own: after an insertion shifts the sequence,
+        // the retained tail keeps reading from where the interval stopped, so
+        // a base origin need not equal its logical position. What the walk
+        // requires is that the leaf's base reads never go backwards.
+        let mut read_end: Option<u64> = None;
         for record in records {
             let piece = Piece::from_record(record)?;
-            if piece.kind == PieceKind::Base && piece.offset != at {
-                return Err(WorkspaceError::Io);
+            if piece.kind == PieceKind::Base {
+                if read_end.is_some_and(|end| piece.offset < end) {
+                    return Err(WorkspaceError::Io);
+                }
+                read_end = piece
+                    .offset
+                    .checked_add(piece.length)
+                    .filter(|end| *end <= MAX_FILE);
             }
             let stop = at.checked_add(piece.length).ok_or(WorkspaceError::Io)?;
             if stop <= splice.start || at >= splice.end {

@@ -11,7 +11,7 @@ use crate::{
     },
     *,
 };
-use layerfs_bridge::contract::{Edit, InodeChange, MAX_FILE, MAX_REPLAY};
+use layerfs_bridge::contract::{Edit, InodeChange, MAX_EDITS_PER_OPERATION, MAX_FILE};
 use std::time::Instant;
 type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
@@ -143,7 +143,7 @@ impl Workspace {
                 .root
                 .arena
                 .cursor(inode.pieces, 0, inode.length, window, deadline)?;
-        let mut edits = vector(256)?;
+        let mut edits = vector(MAX_EDITS_PER_OPERATION as usize)?;
         let mut base = 0u64;
         let mut replacement = 0u64;
         let mut total = 0u64;
@@ -189,7 +189,7 @@ impl Workspace {
         }
         if total != inode.replacement
             || (complete && total != inode.length)
-            || (!complete && total > MAX_REPLAY)
+            || total > MAX_FILE
             || i128::from(inode.base_length) + delta != i128::from(inode.length)
         {
             return Err(WorkspaceError::Io);
@@ -350,7 +350,7 @@ fn push_edit(
     if end == base && replacement == 0 {
         return Ok(());
     }
-    if edits.len() == 256 {
+    if edits.len() == MAX_EDITS_PER_OPERATION as usize {
         return Err(WorkspaceError::Capacity);
     }
     let start = u64::try_from(i128::from(base) + *delta).map_err(|_| WorkspaceError::Io)?;

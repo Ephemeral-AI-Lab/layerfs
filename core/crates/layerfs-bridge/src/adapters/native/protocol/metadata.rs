@@ -196,15 +196,12 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             root,
             base_length,
             edits,
+            replacement,
         } => {
             e.put(root)?;
             e.u64(*base_length)?;
-            e.count(edits.len())?;
-            for v in edits {
-                e.u64(v.start)?;
-                e.u64(v.end)?;
-                e.u64(v.replacement)?;
-            }
+            e.u32(*edits)?;
+            e.u64(*replacement)?;
         }
         Operation::UpdatePreparedFilesystem {
             base,
@@ -747,19 +744,13 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         4 => {
             let root = d.root()?;
             let base_length = d.u64()?;
-            let count = d.count(256, 24)?;
-            let mut edits = Vec::with_capacity(count);
-            for _ in 0..count {
-                edits.push(Edit {
-                    start: d.u64()?,
-                    end: d.u64()?,
-                    replacement: d.u64()?,
-                });
-            }
+            let edits = d.u32()?;
+            let replacement = d.u64()?;
             Operation::EditFile {
                 root,
                 base_length,
                 edits,
+                replacement,
             }
         }
         5 => {
