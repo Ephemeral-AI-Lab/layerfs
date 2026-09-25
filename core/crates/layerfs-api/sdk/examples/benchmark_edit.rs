@@ -20,6 +20,51 @@ use std::{collections::BTreeMap, fmt::Write as _, time::Instant};
 /// One caller root with an `edit` and a `commit` child, and nothing else.
 const OPERATION_KEY: u64 = 232_000;
 
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct DarwinRusageInfoV2 {
+    uuid: [u8; 16],
+    user_time: u64,
+    system_time: u64,
+    package_idle_wakeups: u64,
+    interrupt_wakeups: u64,
+    pageins: u64,
+    wired_size: u64,
+    resident_size: u64,
+    physical_footprint: u64,
+    process_start_time: u64,
+    process_exit_time: u64,
+    child_user_time: u64,
+    child_system_time: u64,
+    child_package_idle_wakeups: u64,
+    child_interrupt_wakeups: u64,
+    child_pageins: u64,
+    child_elapsed_time: u64,
+    disk_read_bytes: u64,
+    disk_write_bytes: u64,
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "proc")]
+unsafe extern "C" {
+    fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut std::ffi::c_void) -> i32;
+}
+
+#[cfg(target_os = "macos")]
+fn process_disk_read_bytes() -> Option<u64> {
+    let mut usage = DarwinRusageInfoV2::default();
+    let pid = i32::try_from(std::process::id()).ok()?;
+    // SAFETY: RUSAGE_INFO_V2 writes its fixed C-layout buffer for this process.
+    (unsafe { proc_pid_rusage(pid, 2, std::ptr::from_mut(&mut usage).cast()) } == 0)
+        .then_some(usage.disk_read_bytes)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn process_disk_read_bytes() -> Option<u64> {
+    None
+}
+
 struct Case {
     fields: BTreeMap<String, String>,
 }
@@ -249,6 +294,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut observed_mtime = None;
     let mut status = "FAIL";
     let mut detail;
+    let read_before =
+        std::env::var_os("LAYERFS_FINISH_DIAGNOSTIC").and_then(|_| process_disk_read_bytes());
     let started = Instant::now();
     let (result, diagnostic) =
         runtime
@@ -298,6 +345,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
     let edit_commit_ns = started.elapsed().as_nanos();
+    let read_after =
+        std::env::var_os("LAYERFS_FINISH_DIAGNOSTIC").and_then(|_| process_disk_read_bytes());
+    let read_delta = read_before
+        .zip(read_after)
+        .and_then(|(before, after)| after.checked_sub(before));
     runtime.publish(diagnostic);
     let mut head_commit = String::new();
     match result {
@@ -369,6 +421,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         String::new()
     };
+    let physical_reads = format!(
+        ",\"process_disk_read_bytes_before\":{},\"process_disk_read_bytes_after\":{},\"process_disk_read_bytes_delta\":{},\"process_disk_read_source\":\"proc_pid_rusage_v2_process_wide\"",
+        read_before.map_or("null".to_string(), |value| value.to_string()),
+        read_after.map_or("null".to_string(), |value| value.to_string()),
+        read_delta.map_or("null".to_string(), |value| value.to_string()),
+    );
     let receipt =
         format!(
         "{{\"schema\":\"core-fs-bench-pro-exec-fuse-edit-performance-v1\",\"status\":\"{status}\",\
@@ -385,7 +443,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 \"range_shifted_suffix_bytes\":{range_shifted_suffix_bytes},\
 \"unmount_ok\":{},\"sandbox_delete_ok\":{},\"sandbox_delete_container_removed\":{},\
 \"sandbox_delete_volume_removed\":{},\"store\":\"{}\",\"history\":\"{}\",\
-\"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false{v4_metadata}}}",
+\"image\":\"{}\",\"service_endpoint_port\":{},\"replay\":false{v4_metadata}{physical_reads}}}",
         detail.escape_debug(),
         case.get("family_id")?,
         case.get("scenario_id")?,
