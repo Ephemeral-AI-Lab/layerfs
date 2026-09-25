@@ -233,6 +233,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         == "workspace-exec-fuse-range-splice-complexity-commit-v1";
     let generic_ioctl =
         case.get("operation_contract_id")? == "workspace-exec-mounted-range-replace-v3";
+    let posix_count =
+        case.get("operation_contract_id")? == "workspace-exec-posix-count-diagnostic-v1";
 
     // Per-case preparation, outside the operation timer but reported.
     let prepared = Instant::now();
@@ -411,7 +413,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cleanup_started = Instant::now();
     let post_status = workspaces.status(&mount.id);
     let unmount = workspaces.unmount(&mount.id);
-    let (delete, log_capture) = if v4 || v5 || complexity_single || generic_ioctl {
+    let (delete, log_capture) = if v4 || v5 || complexity_single || generic_ioctl || posix_count {
         let (delete, capture) = sandboxes.delete_with_logs(sandbox, &mut std::io::stderr());
         (delete, Some(capture))
     } else {
@@ -445,7 +447,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .as_ref()
         .map(|value| value.range_shifted_suffix_bytes)
         .unwrap_or(0);
-    let v4_metadata = if v4 || v5 || complexity_single || generic_ioctl {
+    let v4_metadata = if v4 || v5 || complexity_single || generic_ioctl || posix_count {
         let capture = log_capture.as_ref().expect("v4 captured logs");
         match observed_mtime {
             Some((seconds, nanoseconds)) => format!(

@@ -223,6 +223,27 @@ pub fn mutate(
                     outcome.chain.pooled.pack_fetches,
                     outcome.chain.pooled.pack_bytes,
                 );
+                if matches!(&r.operation, Operation::EditFile { .. }) {
+                    eprintln!(
+                        "LFS_FINISH_SUBSTEP v=1 request={} scope=save-wide flush_batch_ns={} wave_ns={} offer_total_ns={} seal_total_ns={} write_pack_total_ns={} validate_ns={} collision_query_ns={} rows_ns={} members_ns={} insert_objects_ns={} sql_ns={} finish_drain_ns={} finish_batch_objects={} inserted={} reused={}",
+                        r.id,
+                        diag.flush_batch_ns,
+                        diag.wave_ns,
+                        diag.offer_total_ns,
+                        diag.seal_total_ns,
+                        diag.write_pack_total_ns,
+                        diag.validate_ns,
+                        diag.collision_query_ns,
+                        diag.rows_ns,
+                        diag.members_ns,
+                        diag.insert_objects_ns,
+                        outcome.profile.sql_ns,
+                        diag.finish_drain_ns,
+                        diag.finish_batch_objects,
+                        outcome.inserted,
+                        outcome.reused,
+                    );
+                }
             }
             if let Operation::UpdatePortableMetadata {
                 base,
