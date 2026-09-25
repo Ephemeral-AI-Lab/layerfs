@@ -179,6 +179,49 @@ fn an_independent_save_reports_its_real_scopes() {
         "{:?}",
         child_names(&tree.children()[1])
     );
+    let finish = &tree.children()[2];
+    assert_eq!(
+        child_names(finish),
+        vec![
+            "storage.finish.drain".to_string(),
+            "storage.finish.owner".to_string()
+        ]
+    );
+    let owner = &finish.children()[1];
+    let names = child_names(owner);
+    for required in [
+        "storage.finish.pack_seal",
+        "storage.finish.candidate_flush",
+        "storage.finish.ownership_publish",
+        "storage.finish.ordinal_watermark",
+        "storage.finish.sqlite_commit",
+        "storage.finish.pool_clone",
+        "storage.finish.candidates_clone",
+    ] {
+        assert!(
+            names.iter().any(|name| name == required),
+            "missing {required}: {names:?}"
+        );
+    }
+    assert!(!report.is_incomplete());
+    assert!(
+        finish
+            .children()
+            .iter()
+            .map(TimingNode::elapsed)
+            .sum::<std::time::Duration>()
+            <= finish.elapsed()
+    );
+    assert!(
+        owner
+            .children()
+            .iter()
+            .map(TimingNode::elapsed)
+            .sum::<std::time::Duration>()
+            <= owner.elapsed()
+    );
+    assert_eq!(outcome.profile.diag.finish_pool_clone_skipped, 0);
+    assert_eq!(outcome.profile.diag.finish_candidate_clone_skipped, 0);
 
     let (read_result, read_report) = Timing::record("c2.read", |read| {
         store.read_batch(&[root], read.child("storage.read"))

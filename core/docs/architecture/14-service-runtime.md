@@ -359,6 +359,23 @@ failures retain the available typed cause and checked cleanup disposition. Unkno
 C2 outcomes are not aborted or replayed on a guess. A successful content-object or filesystem
 root is returned only after validated input finality and successful C2 `finish`.
 
+For a save's existing `service.finish` LFT1 span, the Store records one
+`storage.finish.drain` child and one `storage.finish.owner` child. The owner
+records bounded children for pack seal, transaction begin when needed,
+candidate flush, ownership publication, ordinal/watermark work, SQLite
+commit, and the separate postcommit PoolIndex and Candidates clones. A
+disabled recorder leaves those nodes absent without changing the save's
+result; failed scopes retain their completed parents and children. The
+`SaveProfile` diagnostic carries pending-batch object/byte counts and each
+index's entry/live-byte count or a skipped-lock marker. With
+`LAYERFS_FINISH_DIAGNOSTIC` set, the Service writes one fixed count line after
+successful finish, including existing object, pack, statement and pooled
+fetch counts. Exact per-finish SQLite page and OS physical-read counts are
+unavailable in the safe product API; any external process I/O/page reading
+must keep its broader attribution. Source basis: parent
+`501addcd1693f6e2afb15599a7db966a200ca5ab` plus the same-commit
+storage/Service instrumentation.
+
 Prepared updates verify the original scope/root serial, existing identities and
 retained references. They send final bindings only for changed names. Directory
 content cannot be swapped through an inode value; it uses directory changes.

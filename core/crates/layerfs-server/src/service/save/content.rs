@@ -184,6 +184,33 @@ pub fn mutate(
             let outcome = save
                 .finish(scope.child("service.finish"))
                 .map_err(storage)?;
+            if std::env::var_os("LAYERFS_FINISH_DIAGNOSTIC").is_some() {
+                let diag = outcome.profile.diag;
+                eprintln!(
+                    "LFS_FINISH_COUNT v=1 request={} inserted={} reused={} full={} prefix={} packs={} pack_bytes={} statements={} commits={} batch_objects={} batch_bytes={} pool_entries={} pool_bytes={} candidates_entries={} candidates_bytes={} pool_clone_skipped={} candidates_clone_skipped={} chain_objects={} chain_encoded_bytes={} pooled_pack_fetches={} pooled_pack_bytes={} phase_pages=UNAVAILABLE phase_physical_read_bytes=UNAVAILABLE",
+                    r.id,
+                    outcome.inserted,
+                    outcome.reused,
+                    outcome.full_records,
+                    outcome.prefix_records,
+                    outcome.packs_created,
+                    outcome.pack_bytes_written,
+                    outcome.statements,
+                    outcome.commits,
+                    diag.finish_batch_objects,
+                    diag.finish_batch_bytes,
+                    diag.finish_pool_entries,
+                    diag.finish_pool_bytes,
+                    diag.finish_candidate_entries,
+                    diag.finish_candidate_bytes,
+                    diag.finish_pool_clone_skipped,
+                    diag.finish_candidate_clone_skipped,
+                    outcome.chain.objects,
+                    outcome.chain.encoded_bytes,
+                    outcome.chain.pooled.pack_fetches,
+                    outcome.chain.pooled.pack_bytes,
+                );
+            }
             if let Operation::UpdatePortableMetadata {
                 base,
                 kind,

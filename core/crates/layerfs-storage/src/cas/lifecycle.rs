@@ -22,6 +22,7 @@ use crate::sqlite::{
     lookup, ownership,
     write::{self, TransactionState},
 };
+use layerfs_telemetry::timer::{Active, TimingScope};
 use std::time::Instant;
 
 impl MutationOwner {
@@ -214,11 +215,11 @@ impl MutationOwner {
     }
 
     /// Finishes physical groups, then atomically publishes one save row.
-    pub fn finish(&mut self) -> StorageResult<OutcomeCounters> {
+    pub fn finish(&mut self, scope: &TimingScope<'_, Active>) -> StorageResult<OutcomeCounters> {
         if self.terminal {
             return Err(StorageError::Aborted);
         }
-        match self.finish_inner() {
+        match self.finish_inner(scope) {
             Ok(mut counters) => {
                 // Selection and chain counters live beside the resolver while the
                 // operation runs; the outcome reports the totals once.
@@ -235,28 +236,33 @@ impl MutationOwner {
         }
     }
 
-    fn finish_inner(&mut self) -> StorageResult<OutcomeCounters> {
+    fn finish_inner(&mut self, scope: &TimingScope<'_, Active>) -> StorageResult<OutcomeCounters> {
         let whole = Instant::now();
         let mut availability = Availability::default();
-        for lane in PackLane::ALL {
-            self.seal_group(lane, &mut availability)?;
-        }
+        scope.child("storage.finish.pack_seal").run(|_| {
+            for lane in PackLane::ALL {
+                self.seal_group(lane, &mut availability)?;
+            }
+            Ok::<(), StorageError>(())
+        })?;
         let arbitration = Arc::clone(&self.arbitration);
         let _guard = ownership::lock(&arbitration)?;
         if !self.transaction_open {
-            self.begin_write()?;
+            scope
+                .child("storage.finish.transaction_begin")
+                .run(|_| self.begin_write())?;
         }
         // W2 (#188d): the content index is written in the transaction that publishes
         // the objects it names, so a save's output and its index become visible
         // together or not at all.
         let started = Instant::now();
-        let flushed = {
+        let flushed = scope.child("storage.finish.candidate_flush").run(|_| {
             let mut index = self
                 .candidates
                 .lock()
                 .map_err(|_| StorageError::Integrity("candidate index lock"))?;
             index.flush(&self.connection)
-        };
+        });
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         flushed?;
         // Multi-writer: the same transaction releases this save's slot by
@@ -264,31 +270,54 @@ impl MutationOwner {
         // writer can hand out a pack id this save already used. Either the save's
         // data, its index and its publication all become visible, or none does.
         let started = Instant::now();
-        ownership::publish(&self.connection, self.save_id)?;
+        scope
+            .child("storage.finish.ownership_publish")
+            .run(|_| ownership::publish(&self.connection, self.save_id))?;
         SaveProfile::charge(&mut self.profile.diag.publish_ns, started);
         // The ordinal block this save still holds went with the save: what it did
         // not hand out is returned to the catalogue, in the transaction that
         // publishes the values that were handed out (`ownership::release_ordinals`).
-        if let (Some(used_end), Some(reserved_end)) = (self.next_ordinal, self.ordinal_block_end) {
-            ownership::release_ordinals(&self.connection, used_end, reserved_end)?;
-        }
-        self.advance_pack_if_moved()?;
+        scope.child("storage.finish.ordinal_watermark").run(|_| {
+            if let (Some(used_end), Some(reserved_end)) =
+                (self.next_ordinal, self.ordinal_block_end)
+            {
+                ownership::release_ordinals(&self.connection, used_end, reserved_end)?;
+            }
+            self.advance_pack_if_moved()
+        })?;
         let started = Instant::now();
-        write::commit(&self.connection)?;
+        scope
+            .child("storage.finish.sqlite_commit")
+            .run(|_| write::commit(&self.connection))?;
         SaveProfile::charge(&mut self.profile.commit_ns, started);
         self.counters.commits += 1;
         self.transaction_open = false;
         // Only completed saves can seed the shared disposable candidate indexes.
         // Concurrent publications can omit useful candidates, never expose private ones.
-        if let (Ok(mut shared), Ok(private)) = (self.published_pool.lock(), self.pool_index.lock())
-        {
-            *shared = private.clone();
-        }
-        if let (Ok(mut shared), Ok(private)) =
-            (self.published_candidates.lock(), self.candidates.lock())
-        {
-            *shared = private.clone();
-        }
+        scope.child("storage.finish.pool_clone").run(|_| {
+            if let (Ok(mut shared), Ok(private)) =
+                (self.published_pool.lock(), self.pool_index.lock())
+            {
+                self.profile.diag.finish_pool_entries = private.len() as u64;
+                self.profile.diag.finish_pool_bytes = private.live_bytes() as u64;
+                *shared = private.clone();
+            } else {
+                self.profile.diag.finish_pool_clone_skipped = 1;
+            }
+            Ok::<(), StorageError>(())
+        })?;
+        scope.child("storage.finish.candidates_clone").run(|_| {
+            if let (Ok(mut shared), Ok(private)) =
+                (self.published_candidates.lock(), self.candidates.lock())
+            {
+                self.profile.diag.finish_candidate_entries = private.entries() as u64;
+                self.profile.diag.finish_candidate_bytes = private.live_bytes() as u64;
+                *shared = private.clone();
+            } else {
+                self.profile.diag.finish_candidate_clone_skipped = 1;
+            }
+            Ok::<(), StorageError>(())
+        })?;
         SaveProfile::charge(&mut self.profile.diag.finish_total_ns, whole);
         Ok(self.counters)
     }
