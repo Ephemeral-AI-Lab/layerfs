@@ -94,6 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         runtime: runtime.clone(),
         telemetry_run: Some(run),
     })?;
+    server.listen()?;
     let owner = server.owner()?;
     let workspaces = WorkspaceApi::new(&owner);
     let sandboxes = SandboxApi::new(&owner);
