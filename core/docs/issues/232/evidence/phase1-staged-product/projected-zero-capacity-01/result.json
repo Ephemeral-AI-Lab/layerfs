@@ -1,0 +1,83 @@
+{
+  "status": "PASS",
+  "mode": "functional-projected-range-workspace",
+  "case": "zero_capacity",
+  "checks": [
+    {
+      "id": "zero_capacity",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "S-15"
+  ],
+  "requirement_scope": "Workspace projected handle and receipt, without Linux ioctl",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "Linux mounted ioctl ABI",
+    "public SDK Exec and Commit",
+    "latency or cache admission"
+  ],
+  "source": "9a42709add7ae19ac05ae21be892077a696a51c8",
+  "product_inputs_sha256": "79b6724fa41f2fc3b91739dbf9aa3321ad94be82901cc5078c04a544592bc1e9",
+  "driver_sha256": "481e2c753510bfd864d667f907e62f4f42c357befca6ce1b8ed4dba424d5178b",
+  "test_source_sha256": "48c8ff59df1e036233f5af18938a80a7e0fd082edcf3ff0200b46ce0e40fe600",
+  "entrypoint_sha256": "ef00f31c172902f191995528d1de7ea5bcd61956f47df455136ba2174382c936",
+  "helper_source_sha256": "349c4d13f1fc72e77a4e6188746f7f97516c8acadd6986060e5adf88a2ce4a28",
+  "test_binary_sha256": "ed9e956a24a886d3174906f52d3450c53191058f3fb6262e84493fb1753d3eb9",
+  "binaries": {
+    "layerfs-server": "8a581249eeb8fd6b0ce76f7ffb4bdf94231146c81b118c9778f86a35e72bd116",
+    "layerfs-daemon": "017ed05535243782185a6ff993b45d9afbb95ab08bc6fadc5409921e62039569",
+    "examples/public_key": "55a461a07b94c77451b75e6e3931e77f3eddd050064551af927944cf19bee352"
+  },
+  "image": "sha256:9babee938c8c9c7a6678331c98f76a88a40594569b2f6a726c08d3677d836026",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "f268477a0bef",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target/phase1-functional",
+    "build_target": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target/phase1-fixtures/large-edit-64m/result.json",
+      "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/projected_range-d4cf867bbcc9bc4f"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target/phase1-functional/projected-zero-capacity-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": []
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/core/target/phase1-fixtures/large-edit-64m/result.json",
+    "receipt_sha256": "850b879fbf4385e94402e71cb1fcb40aeda1274348e92989c220897db9b1eefc",
+    "closed_store_sha256": "ab407775eb91e037c11d299e9c2848e5bc770da2f7862de001829cdb60986607",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "d6eee2c3dcaadf658dee216822512a5a291816f9224c87555903f1f43facbd57",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "actual_nano_cpus": 2000000000,
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::projected_range_zero_capacity",
+  "test_exit": 0,
+  "observations": [],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 0.8825926249992335
+}
