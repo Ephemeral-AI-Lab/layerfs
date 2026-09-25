@@ -546,6 +546,61 @@ fn a_first_edit_inside_an_implicit_base_retains_both_sides() {
 }
 
 #[test]
+fn an_implicit_base_longer_than_one_extent_folds_into_split_parts() {
+    let f = Fixture::new();
+    // A never-edited base-backed file longer than the extent ceiling holds its
+    // base read as adjacent parts, exactly as a stored leaf would; the implicit
+    // fold must split the retained prefix and tail the same way instead of
+    // emitting one over-ceiling extent. The mounted route never edited a file
+    // this large, so the shape was unreachable before the route harness.
+    let ceiling = u64::from(MAX_EXTENT);
+    let base = 3 * ceiling + 10;
+    let first = f
+        .splice(PageRef::NULL, 10, 14, base, 0, base, &[local(0, 4, 5, 6)])
+        .unwrap();
+    assert_eq!(first.length, base);
+    assert_eq!(first.edits, 1);
+    assert_eq!(first.replacement, 4);
+    let parts: Vec<(u64, Piece)> = f.walk(first.root, base);
+    // The tail is exactly three parts: two at the ceiling and one remainder.
+    assert_eq!(parts.len(), 5);
+    assert_eq!(parts[0].1.kind, PieceKind::Base);
+    assert_eq!(parts[0].1.length, 10);
+    assert_eq!(parts[1].1.kind, PieceKind::Local);
+    assert_eq!(parts[1].1.length, 4);
+    assert_eq!(parts[2].1.kind, PieceKind::Base);
+    assert_eq!(parts[2].1.offset, 14);
+    assert_eq!(parts[2].1.length, ceiling);
+    assert_eq!(parts[3].1.offset, 14 + ceiling);
+    assert_eq!(parts[3].1.length, ceiling);
+    assert_eq!(parts[4].1.offset, 14 + 2 * ceiling);
+    assert_eq!(parts[4].1.length, ceiling - 4);
+    assert_eq!(
+        parts[4].0 + parts[4].1.length,
+        base,
+        "the split tail must cover the whole retained base"
+    );
+    // A second edit on that stored sequence splices the multi-part tail
+    // without confusing a part boundary with a logical byte boundary.
+    let second = f
+        .splice(
+            first.root,
+            14 + ceiling,
+            14 + ceiling + 2,
+            base,
+            4,
+            base,
+            &[zero(2)],
+        )
+        .unwrap();
+    assert_eq!(second.length, base);
+    assert_eq!(second.replacement, 6);
+    let spliced = f.piece_at(second.root, 14 + ceiling, base).unwrap();
+    assert_eq!(spliced.1.kind, PieceKind::Zero);
+    assert_eq!(spliced.1.length, 2);
+}
+
+#[test]
 fn an_implicit_base_append_past_eof_fills_the_gap() {
     let f = Fixture::new();
     // A write that starts past the end of a never-edited file keeps the whole

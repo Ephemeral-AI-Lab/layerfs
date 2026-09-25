@@ -351,22 +351,28 @@ pub fn replace<S: PieceStore + ?Sized>(
         } else if current == splice.old_base {
             // One base read of the selected content: the splice folds into
             // that implicit base, so the retained prefix and tail read the
-            // base exactly as a stored leaf would.
+            // base exactly as a stored leaf would. A stored leaf holds a long
+            // base read as adjacent parts no larger than the extent ceiling,
+            // so the implicit fold splits them the same way.
             if splice.end > splice.old_base {
                 return Err(WorkspaceError::Io);
             }
             if splice.start > 0 {
-                walk.emit(Piece::base(splice.start))?;
+                for part in parts(Piece::base(splice.start)) {
+                    walk.emit(part)?;
+                }
             }
             walk.insert()?;
             if splice.end < splice.old_base {
-                walk.emit(Piece {
+                for part in parts(Piece {
                     kind: PieceKind::Base,
                     length: splice.old_base - splice.end,
                     offset: splice.end,
                     payload: 0,
                     custody: PageRef::NULL,
-                })?;
+                }) {
+                    walk.emit(part)?;
+                }
             }
         } else {
             // A NULL root with a partially edited sequence cannot exist.
