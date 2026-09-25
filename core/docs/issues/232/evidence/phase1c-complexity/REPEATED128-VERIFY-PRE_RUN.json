@@ -1,0 +1,29 @@
+{
+  "case_path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/case.txt",
+  "case_sha256": "979ac0a26af27fa9134338da916af852e0d8f23da2d862001e63ee58be346e45",
+  "exec_or_commit_rerun": false,
+  "first_verification_sha256": "420bc3285ab4b8e806444c53bb4cb22583be144507825d35f75b9eb7a95c034c",
+  "history_path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/history.sqlite",
+  "history_sha256": "fc0675ca6e25294311635243531771eb0866e184a9f574aade82111873017846",
+  "image_id": "sha256:01dfab4c41e7ab4fa46c5db4316f3a851b587f300921c9ae16800c1ef15f5ca9",
+  "one_verifier_attempt": true,
+  "output": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/verification-repair-01",
+  "performance_harness_seal": "3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a",
+  "performance_product_seal": "683c9b510400880ce6e739f33a68cb809fb10df02920456ba3b108c0c60ff6c9",
+  "performance_receipt_sha256": "c7dd45fa3342842d7d3e2f0645c257e53112c8bc3f73156824cc438c769ec481",
+  "performance_source_commit": "7ee723ca6663d5c5d3b6c6e7b75be7069b281da1",
+  "scenario_id": "repeated-128-progress-proof-v1",
+  "schema": "issue232-repeated128-verifier-repair-pre-run-v1",
+  "status": "PROSPECTIVE",
+  "store_path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-progress-proof-01/store.sqlite",
+  "store_sha256": "1e7def24c21ce5395efe65eea379f76f5104a39d09aba4b0d57b8945c7cca89b",
+  "verifier": {
+    "path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/binary-archive/01245cc3924ee478ce22986600dc8a20cf0585f94e00db4659f1f15e8376537d/verify_edit",
+    "sha256": "01245cc3924ee478ce22986600dc8a20cf0585f94e00db4659f1f15e8376537d"
+  },
+  "verifier_budget_ns": 10000000000,
+  "verifier_harness_seal": "3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a",
+  "verifier_product_seal": "a4494821e47446a900d79a21f82f0f6733ddd493e01c47eca4f75018c74fd9cb",
+  "verifier_source_commit": "9eede8a35aeafef6d1bb35d5ae5289bcb28026db",
+  "verifier_source_tree": "8c4f8611a60bef6b472a7234b7573057344d22a1"
+}
