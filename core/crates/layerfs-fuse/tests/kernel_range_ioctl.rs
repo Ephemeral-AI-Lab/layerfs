@@ -6,7 +6,7 @@ mod support;
 #[cfg(target_os = "linux")]
 mod linux {
     use super::support::{deadline, Fixture, Gate};
-    use layerfs_workspace::ReferenceScope;
+    use layerfs_workspace::{FileAccess, FileCreateOptions, FileOpenOptions, ReferenceScope};
     use std::{
         fs::{self, File, OpenOptions},
         os::{
@@ -707,6 +707,85 @@ mod linux {
             .forget(data.serial, u64::MAX, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
         println!("KERNEL_RANGE_CHECK stage-cleanup PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and sparse 4 GiB logical file"]
+    fn kernel_range_staged_max_file_math() {
+        use sha2::{Digest, Sha256};
+        const MAX: u64 = 4 * 1024 * 1024 * 1024;
+        let f = Fixture::new(Gate::None);
+        let (created, local_handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"limit.bin",
+                FileCreateOptions {
+                    mode: 0o600,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        append: false,
+                        truncate: false,
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .set_len(created.serial, MAX, deadline())
+            .unwrap();
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(f.workspace.mount_path().join("limit.bin"))
+            .unwrap();
+        let before = state(&file);
+        assert_eq!(number(&before, 64), MAX);
+        let request = |offset: u64, deleted: u64, logical: u64| {
+            let mut bytes = [0u8; 128];
+            bytes[..4].copy_from_slice(b"LFB3");
+            bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
+            bytes[8..64].copy_from_slice(&before[8..64]);
+            bytes[64..72].copy_from_slice(&offset.to_le_bytes());
+            bytes[72..80].copy_from_slice(&deleted.to_le_bytes());
+            bytes[80..88].copy_from_slice(&logical.to_le_bytes());
+            bytes[88..96].copy_from_slice(&1u64.to_le_bytes());
+            bytes[96..128].copy_from_slice(&Sha256::digest(b"Z"));
+            bytes
+        };
+        let call = |cmd: u32, bytes: &mut [u8]| -> Result<(), i32> {
+            if unsafe { libc::ioctl(file.as_raw_fd(), cmd as _, bytes.as_mut_ptr()) } == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error().raw_os_error().unwrap())
+            }
+        };
+        let mut overflow = request(u64::MAX, 1, 1);
+        assert_eq!(call(0xc080_f542, &mut overflow), Err(libc::EINVAL));
+        let mut too_long = request(MAX, 0, 1);
+        assert_eq!(call(0xc080_f542, &mut too_long), Err(libc::ENOSPC));
+        let mut exact = request(MAX - 1, 1, 1);
+        call(0xc080_f542, &mut exact).unwrap();
+        let mut abort = [0u8; 128];
+        abort[..4].copy_from_slice(b"LFX3");
+        abort[4..6].copy_from_slice(&3u16.to_le_bytes());
+        abort[8..24].copy_from_slice(&exact[8..24]);
+        call(0x4080_f545, &mut abort).unwrap();
+        assert_eq!(state(&file), before);
+        drop(file);
+        mount.unmount(deadline()).unwrap();
+        f.workspace.release(local_handle).unwrap();
+        f.workspace
+            .unlink(f.workspace.root().serial, b"limit.bin", deadline())
+            .unwrap();
+        f.workspace
+            .forget(created.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap(); // The 4 GiB temporary is gone; no data copy.
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK staged-max-file-math PASS");
     }
 
     #[test]

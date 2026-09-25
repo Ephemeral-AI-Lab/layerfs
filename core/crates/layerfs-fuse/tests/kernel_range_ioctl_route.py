@@ -14,6 +14,7 @@ driver.CASES = {
     'staged_apply': ['staged-apply'],
     'staged_bounds': ['staged-bounds'],
     'stage_cleanup': ['stage-cleanup'],
+    'staged_max_file_math': ['staged-max-file-math'],
 }
 driver.REQUIREMENTS = {
     'insert_commit': ['W-04', 'W-07', 'W-11', 'S-18'],
@@ -23,6 +24,7 @@ driver.REQUIREMENTS = {
     'staged_apply': ['W-04', 'W-07', 'W-11', 'S-18'],
     'staged_bounds': ['W-04', 'W-07', 'W-11', 'S-18'],
     'stage_cleanup': ['W-04', 'W-07', 'W-11'],
+    'staged_max_file_math': ['W-04', 'W-07', 'W-11'],
 }
 driver.TEST_SOURCE = Path(__file__).with_name('kernel_range_ioctl.rs')
 driver.ENTRY_SOURCE = Path(__file__)
