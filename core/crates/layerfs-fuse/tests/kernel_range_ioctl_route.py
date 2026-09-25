@@ -12,6 +12,7 @@ driver.CASES = {
     'read_only': ['read-only'],
     'stage_lifecycle': ['staging-lifecycle'],
     'staged_apply': ['staged-apply'],
+    'staged_bounds': ['staged-bounds'],
 }
 driver.REQUIREMENTS = {
     'insert_commit': ['W-04', 'W-07', 'W-11', 'S-18'],
@@ -19,6 +20,7 @@ driver.REQUIREMENTS = {
     'read_only': ['W-04', 'W-07'],
     'stage_lifecycle': ['W-04', 'W-07', 'W-11'],
     'staged_apply': ['W-04', 'W-07', 'W-11', 'S-18'],
+    'staged_bounds': ['W-04', 'W-07', 'W-11', 'S-18'],
 }
 driver.TEST_SOURCE = Path(__file__).with_name('kernel_range_ioctl.rs')
 driver.ENTRY_SOURCE = Path(__file__)

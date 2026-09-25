@@ -512,6 +512,139 @@ mod linux {
 
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_range_staged_bounds() {
+        use sha2::{Digest, Sha256};
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().join("data.bin");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let other = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let before = state(&file);
+        let original_len = number(&before, 64);
+        let request = |stamp: &[u8; 88], logical: u64, literal: u64, digest: &[u8]| {
+            let mut bytes = [0u8; 128];
+            bytes[..4].copy_from_slice(b"LFB3");
+            bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
+            bytes[8..64].copy_from_slice(&stamp[8..64]);
+            bytes[64..72].copy_from_slice(&number(stamp, 64).to_le_bytes());
+            bytes[80..88].copy_from_slice(&logical.to_le_bytes());
+            bytes[88..96].copy_from_slice(&literal.to_le_bytes());
+            bytes[96..128].copy_from_slice(digest);
+            bytes
+        };
+        let call = |file: &File, cmd: u32, bytes: &mut [u8]| -> Result<(), i32> {
+            if unsafe { libc::ioctl(file.as_raw_fd(), cmd as _, bytes.as_mut_ptr()) } == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error().raw_os_error().unwrap())
+            }
+        };
+        let terminal = |magic: &[u8; 4], token: &[u8; 16]| {
+            let mut bytes = [0u8; 128];
+            bytes[..4].copy_from_slice(magic);
+            bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
+            bytes[8..24].copy_from_slice(token);
+            bytes
+        };
+        let mut oversized = request(&before, 8 * 1024 * 1024 + 1, 0, &[0; 32]);
+        assert_eq!(call(&file, 0xc080_f542, &mut oversized), Err(libc::ENOSPC));
+        let mut stale = request(&before, 1, 1, &Sha256::digest(b"X"));
+        stale[56..64].copy_from_slice(&(number(&before, 56) + 1).to_le_bytes());
+        assert_eq!(call(&file, 0xc080_f542, &mut stale), Err(libc::ESTALE));
+        assert_eq!(state(&file), before);
+
+        let mut bad = request(&before, 4096, 4096, &[0; 32]);
+        call(&file, 0xc080_f542, &mut bad).unwrap();
+        let bad_token: [u8; 16] = bad[8..24].try_into().unwrap();
+        let mut bytes = [0u8; 4224];
+        bytes[..4].copy_from_slice(b"LFD3");
+        bytes[4..6].copy_from_slice(&3u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&1u16.to_le_bytes());
+        bytes[8..24].copy_from_slice(&bad_token);
+        bytes[32..40].copy_from_slice(&4096u64.to_le_bytes());
+        bytes[40..44].copy_from_slice(&4096u32.to_le_bytes());
+        bytes[128..].fill(0x5a);
+        call(&file, 0x5080_f543, &mut bytes).unwrap();
+        assert_eq!(state(&file), before);
+        assert_eq!(
+            call(&file, 0x4080_f544, &mut terminal(b"LFA3", &bad_token)),
+            Err(libc::EINVAL)
+        );
+        assert_eq!(state(&file), before);
+
+        let mut zero_hash = Sha256::new();
+        for _ in 0..2048 {
+            zero_hash.update([0u8; 4096]);
+        }
+        let mut full = request(&before, 8 * 1024 * 1024, 0, &zero_hash.finalize());
+        call(&file, 0xc080_f542, &mut full).unwrap();
+        let token: [u8; 16] = full[8..24].try_into().unwrap();
+        let mut concurrent = request(&before, 1, 1, &Sha256::digest(b"X"));
+        assert_eq!(
+            call(&other, 0xc080_f542, &mut concurrent),
+            Err(libc::ENOSPC)
+        );
+        let mut zero_data = [0u8; 4224];
+        zero_data[..4].copy_from_slice(b"LFD3");
+        zero_data[4..6].copy_from_slice(&3u16.to_le_bytes());
+        zero_data[6..8].copy_from_slice(&2u16.to_le_bytes());
+        zero_data[8..24].copy_from_slice(&token);
+        zero_data[32..40].copy_from_slice(&(8 * 1024 * 1024u64).to_le_bytes());
+        assert_eq!(call(&other, 0x5080_f543, &mut zero_data), Err(libc::EBADF));
+        zero_data[24..32].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(call(&file, 0x5080_f543, &mut zero_data), Err(libc::EINVAL));
+        zero_data[24..32].fill(0);
+        call(&file, 0x5080_f543, &mut zero_data).unwrap();
+        assert_eq!(state(&file), before);
+        call(&file, 0x4080_f544, &mut terminal(b"LFA3", &token)).unwrap();
+        let after = state(&file);
+        assert_eq!(number(&after, 56), number(&before, 56) + 1);
+        assert_eq!(number(&after, 64), original_len + 8 * 1024 * 1024);
+        assert_eq!(
+            file.metadata().unwrap().len(),
+            original_len + 8 * 1024 * 1024
+        );
+        assert_eq!(
+            other.metadata().unwrap().len(),
+            original_len + 8 * 1024 * 1024
+        );
+        assert_eq!(read(&file, original_len, 4096), vec![0; 4096]);
+        assert!(read(&file, original_len + 8 * 1024 * 1024, 1).is_empty());
+        assert_eq!(
+            f.workspace.status().unwrap().range_accepted_payload_bytes,
+            0
+        );
+        let report = f.workspace.commit(deadline()).unwrap();
+        let root = match report.outcome {
+            layerfs_bridge::contract::CommitOutcomeWire::Committed(committed) => committed.root,
+            other => panic!("{other:?}"),
+        };
+        let committed = super::support::attr(f.native.attributes(root, b"data.bin"));
+        assert_eq!(committed.2, original_len + 8 * 1024 * 1024);
+        assert_eq!(
+            f.native.bytes(committed.1, original_len, 4096),
+            vec![0; 4096]
+        );
+        drop(file);
+        drop(other);
+        mount.unmount(deadline()).unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK staged-bounds PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_range_read_only() {
         let f = Fixture::new(Gate::None);
         let data = f.lookup(b"data.bin");
