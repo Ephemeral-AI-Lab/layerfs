@@ -2,7 +2,13 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 
-No #245 candidate, new measurement, or admission result exists. Phase 1 targets
+No #245 candidate, registered measurement, or admission result exists. A first
+repair round has since localized and fixed the observed rename failure and the
+two binding defects behind it, and re-checked the four retained #243 oracles
+through the mounted route; its labelled diagnostics, receipts and unmet gates
+are in [Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md).
+Those attempts are cause-finding diagnostics on a changed source identity, not a
+registered performance selection, and every latency row is ineligible. Phase 1 targets
 the retained failures and growing work below; larger package and file workloads
 belong to the separate load-bearing plan. The public route is
 `WorkspaceApi::exec(command)` → `/bin/sh -c` → ordinary POSIX calls on the

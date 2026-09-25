@@ -36,6 +36,16 @@ verification gate.
   ownership and LOC range, complexity model, ordinary FUSE route, and
   verification gates.
 
+The first repair round is recorded in
+[Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md):
+three defects on the shared namespace path were localized from a labelled
+mounted diagnostic, fixed, and re-verified. The mixed package refresh and the
+two rename shapes now pass with an independent full-tree oracle, the four #243
+correctness oracles still hold, and every latency row stays **INELIGIBLE**. The
+piece index, the streaming Commit, the continuously writable Commit proof and
+the frozen Phase 1 performance selection remain **NOT_RUN**; this folder still
+holds no release candidate and no admission result.
+
 The retained [#243 Phase 2 report](../243/evidence/phase2-ordinary-shell-v1/REPORT.md)
 records a mixed-refresh functional FAIL and three functional observations with
 cache-ineligible latency. The [#232 POSIX count diagnostic](../232/evidence/posix-count-diagnostic/REPORT.md)
