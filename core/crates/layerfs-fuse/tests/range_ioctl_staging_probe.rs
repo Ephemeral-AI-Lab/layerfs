@@ -358,10 +358,21 @@ mod linux {
         .unwrap();
         let bg = session.spawn().unwrap();
         *notifier.lock().unwrap() = Some(bg.notifier());
+        let mountinfo = fs::read_to_string("/proc/self/mountinfo")
+            .unwrap()
+            .lines()
+            .find(|line| line.contains(&root.join("mnt").display().to_string()))
+            .unwrap()
+            .to_string();
+        fs::write(root.join("mountinfo"), mountinfo).unwrap();
         fs::write(root.join("ready"), "1").unwrap();
         let mut byte = [0];
         let _ = io::stdin().read(&mut byte);
-        bg.umount_and_join().unwrap();
+        if case == "unmount" {
+            bg.join().unwrap();
+        } else {
+            bg.umount_and_join().unwrap();
+        }
         let mut s = state.lock().unwrap();
         s.stage = None;
         log(
@@ -535,6 +546,15 @@ mod linux {
             }
             "unmount" => {
                 call(&root, &file, "BEGIN", BEGIN, begin(0, digest)).unwrap();
+                let mount = std::ffi::CString::new(root.join("mnt").to_str().unwrap()).unwrap();
+                assert_eq!(
+                    unsafe { libc::umount2(mount.as_ptr(), libc::MNT_DETACH) },
+                    0
+                );
+                log(
+                    &root,
+                    "caller forced-detach while staged descriptor remains open",
+                );
                 drop(child.stdin.take());
                 assert!(child.wait().unwrap().success());
                 drop(file);
