@@ -98,13 +98,23 @@ at **1,024**. This is another source bound, not an observed 500 MiB
 temp-file receipt. A temp-file workflow changes the registered editor
 algorithm and still needs a piece-index/product design for the largest tier.
 
+The independent [frozen-v2 POSIX count diagnostic](evidence/posix-count-diagnostic/REPORT.md)
+then ran the 1 and 10 MiB middle shifts under a new instrumented identity,
+one attempt each. The mounted route reported 9 versus 81 ordinary FUSE WRITE
+callbacks and zero range ioctls; cumulative old-piece loads rose from 51 to
+3,363 and piece-index pages written from 10 to 144 while the shifted suffix
+grew tenfold. Both cases passed full-file verification and cleanup, with
+latency still cache-`INELIGIBLE`. The diagnostic exposed existing Store
+substep totals as save-wide; earlier flush waves prevent attributing the
+10 MiB aggregate to its final drain. No product algorithm was changed.
+
 ## Five revised checkpoints
 
 | Phase | Gate, commit and verification | Current outcome |
 | --- | --- | --- |
 | 1. Establish the user-facing route | Commit `8ec08e800` records the pre-run, one public SDK mounted POSIX probe, independent full-file verifier and corrected workflow. | **PASS** for the one ordinary overwrite route; no broad command or latency claim. |
 | 2. Explain retained structural failures | `derive_v2_limits.py` checks 56 registry rows, 20 shifts, the 8 MiB source limit and exact agreement between eleven over-limit rows and eleven retained v2 failures. | **PASS** for the source-and-registry deduction; the historical observed outcome remains 5 s Exec `FAIL`. |
-| 3. Select a capacity-preserving generic POSIX design | The current in-place 10/100/500 MiB shifts cannot fit existing Workspace/Bridge replay. A temp-file-and-rename command is a different editor algorithm and also crosses the 1,024-piece limit at 500 MiB. The independent [Phase 1B drain diagnosis](../241/evidence/phase1b-finish-diagnostic/REPORT.md) stays valid, with no narrow optimization yet justified. | **BLOCKED on route/contract selection and piece-index design.** No cap, worker or timeout inflation is an acceptable shortcut. |
+| 3. Select a capacity-preserving generic POSIX design | The [new count diagnostic](evidence/posix-count-diagnostic/REPORT.md) confirms growing full-list work on ordinary WRITE; the current in-place 10/100/500 MiB shifts cannot fit existing Workspace/Bridge replay. A temp-file-and-rename command is a different editor algorithm and also crosses the 1,024-piece limit at 500 MiB. The independent [Phase 1B drain diagnosis](../241/evidence/phase1b-finish-diagnostic/REPORT.md) stays valid, with no narrow optimization yet justified. | **BLOCKED on route/contract selection and piece-index design.** No cap, worker or timeout inflation is an acceptable shortcut. |
 | 4. Prove all 56 generic-shell cases | Freeze the selected actual shell commands, source/build/image identities, callback counts and byte oracles; then verify one fresh changed-source attempt per case. | **NOT_RUN.** The v2 POSIX baseline is 45 verified, eleven failed. The v3 ioctl campaign is a separate selection. |
 | 5. Qualify performance and release | Enforce an equal cache state for Edit-written backing bytes, retain one sample per case, independent verification and cleanup, and compare only prospective same-route targets. | **NOT_RUN.** The current FUSE backing-cache domain is ineligible for cold latency. |
 

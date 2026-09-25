@@ -30,17 +30,20 @@ just one of those full-list passes: 820 at 40 blocks, 80,200 at 400 and
 | A newly specified temp-file-and-rename command | At 500 MiB, at least 4,000 FUSE WRITE callbacks create distinct Local payload pieces; the current index caps at 1,024. This is a different benchmark operation. | A piece index that supports thousands of bounded writes and the ConstructFile/rename publication path; retain a new scenario identity and oracle. |
 | Both routes | The Edit-written backing cache remains unqualified for a cold Commit claim. | Measure the true product cache state or keep numeric rows `INELIGIBLE`. The independent `service.finish` Phase 1B diagnostic identified batch drain, but not a safe inner change. |
 
-The next **count-driven** work can reuse the existing `LFS_PIECE_COUNT` and
-`LFS_PIECE_PAGES` diagnostic for a declared ordinary POSIX command to record
-per-callback old/new pieces, list visits and pages written, never as a repeat
-performance sample. For Commit, `SaveOutcome.profile.diag` already contains
+The [first frozen-v2 POSIX count diagnostic](evidence/posix-count-diagnostic/REPORT.md)
+reused `LFS_PIECE_COUNT` and `LFS_PIECE_PAGES` on ordinary mounted commands:
+9 versus 81 WRITE callbacks, 51 versus 3,363 cumulative old-piece loads,
+and 10 versus 144 rebuilt piece-index pages at 1 versus 10 MiB. Both rows
+passed the full-file oracle but were cold-cache `INELIGIBLE`. For Commit,
+`SaveOutcome.profile.diag` already contains
 `flush_batch_ns`, `wave_ns`, `offer_total_ns`, `seal_total_ns`,
-`write_pack_total_ns` and `validate_ns`; the retained Phase 1B line did not
-emit them. A new prospective diagnostic can expose those existing nested
-totals before proposing a drain optimization. Preserve their overlap and
-save-wide scope in analysis; subtract a before-finish snapshot if earlier
-waves contributed. There is no justified product change from the existing
-two Phase 1B rows alone.
+`write_pack_total_ns` and `validate_ns`; the new diagnostic exposed those
+existing nested totals. At 10 MiB, earlier flush waves contributed, so the
+save-wide totals cannot isolate the final drain; a later prospective
+diagnostic needs a before-finish snapshot or final-flush-only instrument.
+Preserve the totals' overlap and save-wide scope. There is still no
+justified Commit optimization from the retained Phase 1B rows or these
+two POSIX count rows alone.
 
 ## The precise promise
 
