@@ -68,7 +68,10 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
     }
     Ok(refs)
 }
-fn index_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
+/// The declared level ceiling of one metadata key kind. Every metadata key is a
+/// one-byte kind followed by its identity, except a name kind's cursor bound,
+/// which may carry the kind byte alone and no name at all.
+pub(crate) fn key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
     match key.first() {
         Some(b'E' | b'T') if key.len() <= 256 => Ok(3),
         Some(b'D') if key.len() == 17 => Ok(2),
@@ -76,12 +79,21 @@ fn index_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
         _ => Err(WorkspaceError::Io),
     }
 }
+/// The level ceiling of one key that is written into a page, where a name kind
+/// must carry at least one name byte: a bare kind byte is only a cursor bound.
+pub(crate) fn stored_key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
+    let limit = key_limit(key)?;
+    if limit == 3 && key.len() < 2 {
+        return Err(WorkspaceError::Io);
+    }
+    Ok(limit)
+}
 fn check_index(cells: &[Cell], level: u8, limit: u8) -> Result<(), WorkspaceError> {
     if level > limit {
         return Err(WorkspaceError::Io);
     }
     for cell in cells {
-        if index_limit(cell.key())? != limit || (limit == 3 && cell.key_len < 2) {
+        if stored_key_limit(cell.key())? != limit {
             return Err(WorkspaceError::Io);
         }
         if level == 0 {
@@ -112,7 +124,7 @@ impl Arena {
         if root == PageRef::NULL {
             return Ok(None);
         }
-        let limit = index_limit(key)?;
+        let limit = key_limit(key)?;
         let mut expected = None;
         let mut maximum: Option<Cell> = None;
         for _ in 0..=limit {
@@ -340,7 +352,7 @@ impl RootOwner {
         window: &mut Window,
         deadline: Instant,
     ) -> Result<PageRef, WorkspaceError> {
-        let limit = index_limit(updates.first().ok_or(WorkspaceError::InvalidInput)?.key())?;
+        let limit = key_limit(updates.first().ok_or(WorkspaceError::InvalidInput)?.key())?;
         if updates.len() > if limit == 3 { 1 } else { 4 }
             || updates
                 .windows(2)
@@ -494,7 +506,7 @@ impl Arena {
         deadline: Instant,
     ) -> Result<Option<Cell>, WorkspaceError> {
         let page = self.load(root, window, deadline)?;
-        check_index(&page.cells, page.level, index_limit(lower)?)?;
+        check_index(&page.cells, page.level, key_limit(lower)?)?;
         if parent.is_some_and(|(n, key)| {
             n != page.level
                 || page.body() < MIN_BODY

@@ -186,11 +186,26 @@ reply or save input.
 
 The implemented delta records add three rules to this precedence:
 
-- **One name owns a binding or a removal, never both.** A publication that
-  binds a name again clears the removal record that name carried
+- **One name owns a binding or a removal, never both.** Every publication that
+  binds a name clears the removal record that name carried
   (`overlay/directories.rs::keep_name` rebuilds the directory's removal page
-  without the name), so a rename destination is listed and resolvable instead
-  of being hidden by its own stale tombstone.
+  without the name, and both `filesystem/rename.rs` and `filesystem/create.rs`
+  call it before writing the binding), so a name is listed and resolvable
+  instead of being hidden by its own stale tombstone. The rule is shared
+  because one generation reaches it through more than one ordinary syscall
+  sequence: a POSIX overwrite the kernel resolves as `UNLINK` followed by
+  `CREATE` binds a name whose removal record the same generation has just
+  written. `keep_name` advances its cursor by the cell it visited rather than
+  by the cells it kept, so a name that is the first removal record on the page
+  is still visited exactly once.
+- **A metadata page key's length bound belongs to its kind.** A `D` key is 17
+  bytes and an `I`, `N` or `R` key is 9, while a name kind (`E`, `T`) is one
+  kind byte plus up to 255 name bytes (`backing/metadata_index.rs::key_limit`).
+  A cursor bound may carry the kind byte alone; a key written into a page must
+  carry its identity (`stored_key_limit`). `backing/metadata_build.rs` validates
+  every page it writes with that rule, so rebuilding a name page accepts an
+  ordinary long file name: a 17-byte `package-lock.json` produces an 18-byte
+  removal key.
 - **A rename destination binding shadows an inherited binding.** The
   publication writes the destination binding whatever the destination parent's
   origin held (`filesystem/rename.rs`), so an inherited base binding is
