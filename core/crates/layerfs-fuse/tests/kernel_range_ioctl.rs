@@ -274,6 +274,110 @@ mod linux {
 
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
+    fn kernel_range_staging_lifecycle() {
+        use sha2::{Digest, Sha256};
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        f.workspace.set_len(data.serial, 8192, deadline()).unwrap();
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().join("data.bin");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let other = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let before = state(&file);
+        let original = read(&file, 0, 8192);
+        let payload = vec![0x5a; 65536];
+        let mut begin = [0u8; 128];
+        begin[..4].copy_from_slice(b"LFB3");
+        begin[4..6].copy_from_slice(&3u16.to_le_bytes());
+        begin[8..64].copy_from_slice(&before[8..64]);
+        begin[64..72].copy_from_slice(&4096u64.to_le_bytes());
+        begin[80..88].copy_from_slice(&65536u64.to_le_bytes());
+        begin[88..96].copy_from_slice(&65536u64.to_le_bytes());
+        begin[96..128].copy_from_slice(&Sha256::digest(&payload));
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0xc080_f542u32 as _, begin.as_mut_ptr()) },
+            0
+        );
+        assert_eq!(&begin[..8], b"LFB3\x03\0\0\0");
+        let token: [u8; 16] = begin[8..24].try_into().unwrap();
+        assert_ne!(token, [0; 16]);
+
+        let mut fragment = [0u8; 4224];
+        fragment[..4].copy_from_slice(b"LFD3");
+        fragment[4..6].copy_from_slice(&3u16.to_le_bytes());
+        fragment[6..8].copy_from_slice(&1u16.to_le_bytes());
+        fragment[8..24].copy_from_slice(&token);
+        fragment[32..40].copy_from_slice(&4096u64.to_le_bytes());
+        fragment[40..44].copy_from_slice(&4096u32.to_le_bytes());
+        fragment[128..].fill(0x5a);
+        fragment[24..32].copy_from_slice(&4096u64.to_le_bytes());
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x5080_f543u32 as _, fragment.as_mut_ptr()) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EINVAL)
+        );
+        fragment[24..32].fill(0);
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    other.as_raw_fd(),
+                    0x5080_f543u32 as _,
+                    fragment.as_mut_ptr(),
+                )
+            },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EBADF)
+        );
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x5080_f543u32 as _, fragment.as_mut_ptr()) },
+            0
+        );
+        assert_eq!(state(&file), before);
+        assert_eq!(read(&file, 0, 8192), original);
+
+        let mut terminal = [0u8; 128];
+        terminal[..4].copy_from_slice(b"LFX3");
+        terminal[4..6].copy_from_slice(&3u16.to_le_bytes());
+        terminal[8..24].copy_from_slice(&token);
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x4080_f545u32 as _, terminal.as_mut_ptr()) },
+            0
+        );
+        terminal[..4].copy_from_slice(b"LFA3");
+        assert_eq!(
+            unsafe { libc::ioctl(file.as_raw_fd(), 0x4080_f544u32 as _, terminal.as_mut_ptr()) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EBADF)
+        );
+        assert_eq!(state(&file), before);
+        drop(file);
+        drop(other);
+        mount.unmount(deadline()).unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK staging-lifecycle PASS");
+    }
+
+    #[test]
+    #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_range_read_only() {
         let f = Fixture::new(Gate::None);
         let data = f.lookup(b"data.bin");

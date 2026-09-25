@@ -1,4 +1,5 @@
 //! Linux LFS2/LFE2 carrier; Workspace owns the projected range mutation.
+mod staging;
 mod wire;
 use crate::{
     adapter::{Adapter, CALLBACK_BUDGET},
@@ -8,6 +9,7 @@ use fuser::{Errno, FileHandle, INodeNo, IoctlFlags, ReplyIoctl, Request};
 use layerfs_workspace::{
     filesystem::projection_counters::ProjectionOp, RangeEdit, RangeStamp, RangeState,
 };
+pub(crate) use staging::Stages;
 use std::time::Instant;
 
 const STATE_CMD: u32 = 0xc058_f540;
@@ -203,8 +205,27 @@ pub(crate) fn dispatch(
         wire::BEGIN | wire::DATA | wire::APPLY | wire::ABORT => {
             let result = wire::validate(cmd, input, out_size, flags)
                 .and_then(|()| adapter.guard(req))
-                .and_then(|()| adapter.handle(ino, fh));
-            reply.error(result.err().unwrap_or(Errno::EOPNOTSUPP));
+                .and_then(|()| adapter.handle(ino, fh))
+                .and_then(|()| {
+                    if !adapter.writable {
+                        return Err(Errno::EROFS);
+                    }
+                    match cmd {
+                        wire::BEGIN => adapter.stages.begin(adapter, ino, fh, input).map(Some),
+                        wire::DATA => adapter.stages.data(fh, input).map(|()| None),
+                        wire::APPLY => adapter
+                            .stages
+                            .apply_ready(adapter, ino, fh, input)
+                            .map(|()| None),
+                        wire::ABORT => adapter.stages.abort(fh, input).map(|()| None),
+                        _ => unreachable!(),
+                    }
+                });
+            match result {
+                Ok(Some(output)) => reply.ioctl(0, &output),
+                Ok(None) => reply.ioctl(0, &[]),
+                Err(error) => reply.error(error),
+            }
         }
         _ => unreachable!(),
     }

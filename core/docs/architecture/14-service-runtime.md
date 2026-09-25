@@ -198,13 +198,19 @@ its handle/stamp checks at publication; a mode change does not revoke an
 already-open writable descriptor. Path-based edits and handleless size changes
 retain their separate permission check.
 
-The Linux adapter also validates prospective LFB3/LFD3/LFA3/LFX3 version-3
-ioctl frame lengths, magic, flags, reserved bytes and the 8 MiB logical
-replacement bound. At this source checkpoint it explicitly returns
-`EOPNOTSUPP` for a valid staged frame; no stage or Workspace mutation is
-created yet. The existing LFS2/LFE2 inline route is unchanged. Source basis:
-parent `b6327b323577d1804b466624ae109d94d9bb45dc` plus the same-commit
-`layerfs-fuse/src/range_ioctl/wire.rs` and dispatch update.
+The Linux adapter validates LFB3/LFD3/LFA3/LFX3 version-3 ioctl frames.
+BEGIN reserves declared logical bytes under an 8 MiB per-mount aggregate
+budget and a 32-stage cap, binds a random token to the descriptor and exact
+Workspace stamp, and changes no Workspace bytes. Ordered DATA stores at most
+the declared literal bytes and hashes Zero runs through a fixed scratch
+buffer; ABORT, descriptor release, mount stop, destroy and a 30-second
+deadline discard private stages. A mount-owned sweeper enforces deadline
+cleanup while idle and is joined during unmount. At this checkpoint APPLY
+validates complete length, digest and stamp, consumes the stage, then returns
+`EOPNOTSUPP` before mutation; the one-Workspace-splice integration follows.
+LFS2/LFE2 inline behavior is unchanged. Source basis: parent
+`6629951c2437970c5b9378c7e3ed018e9232d044` plus the same-commit
+FUSE staging, mount and adapter changes.
 
 The daemon status wire carries the same counts in the fixed
 `layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,

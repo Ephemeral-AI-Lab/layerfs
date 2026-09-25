@@ -72,6 +72,9 @@ at `4..6`, zero flags `6..8`, the token at `8..24` and zero `24..128`.
 Both have zero output bytes. A wrong descriptor/token/incarnation returns
 `EBADF`; a stale stamp returns `ESTALE`.
 
+At most 32 stages may be outstanding per mount; the aggregate declared
+logical length still cannot exceed 8 MiB.
+
 APPLY consumes the token exactly once. It checks full logical/literal
 lengths and SHA-256, current handle/incarnation/stamp and mutation capacity,
 then obtains one Workspace mutation permit and performs one semantic splice

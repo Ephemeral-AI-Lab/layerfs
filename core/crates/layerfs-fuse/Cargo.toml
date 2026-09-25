@@ -12,6 +12,7 @@ layerfs-workspace = { path = "../layerfs-workspace" }
 [target.'cfg(target_os = "linux")'.dependencies]
 fuser = { version = "=0.18.0", default-features = false }
 libc = "=0.2.189"
+sha2 = "=0.10.9"
 
 [dev-dependencies]
 layerfs-bridge = { path = "../layerfs-bridge" }

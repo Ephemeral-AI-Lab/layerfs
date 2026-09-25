@@ -10,10 +10,10 @@ const MAX_REPLACEMENT: u64 = 8 * 1024 * 1024;
 fn u16_at(input: &[u8], at: usize) -> u16 {
     u16::from_le_bytes(input[at..at + 2].try_into().unwrap())
 }
-fn u32_at(input: &[u8], at: usize) -> u32 {
+pub(super) fn u32_at(input: &[u8], at: usize) -> u32 {
     u32::from_le_bytes(input[at..at + 4].try_into().unwrap())
 }
-fn u64_at(input: &[u8], at: usize) -> u64 {
+pub(super) fn u64_at(input: &[u8], at: usize) -> u64 {
     u64::from_le_bytes(input[at..at + 8].try_into().unwrap())
 }
 

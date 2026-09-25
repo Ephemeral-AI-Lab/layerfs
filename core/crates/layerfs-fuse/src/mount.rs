@@ -5,6 +5,7 @@ use std::{fmt, io, time::Instant};
 #[cfg(target_os = "linux")]
 use {
     crate::adapter::Adapter,
+    crate::range_ioctl::Stages,
     fuser::{Config, MountOption, Session, SessionACL, SessionUnmounter},
     layerfs_workspace::{
         CoherenceStatus, MountLease, MutationReceipt, WorkspaceAccess, MAX_READ_BYTES,
@@ -114,6 +115,10 @@ pub struct MountHandle {
     #[cfg(target_os = "linux")]
     stopping: Arc<AtomicBool>,
     #[cfg(target_os = "linux")]
+    stages: Arc<Stages>,
+    #[cfg(target_os = "linux")]
+    stage_sweeper: Option<JoinHandle<()>>,
+    #[cfg(target_os = "linux")]
     unmounter: Option<SessionUnmounter>,
     #[cfg(target_os = "linux")]
     worker: Option<JoinHandle<io::Result<()>>>,
@@ -189,20 +194,41 @@ fn mount_profile(
         // Only this cell crosses the outer thread spawn. If spawn fails, dropping
         // its closure cannot drop the Session still owned by the parent's Arc.
         let pending = Arc::new(Mutex::new(None));
+        let stages = Arc::new(Stages::default());
         let mut handle = MountHandle {
             workspace: workspace.clone(),
             lease,
             stopping: Arc::new(AtomicBool::new(false)),
+            stages: Arc::clone(&stages),
+            stage_sweeper: None,
             unmounter: None,
             worker: None,
             pending: Some(Arc::clone(&pending)),
             cleanup_failed: false,
             finished: false,
         };
+        let sweeper = match thread::Builder::new()
+            .name("layerfs-ioctl-stages".into())
+            .spawn({
+                let stopping = Arc::clone(&handle.stopping);
+                let stages = Arc::clone(&stages);
+                move || {
+                    while !stopping.load(Ordering::Acquire) {
+                        stages.sweep();
+                        thread::park_timeout(Duration::from_millis(100));
+                    }
+                    stages.clear();
+                }
+            }) {
+            Ok(worker) => worker,
+            Err(error) => return Err(failure.with_owner(MountPhase::Worker, error.into(), handle)),
+        };
+        handle.stage_sweeper = Some(sweeper);
         let adapter = Adapter {
             workspace: workspace.clone(),
             stopping: Arc::clone(&handle.stopping),
             writable,
+            stages,
         };
         let mut config = Config::default();
         config.acl = SessionACL::Owner;
@@ -293,6 +319,10 @@ impl MountHandle {
     #[cfg(target_os = "linux")]
     fn stop_admission(&mut self) {
         self.stopping.store(true, Ordering::Release);
+        self.stages.clear();
+        if let Some(worker) = &self.stage_sweeper {
+            worker.thread().unpark();
+        }
         self.lease.stop_admission();
     }
 
@@ -368,6 +398,9 @@ impl MountHandle {
                         return Err(MountError::CleanupFailed);
                     }
                 }
+            }
+            if let Some(worker) = self.stage_sweeper.take() {
+                worker.join().map_err(|_| MountError::CleanupFailed)?;
             }
             if Instant::now() >= deadline {
                 return Err(MountError::Deadline);

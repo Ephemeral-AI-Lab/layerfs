@@ -35,6 +35,7 @@ pub(crate) struct Adapter {
     pub(crate) workspace: Workspace,
     pub(crate) stopping: Arc<AtomicBool>,
     pub(crate) writable: bool,
+    pub(crate) stages: Arc<crate::range_ioctl::Stages>,
 }
 
 impl Adapter {
@@ -130,6 +131,7 @@ impl Filesystem for Adapter {
 
     fn destroy(&mut self) {
         self.stopping.store(true, Ordering::Release);
+        self.stages.clear();
     }
 
     fn lookup(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
@@ -307,9 +309,10 @@ impl Filesystem for Adapter {
         _: bool,
         reply: ReplyEmpty,
     ) {
-        let result = self
-            .handle(ino, fh)
-            .and_then(|()| self.workspace.release(fh.0).map_err(errno));
+        let result = self.handle(ino, fh).and_then(|()| {
+            self.stages.release(fh.0);
+            self.workspace.release(fh.0).map_err(errno)
+        });
         match result {
             Ok(()) => reply.ok(),
             Err(error) => reply.error(error),
