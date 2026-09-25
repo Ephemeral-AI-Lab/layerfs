@@ -22,6 +22,11 @@ their separate source bases.
 The Init ordering-backing correction describes product commit
 `0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
 their separate source bases.
+The #243 range-ioctl retirement describes the FUSE source in the same commit
+as this note. Historical range-ioctl paragraphs below describe the earlier
+opt-in carrier; the current Linux adapter returns `ENOTTY` for ioctl, and
+ordinary Workspace writes continue through FUSE WRITE and the internal
+Workspace piece operations.
 
 The agent-facing project Init route is based on `main` at
 `7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.

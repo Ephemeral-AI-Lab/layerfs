@@ -5,8 +5,6 @@
 mod adapter;
 mod mount;
 #[cfg(target_os = "linux")]
-mod range_ioctl;
-#[cfg(target_os = "linux")]
 mod replies;
 
 pub use mount::{mount, mount_writable, MountError, MountFailure, MountHandle, MountPhase};
