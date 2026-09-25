@@ -37,7 +37,11 @@ fn selected_mount_exec_and_identity_round_trip() {
             store: 0,
             profile: WORKSPACE_STATUS_PROFILE,
             deadline_ms: 5_000,
-            response_bytes: 0,
+            response_bytes: if matches!(&operation, Operation::WorkspaceExec { .. }) {
+                5
+            } else {
+                0
+            },
             operation,
         };
         assert_eq!(

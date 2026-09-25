@@ -14,7 +14,7 @@ use layerfs_fuse::MountError;
 use layerfs_telemetry::timer::{Active, TimingScope};
 use nix::poll::{poll, PollFd, PollFlags};
 use std::{
-    io::{self, Read},
+    io::{self, Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     os::fd::AsFd,
     sync::{
@@ -137,7 +137,7 @@ fn run(
                 .stack_size(2 * 1024 * 1024)
                 .spawn(move || {
                     if let Ok(connection) = accept(stream, &private, &config.peers) {
-                        let _ = serve(connection, |peer, request, input, _, deadline| {
+                        let _ = serve(connection, |peer, request, input, output, deadline| {
                             let (result, diagnostic) = target.telemetry.recorder().run(
                                 request.id,
                                 request.operation.label(),
@@ -147,7 +147,7 @@ fn run(
                                         &config.grants,
                                         peer,
                                         request,
-                                        input,
+                                        (input, output),
                                         deadline,
                                         scope,
                                     )
@@ -192,10 +192,11 @@ fn dispatch(
     grants: &[ControlGrant],
     peer: &VerifiedPeer,
     request: &Request,
-    input: &mut dyn Read,
+    streams: (&mut dyn Read, &mut dyn Write),
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
+    let (input, output) = streams;
     request.validate()?;
     if Instant::now() >= deadline {
         return Err(Code::Deadline.into());
@@ -379,6 +380,7 @@ fn dispatch(
             workspace,
             requested_incarnation,
             command,
+            output,
             native_deadline,
             scope,
         );

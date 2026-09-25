@@ -151,6 +151,7 @@ impl Client {
             let response = (|| {
                 let mut bytes = 0u64;
                 let mut frames = 0u64;
+                let mut progress = 0u64;
                 loop {
                     let frame = receive.read().map_err(|_| delivery(r))?;
                     frames += 1;
@@ -159,6 +160,13 @@ impl Client {
                     }
                     match frame.kind {
                         Kind::ResultData => {
+                            if matches!(r.operation, Operation::WorkspaceExec { .. }) {
+                                if frame.bytes != [0] || progress >= r.response_bytes {
+                                    return Err(delivery(r));
+                                }
+                                progress += 1;
+                                continue;
+                            }
                             if matches!(
                                 r.operation,
                                 Operation::HistoryCommand(

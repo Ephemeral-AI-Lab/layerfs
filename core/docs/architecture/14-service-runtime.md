@@ -88,6 +88,19 @@ The Exec readiness refinement after source commit
 than parking for a fixed 5 ms while either pipe remains open. The deadline,
 8 KiB stream caps and process-group cleanup stay the same. If both pipes close
 before the child exits, the bounded 5 ms process-status wait remains.
+The #232 repeated-edit liveness change is based on source commit
+`7137cd7ecc8d6d44c24eccbd277a1366269d62ee` plus the product edit in this
+commit. Exec observes its Workspace revision every 200 ms while the child is
+running and may send one bounded native `ResultData` progress marker when that
+revision advances, at most once per second. The same authenticated marker shape
+already serves native Init progress; Exec receives no logical result bytes from
+it. The client accepts only the one-byte zero marker for Exec, within the
+declared response-byte budget. It still requires the terminal Exec response to
+acknowledge completion. A command with no published Workspace progress remains
+subject to the five-second transport silence bound; the absolute 30-second
+Exec deadline, process-group cleanup, mutation semantics and explicit Commit
+boundary are unchanged. `daemon.exec_progress` LFT1 children count actual
+marker sends. No extra worker or automatic replay is introduced.
 The control acceptor revision after source commit
 `00e7374ff1e6d86d176aab90379bf040a3cf036f` waits for listener readiness
 instead of sleeping for a fixed 10 ms when no connection is queued. Its poll

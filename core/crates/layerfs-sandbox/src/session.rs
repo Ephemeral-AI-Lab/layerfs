@@ -168,13 +168,18 @@ pub(crate) fn call(
     operation: Operation,
 ) -> Result<Response, Failure> {
     let deadline = Instant::now() + Duration::from_millis(u64::from(deadline_ms));
+    let response_bytes = if matches!(&operation, Operation::WorkspaceExec { .. }) {
+        u64::from(deadline_ms.div_ceil(1_000))
+    } else {
+        0
+    };
     let request = Request {
         id,
         generation: 0,
         store: 0,
         profile: WORKSPACE_STATUS_PROFILE,
         deadline_ms,
-        response_bytes: 0,
+        response_bytes,
         operation,
     };
     client.call_until(&request, &mut &[][..], &mut io::sink(), deadline)

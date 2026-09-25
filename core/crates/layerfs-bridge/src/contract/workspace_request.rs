@@ -12,9 +12,14 @@ pub(crate) fn validate(request: &Request) -> Result<(), Failure> {
         Operation::WorkspaceExec { .. } => WORKSPACE_EXEC_MAX_MS,
         _ => WORKSPACE_STATUS_MAX_MS,
     };
+    let response_bytes = if matches!(&request.operation, Operation::WorkspaceExec { .. }) {
+        u64::from(request.deadline_ms.div_ceil(1_000))
+    } else {
+        0
+    };
     if request.store != 0
         || request.generation != 0
-        || request.response_bytes != 0
+        || request.response_bytes != response_bytes
         || request.deadline_ms > maximum
     {
         return Err(Code::InvalidInput.into());

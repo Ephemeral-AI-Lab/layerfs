@@ -11,6 +11,7 @@ use nix::{
     unistd::read,
 };
 use std::{
+    io::Write,
     os::{fd::AsFd, unix::process::CommandExt},
     process::{ChildStderr, ChildStdout, Command, Stdio},
     thread,
@@ -54,6 +55,7 @@ pub(crate) fn execute(
     workspace: &Workspace,
     incarnation: &[u8; 32],
     command: &[u8],
+    output: &mut dyn Write,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
@@ -83,16 +85,37 @@ pub(crate) fn execute(
     let mut err = Vec::new();
     let mut out_truncated = false;
     let mut err_truncated = false;
-    let result = scope.child("daemon.exec_output").run(|_| {
+    let result = scope.child("daemon.exec_output").run(|active| {
         (|| -> Result<_, Failure> {
             nonblocking(stdout.as_ref().ok_or(Code::Io)?)?;
             nonblocking(stderr.as_ref().ok_or(Code::Io)?)?;
             let mut status = None;
+            let mut revision = workspace.status().map_err(|_| Code::Io)?.revision;
+            let mut last_progress = None;
+            let mut next_check = Instant::now() + Duration::from_millis(200);
             loop {
                 drain(&mut stdout, &mut out, &mut out_truncated)?;
                 drain(&mut stderr, &mut err, &mut err_truncated)?;
                 if status.is_none() {
                     status = child.try_wait()?;
+                }
+                let now = Instant::now();
+                if status.is_none() && now >= next_check {
+                    let current = workspace.status().map_err(|_| Code::Io)?.revision;
+                    if current > revision
+                        && last_progress.is_none_or(|last: Instant| {
+                            now.duration_since(last) >= Duration::from_secs(1)
+                        })
+                    {
+                        active.child("daemon.exec_progress").run(|_| {
+                            output.write_all(&[0])?;
+                            output.flush()?;
+                            Ok::<(), Failure>(())
+                        })?;
+                        revision = current;
+                        last_progress = Some(now);
+                    }
+                    next_check = now + Duration::from_millis(200);
                 }
                 if status.is_some() && stdout.is_none() && stderr.is_none() {
                     return Ok(status);
