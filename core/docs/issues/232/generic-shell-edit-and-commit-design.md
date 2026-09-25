@@ -9,6 +9,39 @@ were read-only; no performance sample was repeated. An implementation needs its
 own reviewed contract, exact source identity, and new scenario version wherever
 the editor operation changes.
 
+## 2026-09-25 source gates and next causal checks
+
+The later [mounted POSIX proof and five checkpoints](SHELL_ROUTE_CORRECTION.md)
+supersede this study's earlier assumption that exposing a range ioctl could
+serve the intended arbitrary-shell claim. The ioctl remains opt-in. A
+[registry/source derivation](evidence/shell-posix-diagnostic/V2_LIMITS.json)
+shows that exactly the eleven retained v2 structural failures move more than
+the existing-file 8 MiB replay limit; their *observed* failure was the 5 s
+silent Exec result, before any Capacity result. The ordinary WRITE path
+collects the entire existing piece list, runs `pieces::splice` across it and
+rebuilds all piece pages on each callback. A shift of `C` distinct 128 KiB
+blocks therefore performs at least `C(C+1)/2` cumulative piece visits in
+just one of those full-list passes: 820 at 40 blocks, 80,200 at 400 and
+2,001,000 at 2,000. These are source-count lower bounds, not measured time.
+
+| Generic POSIX workflow | Earliest capacity gate | Reusable product work |
+| --- | --- | --- |
+| Frozen v2 in-place shift of an existing file | The final shifted suffix in eleven rows exceeds Workspace and Bridge `MAX_REPLAY = 8 MiB`. | A bounded private-overlay/replay design and path-local piece update; preserve one Exec then explicit Commit. Merely increasing the quota does not solve full-list work or bounded residency. |
+| A newly specified temp-file-and-rename command | At 500 MiB, at least 4,000 FUSE WRITE callbacks create distinct Local payload pieces; the current index caps at 1,024. This is a different benchmark operation. | A piece index that supports thousands of bounded writes and the ConstructFile/rename publication path; retain a new scenario identity and oracle. |
+| Both routes | The Edit-written backing cache remains unqualified for a cold Commit claim. | Measure the true product cache state or keep numeric rows `INELIGIBLE`. The independent `service.finish` Phase 1B diagnostic identified batch drain, but not a safe inner change. |
+
+The next **count-driven** work can reuse the existing `LFS_PIECE_COUNT` and
+`LFS_PIECE_PAGES` diagnostic for a declared ordinary POSIX command to record
+per-callback old/new pieces, list visits and pages written, never as a repeat
+performance sample. For Commit, `SaveOutcome.profile.diag` already contains
+`flush_batch_ns`, `wave_ns`, `offer_total_ns`, `seal_total_ns`,
+`write_pack_total_ns` and `validate_ns`; the retained Phase 1B line did not
+emit them. A new prospective diagnostic can expose those existing nested
+totals before proposing a drain optimization. Preserve their overlap and
+save-wide scope in analysis; subtract a before-finish snapshot if earlier
+waves contributed. There is no justified product change from the existing
+two Phase 1B rows alone.
+
 ## The precise promise
 
 `WorkspaceApi::exec(command)` passes opaque bytes to `/bin/sh -c`. LayerFS does
