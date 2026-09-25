@@ -54,7 +54,23 @@ format, so every case is checkable without a mount, a Store or a service:
 | `refuses_a_page_that_does_not_declare_the_length_indexed_format` | a body relabelled as the pre-length-indexed form is refused by `PageKind::of` |
 | `a_refused_splice_leaves_the_published_sequence_unchanged` | after a refusal the old root still reads its sequence and the store holds exactly the pages the first build wrote |
 
-## 3. What is not established
+## 3. Final checks at the frozen source
+
+Run once, at `466d6da6a` with a clean tree, exactly as the handoff prescribes:
+
+| Command | Result |
+| --- | --- |
+| `cargo +1.85.1 test --manifest-path core/Cargo.toml --locked --offline --all-targets` | exit 0; no failing target |
+| `cargo +1.85.1 clippy --manifest-path core/Cargo.toml --all-targets --locked --offline -- -D warnings` | exit 0; zero errors |
+| `cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all --check` | exit 0 |
+| `python3 core/tools/check_product_boundary.py` | exit 0; 293 production files scanned |
+| `python3 -m unittest discover -s core/tools -p 'test_*.py'` | 9 tests, OK |
+
+The `--all-targets` test run is on the host (Darwin ARM64), so the Linux-gated
+mounted suites compile **out** of it; that gap is `core/AGENTS.md` policy and is
+recorded again in §4. No CI ran and no aggregate pre-push gate was invoked.
+
+## 4. What is not established
 
 The suite is a **component** gate on the page store and the traversal. It is not
 a mounted proof and it does not replace one:
@@ -74,7 +90,7 @@ a mounted proof and it does not replace one:
   publication; package E is unstarted.
 - No Phase 1 performance selection exists and no latency number is reported.
 
-## 4. Honest complexity statement
+## 5. Honest complexity statement
 
 The splice folds the extents of the replaced interval and the leaves that hold
 them, copies their ancestors and shares every other page: `O(H + K)` extents for
@@ -89,7 +105,7 @@ are recorded here rather than left implicit:
   count is recorded as `u16::MAX` and lowering derives the exact value from the
   sequence itself. `Commit` lowers such a file rather than reusing its base.
 
-## 5. Checks at this source identity
+## 6. Other checks run during the round
 
 | Command | Result |
 | --- | --- |
