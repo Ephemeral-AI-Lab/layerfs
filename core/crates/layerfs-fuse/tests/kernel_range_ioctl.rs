@@ -644,6 +644,72 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "requires real privileged Linux FUSE and one 30-second expiry"]
+    fn kernel_range_stage_cleanup() {
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().join("data.bin");
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let other = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let before = state(&file);
+        let begin = |fd: &File| {
+            let mut frame = [0u8; 128];
+            frame[..4].copy_from_slice(b"LFB3");
+            frame[4..6].copy_from_slice(&3u16.to_le_bytes());
+            frame[8..64].copy_from_slice(&before[8..64]);
+            frame[64..72].copy_from_slice(&number(&before, 64).to_le_bytes());
+            frame[80..88].copy_from_slice(&(8 * 1024 * 1024u64).to_le_bytes());
+            assert_eq!(
+                unsafe { libc::ioctl(fd.as_raw_fd(), 0xc080_f542u32 as _, frame.as_mut_ptr()) },
+                0
+            );
+            assert_ne!(&frame[8..24], &[0; 16]);
+        };
+        begin(&file);
+        let handles = f.workspace.status().unwrap().projection_handles;
+        drop(file);
+        for _ in 0..100 {
+            if f.workspace.status().unwrap().projection_handles + 1 == handles {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(
+            f.workspace.status().unwrap().projection_handles + 1,
+            handles
+        );
+        begin(&other); // Owner close released its full 8 MiB reservation.
+        std::thread::sleep(std::time::Duration::from_secs(31));
+        let third = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        begin(&third); // Idle deadline sweeper released the second reservation.
+        assert_eq!(state(&third), before);
+        let closer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            drop(other);
+            drop(third);
+        });
+        mount.unmount(deadline()).unwrap(); // Begins with a private stage outstanding.
+        closer.join().unwrap();
+        f.workspace
+            .forget(data.serial, u64::MAX, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        println!("KERNEL_RANGE_CHECK stage-cleanup PASS");
+    }
+
+    #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_range_read_only() {
         let f = Fixture::new(Gate::None);
