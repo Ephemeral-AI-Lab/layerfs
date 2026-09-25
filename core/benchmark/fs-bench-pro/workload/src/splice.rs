@@ -3,13 +3,12 @@ use super::{payload, read_exact_at, Options};
 use sha2::{Digest, Sha256};
 use std::{
     fs::File,
-    io::{Error, ErrorKind, Read, Write},
+    io::{Error, ErrorKind, Read},
     os::{
         fd::AsRawFd,
         raw::{c_int, c_ulong},
         unix::fs::{FileExt, MetadataExt},
     },
-    time::Instant,
 };
 
 const STATE: c_ulong = 0xc058_f540;
@@ -89,29 +88,14 @@ fn unknown(phase: &str, before: &Stamp, error: impl std::fmt::Display) -> ! {
     std::process::exit(75)
 }
 
-#[derive(Default)]
-struct BatchTimes {
-    state_ns: u128,
-    stat_ns: u128,
-    read_ns: u128,
-    edit_ns: u128,
-    total_ns: u128,
-}
-
 fn confirm(
     file: &File,
     before: &Stamp,
     expected_length: u64,
     expected: &[u8],
     read_start: u64,
-    stats: Option<&mut BatchTimes>,
 ) -> (i64, u32) {
-    let mut stats = stats;
-    let started = stats.as_ref().map(|_| Instant::now());
     let after = state(file).unwrap_or_else(|error| unknown("post-state", before, error));
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.state_ns += started.elapsed().as_nanos();
-    }
     if after.serial != before.serial
         || after.incarnation != before.incarnation
         || after.generation != before.generation
@@ -124,13 +108,9 @@ fn confirm(
             "revision, identity or length mismatch",
         );
     }
-    let started = stats.as_ref().map(|_| Instant::now());
     let stat = file
         .metadata()
         .unwrap_or_else(|error| unknown("fstat", before, error));
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.stat_ns += started.elapsed().as_nanos();
-    }
     if stat.len() != after.length
         || stat.mtime() != after.mtime_seconds
         || stat.mtime_nsec() != i64::from(after.mtime_nanoseconds)
@@ -138,26 +118,15 @@ fn confirm(
         unknown("fstat", before, "length or mtime mismatch");
     }
     let mut actual = vec![0; expected.len()];
-    let started = stats.as_ref().map(|_| Instant::now());
     read_exact_at(file, read_start, &mut actual)
         .unwrap_or_else(|error| unknown("readback", before, error));
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.read_ns += started.elapsed().as_nanos();
-    }
     if actual != expected {
         unknown("readback", before, "boundary bytes mismatch");
     }
     (after.mtime_seconds, after.mtime_nanoseconds)
 }
 
-fn run_with(
-    options: &Options,
-    file: &File,
-    replacement: &[u8],
-    stats: Option<&mut BatchTimes>,
-) -> Result<(i64, u32), Error> {
-    let mut stats = stats;
-    let total_started = stats.as_ref().map(|_| Instant::now());
+fn run_with(options: &Options, file: &File, replacement: &[u8]) -> Result<(i64, u32), Error> {
     if replacement.len() as u64 != options.length {
         return Err(Error::new(
             ErrorKind::InvalidInput,
@@ -185,16 +154,8 @@ fn run_with(
     let final_length = final_length
         .checked_add(replacement.len() as u64)
         .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "result length overflow"))?;
-    let started = stats.as_ref().map(|_| Instant::now());
     let before = state(file)?;
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.state_ns += started.elapsed().as_nanos();
-    }
-    let started = stats.as_ref().map(|_| Instant::now());
     let stat = file.metadata()?;
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.stat_ns += started.elapsed().as_nanos();
-    }
     if before.length != options.expect_size
         || stat.len() != before.length
         || stat.mtime() != before.mtime_seconds
@@ -206,7 +167,6 @@ fn run_with(
     let right_len = (options.expect_size - tail_start).min(16) as usize;
     let read_start = options.offset - left_len as u64;
     let mut expected = vec![0; left_len + replacement.len() + right_len];
-    let started = stats.as_ref().map(|_| Instant::now());
     read_exact_at(file, read_start, &mut expected[..left_len])?;
     expected[left_len..left_len + replacement.len()].copy_from_slice(replacement);
     read_exact_at(
@@ -214,29 +174,11 @@ fn run_with(
         tail_start,
         &mut expected[left_len + replacement.len()..],
     )?;
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.read_ns += started.elapsed().as_nanos();
-    }
     let mut bytes = request(options, &before, replacement);
-    let started = stats.as_ref().map(|_| Instant::now());
     if unsafe { ioctl(file.as_raw_fd(), EDIT, bytes.as_mut_ptr()) } != 0 {
         unknown("edit", &before, Error::last_os_error());
     }
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), started) {
-        stats.edit_ns += started.elapsed().as_nanos();
-    }
-    let result = confirm(
-        file,
-        &before,
-        final_length,
-        &expected,
-        read_start,
-        stats.as_deref_mut(),
-    );
-    if let (Some(stats), Some(started)) = (stats.as_deref_mut(), total_started) {
-        stats.total_ns += started.elapsed().as_nanos();
-    }
-    Ok(result)
+    Ok(confirm(file, &before, final_length, &expected, read_start))
 }
 
 pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
@@ -245,7 +187,7 @@ pub(super) fn run(options: &Options, file: &File) -> Result<(i64, u32), Error> {
     } else {
         payload(options)?
     };
-    run_with(options, file, &replacement, None)
+    run_with(options, file, &replacement)
 }
 
 pub(super) fn run_batch(options: &Options, file: &File) -> Result<(i64, u32), Error> {
@@ -264,34 +206,11 @@ pub(super) fn run_batch(options: &Options, file: &File) -> Result<(i64, u32), Er
     let width = 4096 / options.count as usize;
     let mut step = options.clone();
     let mut mtime = (0, 0);
-    let mut stats = std::env::var_os("LAYERFS_LIVENESS_DIAGNOSTIC").map(|_| BatchTimes::default());
     for i in 0..options.count as usize {
         step.expect_size = options.expect_size + (i * width) as u64;
         step.offset = options.offset + (i * (256 + width)) as u64;
         step.length = width as u64;
-        mtime = run_with(
-            &step,
-            file,
-            &replacement[i * width..(i + 1) * width],
-            stats.as_mut(),
-        )?;
-    }
-    if let Some(stats) = stats {
-        if let Ok(mut log) = File::options().append(true).open("/proc/1/fd/2") {
-            let _ = writeln!(
-                log,
-                "LFS_LIVENESS_DIAG v=1 edits={} total_ns={} state_ns={} stat_ns={} read_ns={} edit_ns={} residual_ns={}",
-                options.count,
-                stats.total_ns,
-                stats.state_ns,
-                stats.stat_ns,
-                stats.read_ns,
-                stats.edit_ns,
-                stats.total_ns.saturating_sub(
-                    stats.state_ns + stats.stat_ns + stats.read_ns + stats.edit_ns
-                )
-            );
-        }
+        mtime = run_with(&step, file, &replacement[i * width..(i + 1) * width])?;
     }
     Ok(mtime)
 }

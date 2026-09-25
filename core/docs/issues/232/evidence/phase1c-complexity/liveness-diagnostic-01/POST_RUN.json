@@ -1,0 +1,9 @@
+{
+  "full_local_run_path": "/Users/yifanxu/.codex/worktrees/7aa0/layerfs/benchmark-results/fs-bench-pro/repeated128-liveness-diagnostic-01",
+  "history_bytes": 86016,
+  "history_sha256": "a13d2946a7e33887df7d982bbe74c6be16e75e979e85f37f9d5fe82543629a9c",
+  "schema": "issue232-repeated128-liveness-post-run-v1",
+  "status": "FAIL",
+  "store_bytes": 2691072,
+  "store_sha256": "d57c2d300c4bc3e0b90df27073b931436937383bf63e3f6d65cf54f63bd73ec8"
+}
