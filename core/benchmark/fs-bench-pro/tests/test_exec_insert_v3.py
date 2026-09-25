@@ -136,6 +136,7 @@ class InsertV3(unittest.TestCase):
                   "canonical_count_expected": "0"}, "canonical count"),
             ):
                 case.write_text("operation_contract_id=workspace-exec-fuse-range-splice-commit-v3\n"
+                                "scenario_id=insert-middle-4k-on-1mib-ops-1-exec-v3\n"
                                 + "".join(f"{key}={value}\n" for key, value in fields.items()))
                 result = subprocess.run([str(verifier), str(case), "/absent/store",
                                          "/absent/history"], capture_output=True, text=True)
