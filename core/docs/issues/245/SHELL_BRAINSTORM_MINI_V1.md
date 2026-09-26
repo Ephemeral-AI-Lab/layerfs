@@ -50,6 +50,7 @@ The exact old tree, apart from parent directories implied by each path, is:
   `doc {i:03d} line\n` and truncate to exactly 32 KiB.
 - `packages/old/subtree/file.txt = b"old file\n"`,
   `packages/old/subtree/nested/child.txt = b"old child\n"`,
+  `packages/old/anchor.txt = b"old anchor\n"`,
   `packages/new/anchor.txt = b"new anchor\n"`,
   `packages/obsolete/dead.txt = b"remove me\n"`.
 - `packages/{replacement,large,many}/keep.txt = b"keep\n"`.
@@ -70,7 +71,9 @@ The image-only `/fixtures/stress/` tree contains:
 The registry owns **exact command bytes**, order, Commit choice and expected
 route minima. The runner's pure `expected_files(case_id)` derives each complete
 post-Commit manifest from these formulas; no case-specific product route exists.
-The seeded old tree has 140 regular files. There is one source arm per cell and
+The seeded old tree has 141 regular files. The old anchor keeps
+`packages/old/` present after its inherited subtree moves. There is one
+source arm per cell and
 no baseline/candidate latency comparison in mini v1; a later comparison needs
 a separately frozen arm contract and cache qualification.
 The 13 IDs are `many-packages-mini-v1`, `large-package-mini-v1`,
