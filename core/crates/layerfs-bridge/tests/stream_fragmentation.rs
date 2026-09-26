@@ -10,7 +10,7 @@ use layerfs_bridge::{
     contract::*,
 };
 use std::{
-    io,
+    io::{self, Write},
     sync::{atomic::AtomicBool, Arc, Mutex},
     time::Instant,
 };

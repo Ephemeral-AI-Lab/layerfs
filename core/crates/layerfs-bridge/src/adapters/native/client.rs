@@ -163,7 +163,7 @@ impl Client {
                                 r.operation,
                                 Operation::HistoryCommand(
                                     HistoryCommand::ImportNativeDirectory { .. }
-                                )
+                                ) | Operation::WorkspaceExec { .. }
                             ) {
                                 if frame.bytes != [0] {
                                     return Err(delivery(r));

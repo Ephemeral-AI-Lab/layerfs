@@ -4,7 +4,7 @@ use crate::{
     lifecycle::{mount_failure_code, Lifecycle},
 };
 use layerfs_bridge::{
-    adapters::native::{connection::accept, server::serve},
+    adapters::native::{connection::accept, payload::Output, server::serve},
     contract::{
         Code, Failure, Operation, Request, Response, VerifiedPeer, WorkspaceLifecycleOutcome,
         WorkspaceLifecycleWire,
@@ -137,7 +137,7 @@ fn run(
                 .stack_size(2 * 1024 * 1024)
                 .spawn(move || {
                     if let Ok(connection) = accept(stream, &private, &config.peers) {
-                        let _ = serve(connection, |peer, request, input, _, deadline| {
+                        let _ = serve(connection, |peer, request, input, output, deadline| {
                             let (result, diagnostic) = target.telemetry.recorder().run(
                                 request.id,
                                 request.operation.label(),
@@ -148,6 +148,7 @@ fn run(
                                         peer,
                                         request,
                                         input,
+                                        output,
                                         deadline,
                                         scope,
                                     )
@@ -187,12 +188,17 @@ fn authorized(grants: &[ControlGrant], peer: &VerifiedPeer, operation: u8) -> Re
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "control authority and Exec output remain explicit"
+)]
 fn dispatch(
     target: &Target,
     grants: &[ControlGrant],
     peer: &VerifiedPeer,
     request: &Request,
     input: &mut dyn Read,
+    output: &mut Output<'_>,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
@@ -379,6 +385,7 @@ fn dispatch(
             workspace,
             requested_incarnation,
             command,
+            output,
             native_deadline,
             scope,
         );

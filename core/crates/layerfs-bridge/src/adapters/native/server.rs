@@ -15,7 +15,7 @@ pub fn serve(
         &VerifiedPeer,
         &Request,
         &mut dyn Read,
-        &mut dyn Write,
+        &mut Output<'_>,
         Instant,
     ) -> Result<Response, Failure>,
 ) -> Result<(), Failure> {

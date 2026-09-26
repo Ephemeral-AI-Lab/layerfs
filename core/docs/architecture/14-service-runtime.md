@@ -27,6 +27,8 @@ as this note. Historical range-ioctl paragraphs below describe the earlier
 opt-in carrier; the current Linux adapter returns `ENOTTY` for ioctl, and
 ordinary Workspace writes continue through FUSE WRITE and the internal
 Workspace piece operations.
+The #232 Exec progress rule below describes the bridge and daemon source in
+the same commit as that rule; earlier sections retain their stated bases.
 
 The agent-facing project Init route is based on `main` at
 `7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.
@@ -93,6 +95,14 @@ The Exec readiness refinement after source commit
 than parking for a fixed 5 ms while either pipe remains open. The deadline,
 8 KiB stream caps and process-group cleanup stay the same. If both pipes close
 before the child exits, the bounded 5 ms process-status wait remains.
+While waiting for a mounted Exec child, the daemon checks the Workspace's
+accepted revision at most once per second. An increase sends one authenticated
+`ResultData [0]` progress record on that Exec response. The client accepts that
+exact marker for Exec without counting logical result bytes; unrelated operations
+still reject it. A marker acknowledges published Workspace mutation, not child
+completion or Commit. No marker is sent for an unchanged revision. The existing
+five-second no-wire-progress limit, 30-second Exec request deadline and bounded
+response-frame count remain in force.
 The control acceptor revision after source commit
 `00e7374ff1e6d86d176aab90379bf040a3cf036f` waits for listener readiness
 instead of sleeping for a fixed 10 ms when no connection is queued. Its poll

@@ -9,6 +9,69 @@ use layerfs_bridge::adapters::native::{
 };
 
 #[test]
+fn exec_progress_is_authenticated_and_has_no_result_bytes() {
+    use layerfs_bridge::{
+        adapters::native::{client::Client, server::serve},
+        contract::{Operation, Request, Response, WorkspaceExecWire, WORKSPACE_STATUS_PROFILE},
+    };
+    let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+    let address = listener.local_addr().unwrap();
+    let public = *VerifiedPeer::from_private(&[9; 32]).unwrap().public_key();
+    let peer = *VerifiedPeer::from_private(&[7; 32]).unwrap().public_key();
+    std::thread::scope(|threads| {
+        let server = threads.spawn(|| {
+            let (socket, _) = listener.accept().unwrap();
+            let connection = accept(
+                socket,
+                &[9; 32],
+                &[Peer {
+                    selector: 1,
+                    public: peer,
+                    expires_unix: u64::MAX,
+                }],
+            )
+            .unwrap();
+            let _ = serve(connection, |_, _, input, output, _| {
+                assert_eq!(input.read(&mut [0; 1])?, 0);
+                output.progress()?;
+                output.progress()?;
+                Ok(Response::WorkspaceExec(Box::new(WorkspaceExecWire {
+                    workspace: b"work".to_vec(),
+                    incarnation: [4; 32],
+                    exit_status: Some(0),
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                    stdout_truncated: false,
+                    stderr_truncated: false,
+                })))
+            });
+        });
+        let mut client = Client::new(connect(address, 1, &[7; 32], &public).unwrap()).unwrap();
+        let request = Request {
+            id: 1,
+            generation: 0,
+            store: 0,
+            profile: WORKSPACE_STATUS_PROFILE,
+            deadline_ms: 5_000,
+            response_bytes: 0,
+            operation: Operation::WorkspaceExec {
+                workspace: b"work".to_vec(),
+                incarnation: [4; 32],
+                command: b"true".to_vec(),
+            },
+        };
+        let mut bytes = Vec::new();
+        let response = client.call(&request, &mut &[][..], &mut bytes).unwrap();
+        assert!(
+            matches!(response, Response::WorkspaceExec(result) if result.exit_status == Some(0))
+        );
+        assert!(bytes.is_empty());
+        drop(client);
+        server.join().unwrap();
+    });
+}
+
+#[test]
 fn caller_deadline_covers_connect_and_hello() {
     use layerfs_bridge::{adapters::native::client::Client, contract::Code};
     use std::{
