@@ -94,6 +94,11 @@ writer moved the frontier, reconciliation rebuilds from the newer root within
 the same deadline. Intermediate trees stay temporary; only the converged tree
 is sealed. Mounted writes and reads wait for a current gate holder up to their
 deadline instead of exposing a transient `Busy`.
+Routine metadata maintenance also waits for the builder's shared backing I/O
+window before it takes the writer gate. This keeps a mounted write from seeing
+`Busy` solely because reconciliation is reading its pinned frontier, without
+holding the gate while it waits for that window. The deadline and window count
+are unchanged (source update after `d6bc594f2`).
 
 The new overlay, Branch context, canonical base, baseline epoch and revision are
 installed together under the final gate and state lock. Only eligible old roots are

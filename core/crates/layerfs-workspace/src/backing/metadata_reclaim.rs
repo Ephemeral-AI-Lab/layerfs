@@ -11,7 +11,7 @@ use crate::*;
 use std::{
     fs, io,
     sync::{atomic::Ordering, Arc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 impl RootOwner {
     pub(super) fn cleanup_step(
@@ -466,8 +466,20 @@ impl MetadataHost {
                 ..MetadataCleanupReport::default()
             });
         }
-        let _writer = self.writer()?;
-        let mut lease = self.payloads.window(3, 4)?;
+        // Reconciliation builds without the writer gate but owns this I/O
+        // window. Wait for it before taking the gate, so mounted mutation
+        // maintenance cannot surface a transient Busy or block its release.
+        let mut lease = loop {
+            match self.payloads.window(3, 4) {
+                Ok(lease) => break lease,
+                Err(WorkspaceError::Busy) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+                Err(WorkspaceError::Busy) => return Err(WorkspaceError::Deadline),
+                Err(error) => return Err(error),
+            }
+        };
+        let _writer = self.writer_until(deadline)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = MetadataCleanupReport::default();
         loop {
