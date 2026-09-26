@@ -149,6 +149,13 @@ are reused. Those require the cross-layer gates below.
 
 ## 4. Commit lineage and concurrency
 
+The [animated Commit timeline](assets/incremental-commit-private-backing.gif)
+shows the shell, active Workspace, private backing, frozen Commit and Store
+heads in separate lanes. Its accompanying text below remains the source for
+the capture, reconciliation and failure qualifications.
+
+![Ten-step incremental Commit timeline showing frozen G1 and live G2 roots sharing private backing while C1 and C2 publish in sequence](assets/incremental-commit-private-backing.gif)
+
 ```text
  time -------------------------------------------------------------->
 

@@ -32,7 +32,9 @@ tracked by #248 and #249 below.
   maps the private file tree, payload backing, canonical Commit result and
   daemon ownership to explicit asymptotic costs and proof gates. Its companion
   studies cover the [private backing and page tree](PRIVATE_BACKING_AND_PAGE_TREE.md)
-  and [final-delta Commit](FINAL_DELTA_COMMIT_COMPLEXITY.md).
+  and [final-delta Commit](FINAL_DELTA_COMMIT_COMPLEXITY.md). The
+  [animated Commit timeline](assets/incremental-commit-private-backing.gif)
+  follows the shell, live Workspace, private backing, frozen root and Store.
 - [Implementation plan](IMPLEMENTATION_PLAN.md) sequences root-cause repair,
   local index work, Commit transport, concurrency proof and prospective gates.
 - [Phase 1 verification](VERIFICATION_PHASE1.md) distinguishes the retained
