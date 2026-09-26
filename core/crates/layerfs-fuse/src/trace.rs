@@ -1,6 +1,8 @@
 //! Env-gated per-callback diagnostics for the mounted adapter.
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
+use std::sync::OnceLock;
+use std::time::Instant;
 
 /// Prints one line per callback the adapter admitted.
 ///
@@ -15,5 +17,7 @@ pub(crate) fn trace(operation: &str, name: Option<&OsStr>, detail: &str) {
     let name = name.map_or_else(String::new, |name| {
         format!(" name={}", String::from_utf8_lossy(name.as_bytes()))
     });
-    eprintln!("LFS_FUSE_CALLBACK v=1 op={operation}{name} {detail}");
+    static START: OnceLock<Instant> = OnceLock::new();
+    let at_us = START.get_or_init(Instant::now).elapsed().as_micros();
+    eprintln!("LFS_FUSE_CALLBACK v=1 at_us={at_us} op={operation}{name} {detail}");
 }
