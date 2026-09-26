@@ -49,7 +49,7 @@ mod linux {
             f.workspace.metadata_status().unwrap()
         );
     }
-    fn edits_since(f: &Fixture, from: usize) -> Vec<(Root, u64, Vec<Edit>)> {
+    fn edits_since(f: &Fixture, from: usize) -> Vec<(Root, u64, u32, u64)> {
         f.native.observations.lock().unwrap().operations[from..]
             .iter()
             .filter_map(|op| match op {
@@ -57,7 +57,8 @@ mod linux {
                     root,
                     base_length,
                     edits,
-                } => Some((*root, *base_length, edits.clone())),
+                    replacement,
+                } => Some((*root, *base_length, *edits, *replacement)),
                 _ => None,
             })
             .collect()
@@ -121,40 +122,30 @@ mod linux {
     }
 
     #[test]
-    #[ignore = "requires exact zero-source envelope and real Commit"]
+    #[ignore = "requires exact zero-source stream and real Commit"]
     fn resize_envelope() {
         let f = Fixture::new(Gate::None);
         let (data, handle) = open(&f, b"data.bin");
         resize(&f, data.serial, 0);
-        resize(&f, data.serial, 8 * 1024 * 1024);
-        let attrs = f.workspace.getattr(data.serial).unwrap();
+        // The retired 8 MiB replay envelope no longer refuses a larger zero
+        // extension: the declared replacement total streams to the service
+        // bounded only by the file ceiling, and zero bytes still allocate no
+        // private payload.
+        resize(&f, data.serial, 9 * 1024 * 1024);
         let status = f.workspace.status().unwrap();
-        assert_eq!(
-            f.workspace
-                .set_len(data.serial, 8 * 1024 * 1024 + 1, deadline())
-                .unwrap_err(),
-            WorkspaceError::Capacity
-        );
-        assert_eq!(f.workspace.getattr(data.serial).unwrap(), attrs);
-        let after = f.workspace.status().unwrap();
-        assert_eq!(
-            (after.generation, after.revision, after.dirty_inodes),
-            (status.generation, status.revision, status.dirty_inodes)
-        );
-        assert_eq!(f.read(handle, 8 * 1024 * 1024 - 64, 64), vec![0; 64]);
+        assert_eq!(status.dirty_inodes, 1);
+        assert_eq!(f.read(handle, 9 * 1024 * 1024 - 64, 64), vec![0; 64]);
         let backing = f.workspace.backing_status().unwrap();
         assert_eq!(backing.payloads, 0);
         assert!(backing.allocated_bytes < 128 * 1024);
         let before = position(&f);
         let report = commit(&f);
         let content = saved(&f, &report, b"data.bin");
-        assert_eq!(content.2, 8 * 1024 * 1024);
+        assert_eq!(content.2, 9 * 1024 * 1024);
         let edits = edits_since(&f, before);
         assert_eq!(edits.len(), 1);
-        assert_eq!(
-            edits[0].2.iter().map(|e| e.replacement).sum::<u64>(),
-            8 * 1024 * 1024
-        );
+        assert_eq!(edits[0].2, 1);
+        assert_eq!(edits[0].3, 9 * 1024 * 1024);
         for start in (0..content.2).step_by(MAX_READ_BYTES) {
             assert!(f
                 .native
@@ -162,17 +153,18 @@ mod linux {
                 .iter()
                 .all(|b| *b == 0));
         }
+        // A further extension past the old ceiling also succeeds now; the
+        // replacement total is still an explicit declared figure.
         f.edit(b"data.bin", 0, 0, b"x");
-        let attrs = f.workspace.getattr(data.serial).unwrap();
+        f.workspace
+            .set_len(data.serial, 16 * 1024 * 1024 + 1, deadline())
+            .unwrap();
         assert_eq!(
-            f.workspace
-                .set_len(data.serial, 16 * 1024 * 1024 + 1, deadline())
-                .unwrap_err(),
-            WorkspaceError::Capacity
+            f.workspace.getattr(data.serial).unwrap().size,
+            16 * 1024 * 1024 + 1
         );
-        assert_eq!(f.workspace.getattr(data.serial).unwrap(), attrs);
         observe(&f);
-        check("zero-input-exact-eight-MiB-bound-without-payload-allocation");
+        check("zero-input-streams-past-the-retired-eight-MiB-envelope-without-payload-allocation");
     }
 
     #[test]
@@ -211,18 +203,7 @@ mod linux {
         let before = position(&f);
         let next = commit(&f);
         let edits = edits_since(&f, before);
-        assert_eq!(
-            edits,
-            vec![(
-                g.1,
-                128,
-                vec![Edit {
-                    start: 48,
-                    end: 128,
-                    replacement: 52
-                }]
-            )]
-        );
+        assert_eq!(edits, vec![(g.1, 128, 1, 52)]);
         let content = saved(&f, &next, b"data.bin");
         assert_eq!(content.2, 100);
         assert_eq!(
@@ -252,18 +233,7 @@ mod linux {
         let before = position(&f);
         let second = commit(&f);
         let edits = edits_since(&f, before);
-        assert_eq!(
-            edits,
-            vec![(
-                g.1,
-                128,
-                vec![Edit {
-                    start: 80,
-                    end: 84,
-                    replacement: 4
-                }]
-            )]
-        );
+        assert_eq!(edits, vec![(g.1, 128, 1, 4)]);
         let content = saved(&f, &second, b"data.bin");
         assert_eq!(
             f.native.bytes(content.1, 78, 8),
@@ -447,10 +417,10 @@ mod linux {
             .operations
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile { edits, .. } => Some(edits),
+                Operation::EditFile { replacement, .. } => Some(replacement),
                 _ => None,
             })
-            .all(|edits| edits.iter().all(|edit| edit.replacement == 0)));
+            .all(|replacement| *replacement == 0));
         drop(observed);
         observe(&f);
         check("all-104-inode-shrinks-save-once-with-hardlink-sharing");

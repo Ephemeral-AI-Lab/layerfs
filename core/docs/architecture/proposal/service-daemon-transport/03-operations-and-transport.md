@@ -101,21 +101,24 @@ adapter exposes EOF only after a valid `END_INPUT`, never merely because a socke
 read temporarily produced no bytes. Zero-length input still requires explicit
 input completion before publication.
 
-**Known edits require replayable input.** `EditSource::read_at(index, offset, dst)`
-is not a one-pass socket interface. The comparison and edit construction paths
-may read replacement bytes again. The initial proposed implementation receives
-replacement parts into explicitly reserved, capped service memory before calling
-`apply_edits`; it does not claim file-size-independent memory for arbitrary edits.
-The per-op replay cap `R_replay` and aggregate admission charge are specified in
-the resource profile; complete-file total byte allowance `R_request` may exceed both
-`F` and `W` because that route is sequential. A request above that cap fails before mutation. A separately designed,
-bounded file-backed replay source could later serve larger replacements; there
-is no automatic spool fallback, and its disk/page-cache/cleanup costs would have
-to be charged and verified. Do not flatten known edits into a complete new file
-just to fit a sequential transport abstraction. Before implementation, decide how
-every required edit workload fits the supported replay route. A required case that
-does not fit is `NOT_RUN` with its reason until the design is resolved; do not
-shrink its input or move acquisition/replay work outside its measurement timer.
+**Known edits stream their descriptors and replay from a bounded spool.** The
+`EditFile` `Begin` frame declares the edit count and the replacement total; the
+packed descriptors — 24 bytes per edit, in declared order — ride the body stream
+as its prefix, and the replacement bytes follow them. The service parses that
+prefix, validates the stream arithmetic the `Begin` frame cannot see (ordering,
+overlap and the accumulated final length, in current-result coordinates), and
+takes the replacement bytes once into a bounded spool: a resident window (64 KiB)
+for small totals, a service-side replay file for larger ones. `EditSource::read_at`
+is not a one-pass socket interface — the comparison and construction paths may
+read replacement bytes again — so the spool is what the builder replays from,
+and one operation's resident replacement cost never grows past the window plus
+the copy buffer, whatever the file size. The declared replacement total is
+bounded by the file ceiling `MAX_FILE` (4 GiB), and the descriptor count by the
+explicit per-operation edit budget shared with the builder's `EditStream`
+(4,096 edits, 96 KiB of descriptors at the cap). There is no automatic spool
+fallback beyond the one bounded file, and its disk/page-cache cost is charged
+to the operation and cleaned deterministically. Do not flatten known edits into
+a complete new file just to fit a sequential transport abstraction.
 
 Edit coordinates are **current-result coordinates**, and the current C1 stream
 rejects an edit reaching back into bytes an earlier replacement introduced. Keep

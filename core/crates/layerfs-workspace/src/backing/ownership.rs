@@ -473,6 +473,45 @@ impl Arena {
         }
         result
     }
+    /// Reads one page's encoded body without decoding it, for the page kinds
+    /// whose body is not a keyed cell list. Identity and address are checked
+    /// exactly as `load` checks them.
+    pub fn load_raw(
+        &self,
+        r: PageRef,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
+        clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        let owner = self.read_owner(r, window, deadline)?;
+        if owner.role != 1 {
+            return Err(WorkspaceError::Io);
+        }
+        let file = segments::open(
+            self.directory
+                .file()
+                .map_err(|error| self.read_error(BackingPhase::Read, error))?
+                .as_ref(),
+            &page_name(r),
+        )
+        .map_err(|error| self.read_error(BackingPhase::Read, error))?;
+        self.validate_file(&file, (owner.device, owner.inode), BackingPhase::Read)?;
+        segments::read(&file, window, 0, metadata_pages::PAGE)
+            .map_err(|error| self.read_error(BackingPhase::Read, error))?;
+        drop(file);
+        let mut bytes = [0; metadata_pages::PAGE];
+        bytes.copy_from_slice(&window.0[..metadata_pages::PAGE]);
+        // A body this reader cannot address is a corrupt page, exactly as a
+        // failed decode is.
+        if metadata_pages::verify(&bytes).is_err() {
+            self.host()?.quarantine(self, true);
+            self.state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .unrecoverable = true;
+        }
+        Ok(bytes)
+    }
     pub fn custody(
         &self,
         candidate: &RootOwner,
@@ -760,6 +799,80 @@ impl RootOwner {
             }
         }
         result
+    }
+    /// Writes one page whose body an encoder fills for the allocated identity.
+    /// Ownership, references and accounting are the same as `write_page`; the
+    /// raw form exists because a piece page is not a keyed-cell page.
+    pub(crate) fn write_raw_page<S>(
+        &self,
+        window: &mut Window,
+        deadline: Instant,
+        encode: impl FnOnce(PageRef, &mut [u8]) -> Result<S, WorkspaceError>,
+    ) -> Result<(PageRef, S), WorkspaceError> {
+        if self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .temporary
+            .len()
+            == 128
+        {
+            return Err(WorkspaceError::Capacity);
+        }
+        let r = self.arena.allocate_slot(self, window, deadline)?;
+        let state = encode(r, &mut window.0[..PAGE])?;
+        // A page's edges are declared by the page itself, and the window is the
+        // only place the encoded bytes exist: the ledger write below reuses the
+        // same window page, so the edges must be taken before it.
+        let edges = super::metadata_index::edges_raw(
+            self.arena.directory.incarnation,
+            r,
+            &window.0[..PAGE],
+        )?;
+        let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.arena.set_owner(
+            r,
+            Owner {
+                epoch: r.epoch,
+                role: 1,
+                refs: 1,
+                device: identity.0,
+                inode: identity.1,
+                ..Owner::default()
+            },
+            window,
+            deadline,
+        )?;
+        {
+            let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            s.temporary.push(r);
+            s.pending = None;
+            s.slot_pending = None;
+        }
+        self.arena
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .pages += 1;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = Some((r, 0));
+        for (index, edge) in edges.into_iter().enumerate() {
+            self.arena.change_refs(edge, 1, window, deadline)?;
+            self.state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .edge_progress = Some((r, index + 1));
+        }
+        let mut owner = self.arena.read_owner(r, window, deadline)?;
+        owner.edges = true;
+        self.arena.set_owner(r, owner, window, deadline)?;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = None;
+        Ok((r, state))
     }
     pub fn write_page(
         &self,

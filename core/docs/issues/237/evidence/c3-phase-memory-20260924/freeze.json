@@ -1,0 +1,14 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "output": "benchmark-results/fs-bench-pro/issue237-c3-phase-memory-20260924-01",
+  "profile": "Cargo locked release",
+  "purpose": "phase-local memory cause counts; no performance arm",
+  "sha256": {
+    "diff": "0504af8a2ba01354ecf2b6d44664084fcf0da5034fd8bd94bd8c2da23d3ed61c",
+    "driver": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+    "master_manifest": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "runner": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f"
+  },
+  "source_commit": "c6751e8aaed12f5bf0ee063ff8703f234e2add06",
+  "status": "FROZEN_BEFORE_BUILD"
+}

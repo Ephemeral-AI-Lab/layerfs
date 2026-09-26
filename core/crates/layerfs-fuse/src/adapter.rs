@@ -1,5 +1,6 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
 use crate::replies::{attributes, errno, inode, kind, serial};
+use crate::trace::trace;
 use fuser::*;
 use layerfs_workspace::{
     filesystem::projection_counters::ProjectionOp, FileAccess, FileCreateOptions, FileOpenOptions,
@@ -247,6 +248,11 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
+        trace(
+            "read",
+            None,
+            &format!("ino={} offset={offset} size={size}", ino.0),
+        );
         let permit = self.observe(req, ProjectionOp::Read);
         let result = permit
             .as_ref()
@@ -439,6 +445,11 @@ impl Filesystem for Adapter {
         flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
+        trace(
+            "setattr",
+            None,
+            &format!("ino={} size={size:?} mode={mode:?}", ino.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
         // The callback class is counted as observed, before any refusal, so the
         // count describes what the kernel asked for rather than what succeeded.
@@ -537,6 +548,11 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        trace(
+            "write",
+            None,
+            &format!("ino={} offset={offset} len={}", ino.0, data.len()),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
         self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
@@ -655,6 +671,11 @@ impl Filesystem for Adapter {
         _umask: u32,
         reply: ReplyEntry,
     ) {
+        trace(
+            "mkdir",
+            Some(name),
+            &format!("parent={} mode={mode:o}", parent.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
         self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
@@ -691,6 +712,7 @@ impl Filesystem for Adapter {
         }
     }
     fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        trace("unlink", Some(name), &format!("parent={}", parent.0));
         let deadline = Instant::now() + CALLBACK_BUDGET;
         self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
@@ -713,6 +735,7 @@ impl Filesystem for Adapter {
         }
     }
     fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        trace("rmdir", Some(name), &format!("parent={}", parent.0));
         let deadline = Instant::now() + CALLBACK_BUDGET;
         self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
@@ -783,6 +806,17 @@ impl Filesystem for Adapter {
         reply: ReplyEmpty,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        trace(
+            "rename",
+            Some(name),
+            &format!(
+                "parent={} new_parent={} new_name={} flags={:#x}",
+                parent.0,
+                new_parent.0,
+                String::from_utf8_lossy(new_name.as_bytes()),
+                flags.bits()
+            ),
+        );
         self.workspace.record_projection_call(ProjectionOp::Rename);
         // RENAME_NOREPLACE is the only selected flag; exchange and whiteout stay
         // unsupported and are refused before any publication.
@@ -868,6 +902,11 @@ impl Filesystem for Adapter {
         requested: i32,
         reply: ReplyCreate,
     ) {
+        trace(
+            "create",
+            Some(name),
+            &format!("parent={} mode={mode:o} flags={requested:#x}", parent.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
         self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {

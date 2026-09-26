@@ -1,13 +1,15 @@
-pub(crate) mod budget;
-pub(crate) mod directory;
-pub(crate) mod metadata;
+pub mod budget;
+pub mod directory;
+pub mod metadata;
+pub mod metadata_cursor;
 pub(crate) mod metadata_index;
-pub(crate) mod metadata_pages;
+pub mod metadata_pages;
+pub mod metadata_pieces;
 pub(crate) mod metadata_reclaim;
 pub(crate) mod ownership;
-pub(crate) mod payload;
+pub mod payload;
 pub(crate) mod reader;
 pub(crate) mod reclaim;
-pub(crate) mod segments;
+pub mod segments;
 
 mod metadata_build;

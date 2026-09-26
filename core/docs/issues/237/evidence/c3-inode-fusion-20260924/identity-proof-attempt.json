@@ -1,0 +1,18 @@
+{
+  "candidate": {
+    "root": "ed3d72e767933fd53628c0771e888872dea3a1448fbd91ffcf6549991baab7fa",
+    "root_serial": 1,
+    "stack_body": "aceed4a34eda6c353d279facc9772a44"
+  },
+  "control": {
+    "root": "1d4d21fdd9d565c9cff45c689628d70a99a433cf992a7448b520585cddff8561",
+    "root_serial": 1,
+    "stack_body": "642a550c389b6b60e96d8946e6073d33"
+  },
+  "fixture": "three regular files, root plus nested and empty directory",
+  "interpretation": "different root IDs are expected under different scope seeds; no exact-root comparison or performance claim",
+  "purpose": "untimed fixed-key small-source canonical identity check",
+  "raw_output": "benchmark-results/fs-bench-pro/issue237-inode-fusion-identity-proof-20260924-01",
+  "reason": "public Service::init_project reads new random stack and scope authority from /dev/urandom inside each call; fixed host binding/private/cursor keys do not fix that identity",
+  "status": "NOT_COMPARABLE"
+}

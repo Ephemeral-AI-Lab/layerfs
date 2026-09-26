@@ -1,0 +1,60 @@
+{
+  "candidate": {
+    "peak_rss_bytes": 127631360,
+    "phase_peak_rss_bytes": {
+      "file_loop_end": 105332736,
+      "file_save_end": 105332736,
+      "history_published": 127631360,
+      "import_begin": 22773760,
+      "namespace_entry": 105332736,
+      "namespace_save_end": 127631360,
+      "prereq_end": 105332736,
+      "scan_end": 75841536,
+      "tree_build_end": 127057920,
+      "tree_input": 105332736
+    },
+    "product_seal": "79eef35961f0ccc1a837507871cabe0d40b650465546639933cc5828897c44c1",
+    "raw_operation_ns": 5410089250,
+    "receipt": "candidate/receipt.json",
+    "store_apparent_bytes": 519819264
+  },
+  "control": {
+    "peak_rss_bytes": 145686528,
+    "phase_peak_rss_bytes": {
+      "file_loop_end": 106708992,
+      "file_save_end": 106708992,
+      "history_published": 145686528,
+      "import_begin": 22675456,
+      "namespace_entry": 106708992,
+      "namespace_save_end": 145686528,
+      "prereq_end": 106708992,
+      "scan_end": 76185600,
+      "tree_build_end": 142229504,
+      "tree_input": 120143872
+    },
+    "product_seal": "c2e50eecfed39038a1d6f943acd6741ebe5fa85c57e57846d12af21428c83c3a",
+    "raw_operation_ns": 5406411000,
+    "receipt": "core/docs/issues/237/evidence/c3-entry-memory-20260924/control/receipt.json",
+    "store_apparent_bytes": 519901184
+  },
+  "decision": {
+    "job_frontier_condition_met": false,
+    "met": true,
+    "oracle": "PASS",
+    "performance": "INELIGIBLE; metadata cache unqualified; raw times diagnostic only",
+    "threshold_bytes": 4194304
+  },
+  "explicit_avoided_reservations_bytes": 9110312,
+  "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+  "limitations": [
+    "one sample per arm",
+    "control/candidate independent stack/scope and Store/History",
+    "exact canonical root equality not checked in this diagnostic",
+    "sparse-history #229 gate separate"
+  ],
+  "namespace_interval_highwater_reduction_bytes": 16678912,
+  "peak_reduction_bytes": 18055168,
+  "peak_reduction_mib": 17.21875,
+  "raw_call_delta_ns": 3678250,
+  "schema": "issue237-inode-fusion-one-shot-memory-v1"
+}

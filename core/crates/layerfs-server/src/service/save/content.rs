@@ -1,4 +1,5 @@
 //! One C2 save per mutation. Root delivery follows validated EOF and finish.
+use super::edit_stream;
 use super::{filesystem, metadata, validation::validate_inode_role};
 use crate::service::input::Exact;
 use crate::service::{
@@ -10,7 +11,7 @@ use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;
 use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream, Replacements};
+use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream};
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{io::Read, time::Instant};
@@ -21,15 +22,25 @@ pub fn mutate(
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
-    // Replay acquisition is part of this operation and precedes mutation ownership.
-    let mut replacements = Replacements::new();
-    if let Operation::EditFile { edits, .. } = &r.operation {
-        for e in edits {
-            let n = usize::try_from(e.replacement).map_err(|_| Code::Capacity)?;
-            let mut part = vec![0; n];
-            input.read_exact(&mut part)?;
-            replacements.push(part);
-        }
+    // Descriptor parsing and replacement acquisition are part of this operation
+    // and precede mutation ownership. The descriptors ride the body stream as
+    // its prefix and the replacement bytes follow them; the spool the builder
+    // replays from is bounded resident, or a service-side file for large totals.
+    let mut edit_input = None;
+    if let Operation::EditFile {
+        base_length,
+        edits,
+        replacement,
+        ..
+    } = &r.operation
+    {
+        edit_input = Some(edit_stream::read(
+            input,
+            *base_length,
+            *edits,
+            *replacement,
+            deadline,
+        )?);
         end_input(input)?;
     }
     if matches!(
@@ -85,28 +96,28 @@ pub fn mutate(
             })
         }
         Operation::EditFile {
-            root,
-            base_length,
-            edits,
+            root, base_length, ..
         } => {
-            let cdc_input_bytes: u64 = edits.iter().map(|edit| edit.replacement).sum();
-            let edits = EditStream::new(
+            let edit_input = edit_input.as_ref().ok_or(Code::InvalidInput)?;
+            let cdc_input_bytes: u64 = edit_input.edits().iter().map(|edit| edit.replacement).sum();
+            let stream = EditStream::new(
                 *base_length,
-                edits
+                edit_input
+                    .edits()
                     .iter()
                     .map(|e| layerfs_content::Edit::new(e.start, e.end, e.replacement))
                     .collect(),
             )
             .map_err(content);
-            edits.and_then(|edits| {
+            stream.and_then(|stream| {
                 apply_edits(
                     policy,
                     &capacities,
                     &provider,
                     EditRequest {
                         root: id(root),
-                        edits: &edits,
-                        source: &replacements,
+                        edits: &stream,
+                        source: edit_input,
                     },
                     &mut handoff,
                     scope.child("service.edit"),
@@ -114,7 +125,9 @@ pub fn mutate(
                 .map(|f| {
                     if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
                         eprintln!(
-                            "LFS_C1_EDIT_COUNT v=1 cdc_input_bytes={cdc_input_bytes} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
+                            "LFS_C1_EDIT_COUNT v=1 cdc_input_bytes={cdc_input_bytes} spool_bytes={} spool_resident={} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
+                            edit_input.bytes,
+                            edit_input.resident(),
                             f.counters.nodes_read,
                             f.counters.nodes_created,
                             f.counters.payloads_created,

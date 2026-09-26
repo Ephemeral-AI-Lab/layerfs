@@ -25,7 +25,15 @@ pub const CONSTRUCT_SYMLINK_REQUEST_BYTES: usize = 29 + SYMLINK_TARGET_BYTES;
 /// Store's own configured budget (`max_concurrent_writes`, #216), so a busy
 /// writer set no longer refuses reads.
 pub const MAX_READ_OPERATIONS: usize = 2;
-pub const MAX_REPLAY: u64 = 8 * 1024 * 1024;
+/// Largest number of edit descriptors one `EditFile` operation may declare.
+///
+/// The descriptors ride the body stream as a packed 24-byte-per-edit prefix, so
+/// this bound prices the descriptor list both sides materialize for validation
+/// (24 B/edit, 96 KiB at the cap) — it is the same per-operation budget the
+/// content builder's `EditStream` enforces, declared once here so a request is
+/// refused before a byte flows. It is an explicit resource budget, not a
+/// transport frame limit.
+pub const MAX_EDITS_PER_OPERATION: u32 = 4_096;
 
 /// Persistent/handshaking/closing sessions a transport admits for one Store.
 ///
@@ -80,7 +88,12 @@ pub enum Operation {
     EditFile {
         root: Root,
         base_length: u64,
-        edits: Vec<Edit>,
+        /// Declared count of edit descriptors. The packed descriptors — 24
+        /// bytes each, in the declared edit order — are the **prefix of this
+        /// operation's body stream**; they are not carried in the Begin frame.
+        edits: u32,
+        /// Declared total replacement bytes that follow the descriptor block.
+        replacement: u64,
     },
     UpdatePreparedFilesystem {
         base: Root,
@@ -363,9 +376,14 @@ impl Operation {
     pub fn input_length(&self) -> Result<u64, Failure> {
         match self {
             Self::ConstructFile { length } => Ok(*length),
-            Self::EditFile { edits, .. } => edits.iter().try_fold(0u64, |sum, e| {
-                sum.checked_add(e.replacement).ok_or(Code::Capacity.into())
-            }),
+            Self::EditFile {
+                edits, replacement, ..
+            } => {
+                let descriptors = u64::from(*edits).checked_mul(24).ok_or(Code::Capacity)?;
+                descriptors
+                    .checked_add(*replacement)
+                    .ok_or_else(|| Code::Capacity.into())
+            }
             _ => Ok(0),
         }
     }
@@ -441,31 +459,24 @@ impl Request {
                 }
             }
             Operation::EditFile {
-                base_length, edits, ..
+                base_length,
+                edits,
+                replacement,
+                ..
             } => {
-                if edits.len() > 256
-                    || *base_length > MAX_FILE
-                    || self.operation.input_length()? > MAX_REPLAY
+                // The descriptor list rides the body stream, so this validates
+                // only what the Begin frame itself declares: the base ceiling,
+                // the explicit per-operation descriptor budget, and the two
+                // stream totals whose sum bounds the input. Ordering, overlap
+                // and the accumulated final length are validated by the
+                // server when it parses the descriptor block from the stream.
+                if *base_length > MAX_FILE
+                    || *edits > MAX_EDITS_PER_OPERATION
+                    || *replacement > MAX_FILE
+                    || (*edits == 0 && *replacement > 0)
+                    || self.operation.input_length()? > MAX_FILE
                 {
                     return Err(Code::Capacity.into());
-                }
-                let mut length = *base_length;
-                let mut previous = 0;
-                for edit in edits {
-                    if edit.start < previous || edit.start > edit.end || edit.end > length {
-                        return Err(invalid());
-                    }
-                    length = length
-                        .checked_sub(edit.end - edit.start)
-                        .and_then(|n| n.checked_add(edit.replacement))
-                        .ok_or_else(invalid)?;
-                    previous = edit
-                        .start
-                        .checked_add(edit.replacement)
-                        .ok_or_else(invalid)?;
-                    if length > MAX_FILE {
-                        return Err(Code::Capacity.into());
-                    }
                 }
             }
             Operation::Inspect { query, .. } => match query {

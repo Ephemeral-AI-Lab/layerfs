@@ -21,9 +21,11 @@ impl RootOwner {
         let mut previous: Option<Cell> = None;
         while let Some(cell) = next(window)? {
             total += 1;
+            // The key kind owns its own length bound; a name kind carries up to
+            // 255 name bytes, so a fixed ceiling here would refuse an ordinary
+            // long file name exactly when its name page is rebuilt.
             if total > 256
-                || cell.key_len > 17
-                || !matches!(cell.key()[0], b'D' | b'E' | b'I' | b'N' | b'T')
+                || crate::backing::metadata_index::stored_key_limit(cell.key()).is_err()
                 || previous.as_ref().is_some_and(|old| old.key() >= cell.key())
             {
                 return Err(WorkspaceError::Io);

@@ -1,0 +1,110 @@
+{
+  "highwater_file_loop_from_scan": 27099136,
+  "highwater_namespace_from_file_loop": 31080448,
+  "highwater_scan_from_import_begin": 75595776,
+  "limitations": [
+    "cumulative high-water changes locate an interval but are not an additive heap ledger",
+    "current RSS point readings can miss within-interval maxima",
+    "old and C3 public routes have different representations and cache metadata is unqualified"
+  ],
+  "measurement": "Darwin proc_pid_rusage current RSS/physical footprint and getrusage cumulative high-water at ordered product boundary marks",
+  "namespace_vector_reservation_bytes": 18838440,
+  "old_retained_t1_peak_rss": 92405760,
+  "phase_diagnostic_peak_minus_old": 64061440,
+  "rows": [
+    {
+      "current_rss": 22691840,
+      "footprint": 21070184,
+      "label": "import_begin",
+      "peak_rss": 22691840
+    },
+    {
+      "current_rss": 98287616,
+      "footprint": 96616880,
+      "label": "scan_end",
+      "new_highwater_since_previous": 75595776,
+      "peak_rss": 98287616
+    },
+    {
+      "current_rss": 120668160,
+      "footprint": 82952792,
+      "label": "file_loop_end",
+      "new_highwater_since_previous": 27099136,
+      "peak_rss": 125386752
+    },
+    {
+      "current_rss": 111804416,
+      "footprint": 82838056,
+      "label": "file_save_end",
+      "new_highwater_since_previous": 0,
+      "peak_rss": 125386752
+    },
+    {
+      "current_rss": 111820800,
+      "footprint": 82838056,
+      "label": "namespace_entry",
+      "new_highwater_since_previous": 0,
+      "peak_rss": 125386752
+    },
+    {
+      "current_rss": 118390784,
+      "footprint": 89326120,
+      "label": "prereq_end",
+      "new_highwater_since_previous": 0,
+      "peak_rss": 125386752
+    },
+    {
+      "current_rss": 134168576,
+      "footprint": 105103936,
+      "label": "tree_input",
+      "new_highwater_since_previous": 8781824,
+      "peak_rss": 134168576
+    },
+    {
+      "current_rss": 153632768,
+      "footprint": 115655256,
+      "label": "tree_build_end",
+      "new_highwater_since_previous": 19464192,
+      "peak_rss": 153632768
+    },
+    {
+      "current_rss": 147668992,
+      "footprint": 118456896,
+      "label": "namespace_save_end",
+      "new_highwater_since_previous": 2834432,
+      "peak_rss": 156467200
+    },
+    {
+      "current_rss": 147685376,
+      "footprint": 118456896,
+      "label": "history_published",
+      "new_highwater_since_previous": 0,
+      "peak_rss": 156467200
+    }
+  ],
+  "status": "DIAGNOSTIC",
+  "vectors": [
+    {
+      "entries": 101001,
+      "entries_reserved": 14680064,
+      "identified_inventory_min_bytes": 54753736,
+      "jobs": 100000,
+      "jobs_reserved": 23068672,
+      "name_lengths": 705000,
+      "path_lengths": 16300000,
+      "phase": "scan"
+    },
+    {
+      "content_roots_reserved": 3232032,
+      "metadata_reserved": 3232032,
+      "phase": "prereq",
+      "serials_reserved": 808008
+    },
+    {
+      "directories_reserved": 32032,
+      "entries": 101001,
+      "inodes_reserved": 11534336,
+      "phase": "tree_input"
+    }
+  ]
+}

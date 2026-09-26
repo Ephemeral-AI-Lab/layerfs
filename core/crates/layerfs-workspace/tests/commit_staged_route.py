@@ -7,10 +7,12 @@ driver.CASES = {
     'remote_admission': ['remote-admission-refusal-leaves-stage-usable-without-replay'],
     'repeated': ['same-Workspace-A-B-A-commits-preserve-handles-and-incremental-input', 'known-commit-clean-close'],
     'successor': ['late-D1-reconciliation-keeps-exact-G-coordinates-and-old-reply'],
+    'mounted_successor': ['mounted-three-generation-convergence-keeps-old-heads-and-ordered-writes'],
+    'mounted_build_overlap': ['mounted-B-accepted-during-real-successor-page-read-and-old-heads-stay-exact'],
     'selectors': ['foreign-expired-dropped-and-consumed-selectors-never-replay'],
     'denied': ['actual-commit-denial-retains-stage-and-local-state'],
     'lost_result': ['native-lost-commit-result-stays-unknown-despite-later-observation'],
-    'reconcile_failure': ['known-C5-success-survives-native-reconciliation-failure'],
+    'reconcile_failure': ['known-C5-success-retries-local-reconciliation-without-replay'],
     'consumed_stage': ['consumed-token-and-identical-root-do-not-prove-own-success'],
     'head_moved': ['Branch-move-preserves-exact-losing-stage'],
     'cycles': ['repeated-commit-frontiers-and-eligible-root-cleanup-stay-bounded'],
@@ -21,6 +23,8 @@ driver.REQUIREMENTS = {
     'remote_admission': ['S-12', 'B-26'],
     'repeated': ['S-14', 'S-18', 'H-03', 'B-28'],
     'successor': ['S-04', 'S-05', 'S-16', 'S-18', 'H-03'],
+    'mounted_successor': ['S-04', 'S-05', 'S-16', 'S-18', 'H-03'],
+    'mounted_build_overlap': ['S-04', 'S-05', 'S-16', 'S-18', 'H-03'],
     'selectors': ['S-12', 'H-06'],
     'denied': ['S-15', 'H-07'],
     'lost_result': ['H-07', 'H-09', 'H-10'],
@@ -41,7 +45,7 @@ driver.LIMIT_CASES = ('reconcile_failure',)
 driver.DENIED_COMMIT_CASE = 'denied'
 driver.PROXY_CASE = 'lost_result'
 driver.NOT_RUN = ['actual UpToDate: current public mutations always assign mtime and clean Stage is refused',
-                  'composite Commit and explicit failed-state disposition', 'mounted writes',
+                  'composite Commit and explicit failed-state disposition',
                   'namespace mutations and npm', 'R6', 'hard RSS/cgroup bound',
                   'full read/directory in-flight and capture/prepared-mutation schedules']
 

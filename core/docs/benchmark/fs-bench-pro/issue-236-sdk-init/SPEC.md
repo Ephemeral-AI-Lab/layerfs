@@ -3,6 +3,9 @@
 > Frozen before the first SDK-route timed sample. This adds a separate route to
 > the existing #231 case shapes; it does not change or promote daemon-host
 > receipts. Source basis: `67946e5759302d3bdca27aeb482d56384068557d`.
+> **Historical profile:** its debug-only build rule was superseded by the
+> [2026-09-24 release-only selection](../issue-231/SDK-RELEASE-FOUR-TIER-20260924.md).
+> The v1/v2 debug receipts keep their recorded statuses.
 
 ## Claim and selected cases
 

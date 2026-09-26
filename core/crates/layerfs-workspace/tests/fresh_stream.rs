@@ -240,17 +240,15 @@ mod linux {
                 Operation::EditFile {
                     root,
                     base_length,
-                    edits,
-                } => Some((root, base_length, edits)),
+                    replacement,
+                    ..
+                } => Some((root, base_length, replacement)),
                 _ => None,
             })
             .collect();
         assert_eq!(rows.len(), 1);
         assert_eq!((*rows[0].0, *rows[0].1), (content, length));
-        assert_eq!(
-            rows[0].2.iter().map(|e| e.replacement).sum::<u64>(),
-            replacement
-        );
+        assert_eq!(*rows[0].2, replacement);
         assert_eq!(
             ops.iter()
                 .filter(|op| matches!(op,
@@ -356,37 +354,31 @@ mod linux {
             .write_file(handle, offset, &payload, deadline())
             .unwrap();
     }
-    fn refuse_extra(f: &Fixture, serial: u64, handle: HandleId) {
-        let payload = f.own(b"!");
+    /// One more replacement byte past the retired replay envelope. The bound
+    /// no longer refuses: the byte publishes locally through the captured
+    /// local source with no RPC, and exactly one revision advances.
+    fn grow_past(f: &Fixture, serial: u64, handle: HandleId, at: u64, refresh: usize) {
         let before = f.workspace.status().unwrap();
-        let attrs = f.workspace.getattr(serial).unwrap();
         let calls = operations(f).len();
-        assert_eq!(
-            f.workspace
-                .write_file(handle, REPLAY + 4, &payload, deadline()),
-            Err(WorkspaceError::Capacity)
-        );
+        write(f, handle, at, b"!");
         let after = f.workspace.status().unwrap();
         assert_eq!(
-            (
-                after.generation,
-                after.revision,
-                after.dirty_inodes,
-                after.nodes,
-                after.handles
-            ),
-            (
-                before.generation,
-                before.revision,
-                before.dirty_inodes,
-                before.nodes,
-                before.handles
-            )
+            (after.generation, after.dirty_inodes, after.handles),
+            (before.generation, before.dirty_inodes, before.handles)
         );
-        assert_eq!(f.workspace.getattr(serial).unwrap(), attrs);
-        assert_eq!(operations(f).len(), calls);
+        assert_eq!(after.revision, before.revision + 1);
+        // A local write makes no RPC of its own. After a Commit moved the
+        // baseline, the first edit on a stale node refreshes its original
+        // facts through the branch and attributes queries, which is the
+        // designed resolution rather than write traffic.
+        assert_eq!(
+            operations(f).len(),
+            calls + refresh,
+            "unexpected write traffic; observed {:?}",
+            &operations(f)[calls..]
+        );
+        assert_eq!(f.workspace.getattr(serial).unwrap().size, at + 1);
         assert_eq!(f.read(handle, 0, 6), b"D1tail");
-        assert_eq!(f.read(handle, REPLAY + 2, 2), [0, b'Z']);
     }
     #[test]
     #[ignore = "requires native captured-G delivery and exact unchanged replay admission"]
@@ -418,10 +410,12 @@ mod linux {
         f.native.wait_entered();
         let calls = operations(&f).len();
         write(&f, handle, 0, b"D1");
-        // Captured tail contributes four Base bytes; only Local and Zero count as replay.
+        // Captured tail contributes four Base bytes; only Local and Zero count
+        // as replacement. One byte past the retired envelope still publishes
+        // locally: the retired bound no longer refuses the successor's growth.
         write(&f, handle, REPLAY + 3, b"Z");
         assert_eq!(f.workspace.getattr(a.serial).unwrap().size, REPLAY + 4);
-        refuse_extra(&f, a.serial, handle);
+        grow_past(&f, a.serial, handle, REPLAY + 4, 0);
         assert_eq!(
             operations(&f).len(),
             calls,
@@ -438,11 +432,17 @@ mod linux {
         let one = f.workspace.commit_staged(&stage, deadline()).unwrap();
         assert_eq!(one.stage_token, Some(frozen.token));
         assert_eq!(committed(&f, one), frozen.candidate_root);
-        refuse_extra(&f, a.serial, handle);
+        grow_past(&f, a.serial, handle, REPLAY + 5, 1);
         let live = f.workspace.getattr(a.serial).unwrap();
         let start = operations(&f).len();
         let two = committed(&f, f.workspace.commit(deadline()).unwrap());
-        one_edit(&operations(&f)[start..], g_content, g_metadata, 6, REPLAY);
+        one_edit(
+            &operations(&f)[start..],
+            g_content,
+            g_metadata,
+            6,
+            REPLAY + 2,
+        );
         assert_eq!(
             prepared(&operations(&f)[start..]).base,
             frozen.candidate_root
@@ -457,20 +457,20 @@ mod linux {
             expected.update(&zeros[..length]);
             remaining -= length as u64;
         }
-        expected.update(b"Z");
+        expected.update(b"Z!!");
         canonical_digest(
             &f,
             content,
-            REPLAY + 4,
+            REPLAY + 6,
             &format!("{:x}", expected.finalize()),
         );
         assert_eq!(f.read(handle, 0, 6), b"D1tail");
         assert_eq!(publications(&f), 2);
         missing(&f, before.effective_root, b"captured");
-        println!("FRESH_STREAM_REPLAY captured_survivor=4 local=3 zero={} replacement={} file_length={} plus1=Capacity before_and_after_G=true", REPLAY - 3, REPLAY, REPLAY + 4);
+        println!("FRESH_STREAM_REPLAY captured_survivor=4 local=4 zero={} replacement={} file_length={} plus1=publishes-locally before_and_after_G=true", REPLAY - 3, REPLAY + 2, REPLAY + 6);
         drop(stage);
         f.workspace.release(handle).unwrap();
-        check("captured-fresh-G-tail-survives-exact-replay-limit-before-and-after-rebase");
+        check("captured-fresh-G-tail-grows-past-the-retired-replay-limit-before-and-after-rebase");
         close(&f, a.serial);
     }
 }

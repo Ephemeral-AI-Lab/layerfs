@@ -10,7 +10,7 @@ const VERSION: u16 = 1;
 const FIELDS_END: usize = 80;
 
 #[repr(align(4096))]
-pub(crate) struct Window(pub [u8; WINDOW_BYTES]);
+pub struct Window(pub [u8; WINDOW_BYTES]);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Header {

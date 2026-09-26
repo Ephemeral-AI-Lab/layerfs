@@ -1,5 +1,5 @@
 //! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
-use super::{lower::Dirty, source::ReplacementSource};
+use super::{lower::Dirty, source::ReplacementSource, upload};
 use crate::{
     overlay::snapshot::{SavedInode, Submission},
     *,
@@ -86,7 +86,10 @@ impl Workspace {
                 root
             } else {
                 let plan = self.lower_file(submission, inode, deadline)?;
-                if plan.edits.is_empty() && !inode.fresh {
+                // An exact zero is a version whose selected content is its
+                // own base; a splice that shared an untouched subtree records
+                // `u16::MAX` instead and is always lowered.
+                if plan.edits.is_empty() && inode.edits == 0 && !inode.fresh {
                     inode.base
                 } else {
                     submission.phase(StagePhase::FileSave, Some(serial))?;
@@ -95,45 +98,76 @@ impl Workspace {
                     let remote = first_remote
                         .take()
                         .map_or_else(|| self.begin(true, deadline), Ok)?;
-                    let response = self.remote_call(
-                        (self.inner.store, captured.generation),
-                        if inode.fresh {
+                    let saved_root = if inode.fresh {
+                        let response = self.remote_call(
+                            (self.inner.store, captured.generation),
                             Operation::ConstructFile {
                                 length: inode.length,
-                            }
-                        } else {
+                            },
+                            &mut source,
+                            0,
+                            &mut std::io::sink(),
+                            deadline,
+                        );
+                        drop(remote);
+                        if let Some(failure) = source.failure.take() {
+                            submission
+                                .state
+                                .lock()
+                                .map_err(|_| WorkspaceError::Io)?
+                                .source_failure = Some(failure);
+                        }
+                        let Response::Saved { root, length, .. } = response? else {
+                            return Err(WorkspaceError::InvalidInput);
+                        };
+                        if length != inode.length || !source.complete() {
+                            return Err(WorkspaceError::InvalidInput);
+                        }
+                        root
+                    } else {
+                        // The descriptor list is the prefix of the body stream
+                        // and the replacement bytes follow it, so an existing
+                        // file's edit pays no whole-request buffer: the request
+                        // declares the two stream totals and the bounded
+                        // lowering list packs the descriptors ahead of the
+                        // frozen sequence's replacement bytes.
+                        let mut upload = upload::EditUpload::new(&plan.edits, &mut source)?;
+                        let response = self.remote_call(
+                            (self.inner.store, captured.generation),
                             Operation::EditFile {
                                 root: inode.base,
                                 base_length: inode.base_length,
-                                edits: plan.edits,
-                            }
-                        },
-                        &mut source,
-                        0,
-                        &mut std::io::sink(),
-                        deadline,
-                    );
-                    drop(remote);
-                    if let Some(failure) = source.failure.take() {
-                        submission
-                            .state
-                            .lock()
-                            .map_err(|_| WorkspaceError::Io)?
-                            .source_failure = Some(failure);
-                    }
-                    let Response::Saved { root, length, .. } = response? else {
-                        return Err(WorkspaceError::InvalidInput);
+                                edits: plan.edits.len() as u32,
+                                replacement: plan.inode.replacement,
+                            },
+                            &mut upload,
+                            0,
+                            &mut std::io::sink(),
+                            deadline,
+                        );
+                        drop(remote);
+                        if let Some(failure) = source.failure.take() {
+                            submission
+                                .state
+                                .lock()
+                                .map_err(|_| WorkspaceError::Io)?
+                                .source_failure = Some(failure);
+                        }
+                        let Response::Saved { root, length, .. } = response? else {
+                            return Err(WorkspaceError::InvalidInput);
+                        };
+                        if length != inode.length || !source.complete() {
+                            return Err(WorkspaceError::InvalidInput);
+                        }
+                        root
                     };
-                    if length != inode.length || !source.complete() {
-                        return Err(WorkspaceError::InvalidInput);
-                    }
                     submission
                         .state
                         .lock()
                         .map_err(|_| WorkspaceError::Io)?
                         .status
                         .saved_files += 1;
-                    root
+                    saved_root
                 }
             };
             {

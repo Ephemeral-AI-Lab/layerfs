@@ -1,0 +1,55 @@
+{
+  "candidate": {
+    "peak_rss_bytes": 125091840,
+    "phase_peak_rss_bytes": {
+      "file_loop_end": 106364928,
+      "file_save_end": 106364928,
+      "history_published": 125091840,
+      "import_begin": 22708224,
+      "namespace_entry": 106364928,
+      "namespace_save_end": 125091840,
+      "prereq_end": 106364928,
+      "scan_end": 75841536,
+      "tree_build_end": 121618432,
+      "tree_input": 106364928
+    },
+    "product_seal": "aea0b49350972248e0ef02d2bbad6cb8ada6b45362869182f14bf800e37f548f",
+    "raw_operation_ns": 5462784292,
+    "receipt": "candidate/receipt.json"
+  },
+  "control": {
+    "peak_rss_bytes": 127631360,
+    "phase_peak_rss_bytes": {
+      "file_loop_end": 105332736,
+      "file_save_end": 105332736,
+      "history_published": 127631360,
+      "import_begin": 22773760,
+      "namespace_entry": 105332736,
+      "namespace_save_end": 127631360,
+      "prereq_end": 105332736,
+      "scan_end": 75841536,
+      "tree_build_end": 127057920,
+      "tree_input": 105332736
+    },
+    "product_seal": "79eef35961f0ccc1a837507871cabe0d40b650465546639933cc5828897c44c1",
+    "raw_operation_ns": 5410089250,
+    "receipt": "core/docs/issues/237/evidence/c3-inode-fusion-20260924/candidate/receipt.json"
+  },
+  "decision": {
+    "job_frontier_condition_met": false,
+    "met": false,
+    "oracle": "PASS",
+    "performance": "INELIGIBLE; metadata cache unqualified; raw time diagnostic only",
+    "threshold_bytes": 8388608
+  },
+  "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+  "limitations": [
+    "one candidate sample; retained exact-harness control",
+    "random independent stack/scope and Store/History; exact root equality not tested",
+    "sparse-history #229 gate separate"
+  ],
+  "peak_reduction_bytes": 2539520,
+  "peak_reduction_mib": 2.421875,
+  "raw_call_delta_ns": 52695042,
+  "schema": "issue237-c1-fresh-validation-one-shot-memory-v1"
+}

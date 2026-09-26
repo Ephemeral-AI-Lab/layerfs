@@ -321,12 +321,9 @@ pub fn repeat(len: usize, byte: u8) -> Vec<u8> {
 
 /// Truncates a pack row's bytes to the length the pack itself declares.
 ///
-/// A pack row is allocated at its lane's pack limit so that an append can write
-/// into the spare bytes in place, so `SELECT data` returns the row's whole
-/// capacity. The pack's own control area names how many of those bytes are the
-/// pack; this returns exactly those, which is what every reader above
-/// `lookup::pack_bytes` sees. A test that inspected the raw row without this
-/// would be reading a pack padded with zeros.
+/// Older pack rows can reserve bytes after their declared length; current
+/// closed rows may be exact length. This returns only the declared bytes that
+/// readers above `lookup::pack_bytes` see in either case.
 pub fn truncate_pack(data: Vec<u8>) -> Vec<u8> {
     let used = layerfs_storage::pack::declared_length(&data).expect("declared pack length");
     let mut pack = data;
@@ -334,12 +331,10 @@ pub fn truncate_pack(data: Vec<u8>) -> Vec<u8> {
     pack
 }
 
-/// Writes a tampered pack back into its row, keeping the row's own capacity.
+/// Writes a tampered pack back into its row.
 ///
-/// The row's length *is* the pack's capacity and a later append writes into the
-/// spare bytes, so a tamper that shortened the row would break the write path
-/// instead of the read path the case is about. The pack is padded back to the
-/// length the row already had.
+/// Keep an existing larger row's capacity; a test that intentionally adds
+/// encoded padding may grow an exact-length row through this external UPDATE.
 pub fn write_pack_row(connection: &rusqlite::Connection, pack_id: i64, pack: &[u8]) {
     let capacity: i64 = connection
         .query_row(
@@ -349,12 +344,8 @@ pub fn write_pack_row(connection: &rusqlite::Connection, pack_id: i64, pack: &[u
         )
         .expect("pack row length");
     let capacity = usize::try_from(capacity).expect("pack capacity");
-    assert!(
-        pack.len() <= capacity,
-        "a tampered pack never exceeds its row"
-    );
     let mut bytes = pack.to_vec();
-    bytes.resize(capacity, 0);
+    bytes.resize(capacity.max(bytes.len()), 0);
     let affected = connection
         .execute(
             "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",

@@ -277,18 +277,17 @@ impl Native {
         if is_commit {
             if let Ok(Response::History(result)) = &response {
                 if let HistoryResult::Committed(outcome) = result.as_ref() {
-                    self.observations
-                        .lock()
-                        .unwrap()
-                        .commits
-                        .push(outcome.clone());
+                    let mut observations = self.observations.lock().unwrap();
+                    observations.commits.push(outcome.clone());
                     if matches!(
                         self.gate,
                         Gate::CommitCompletionFailure | Gate::CompositeCompletionFailure
-                    ) {
+                    ) && observations.commits.len() == 1
+                    {
                         file_limit("2048");
                         println!("COMMIT_BACKING_LIMIT_APPLIED");
                     }
+                    drop(observations);
                     if self.gate == Gate::CommitReply {
                         let mut observations = self.observations.lock().unwrap();
                         observations.commit_entered = true;

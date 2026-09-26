@@ -52,6 +52,21 @@ fn fixture() -> (Temp, Service, VerifiedPeer) {
     .unwrap();
     (Temp(path), service, peer)
 }
+
+/// Packs one edit list into the wire descriptor block: 24 bytes per edit
+/// (start, end, replacement; each big-endian u64), followed here by the
+/// replacement bytes - exactly the EditFile body stream.
+fn edit_stream_input(edits: &[(u64, u64, u64)], replacement: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    for (start, end, bytes) in edits {
+        out.extend_from_slice(&start.to_be_bytes());
+        out.extend_from_slice(&end.to_be_bytes());
+        out.extend_from_slice(&bytes.to_be_bytes());
+    }
+    out.extend_from_slice(replacement);
+    out
+}
+
 fn request(id: u64, operation: Operation) -> Request {
     Request {
         id,
@@ -118,14 +133,11 @@ fn construct_read_edit_inspect_and_reopen() {
                     Operation::EditFile {
                         root,
                         base_length: length,
-                        edits: vec![Edit {
-                            start: 0,
-                            end: 0,
-                            replacement: 3,
-                        }],
+                        edits: 1,
+                        replacement: 3,
                     },
                 ),
-                &mut Cursor::new(b"new"),
+                &mut Cursor::new(edit_stream_input(&[(0, 0, 3)], b"new")),
                 &mut std::io::sink(),
             )
             .0

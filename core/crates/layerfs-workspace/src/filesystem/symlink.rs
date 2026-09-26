@@ -111,23 +111,19 @@ impl Workspace {
                 .ok_or(WorkspaceError::Unsupported)?;
             let _view = host.writer()?;
             let mut lease = host.payloads.window(1, 3)?;
-            let pieces = root.arena.pieces(
+            let (start, piece) = root.arena.piece_at(
                 inode.pieces,
-                inode.count,
+                0,
                 inode.length,
                 lease.window.as_mut().ok_or(WorkspaceError::Io)?,
                 deadline,
             )?;
-            if pieces.len() != 1 {
+            if start != 0 {
                 return Err(WorkspaceError::Io);
             }
-            pieces[0]
+            piece
         };
-        if piece.kind != PieceKind::Local
-            || piece.start != 0
-            || piece.offset != 0
-            || piece.length != inode.length
-        {
+        if piece.kind != PieceKind::Local || piece.offset != 0 || piece.length != inode.length {
             return Err(WorkspaceError::Io);
         }
         let payload = root.arena.payload(piece.payload, piece.custody)?;

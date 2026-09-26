@@ -1,0 +1,23 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata-unqualified",
+  "candidate_output": "benchmark-results/fs-bench-pro/issue237-inode-fusion-20260924-01",
+  "candidate_peak_target_bytes": 141492224,
+  "candidate_product_seal": "79eef35961f0ccc1a837507871cabe0d40b650465546639933cc5828897c44c1",
+  "control_peak_rss_bytes": 145686528,
+  "control_product_seal": "c2e50eecfed39038a1d6f943acd6741ebe5fa85c57e57846d12af21428c83c3a",
+  "control_receipt": "core/docs/issues/237/evidence/c3-entry-memory-20260924/control/receipt.json",
+  "driver_sha256": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+  "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+  "instrument_diff_sha256": "1e37b9ef099a469c64518e68a77be3da8657d566f14d9b0a7a7482cab400f677",
+  "limitations": "random independent stack/scope identity; exact canonical root equality not checked by this diagnostic; timing is ineligible for speed claim",
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "profile": "locked release diagnostic, unregistered; registered debug SDK selection separate",
+  "question": "Directly build InodeUpdate during prerequisites to avoid two 101001-slot ObjectId vectors; does whole-call peak fall by >=4 MiB?",
+  "runner_sha256": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f",
+  "sample": "one real public Client::init_project call, fresh byte copy and Store/History, separate full 101001-path 500000000-byte oracle; no resampling",
+  "source_commit": "c52e5eba4ce6e9db373503731628f24ae8f25859",
+  "source_dirty": true,
+  "source_tree": "a7cdc89e2a01e27e7dc46508bf71cd7fcbbca912",
+  "status": "FROZEN_BEFORE_BUILD",
+  "whole_call_peak_reduction_target_bytes": 4194304
+}

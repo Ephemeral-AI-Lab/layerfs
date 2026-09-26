@@ -5,7 +5,7 @@ import mkdir_route as driver
 
 driver.CASES = {
     'mounted_dsh': 'pinned-DSH-mounted-upload-full-construction-then-small-canonical-edit',
-    'captured_replay': 'captured-fresh-G-tail-survives-exact-replay-limit-before-and-after-rebase',
+    'captured_replay': 'captured-fresh-G-tail-grows-past-the-retired-replay-limit-before-and-after-rebase',
 }
 driver.ENTRY_SOURCE = Path(__file__)
 driver.TEST_SOURCE = Path(__file__).with_name('fresh_stream.rs')

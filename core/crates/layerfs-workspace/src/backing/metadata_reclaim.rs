@@ -11,7 +11,7 @@ use crate::*;
 use std::{
     fs, io,
     sync::{atomic::Ordering, Arc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 impl RootOwner {
     pub(super) fn cleanup_step(
@@ -63,8 +63,16 @@ impl RootOwner {
                 .filter(|(page, _)| *page == frame.page)
                 .map(|(_, count)| count);
             if owner.edges || partial.is_some() {
-                let data = arena.load(frame.page, window, deadline)?;
-                let edges = super::metadata_index::edges(&data)?;
+                // A page under cleanup may be keyed cells or one file's extent
+                // sequence: both declare their own edges, so the raw body and
+                // the kind-aware extraction decide them. The cell decoder would
+                // refuse an extent page and quarantine a healthy arena.
+                let bytes = arena.load_raw(frame.page, window, deadline)?;
+                let edges = super::metadata_index::edges_raw(
+                    arena.directory.incarnation,
+                    frame.page,
+                    &bytes,
+                )?;
                 let count = partial.unwrap_or(edges.len());
                 if count > edges.len() {
                     return Err(WorkspaceError::Io);
@@ -170,12 +178,27 @@ impl RootOwner {
         }
         result
     }
-    fn reclaim_owned(
-        &self,
-        window: &mut Window,
-        deadline: Instant,
-        report: &mut MetadataCleanupReport,
-    ) -> Result<(), WorkspaceError> {
+    /// Reclaims only this attempt's known unfinished page before a caller
+    /// retries local reconciliation. Its completed temporary pages and quota
+    /// reservation remain owned by the attempt for the eventual seal.
+    pub(crate) fn repair_pending_for_retry(&self, deadline: Instant) -> Result<(), WorkspaceError> {
+        let host = self.arena.host()?;
+        let _writer = host.writer_until(deadline)?;
+        if !self
+            .arena
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .complete
+        {
+            return Err(WorkspaceError::Busy);
+        }
+        self.cleanup_pending(deadline, true)?;
+        host.refresh()
+    }
+    /// Cleans a known pending page without releasing the candidate root.
+    /// A retry keeps its reserved slot; full reclaim gives the slot back.
+    fn cleanup_pending(&self, deadline: Instant, resume: bool) -> Result<(), WorkspaceError> {
         if self
             .arena
             .state
@@ -281,13 +304,23 @@ impl RootOwner {
                     .custodies
                     .pop();
             }
+            let mut owner = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
             if r.epoch == 1 {
                 if a.next != r.slot + 1 {
                     return Err(WorkspaceError::Io);
                 }
                 a.next -= 1;
-                self.arena.host()?.slots.fetch_sub(1, Ordering::AcqRel);
+                if resume {
+                    // The slot claim stays reserved for the same attempt.
+                    a.reserved_slots = a.reserved_slots.checked_add(1).ok_or(WorkspaceError::Io)?;
+                    owner.slot_credits = owner
+                        .slot_credits
+                        .checked_add(1)
+                        .ok_or(WorkspaceError::Io)?;
+                } else {
+                    self.arena.host()?.slots.fetch_sub(1, Ordering::AcqRel);
+                }
             } else {
                 a.free = PageRef {
                     slot: r.slot,
@@ -295,12 +328,17 @@ impl RootOwner {
                 };
                 a.reusable += 1;
             }
-            drop(a);
-            self.state
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .slot_pending = None;
+            owner.slot_pending = None;
         }
+        Ok(())
+    }
+    fn reclaim_owned(
+        &self,
+        window: &mut Window,
+        deadline: Instant,
+        report: &mut MetadataCleanupReport,
+    ) -> Result<(), WorkspaceError> {
+        self.cleanup_pending(deadline, false)?;
         loop {
             let frame = {
                 self.state
@@ -428,8 +466,26 @@ impl MetadataHost {
                 ..MetadataCleanupReport::default()
             });
         }
-        let _writer = self.writer()?;
-        let mut lease = self.payloads.window(3, 4)?;
+        // Routine cleanup can stay charged for a later pass while the
+        // successor builder owns the shared I/O window. Explicit reclaim
+        // still waits to its deadline instead of pretending cleanup completed.
+        let mut lease = loop {
+            match self.payloads.window(3, 4) {
+                Ok(lease) => break lease,
+                Err(WorkspaceError::Busy) if routine => {
+                    return Ok(MetadataCleanupReport {
+                        remaining_roots: self.roots.lock().map_err(|_| WorkspaceError::Io)?.len(),
+                        ..MetadataCleanupReport::default()
+                    });
+                }
+                Err(WorkspaceError::Busy) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+                Err(WorkspaceError::Busy) => return Err(WorkspaceError::Deadline),
+                Err(error) => return Err(error),
+            }
+        };
+        let _writer = self.writer_until(deadline)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = MetadataCleanupReport::default();
         loop {

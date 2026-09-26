@@ -45,7 +45,8 @@ This file adds the owner's product-source and module-structure requirements.
   expected production LOC delta is 0. Preserve already-established canonical
   compatibility proofs. For the v0.1.7 unified fs-bench-pro successor, also read
   [`core/benchmark/fs-bench-pro/AGENTS.md`](benchmark/fs-bench-pro/AGENTS.md) before
-  implementation; it fixes one sample/seed and the focused iteration workflow.
+  implementation; it fixes one sample/seed, the focused iteration workflow,
+  and release-only binaries for new Core SDK Init measurements.
 - Keep unrelated work intact. Package/source moves and legacy retirement follow
   the migration plan; they are not implicit parts of implementing a component.
 

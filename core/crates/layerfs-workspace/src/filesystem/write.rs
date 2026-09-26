@@ -6,8 +6,9 @@ use crate::{
         metadata::RootOwner,
         metadata_index::vector,
         metadata_pages::{self, Cell, PageRef},
+        metadata_pieces,
     },
-    overlay::pieces::{self, CapturedBase, Inode, Piece, PieceKind},
+    overlay::pieces::{CapturedBase, Inode, Piece, PieceKind},
     runtime::{
         coherence::MutationOrigin,
         state::{Handle, State},
@@ -467,7 +468,11 @@ impl Workspace {
             }
         }
         self.maintain_backing(deadline)?;
-        let _writer = host.writer()?;
+        // The mounted publication waits for a current holder instead of
+        // refusing: reconciliation holds the gate only for its two short
+        // ordering points, and that microsecond overlap must never surface as
+        // `EBUSY` to a shell command.
+        let _writer = host.writer_until(deadline)?;
         let (expected_revision, generation, dirty, old_root, needs_completion, frozen, append) = {
             let s = self.state()?;
             self.available(&s)?;
@@ -514,7 +519,6 @@ impl Workspace {
         }
         let mut replacement = [Piece {
             kind: PieceKind::Zero,
-            start: 0,
             length: 0,
             offset: 0,
             payload: 0,
@@ -588,8 +592,8 @@ impl Workspace {
                 published_handle: None,
             });
         }
-        // A metadata-only request never selects replacement pieces: the selected
-        // content root this generation already is the exact desired content.
+        // A metadata-only request never selects replacement extents: the
+        // selected content root this generation already is the exact content.
         let metadata_only = mutation.is_metadata_only();
         if metadata_only {
             for piece in &mut replacement {
@@ -605,7 +609,6 @@ impl Workspace {
                 .custody;
             replacement[1] = Piece {
                 kind: PieceKind::Local,
-                start: 0,
                 length: payload.len(),
                 offset: 0,
                 payload: payload.record.id,
@@ -651,7 +654,14 @@ impl Workspace {
             (Some(inode), Some(submission)) => inode.generation == submission.capture()?.generation,
             _ => false,
         };
-        let old_pieces = if inherited_capture {
+        // The version's own extent sequence. A capture conversion replaces the
+        // whole version with one canonical base read of the frozen root, so the
+        // local edit list this generation had is exactly empty: a stale edit
+        // count would describe extents that no longer exist. A version that has
+        // no stored sequence yet is exactly one canonical base read of its
+        // selected content, which is the sequence the splice replaces into.
+        let mut previous = inode.pieces;
+        if inherited_capture {
             let frozen = frozen.as_ref().ok_or(WorkspaceError::Io)?.capture()?;
             inode.base = CapturedBase {
                 root: frozen.root.root()?,
@@ -662,54 +672,48 @@ impl Workspace {
             .bytes();
             inode.captured = true;
             inode.base_length = inode.length;
-            // The whole version is one base read of the frozen root from here on,
-            // so the local edit list this generation had is exactly empty. A
-            // metadata-only mutation keeps the piece list it selected above, and
-            // a stale edit count would describe pieces that no longer exist.
             inode.edits = 0;
             inode.replacement = 0;
-            let mut pieces = vector(1024)?;
-            if inode.length > 0 {
-                pieces.push(Piece {
-                    kind: PieceKind::Base,
-                    start: 0,
-                    length: inode.length,
-                    offset: 0,
-                    payload: 0,
-                    custody: PageRef::NULL,
-                });
+            previous = PageRef::NULL;
+        }
+        // The replacement extents of this mutation, in order. A version whose
+        // sequence is one implicit base read folds them into that base inside
+        // the splice itself; a stored sequence takes them as the interval's
+        // replacement, and a fresh construction takes them as the whole result.
+        let mut parts = metadata_pieces::Replacement::new();
+        for piece in stream_pieces.as_deref().unwrap_or(&replacement) {
+            parts.extend(*piece);
+        }
+        let candidate = host.candidate(arena, generation, needs_completion, parent)?;
+        let mut portions = parts.into_parts();
+        if let Some(payload) = payload {
+            if !payload.is_empty() {
+                let custody = arena.custody(&candidate, payload, window, deadline)?;
+                for piece in portions.parts_mut() {
+                    if piece.kind == PieceKind::Local && piece.payload == payload.record.id {
+                        piece.custody = custody;
+                    }
+                }
             }
-            pieces
-        } else if old.is_some() {
-            arena.pieces(inode.pieces, inode.count, inode.length, window, deadline)?
-        } else {
-            let mut pieces = vector(1024)?;
-            if inode.length > 0 {
-                pieces.push(Piece {
-                    kind: PieceKind::Base,
-                    start: 0,
-                    length: inode.length,
-                    offset: 0,
-                    payload: 0,
-                    custody: PageRef::NULL,
-                });
-            }
-            pieces
-        };
-        // Capture conversion above selects replay for D1 edits, even if G created
-        // the file. Only an uncaptured fresh file streams complete construction.
-        let (mut pieces, edits, replacement_bytes) = if metadata_only {
-            (old_pieces, inode.edits, inode.replacement)
-        } else {
-            pieces::splice(
-                &old_pieces,
-                start,
-                end,
-                stream_pieces.as_deref().unwrap_or(&replacement),
-                inode.base_length,
-                inode.constructs_file(),
-            )?
-        };
+        }
+        if !metadata_only {
+            let folded = metadata_pieces::replace(
+                candidate.as_ref(),
+                previous,
+                metadata_pieces::Splice {
+                    start,
+                    end,
+                    old_base: inode.base_length,
+                    old_replacement: inode.replacement,
+                    length,
+                },
+                &mut portions,
+                window,
+            )?;
+            inode.pieces = folded.root;
+            inode.edits = folded.edits;
+            inode.replacement = folded.replacement;
+        }
         let revision = expected_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
@@ -741,21 +745,6 @@ impl Workspace {
         inode.mode = next_mode;
         inode.seconds = next_seconds;
         inode.nanos = next_nanos;
-        inode.edits = edits;
-        inode.replacement = replacement_bytes;
-        inode.count = pieces.len() as u16;
-        let candidate = host.candidate(arena, generation, needs_completion, parent)?;
-        if let Some(payload) = payload {
-            if !payload.is_empty() {
-                let custody = arena.custody(&candidate, payload, window, deadline)?;
-                for p in &mut pieces {
-                    if p.kind == PieceKind::Local && p.payload == payload.record.id {
-                        p.custody = custody;
-                    }
-                }
-            }
-        }
-        inode.pieces = candidate.build_pieces(&pieces, window, deadline)?;
         let mut updates = vector(2)?;
         updates.push(Cell::new(
             &metadata_pages::dirty_key(generation, original.serial),

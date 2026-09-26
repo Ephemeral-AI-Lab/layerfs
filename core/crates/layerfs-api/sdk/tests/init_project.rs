@@ -10,11 +10,12 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 const BINDING: &[u8] = b"issue236-sdk-proof";
 const CURSOR_KEY: [u8; 32] = [0x36; 32];
+static NEXT_PROOF_ROOT: AtomicUsize = AtomicUsize::new(0);
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -25,7 +26,6 @@ fn repo() -> PathBuf {
 }
 
 fn proof_root() -> PathBuf {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
     let parent = repo().join("core/target/issue236-proof");
     std::fs::create_dir_all(&parent).unwrap();
     let root = parent.join(format!(
@@ -35,7 +35,7 @@ fn proof_root() -> PathBuf {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
+        NEXT_PROOF_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir(&root).unwrap();
     root
