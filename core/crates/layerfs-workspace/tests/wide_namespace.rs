@@ -408,7 +408,9 @@ fn a_generation_admits_many_identities_while_its_budget_has_room() {
         "FRONTIER_ADMITTED names={MANY} dirty_inodes={} revision={}",
         status.dirty_inodes, status.revision
     );
-    assert_eq!(status.dirty_inodes, MANY);
+    // One dirty identity per created file, plus the directory they were
+    // created in: the parent's own record moves with its first new name.
+    assert_eq!(status.dirty_inodes, MANY + 1);
     assert_eq!(status.revision, MANY as u64);
     // Every creation above was admitted; the walk below is what refuses, and
     // what it refuses with is named rather than reported as an unnamed miss.
