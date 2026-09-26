@@ -1,0 +1,87 @@
+{
+  "status": "FAIL",
+  "mode": "functional-workspace-write",
+  "case": "frontier",
+  "checks": [
+    {
+      "id": "final-file-save-crosses-4096-separated-runs",
+      "status": "NOT_RUN"
+    }
+  ],
+  "packet_requirement_ids": [
+    "W-01",
+    "W-07",
+    "W-12",
+    "B-01",
+    "B-20",
+    "S-18"
+  ],
+  "requirement_scope": "Native existing-file handle writes only; no mounted write/coherence/append-position qualification",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 25,
+  "commit_deadline_seconds": 25,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "mounted writable kernel profile and syscall fd-position semantics",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "authenticated daemon edit/Commit controls"
+  ],
+  "source": "dec2c395de41ff62f03697bf057afa635684fa15",
+  "product_inputs_sha256": "6fdfa97795bf5b08396de982ac7ed7e7dceb6325d19e094c5ce4f1798aed9e9d",
+  "driver_sha256": "392325e2c8a815be135f3f8eb624cda0f0e03b07581178078f293d828c7b54f9",
+  "test_source_sha256": "654bc0147e2a098c9945c78a6600c62a6599333175a65196faaa49e2bd675530",
+  "entrypoint_sha256": "a71edc581dd7ad22af48f58273fbe4c83c4466361aab813ebb26aff301d08e67",
+  "helper_source_sha256": "48b43731da834b4f22b9a170e351ed4a49ed332c7bd448ec241260c4d215af22",
+  "test_binary_sha256": "d217d4ec0e6934262510c25f99f165a8a064c8fd457431028fe294d27fcf7dcc",
+  "binaries": {
+    "layerfs-server": "f2e48964168cb8fd84af725acf33cfb2a1d26237ccd023079fe0d46c8dd873e4",
+    "layerfs-daemon": "6323bccd5e48e3611f41ad9eda9239d183439494647dcffd26b73ce43979fb14",
+    "examples/public_key": "dc708de66558311e183169ba734a5ac39d5f59715d637c0558b95ee8f1427d8e"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/97b3/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "d9c8daa0fa79",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-diagnostic",
+    "build_target": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-diagnostic/fixture-prep-02/result.json",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-diagnostic/bin/write-test"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-diagnostic/frontier-01",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": []
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-diagnostic/fixture-prep-02/result.json",
+    "receipt_sha256": "7b3f223148ce0ef3607d7e7c98030be88987d389fd60593887dcf972570e87f7",
+    "closed_store_sha256": "f2b58518a249934ce10a3f7e6bb6ceb2334e9bf886c35dec99f01d647c941f16",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "1e81fd1345ebdc3d186972e417d1344e96ea5b0c2c92db8cbba5303045b9f88f",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "actual_nano_cpus": 2000000000,
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::write_frontier",
+  "failure": "TimeoutError('complete functional selection exceeded 60 seconds')",
+  "command_wall_seconds": 60.004927540998324
+}

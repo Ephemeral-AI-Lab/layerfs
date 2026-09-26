@@ -1,0 +1,5 @@
+error: the argument '--tests' cannot be used multiple times
+
+Usage: cargo-zigbuild zigbuild [OPTIONS]
+
+For more information, try '--help'.

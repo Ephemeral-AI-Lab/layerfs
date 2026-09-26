@@ -1,0 +1,3 @@
+FRONTIER_COUNT writes=512 elapsed_ms=15217 payloads=1 acquire_ms=0 publish_ms=0
+FRONTIER_COUNT writes=1024 elapsed_ms=33207 payloads=1 acquire_ms=0 publish_ms=0
+FRONTIER_COUNT writes=1536 elapsed_ms=54089 payloads=1 acquire_ms=0 publish_ms=0

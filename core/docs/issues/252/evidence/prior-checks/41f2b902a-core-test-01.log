@@ -1,0 +1,79 @@
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-telemetry)
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-bridge)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-api/core)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-sandbox)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-server)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-daemon)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 35.59s
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_api_core-5284ee300d308748)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_bridge-dd79847e03569c04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aead_profile.rs (core/target/release/deps/aead_profile-3bf99b5cd6b45618)
+
+running 1 test
+test negotiated_suite_matches_the_compiled_backend ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_control.rs (core/target/release/deps/agent_control-bf991ae6936ec8af)
+
+running 1 test
+test selected_mount_exec_and_identity_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attributes.rs (core/target/release/deps/attributes-d6eefdae0278f20b)
+
+running 1 test
+test complete_attributes_roundtrip_and_reject_invalid_fields ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/construct_metadata.rs (core/target/release/deps/construct_metadata-d482cea8870762ef)
+
+running 3 tests
+test constructor_has_exact_wire_shapes_body_limits_and_shared_metadata_grant ... ok
+test constructor_refuses_invalid_portable_fields_profiles_and_response_bodies ... ok
+test native_constructor_correlates_every_echo_and_preserves_unknown_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/construct_symlink.rs (core/target/release/deps/construct_symlink-727c71ae1900ce03)
+
+running 3 tests
+test constructor_rejects_malformed_metadata_and_nonzero_result_body_budget ... ok
+test constructor_has_exact_bounds_opaque_target_and_shared_content_grant ... FAILED
+test native_constructor_correlates_saved_length_and_keeps_terminal_loss_unknown_without_replay ... ok
+
+failures:
+
+---- constructor_has_exact_bounds_opaque_target_and_shared_content_grant stdout ----
+
+thread 'constructor_has_exact_bounds_opaque_target_and_shared_content_grant' panicked at crates/layerfs-bridge/tests/construct_symlink.rs:43:9:
+assertion `left == right` failed
+  left: None
+ right: Some(4)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    constructor_has_exact_bounds_opaque_target_and_shared_content_grant
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test construct_symlink`

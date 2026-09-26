@@ -1,0 +1,1 @@
+{"cases": ["mixed-refresh-v1", "overwrite-4k-v1", "repeated-one-byte-v1", "failed-command-no-commit-v1"], "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c", "v1_files": 9, "v2_files": 8}

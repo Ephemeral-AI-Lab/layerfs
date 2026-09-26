@@ -1,0 +1,67 @@
+{
+  "binary_sha256": "cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {},
+  "cleanup_status": "FAIL",
+  "clone": {
+    "history": "benchmark-results/issue252-functional/run-01/prepend-4k-10mib-v1/history.sqlite",
+    "store": "benchmark-results/issue252-functional/run-01/prepend-4k-10mib-v1/store.sqlite"
+  },
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "command": [
+    "benchmark-results/issue252-functional/prepared-01/base/binary-archive/cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7/benchmark_shell",
+    "run",
+    "benchmark-results/issue252-functional/run-01/prepend-4k-10mib-v1/case.before",
+    "benchmark-results/issue252-functional/run-01/prepend-4k-10mib-v1/store.sqlite",
+    "benchmark-results/issue252-functional/run-01/prepend-4k-10mib-v1/history.sqlite",
+    "sha256:56368d160bc0b825ffd4a952500389c9004b8048c45c140205dff785e8d88cb4"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 15004791167,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": null,
+  "driver_exit_code": null,
+  "driver_timeout": true,
+  "family_id": "workspace_shell_package",
+  "functional_status": "FAIL",
+  "harness_seal": "829a61358dcd4dfbc6b0197b5b36d646f4ce43b01f6a8e46874a9bb3188d2119",
+  "image_id": "sha256:56368d160bc0b825ffd4a952500389c9004b8048c45c140205dff785e8d88cb4",
+  "lft1": {
+    "event_count": 44,
+    "operation": null,
+    "operation_event_count": 0
+  },
+  "master": {
+    "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+    "genesis_layer": "3284131ba83830fc6cf5deeed840c31d55f942950660fa619402d6be025d31cf38",
+    "genesis_root": "38e0fb7861117ca2e83580e7fc1d0f5718dc58c63a871098518e5065b1cb6a06",
+    "genesis_root_serial": 1,
+    "history_sha256": "4b95d1a435fc1505359b1a76274c405ea3baef2278ecc3ca7df427555cfa97d2",
+    "init_wall_ns": 42841334,
+    "old_commit": "12d7a94b16218e2f36bec7cbd44a079b62306f01808325d79986ed987893c9cc4e",
+    "old_manifest_sha256": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+    "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-01/functional/masters/large",
+    "project_id": "318b08a89d33dc607e03bd1534f02463d0",
+    "seed_wall_ns": 905448333,
+    "store_sha256": "585c6a4d7871b24389e4b589ec1380c912b33633cba67980cce91f3a9a71178a",
+    "verify_wall_ns": 71781792
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "a5a10f002b5183ca9670f4908025d2e38cbf2556de614e9a0cebe95e65e77736",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": false,
+  "row_status": "FAIL",
+  "sample_count": 1,
+  "scenario_id": "prepend-4k-10mib-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "set -eu\ntruncate -s 10489856 large.bin\ni=79\nwhile [ \"$i\" -ge 0 ]; do\n  dd if=large.bin of=large.bin ibs=131072 obs=4096 skip=\"$i\" seek=\"$((i*32+1))\" count=1 conv=notrunc 2>/dev/null\n  i=$((i-1))\ndone\ndd if=/fixtures/v2/patch-4k.bin of=large.bin bs=4096 count=1 conv=notrunc 2>/dev/null\n",
+  "source_commit": "33df2701a77013ec65504c023b7f34331237c3f0",
+  "source_tree": "75f1b00603f7a055c727773d899fb8a31c5d5d9c",
+  "verifier": {
+    "status": "NOT_RUN"
+  },
+  "verifier_sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+}

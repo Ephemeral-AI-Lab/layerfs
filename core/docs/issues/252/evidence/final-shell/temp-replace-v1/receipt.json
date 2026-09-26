@@ -1,0 +1,152 @@
+{
+  "binary_sha256": "cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "12",
+    "lookup": "6",
+    "open": "0",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "1",
+    "setattr": "0",
+    "write": "2"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/issue252-functional/run-04/temp-replace-v1/history.sqlite",
+    "store": "benchmark-results/issue252-functional/run-04/temp-replace-v1/store.sqlite"
+  },
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "command": [
+    "benchmark-results/issue252-functional/prepared-04/base/binary-archive/cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7/benchmark_shell",
+    "run",
+    "benchmark-results/issue252-functional/run-04/temp-replace-v1/case.before",
+    "benchmark-results/issue252-functional/run-04/temp-replace-v1/store.sqlite",
+    "benchmark-results/issue252-functional/run-04/temp-replace-v1/history.sqlite",
+    "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 911466458,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+    "cleanup_ns": 495690875,
+    "commit_called": true,
+    "commit_ns": 28026000,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 16791,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 46406417,
+    "head_commit": "12b886b14b0a57870d43af9293c790b242341483bae225327e304900cf5f070682",
+    "mode": "run",
+    "operation_ns": 74439333,
+    "projection_counts": "lookup=6,getattr=12,read=0,write=2,readdir=0,open=0,setattr=0,rename=1,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "temp-replace-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+  "image_id": "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47",
+  "lft1": {
+    "event_count": 52,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 374848125,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        12434000,
+        12014000
+      ],
+      "first_ns": 292153584,
+      "gaps": 0,
+      "incarnation": 2788451180106,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12094167,
+      "last_ns": 371915375,
+      "last_probe_ns": 11500,
+      "namespace": 7,
+      "opened_ns": 300410584,
+      "pid": 90958,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "733354c912131669e6284cffee952798",
+      "sampled_max_rss": 30867456,
+      "samples": 9,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 46406709,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 28026250,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 74435416,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+    "genesis_layer": "3245e041f13c736cf8298ed11b862412dc49bebc83e6df42f302a0c6f3b54f2aaf",
+    "genesis_root": "8105ebac66a643bfa502754f2ce89bc3879268e0aa4d4d35212783791301c2a5",
+    "genesis_root_serial": 1,
+    "history_sha256": "2f410d65689bcd80ae0efc0c9c9647f5c9a14932a3a157869047f0afef87f07e",
+    "init_wall_ns": 42472917,
+    "old_commit": "12a71f0e9694ffc9f4a605ebf68344f418e7a9dbb96d942b94114a0dd7de850436",
+    "old_manifest_sha256": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+    "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/masters/large",
+    "project_id": "31ca02ea0c7d9c6459c6938a2c7b6735cd",
+    "seed_wall_ns": 922201584,
+    "store_sha256": "7520553f4c793982acd95e5ef12cc518fe0cc42dc2282a701b8ba588408f3fad",
+    "verify_wall_ns": 71420166
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "temp-replace-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "cp /fixtures/v2/patch-4k.bin large.bin.next; mv -f large.bin.next large.bin",
+  "source_commit": "0560a0cd558cc55bf08efcd5f7b38de204ef690f",
+  "source_tree": "db9b0313f935ad37e23f80d75d6ed29532ecc973",
+  "verifier": {
+    "command": [
+      "benchmark-results/issue252-functional/prepared-04/base/binary-archive/ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b/verify_shell",
+      "benchmark-results/issue252-functional/run-04/temp-replace-v1/case.verify",
+      "benchmark-results/issue252-functional/run-04/temp-replace-v1/store.sqlite",
+      "benchmark-results/issue252-functional/run-04/temp-replace-v1/history.sqlite",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/large.tsv",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/temp-replace-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 101169375
+  },
+  "verifier_sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+}

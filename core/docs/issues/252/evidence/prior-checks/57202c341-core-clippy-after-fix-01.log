@@ -1,0 +1,43 @@
+    Checking layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-storage)
+    Checking layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-history)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-content)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-daemon)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-sandbox)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-server)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-api/sdk)
+error: the borrowed expression implements the required traits
+   --> crates/layerfs-server/tests/direct.rs:324:21
+    |
+324 |         Store::open(&_temp.0.join("store.sqlite"), scope.child("store"))
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: change this to: `_temp.0.join("store.sqlite")`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrows_for_generic_args
+    = note: `-D clippy::needless-borrows-for-generic-args` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrows_for_generic_args)]`
+
+error: use of `format!` to build up a string from an iterator
+   --> crates/layerfs-server/tests/direct.rs:543:5
+    |
+543 |     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: call `fold` instead
+   --> crates/layerfs-server/tests/direct.rs:543:18
+    |
+543 |     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    |                  ^^^
+help: ... and use the `write!` macro here
+   --> crates/layerfs-server/tests/direct.rs:543:29
+    |
+543 |     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    |                             ^^^^^^^^^^^^^^^^^^^^^
+    = note: this can be written more efficiently by appending to a `String` directly
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#format_collect
+    = note: `-D clippy::format-collect` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::format_collect)]`
+
+error: could not compile `layerfs-server` (test "direct") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

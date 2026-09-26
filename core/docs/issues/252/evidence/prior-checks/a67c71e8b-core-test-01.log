@@ -1,0 +1,210 @@
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-bridge)
+    Finished `release` profile [optimized] target(s) in 1.53s
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_api_core-5284ee300d308748)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_bridge-dd79847e03569c04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aead_profile.rs (core/target/release/deps/aead_profile-3bf99b5cd6b45618)
+
+running 1 test
+test negotiated_suite_matches_the_compiled_backend ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_control.rs (core/target/release/deps/agent_control-bf991ae6936ec8af)
+
+running 1 test
+test selected_mount_exec_and_identity_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attributes.rs (core/target/release/deps/attributes-d6eefdae0278f20b)
+
+running 1 test
+test complete_attributes_roundtrip_and_reject_invalid_fields ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/construct_metadata.rs (core/target/release/deps/construct_metadata-d482cea8870762ef)
+
+running 3 tests
+test constructor_has_exact_wire_shapes_body_limits_and_shared_metadata_grant ... ok
+test constructor_refuses_invalid_portable_fields_profiles_and_response_bodies ... ok
+test native_constructor_correlates_every_echo_and_preserves_unknown_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/construct_symlink.rs (core/target/release/deps/construct_symlink-727c71ae1900ce03)
+
+running 3 tests
+test constructor_has_exact_bounds_opaque_target_and_shared_content_grant ... ok
+test constructor_rejects_malformed_metadata_and_nonzero_result_body_budget ... ok
+test native_constructor_correlates_saved_length_and_keeps_terminal_loss_unknown_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/early_refusal.rs (core/target/release/deps/early_refusal-3fc45cf1ea1fe565)
+
+running 1 test
+test early_failure_is_delivered_while_the_bounded_upload_closes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/history_delivery.rs (core/target/release/deps/history_delivery-5043b8bcaf25dca7)
+
+running 1 test
+test mutation_result_data_is_rejected_before_any_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_protocol.rs (core/target/release/deps/history_protocol-c6396346799bb763)
+
+running 17 tests
+test failure_codes_round_trip_and_stay_typed ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test identity_widths_and_tags_are_checked ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test native_import_declares_progress_response_budget ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test profile_and_opcode_must_agree ... ok
+test every_reply_round_trips ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test every_query_and_command_round_trips ... ok
+test history_wire_bytes_match_pre_simplification_head ... ok
+test page_and_count_bounds_are_checked ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_connections.rs (core/target/release/deps/native_connections-e74101ef20c46f1e)
+
+running 5 tests
+test exec_progress_is_authenticated_and_has_no_result_bytes ... ok
+test definite_missing_inspect_keeps_one_authenticated_session ... ok
+test repeated_native_connections_authenticate_with_ordinary_tcp ... ok
+test caller_deadline_covers_connect_and_hello ... ok
+test productive_upload_keeps_the_response_wait_alive ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.03s
+
+     Running tests/pipe_cancel.rs (core/target/release/deps/pipe_cancel-24bd5ea16a848215)
+
+running 2 tests
+test cancelled_write_all_terminates ... ok
+test cancelled_read_exact_terminates ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/pipe_deadline.rs (core/target/release/deps/pipe_deadline-cb8a36f8a788ac98)
+
+running 1 test
+test a_full_pipe_fails_at_the_deadline_instead_of_blocking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/portable_metadata.rs (core/target/release/deps/portable_metadata-46da7cd68c03ca1a)
+
+running 3 tests
+test metadata_operation_has_exact_shapes_and_an_independent_store_grant ... ok
+test invalid_portable_fields_and_profiles_are_refused_before_delivery ... ok
+test native_metadata_reply_must_echo_the_exact_input_and_preserve_unknown_delivery ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/protocol.rs (core/target/release/deps/protocol-77ef3e9bf879e313)
+
+running 6 tests
+test final_file_stream_charges_extent_records_separately_from_file_length ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test declared_large_input_has_a_size_consistent_frame_and_time_budget ... ok
+test remote_budget_only_shortens_the_declared_duration ... ok
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/relay_write.rs (core/target/release/deps/relay_write-5d7b7a6a57d56292)
+
+running 1 test
+test result_frames_reach_the_consumer_one_write_each ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/source.rs (core/target/release/deps/source-f3f2694c99d478db)
+
+running 1 test
+test portable_source_handles_dynamic_input_deadline_and_cancellation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stream_fragmentation.rs (core/target/release/deps/stream_fragmentation-27d4eee04f40a281)
+
+running 4 tests
+test short_logical_writes_form_bounded_result_frames ... ok
+test handler_failure_discards_pending_tail_without_drop_flush ... ok
+test short_source_reads_form_bounded_body_frames ... ok
+test buffered_output_checks_deadline_before_accepting_another_fragment ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/upload_batch.rs (core/target/release/deps/upload_batch-8d258999f3f148f4)
+
+running 1 test
+test bulk_upload_batches_records_without_changing_frames ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/workspace_attach.rs (core/target/release/deps/workspace_attach-350511fb60f04f21)
+
+running 3 tests
+test attach_is_identity_only_bounded_profile_three_mutation ... ok
+test attach_and_failed_status_preserve_codes_without_widening_lifecycle ... ok
+test authenticated_attach_and_status_correlate_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/workspace_close_clean.rs (core/target/release/deps/workspace_close_clean-9abc293bc7667289)
+
+running 2 tests
+test lifecycle_bounds_and_shared_outcomes_preserve_distinct_wire_bytes ... ok
+test authenticated_lifecycle_correlates_each_variant_and_identity_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/workspace_commit.rs (core/target/release/deps/workspace_commit-36ae8a62ce77974a)
+
+running 4 tests
+test commit_request_has_its_own_budget_and_never_store_authority ... ok
+test writable_status_preserves_submission_and_reachable_partial_commit_state ... FAILED
+test commit_terminal_preserves_full_known_and_observed_records_with_bounded_bytes ... ok
+test authenticated_commit_and_writable_status_correlate_and_never_replay ... ok
+
+failures:
+
+---- writable_status_preserves_submission_and_reachable_partial_commit_state stdout ----
+
+thread 'writable_status_preserves_submission_and_reachable_partial_commit_state' panicked at crates/layerfs-bridge/tests/workspace_commit.rs:351:5:
+assertion `left == right` failed
+  left: 405
+ right: 437
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    writable_status_preserves_submission_and_reachable_partial_commit_state
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p layerfs-bridge --test workspace_commit`

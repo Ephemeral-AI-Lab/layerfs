@@ -1,0 +1,152 @@
+{
+  "binary_sha256": "cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "34",
+    "lookup": "16",
+    "open": "16",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "16"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/history.sqlite",
+    "store": "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/store.sqlite"
+  },
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "command": [
+    "benchmark-results/issue252-functional/prepared-04/base/binary-archive/cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7/benchmark_shell",
+    "run",
+    "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/case.before",
+    "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/store.sqlite",
+    "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/history.sqlite",
+    "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 1108366834,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+    "cleanup_ns": 500245958,
+    "commit_called": true,
+    "commit_ns": 31920875,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 21118,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 225954916,
+    "head_commit": "127cc31fc62150d5cd6a2e42beb4e387370862908c9b1ebd06b8f98bfc00dc29e6",
+    "mode": "run",
+    "operation_ns": 257881584,
+    "projection_counts": "lookup=16,getattr=34,read=0,write=16,readdir=0,open=16,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "repeated-one-byte-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+  "image_id": "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47",
+  "lft1": {
+    "event_count": 67,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 552739542,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        25619000,
+        22251000
+      ],
+      "first_ns": 290785292,
+      "gaps": 0,
+      "incarnation": 2788230635452,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 11726667,
+      "last_ns": 551751959,
+      "last_probe_ns": 9333,
+      "namespace": 7,
+      "opened_ns": 294859625,
+      "pid": 90413,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "fd1c69dd5704e5e59d46aad6baff088b",
+      "sampled_max_rss": 34668544,
+      "samples": 27,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 225955208,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 31920958,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 257878375,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+    "genesis_layer": "32c50e896a3eb4855facbadc3b7e6ad54c753331439de6ebfc7cd0e60075f44d33",
+    "genesis_root": "e55716a3aef5405a9b77d03f1c147127b09912e56c101791800a7f6b398ace5b",
+    "genesis_root_serial": 1,
+    "history_sha256": "e5356f3b387a7d5dca4b8927afef28a6f3cd9086ec927fc8f299a0179fe88958",
+    "init_wall_ns": 24956875,
+    "old_commit": "12a1d304390c425ad4f8746021e0f3bc97100a5b64bedda76de649701449030916",
+    "old_manifest_sha256": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+    "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/masters/repeated",
+    "project_id": "314cb51163308460e1c6158cf6d6f56293",
+    "seed_wall_ns": 908153000,
+    "store_sha256": "1a414f5059a2355bd104b840356f9f1b91be262cf7e97a5c280cdffe2105b447",
+    "verify_wall_ns": 40114583
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "repeated-one-byte-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "i=0; while [ \"$i\" -lt 16 ]; do printf X | dd of=repeated.bin bs=1 seek=\"$i\" conv=notrunc 2>/dev/null; i=$((i + 1)); done",
+  "source_commit": "0560a0cd558cc55bf08efcd5f7b38de204ef690f",
+  "source_tree": "db9b0313f935ad37e23f80d75d6ed29532ecc973",
+  "verifier": {
+    "command": [
+      "benchmark-results/issue252-functional/prepared-04/base/binary-archive/ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b/verify_shell",
+      "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/case.verify",
+      "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/store.sqlite",
+      "benchmark-results/issue252-functional/run-04/repeated-one-byte-v1/history.sqlite",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/repeated.tsv",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/repeated-one-byte-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 68563417
+  },
+  "verifier_sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+}
