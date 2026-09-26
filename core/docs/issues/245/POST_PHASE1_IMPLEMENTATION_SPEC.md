@@ -26,13 +26,14 @@ is not an atomic Workspace transaction: its syscalls can cross a Commit capture.
 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) | Daemon registry for several mounted Workspaces; independent overlapping Exec calls; shared lightweight, count-free command supervision and no whole-Exec runtime timer. | One Commit/Stage submission at a time **per Workspace**. Different Workspaces may commit concurrently subject to Store admission and head conflicts. |
 | [#219](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219) | Operator `max_workspaces_per_sandbox` setting at sandbox creation, enforced by daemon-internal Workspace creation. | Sibling of #249. It counts live/attaching/retained/closing Workspaces, never Exec calls or generations. |
 
-Sequence: seal the public mini contract first; implement shared backing and #248
-and #256 tree work in coordinated slices; prove #258's move semantics; complete
+Sequence: keep the already sealed public mini contract as a later verification
+input; implement shared backing and #248 and #256 tree work in coordinated
+slices; prove #258's move semantics; complete
 #249's multi-Workspace/Exec transport; add #219's operator policy over the same
 daemon registry. This is a dependency order for proofs, not a global source lock.
-Early mini rows may fail under today's ceilings; their unchanged receipts remain
-diagnostics. The full issue acceptance cases retain their larger registered
-counts and separate performance budgets.
+The mini runner belongs to the benchmark/test lane after the relevant product
+work, outside production LOC. The full issue acceptance cases retain their
+larger registered counts and separate performance budgets.
 
 ## Target architecture
 
@@ -142,23 +143,30 @@ Each production file stays below 1,000 physical lines; `lib.rs` and `mod.rs`
 stay below 200. Every actual commit records exact first-parent before/after
 production LOC, including migration subtotals.
 
-## Implementation slices and stop conditions
+## Product implementation slices and stop conditions
 
 | Order | Slice | Finish before the next dependent claim |
 | ---: | --- | --- |
-| 0 | Pin current source, public case/fixture identities, cache/resource scopes and exact-root compatibility for the existing accepted domain. Preserve #243/#245 historical receipts. | The [13-cell mini contract](SHELL_BRAINSTORM_MINI_V1.md) is committed before its runner; no unqualified wall number is promoted to a speed gate. |
 | 1 | Implement **one shared** page/payload ownership substrate for #248 and #256: charged page/ledger capacity, payload-ID lookup, work-triggered reclaim, progressive reserves, grouped ledger I/O only where custody stays exact. | Narrow writes and many tiny writes preserve atomic local roots and pinned G1/G2; count traces show no scan of earlier acquisitions per write. Quota/unknown failures retain their owners. |
 | 2 | Complete #248's file path: balanced extent splice at height transitions, persistent frozen cursor across lower/upload pulls, short writer-gate holds and bounded C1 replay. Measure C1 node visits before replacing its current exact-root split/join algorithm. | Public 4,097 separated writes and Commit preserve exact bytes/root/head; no historical-write scan or count refusal; G2 can mutate during every declared Commit phase. A new C1 builder requires an explicit canonical-identity proof or ruling. |
 | 3 | Complete #256's keyed namespace path and prepared stream: point delete/rebind, ordered cursors, charged live pins, wide counts, validated replay spool and C1 bounded ordering. | Public 129, 257 and 1,025 changed-name/file Commit cases pass full-tree and old-head oracles. A single generation publishes one head; read, readdir and cleanup remain bounded by resources. |
 | 4 | Complete #258's inherited-directory move on the same keyed namespace substrate. | A base-resident directory with descendants moves without a full subtree copy; old paths disappear, new inherited paths resolve, open handles survive and invalid deep paths fail before publication. |
 | 5 | Complete #249's per-sandbox Workspace registry and shared event-driven Exec leases; add #219's selected positive Workspace-count policy over that registry. | Multiple mounts and overlapping Exec on one or several Workspaces work with no fixed Exec count or whole-command timer; one Commit per Workspace, independent Store admission across Workspaces, exact lease cleanup and count=1/2/3 policy. |
-| 6 | Integrate under #245 using the full registered load-bearing cases and combined file-plus-namespace generations. | Two incremental heads compare against their immediate predecessor; old heads remain readable; exact physical/RAM/CPU and callback receipts distinguish resource refusal from a hidden count; every result is PASS, FAIL, INELIGIBLE or NOT_RUN. |
+| 6 | Integrate the implemented product paths under #245, including combined file-plus-namespace generations and immediate-predecessor reconciliation. | Focused correctness gates preserve G2 writes, old-head readability and exact custody; public load-bearing qualification is in the separate verification lane below. |
 
 Code verification is per changed Core component with locked Cargo tests,
 clippy, fmt and the product-boundary guard. Public performance rows are taken
 once only after the relevant source, workload, cache contract and budget are
 frozen. A cache-ineligible mini timing can motivate a count-driven diagnostic;
 it cannot authorize a performance PASS or a shorter workload.
+
+The [13-cell mini runner](SHELL_BRAINSTORM_MINI_V1.md) is a separate
+**verification/benchmark artifact**, implemented after the relevant product
+paths. It is excluded from production source and LOC. Run its public shell
+cases and the full-size issue gates as verification work, with sealed release
+binaries, independent oracles, append-only receipts and the declared cache
+status. A failed case returns to its owning product slice for a focused fix;
+the runner itself is not a prerequisite product phase.
 
 ## Proof gates before claiming this architecture
 
@@ -169,6 +177,6 @@ Workspace counts 1/2/3; two incremental Commits with a G2 write accepted during
 G1 construction; old-head exact bytes; and precise cleanup/resource refusals.
 Record actual callback and page/ledger counts, private and Store bytes, spool,
 RSS/page cache, Exec/Commit/cleanup wall, and every nonpassing row. The
-[proposed mini benchmark](SHELL_BRAINSTORM_MINI_V1.md) is an early API smoke and cost
+[proposed mini benchmark](SHELL_BRAINSTORM_MINI_V1.md) is a verification-only API smoke and cost
 diagnostic for all ten brainstorm categories, not a substitute for these
 full-size gates or a cold-cache performance admission.

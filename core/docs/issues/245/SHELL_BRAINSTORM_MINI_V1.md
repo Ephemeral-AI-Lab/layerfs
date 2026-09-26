@@ -5,6 +5,11 @@
 > Prospective exploratory benchmark specification for [#245](https://github.com/Ephemeral-AI-Lab/layerfs/issues/245).
 > This document and [the registry](../../../benchmark/fs-bench-pro/registry/workspace-shell-brainstorm-mini-v1.json) are committed before runner implementation or sampling. The runner is not implemented and no row below is measured yet.
 
+The future runner, fixtures and receipts are **verification/benchmark tests**
+after the relevant product implementation. They are excluded from production
+source and production LOC. This contract freezes the test workload; it does
+not add a product implementation phase.
+
 ## Claim and public operation
 
 The family `workspace_shell_brainstorm_mini`, version 1, covers **all ten

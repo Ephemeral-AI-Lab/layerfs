@@ -46,7 +46,8 @@ timer. These are target behaviors, not current product claims.
   bounds, remaining ceilings, source ownership, provisional LOC and proof gates.
 - [Iterative post-Phase-1 implementation handoff](HANDOFF_POST_PHASE1_ITERATIVE_IMPLEMENTATION.md)
   is the copyable agent assignment: release-only builds, phase-local checks,
-  30-second test ceiling, one commit and issue update per completed phase.
+  30-second test ceiling, one commit and issue update per completed phase,
+  and a separate verification/benchmark lane for the mini runner.
 - [Workspace shell brainstorm mini v1](SHELL_BRAINSTORM_MINI_V1.md) freezes a
   13-cell public API diagnostic selection covering all ten load-bearing
   categories; its registry and future runner are separate from Phase 1 evidence.

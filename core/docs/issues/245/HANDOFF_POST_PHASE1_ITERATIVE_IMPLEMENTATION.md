@@ -101,20 +101,40 @@ progress independently subject to actual Store/resource admission.
    work on any independent slice. If no meaningful work remains possible,
    provide a precise blocked handoff; never claim an unfinished phase done.
 
-### Phase order and gates
+### Product implementation phase order
 
 | Phase | Implementation focus | Required completion evidence |
 | ---: | --- | --- |
-| 0 | Implement the already frozen 13-cell mini runner from `SHELL_BRAINSTORM_MINI_V1.md`, reusing the current public SDK driver/verifier where possible. | All ten brainstorm categories are registered; commands pass unchanged through public Exec; one independent master clone per cell; old/new full-tree oracle; one sample per case and append-only receipts. Its uncontrolled-cache wall numbers stay `INELIGIBLE`. A mini sample is not a full #248/#256 gate. |
 | 1 | Shared #248/#256 page and payload ownership: charged allocation, indexed payload lookup, work-driven reclamation and exact pinned-root custody. | Count-driven public-route diagnostic shows no per-write scan of all earlier acquisitions; quota/failure paths preserve owners. |
 | 2 | #248 file extent and frozen Commit path: height transitions, monotone cursors, short writer-gate holds, bounded C1 replay. | Public 4,097 separated writes in one Exec, Commit, exact old/new bytes/roots, writer progress through declared Commit phases and registered resource/time receipts. |
 | 3 | #256 keyed namespace, live pins, prepared stream and C1 ordering. | Public 129/257/1,025 changed-file/name cases, exact whole-tree verifier and one-head publication; no fixed count before resource admission. |
 | 4 | #258 stable canonical origin for inherited directory moves. | Mounted base-resident subtree move, descendant reads, temp replacement, old-path absence, old-head readability and atomic invalid-path refusal. |
 | 5 | #249 multi-Workspace daemon registry and lightweight concurrent Exec; #219 operator Workspace-count policy. | Multiple mounts, overlapping Exec within/across Workspaces, no whole-Exec timer or fixed Exec count, one Commit slot per Workspace, exact cleanup, configured Workspace counts 1/2/3. |
-| 6 | #245 combined load-bearing and incremental-head qualification. | Two sequential Commits compare against the immediately preceding successful version; G2 writes persist; full registered cases and every FAIL/INELIGIBLE/NOT_RUN row are reported. |
 
-Phase 0 is a diagnostic harness, not permission to soften a workload after a
-miss. At each phase, prefer counts of actual FUSE callbacks, page/ledger I/O,
+### Verification and benchmark tests — separate from product implementation
+
+Run focused release tests and required public proof as each product phase
+becomes ready. Build the 13-cell mini runner specified by
+`SHELL_BRAINSTORM_MINI_V1.md` as **benchmark/test code**, after the relevant
+product path is implemented. The registry is already frozen. The runner may
+reuse the public SDK driver and independent verifier, but it must send each
+command unchanged through `WorkspaceApi::exec`; use one independent master
+clone per cell and retain one append-only attempt per case. Its uncontrolled
+cache wall numbers remain `INELIGIBLE`. A mini sample is not a #248 or #256
+full-size gate. Keep this runner, its fixtures and receipts out of production
+source and production LOC; commit and report that verification artifact
+separately with production LOC delta 0. Push its commit and update the owning
+issue plus #245 with every sampled, failing and unrun row.
+
+Complete #245's **integration verification** after the product phases: combined
+file-plus-namespace generations, two sequential Commits against the immediate
+predecessor, G2 writes retained during G1 construction, exact old/new heads,
+and every registered load-bearing PASS/FAIL/INELIGIBLE/NOT_RUN row. A failing
+verification row sends the agent back to the owning product phase for a
+focused fix; it does not become a new implementation phase or a reason to
+weaken the benchmark.
+
+At each phase, prefer counts of actual FUSE callbacks, page/ledger I/O,
 payload records, C1 work, spool/private/Store bytes, CPU and resident/file
 cache domains over repeated wall samples. The source analysis estimates for
 #256 are *not* a LOC budget: the proposed line items sum to roughly 2,990,
@@ -122,6 +142,7 @@ but the actual implementation should reuse existing structures and report
 measured LOC per commit.
 
 Send concise progress updates during long work. End each completed turn with
-the current phase, commit, issue update, checks with exact status, and the
-next actionable step. Continue autonomously until every required phase is
-complete or a real blocker is documented with no independent work left.
+the current product or verification phase, commit, issue update, checks with
+exact status, and the next actionable step. Continue autonomously until every
+required product phase and verification gate is complete or a real blocker is
+documented with no independent work left.
