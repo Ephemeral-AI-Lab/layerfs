@@ -10,7 +10,7 @@ use crate::{
     overlay::{directories::Directory, pieces::Inode},
     WorkspaceError,
 };
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 pub fn vector<T>(capacity: usize) -> Result<Vec<T>, WorkspaceError> {
     let mut out = Vec::new();
     out.try_reserve_exact(capacity)
@@ -189,25 +189,41 @@ impl Arena {
 impl Arena {
     /// One file's extent that covers `offset`, with its derived logical start.
     pub fn piece_at(
-        &self,
+        self: &Arc<Self>,
         root: PageRef,
         offset: u64,
         length: u64,
         window: &mut Window,
         deadline: Instant,
     ) -> Result<(u64, crate::overlay::pieces::Piece), WorkspaceError> {
-        crate::backing::metadata_pieces::piece_at(self, root, offset, length, window, deadline)
+        crate::backing::metadata_pieces::piece_at(
+            self.clone(),
+            root,
+            offset,
+            length,
+            window,
+            deadline,
+        )
     }
-    /// A bounded ordered cursor over one file's extents.
+    /// A bounded ordered cursor over one file's extents. The cursor owns the
+    /// arena handle it reads through, so a caller can keep one walk across
+    /// several transport pulls.
     pub fn cursor(
-        &self,
+        self: &Arc<Self>,
         root: PageRef,
         offset: u64,
         length: u64,
         window: &mut Window,
         deadline: Instant,
-    ) -> Result<crate::backing::metadata_pieces::Cursor<'_, Self>, WorkspaceError> {
-        crate::backing::metadata_pieces::cursor(self, root, offset, length, window, deadline)
+    ) -> Result<crate::backing::metadata_pieces::Cursor<Arc<Self>>, WorkspaceError> {
+        crate::backing::metadata_pieces::cursor(
+            self.clone(),
+            root,
+            offset,
+            length,
+            window,
+            deadline,
+        )
     }
 }
 impl RootOwner {

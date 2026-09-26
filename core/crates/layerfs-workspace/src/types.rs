@@ -239,6 +239,10 @@ pub struct BackingStatus {
     pub routine_scans: u64,
     /// Ownership records visited by an indexed or deliberate scoped lookup.
     pub lookup_scans: u64,
+    /// Metadata pages read by every arena of this host. A bounded walk holds
+    /// its path, so this does not grow with the frames one frozen transfer is
+    /// replayed in.
+    pub metadata_reads: u64,
     pub readers: usize,
     pub acquiring: bool,
     pub cleaning: bool,

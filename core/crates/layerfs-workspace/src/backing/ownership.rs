@@ -447,6 +447,7 @@ impl Arena {
         deadline: Instant,
     ) -> Result<PageData, WorkspaceError> {
         clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        self.reads.fetch_add(1, Ordering::Relaxed);
         let owner = self.read_owner(r, window, deadline)?;
         if owner.role != 1 {
             return Err(WorkspaceError::Io);
@@ -483,6 +484,7 @@ impl Arena {
         deadline: Instant,
     ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
         clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        self.reads.fetch_add(1, Ordering::Relaxed);
         let owner = self.read_owner(r, window, deadline)?;
         if owner.role != 1 {
             return Err(WorkspaceError::Io);

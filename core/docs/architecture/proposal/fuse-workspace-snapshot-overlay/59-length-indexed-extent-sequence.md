@@ -348,3 +348,48 @@ both leaves — and an insertion at offset 0 both read back as 249 extents in
 order, with every leaf still exactly one level below the root. The same shape
 driven through the mounted Workspace API in `tests/commit_progress.rs` accepts
 384 consecutive appended writes (four leaf pages) and transfers all of them.
+
+## 11. One walk per Commit phase, under a read lease (2026-09-26, #248 phase 2)
+
+Written against the source this section is committed with. The page format and
+the canonical Store representation do not change; the public API does not
+change.
+
+**The gate this removes.** Commit lowering held the shared metadata writer gate
+across its whole frozen-file walk, and the descriptor and replacement transfers
+re-acquired it for every pull. The captured root is immutable and pinned for the
+submission, so those reads do not need a mutation gate at all: a mounted write
+waited behind work that only read pages nobody could change.
+
+**The lease.** Each phase now reads the captured sequence under a bounded read
+lease — a payload window, the same reader slot the ordinary read callback uses —
+and holds no mutation gate. The walk itself is one cursor per phase, owned by the
+transfer that carries it:
+
+| Phase | Walk | Across pulls |
+| --- | --- | --- |
+| lowering | one cursor over the frozen sequence | completes inside the phase |
+| descriptor stream | one cursor in `FileUpload` | kept for every frame |
+| replacement bytes | one cursor in `ReplacementSource` | kept for every frame |
+
+A cursor therefore owns its store handle rather than borrowing it, which is what
+lets one be stored across a transport pull. The page a frame stops in is the page
+the next frame resumes in: no frame re-seeks the path from the root, which is the
+`Q * H` term the frozen-lowering cost model lists.
+
+**A count, not a timing.** `BackingStatus::metadata_reads` reports the pages the
+host's arenas have read, as ordinary product telemetry. It makes the claim
+checkable on the public route without a wall clock: through
+`tests/commit_progress.rs` (attach, one local file, `Workspace::commit`), a
+Commit over 384 appended extents in four leaf pages transfers 1,582,080 bytes in
+387 frames while reading 52 metadata pages. Re-seeking the path once per pull —
+the shape this replaces — reads 816 pages for the same transfer, which that
+case's bound refuses.
+
+**What this case does and does not prove.** It drives the real route: the body
+is one descriptor per extent plus every replacement byte, replayed frame by
+frame, and an ordinary mounted mutation is accepted between two frames of the
+transfer. The writer-gate property itself is enforced by construction — no
+Commit phase acquires the gate across a walk or a pull — and a deterministic
+overlap check needs the page-read barrier the recorded E/F fixtures use; that
+check is not taken here.

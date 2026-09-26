@@ -310,6 +310,7 @@ impl PayloadHost {
             failed_payloads: failed,
             routine_scans: state.routine_scans,
             lookup_scans: state.lookup_scans,
+            metadata_reads: 0,
             readers: slots[1..3].iter().filter(|slot| slot.is_none()).count(),
             acquiring: slots[0].is_none(),
             cleaning: slots[3].is_none(),
@@ -693,10 +694,19 @@ impl Workspace {
         host.acquire(directory, length, source, deadline, &self.inner.stopping)
     }
     pub fn backing_status(&self) -> Result<BackingStatus, WorkspaceError> {
-        self.host
+        let mut status = self
+            .host
             .payloads
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?
-            .status()
+            .status()?;
+        // The page counter belongs to the host's arenas, so one status report
+        // answers both backing questions a caller checks together.
+        status.metadata_reads = self
+            .host
+            .metadata
+            .as_ref()
+            .map_or(Ok(0), |host| host.page_reads())?;
+        Ok(status)
     }
 }

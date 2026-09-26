@@ -13,7 +13,7 @@
 //! passes through, plus one per level the following descent enters. Summed over a
 //! whole walk that is `O(H + L)`, not one path read per leaf.
 use super::{
-    metadata_pages::{self, PageRef, PieceRecord},
+    metadata_pages::{self, PageRef, PieceRecord, PAGE},
     metadata_pieces::PieceStore,
     segments::Window,
 };
@@ -30,21 +30,59 @@ fn clock(deadline: Instant) -> Result<(), WorkspaceError> {
     crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)
 }
 
+/// A shared or borrowed store handle is a store: the cursor owns whichever
+/// handle its caller holds, so one Commit phase can keep a walk across its
+/// transport pulls without borrowing the host it reads through.
+impl<S: PieceStore + ?Sized> PieceStore for &S {
+    fn read(&self, page: PageRef, window: &mut Window) -> Result<[u8; PAGE], WorkspaceError> {
+        (**self).read(page, window)
+    }
+    fn write<T>(
+        &self,
+        level: u8,
+        window: &mut Window,
+        encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
+    ) -> Result<T, WorkspaceError> {
+        (**self).write(level, window, encode)
+    }
+    fn incarnation(&self) -> [u8; 32] {
+        (**self).incarnation()
+    }
+}
+impl<S: PieceStore + ?Sized> PieceStore for std::sync::Arc<S> {
+    fn read(&self, page: PageRef, window: &mut Window) -> Result<[u8; PAGE], WorkspaceError> {
+        (**self).read(page, window)
+    }
+    fn write<T>(
+        &self,
+        level: u8,
+        window: &mut Window,
+        encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
+    ) -> Result<T, WorkspaceError> {
+        (**self).write(level, window, encode)
+    }
+    fn incarnation(&self) -> [u8; 32] {
+        (**self).incarnation()
+    }
+}
+
 /// A bounded ordered cursor over one file's extents, positioned at `offset`.
-pub fn cursor<'a, S: PieceStore + ?Sized>(
-    store: &'a S,
+/// The cursor owns its store handle, so a Commit phase can hold one across its
+/// transport pulls instead of seeking the same path again for every frame.
+pub fn cursor<S: PieceStore>(
+    store: S,
     root: PageRef,
     offset: u64,
     length: u64,
     window: &mut Window,
     deadline: Instant,
-) -> Result<Cursor<'a, S>, WorkspaceError> {
+) -> Result<Cursor<S>, WorkspaceError> {
     Cursor::seek(store, root, offset, length, window, deadline)
 }
 
 /// The extent of `root` that covers `offset`, with its derived logical start.
-pub fn piece_at<S: PieceStore + ?Sized>(
-    store: &S,
+pub fn piece_at<S: PieceStore>(
+    store: S,
     root: PageRef,
     offset: u64,
     length: u64,
@@ -57,8 +95,8 @@ pub fn piece_at<S: PieceStore + ?Sized>(
 /// A bounded ordered cursor over one file's extents. The Workspace's backing
 /// operations are deadline-bounded, so the cursor carries the operation's own
 /// deadline and checks it between its page reads.
-pub struct Cursor<'a, S: PieceStore + ?Sized> {
-    store: &'a S,
+pub struct Cursor<S: PieceStore> {
+    store: S,
     deadline: Instant,
     stack: [Frame; MAX_HEIGHT as usize],
     depth: usize,
@@ -89,11 +127,11 @@ impl Frame {
         step: 0,
     };
 }
-impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
+impl<S: PieceStore> Cursor<S> {
     /// Positions a cursor at `offset`, which must be inside a sequence that
     /// covers `length` bytes.
     pub fn seek(
-        store: &'a S,
+        store: S,
         root: PageRef,
         offset: u64,
         length: u64,
@@ -125,13 +163,13 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
             if cursor.depth == MAX_HEIGHT as usize {
                 return Err(WorkspaceError::Io);
             }
-            let bytes = store.read(page, window)?;
+            let bytes = cursor.store.read(page, window)?;
             if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces {
                 return Err(WorkspaceError::Io);
             }
             if bytes[48] == 0 {
                 let records = metadata_pages::decode_pieces_leaf(
-                    store.incarnation(),
+                    cursor.store.incarnation(),
                     page,
                     &bytes,
                     MAX_FILE,
@@ -155,8 +193,12 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
                 cursor.point = lower;
                 return Ok(cursor);
             }
-            let (level, children) =
-                metadata_pages::decode_pieces_branch(store.incarnation(), page, &bytes, MAX_FILE)?;
+            let (level, children) = metadata_pages::decode_pieces_branch(
+                cursor.store.incarnation(),
+                page,
+                &bytes,
+                MAX_FILE,
+            )?;
             // Levels are relative: a branch one above the leaves declares 1,
             // and every branch declares exactly one below its parent. The root
             // therefore declares the tree's height, never more than the

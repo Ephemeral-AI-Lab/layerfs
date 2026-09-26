@@ -1,7 +1,10 @@
 //! Fixed-window upload of the captured final file sequence and its local bytes.
 use super::source::ReplacementSource;
 use crate::{
-    backing::metadata::RootOwner,
+    backing::{
+        metadata::{Arena, RootOwner},
+        metadata_pieces::Cursor,
+    },
     overlay::pieces::{Inode, PieceKind},
     *,
 };
@@ -24,6 +27,11 @@ pub(crate) struct FileUpload<'a> {
     position: u64,
     record: [u8; 24],
     record_at: usize,
+    /// The one descriptor walk this upload owns, kept across its frames for the
+    /// same reason the replacement walk is: a frame continues the frozen
+    /// sequence instead of seeking its path again, and the immutable pinned
+    /// pages are read without the metadata writer gate.
+    cursor: Option<Cursor<Arc<Arena>>>,
     pub(crate) failure: Option<WorkspaceError>,
 }
 
@@ -44,6 +52,7 @@ impl<'a> FileUpload<'a> {
             position: 0,
             record: [0; 24],
             record_at: 24,
+            cursor: None,
             failure: None,
         }
     }
@@ -80,17 +89,19 @@ impl<'a> FileUpload<'a> {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let _view = host.writer()?;
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        let mut cursor = self.root.arena.cursor(
-            self.inode.pieces,
-            self.position,
-            self.inode.length,
-            window,
-            deadline,
-        )?;
+        if self.cursor.is_none() {
+            self.cursor = Some(self.root.arena.cursor(
+                self.inode.pieces,
+                self.position,
+                self.inode.length,
+                window,
+                deadline,
+            )?);
+        }
         while filled < out.len() && self.remaining > 0 {
+            let cursor = self.cursor.as_mut().ok_or(WorkspaceError::Io)?;
             let (start, piece) = cursor.next(window)?.ok_or(WorkspaceError::Io)?;
             if start != self.position {
                 return Err(WorkspaceError::Io);

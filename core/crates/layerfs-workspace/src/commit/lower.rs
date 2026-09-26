@@ -133,7 +133,10 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let _view = host.writer()?;
+        // The captured sequence is immutable and pinned for this submission, so
+        // the walk reads it under a bounded read lease: no Commit phase holds
+        // the shared metadata writer gate across it, and a mounted write may
+        // publish while the walk is in progress.
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         // One ordered walk checks the immutable final sequence and counts its

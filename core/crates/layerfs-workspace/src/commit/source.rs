@@ -1,6 +1,10 @@
 //! The existing bridge Source contract over captured replacement spans.
 use crate::{
-    backing::{metadata::RootOwner, reader::PayloadReader},
+    backing::{
+        metadata::{Arena, RootOwner},
+        metadata_pieces::Cursor,
+        reader::PayloadReader,
+    },
     overlay::pieces::{Inode, PieceKind},
     *,
 };
@@ -22,6 +26,11 @@ pub struct ReplacementSource {
     reader: Option<PayloadReader>,
     left: u64,
     zero: bool,
+    /// The one walk of the frozen sequence this transfer owns. It is opened at
+    /// the first byte the transfer still owes and kept across every later pull,
+    /// so a transport frame never seeks the same path again and no Commit phase
+    /// holds the metadata writer gate over the transfer.
+    cursor: Option<Cursor<Arc<Arena>>>,
     pub failure: Option<WorkspaceError>,
 }
 impl ReplacementSource {
@@ -35,6 +44,7 @@ impl ReplacementSource {
             reader: None,
             left: 0,
             zero: false,
+            cursor: None,
             failure: None,
         }
     }
@@ -104,29 +114,32 @@ impl ReplacementSource {
             }
             return Ok(0);
         }
-        // The frozen sequence is walked by one bounded cursor per pull: it
+        // The frozen sequence is walked once: the cursor is opened at the first
+        // byte this transfer still owes and kept across every later pull, so it
         // steps forward through the leaves in order and the buffer fills from
-        // every non-base extent it passes, so the walk visits each page of its
-        // path once — exactly like the lowering walk — instead of re-seeking
-        // per extent.
-        let root = self.root.clone();
+        // every non-base extent it passes. A frame therefore never seeks the
+        // path again, and the captured pages are immutable and pinned, so the
+        // walk reads them without the metadata writer gate — a mounted write
+        // may proceed throughout the transfer.
         let host = self
             .workspace
             .host
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let _view = host.writer()?;
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        let mut cursor = root.arena.cursor(
-            self.inode.pieces,
-            self.position,
-            self.inode.length,
-            window,
-            deadline,
-        )?;
+        if self.cursor.is_none() {
+            self.cursor = Some(self.root.arena.cursor(
+                self.inode.pieces,
+                self.position,
+                self.inode.length,
+                window,
+                deadline,
+            )?);
+        }
         while filled < out.len() {
+            let cursor = self.cursor.as_mut().ok_or(WorkspaceError::Io)?;
             let Some((start, piece)) = cursor.next(window)? else {
                 break;
             };
@@ -157,7 +170,7 @@ impl ReplacementSource {
                     }
                 }
                 PieceKind::Local => {
-                    let payload = root.arena.payload(piece.payload, piece.custody)?;
+                    let payload = self.root.arena.payload(piece.payload, piece.custody)?;
                     let mut reader = payload.reader(piece.offset..piece.offset + piece.length)?;
                     let mut left = piece.length;
                     while left > 0 && filled < out.len() {
