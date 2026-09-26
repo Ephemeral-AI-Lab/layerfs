@@ -325,7 +325,25 @@ The file work moves substantial existing splice code, so gross reviewed lines ac
 | server/save/namespace_spool.rs (new) / filesystem.rs / catalog.rs | +350 / +120 / +80 | Validated receive spool, C1 handoff and atomic stage/commit. |
 | content/filesystem/input.rs / validate.rs / validate/cycles.rs (new) / update.rs / references/reduce.rs | +120 / +200 / ~0 net moved / +180 / +160 | Stream/indexed-spool input and bounded validation/reduction; move roughly 250–350 lines from the current 912-physical-line validate.rs into focused cycles.rs. |
 
-Likely namespace net source growth is **about 3,000 production LOC**, with a **1,400–5,000** range until the C1 input contract is prototyped. Roughly 300–500 lines may be relocated out of large files; that relocation is not net LOC. These estimates are not a mandate to add abstractions. Use existing keyed pages, C1 sorted builder and C1 FileBacking before adding code.
+The individual guesses above add to **about +2,990 net production LOC**:
+
+| Area | Sum of line-item guesses |
+| --- | ---: |
+| Private keyed tree and filesystem mutations | +680 |
+| Live node/cache ownership | +355 |
+| Frozen Workspace Commit lowering | +285 |
+| Bridge prepared-stream grammar and transport | +460 |
+| Server validation, spool and C1 handoff | +550 |
+| C1 input, validation and reducer changes | +660 |
+
+This is an **illustrative sum, not a target or a credible range**. The earlier
+1,400–5,000 range was not derived from alternative implementations and should
+not be used as a budget. The real delta depends most on whether the current
+Bridge framing, C1 sorted builder and charged `FileBacking` can be adapted
+without the proposed new modules. Prototype that seam and implement only the
+code needed for the public 129/257/1,025 gates. Roughly 300–500 lines may be
+relocated out of large files; relocation is not net LOC. The final first-parent
+production count is measured per commit, not predicted by this table.
 
 ## 7. Sequence, proof and measurement
 

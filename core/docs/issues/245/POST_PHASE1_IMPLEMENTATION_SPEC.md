@@ -130,7 +130,7 @@ core/crates/layerfs-sandbox/src/ selected max_workspaces_per_sandbox policy
 | --- | ---: | --- |
 | Shared page/payload ownership, counted once | +500–700 | `backing/metadata.rs`, `ownership.rs`, `payload.rs`; extracted `page_store/`, `payload/index.rs`. |
 | #248 file paths | −100 to +700, plus conditional +150–350 C1 | Existing `metadata_pieces.rs`, `metadata_cursor.rs`, `commit/{lower,upload,source}.rs`; `binary_plus_tree/extent/`. |
-| #256 namespace and streaming | +1,400–5,000 | Existing `metadata_index.rs`, `overlay/directories.rs`, `runtime/state.rs`, Commit/Bridge/server/C1; `binary_plus_tree/keyed/`. |
+| #256 namespace and streaming | No reliable range yet; the detailed line-item sketch sums to about +2,990 | Existing `metadata_index.rs`, `overlay/directories.rs`, `runtime/state.rs`, Commit/Bridge/server/C1; add keyed or stream modules only where current code cannot be reused. |
 | #258 inherited move | +250–600 | Existing `filesystem/{rename,namespace_view}.rs`; focused move/origin module as needed. |
 | #249 daemon/Exec | +600–1,500 | Existing daemon control/execution/lifecycle and SDK/Bridge route; shared supervisor module. |
 | #219 operator setting | +100–250 | Sandbox config/launcher and daemon admission. |
