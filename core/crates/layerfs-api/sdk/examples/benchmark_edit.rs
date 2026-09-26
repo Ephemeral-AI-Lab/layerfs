@@ -394,6 +394,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let read_delta = read_before
         .zip(read_after)
         .and_then(|(before, after)| after.checked_sub(before));
+    if std::env::var_os("LAYERFS_EDIT_OUTCOME_DIAGNOSTIC").is_some() {
+        match &result {
+            Ok(_) => eprintln!("LFS_EDIT_OUTCOME v=1 commit=ok"),
+            Err(error) => eprintln!("LFS_EDIT_OUTCOME v=1 commit_error={error}"),
+        }
+    }
     runtime.publish(diagnostic);
     let mut head_commit = String::new();
     match result {
