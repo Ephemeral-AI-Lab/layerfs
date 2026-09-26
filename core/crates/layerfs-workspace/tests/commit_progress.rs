@@ -14,10 +14,11 @@
 //! the walk that produces it reads a bounded number of metadata pages however
 //! many frames the transport asks for (the cursor keeps its path across pulls);
 //! and an ordinary mounted mutation is accepted while the transfer is in
-//! flight. The writer-gate property itself is enforced by construction - no
-//! Commit phase acquires the gate across the walk or the pull - and its
-//! deterministic overlap check needs the page-read barrier the recorded E/F
-//! fixtures use; this file does not claim it.
+//! flight. The writer-gate property itself - no Commit phase acquires the gate
+//! across the walk or the pull - is held deterministically by
+//! `commit_overlap.rs`, which stops a page read of the transfer in the kernel
+//! with the recorded E/F page-read barrier and reads the gate state there; this
+//! file claims the frame replay and the bounded walk, not the gate.
 #![cfg(target_os = "linux")]
 use layerfs_bridge::contract::*;
 use layerfs_workspace::*;
