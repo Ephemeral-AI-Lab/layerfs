@@ -1,0 +1,58 @@
+{
+  "cases": [
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "mixed-refresh-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "overwrite-4k-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "repeated-one-byte-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "failed-command-no-commit-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "append-10mib-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "resize-10mib-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "temp-replace-v1"
+    },
+    {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "scenario_id": "prepend-4k-10mib-v2"
+    }
+  ],
+  "functional_script_sha256": "95261a8ac9aaa7a2001df59ac8bdede248ea35a5815cd9028eb22e4794fc904e",
+  "prepared": "benchmark-results/issue252-main-verify/shell-prepared-01/functional-prepared.json",
+  "schema": "issue252-ordinary-shell-functional-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+    "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+    "source_commit": "cab07b60ef69bc70323fb01ba23938b00daa1623",
+    "source_dirty": false,
+    "source_tree": "90965958d12b6ce1f8e1f372a236989e69eec92d"
+  }
+}
