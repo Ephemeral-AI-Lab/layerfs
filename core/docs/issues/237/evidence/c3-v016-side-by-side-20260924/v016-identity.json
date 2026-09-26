@@ -1,0 +1,21 @@
+{
+  "binary_sha256": "641f710b76599d27437556490c9acd9a4636a9f7dfe6ae33dd1dc9ca211ddca0",
+  "cache_profile": "independent-source-payload-zero;metadata-residency-unmeasured",
+  "cold_driver_sha256": "a730c67107ecfbb11f3cf91e260e5b9b34438e41accec665b95953d6d275ddfe",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue237-v016-exact-100k/layerfs/target/release/fs-benchmark-pro",
+    "namespace-init-diagnostic-core-fixture",
+    "benchmark-results/issue237-v016-exact-100k-20260924-01/store",
+    "benchmark-results/issue237-v016-exact-100k-20260924-01/source/payload",
+    "namespace-100000",
+    "1",
+    "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+    "independent-source-payload-zero;metadata-residency-unmeasured"
+  ],
+  "diagnostic_nonce": "69d2116fe9575799",
+  "harness_sha256": "91b2ea0007e4966d386421ad1cc415db11a190b0dda1b5bfb5b31b89eed8427a",
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "seed_hex": "69d2116fe957579924df288cc7265d9642d0e0ec5511e16aac77984803f20437",
+  "tag_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "verification": "SKIPPED"
+}

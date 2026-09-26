@@ -1,0 +1,18 @@
+{
+  "bytes": 500000000,
+  "directories": 1001,
+  "files": 100000,
+  "finished_ns": 180962408262916,
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "method": "darwin-shared-mmap-invalidate-mincore-v1",
+  "pages": 126206,
+  "resident_pages": 0,
+  "script_sha256": "a730c67107ecfbb11f3cf91e260e5b9b34438e41accec665b95953d6d275ddfe",
+  "self_check": {
+    "cold_pages_remaining": 0,
+    "warm_pages_detected": 32
+  },
+  "source": "benchmark-results/issue237-v016-exact-100k-20260924-01/source/payload",
+  "status": "VERIFIED_COLD",
+  "wall_ns": 9653831083
+}

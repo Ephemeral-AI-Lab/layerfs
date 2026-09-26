@@ -1,0 +1,105 @@
+{
+  "both_full_oracle": "PASS",
+  "both_payload_launch_resident_pages": 0,
+  "candidate_peak_minus_v016_retained": 52297728,
+  "candidate_product_seal": "c2e50eecfed39038a1d6f943acd6741ebe5fa85c57e57846d12af21428c83c3a",
+  "closed_store_object_rows": {
+    "candidate": 112424,
+    "control": 112424
+  },
+  "closed_store_query": "SQLite mode=ro&immutable=1; SELECT count(*) FROM objects on both closed Stores",
+  "control_product_seal": "ca72aa0f1e627661f4ad3009918e30c46998d0321f8929929c73125bbd6ad158",
+  "decision": "local structure reduction and one-shot process RSS reduction; namespace peak and old-to-Core gap remain open",
+  "job_vector_reserved_candidate": 9437184,
+  "job_vector_reserved_control": 23068672,
+  "job_vector_reserved_reduction": 13631488,
+  "manifest_sha256": "23246a276522418812df2392619c13391bc864835d09a6695b6bd6fc0307d7a5",
+  "path_length_difference": 300000,
+  "public_call_peak_rss_reduction": 11763712,
+  "rows": [
+    {
+      "candidate_current_rss": 22675456,
+      "candidate_peak_rss": 22675456,
+      "control_current_rss": 22691840,
+      "control_peak_rss": 22691840,
+      "label": "import_begin",
+      "peak_reduction": 16384
+    },
+    {
+      "candidate_current_rss": 76480512,
+      "candidate_peak_rss": 76480512,
+      "control_current_rss": 98287616,
+      "control_peak_rss": 98287616,
+      "label": "scan_end",
+      "peak_reduction": 21807104
+    },
+    {
+      "candidate_current_rss": 105660416,
+      "candidate_peak_rss": 105857024,
+      "control_current_rss": 120668160,
+      "control_peak_rss": 125386752,
+      "label": "file_loop_end",
+      "peak_reduction": 19529728
+    },
+    {
+      "candidate_current_rss": 96813056,
+      "candidate_peak_rss": 105857024,
+      "control_current_rss": 111804416,
+      "control_peak_rss": 125386752,
+      "label": "file_save_end",
+      "peak_reduction": 19529728
+    },
+    {
+      "candidate_current_rss": 96829440,
+      "candidate_peak_rss": 105857024,
+      "control_current_rss": 111820800,
+      "control_peak_rss": 125386752,
+      "label": "namespace_entry",
+      "peak_reduction": 19529728
+    },
+    {
+      "candidate_current_rss": 103415808,
+      "candidate_peak_rss": 105857024,
+      "control_current_rss": 118390784,
+      "control_peak_rss": 125386752,
+      "label": "prereq_end",
+      "peak_reduction": 19529728
+    },
+    {
+      "candidate_current_rss": 119259136,
+      "candidate_peak_rss": 119259136,
+      "control_current_rss": 134168576,
+      "control_peak_rss": 134168576,
+      "label": "tree_input",
+      "peak_reduction": 14909440
+    },
+    {
+      "candidate_current_rss": 141279232,
+      "candidate_peak_rss": 141279232,
+      "control_current_rss": 153632768,
+      "control_peak_rss": 153632768,
+      "label": "tree_build_end",
+      "peak_reduction": 12353536
+    },
+    {
+      "candidate_current_rss": 135905280,
+      "candidate_peak_rss": 144703488,
+      "control_current_rss": 147668992,
+      "control_peak_rss": 156467200,
+      "label": "namespace_save_end",
+      "peak_reduction": 11763712
+    },
+    {
+      "candidate_current_rss": 135921664,
+      "candidate_peak_rss": 144703488,
+      "control_current_rss": 147685376,
+      "control_peak_rss": 156467200,
+      "label": "history_published",
+      "peak_reduction": 11763712
+    }
+  ],
+  "scan_end_rss_reduction": 21807104,
+  "shared_harness_seal": "7614161b4c70cad74ca93c684c105c86f778870e2481c56ad761348ea19b9ae2",
+  "status": "DIAGNOSTIC",
+  "timing_claim": "none; operation_ns is diagnostic only"
+}

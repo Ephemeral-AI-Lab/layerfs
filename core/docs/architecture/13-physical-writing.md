@@ -20,6 +20,9 @@ The #237 bounded multi-group admission amendment in §18.4.2 describes the
 product source in **this document's commit**, which also changes
 `cas/placement.rs`, `cas/save.rs` and `cas/selection.rs`. Earlier sections retain
 their historical source pins where they describe older behavior.
+The #237 exact payload and pooled reuse amendment in §18.4.3 describes
+product source in this document's commit. Earlier section pins remain
+historical.
 
 Chapter numbers are global to the set: this paper holds **chapter 18**.
 
@@ -319,30 +322,58 @@ wave or the final publication. This is a bounded change to *when* groups are
 placed, not a new format or a path that moves cold source or Store work outside
 the caller's operation.
 
+### 18.4.3 Exact payload packs and pooled reuse (#237)
+
+Placement decides a pack's final length before writing it. Ordinary,
+Native and WholeFile packs close at each `select_many` flush; a newly
+created row therefore uses its exact declared `used` length as its
+SQLite BLOB capacity. The next flush starts a new pack. Singleton packs
+already hold one record and remain exact length. Existing fixed
+directories, 4-KiB SQLite pages, pack versions and readers are unchanged.
+
+PooledMetadata is the bounded exception: one open pack persists across
+placement flushes within a Save. Its first INSERT reserves the existing
+256-KiB limit so later groups can append in place. The pack bytes are
+written before each group's catalogue row, and a demanded same-Save
+read still seals pending groups before lookup. When the pooled pack
+fills, placement closes it and starts another. This uses the existing
+incremental BLOB writer; it does not assemble and rewrite a full pack
+on every append or add a second queue.
+
+The per-pack fixed directory is 4,096 B for Ordinary, Native and
+PooledMetadata, and 1,024 B for WholeFile. Closing payload rows removes
+unused *post-used BLOB capacity*. Reusing the pooled row avoids paying
+its fixed header and directory once per group. The one-shot
+[research receipt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/e2c8e6937/core/docs/issues/237/pack-space-c3-result-20260924.md)
+measured 2,001 pooled groups in 16 packs, down from 2,001 packs in
+the all-closed C2 experiment, with a full reopened 100k oracle. That
+row has unqualified namespace metadata cache and is not a release
+performance PASS. Sparse-history compactness remains a separate #229
+gate; the retained research treatments and failures are linked from
+the [handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/e2c8e6937/core/docs/issues/237/db-space-handoff-20260924.md).
+
 ---
 
-## 18.5 Assembly
+## 18.5 Selected writes and physical layout
 
 ```text
-   assemble(lane, groups)            borrows; the caller still owns the bodies
-   assemble_consuming(lane, groups)  consumes; releases each body as copied
-
-   header   PACK_MAGIC ‖ control area (HEADER_LEN = 16)
-   directory  one entry per group
-              ordinary/native: 16 B   whole-file: 4 B (starts only)
-   bodies   the framed groups, in order
+pack BLOB
+├─ 24-B control area: magic, version, group count, declared used length
+├─ fixed directory: 4,096 B for ordinary/native/pooled;
+│                   1,024 B for whole-file
+└─ framed group bodies, starting after the fixed directory
 ```
 
-The `closing` flag in `assemble_write` chooses between them:
-
-| Situation | Call | Why |
-| --- | --- | --- |
-| the pack stays open | `assemble` | a later group may still append, so the tail must survive |
-| the pack is full and being replaced | `assemble_consuming` | *"its tail is dead: the assembly consumes the groups and releases each body as it is copied instead of holding both"* |
-
-So the two paths exist to avoid holding two copies of a pack body at the moment a
-pack is retired — the one point where a naive implementation would double its
-transient memory.
+`LanePlacement::select_many` returns one `SelectedWrite` for each pack
+receiving groups in that call. It carries only the new bodies, directory
+entries, control area and their fixed offsets. A newly created row uses
+`zeroblob(capacity)`; the SQLite writer then writes those three regions
+through an incremental BLOB handle. The payload lanes close each call's
+last pack at its exact used length. Pooled metadata may append to its one
+open row, keeping its previously assigned group and body offsets.
+Neither path needs to assemble and rewrite the entire pack for every
+append. The `assemble` and `assemble_consuming` helpers remain bounded
+format assembly operations; they are not the placement writer's hot path.
 
 ---
 

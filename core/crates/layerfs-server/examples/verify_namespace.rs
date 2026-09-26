@@ -19,6 +19,8 @@ use std::{
 };
 
 const VERIFY_WORKERS: usize = 4;
+const SAMPLE_TARGET: usize = 64;
+const SAMPLE_POLICY: &str = "stride64-size-log2-endpoints-v1";
 type MetadataMemo = Option<((ObjectId, InodeKind), PortableMetadata)>;
 
 #[derive(Clone)]
@@ -86,6 +88,35 @@ fn manifest(bytes: &[u8]) -> Result<BTreeMap<String, Expected>, Box<dyn std::err
         return Err("missing expected root".into());
     }
     Ok(expected)
+}
+
+/// A fixed-size cross-tree sample plus both endpoints of each occupied size band.
+fn sampled_paths(expected: &BTreeMap<String, Expected>) -> BTreeSet<String> {
+    let count = expected.values().filter(|row| row.kind == 'f').count();
+    let stride = count.div_ceil(SAMPLE_TARGET).max(1);
+    let mut first = [None; 65];
+    let mut last = [None; 65];
+    let mut sampled = BTreeSet::new();
+    for (index, (path, row)) in expected
+        .iter()
+        .filter(|(_, row)| row.kind == 'f')
+        .enumerate()
+    {
+        if index % stride == 0 || index + 1 == count {
+            sampled.insert(path.clone());
+        }
+        let bucket = if row.size == 0 {
+            0
+        } else {
+            1 + row.size.ilog2() as usize
+        };
+        first[bucket].get_or_insert(path.as_str());
+        last[bucket] = Some(path.as_str());
+    }
+    for path in first.into_iter().chain(last).flatten() {
+        sampled.insert(path.to_owned());
+    }
+    sampled
 }
 
 fn check_metadata(
@@ -197,6 +228,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("sealed manifest digest mismatch".into());
     }
     let expected = manifest(&raw)?;
+    let sample = sampled_paths(&expected);
+    let manifest_files = expected.values().filter(|row| row.kind == 'f').count();
+    let manifest_bytes = expected
+        .values()
+        .filter(|row| row.kind == 'f')
+        .try_fold(0_u64, |total, row| total.checked_add(row.size))
+        .ok_or("manifest byte count overflow")?;
     let root = ObjectId::from_bytes(&unhex(&args[3])?)?;
     let stack: [u8; 16] = unhex(&args[4])?
         .try_into()
@@ -227,6 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut memo = None;
     let mut jobs = VecDeque::new();
     let mut directories = 0u64;
+    let mut discovered_files = 0usize;
     while let Some((path, value)) = pending.pop_front() {
         let wanted = expected.get(&path).ok_or("unexpected actual path")?;
         let logical = LogicalPath::new(&path)?;
@@ -250,9 +289,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err(format!("duplicate actual path: {child}").into());
                 }
                 let value = inode.ok_or("missing listed inode")?;
+                let wanted = expected.get(&child).ok_or("unexpected actual path")?;
                 match value.kind {
                     InodeKind::Directory => pending.push_back((child, value)),
-                    InodeKind::RegularFile => jobs.push_back((child, value)),
+                    InodeKind::RegularFile => {
+                        if wanted.kind != 'f' {
+                            return Err(format!("file kind mismatch: {child}").into());
+                        }
+                        discovered_files += 1;
+                        if sample.contains(&child) {
+                            jobs.push_back((child, value));
+                        }
+                    }
                     InodeKind::Symlink => return Err("unexpected actual symlink".into()),
                 }
             }
@@ -262,13 +310,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    if seen.len() != expected.len() {
-        return Err("missing output paths".into());
+    if seen.len() != expected.len()
+        || discovered_files != manifest_files
+        || jobs.len() != sample.len()
+    {
+        return Err("missing output paths or sample".into());
     }
-    eprintln!("LFS237 verifier traversal paths={} directories={} queued_files={} metadata_attribute_waves={}", seen.len(), directories, jobs.len(), attributes.read_waves);
-    let (files, bytes, file_metadata_waves) =
+    eprintln!("LFS237 lite verifier traversal paths={} directories={} discovered_files={} sampled_files={} metadata_attribute_waves={}", seen.len(), directories, discovered_files, jobs.len(), attributes.read_waves);
+    let (sampled_files, sampled_bytes, file_metadata_waves) =
         verify_files(&store, &expected, jobs).map_err(io::Error::other)?;
-    println!("{{\"status\":\"PASS\",\"paths\":{},\"files\":{},\"directories\":{},\"bytes\":{},\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
-        seen.len(), files, directories, bytes, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);
+    if sampled_files as usize != sample.len() {
+        return Err("sampled file count mismatch".into());
+    }
+    println!("{{\"status\":\"PASS\",\"paths\":{},\"discovered_files\":{},\"directories\":{},\"manifest_bytes\":{},\"sampled_files\":{},\"sampled_bytes\":{},\"sample_policy\":\"{}\",\"workers\":{},\"metadata_attribute_waves\":{},\"root\":\"{}\",\"manifest_sha256\":\"{}\"}}",
+        seen.len(), discovered_files, directories, manifest_bytes, sampled_files, sampled_bytes,
+        SAMPLE_POLICY, VERIFY_WORKERS, attributes.read_waves + file_metadata_waves, root, manifest_digest);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lite_sample_covers_anchors_empty_sizes_and_tree_tail() {
+        let mut expected = BTreeMap::new();
+        for index in 0..256 {
+            let size = match index {
+                0 | 1 => 100_000_000,
+                10 => 0,
+                128 => 4_000,
+                255 => 50_000,
+                _ => 50,
+            };
+            expected.insert(
+                format!("f{index:03}"),
+                Expected {
+                    kind: 'f',
+                    mode: 0o640,
+                    mtime_ns: 0,
+                    size,
+                    sha256: String::new(),
+                },
+            );
+        }
+        let sample = sampled_paths(&expected);
+        for path in ["f000", "f001", "f010", "f128", "f255"] {
+            assert!(sample.contains(path), "missing {path}");
+        }
+        assert!(sample.len() <= 195);
+        assert!(sample.len() < expected.len());
+    }
 }

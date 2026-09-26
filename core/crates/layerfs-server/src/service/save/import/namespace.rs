@@ -126,33 +126,15 @@ pub(crate) fn build_namespace(
         .ok_or(Code::Capacity)?;
     progress.tick()?;
     let serials: Vec<u64> = (root_serial..last).collect();
-    let (metadata, content_roots) = prerequisites(
+    let inodes = prerequisites(
         store,
         provider,
         entries,
+        &serials,
         files_just_imported,
         progress,
         timer,
     )?;
-    let inodes: Vec<InodeUpdate> = entries
-        .iter()
-        .enumerate()
-        .map(|(index, entry)| {
-            Ok(InodeUpdate {
-                serial: serials[index],
-                value: InodeValue {
-                    kind: kind_of(entry.kind),
-                    namespace_ref_count: 0,
-                    content_root: match entry.kind {
-                        RecordKind::RegularFile => entry.content.ok_or(Code::InvalidInput)?,
-                        RecordKind::Symlink => content_roots[index],
-                        RecordKind::Directory => content_roots[index],
-                    },
-                    metadata_root: metadata[index],
-                },
-            })
-        })
-        .collect::<Result<_, Failure>>()?;
     let directories = directory_updates(entries, &serials)?;
     let input = FilesystemInput {
         base: None,
@@ -233,18 +215,16 @@ pub(crate) fn build_namespace(
 
 /// Builds and saves the attribute trees and symlink targets the tree refers to.
 ///
-/// Returns one metadata root per entry and one content root per entry; a
-/// directory's and a regular file's content root come from elsewhere, so their
-/// slots carry the metadata root as a harmless placeholder that the caller
-/// overwrites.
+/// Constructs each typed inode directly as its prerequisite roots are emitted.
 fn prerequisites(
     store: &Store,
     provider: &dyn AuthenticatedObjects,
     entries: &[PreparedEntry],
+    serials: &[u64],
     files_just_imported: bool,
     progress: &mut ImportProgress<'_>,
     timer: &TimingScope<'_, Active>,
-) -> Result<(Vec<ObjectId>, Vec<ObjectId>), Failure> {
+) -> Result<Vec<InodeUpdate>, Failure> {
     let mut save = store
         .begin_save(timer.child("history.begin_prerequisite_save"))
         .map_err(storage)?;
@@ -252,12 +232,11 @@ fn prerequisites(
         let mut handoff = SaveHandoff::new(&mut save);
         let result = timer.child("history.prerequisites").run(|_| {
             let mut objects = FilesystemObjects::new(provider, &mut handoff);
-            let mut metadata = Vec::with_capacity(entries.len());
-            let mut content_roots = Vec::with_capacity(entries.len());
+            let mut inodes = Vec::with_capacity(entries.len());
             // Adjacent equal portable fields have the same canonical metadata root.
             // One slot avoids an entry-count-sized cache on heterogeneous imports.
             let mut previous_metadata = None;
-            for entry in entries {
+            for (index, entry) in entries.iter().enumerate() {
                 progress.tick()?;
                 let kind = kind_of(entry.kind);
                 let value = PortableMetadata {
@@ -302,10 +281,17 @@ fn prerequisites(
                     }
                     RecordKind::Directory => metadata_root,
                 };
-                metadata.push(metadata_root);
-                content_roots.push(content_root);
+                inodes.push(InodeUpdate {
+                    serial: serials[index],
+                    value: InodeValue {
+                        kind,
+                        namespace_ref_count: 0,
+                        content_root,
+                        metadata_root,
+                    },
+                });
             }
-            Ok((metadata, content_roots))
+            Ok(inodes)
         });
         let retained = handoff.take_failure();
         drop(handoff);

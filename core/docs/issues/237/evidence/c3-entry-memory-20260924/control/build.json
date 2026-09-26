@@ -1,0 +1,17 @@
+{
+  "binaries": {
+    "benchmark_init_memory": {
+      "path": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/binary-archive/56f943e017c16d051e14beeee931e4d71b9d39d63f649cba4e1521f65c914b98/benchmark_init_memory",
+      "sha256": "56f943e017c16d051e14beeee931e4d71b9d39d63f649cba4e1521f65c914b98"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/fd42/layerfs/benchmark-results/fs-bench-pro/binary-archive/71c1e856e08aed31fa80740d76988e2d65677e1ea7ef46b64ab6b985c5563d88/verify_namespace",
+      "sha256": "71c1e856e08aed31fa80740d76988e2d65677e1ea7ef46b64ab6b985c5563d88"
+    }
+  },
+  "command": null,
+  "mode": "exact-binary-reuse",
+  "profile": "release",
+  "status": "PASS",
+  "wall_ns": 0
+}
