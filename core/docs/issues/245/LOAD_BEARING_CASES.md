@@ -7,6 +7,14 @@ after the earlier [#243 shell selection](../243/PHASE1_CONTRACT.md) is repaired
 and verified. The sizes and commands below are proposals, not a frozen test
 selection or measured result. No success, speed, or capacity claim follows.
 
+The [post-#252 source review](LOAD_BEARING_CASE_REVIEW.md) evaluates every row
+against product source `f74dbe77da12fa533587be8a578375bce3f19373` and
+records one uncovered base-resident directory-move case as
+[#258](https://github.com/Ephemeral-AI-Lab/layerfs/issues/258). The “current”
+1,024-piece, 256-interval and 8 MiB final-replacement figures below belong to
+this earlier proposal, not the later generic `SaveFile` implementation. The
+case definitions remain proposed and have not been sampled.
+
 The caller remains the public `WorkspaceApi::exec(command)`, which runs
 `/bin/sh -c` in the mounted Workspace. Inputs live in the Linux image under
 `/fixtures/stress/`, outside the mount; no registry, network, LayerFS edit tool,
@@ -63,6 +71,7 @@ destination.
 | Large fresh file and append | Image has a proposed 256 MiB file. `cp /fixtures/stress/fresh.bin packages/big/new.bin`; a separate case uses `cat /fixtures/stress/append.bin >> packages/big/existing.bin`. | Complete new/extended bytes and modes, old root unchanged, no partial file in the published tree. | Thousands of ordinary writes may exceed 1,024 pieces; bounded private backing and one-pass Commit construction. New-file and existing-file append use different Commit routes. |
 | Shell-driven prepend/insert | Base has a proposed 64 MiB file. Shell builds `file.next` with `cat /fixtures/stress/prefix.bin file > file.next` and `mv -f file.next file`; a separate in-place-shift algorithm may be registered later. | Exact shifted bytes, length, replacement semantics, and old Commit. | This *command* sends the full new file through FUSE; a local index cannot erase that I/O. Test temp-file write/rename throughput and namespace correctness separately from true in-place shifting. |
 | Printed logs versus a Workspace log file | Image has deterministic 16 KiB stdout and stderr files plus a proposed multi-MiB log payload. One Exec runs `cat /fixtures/stress/stdout.txt; cat /fixtures/stress/stderr.txt >&2`; another runs `cat /fixtures/stress/log.bin >> logs/build.log`. | For printing: exact retained first 8 KiB of each stream, both truncation flags, exit status, and unchanged Branch head. For file logging: complete committed `logs/build.log` bytes and old root. | Printing exercises bounded Exec output and pipe draining, **not** FUSE writes. Logging to `/workspace` exercises FUSE append, piece growth, backing disk, and Commit. Diagnostic daemon stderr is a third channel. |
+| Recursive content scan (`grep -r`) | One prepared, manifest-listed tree contains many regular **text** files with a known total byte count and an absent fixed needle. One read-only Exec runs `LC_ALL=C grep -rF -- '<absent-needle>' packages >/dev/null; rc=$?; [ "$rc" -eq 1 ]`. A separate metadata-only control runs `find packages -type f -print >/dev/null` on an independent copy of the same master. No symlinks or unreadable paths enter the fixture. | Exec exits zero only when grep scanned without a match or error; independent verification checks the frozen file manifest, absence of the needle, no mutations, unchanged Branch head and empty output. The metadata control must issue no file-content READ; the grep case must report actual FUSE READ bytes and Store payload-read bytes. | Compare namespace traversal with content scanning without conflating their work. Directory metadata can be fetched lazily while grep forces file-content reads. Report full-command wall, bytes read, callbacks, host Store I/O, CPU, RSS and page cache under separately qualified cold cache states. Do not run the metadata control first on the grep sample's mount. |
 
 For each case, capture read/lookup/write/size/create/unlink/rename callbacks and
 bytes where available, per-call piece and index-page work, Commit input/scan and
