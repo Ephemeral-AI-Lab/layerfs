@@ -990,6 +990,51 @@ fn a_fold_that_removes_a_whole_branch_drops_its_level() {
 }
 
 #[test]
+fn one_walk_advances_without_rereading_the_path_above_each_leaf() {
+    let f = Fixture::new();
+    // 65,536 one-byte extents: 529 leaf pages under three level-1 branches
+    // under one root. A walk of the whole sequence must visit each page of the
+    // tree about once, not re-read the path from the root for every leaf.
+    let runs = 65_536u64;
+    let root = f.build(&separated(runs), runs).unwrap();
+    let (leaves, level, _) = structure(&f, root);
+    let pages = tree(&f, root).len();
+    f.store.reset();
+    let walked = f.walk(root, runs);
+    let reads = f.store.read_pages().len();
+    println!("PIECES_CURSOR leaves={leaves} level={level} pages={pages} reads={reads}");
+    assert_eq!(walked.len(), runs as usize);
+    assert_eq!(
+        walked.iter().map(|(_, piece)| piece.length).sum::<u64>(),
+        runs
+    );
+    // Per leaf the walk re-reads the page it steps inside and reads the leaf it
+    // enters: at most two page visits per page of the tree, plus the first
+    // descent. Reading every ancestor per leaf would cost about
+    // `height * leaves`, which this bound refuses.
+    assert!(
+        reads <= 2 * pages + 4,
+        "one walk read {reads} pages for a {pages}-page tree"
+    );
+    // Resuming from the middle of the sequence is bounded the same way: only
+    // the path to the leaf it starts in, then the same monotone advance.
+    f.store.reset();
+    let mut counts = 0usize;
+    let half = runs / 2;
+    f.with_window(|window| {
+        let mut cursor =
+            metadata_pieces::cursor(&f.store, root, half, runs, window, deadline()).unwrap();
+        while cursor.next(window).unwrap().is_some() {
+            counts += 1;
+        }
+    });
+    let resumed = f.store.read_pages().len();
+    println!("PIECES_CURSOR half={half} extents={counts} reads={resumed}");
+    assert_eq!(counts, (runs - half) as usize);
+    assert!(resumed <= 2 * pages + 4);
+}
+
+#[test]
 fn a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary() {
     let f = Fixture::new();
     // The declared maximum file: one base read of exactly 4 GiB, which the

@@ -124,18 +124,26 @@ it was.
 
 `metadata_pieces::Cursor` holds one page path and one leaf's records. A seek
 subtracts subtree lengths on the way down; `next` steps through the leaf and
-walks to the following leaf through the same path. Reads and one Commit walk
-therefore visit `O(H + touched leaves)` index pages and never materialize a
-file's whole extent list. The cursor checks the operation deadline between page
-reads.
+walks to the following leaf through the same path. The cursor checks the
+operation deadline between page reads and never materializes a file's whole
+extent list.
+
+Each frame of the path remembers the logical start and the length of the child
+it selected ([§9](#9-monotone-cursor-advance-2026-09-26-248-phase-2)). Advancing
+to the following leaf therefore subtracts remembered lengths instead of
+re-reading the path from the root: one page read for each frame the step passes
+through, plus one for each level the following descent enters. Summed over a
+whole walk the page visits are `O(H + L)` for `H` the height and `L` the leaves
+the walk reaches — each page of the tree is entered about once — rather than
+`O(H)` per leaf.
 
 ## 5. Complexity
 
 | Path | Work per accepted callback |
 | --- | --- |
 | Local write index | `O(H + K)` extents folded plus the retained bytes; only touched leaves and their ancestors are written |
-| One read at an offset | `O(H + touched leaves)` |
-| Commit walk of one file | one ordered pass, bounded edit buffer and bounded cursor |
+| One read at an offset | `O(H)` index pages plus the leaf it lands in |
+| Commit walk of one file | one ordered pass, `O(H + L)` private page visits for `L` leaves, bounded edit buffer and bounded cursor |
 
 `H ≈ log_F P` for `P` extents, fanout `F` (a branch page holds 248 children, a
 leaf 124 records) and `K` extents touched by one callback. The logical file
@@ -258,3 +266,41 @@ no page, drops the node and lets the root lose a level, leaving the untouched
 exactly one level below their parent and that the earlier generation still reads
 what it published. These are structural and work counts from the same traversal
 the mounted path uses, not a capacity or latency claim.
+
+## 9. Monotone cursor advance (2026-09-26, #248 phase 2)
+
+Written against the source this section is committed with. It changes no page
+format, no public API and no canonical Store representation: the same pages are
+read in the same order, and the sequence a walk reports is identical.
+
+**The cost this removes.** §4 promised `O(H + L)` page visits for a walk. The
+cursor's `step_in` re-read every ancestor from the root each time it moved to
+the following leaf, so a walk of `L` leaves paid `O(H)` reads per leaf — `O(H*L)`
+over the tree — and a Commit lowering pass or a replacement transfer inherited
+that factor. It is exactly the "reopened cursors reread ancestors" term the
+joint study lists for the frozen file lowering.
+
+**The rule.** A frame keeps what its parent told it: which child it selected,
+where that child's subtree starts and how long it is. Steps follow from
+remembered arithmetic:
+
+| Event | Page reads |
+| --- | --- |
+| next leaf under the same branch | re-read that branch page, then read the leaf it enters |
+| next child of a higher branch | re-read that one branch page, then one read per level the descent below it enters |
+| leaf reached, no frame has another child | none: the walk is over |
+
+Every page a walk enters is therefore read about once, plus one re-read for each
+step inside it, which is bounded by the tree's own page count. A walk of the
+65,536-extent shape (529 leaves, 533 pages, height 2) reads 1,061 pages; resuming
+at its midpoint and walking the remaining 32,768 extents reads 532. Reading the
+path from the root per leaf costs about three reads per leaf on the same shape
+(~1,587), which the committed test refuses.
+
+**Counted evidence.** Through the page-format-identical in-memory store the
+external tests use: `one_walk_advances_without_rereading_the_path_above_each_leaf`
+asserts the full walk stays within twice the tree's page count plus the first
+descent, that the same bound holds for a walk resumed at the midpoint, and that
+both return the sequence exactly, in order, with every byte accounted for. These
+are page-visit counts from the same traversal the mounted path uses, not a
+latency or throughput claim.

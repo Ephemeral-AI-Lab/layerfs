@@ -1,11 +1,17 @@
-//! The bounded reader for one file's length-indexed extent sequence.
+//! The bounded ordered reader for one file's length-indexed extent sequence.
 //!
-//! The cursor holds one page path and one leaf's records, so a read or a Commit
-//! walk visits `O(H + touched leaves)` index pages and never materializes a
-//! file's whole extent list. It checks the operation deadline between page
-//! reads. Levels are relative: a branch directly above the leaves declares 1
-//! and every branch declares exactly one below its parent, so the root declares
-//! the tree's height.
+//! A cursor holds one page path and one leaf's records, so a read or a Commit
+//! walk visits `O(H + L)` index pages for `H` the tree's height and `L` the
+//! leaves it reaches, and never materializes a file's whole extent list. It
+//! checks the operation deadline between page reads.
+//!
+//! Levels are relative: a branch directly above the leaves declares 1 and every
+//! branch declares exactly one below its parent, so the root declares the tree's
+//! height. Every frame remembers the logical start and length of the child it
+//! selected, so advancing to the next leaf subtracts those remembered lengths
+//! instead of re-reading the path from the root: one page read per frame the step
+//! passes through, plus one per level the following descent enters. Summed over a
+//! whole walk that is `O(H + L)`, not one path read per leaf.
 use super::{
     metadata_pages::{self, PageRef, PieceRecord},
     metadata_pieces::PieceStore,
@@ -60,14 +66,18 @@ pub struct Cursor<'a, S: PieceStore + ?Sized> {
     at: usize,
     point: u64,
 }
-/// One branch page above the current leaf: the page itself, its declared
-/// level, how many children it holds and which one the walk is inside.
+/// One branch page above the current leaf: the page itself, its declared level,
+/// how many children it holds, which one the walk is inside, and the logical
+/// start and length of that child's subtree. The two positions are what let the
+/// walk step to the next child without re-reading the path above it.
 #[derive(Clone, Copy)]
 struct Frame {
     page: PageRef,
     level: u8,
     count: u16,
     index: u16,
+    start: u64,
+    step: u64,
 }
 impl Frame {
     const EMPTY: Self = Self {
@@ -75,6 +85,8 @@ impl Frame {
         level: 0,
         count: 0,
         index: 0,
+        start: 0,
+        step: 0,
     };
 }
 impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
@@ -156,22 +168,28 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
                 return Err(WorkspaceError::Io);
             }
             let mut selected = children.len() - 1;
+            let mut start = lower;
             for (index, child) in children.iter().enumerate() {
                 let end = lower.checked_add(child.length).ok_or(WorkspaceError::Io)?;
                 if offset < end || index + 1 == children.len() {
                     selected = index;
+                    start = lower;
                     break;
                 }
                 lower = end;
             }
+            let child = children[selected];
             cursor.stack[cursor.depth] = Frame {
                 page,
                 level,
                 count: children.len() as u16,
                 index: selected as u16,
+                start,
+                step: child.length,
             };
             cursor.depth += 1;
-            page = children[selected].page;
+            page = child.page;
+            lower = start;
         }
     }
     /// The next extent in sequence order, with its derived logical start.
@@ -206,7 +224,10 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
         }
         Ok((start, piece))
     }
-    /// Moves to the next leaf, if the sequence holds one.
+    /// Moves to the next leaf, if the sequence holds one. Every frame already
+    /// remembers where its selected child starts and how long it is, so the
+    /// first frame with another child is the whole decision: no page above this
+    /// leaf is read to find it.
     fn advance(&mut self, window: &mut Window) -> Result<bool, WorkspaceError> {
         clock(self.deadline)?;
         while self.depth > 0 {
@@ -214,50 +235,51 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
             let frame = self.stack[self.depth];
             let next = frame.index.saturating_add(1);
             if next < frame.count {
+                let start = frame
+                    .start
+                    .checked_add(frame.step)
+                    .ok_or(WorkspaceError::Io)?;
                 self.stack[self.depth].index = next;
-                return self.step_in(window).map(|()| true);
+                return self.step_in(start, window).map(|()| true);
             }
         }
         Ok(false)
     }
-    /// Rebuilds the walk under the child the frame at the current depth now
-    /// selects. Every ancestor is re-read for its children's lengths, so the
-    /// new leaf's logical start is accumulated, not remembered.
-    fn step_in(&mut self, window: &mut Window) -> Result<(), WorkspaceError> {
-        let mut lower = 0u64;
-        for height in 0..=self.depth {
-            let frame = self.stack[height];
-            let bytes = self.store.read(frame.page, window)?;
-            if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces
-                || bytes[48] == 0
-            {
-                return Err(WorkspaceError::Io);
-            }
-            let (level, children) = metadata_pages::decode_pieces_branch(
-                self.store.incarnation(),
-                frame.page,
-                &bytes,
-                MAX_FILE,
-            )?;
-            if level != frame.level || children.len() != usize::from(frame.count) {
-                return Err(WorkspaceError::Io);
-            }
-            let index = usize::from(frame.index);
-            let child = children.get(index).ok_or(WorkspaceError::Io)?;
-            lower = children[..index].iter().try_fold(lower, |sum, c| {
-                sum.checked_add(c.length).ok_or(WorkspaceError::Io)
-            })?;
-            if height == self.depth {
-                // The frames above stay; the subtree below is rebuilt.
-                self.depth += 1;
-                return self.enter(child.page, lower, window);
-            }
+    /// Selects the frame's current child one more time and descends the leftmost
+    /// path under it, which starts at `start`. Only the page whose child the
+    /// step enters is re-read; each level below it is read once as the descent
+    /// passes through.
+    fn step_in(&mut self, start: u64, window: &mut Window) -> Result<(), WorkspaceError> {
+        let frame = self.stack[self.depth];
+        let bytes = self.store.read(frame.page, window)?;
+        if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces
+            || bytes[48] == 0
+        {
+            return Err(WorkspaceError::Io);
         }
-        Err(WorkspaceError::Io)
+        let (level, children) = metadata_pages::decode_pieces_branch(
+            self.store.incarnation(),
+            frame.page,
+            &bytes,
+            MAX_FILE,
+        )?;
+        if level != frame.level || children.len() != usize::from(frame.count) {
+            return Err(WorkspaceError::Io);
+        }
+        let index = usize::from(frame.index);
+        let child = *children.get(index).ok_or(WorkspaceError::Io)?;
+        self.stack[self.depth] = Frame {
+            index: frame.index,
+            start,
+            step: child.length,
+            ..frame
+        };
+        self.depth += 1;
+        self.load(child.page, start, window)
     }
     /// Loads the leftmost leaf of the subtree at `page`, which starts at
     /// `lower`, pushing a frame for every branch level it passes.
-    fn enter(
+    fn load(
         &mut self,
         mut page: PageRef,
         lower: u64,
@@ -295,15 +317,19 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
             if self.depth > 0 && level != self.stack[self.depth - 1].level.saturating_sub(1) {
                 return Err(WorkspaceError::Io);
             }
+            let child = children[0];
             self.stack[self.depth] = Frame {
                 page,
                 level,
                 count: children.len() as u16,
                 index: 0,
+                start: lower,
+                step: child.length,
             };
             self.depth += 1;
-            page = children[0].page;
-            // The first child starts exactly where its parent's subtree does.
+            // The first child starts exactly where its parent's subtree does,
+            // so the logical start carries over unchanged.
+            page = child.page;
         }
     }
 }
