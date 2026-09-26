@@ -24,8 +24,9 @@ The Init ordering-backing correction describes product commit
 their separate source bases.
 The #243 range-ioctl retirement describes the FUSE source in the same commit
 as this note. Historical range-ioctl paragraphs below describe the earlier
-opt-in carrier; the current Linux adapter returns `ENOTTY` for ioctl, and
-ordinary Workspace writes continue through FUSE WRITE and the internal
+opt-in carrier. The #252 follow-up removes the remaining FUSE ioctl override;
+the pinned `fuser` default refuses unimplemented ioctl requests with `ENOSYS`.
+Ordinary Workspace writes continue through FUSE WRITE and the internal
 Workspace piece operations.
 The #232 Exec progress rule below describes the bridge and daemon source in
 the same commit as that rule; earlier sections retain their stated bases.
@@ -53,7 +54,7 @@ opcodes 3 (`ConstructFile`), 4 (`EditFile`) and 5
 (`UpdatePreparedFilesystem`) and their dedicated codecs/handlers are absent.
 The direct Workspace range entrypoints and projected range wire fields are
 absent. Status response envelopes are now 219 bytes and writable-status
-response envelopes 405 bytes; FUSE ioctl still refuses mutation.
+response envelopes 405 bytes. The Linux adapter implements no ioctl callback.
 `InitLayerStack`, `AddLayer` and
 `DiscardStage` remain in the history grammar because the active Linux history
 route in `core/crates/layerfs-daemon/tests/history_route.py` uses them. The

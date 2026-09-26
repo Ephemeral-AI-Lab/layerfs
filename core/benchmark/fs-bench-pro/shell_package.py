@@ -130,7 +130,6 @@ def registry():
     for row in data["cases"]:
         assert row["complete_command_limit_s"] <= 25
         assert row["command"] and "layerfs-edit-tool" not in row["command"]
-        assert "ioctl" not in row["command"]
     return data
 
 

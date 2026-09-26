@@ -6,7 +6,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'layerfs-workspace/
 import stage_route as driver
 
 driver.CASES = {
-    'no_range_ioctl': ['former-STATE-ioctl-returns-ENOTTY-with-no-range-classes'],
     'positional': ['mounted-overwrite-gap-alias-and-A-B-A-incremental-Commits'],
     'append': ['mounted-concurrent-append-preserves-live-EOF-and-fd-positions'],
     'read_race': ['mounted-old-read-refuses-new-WRITE-before-ingress-and-keeps-read-progress'],
@@ -23,7 +22,6 @@ driver.REQUIREMENTS = {case: ['W-01', 'W-07', 'W-12', 'B-01', 'S-15', 'S-18'] fo
 driver.REQUIREMENTS['native_save'] += ['S-03', 'S-11']
 driver.REQUIREMENTS['append'] += ['W-02']
 driver.REQUIREMENTS['positional'] += ['W-04', 'W-11']
-driver.REQUIREMENTS['no_range_ioctl'] += ['W-01']
 driver.REQUIREMENTS['mappings'] += ['W-13']
 driver.REQUIREMENTS['ingress'] += ['B-09', 'B-10']
 driver.REQUIREMENTS['quota'] += ['B-14', 'B-20']

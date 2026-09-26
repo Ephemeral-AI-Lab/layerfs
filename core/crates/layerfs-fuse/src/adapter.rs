@@ -597,21 +597,6 @@ impl Filesystem for Adapter {
         }
     }
 
-    fn ioctl(
-        &self,
-        req: &Request,
-        ino: INodeNo,
-        fh: FileHandle,
-        flags: IoctlFlags,
-        cmd: u32,
-        input: &[u8],
-        out_size: u32,
-        reply: ReplyIoctl,
-    ) {
-        let _ = (req, ino, fh, flags, cmd, input, out_size);
-        reply.error(Errno::ENOTTY);
-    }
-
     fn mknod(
         &self,
         req: &Request,

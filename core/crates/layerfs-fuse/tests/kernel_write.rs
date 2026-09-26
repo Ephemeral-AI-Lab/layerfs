@@ -97,31 +97,6 @@ mod linux {
 
     #[test]
     #[ignore = "requires real privileged Linux FUSE and native service"]
-    fn kernel_write_no_range_ioctl() {
-        let f = Fixture::new(Gate::None);
-        let data = data(&f, None);
-        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
-        let file = open_mounted(&f, "data.bin", false);
-        let mut request = [0_u8; 88];
-        request[..4].copy_from_slice(b"LFS2");
-        let result =
-            unsafe { libc::ioctl(file.as_raw_fd(), 0xc058_f540_u32 as _, request.as_mut_ptr()) };
-        assert_eq!(result, -1);
-        assert_eq!(
-            std::io::Error::last_os_error().raw_os_error(),
-            Some(libc::ENOTTY)
-        );
-        drop(file);
-        assert_eq!(
-            f.workspace.status().unwrap().projection_calls.len(),
-            PROJECTION_CLASSES
-        );
-        finish(&f, data, &mut mount);
-        check("former-STATE-ioctl-returns-ENOTTY-with-no-range-classes");
-    }
-
-    #[test]
-    #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_write_positional() {
         let f = Fixture::new(Gate::None);
         let data = data(&f, Some(8192));
