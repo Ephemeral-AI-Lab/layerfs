@@ -220,21 +220,27 @@ unless a measured case requires the tighter shape.
 
 These follow phase 2's closure; they are not a substitute for 2.R1-2.R2.
 
-**The `binary_plus_tree/` module layout is not a phase-3 deliverable.** It is the
-SRP *destination* the [joint study](JOINT_248_256_TREE_RESEARCH.md#srp-extraction-plan)
-proposes, and the [spec](POST_PHASE1_IMPLEMENTATION_SPEC.md) permits it only
-"where current code cannot be reused". Phase 3's gate is behavioural - point
-mutation, ordered cursor, lifted counts, one head - and moving files buys
-reviewability, not behaviour. Relocate a responsibility only when the change that
-needs the room lands with it, keep the old reexports while one responsibility
-moves, report the move as migration (net production LOC ~0) and never as an
-algorithmic improvement. The trigger is the 999-physical-line ceiling: at this
-head `metadata_pieces.rs` has 964 lines, `ownership.rs` 943 and `metadata.rs` 897,
-while the keyed files phase 3 edits (`metadata_index.rs` 428,
-`metadata_build.rs` 79, `metadata_pages.rs` 539) have room. If the keyed delete,
-rebalance and ordered cursor do not fit those files, split them into
-`binary_plus_tree/keyed/{format,update,delete,cursor,build}.rs` in the same commit
-as the behaviour that needs it.
+**Where the `binary_plus_tree/` shape lives.** Phase 3 owns it, as slice 3.0
+below: the two tree algorithms get their proposed component there, by relocation
+and before the new keyed behaviour is written, so 3.1 authors
+`keyed/delete.rs` and `keyed/cursor.rs` where they belong instead of growing
+`metadata_index.rs` again. Phase 2 was the extent-tree phase and shipped its work
+in place; phase 3 is the keyed-tree phase, and the keyed half is the one that
+needs the room first. The
+[joint study](JOINT_248_256_TREE_RESEARCH.md#srp-extraction-plan) and the
+[spec](POST_PHASE1_IMPLEMENTATION_SPEC.md) define the destination; this revision
+only fixes which phase realizes it.
+
+Three rules keep 3.0 honest. It is a **relocation**: no page format, no algorithm
+and no public path changes, every existing test runs unedited, and the move is
+reported as migration with net production LOC near zero - never as an
+algorithmic improvement. It moves **one responsibility per file**, keeping the
+old module paths as reexports until nothing imports them. And it does not become
+a reason to touch behaviour: the extent half's ceiling pressure is real
+(`metadata_pieces.rs` 964 lines at this head) but the `page_store/` and
+`payload/` extractions stay deferred until `ownership.rs` (943) or
+`metadata.rs` (897) is the file a change actually needs - that is stage two of
+the same relocation, not part of 3.0.
 
 The pin is measured, not guessed. `tests/wide_namespace.rs` creates 200 names in
 one directory through the public API and, at `c30fe68a0`, reports
@@ -245,6 +251,7 @@ the admission as its reason; it must pass unchanged once 3.1 and 3.2 land.
 
 | Slice | Where | What the code must do | Focused tests that prove it |
 | ---: | --- | --- | --- |
+| 3.0 | `backing/` only | Realize the study's tree component by **relocating** the two existing tree algorithms, with no behaviour change: `binary_plus_tree/mod.rs` (thin), `extent/{mod,format,splice,cursor}.rs` from `metadata_pieces.rs`, `metadata_cursor.rs` and the piece half of `metadata_pages.rs`, and `keyed/{mod,format,update,build}.rs` from `metadata_index.rs`, `metadata_build.rs` and the cell half of `metadata_pages.rs`. Keep the shared 4 KiB header, `PageRef` and `PageKind` in one place the three specializations import, keep the old module paths as reexports so nothing else moves, and keep every `mod.rs` under 200 physical lines. | The whole existing suite, unchanged and unedited: if any case needs editing, the move changed behaviour and is not a relocation. |
 | 3.1 | `backing/metadata_index.rs`, `overlay/directories.rs` | Add a path-local keyed delete (leaf removal, sibling borrow or merge on underflow, root collapse) and a persistent ordered key cursor that keeps its path across leaves; rewrite `keep_name`/`drop_entry`/`remove_name` as point mutations instead of rebuilding a whole page from a resident `Vec` of at most 128 names; drop `Directory::parse`'s `count > 128` and resident-128 caps while keeping the `u16` count and charging the local delta. | `tests/wide_namespace.rs` (200 names, rename/unlink/recreate) plus counted cases: one name walk visits each reached leaf once, and one rename or unlink rewrites only its path. |
 | 3.2 | `runtime/state.rs` (`frontier_bytes`), `overlay/snapshot.rs`, `commit/reconcile.rs` | Compute the generation frontier charge from the actual dirty/name/row counts and reserve it from the host budget, so a refusal is a real budget refusal rather than `dirty > 128 \|\| names > 128` or a computed prepared size over `METADATA_BYTES` (32 KiB). Keep the prepared-namespace accounting exact so 3.3 can declare it. | A many-identity generation (at least 1,025 created files and names) admitted while the declared budget has room; a declared-budget exhaustion that refuses precisely and publishes nothing. |
 | 3.3 | `commit/directories.rs`, `commit/lower.rs` | Lower the frozen namespace with the 3.1 cursors: one ordered pass per record kind, exact declared totals, no `vector(128 + …)`, no `rows.len() == 128`, no `changes.len() == 128`, and still exactly one filesystem root and one head per generation. | Exact rows for a wide directory; old and new listing oracles; one published head. |
