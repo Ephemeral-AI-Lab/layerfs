@@ -40,10 +40,12 @@ verification gate.
   already proved and must not be redone, the exact code sites of every remaining
   gap, the work packages and their stop conditions, the operational playbook for
   mounted diagnostics, and the reporting requirements.
-- [D/E/F finish handoff](HANDOFF_D_E_F.md) is the current assignment: the
-  mounted write-path repair and the frozen control are done, the four gating
-  design decisions are recorded and owner-approved, and the remaining packages
-  (streaming transport, generations, the route harness, the candidate arm) are
+- [D/E/F finish handoff](HANDOFF_D_E_F.md) is the prior assignment: the four
+  gating design decisions are recorded and owner-approved, and its §8 remains
+  binding; everything it marks done stays done.
+- [E/F continuation handoff](HANDOFF_E_F_CONTINUATION.md) is the current
+  assignment: package D, the route harness and the frozen F target are done and
+  verified, package E is in flight, and the candidate arm and the leftovers are
   specified with their gates and stop conditions.
 
 ## Checkpoint (2026-09-26)
@@ -56,18 +58,20 @@ verification gate.
 | Evidence blocker 1 (retained prepared state) | ✅ closed | `issue245-shell-package-v3-prepared-01` |
 | F pre-optimization control arm | ✅ collected and qualifying (4/4 functional PASS) | `issue245-shell-package-v3-control-01` |
 | ~5.5 s cleanup diagnosis | ✅ explained and fixed | cleanup ~0.5 s in every passing row |
-| Evidence blocker 2 (route harness) | ⬜ not started | chain mapped in the finish handoff §4.1 |
-| Package D (streaming transport) | ⬜ not started; design decided | finish handoff §3, §8 D-1 |
-| Package E (generations + reconcile) | ⬜ not started; fix shape decided | finish handoff §3, §8 E-1 |
-| Package F candidate arm + target freeze | ⬜ not started; target decided | finish handoff §4.0, §8 F-1 |
+| Evidence blocker 2 (route harness) | ✅ closed this round | eight route cases PASS on the final source, receipts in `benchmark-results/fs-bench-pro/issue245-route-harness/*-f/` |
+| Package D (streaming transport) | ✅ closed this round | `036847824` (+342 LOC); descriptors as body-stream prefix, bounded replay spool, ceilings removed |
+| Package E (generations + reconcile) | 🟡 in flight, uncommitted | `writer_until` + reconcile restructure in the working tree; retry path, gate test and route verification remain |
+| Package F target freeze | ✅ frozen this round | [phase1-f-target/TARGET.md](evidence/phase1-f-target/TARGET.md), `bf9c3f5e0` |
+| Package F candidate arm | ⬜ not started | needs a fresh `prepare` at the frozen post-E source |
+| Three latent extent-sequence defects | ✅ fixed this round | `0d4834f81` (over-ceiling implicit base), `036847824` (O(pages) descend, post-insertion `Io`) |
 
 The four decisions that gate the remaining work (D's frame protocol, E's
 reconcile shape, the harness route, F's comparative target) were made with the
-owner on 2026-09-26 and are binding for the finish round — see
-[HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). Roughly half the issue by remaining
-effort is complete: the algorithmic foundation is real and proven on the
-mounted route; what remains is the streaming wire (D), continuous generations
-(E) and the before/after proof (F's candidate).
+owner on 2026-09-26 and are binding — see
+[HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). The streaming wire (D) and the route
+harness are closed; what remains is continuous generations (E) and the
+before/after proof (F's candidate arm), plus the deferred gates in
+[HANDOFF_E_F_CONTINUATION.md §3](HANDOFF_E_F_CONTINUATION.md).
 
 The first repair round is recorded in
 [Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md):

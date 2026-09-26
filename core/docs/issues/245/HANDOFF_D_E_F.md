@@ -1,11 +1,14 @@
 # #245 handoff: finish D, E and F — streaming transport, generations, frozen proof
 
-> **Status:** current handoff. Phase 1A, Phase 1B packages A–C, the mounted
-> write-path repair, evidence blocker 1 and the F **control** arm are done,
-> committed and gated on this branch. Packages D and E, the route harness
-> (blocker 2) and F's candidate arm are not started. The four design decisions
-> that gate the remaining work are **made and recorded** in §8 — proceed on
-> them, do not re-open them.
+> **Status:** superseded by
+> [HANDOFF_E_F_CONTINUATION.md](HANDOFF_E_F_CONTINUATION.md), which carries the
+> remaining work. Phase 1A, Phase 1B packages A–C, the mounted write-path
+> repair, evidence blocker 1 and the F **control** arm are done, committed and
+> gated on this branch. Package D, the route harness (blocker 2) and the F
+> target freeze were completed under this handoff; package E is in flight and
+> F's candidate arm is not started. The four design decisions that gate the
+> remaining work are **made and recorded** in §8 — proceed on them, do not
+> re-open them.
 
 Copy the assignment below into a new task. This is a **delta** handoff. Read it
 with [ARCHITECTURE.md](ARCHITECTURE.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md),
