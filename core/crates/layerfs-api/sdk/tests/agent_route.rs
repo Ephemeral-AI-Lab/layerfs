@@ -229,8 +229,8 @@ fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
     );
     assert!(status.projection_count("setattr").is_some());
     assert!(status.projection_count("rename").is_some());
-    assert_eq!(status.projection_count("range_state"), Some(0));
-    assert_eq!(status.projection_count("range_edit"), Some(0));
+    assert_eq!(status.projection_count("range_state"), None);
+    assert_eq!(status.projection_count("range_edit"), None);
     assert!(status.upstream_calls > 0);
     workspaces.unmount(&mount.id).unwrap();
     assert_eq!(sandboxes.list().unwrap()[0].id, primary);

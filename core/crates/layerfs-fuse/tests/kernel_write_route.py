@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'layerfs-workspace/
 import stage_route as driver
 
 driver.CASES = {
-    'no_range_ioctl': ['former-STATE-ioctl-returns-ENOTTY-with-zero-range-counters'],
+    'no_range_ioctl': ['former-STATE-ioctl-returns-ENOTTY-with-no-range-classes'],
     'positional': ['mounted-overwrite-gap-alias-and-A-B-A-incremental-Commits'],
     'append': ['mounted-concurrent-append-preserves-live-EOF-and-fd-positions'],
     'read_race': ['mounted-old-read-refuses-new-WRITE-before-ingress-and-keeps-read-progress'],

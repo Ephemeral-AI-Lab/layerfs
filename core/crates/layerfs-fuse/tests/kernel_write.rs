@@ -112,10 +112,12 @@ mod linux {
             Some(libc::ENOTTY)
         );
         drop(file);
-        assert_eq!(f.workspace.status().unwrap().projection_calls[9].1, 0);
-        assert_eq!(f.workspace.status().unwrap().projection_calls[10].1, 0);
+        assert_eq!(
+            f.workspace.status().unwrap().projection_calls.len(),
+            PROJECTION_CLASSES
+        );
         finish(&f, data, &mut mount);
-        check("no_range_ioctl");
+        check("former-STATE-ioctl-returns-ENOTTY-with-no-range-classes");
     }
 
     #[test]
