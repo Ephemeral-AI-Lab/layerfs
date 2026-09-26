@@ -202,6 +202,27 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                     e.u8(4)?;
                     e.blob(path)?;
                 }
+                Inspect::ChildAttributes { parent, name } => {
+                    e.u8(5)?;
+                    e.u64(*parent)?;
+                    e.blob(name)?;
+                }
+                Inspect::InodeAttributes { serial } => {
+                    e.u8(6)?;
+                    e.u64(*serial)?;
+                }
+                Inspect::InodeList {
+                    serial,
+                    after,
+                    entries,
+                    bytes,
+                } => {
+                    e.u8(7)?;
+                    e.u64(*serial)?;
+                    e.blob(after)?;
+                    e.u16(*entries)?;
+                    e.u32(*bytes)?;
+                }
             }
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
@@ -656,6 +677,17 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                 },
                 4 => Inspect::Attributes {
                     path: d.blob(4096)?,
+                },
+                5 => Inspect::ChildAttributes {
+                    parent: d.u64()?,
+                    name: d.blob(255)?,
+                },
+                6 => Inspect::InodeAttributes { serial: d.u64()? },
+                7 => Inspect::InodeList {
+                    serial: d.u64()?,
+                    after: d.blob(255)?,
+                    entries: d.u16()?,
+                    bytes: d.u32()?,
                 },
                 _ => return Err(Code::Unsupported.into()),
             };

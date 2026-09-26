@@ -169,6 +169,22 @@ pub enum Inspect {
     Readlink {
         path: Vec<u8>,
     },
+    /// A child of one immutable canonical directory, located by parent serial.
+    ChildAttributes {
+        parent: u64,
+        name: Vec<u8>,
+    },
+    /// One inode in an immutable canonical root, regardless of its current name.
+    InodeAttributes {
+        serial: u64,
+    },
+    /// A directory in an immutable canonical root, regardless of its path.
+    InodeList {
+        serial: u64,
+        after: Vec<u8>,
+        entries: u16,
+        bytes: u32,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectoryChange {
@@ -456,6 +472,20 @@ impl Request {
                 Inspect::Stat { path }
                 | Inspect::Attributes { path }
                 | Inspect::Readlink { path } => check_path(path)?,
+                Inspect::ChildAttributes { parent, name } => {
+                    check_serial(*parent)?;
+                    check_inspect_name(name)?;
+                }
+                Inspect::InodeAttributes { serial } => check_serial(*serial)?,
+                Inspect::InodeList {
+                    serial,
+                    after,
+                    entries,
+                    bytes,
+                } => {
+                    check_serial(*serial)?;
+                    check_inspect_list(after, *entries, *bytes)?;
+                }
                 Inspect::List {
                     path,
                     after,
@@ -463,14 +493,7 @@ impl Request {
                     bytes,
                 } => {
                     check_path(path)?;
-                    if after.len() > 255
-                        || *entries == 0
-                        || *entries > 128
-                        || *bytes == 0
-                        || *bytes > 16384
-                    {
-                        return Err(Code::Capacity.into());
-                    }
+                    check_inspect_list(after, *entries, *bytes)?;
                 }
             },
             _ => {}
@@ -641,4 +664,35 @@ fn check_path(path: &[u8]) -> Result<(), Failure> {
     } else {
         Ok(())
     }
+}
+
+fn check_serial(serial: u64) -> Result<(), Failure> {
+    if serial == 0 || serial > i64::MAX as u64 {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+
+fn check_inspect_name(name: &[u8]) -> Result<(), Failure> {
+    if name.is_empty() || name.len() > 255 {
+        return Err(Code::InvalidInput.into());
+    }
+    if name == b"."
+        || name == b".."
+        || name.iter().any(|byte| matches!(byte, 0 | b'/' | b'\\'))
+        || std::str::from_utf8(name).is_err()
+    {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
+}
+
+fn check_inspect_list(after: &[u8], entries: u16, bytes: u32) -> Result<(), Failure> {
+    if after.len() > 255 || entries == 0 || entries > 128 || bytes == 0 || bytes > 16384 {
+        return Err(Code::Capacity.into());
+    }
+    if !after.is_empty() {
+        check_inspect_name(after)?;
+    }
+    Ok(())
 }

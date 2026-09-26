@@ -534,14 +534,21 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         ) => *nanoseconds < 1_000_000_000 && bytes == 0,
         (
             Operation::Inspect {
-                query: Inspect::Attributes { path },
+                query: Inspect::Attributes { path } | Inspect::ChildAttributes { name: path, .. },
                 ..
             },
             Response::Attributes { .. },
         ) => response.validate_attributes(Some(path.is_empty())).is_ok() && bytes == 0,
         (
             Operation::Inspect {
-                query: Inspect::List { entries, .. },
+                query: Inspect::InodeAttributes { serial },
+                ..
+            },
+            Response::Attributes { serial: actual, .. },
+        ) => actual == serial && response.validate_attributes(None).is_ok() && bytes == 0,
+        (
+            Operation::Inspect {
+                query: Inspect::List { entries, .. } | Inspect::InodeList { entries, .. },
                 ..
             },
             Response::List {
