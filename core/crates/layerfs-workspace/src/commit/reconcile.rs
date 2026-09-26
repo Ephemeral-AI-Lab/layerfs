@@ -373,7 +373,7 @@ impl Workspace {
                 let mut after = 0;
                 let mut seen = 0;
                 let mut phase = 0;
-                let built = attempt.root.build_ordered(
+                attempt.root.build_ordered(
                     |window| loop {
                         if let Some((serial, frontier)) =
                             current.next(submission, phase, after, window, deadline)?
@@ -434,8 +434,7 @@ impl Workspace {
                     },
                     window,
                     deadline,
-                )?;
-                built
+                )?
             };
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
             let mut status = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
