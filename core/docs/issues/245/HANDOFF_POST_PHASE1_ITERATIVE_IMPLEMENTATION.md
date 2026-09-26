@@ -14,12 +14,25 @@
 > together**, because 3.3's last constant cannot be lifted safely without 3.4's
 > stream. See the lane state below and
 > [3.3 and 3.4 land together](#33-and-34-land-together).
+>
+> **Revision, 2026-09-26 (post-3.3).** Slice **3.3 is landed** (`e5c14c72c`),
+> together with the **admission half of 3.4**: the prepared update is admitted by
+> the exact bytes it encodes to rather than by 128-row counts, and the whole
+> `layerfs-bridge` package carries a 200-name update with no count refusal. Phase
+> 2's two open items are closed as well (`e5c14c72c` decides 2.R2 and narrows the
+> holds, `b4a306bf2` holds a lowering page read and admits a mounted mutation
+> there). The next assignment is **the rest of 3.4**: carry the prepared
+> namespace as an ordered, replayable stream, validate it once into a bounded
+> service-side spool and feed C1's ordered builder from it. Everything else in
+> this checklist is unchanged; the measured limits and the new neighbouring
+> bound are in [what the lane head proves](#what-the-lane-head-already-proves-so-it-is-not-re-proved).
 
-**Lane state, 2026-09-26 (updated).** The implementation lane is
+**Lane state, 2026-09-26 (updated again).** The implementation lane is
 `codex/issue245-post-phase1-implementation`, based on `f74dbe77d`; its head is
-`861784ab7`. Phase 1 is done (`b298d175d`, `7e6cac877`) and phase 2 is closed
-(`007d53552`, with the 2.R1 writer-gate check, the 2.R2 scope decision and the
-receipts recorded on #245). Phase 3 is **partly done**:
+`b4a306bf2`. Phase 1 is done (`b298d175d`, `7e6cac877`), phase 2's code is done
+(`007d53552`) and its two open items are now closed on this lane: 2.R1's second
+arm (`b4a306bf2`) and the 2.R2 scope decision with the narrowing it implies
+(`e5c14c72c`), both recorded on #245. Phase 3 is **partly done**:
 
 | Slice | Commit | State |
 | ---: | --- | --- |
@@ -27,11 +40,14 @@ receipts recorded on #245). Phase 3 is **partly done**:
 | 3.1 | `8460f5afc` | Done. `keyed/delete.rs` adds a path-local keyed delete (leaf removal, one-neighbour merge or split on underflow, root collapse by lifting); `keyed/cursor.rs` adds a persistent ordered key cursor; `keep_name`/`drop_entry`/`remove_name` are point mutations; `Directory::parse` and rename no longer refuse more than 128 names. |
 | 3.2 | `8460f5afc`, `0d974fa82` | Done. `State::frontier_bytes` charges the exact prepared-namespace bytes against the host's declared memory budget instead of refusing `dirty > 128 \|\| names > 128` or a total over `METADATA_BYTES` (32 KiB); the live-node table grows by charged chunks instead of refusing at `NODE_LIMIT` (256). |
 | 3.2 pin | `861784ab7` | The `#[ignore]`d 1,025-identity case is measured, not predicted: `dirty_inodes=1026` (one per file plus the parent directory), `listed=1022` and `Capacity` at the cookie table, wall 44.73 s. |
-| 3.3, 3.4 | - | **Open. This is the next assignment, and the two land together.** |
+| 3.3 | `e5c14c72c` | Done. The frozen namespace is lowered in one ordered pass per record kind: `commit/lower.rs` walks the captured frontier, the namespace records and the inode records with three cursors advanced in serial order (and reads the result records with a fourth in `prepared_inodes`); `commit/directories.rs` merges a directory's entry and removal leaves in name order, with the 128 row constants gone; `commit/save.rs` admits the update by the exact encoded size. The walk holds no metadata writer gate - that is 2.R2 decided. |
+| 3.4 | `e5c14c72c` (admission half) | **Half landed.** The contract admits the prepared update by `PreparedChanges::frame_bytes` against the 32 KiB metadata frame instead of 128-row counts, and every decoded count is bounded by the bytes the frame still holds. The **stream is open**: the rows are still resident through Bridge, the server and C1, charged before Commit by `State::frontier_bytes` but not spooled, so a generation is bounded by one frame (~338 five-byte names) rather than by the configured budget. |
+| 2.R1, 2.R2 | `b4a306bf2`, `e5c14c72c` | Done. Two frozen Commit phases are held in the kernel with the writer gate free and a mounted mutation admitted there (`FROZEN`, `NAMESPACE`), with the gate-held control arm; the 2.R2 sentence is read as covering every Commit phase. |
 
 `tests/wide_namespace.rs` now passes unedited - the case that pinned
 `create 127: Capacity` at `c30fe68a0` reports `names=165 dirty_inodes=166
-revision=345`. Phase 3 is **not** closed: it closes only with all five slices.
+revision=345`. Phase 3 is **not** closed: it closes only with all five slices,
+and 3.4's stream is the outstanding half.
 
 ## Owner revision, 2026-09-26: implementation and focused tests only
 
@@ -92,15 +108,28 @@ the documents are source-pinned plans, not proof that later code is unchanged.
 Use an isolated implementation worktree/branch based on the latest compatible
 source, keeping the docs research PR reviewable. Preserve other owners' work.
 
-**Start here.** Phases 1 and 2 are done, and phase 3's slices 3.0-3.2 are
-landed and verified on the lane branch named above. The current assignment is
-**slices 3.3 and 3.4 of phase 3, landed together**, under
-[Phase 3 remaining](#phase-3-remaining--ordered-slices). They are one unit:
-3.3's last constant cannot be lifted safely without 3.4's stream
-([why](#33-and-34-land-together)). Keep 3.0-3.2's accepted behaviour and their
-focused cases passing, do not change what they prove, and do not re-run their
-suites for reassurance. Phases 4-6 come after. Nothing in this revision
-licenses a benchmark row in place of a phase's focused tests.
+**Start here.** Phases 1 and 2 are done, and phase 3's slices 3.0-3.3 are
+landed and verified on the lane branch named above, with the admission half of
+3.4. The current assignment is **the rest of slice 3.4**: carry the prepared
+namespace as an ordered, replayable, quota-charged stream with exact declared
+totals, validate it once into a bounded spool and feed C1's ordered builder from
+that spool without a resident vector proportional to rows, under
+[Phase 3 remaining](#phase-3-remaining--ordered-slices). Keep 3.0-3.3's accepted
+behaviour, their exact rows and their focused cases passing, do not change what
+they prove, and do not re-run their suites for reassurance. Phases 4-6 come
+after. Nothing in this revision licenses a benchmark row in place of a phase's
+focused tests.
+
+Two warnings from the half that just landed, both measured rather than argued.
+The bound 3.4 has to lift is now the **metadata frame**, not a row count: a
+200-name update fits one frame and is admitted, a 95-name update of 255-byte
+names does not and is refused as `Capacity` before any command is sent, so the
+work is to move the rows out of the frame rather than to raise a constant. And
+the deep half is **C1's input**, not the wire: `FilesystemInput` takes
+`&[DirectoryUpdate]`, `&[InodeUpdate]` and `&[u64]` and looks serials up by
+binary search (`update_for`, `value_for`, `new_inodes.contains`), so a
+spool-backed source needs those lookups redesigned - which is why the resident
+half must be charged, and reported as remaining, until it is.
 
 ### Product contract
 
@@ -182,11 +211,14 @@ it; it is not a benchmark row to register.
 | 5 | #249 multi-Workspace daemon registry and lightweight concurrent Exec; #219 operator Workspace-count policy. | Per-Workspace Commit slot only, no whole-Exec timer, no fixed Exec count, lease cleanup, and a selected Workspace count of 1/2/3 enforced by the daemon registry. Focused tests: registry admission and refusal, two Workspaces, overlapping Exec, count policy. |
 | 6 | #245 integration: combined file-plus-namespace generation, two sequential Commits against the immediate predecessor, G2 writes retained during G1 construction, exact old/new heads. | Focused tests over the public API; no benchmark artifact required. |
 
-### Phase 2 remaining — close the open items
+### Phase 2 remaining — closed on this lane
 
-Phase 2's code properties are implemented and covered; two items decide whether
-the phase may be called closed. Neither authorizes a workload change, a timeout
-increase or a debug binary.
+Both items below were the phase's open questions. **2.R1** is done for the two
+frozen walks a Commit owns (`007d53552` for the extent transfer, `b4a306bf2`
+for the namespace lowering), and **2.R2** is decided and implemented in
+`e5c14c72c`: the sentence covers every Commit phase, so the namespace reads and
+the frontier walk take no writer gate. The paragraphs below are kept as the
+statement of what was asked; the receipts are on #245.
 
 **2.R1 - a deterministic overlap check for the writer-gate property.** The claim
 is "no Commit phase holds the metadata writer gate across a frozen walk or a
@@ -210,6 +242,18 @@ namespace walk belongs to #256. Decide and record which reading holds: narrow
 those holds here if the sentence covers every Commit phase, or state in the row
 that it covers the file phases its title names and let #256 narrow them. Either
 answer is acceptable; leaving it unstated is not.
+
+**Decided (`e5c14c72c`): the sentence covers every Commit phase.** The namespace
+reads and the frontier walk attend a root that is immutable and pinned for the
+submission - the same property the phase-2 extent walks rely on - so they take a
+bounded read lease and no writer gate, and each leases a scratch window per step
+rather than for the whole walk. What still holds the gate in the Commit path is
+what mutates shared arena state: `persist_saved`'s result install and the
+reconciliation ordering points. `b4a306bf2` holds that open in the kernel:
+`COMMIT_OVERLAP NAMESPACE page=m-page-0000000a-0000000a phase=Some(Preparing)
+baseline_charge=4304 charge=69072 scans=166 saves=9 metadata=9
+lowering_reads=10 mutation=Ok(())`, against the control arm's gate-held read
+with `mutation=Err("Busy")`.
 
 The 4,097-separated-run public row is **not** a phase-2 closure item. By owner
 direction it is verified in the mini-benchmark lane
@@ -267,14 +311,15 @@ The slices below are what is left.
 | 3.0 **done** (`bd907b5ba`) | `backing/` only | Realize the study's tree component by **relocating** the two existing tree algorithms, with no behaviour change: `binary_plus_tree/mod.rs` (thin), `extent/{mod,format,splice,cursor}.rs` from `metadata_pieces.rs`, `metadata_cursor.rs` and the piece half of `metadata_pages.rs`, and `keyed/{mod,format,update,build}.rs` from `metadata_index.rs`, `metadata_build.rs` and the cell half of `metadata_pages.rs`. Keep the shared 4 KiB header, `PageRef` and `PageKind` in one place the three specializations import, keep the old module paths as reexports so nothing else moves, and keep every `mod.rs` under 200 physical lines. | The whole existing suite, unchanged and unedited: if any case needs editing, the move changed behaviour and is not a relocation. |
 | 3.1 **done** (`8460f5afc`) | `binary_plus_tree/keyed/` (the 3.0 destination of `metadata_index.rs`), `overlay/directories.rs` | Add a path-local keyed delete (leaf removal, sibling borrow or merge on underflow, root collapse) and a persistent ordered key cursor that keeps its path across leaves; rewrite `keep_name`/`drop_entry`/`remove_name` as point mutations instead of rebuilding a whole page from a resident `Vec` of at most 128 names; drop `Directory::parse`'s `count > 128` and resident-128 caps while keeping the `u16` count and charging the local delta. | `tests/wide_namespace.rs` (200 names, rename/unlink/recreate) plus counted cases: one name walk visits each reached leaf once, and one rename or unlink rewrites only its path. |
 | 3.2 **done** (`8460f5afc`, `0d974fa82`) | `runtime/state.rs` (`frontier_bytes`), `overlay/snapshot.rs`, `commit/reconcile.rs` | Compute the generation frontier charge from the actual dirty/name/row counts and reserve it from the host budget, so a refusal is a real budget refusal rather than `dirty > 128 \|\| names > 128` or a computed prepared size over `METADATA_BYTES` (32 KiB). Keep the prepared-namespace accounting exact so 3.3 can declare it. | A many-identity generation (at least 1,025 created files and names) admitted while the declared budget has room; a declared-budget exhaustion that refuses precisely and publishes nothing. |
-| 3.3 **next, with 3.4** | `commit/directories.rs`, `commit/lower.rs`, `commit/save.rs` | Lower the frozen namespace with the 3.1 cursors: one ordered pass per record kind, exact declared totals, no `vector(128 + …)`, no `rows.len() == 128`, no `changes.len() == 128`, and still exactly one filesystem root and one head per generation. | Exact rows for a wide directory; old and new listing oracles; one published head. |
-| 3.4 **next, with 3.3** | `bridge/contract/request.rs`, the server's prepared-changes path, C1's filesystem input | Carry the prepared namespace as an ordered, replayable, quota-charged stream with exact declared totals - the `SaveFile`/`FileInput` spool seam is the model to reuse, not a new file builder - validate it once into a bounded spool, and feed C1's ordered builder from that spool without a resident vector proportional to rows. Keep `expected_head`, one publication and canonical identity for previously accepted inputs. | 129/257/1,025 changed-name or changed-file generations through the public API with a full-tree oracle; a resident cost that does not grow with the row count; one canonical filesystem root. |
+| 3.3 **done** (`e5c14c72c`) | `commit/directories.rs`, `commit/lower.rs`, `commit/save.rs`, `bridge/contract/request.rs` | Lowered the frozen namespace with the 3.1 cursors: the frontier, the namespace records and the inode records are three ordered passes advanced in serial order, a directory's final bindings are the ordered merge of its entry and removal leaves, `vector(128 + …)`/`rows.len() == 128`/`changes.len() == 128` are gone, admission is the exact encoded size, and one root and one head per generation are unchanged. | `tests/prepared_namespace.rs` (3 cases): a 200-name Commit's exact rows name by name, the frame boundary at 94/95 long names, and a 200-link pass that reads each reached leaf once (`metadata_reads=21`) - plus `commit_overlap.rs`'s held lowering read. |
+| 3.4 **half landed** (`e5c14c72c`), **stream next** | the server's prepared-changes path, C1's filesystem input (the contract half is in) | Carry the prepared namespace as an ordered, replayable, quota-charged stream with exact declared totals - the `SaveFile`/`FileInput` spool seam is the model to reuse, not a new file builder - validate it once into a bounded spool, and feed C1's ordered builder from that spool without a resident vector proportional to rows. Keep `expected_head`, one publication and canonical identity for previously accepted inputs. Landed instead: the contract admits by exact frame bytes and the wire reader is bounded by the remaining frame bytes, so no count refuses a generatable update. | 129/257/1,025 changed-name or changed-file generations through the public API with a full-tree oracle; a resident cost that does not grow with the row count; one canonical filesystem root. The 200-name row already passes through the public API; the resident half is what is missing. |
 
-Phase 3 closes only with all five slices. 3.0-3.2 are in. **3.3 and 3.4 are the
-next assignment and land together** - see below. If 3.4 proves impossible,
-deliver 3.3 with the prepared namespace still resident **and its size charged
-rather than unbounded**, and report that plainly as the remaining half; do not
-call the phase closed. Check `layerfs-content`'s filesystem validation limits
+Phase 3 closes only with all five slices. 3.0-3.3 are in and 3.4 is half in.
+**The rest of 3.4 is the next assignment.** The fallback this document named for
+3.3 - the prepared namespace still resident **with its size charged rather than
+unbounded** - is what landed: the frontier charge is exact (`State::frontier_bytes`),
+the admission is exact, and the resident half is reported as open rather than
+claimed. Do not call the phase closed until the stream lands. Check `layerfs-content`'s filesystem validation limits
 (the 4,096-binding walk) before claiming a wide rebind passes: this lane has
 already measured that a lifted workspace cap moves the refusal downstream twice
 - the 256-entry live-node table, fixed in `0d974fa82`, and the 1,024-entry
@@ -282,50 +327,70 @@ cookie table, which still refuses a complete listing of more than 1,022 names.
 
 <a id="33-and-34-land-together"></a>
 
-#### Why 3.3 and 3.4 land together
+#### Why 3.3 and 3.4 landed together, and what of it landed
 
-3.3's last constant is coupled to 3.4's stream. `commit/save.rs` still computes
-the prepared-namespace size and refuses it above
+3.3's last constant was coupled to 3.4's stream. `commit/save.rs` computed the
+prepared-namespace size and refused it above
 `layerfs_bridge::contract::METADATA_BYTES` (32 KiB) **at Commit** - the same
 figure 3.2 removed from the pre-Commit frontier. Deleting that check without an
 ordered replayable stream does not lift a bound, it turns a refusal into an
-unbounded resident prepared namespace, so the two halves have to be decided
-together: either 3.3 charges the prepared size precisely against the same host
-budget 3.2 charges, or the spool of 3.4 lands with it and the resident cost
-stops growing with the row count.
+unbounded resident prepared namespace, so the two halves were decided together:
+3.3 charges and declares the prepared size exactly, and the admission is the
+same exact figure the encoder writes. That is the charged-resident outcome this
+document named as the fallback, and it is what `e5c14c72c` landed; the stream
+half is still the assignment.
 
 Measured on the lane head, in the order a wide generation meets them:
 
 | Refusal | Where | State |
 | --- | --- | --- |
-| prepared size over 32 KiB at Commit | `commit/save.rs` (`expected > METADATA_BYTES`) | open; 3.3 charges it, with 3.4 |
-| `vector(usize::from(directory.count) + 128)`, `rows.len() == 128`, `changes.len() == 128` | `commit/directories.rs` | open; 3.3 |
-| one successor lookup per name in the frozen lowering | `commit/directories.rs` (`arena.next` per row) | open; 3.3 uses `Arena::key_cursor` |
-| the prepared namespace is resident through Bridge, the server and C1 | `bridge/contract/request.rs`, the server's prepared-changes path, C1's filesystem input | open; 3.4 |
+| prepared size over 32 KiB at Commit, as an estimate | `commit/save.rs` (`expected > METADATA_BYTES`) | **closed**: the figure is now `PreparedChanges::frame_bytes`, the exact encoded body, checked in the workspace and again in the contract. The frame is still the bound - `PREPARED_FRAME_FIT names=94 declared=32760` / `PREPARED_FRAME_REFUSAL names=95 declared=33106 error=Capacity` - and lifting it is 3.4's stream |
+| `vector(usize::from(directory.count) + 128)`, `rows.len() == 128`, `changes.len() == 128` | `commit/directories.rs` | **closed** by 3.3 |
+| 128 directories / 128 inodes / 128 names in one prepared update | `bridge/contract/request.rs`, `adapters/native/protocol/prepared.rs` | **closed**: the contract admits by exact frame bytes, and every decoded count is bounded by the bytes the frame still holds |
+| one successor lookup per name in the frozen lowering | `commit/directories.rs`, `commit/lower.rs` (`arena.next` per row) | **closed**: `Arena::key_cursor` passes; `PREPARED_NAME_PASS names=200 inodes=1 metadata_reads=21` for 200 names over one identity |
+| the prepared namespace is resident through Bridge, the server and C1 | the server's prepared-changes path, C1's filesystem input | **open. This is the next assignment.** It is charged (`State::frontier_bytes`) rather than unbounded, which is why the frame is the current bound |
+| a directory whose removal cells are short holds 128 in one leaf and refuses the next | `keyed::update` (the tombstone page) | measured while landing 3.3, `Io` for the 129th removal of a five-byte name; the keyed tree's documented refusal shape, now stated in `core/docs/architecture/06-limits.md`. Not a 3.3/3.4 refusal |
 | a complete listing of more than 1,022 names | `runtime::state::COOKIE_LIMIT` (1,024 entries) | measured (`FRONTIER_LISTING listed=1022 refusal=Some(Capacity)`); same #256 lift list, not 3.3/3.4 |
 | 4,096 visited bindings on an alias/cycle walk | `layerfs-content` filesystem validation | not measured in this lane; check before claiming a wide **rebind** passes |
 
-#### A focused test for 3.3 needs a Commit-capable fixture
+#### The Commit-capable fixture 3.3 built, and how to extend it
 
-Traced on the lane head so the next agent does not repeat it:
-`tests/commit_progress.rs` **cannot** exercise `prepared_directories`. Its
-delivery deliberately refuses the file save, and `prepare_changes` - which calls
-`prepared_directories` - runs after `persist_saved` in `commit/save.rs`, so the
-namespace lowering never executes in that fixture. The usable Workspace-level
-harness is `tests/support/native_workspace.rs`, the gate-based fake `Workspace`
-and store that `tests/commit_staged.rs` drives, or the optional Python route
-fixture. Building the namespace-lowering case on that harness is most of 3.3's
-cost, not the lowering code itself. A delivery that records the `StageChanges`
-request is the natural oracle: it sees the exact prepared rows, which is what
-"exact rows for a wide directory" means.
+`tests/prepared_namespace.rs` is that fixture, and it is the cheapest way to
+exercise the preparation from here on. It is an in-process `OperationDelivery`
+that answers `GetBranch`, the root's attributes, `ReserveInodes`, `SaveFile`
+(draining the frozen sequence and returning a root derived from the length),
+`ConstructPortableMetadata`/`UpdatePortableMetadata` echoing the selected fields
+and the stated base root, and both `HistoryCommand::Commit` (a
+`CommitOutcomeWire::Committed`) and `HistoryCommand::StageChanges` (a
+`StageWire` built from the request). It records the prepared update, and after a
+Commit it answers the root listing from what it published, page by page with a
+continuation, and resolves a published name's attributes - without those two it
+cannot list a successor state at all.
+
+Two traps are worth naming. The replies must **echo** the metadata fields and
+the base root the caller states: a placeholder value stops the Commit before its
+lowering, which is how `commit_overlap.rs`'s fixture failed until it echoed
+them. And the fixture must hand out **distinct** serials; a constant
+`ReserveInodes` start makes the second creation collide. A delivery that records
+the `StageChanges` request is the natural oracle: it sees the exact prepared
+rows, which is what "exact rows for a wide directory" means.
+
+`tests/commit_progress.rs` still **cannot** exercise `prepared_directories`: its
+delivery refuses the file save, and `prepare_changes` - which calls
+`prepared_directories` - runs after the save loop in `commit/save.rs`, so the
+namespace lowering never executes there. `tests/support/native_workspace.rs` (the
+route fixture behind `commit_staged.rs`) remains optional and unrun.
 
 #### What the lane head already proves, so it is not re-proved
 
-Reuse these instead of rebuilding them: `tests/wide_namespace.rs` (3 cases,
-14.0 s) for the wide directory, the counted unlink and the spent budget;
-`tests/keyed_tree.rs` (0.22 s) for the cursor's `leaves`/`reads` counts and 160
-deletions to an empty tree; `tests/backing_ownership.rs`, `tests/pieces_sequence.rs`
-and `tests/commit_progress.rs` for phases 1 and 2. The recipe below is the same
+Reuse these instead of rebuilding them: `tests/prepared_namespace.rs` (3 cases,
+7.5-11 s) for the preparation, the frame boundary and the name pass;
+`tests/wide_namespace.rs` (3 cases, 13.8 s) for the wide directory, the counted
+unlink and the spent budget; `tests/keyed_tree.rs` (0.21 s) for the cursor's
+`leaves`/`reads` counts and 160 deletions to an empty tree;
+`tests/commit_overlap.rs` (3 cases, 0.2 s) for the two held frozen walks;
+`tests/backing_ownership.rs`, `tests/pieces_sequence.rs` and
+`tests/commit_progress.rs` for phases 1 and 2. The recipe below is the same
 container the lane used.
 
 **Verified in this lane** (measured, quotable): the 128-name and 32 KiB frontier
@@ -334,7 +399,17 @@ admissions and the 256-entry live-node table are gone (`8460f5afc`,
 publishes nothing; a 64 MiB budget admits 1,025 creations; a complete listing of
 those stops at 1,022 names on the 1,024-entry cookie table; one unlink of a
 130-name directory reads 40 metadata pages; a 160-key tree walks in 3 page reads
-and deletes to empty in 8 publications.
+and deletes to empty in 8 publications. From `e5c14c72c` and `b4a306bf2`: a
+200-name Commit of one generation with 145 later name changes prepares
+`names=165 rows=260 inodes=165 frame_bytes=17501 metadata_reads=1464 saves=165
+metadata=165`; a 200-link generation over one identity prepares in
+`metadata_reads=21`; the frame boundary sits between `names=94 declared=32760`
+and `names=95 declared=33106` against the 32,768-byte frame, the wider one
+refused as `Capacity` with no command delivered; the parent's 128-row
+prepared-update caps are gone and a 200-row update round-trips through the
+encoder and decoder; a page read of the lowering is held in the kernel with the
+writer gate free (`charge=69072` against a held gate's `659664`) and a mounted
+mutation is admitted there.
 
 Still unverified candidates, from source reading only - do **not** treat them as
 proven refusals and do not cite them as such: `RootOwner::write_page`/
@@ -352,6 +427,15 @@ filesystem (its magic and 4096-byte blocks) with `TMPDIR` inside that filesystem
 `overlayfs`, or a `TMPDIR` outside the volume, fails with `Unsupported` or
 `Denied` for reasons unrelated to the code under test; a source tree extracted
 with macOS ownership makes `WorkspaceHost::attach` refuse with `Denied`.
+
+**Two recorded pitfalls of the sync itself.** The worktree is copied in with
+`tar | docker exec tar -x`; extract with `-m` (`--touch`) or cargo skips the
+files, because tar restores the macOS mtimes and a source file older than the
+container's build artifacts is "unchanged". And `cargo` is not on the login
+shell's `PATH` in that image: `export PATH=/usr/local/cargo/bin:$PATH` (or call
+`/usr/local/cargo/bin/cargo`) in every `docker exec bash -c`. GNU tar inside the
+container also prints one "unknown extended header keyword" line per file for
+the macOS xattrs, so redirect both tars' stderr.
 
 The recipe used for phases 1, 2 and 3: the `rust:1.85.1-bookworm` container
 `layerfs-i245-phase1` holding the synced worktree at `/src` on a docker volume
