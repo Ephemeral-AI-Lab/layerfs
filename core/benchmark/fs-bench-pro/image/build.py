@@ -100,6 +100,7 @@ def main():
     parser.add_argument("--scenario-version", type=int, choices=[2, 3, 4], default=2)
     parser.add_argument("--complexity-diagnostic", action="store_true")
     parser.add_argument("--all-ioctl", action="store_true")
+    parser.add_argument("--fuse-trace", action="store_true")
     parser.add_argument("--debug-daemon", action="store_true")
     arguments = parser.parse_args()
     if arguments.complexity_diagnostic and arguments.scenario_version != 4:
@@ -142,6 +143,7 @@ def main():
     dockerfile.write_text(
         f"FROM {BASE}\n"
         + ("ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n" if arguments.complexity_diagnostic else "")
+        + ("ENV LAYERFS_FUSE_TRACE=1\n" if arguments.fuse_trace else "")
         + "COPY layerfs-daemon /layerfs-daemon\n"
         "COPY layerfs-edit-tool /layerfs-bench/bin/layerfs-edit-tool\n"
         "COPY payloads /layerfs-bench/payloads\n"
@@ -172,6 +174,7 @@ def main():
                         selected.ABI if selected is not contract else None),
         "complexity_diagnostic": arguments.complexity_diagnostic,
         "all_ioctl": arguments.all_ioctl,
+        "fuse_trace": arguments.fuse_trace,
         "payloads": payloads,
     }
     output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
