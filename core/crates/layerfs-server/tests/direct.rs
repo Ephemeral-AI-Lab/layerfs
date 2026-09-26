@@ -539,6 +539,100 @@ fn authenticated_generic_save_accepts_4097_separated_final_runs() {
     });
 }
 
+/// The frozen generic save is a *replay*: the service validates and spools the
+/// declared stream, then C1 consumes it through the ordered sequence/source
+/// interface. This case drives many separated final runs whose replacement
+/// bytes exceed the fixed 64 KiB in-memory window, so both spools are files, and
+/// checks the exact bytes of the new root and of the root it replaced.
+#[test]
+fn a_spooled_final_stream_replays_many_runs_with_exact_bytes() {
+    const RUNS: u64 = 2_049;
+    const CHUNK: u64 = 64;
+    const STRIDE: u64 = 2 * CHUNK;
+    let (_temp, service, peer) = fixture();
+    let length = RUNS * STRIDE;
+    let base: Vec<u8> = (0..length).map(|i| (i % 251) as u8).collect();
+    let Response::Saved { root: old, .. } = service
+        .handle(
+            &peer,
+            &request(1, file_save::fresh(length)),
+            &mut Cursor::new(file_save::fresh_body(&base)),
+            &mut std::io::sink(),
+        )
+        .0
+        .unwrap()
+    else {
+        panic!("base")
+    };
+    // One replacement run per stride: the retained canonical span between two
+    // runs is what closes each run, so the stream carries exactly RUNS of them.
+    let mut extents = Vec::new();
+    let mut replacement = Vec::new();
+    let mut expected = base.clone();
+    for index in 0..RUNS {
+        let at = index * STRIDE;
+        let bytes: Vec<u8> = (0..CHUNK)
+            .map(|offset| (index as u8).wrapping_mul(7).wrapping_add(offset as u8 + 1))
+            .collect();
+        extents.push((1, 0, CHUNK));
+        extents.push((0, at + CHUNK, CHUNK));
+        expected[at as usize..(at + CHUNK) as usize].copy_from_slice(&bytes);
+        replacement.extend_from_slice(&bytes);
+    }
+    let replacement_bytes = replacement.len() as u64;
+    assert!(
+        replacement_bytes > 64 * 1024,
+        "the case must exceed the in-memory window so the spool is a file"
+    );
+    let Response::Saved {
+        root: saved,
+        length: saved_length,
+        ..
+    } = service
+        .handle(
+            &peer,
+            &request(
+                2,
+                file_save::existing(old, length, length, extents.len() as u64, replacement_bytes),
+            ),
+            &mut Cursor::new(file_save::body(&extents, &replacement)),
+            &mut std::io::sink(),
+        )
+        .0
+        .unwrap()
+    else {
+        panic!("saved")
+    };
+    assert_eq!(saved_length, length);
+    for (root, wanted) in [(old, &base), (saved, &expected)] {
+        let mut observed = Vec::new();
+        assert_eq!(
+            service
+                .handle(
+                    &peer,
+                    &request(
+                        3,
+                        Operation::ReadFile {
+                            root,
+                            start: 0,
+                            end: length
+                        }
+                    ),
+                    &mut std::io::empty(),
+                    &mut observed
+                )
+                .0
+                .unwrap(),
+            Response::Read { length }
+        );
+        assert_eq!(&observed, wanted);
+    }
+    println!(
+        "FINAL_STREAM_REPLAY runs={RUNS} extents={} replacement={replacement_bytes} spooled=file",
+        extents.len()
+    );
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     let mut result = String::with_capacity(bytes.len() * 2);
