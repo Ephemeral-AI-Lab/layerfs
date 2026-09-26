@@ -8,6 +8,9 @@
 > [02-overlay-snapshot.md](02-overlay-snapshot.md) for the file index only; the
 > namespace, binding and custody rules there are unchanged. No performance,
 > capacity or release claim follows from this document.
+> [§7](#7-level-preserving-rebuild-and-balanced-packing-2026-09-26-248-phase-2)
+> corrects the level and packing rules §2 and §3 describe below: the source
+> those sections were pinned to got both wrong above two branch levels.
 
 ## 1. Why the format changed
 
@@ -150,3 +153,56 @@ ceiling remains 4 GiB.
   construction is bounded by the file, not by a frame.
 - No continuously writable generation proof (package E) and no frozen
   performance selection (package F) exists.
+
+## 7. Level-preserving rebuild and balanced packing (2026-09-26, #248 phase 2)
+
+Source pin: `f74dbe77da12fa533587be8a578375bce3f19373` plus the change committed
+with this note, which is the phase-2 extent-tree slice of
+[#248](https://github.com/EasyAI-Lab/layerfs/issues/248). Two rules §2 and §3
+state as landed were not true of the source they describe, and both broke a
+file whose extent count needs more than one branch level.
+
+**Balanced packing.** `pack` filled each branch greedily - 248 children, then
+whatever is left - so a sequence of 249 leaf pages was packed as `[248, 1]`. The
+page encoder refuses a branch with fewer than two children, so the splice
+returned `Capacity` for a perfectly representable file: any leaf count congruent
+to one modulo the fanout (249, 497, 745, …) could not be written at all.
+`pack_level` now splits each level into its fewest chunks of nearly equal size
+(249 into 125 and 124), which keeps every non-root branch at two children or
+more at every level.
+
+**One level per rebuilt frontier.** `descend` answered with its collected
+children, one level below the node it replaced. For a root one level above the
+leaves that is harmless: the collected pages are leaves and `pack` rebuilt the
+level above them. For a taller tree it mixed the levels - an untouched sibling
+subtree came back as a declared level-1 page while a folded leaf came back as a
+declared level-0 page - and the rebuild relabelled everything from level 1. The
+result was a tree whose declared levels did not match its depth, which the
+cursor refuses (`Io`, "levels are relative"): a file of roughly 30,876 extents or
+more became unreadable after one narrow write. `descend` now returns a `Level` -
+pages that all declare the replaced node's own level - and a branch packs its
+rebuilt children up to that level before answering its parent. The root adopts a
+single returned page at its own level, or adds one level above several.
+
+**The exact file bound.** `PieceRecord::parse` accepted an extent whose
+`offset + length` reached `2^32 - 1` while the declared file maximum is exactly
+`2^32 = 4 GiB`. The last record of a full 4 GiB base read therefore failed to
+parse, so the whole sequence was unreadable at the maximum the format claims to
+represent. The bound is now `MAX_FILE`. One base read of exactly 4 GiB
+round-trips as 257 records and reads back byte-exact.
+
+**Still open in this slice.** A fold that replaces an entire sibling subtree
+with a single page leaves that child below its own level. Rebuilding it needs
+rebalancing across siblings (borrow or merge), which this change does not
+implement: such a splice is **refused** with `Capacity` rather than publishing a
+tree whose children sit at two depths. The condition is a whole branch level of
+one child being replaced at once, so a narrow write anywhere in a tall file is
+unaffected; the level-aware balance work in
+[#248](https://github.com/EasyAI-Lab/layerfs/issues/248) owns closing it.
+
+**Counted evidence.** Through the page-format-identical in-memory store the
+external tests use: 4,097 separated one-byte runs read back exactly and one
+narrow splice reads 2 and writes 2 pages; 65,536 separated runs make 529 leaf
+pages and one narrow splice reads 3 and writes 3 pages; 249 leaf pages pack into
+branches every one of which holds at least two children. These are work counts
+from the same traversal the mounted path uses, not a latency or capacity claim.

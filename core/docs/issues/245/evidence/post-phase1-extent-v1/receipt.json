@@ -1,0 +1,66 @@
+{
+  "case": "#248 phase 2 slice: extent-tree structure - level-preserving rebuild, balanced packing, exact file bound",
+  "status": "PASS (focused external traversal tests); the public 4,097-write Exec/Commit gate is NOT RUN",
+  "kind": "focused external test over the real page codec and the same traversal the mounted path uses, in an in-memory page store; no mount, no Commit, no timed phase",
+  "source": {
+    "first_parent": "7e6cac877a95b1c6c16c05e6f42c39b5052314ae",
+    "product_inputs_sha256": "1ab8709926d93f58e32d1f7004971d597436bc250bb491ab83fbee6e7a9532c6",
+    "branch": "codex/issue245-post-phase1-implementation"
+  },
+  "defects_found_and_fixed": {
+    "hard_refusal_at_249_leaves": "pack() filled each branch greedily (248 then the remainder), so 249 leaf pages packed as [248, 1]; encode_pieces_branch refuses a branch with fewer than two children and the splice returned Capacity. Every leaf count congruent to one modulo 248 (249, 497, 745, ...) could not be written. pack_level() now balances chunk sizes (249 -> 125 + 124).",
+    "malformed_tree_above_two_levels": "descend() answered with its collected children, one level below the node it replaced, so a splice into a tree with a root at level 2 returned a frontier that mixed shared level-1 subtrees with folded level-0 leaves; the rebuild relabelled from level 1 and the cursor then refused the tree (levels are relative). Reproduced at 65,536 one-byte extents (529 leaves): the splice succeeded and the following walk failed with Io. descend() now returns pages that all declare the replaced node's own level and each branch packs its rebuilt children up to that level.",
+    "exact_4_gib_bound": "PieceRecord::parse accepted offset+length only to 2^32-1 while MAX_FILE is exactly 2^32, so the last record of a full 4 GiB base read failed to parse and the whole sequence was unreadable. Now bounded by MAX_FILE.",
+    "remaining_refusal": "a fold that replaces an entire sibling subtree with a single page leaves that child below its own level; the splice now refuses with Capacity instead of publishing a non-uniform tree. Sibling rebalancing (borrow/merge) is remaining #248 work."
+  },
+  "counts": {
+    "command": "TMPDIR=/src/tmp CARGO_TARGET_DIR=/src/core/target-linux cargo test --release --locked --manifest-path core/Cargo.toml -p layerfs-workspace --test pieces_sequence -- --nocapture --test-threads=1",
+    "tests": "27 passed, 0 failed (24 pre-existing extent-sequence cases unchanged, 3 new)",
+    "wall": "0.16 s test wall",
+    "runs_4097_splice": {
+      "page_reads": 2,
+      "page_writes": 2
+    },
+    "runs_65536_leaves": 529,
+    "runs_65536_splice": {
+      "page_reads": 3,
+      "page_writes": 3
+    },
+    "full_4_gib_records": 257,
+    "leaves_249": 249
+  },
+  "build": {
+    "profile": "release",
+    "locked": true,
+    "toolchain": "cargo 1.85.1 (d73d2caf9 2024-12-31) / rustc 1.85.1 (4eb161250 2025-03-15)",
+    "target": "aarch64-unknown-linux-gnu",
+    "cargo_target_dir": "/src/core/target-linux (worktree-local)",
+    "rustflags": "--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2 (repository-root .cargo/config.toml)",
+    "test_binary": "core/target-linux/release/deps/pieces_sequence-98d14bf7c142c280",
+    "test_binary_sha256": "bb996f37bdea3869b993bd5f1b4cfca6c9c31da0f1245dfb3a7858ff72fe1965"
+  },
+  "environment": {
+    "container": "layerfs-i245-phase1",
+    "image": "rust:1.85.1-bookworm",
+    "image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "kernel": "Linux 6.12.76-linuxkit aarch64",
+    "note": "the traversal itself is in memory; the ext4 requirement of the private-backing profile is not exercised by this receipt"
+  },
+  "checks": {
+    "release build workspace --all-targets": "PASS",
+    "release clippy workspace --all-targets": "no error; the only warnings in a changed file are the pre-existing ones in pieces_sequence.rs",
+    "cargo fmt --all -- --check": "PASS",
+    "check_product_boundary.py": "PASS (295 files)",
+    "core/tools unit tests": "PASS (9 tests)"
+  },
+  "not_run": [
+    "the public 4,097 separated writes in one mount->exec->commit case (the Linux mounted harness is not prepared in this environment)",
+    "the mounted FUSE/daemon route, Commit, C1/C5 and every #248 full-size gate",
+    "any timed, cache-qualified or performance row"
+  ],
+  "limits": [
+    "these are work counts of the extent traversal, not a latency, capacity or throughput claim",
+    "the in-memory store speaks the same page format but is not the private arena's ownership path",
+    "one structural case is refused rather than implemented (see remaining_refusal)"
+  ]
+}

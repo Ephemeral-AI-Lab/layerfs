@@ -825,3 +825,144 @@ fn a_shared_subtree_records_the_unknown_count_and_the_exact_total() {
     assert_eq!(again.edits, u16::MAX);
     assert_eq!(again.replacement, 19_200);
 }
+
+/// Every page of one tree, with its declared level and its entry count: extent
+/// records for a leaf, child references for a branch.
+fn tree(f: &Fixture, root: PageRef) -> Vec<(PageRef, u8, usize)> {
+    let mut out = Vec::new();
+    let mut pending = vec![root];
+    while let Some(page) = pending.pop() {
+        let bytes = f.with_window(|window| f.store.page(page, window));
+        let level = bytes[48];
+        if level == 0 {
+            let used = metadata_pages::body_used(&bytes).unwrap();
+            out.push((page, level, used / metadata_pages::RECORD));
+            continue;
+        }
+        let (_, children) =
+            metadata_pages::decode_pieces_branch(INCARNATION, page, &bytes, MAX_FILE).unwrap();
+        for child in &children {
+            pending.push(child.page);
+        }
+        out.push((page, level, children.len()));
+    }
+    out
+}
+
+/// `count` one-byte private extents that never merge: every acquisition has its
+/// own identity, exactly as a sequence of separated writes does.
+fn separated(count: u64) -> Vec<Piece> {
+    (0..count)
+        .map(|at| local(0, 1, at + 1, (at % 4096 + 1) as u32))
+        .collect()
+}
+
+#[test]
+fn a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary() {
+    let f = Fixture::new();
+    // The declared maximum file: one base read of exactly 4 GiB, which the
+    // extent ceiling splits into 257 stored records. The last record ends
+    // exactly at the file bound, and the whole sequence must stay readable.
+    let root = f.build(&[base(0, MAX_FILE)], MAX_FILE).unwrap();
+    let walked = f.walk(root, MAX_FILE);
+    assert_eq!(walked.len(), 257);
+    let mut expected = 0u64;
+    for (start, piece) in &walked {
+        assert_eq!(*start, expected);
+        assert_eq!(piece.kind, PieceKind::Base);
+        expected += piece.length;
+    }
+    assert_eq!(expected, MAX_FILE);
+    let last = walked.last().unwrap().1;
+    assert_eq!(last.offset + last.length, MAX_FILE);
+    // The same bound in the other direction: one byte past it is refused.
+    assert!(f.build(&[base(0, MAX_FILE + 1)], MAX_FILE + 1).is_err());
+}
+
+#[test]
+fn the_249_leaf_transition_keeps_every_branch_non_singleton() {
+    let f = Fixture::new();
+    // 249 leaves is the first count whose last branch chunk would hold a
+    // single child; every non-root branch must keep at least two.
+    let records = 124 * 249;
+    let root = f.build(&separated(records), records).unwrap();
+    let pages = tree(&f, root);
+    let leaves = pages.iter().filter(|(_, level, _)| *level == 0).count();
+    assert_eq!(leaves, 249);
+    for (page, level, entries) in &pages {
+        if *level == 0 {
+            assert!(*entries > 0 && *entries <= 124);
+        } else {
+            assert!(
+                *entries >= 2,
+                "branch {page:?} at level {level} holds {entries} children"
+            );
+            assert!(*entries <= 248);
+        }
+    }
+    let walked = f.walk(root, records);
+    assert_eq!(walked.len(), records as usize);
+}
+
+#[test]
+fn four_thousand_and_ninety_seven_separated_runs_read_and_splice_by_path() {
+    let f = Fixture::new();
+    let runs = 4_097u64;
+    let length = 2 * runs;
+    // One local byte between two base bytes: 4,097 maximal replacement runs.
+    let pieces: Vec<Piece> = (0..runs)
+        .flat_map(|at| [local(0, 1, at + 1, (at % 4096 + 1) as u32), base(at + 1, 1)])
+        .collect();
+    let root = f.build(&pieces, length).unwrap();
+    assert_eq!(f.walk(root, length).len(), 2 * runs as usize);
+    // A narrow splice in the middle reads one path, not the whole sequence.
+    let at = 2 * 2_048;
+    f.store.reset();
+    let spliced = f
+        .splice(root, at, at + 1, length, runs, length, &[local(0, 1, 1, 1)])
+        .unwrap();
+    let reads = f.store.read_pages().len();
+    let writes = f.store.written();
+    println!("PIECES_SCALE runs={runs} splice_reads={reads} splice_writes={writes}");
+    assert!(reads <= 8, "one narrow splice read {reads} pages");
+    assert!(writes <= 8, "one narrow splice wrote {writes} pages");
+    assert_eq!(spliced.length, length);
+    assert_eq!(f.walk(spliced.root, length).len(), 2 * runs as usize);
+}
+
+#[test]
+fn sixty_five_thousand_separated_runs_stay_bounded_and_path_local() {
+    let f = Fixture::new();
+    let runs = 65_536u64;
+    let root = f.build(&separated(runs), runs).unwrap();
+    let pages = tree(&f, root);
+    let leaves = pages.iter().filter(|(_, level, _)| *level == 0).count();
+    assert_eq!(leaves, (runs as usize).div_ceil(124));
+    assert_eq!(f.walk(root, runs).len(), runs as usize);
+    f.store.reset();
+    let spliced = f
+        .splice(
+            root,
+            runs / 2,
+            runs / 2 + 1,
+            runs,
+            runs,
+            runs,
+            &[local(0, 1, 1, 1)],
+        )
+        .unwrap();
+    let reads = f.store.read_pages().len();
+    let writes = f.store.written();
+    println!(
+        "PIECES_SCALE runs={runs} leaves={leaves} splice_reads={reads} splice_writes={writes}"
+    );
+    assert!(reads <= 12, "one narrow splice read {reads} pages");
+    assert!(writes <= 12, "one narrow splice wrote {writes} pages");
+    let walked = f.walk(spliced.root, runs);
+    assert_eq!(walked.len(), runs as usize);
+    assert_eq!(walked[0].1.length, 1);
+    assert_eq!(
+        walked.iter().map(|(_, piece)| piece.length).sum::<u64>(),
+        runs
+    );
+}

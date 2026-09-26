@@ -128,7 +128,7 @@ impl PieceRecord {
             || value
                 .offset
                 .checked_add(value.length)
-                .is_none_or(|end| end > MAX_EXTENT.max((1 << 32) - 1))
+                .is_none_or(|end| end > MAX_FILE)
         {
             return Err(WorkspaceError::Io);
         }

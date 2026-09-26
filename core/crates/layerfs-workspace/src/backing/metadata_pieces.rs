@@ -65,6 +65,15 @@ pub struct Pieces {
     pub length: u64,
 }
 
+/// One uniform level of a rebuilt sequence: every page in `pages` carries the
+/// declared level `level`. The splice's recursion returns pages at the level of
+/// the node it replaced, so a parent always receives children of one level and
+/// the published tree keeps every leaf at the same depth.
+struct Level {
+    pages: Vec<ChildRef>,
+    level: u8,
+}
+
 /// Splits one extent into stored parts, each no larger than the extent ceiling.
 /// A part boundary is a page boundary, never a new logical byte.
 pub fn parts(piece: Piece) -> Vec<Piece> {
@@ -331,7 +340,7 @@ pub fn replace<S: PieceStore + ?Sized>(
         }
     })?;
     let mut walk = Walk::new(store, window, base_length, declared_parts);
-    let mut level = if old == PageRef::NULL {
+    let level = if old == PageRef::NULL {
         // A NULL root is either a version that is exactly one base read of its
         // selected content, or a sequence that is empty; both fold without a
         // tree. `current` is the length of the sequence being replaced.
@@ -377,9 +386,12 @@ pub fn replace<S: PieceStore + ?Sized>(
             // A NULL root with a partially edited sequence cannot exist.
             return Err(WorkspaceError::Io);
         }
-        Vec::new()
+        Level {
+            pages: Vec::new(),
+            level: 0,
+        }
     } else {
-        let (level, covered) = walk.descend(old, splice, 0, 0)?;
+        let (rebuilt, covered) = walk.descend(old, splice, 0, 0)?;
         if covered != splice.start {
             return Err(WorkspaceError::Io);
         }
@@ -387,7 +399,7 @@ pub fn replace<S: PieceStore + ?Sized>(
         // sequence, or one whose interval no leaf of the old tree holds, is
         // merged here. A merge already made inside a leaf leaves this empty.
         walk.insert()?;
-        level
+        rebuilt
     };
     walk.close_leaf()?;
     let dropped = walk.dropped;
@@ -426,9 +438,23 @@ pub fn replace<S: PieceStore + ?Sized>(
     if total > MAX_FILE {
         return Err(WorkspaceError::Capacity);
     }
-    level.extend(std::mem::take(&mut walk.leaves));
+    let mut level = level;
+    if !walk.leaves.is_empty() {
+        // Only a fold into the root's own children leaves pages here, and those
+        // pages are leaves: the level above them is rebuilt below.
+        if level.level != 0 && !level.pages.is_empty() {
+            return Err(WorkspaceError::Capacity);
+        }
+        level.pages.append(&mut walk.leaves);
+    }
     let window = walk.window;
-    let root = pack(store, level, window)?;
+    let root = if level.pages.len() <= 1 {
+        // One page already covers the sequence: it is the root, at its own
+        // level. The tree loses a level exactly when its content collapsed.
+        level.pages.first().map_or(PageRef::NULL, |page| page.page)
+    } else {
+        pack_level(store, level.pages, level.level, window)?.pages[0].page
+    };
     Ok(Pieces {
         root,
         extents: fold.extents(),
@@ -515,7 +541,7 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
         splice: Splice,
         lower: u64,
         source: u64,
-    ) -> Result<(Vec<ChildRef>, u64), WorkspaceError> {
+    ) -> Result<(Level, u64), WorkspaceError> {
         let bytes = self.store.read(page, self.window)?;
         let length = metadata_pages::piece_body_length(&bytes)?;
         let upper = lower.checked_add(length).ok_or(WorkspaceError::Io)?;
@@ -530,6 +556,13 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             // folded sibling's records must become a page before this shared
             // page, or the parent would place them out of order.
             self.close_leaf()?;
+            if !self.leaves.is_empty() {
+                // Folded leaves are pages of level 0 and cannot sit at a shared
+                // subtree's own level. No caller reaches this: a subtree is
+                // shared only when the interval does not touch it, and the
+                // branch above shares such a child without descending.
+                return Err(WorkspaceError::Capacity);
+            }
             self.shared = true;
             self.fold.carry(length)?;
             self.line = self
@@ -537,24 +570,35 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                 .checked_add(length)
                 .filter(|line| *line <= MAX_FILE)
                 .ok_or(WorkspaceError::Capacity)?;
-            let mut pages = std::mem::take(&mut self.leaves);
-            pages.push(ChildRef { page, length });
-            return Ok((pages, upper.min(splice.start)));
+            return Ok((
+                Level {
+                    pages: vec![ChildRef { page, length }],
+                    level: bytes[48],
+                },
+                upper.min(splice.start),
+            ));
         }
         if metadata_pages::PageKind::of(&bytes)? != metadata_pages::PageKind::Pieces {
             return Err(WorkspaceError::Io);
         }
         if bytes[48] == 0 {
             let covered = self.leaf(&bytes, splice, source)?;
-            Ok((std::mem::take(&mut self.leaves), covered))
+            Ok((
+                Level {
+                    pages: std::mem::take(&mut self.leaves),
+                    level: 0,
+                },
+                covered,
+            ))
         } else {
+            let branch_level = bytes[48];
             let (_, children) = metadata_pages::decode_pieces_branch(
                 self.store.incarnation(),
                 page,
                 &bytes,
                 MAX_FILE,
             )?;
-            let mut level = Vec::new();
+            let mut level: Vec<ChildRef> = Vec::new();
             let mut covered = lower;
             let mut reads = source;
             for child in children {
@@ -583,14 +627,32 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                     level.push(child);
                 } else {
                     let (nested, _) = self.descend(child.page, splice, covered, reads)?;
-                    level.extend(nested);
+                    if nested.level != branch_level - 1 {
+                        // A folded child that no longer fills its own level
+                        // would leave this branch's children at two depths.
+                        // Rebuilding that needs rebalancing across siblings,
+                        // which this splice does not do, so it refuses here
+                        // instead of publishing a tree its own cursor cannot
+                        // read. The level-aware balance work in #248 owns it.
+                        return Err(WorkspaceError::Capacity);
+                    }
+                    level.extend(nested.pages);
                 }
                 covered = stop;
                 reads = reads.checked_add(child.length).ok_or(WorkspaceError::Io)?;
             }
+            // Lift the rebuilt children to this branch's own level. A branch
+            // one above the leaves needs one page at level 1; a deeper branch
+            // keeps its depth, so a sibling that stayed untouched and this one
+            // declare the same level.
+            // The tail of the last folded child is still open here; it belongs
+            // to this level before the pages above it are written.
+            self.close_leaf()?;
+            level.append(&mut self.leaves);
+            let rebuilt = pack_level(self.store, level, branch_level - 1, self.window)?;
             // The merge point the parent folds at: the subtree's end, or the
             // interval's start when the subtree reaches past it.
-            Ok((level, covered.min(splice.start)))
+            Ok((rebuilt, covered.min(splice.start)))
         }
     }
     /// Folds one leaf: the retained prefix, the replacement, then the retained
@@ -765,37 +827,52 @@ impl RootOwner {
 /// and its callers stay on one module path.
 pub use super::metadata_cursor::{cursor, piece_at, Cursor};
 
-/// Writes every branch level above the folded and shared leaves. Every
-/// non-root branch keeps at least two children, so the tree stays canonical.
-fn pack<S: PieceStore + ?Sized>(
+/// Writes the branch levels above `lower`, whose pages all declare
+/// `child_level`. The result is one page at the level above them, or, when the
+/// children collapse to a single page, that page at its own level.
+///
+/// Chunk boundaries are balanced rather than greedy: 249 pages split into 125
+/// and 124, never 248 and a single child. Every branch keeps at least two
+/// children, which is what the page codec requires and what keeps the tree's
+/// height a function of its extent count.
+fn pack_level<S: PieceStore + ?Sized>(
     store: &S,
     mut lower: Vec<ChildRef>,
+    child_level: u8,
     window: &mut Window,
-) -> Result<PageRef, WorkspaceError> {
-    if lower.is_empty() {
-        return Ok(PageRef::NULL);
-    }
+) -> Result<Level, WorkspaceError> {
     let incarnation = store.incarnation();
-    let mut level = 1u8;
+    let mut level = child_level;
     while lower.len() > 1 {
-        if level > MAX_HEIGHT {
+        let branch = level.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        if branch > MAX_HEIGHT {
             return Err(WorkspaceError::Capacity);
         }
-        let mut upper = vector(lower.len().div_ceil(BRANCH_CHILDREN))?;
-        for chunk in lower.chunks(BRANCH_CHILDREN) {
+        let chunks = lower.len().div_ceil(BRANCH_CHILDREN);
+        let base = lower.len() / chunks;
+        let extra = lower.len() % chunks;
+        let mut upper = vector(chunks)?;
+        let mut at = 0usize;
+        for index in 0..chunks {
+            let take = base + usize::from(index < extra);
+            let chunk = &lower[at..at + take];
+            at += take;
             let length = chunk.iter().try_fold(0u64, |sum, c| {
                 sum.checked_add(c.length).ok_or(WorkspaceError::Io)
             })?;
-            let page = store.write(level, window, |r, bytes| {
-                metadata_pages::encode_pieces_branch(incarnation, r, level, chunk, bytes)
+            let page = store.write(branch, window, |r, bytes| {
+                metadata_pages::encode_pieces_branch(incarnation, r, branch, chunk, bytes)
                     .map(|()| r)
             })?;
             upper.push(ChildRef { page, length });
         }
         lower = upper;
-        level += 1;
+        level = branch;
     }
-    Ok(lower[0].page)
+    Ok(Level {
+        pages: lower,
+        level,
+    })
 }
 
 /// Whether two adjacent extents may be stored as one extent.
