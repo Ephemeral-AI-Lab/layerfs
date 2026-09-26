@@ -44,6 +44,9 @@ budget. Record count has no fixed admission ceiling; Service input uses a
 64 KiB transfer window and at most 64 KiB of retained replacement bytes,
 plus bounded C1/C2 state. The existing C1 edit algorithm remains
 an internal canonical builder, including its mapping partition and root identity.
+The #252 follow-up corrects the Workspace extent cursor's nonzero-offset seek:
+it accumulates each preceding branch child's length before selecting a child,
+so repeated streamed reads into a multi-leaf frozen file reach the right extent.
 One file save precedes one metadata save and C5 Branch-head publication; a
 failed or interrupted stream cannot publish a partial head. Old file-save
 opcodes 3 (`ConstructFile`), 4 (`EditFile`) and 5

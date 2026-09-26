@@ -88,6 +88,9 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
         window: &mut Window,
         deadline: Instant,
     ) -> Result<Self, WorkspaceError> {
+        if offset > length {
+            return Err(WorkspaceError::Io);
+        }
         let mut cursor = Self {
             store,
             deadline,
@@ -154,14 +157,13 @@ impl<'a, S: PieceStore + ?Sized> Cursor<'a, S> {
             }
             let mut selected = children.len() - 1;
             for (index, child) in children.iter().enumerate() {
-                if offset < lower + child.length {
+                let end = lower.checked_add(child.length).ok_or(WorkspaceError::Io)?;
+                if offset < end || index + 1 == children.len() {
                     selected = index;
                     break;
                 }
+                lower = end;
             }
-            lower = children[..selected].iter().try_fold(lower, |sum, c| {
-                sum.checked_add(c.length).ok_or(WorkspaceError::Io)
-            })?;
             cursor.stack[cursor.depth] = Frame {
                 page,
                 level,

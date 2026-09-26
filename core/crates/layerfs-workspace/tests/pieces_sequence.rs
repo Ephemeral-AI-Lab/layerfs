@@ -435,6 +435,26 @@ fn a_cursor_seeks_and_reads_only_the_path_it_needs() {
 }
 
 #[test]
+fn a_cursor_seeks_into_the_middle_child_of_a_multi_leaf_branch() {
+    let f = Fixture::new();
+    let pieces: Vec<Piece> = (0..400u64)
+        .map(|index| {
+            if index % 2 == 0 {
+                base(index / 2, 1)
+            } else {
+                local(0, 1, index + 1, index as u32 + 1)
+            }
+        })
+        .collect();
+    let root = f.build(&pieces, 400).unwrap();
+    for offset in [0, 123, 124, 125, 247, 248, 399] {
+        let (start, piece) = f.piece_at(root, offset, 400).unwrap();
+        assert_eq!(start, offset);
+        assert_eq!(piece.kind, pieces[offset as usize].kind);
+    }
+}
+
+#[test]
 fn one_cursor_walk_never_holds_the_whole_sequence() {
     let f = Fixture::new();
     let pieces: Vec<Piece> = (0..3_000).map(|index| base(index * 8, 8)).collect();
