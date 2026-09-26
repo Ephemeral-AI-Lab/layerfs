@@ -22,15 +22,20 @@ strict E gate proved one such write during a held successor-builder page read,
 followed by a second sequential Commit at `b2cd0df23`. Other Commit phases
 still take a metadata writer gate during frozen-file walks and transfer pulls;
 see the [phase-by-phase audit](ARCHITECTURE_COMPLEXITY_RESEARCH.md#what-writes-continue-during-commit-currently-proves).
-The remaining 4,096 final-run and daemon-control concurrency limits are
-tracked by #248 and #249 below.
+The #252 SaveFile cutover removed the explicit 4,096 final-run admission check.
+[#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) still owns its public 4,097-run and scaling proof;
+[#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns the separate many-file namespace limits;
+[#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon-control concurrency.
 
 - [Scalable range-based COW architecture](ARCHITECTURE.md) describes current
   and proposed data paths, immutable generation capture, streaming Commit,
   resource limits and unresolved concurrency invariants.
+- [Joint #248/#256 tree and resource research](JOINT_248_256_TREE_RESEARCH.md)
+  pins the post-#252 source, calculates file and namespace capacities, compares
+  current and target costs, and proposes responsibility-based modules and LOC.
 - [Architecture and complexity research](ARCHITECTURE_COMPLEXITY_RESEARCH.md)
-  maps the private file tree, payload backing, canonical Commit result and
-  daemon ownership to explicit asymptotic costs and proof gates. Its companion
+  maps the earlier pinned private file tree, payload backing, canonical Commit
+  result and daemon ownership to asymptotic costs and proof gates. Its companion
   studies cover the [private backing and page tree](PRIVATE_BACKING_AND_PAGE_TREE.md)
   and [final-delta Commit](FINAL_DELTA_COMMIT_COMPLEXITY.md). The
   [animated Commit timeline](assets/incremental-commit-private-backing.gif)
@@ -74,16 +79,18 @@ tracked by #248 and #249 below.
 | Package F target freeze | ✅ frozen this round | [phase1-f-target/TARGET.md](evidence/phase1-f-target/TARGET.md), `bf9c3f5e0` |
 | Package F candidate arm | ✅ frozen comparative wall envelope PASS; latency INELIGIBLE | final source `b2cd0df23`; all four functional/cleanup/verifier cells PASS in [E/F final report](evidence/phase1-e-f-final/REPORT.md) |
 | Three latent extent-sequence defects | ✅ fixed this round | `0d4834f81` (over-ceiling implicit base), `036847824` (O(pages) descend, post-insertion `Io`) |
-| Fixed 4,096 final-run ceiling | ⬜ open after D/E/F | [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) owns the cross-layer final-delta path and its resource bounds |
+| 4,097-run public scaling | ⬜ open after #252 | #252 retired the explicit 4,096 admission check; [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) owns the full SDK/FUSE speed, structural and Commit proof |
+| Many-file namespace scaling | ⬜ open | [#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns 128 dirty identities/names, prepared streaming and adjacent count limits |
 | Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon/session concurrency and per-Workspace Commit serialization |
 
 The four decisions for D/E/F and their original handoff remain in
 [HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). D, E and the frozen F comparative
 selection are complete at the stated scope. The [final report](evidence/phase1-e-f-final/REPORT.md)
 records E's strict overlap gate at `b2cd0df23` and the cache-ineligible F
-latency cells. [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248)
-and then [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) are
-separate follow-ups. The older continuation handoffs remain dated assignments,
+latency cells. [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) and
+[#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) are the two
+scale follow-ups; [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249)
+follows #248 for daemon concurrency. The older continuation handoffs remain dated assignments,
 not current status reports.
 
 The first repair round is recorded in
