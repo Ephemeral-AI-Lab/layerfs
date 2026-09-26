@@ -26,6 +26,12 @@ The #252 SaveFile cutover removed the explicit 4,096 final-run admission check.
 [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) still owns its public 4,097-run and scaling proof;
 [#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns the separate many-file namespace limits;
 [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon-control concurrency.
+The [resource-constraint lift plan](RESOURCE_CONSTRAINT_LIFT_PLAN.md) records
+the later owner direction: one Commit/Stage submission per Workspace is the
+only logical serialization rule; multiple Workspaces and commands may overlap
+when their charged resources admit them. It also separates per-call chunk sizes
+from whole-file limits and specifies the removal of the 30-second whole-Exec
+timer. These are target behaviors, not current product claims.
 
 - [Scalable range-based COW architecture](ARCHITECTURE.md) describes current
   and proposed data paths, immutable generation capture, streaming Commit,
@@ -33,6 +39,9 @@ The #252 SaveFile cutover removed the explicit 4,096 final-run admission check.
 - [Joint #248/#256 tree and resource research](JOINT_248_256_TREE_RESEARCH.md)
   pins the post-#252 source, calculates file and namespace capacities, compares
   current and target costs, and proposes responsibility-based modules and LOC.
+- [Resource-constraint lift plan](RESOURCE_CONSTRAINT_LIFT_PLAN.md) inventories
+  the remaining file, Exec, page-reference and live-state ceilings, assigns
+  their lift paths and defines the multi-Workspace concurrency proof.
 - [Architecture and complexity research](ARCHITECTURE_COMPLEXITY_RESEARCH.md)
   maps the earlier pinned private file tree, payload backing, canonical Commit
   result and daemon ownership to asymptotic costs and proof gates. Its companion
@@ -81,7 +90,7 @@ The #252 SaveFile cutover removed the explicit 4,096 final-run admission check.
 | Three latent extent-sequence defects | ✅ fixed this round | `0d4834f81` (over-ceiling implicit base), `036847824` (O(pages) descend, post-insertion `Io`) |
 | 4,097-run public scaling | ⬜ open after #252 | #252 retired the explicit 4,096 admission check; [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) owns the full SDK/FUSE speed, structural and Commit proof |
 | Many-file namespace scaling | ⬜ open | [#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns 128 dirty identities/names, prepared streaming and adjacent count limits |
-| Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon/session concurrency and per-Workspace Commit serialization |
+| Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns multi-Workspace daemon/session concurrency, one Commit per Workspace and removal of the whole-Exec timer |
 
 The four decisions for D/E/F and their original handoff remain in
 [HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). D, E and the frozen F comparative
