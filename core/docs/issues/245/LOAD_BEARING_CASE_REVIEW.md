@@ -2,16 +2,17 @@
 
 > **Status:** Research; informative and not a product contract.
 >
-> Case source: [`LOAD_BEARING_CASES.md`](LOAD_BEARING_CASES.md) at
-> `d63379b955d1af4656cbfe23ebefc05ebf36ef8c`; its SHA-256 is unchanged
-> in this worktree. Product source pin:
+> The original nine rows of [`LOAD_BEARING_CASES.md`](LOAD_BEARING_CASES.md)
+> were byte-identical to commit
+> `d63379b955d1af4656cbfe23ebefc05ebf36ef8c` when reviewed. A proposed
+> recursive read case was then added separately. Product source pin:
 > `f74dbe77da12fa533587be8a578375bce3f19373` (after #252 and PR #255).
 > Three independent read-only source reviews covered file, namespace and Exec
 > paths. No case was run or benchmarked.
 
 ## Answer and qualification
 
-Eight of the nine proposed *rows* have a source-plausible route or a named
+Eight of the original nine proposed *rows* have a source-plausible route or a named
 #248/#256/#249 lift path, subject to resource and public-API proof. The ninth,
 **Move and replace**, is ambiguous about whether the moved directory is
 inherited from the Store. A fresh upper directory can move, but a base-resident
@@ -51,6 +52,38 @@ pass their own gates; it is not a prediction of benchmark admission.
 | **Large fresh file and append:** 256 MiB copy; separate existing-file append | At least 2,048 max-sized FUSE WRITEs for the fresh copy. Fresh content and existing-base append use different Commit routes. Nominal backing quota can hold the payload, but high water, cumulative write cost and 30-second Exec outcome are unproven. | #248 removes work that grows with earlier writes and proves both Commit routes; #249 removes product whole-Exec expiry. Verify exact bytes/modes and whether append sends only final appended bytes. Measure backing, spool, cgroup cache and complete wall. |
 | **Shell-driven prepend/insert:** 64 MiB temp-file copy then rename; separate future in-place shift | The shown `cat prefix file > file.next` necessarily reads and rewrites the full resulting file through FUSE; a local extent tree cannot erase those POSIX bytes. The fresh-file and same-parent replacement routes exist. | #248 helps bulk write cost; #249 removes the command timer. This case proves temp-file semantics, not efficient in-place insertion. Freeze the true in-place variant separately if pursued. Use `&&`/`set -e`, then check temp absence, held handle, modes, old/new heads and actual read/write bytes. |
 | **Printed logs versus Workspace log file** | Printing 16 KiB to each stream uses no FUSE WRITE, returns the first 8 KiB of each with independent truncation flags, and needs no Commit. Appending a multi-MiB file uses FUSE and Commit. The two are distinct scenarios. | Printing's bounded-output route already exists; verify exact prefixes, flags, exit and unchanged head. For the file log, freeze `logs/` and initial file state, verify bytes, FUSE writes, empty Exec output and old head. #248 scales the file variant; #249 addresses long/quiet Exec. |
+| **Recursive content scan:** `grep -r` plus metadata-only `find` control | This new read-only proposal was added after the three subagent reviews. Directory listing uses paged namespace inspection; regular-file reads enter FUSE `READ` and Workspace `ReadFile` for canonical bytes. No scan result or speed is measured. | Freeze one text-only tree and absent needle, then run the two commands on independent cold-qualified copies. Verify no mutation/Commit, actual content READ bytes for grep and none for find, Store bytes, old head, cgroup cache and complete wall. #256 matters if the tree hits namespace/cache limits; #249 removes the whole-Exec timer. No current issue specifically promises fast recursive content scans. |
+
+### Why the new read case is distinct
+
+`find` enumerates and inspects names; `grep -rF` with an absent needle must
+examine the contents of each regular text file before returning no match.
+The mounted [FUSE read callback](../../../crates/layerfs-fuse/src/adapter.rs)
+calls [Workspace `read`](../../../crates/layerfs-workspace/src/filesystem/read.rs),
+which issues Store `ReadFile` for untouched canonical bytes and reads private
+payloads for Local extents. The mount uses zero metadata TTL; writable-file
+opens request `FOPEN_DIRECT_IO`. This source route makes a recursive scan a
+useful read-heavy probe, but does not establish throughput. A no-match result
+alone does not prove full content delivery: require manifest-verified total
+regular-file bytes and actual FUSE returned-byte and Store-read counters.
+
+The two commands are **separate read-only cases** over independent writable
+copies of one closed prepared Store master. Use `LC_ALL=C`, a frozen grep
+binary/version, deterministic text with no NULs or symlinks, and a needle
+verified absent in the manifest. Grep's expected exit is 1 for no match; the
+wrapper maps only that result to Exec exit zero, so error exit 2 fails. Neither
+case calls Commit. The harness must invalidate source pages and verify whole
+input residency according to its declared cold contract before each timed
+sample; running `find` first in the grep sample would warm metadata and change
+the measurement. Report namespace callbacks and file-content bytes separately,
+and do not treat a `find`/`grep` wall-time ratio as the cost of the same work.
+If the required content-read coverage is established, report both
+`manifest_regular_bytes / Exec_wall` and `FUSE_read_returned_bytes / Exec_wall`
+as separate throughput figures; grep CPU and per-file lookup are included in
+that wall. Neither quotient by itself isolates Store transfer speed.
+If the scan is slow after namespace scaling, diagnose the FUSE read, per-file
+Store RPC and cache path from counters before opening a new read-performance
+implementation issue.
 
 ## Source-backed gaps and resource risks
 
@@ -90,11 +123,12 @@ pass their own gates; it is not a prediction of benchmark admission.
 
 ## Freeze before sampling
 
-The nine table rows contain more than nine possible measurement cells:
+The original nine table rows contain more than nine possible measurement cells:
 directory provenance/move variant, contiguous versus disjoint edits, fresh
 versus append, temp-file prepend versus future in-place shift, and printed
-versus file logs are distinct operations. Register each chosen case separately
-with exact image and Store manifests, command bytes, old/new hashes and modes,
+versus file logs are distinct operations. The added recursive read row also
+has separate `find` and `grep` cells. Register each chosen case with exact
+image and Store manifests, command bytes, old/new hashes and modes,
 cache state, route/callback counts, quotas, timers, and independent verifier.
 Use a short frozen script path if an inline many-package command would exceed
 the present 4,096-byte Exec request. Make multi-command shells fail on their
