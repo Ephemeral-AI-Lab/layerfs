@@ -10,10 +10,11 @@
 mod support;
 
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditSource, EditStream,
-    ObjectId, Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditSource, ObjectId,
 };
-use support::{disabled_scope, noise, patterned, read_back, MemoryStore};
+use support::{
+    disabled_scope, edits::Edits, edits::Parts, noise, patterned, read_back, MemoryStore,
+};
 
 fn policy() -> ConstructionPolicy {
     ConstructionPolicy::frozen_default()
@@ -35,7 +36,7 @@ fn build(bytes: &[u8]) -> (MemoryStore, ObjectId) {
 }
 
 /// Independent model: apply every edit to the running result, in order.
-fn model_apply(base: &[u8], edits: &[Edit], source: &Replacements) -> Vec<u8> {
+fn model_apply(base: &[u8], edits: &[Edit], source: &Parts) -> Vec<u8> {
     let mut result = base.to_vec();
     let mut previous_end = 0_u64;
     for (index, edit) in edits.iter().enumerate() {
@@ -63,8 +64,8 @@ fn model_apply(base: &[u8], edits: &[Edit], source: &Replacements) -> Vec<u8> {
 fn apply(
     store: &MemoryStore,
     root: ObjectId,
-    stream: &EditStream,
-    source: &Replacements,
+    stream: &Edits,
+    source: &Parts,
 ) -> (MemoryStore, ObjectId, u64) {
     let mut result = store.merged_clone();
     let constructed = disabled_scope(|scope| {
@@ -86,8 +87,8 @@ fn apply(
 }
 
 /// Deterministic replacement bytes for the declared length of every edit.
-fn replacements_for(edits: &[Edit]) -> Replacements {
-    let mut source = Replacements::new();
+fn replacements_for(edits: &[Edit]) -> Parts {
+    let mut source = Parts::new();
     for edit in edits {
         source.push(noise(edit.replacement_len() as usize));
     }
@@ -99,7 +100,7 @@ fn expect_model(name: &str, base: &[u8], edits: Vec<Edit>, root_oracle: bool) {
     let replacements = replacements_for(&edits);
     let expected = model_apply(base, &edits, &replacements);
     let (store, root) = build(base);
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     assert_eq!(
         stream.final_len(),
         expected.len() as u64,
@@ -219,12 +220,11 @@ fn the_model_and_the_candidate_agree_on_degenerate_streams() {
     expect_model("delete all", &base, vec![Edit::delete(0, 5_000)], true);
     // An equal replacement is exercised with the base bytes as the replacement.
     let replacements = {
-        let mut source = Replacements::new();
+        let mut source = Parts::new();
         source.push(base[1_000..2_000].to_vec());
         source
     };
-    let stream =
-        EditStream::new(base.len() as u64, vec![Edit::overwrite(1_000, 2_000)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::overwrite(1_000, 2_000)]).expect("valid");
     let (store, root) = build(&base);
     let (result, edited_root, len) = apply(&store, root, &stream, &replacements);
     assert_eq!(edited_root, root, "an identical replacement is a no-op");

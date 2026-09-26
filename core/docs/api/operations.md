@@ -17,11 +17,12 @@ Layer ID, root ID and root serial. It creates no Branch or Workspace.
 For a fresh local authority, `layerfs_sdk::Host::create` owns Store/history
 setup and lends `host.client()`; the Init call still takes only name and path.
 
-The implementation reuses the production native-directory importer. The
-current [command](../../crates/layerfs-bridge/src/contract/history.rs) is
-`HistoryCommand::ImportNativeDirectory`; the similarly named `InitLayerStack`
-uses a pathless manifest with pre-saved file roots and cannot implement this
-method. The current [Service](../../crates/layerfs-server/src/service/handler.rs) has a
+The implementation is the production native-directory importer. The current
+[command](../../crates/layerfs-bridge/src/contract/history.rs) is
+`HistoryCommand::ImportNativeDirectory`, and it is the only
+namespace-initialization route: the pathless `InitLayerStack` command and its
+manifest are retired, and history-command tag 1 is unassigned. The current
+[Service](../../crates/layerfs-server/src/service/handler.rs) has a
 single startup-bound `import_root`; the host-direct SDK passes a validated
 source binding to one authorized call without changing that field. Source
 scan, file reads, construction, saves and C5 publication stay inside the

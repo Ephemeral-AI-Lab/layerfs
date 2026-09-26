@@ -111,17 +111,50 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def bootstrap(service_dir, port, client_key, server_public, content, wide, data_mode=0o644, manifest_extras=()):
+IMPORT_DIRECTORY = 'import'
+# The fixture content is a deterministic byte cycle. It is sized well above the
+# whole-file cutoff so each file takes the chunked construction route and the
+# cases' edits exercise real extent splits.
+FIXTURE_PAYLOAD = bytes(range(251)) * 1_300
+FIXTURE_BYTES = len(FIXTURE_PAYLOAD)
+
+
+def import_path(service_dir):
+    """The directory the Service is configured to import; bind it before startup."""
+    path = service_dir / IMPORT_DIRECTORY
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o644,
+              directories=(), files=(), symlinks=()):
+    """Import the fixture namespace over the product's only initialization route.
+
+    Every entry is a real host entry, so its name, mode and bytes come from the
+    filesystem and the Service saves them through its normal native-directory
+    import. `directories` is a sequence of `(name, mode)` pairs and `files` a
+    sequence of `(name, mode)` pairs whose bytes are the fixture payload, and
+    `symlinks` a sequence of `(name, target)` pairs; `data.bin` keeps the serial
+    the fixture's alias declaration names.
+    """
     daemon, _ = route.start_daemon(service_dir, port, client_key, server_public, 1, None)
     try:
-        manifest = (route.manifest_entry(0, b'', 2, 0o755, 1700000000, 0)
-                    + route.manifest_entry(0, b'data.bin', 1, data_mode, 1700000001, 1, content)
-                    + route.manifest_entry(0, b'other.bin', 1, 0o644, 1700000002, 2, content))
+        source = import_path(service_dir)
+        (source / 'data.bin').write_bytes(FIXTURE_PAYLOAD)
+        (source / 'other.bin').write_bytes(FIXTURE_PAYLOAD)
         if wide:
             for index in range(102):
-                manifest += route.manifest_entry(0, f'f{index:03}'.encode(), 1, 0o644, 1700000003, index, content)
-        manifest += b''.join(manifest_extras)
-        command = b'\x01' + b'\xa1'*16 + route.blob(b'stage-fixture') + b'\xa2'*32 + struct.pack('>H', (105 if wide else 3) + len(manifest_extras)) + manifest
+                (source / f'f{index:03}').write_bytes(FIXTURE_PAYLOAD)
+        for name, mode in directories:
+            (source / name).mkdir()
+            os.chmod(source / name, mode)
+        for name, mode in files:
+            (source / name).write_bytes(FIXTURE_PAYLOAD)
+            os.chmod(source / name, mode)
+        for name, target in symlinks:
+            os.symlink(target, source / name)
+        os.chmod(source / 'data.bin', data_mode)
+        command = b'\x09' + b'\xa1'*16 + route.blob(b'stage-fixture') + b'\xa2'*32
         kind, body = route.exchange(daemon, 1, route.COMMAND_OPCODE, command, route.HISTORY_PROFILE)
         assert kind == 6, body
         tag, created = route.history(body); assert tag == 'StackCreated'
@@ -141,7 +174,7 @@ def bootstrap(service_dir, port, client_key, server_public, content, wide, data_
         tag, committed = route.history(body); assert tag == 'Committed'
         return {'branch': snapshot['branch']['branch'].hex(), 'root': committed['root'].hex(),
                 'root_serial': created['root_serial'], 'file_serial': serial, 'data_mode': data_mode,
-                'route': 'public InitLayerStack, Fork, explicit fixture alias Commit before Workspace attach'}
+                'route': 'public ImportNativeDirectory, Fork, explicit fixture alias Commit before Workspace attach'}
     finally:
         daemon.stdin.close()
         try: daemon.wait(timeout=6)
@@ -174,7 +207,8 @@ def execute(args, report, started):
                LAYERFS_STORE=str(service_dir / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0', LAYERFS_TELEMETRY='off',
                LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
                LAYERFS_HISTORY_BINDING='pair1-stage', LAYERFS_HISTORY_INCARNATION='1',
-               LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
+               LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1',
+               LAYERFS_IMPORT_ROOT=str(import_path(service_dir)))
     if denied_key:
         env['LAYERFS_PEERS'] += f';2,{route.public_key(denied_key)},{int(time.time())+3600},63'
     service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
@@ -184,7 +218,7 @@ def execute(args, report, started):
     try:
         readiness = mounted.line_until(service, timeout=min(10, remaining())); assert 'ready' in readiness, readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
-        report['fixture'] = bootstrap(service_dir, port, client_key, server_public, bytes.fromhex(fixture['file_root']), args.case == 'frontier', DATA_MODES.get(args.case, 0o644))
+        report['fixture'] = bootstrap(service_dir, port, client_key, server_public, args.case == 'frontier', DATA_MODES.get(args.case, 0o644))
         command(['docker', 'volume', 'create', volume]); made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',

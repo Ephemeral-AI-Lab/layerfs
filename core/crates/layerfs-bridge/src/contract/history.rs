@@ -37,10 +37,6 @@ pub const PAGE_RECORDS: u16 = 128;
 pub const HISTORY_RESULT_BYTES: usize = 16 * 1024;
 /// Widest profile-2 failure: prefix/version, Branch conflict and full retained stage.
 pub const HISTORY_FAILURE_BYTES: usize = 482;
-/// Entry-count field capacity of the legacy pathless manifest wire format.
-pub const MANIFEST_ENTRIES: usize = u16::MAX as usize;
-/// Largest bytes of one symlink target inside a manifest.
-pub const MANIFEST_TARGET_BYTES: usize = 4096;
 
 /// The permission bit one opcode requires.
 ///
@@ -189,41 +185,9 @@ pub struct PreparedChanges {
     pub new_symlink_serials: Vec<u64>,
 }
 
-/// One pathless manifest entry of a bounded namespace initialization.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ManifestEntry {
-    /// Index of the parent entry; zero for the root entry itself.
-    pub parent: u16,
-    /// Canonical component name; empty only for the root entry.
-    pub name: Vec<u8>,
-    /// Entry kind: 1 directory, 2 regular file, 3 symlink.
-    pub kind: u8,
-    /// Portable permission bits.
-    pub mode: u32,
-    /// Portable modification time, seconds since the Unix epoch.
-    pub mtime_seconds: i64,
-    /// Portable modification time, fractional second.
-    pub mtime_nanoseconds: u32,
-    /// Already published file root; regular files only.
-    pub content: Option<Root>,
-    /// Inline symbolic-link target; symlinks only.
-    pub target: Vec<u8>,
-}
-
 /// Every mutating history command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HistoryCommand {
-    /// Creates the genesis Layer and the stack.
-    InitLayerStack {
-        /// Authority-supplied 16-byte stack body.
-        stack: [u8; 16],
-        /// Authority-local unique stack name.
-        name: Vec<u8>,
-        /// Seed the service derives the fresh allocation scope from.
-        scope_seed: Root,
-        /// Bounded logical namespace to build.
-        manifest: Vec<ManifestEntry>,
-    },
     /// Imports the Service's operator-configured native directory as one genesis stack.
     ImportNativeDirectory {
         stack: [u8; 16],

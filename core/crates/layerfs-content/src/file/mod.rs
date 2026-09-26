@@ -17,7 +17,7 @@ pub use content::{
 };
 pub use edit::{
     apply_edits, Edit, EditCounters, EditObjects, EditRequest, EditSequence, EditSource,
-    EditStream, Replacements, EDIT_DEFERRED_LIMIT,
+    EDIT_DEFERRED_LIMIT,
 };
 pub use mapping::{ExtentBuilder, PredecessorBase, ReadCounters};
 pub use read::{read_all, read_all_bounded, read_range};

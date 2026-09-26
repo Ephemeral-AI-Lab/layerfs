@@ -57,7 +57,19 @@ def main():
         server_key, client_key = os.urandom(32).hex(), os.urandom(32).hex()
         server_public, client_public = route.public_key(server_key), route.public_key(client_key)
         env = os.environ.copy()
-        env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=f'1,{client_public},{int(time.time())+3600},127',
+        # The recipe is `byte at absolute offset i is i % 251`; write it in
+        # bounded windows so preparation never holds the file resident.
+        source = data / 'source'; source.mkdir()
+        cycle = bytes(range(251)) * 67
+        with (source / 'data.bin').open('wb') as output:
+            for offset in range(0, SIZE, route.FRAME_BYTES):
+                length = min(route.FRAME_BYTES, SIZE - offset)
+                chunk = cycle[offset % 251:offset % 251 + length]
+                assert len(chunk) == length
+                output.write(chunk)
+        assert (source / 'data.bin').stat().st_size == SIZE
+        env.update(LAYERFS_IMPORT_ROOT=str(source),
+                   LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=f'1,{client_public},{int(time.time())+3600},127',
                    LAYERFS_LISTEN='127.0.0.1:0', LAYERFS_STORE=str(data / 'store.sqlite'),
                    LAYERFS_HISTORY_CATALOG=str(data / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
                    LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_INCARNATION='1',
@@ -72,7 +84,6 @@ def main():
         daemon.stdin.write(route.begin(1, 20, route.save_file_metadata(SIZE)))
         daemon.stdin.write(route.frame(3, 1, struct.pack('>QQQ', 1, 0, SIZE)))
         digest = hashlib.sha256()
-        cycle = bytes(range(251)) * 67
         for offset in range(0, SIZE, route.FRAME_BYTES):
             length = min(route.FRAME_BYTES, SIZE-offset)
             chunk = cycle[offset % 251:offset % 251 + length]
@@ -82,9 +93,8 @@ def main():
         kind, body = route.receive(daemon, timeout=10)
         assert kind == 6 and body[0] == 2, body
         content = body[1:33]; report['input_sha256'] = digest.hexdigest(); report['file_root'] = content.hex()
-        entries = (route.manifest_entry(0, b'', 2, 0o755, 1700000000, 0)
-                   + route.manifest_entry(0, b'data.bin', 1, 0o644, 1700000001, 0, content))
-        init = b'\x01' + b'\x91'*16 + route.blob(b'large-local-edit') + bytes(range(32)) + struct.pack('>H', 2) + entries
+        report['namespace_route'] = 'native-directory import of the same bytes under the same canonical root'
+        init = b'\x09' + b'\x91'*16 + route.blob(b'large-local-edit') + bytes(range(32))
         kind, body = route.exchange(daemon, 2, route.COMMAND_OPCODE, init, route.HISTORY_PROFILE)
         assert kind == 6, body
         tag, created = route.history(body); assert tag == 'StackCreated'

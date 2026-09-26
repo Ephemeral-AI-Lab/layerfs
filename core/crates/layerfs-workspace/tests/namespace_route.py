@@ -70,7 +70,8 @@ def execute(args, report, started):
                LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'),
                LAYERFS_HISTORY_CREATE='1', LAYERFS_HISTORY_BINDING='pair1-stage',
                LAYERFS_HISTORY_INCARNATION='1', LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(),
-               LAYERFS_CONSTRUCTION_WORKERS='1')
+               LAYERFS_CONSTRUCTION_WORKERS='1',
+               LAYERFS_IMPORT_ROOT=str(shared.import_path(service_dir)))
     service = subprocess.Popen([shared.route.BIN / 'layerfs-server'], env=env,
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     created = made_volume = False
@@ -89,8 +90,7 @@ def execute(args, report, started):
         readiness = shared.mounted.line_until(service, timeout=min(10, remaining()))
         assert 'ready' in readiness, readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
-        report['fixture'] = shared.bootstrap(service_dir, port, private, server_public,
-                                            bytes.fromhex(fixture['file_root']), False)
+        report['fixture'] = shared.bootstrap(service_dir, port, private, server_public, False)
         command(['docker', 'volume', 'create', volume])
         made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,

@@ -13,6 +13,13 @@ records the internal codec refactor.
 Implementation specification and its pre-publication audit:
 [`proposal/commit-history/`](proposal/commit-history/).
 
+- **Pathless initialization retirement:** product commit in this change removes
+  the `InitLayerStack` command and the pathless manifest it carried
+  (`ManifestEntry`, `NamespaceManifest`, history-command tag 1, and its codec,
+  validation, client matcher and service branch). `ImportNativeDirectory` is now
+  the only namespace-initialization route. Sections 16.4, 16.7, 16.8 and 16.9
+  below state the current boundary; the pins that follow still identify the
+  source each earlier statement was written against.
 - **Source pin:** `7a6db4c2d7f4b9182ea7b0c923eabcafe96dbb0c`, including the
   bridge codec consolidation. This pin-only update changes no product behavior.
   Reference root `crates/` remains separate.
@@ -176,7 +183,7 @@ existing catalog.
 
 | Operation | Effect |
 | --- | --- |
-| `init_layerstack` | creates the genesis Layer and the stack in one transaction; no Branch, stage or Commit |
+| `import_native_directory` | scans the Service's configured native directory, saves its files and metadata through C1/C2, then creates the genesis Layer and the stack in one transaction; no Branch, stage or Commit |
 | `fork` | creates one Branch sharing the selected Layer or the selected ancestor Commit's ancestry; copies no content and no history rows |
 | `read_branch` | capture one coherent Branch snapshot, release C5, then validate the immutable effective root through C1; return root/profile/scope/root serial |
 | `stage_changes` | inserts one frozen stage with a freshly allocated token |
@@ -316,21 +323,23 @@ membership is validated on every suboperation.
 
 Dispatch is exhaustive and semantic. `Operation::read_only`,
 `content_mutation` and `metadata_mutation` are separate exhaustive matches, and
-the old `opcode >= 3` mutation test is gone. A `HistoryQuery` is read-only, a
-`InitLayerStack`, `ImportNativeDirectory`, `StageChanges` and composite `Commit` write content; `Fork`,
+the old `opcode >= 3` mutation test is gone. A `HistoryQuery` is read-only, an
+`ImportNativeDirectory`, `StageChanges` and composite `Commit` write content; `Fork`,
 `CommitStaged`, `AddLayer`, `DiscardStage` and `ReserveInodes` mutate metadata
 only. Metadata commands never start a C2 save. HELLO/framing version stays separate from the operation
 profile; an unknown profile/suboperation combination is refused before any
 mutation, and there is no automatic downgrade or resend.
 
-`ImportNativeDirectory` is history-command metadata tag 9. The authorized
-Service reads only its operator-configured `LAYERFS_IMPORT_ROOT`; the client
-cannot supply a host path. The operation scans names and reads file bytes before
-its C1/C2 saves and C5 genesis publication return `StackCreated`. It accepts
-regular files and directories, refuses symlinks and special files, and has no
-default file or entry-count ceiling. The pathless `InitLayerStack` retains its
-pre-saved-root semantics and is bounded by the legacy request's metadata frame
-and 16-bit parent encoding, without the former 128-entry test cap. Four source
+`ImportNativeDirectory` is history-command metadata tag 9 and the only
+namespace-initialization route. The authorized Service reads only its
+operator-configured `LAYERFS_IMPORT_ROOT`; the client cannot supply a host path.
+The operation scans names and reads file bytes before its C1/C2 saves and C5
+genesis publication return `StackCreated`. It accepts regular files and
+directories, refuses symlinks and special files, and has no default file or
+entry-count ceiling. History-command tag 1 is retired and unassigned: the
+pathless `InitLayerStack` manifest route no longer exists, so a request that
+still carries that tag is refused as an unsupported suboperation rather than
+reinterpreted. Four source
 file workers construct C1 objects and send ordered Object/Done events through
 four bounded `ImportBatch` channel slots to one C2 save owner. An ordinary batch
 holds at most 256 KiB of canonical object bytes, 512 objects and 512 file
@@ -375,8 +384,8 @@ widths are Stack 117/179, Branch 71/166, Commit 116/149, Layer 85/168, Stage
 309/342 bytes. The 32 KiB request envelope and legacy limits remain unchanged.
 The native codecs share optional fixed-width primitives in `protocol/metadata.rs`
 and the five history page envelopes in `protocol/response.rs`. Record codecs
-retain their own validation and explicit minimum widths. Prepared-update and
-manifest decoders construct records in wire-field order. A frozen 46-case external
+retain their own validation and explicit minimum widths. Prepared-update
+decoders construct records in wire-field order. A frozen 46-case external
 fixture from a4a144af checks that this consolidation preserves encoded bytes.
 
 Candidate profile-2 compatibility changes are frozen in the
@@ -390,14 +399,16 @@ could mislabel a known successful metadata transition as abort.
 ## 16.8 Production namespace bootstrap
 
 Initialization is production code, not the `examples/prepare_store.rs` fixture.
-The pathless bootstrap manifest fits the existing 32 KiB metadata envelope and
-16-bit parent encoding, without the former 128-entry test ceiling. Its entries name their
-parent by index, a canonical component name, a kind, portable mode/mtime and,
-per kind, an already published file root or a bounded inline symlink target.
-Native directory import has no default file or entry-count ceiling. Both
-initialization routes give the C1 ordering reducer a private file backing so
+`ImportNativeDirectory` is the whole route: the operator names a host directory,
+the Service scans it and saves it, and C5 publishes one genesis Layer and stack.
+The import has no default file or entry-count ceiling, and it refuses symlinks
+and special files. The C1 ordering reducer receives a private file backing so
 the default bounded in-memory row set can spill and be checked for cleanup
 before publication.
+
+There is no pathless initialization payload. A namespace whose content must
+include a symlink is created through the execution-side Workspace route, not by
+declaring one in an initialization request.
 
 Every serial is assigned by the service from one reservation the C5 catalog
 consumed first; no caller supplies a serial and no foreign scope is imported. The
@@ -436,9 +447,10 @@ Recorded plainly, because each is a limit rather than a plan:
   be reopened for writing; mutations fail with `ContinuityUnavailable`. A
   trustworthy external continuity handoff is a separate future provider
   capability.
-- **No general host import and no arbitrary filesystem-root registration.** The
-  manifest is pathless and bounded; a host tree is not scanned and a second
-  import algorithm does not exist.
+- **No arbitrary filesystem-root registration and no symlink in an import.** The
+  only initialization route is the Service's operator-configured native
+  directory; a client cannot name a host path, the import refuses symlinks, and
+  a second import algorithm does not exist.
 - **No new-inode or new-symlink operation on a live Workspace.** `stage_changes`
   accepts the existing-inode prepared-update surface with its existing
   changed-name/inode limits (128 of each). `reserve_inodes` does not silently

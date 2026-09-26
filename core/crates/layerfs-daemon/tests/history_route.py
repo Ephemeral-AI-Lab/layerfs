@@ -21,6 +21,9 @@ PROFILE = os.environ.get("LAYERFS_PROOF_PROFILE", "debug")
 if PROFILE not in ("debug", "release"):
     raise ValueError("unsupported proof build profile")
 BIN = TARGET / PROFILE
+# Optional daemon-client binary, for a run whose daemon is a Linux build while
+# the host binaries stay native. The default is the profile directory above.
+DAEMON_BINARY = Path(os.environ.get("LAYERFS_DAEMON_BINARY", BIN / "layerfs-daemon"))
 
 FRAME_BYTES = 16384
 CURSOR_BYTES = 160
@@ -86,11 +89,6 @@ def save_file_metadata(length):
 
 def save_file_body(data):
     return (struct.pack(">QQQ", 1, 0, len(data)) + data) if data else b""
-
-
-def manifest_entry(parent, name, kind, mode, seconds, nanos, content=None, target=b""):
-    return (struct.pack(">H", parent) + blob(name) + struct.pack(">BIQI", kind, mode, seconds, nanos)
-            + optional(content) + blob(target))
 
 
 class Reader:
@@ -221,9 +219,22 @@ def provision_store(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def start_service(temp, port, server_key, peers):
+def native_directory(temp, name="source"):
+    """Create one host directory the Service is configured to import.
+
+    The native-directory importer is the only namespace-initialization route: it
+    reads a real operator-configured directory, so a fixture that needs namespace
+    content writes it here before asking the Service to import it.
+    """
+    source = Path(temp) / name
+    source.mkdir(parents=True, exist_ok=True)
+    return source
+
+
+def start_service(temp, port, server_key, peers, import_root):
     env = os.environ.copy()
-    env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=peers,
+    env.update(LAYERFS_IMPORT_ROOT=str(import_root),
+               LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=peers,
                LAYERFS_STORE=str(Path(temp) / "store.sqlite"),
                LAYERFS_LISTEN=f"127.0.0.1:{port}", LAYERFS_TELEMETRY="off",
                LAYERFS_HISTORY_CATALOG=str(Path(temp) / "history.sqlite"),
@@ -242,7 +253,7 @@ def start_daemon(temp, port, client_key, server_public, selector, image):
                LAYERFS_ENDPOINT=f"127.0.0.1:{port}", LAYERFS_SELECTOR=str(selector),
                LAYERFS_TELEMETRY="off")
     if image is None:
-        return subprocess.Popen([BIN / "layerfs-daemon"], env=env, stdin=subprocess.PIPE,
+        return subprocess.Popen([DAEMON_BINARY], env=env, stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE), "host"
     name = f"layerfs-history-route-{os.getpid()}"
     command = ["docker", "run", "--name", name, "--rm", "--log-driver=none", "--read-only",
@@ -251,12 +262,18 @@ def start_daemon(temp, port, client_key, server_public, selector, image):
     for key in ("LAYERFS_PRIVATE_KEY", "LAYERFS_SERVER_KEY", "LAYERFS_SELECTOR", "LAYERFS_TELEMETRY"):
         command += ["-e", key]
     env["LAYERFS_ENDPOINT"] = f"host.docker.internal:{port}"
-    command += ["-e", "LAYERFS_ENDPOINT", image]
+    command += ["-e", "LAYERFS_ENDPOINT"]
+    if Path(DAEMON_BINARY).parent != BIN:
+        command += ["-v", f"{Path(DAEMON_BINARY).parent}:/linux-runner:ro"]
+        command += [image, "/linux-runner/" + Path(DAEMON_BINARY).name]
+        return subprocess.Popen(command, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE), name
+    command += [image]
     return subprocess.Popen(command, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE), name
 
 
-def run_cases(daemon, evidence):
+def run_cases(daemon, evidence, source):
     stack_body, branch_body, workspace = b"\x51" * 16, b"\x61" * 16, b"\x71" * 32
     seed = bytes(range(32))
     payload = b"history route payload"
@@ -269,16 +286,20 @@ def run_cases(daemon, evidence):
     second_root = body[1:33]
     evidence.append({"id": "R01", "case": "generic file save through profile 1", "status": "PASS"})
 
-    entries = (manifest_entry(0, b"", 2, 0o755, 1700000000, 0, None)
-               + manifest_entry(0, b"a", 1, 0o644, 1700000001, 0, file_root))
-    init = b"\x01" + stack_body + blob(b"main") + seed + struct.pack(">H", 2) + entries
+    # The namespace file holds the exact bytes the earlier generic save stored,
+    # so the published file root must be that root again.
+    (source / "a").write_bytes(payload)
+    init = b"\x09" + stack_body + blob(b"main") + seed
     kind, body = exchange(daemon, 3, COMMAND_OPCODE, init, HISTORY_PROFILE)
     assert kind == 6, body
     tag, record = history(body)
     assert tag == "StackCreated", tag
     stack, genesis = record["stack"], record["head_layer"]
     assert stack[0] == 0x31 and genesis[0] == 0x32
-    evidence.append({"id": "R02", "case": "init_layerstack through the daemon", "status": "PASS"})
+    # R03 below reads the genesis Layer's filesystem root back through the same
+    # query surface and checks it against the fork's effective root; R09 then
+    # compares the published file root with the generic save's exact root.
+    evidence.append({"id": "R02", "case": "native-directory import through the daemon", "status": "PASS"})
 
     fork = b"\x02" + stack + branch_body + blob(b"work") + b"\x01" + genesis
     kind, body = exchange(daemon, 4, COMMAND_OPCODE, fork, HISTORY_PROFILE)
@@ -414,7 +435,8 @@ def main():
                 "method": "existing C2 fixture executable (Store::open never creates)",
                 "store_sha256": provision_store(Path(temp) / "store.sqlite"),
             }
-            service, ready = start_service(temp, port, server_key, peers)
+            source = native_directory(temp)
+            service, ready = start_service(temp, port, server_key, peers, source)
             evidence["service_ready"] = ready
             evidence["binaries"] = {str(BIN / "layerfs-server"): hashlib.sha256((BIN / "layerfs-server").read_bytes()).hexdigest()}
 
@@ -431,7 +453,7 @@ def main():
             client, name = start_daemon(temp, port, allowed_key, server_public, 1, args.image)
             daemon = client
             evidence["client_name"] = name
-            identities = run_cases(client, evidence["cases"])
+            identities = run_cases(client, evidence["cases"], source)
             evidence["identities"] = identities
             evidence["cases"].append({"id": "R11", "case": "delayed token cannot consume a replacement stage",
                                       "status": "PASS"})
@@ -466,6 +488,12 @@ def main():
                 try:
                     child.kill()
                     child.wait(timeout=10)
+                except Exception:
+                    pass
+        for label, child in (("daemon", daemon), ("service", service)):
+            if child is not None and child.stderr is not None:
+                try:
+                    (args.output / f"{label}.stderr").write_bytes(child.stderr.read())
                 except Exception:
                     pass
     evidence["status"] = "PASS" if all(case["status"] == "PASS" for case in evidence["cases"]) else "FAIL"

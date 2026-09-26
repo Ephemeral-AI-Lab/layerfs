@@ -1,8 +1,6 @@
 //! Conversion between service wire records and catalog values.
 use crate::service::error::catalog as failure;
-use crate::service::read::content::id;
-use layerfs_bridge::contract::*;
-use layerfs_bridge::contract::{HistoryResult, ManifestEntry};
+use layerfs_bridge::contract::{HistoryResult, *};
 use layerfs_history::*;
 
 pub(crate) fn changes_kind(kind: u8) -> Result<u8, Failure> {
@@ -12,9 +10,7 @@ pub(crate) fn changes_kind(kind: u8) -> Result<u8, Failure> {
     }
 }
 
-pub(crate) fn commit_outcome(
-    outcome: CommitStagedOutcome,
-) -> layerfs_bridge::contract::HistoryResult {
+pub(crate) fn commit_outcome(outcome: CommitStagedOutcome) -> HistoryResult {
     HistoryResult::Committed(match outcome {
         CommitStagedOutcome::Committed(record) => {
             CommitOutcomeWire::Committed(commit_wire(&record))
@@ -61,26 +57,6 @@ pub(crate) fn optional_commit(bytes: &Option<[u8; 33]>) -> Result<Option<CommitI
 
 pub(crate) fn optional_layer(bytes: &Option<[u8; 33]>) -> Result<Option<LayerId>, Failure> {
     bytes.as_ref().map(layer_id).transpose()
-}
-
-pub(crate) fn manifest_of(entries: &[ManifestEntry]) -> Result<NamespaceManifest, Failure> {
-    let entries = entries
-        .iter()
-        .map(|entry| {
-            Ok(layerfs_history::ManifestEntry {
-                parent: entry.parent,
-                name: entry.name.clone(),
-                kind: layerfs_history::RecordKind::from_code(entry.kind)
-                    .map_err(|_| Code::InvalidInput)?,
-                mode: entry.mode,
-                mtime_seconds: entry.mtime_seconds,
-                mtime_nanoseconds: entry.mtime_nanoseconds,
-                content: entry.content.map(|root| id(&root)),
-                target: (!entry.target.is_empty()).then(|| entry.target.clone()),
-            })
-        })
-        .collect::<Result<Vec<_>, Failure>>()?;
-    Ok(NamespaceManifest { entries })
 }
 
 pub(crate) fn stack_wire(record: &LayerStackRecord) -> StackWire {

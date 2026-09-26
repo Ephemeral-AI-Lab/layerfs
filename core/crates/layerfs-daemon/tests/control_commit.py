@@ -625,7 +625,8 @@ def execute(args, report):
         LAYERFS_STORE=str(service_dir / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0', LAYERFS_TELEMETRY='off',
         LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
         LAYERFS_HISTORY_BINDING='pair1-stage', LAYERFS_HISTORY_INCARNATION='1',
-        LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
+        LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1',
+        LAYERFS_IMPORT_ROOT=str(stage_route.import_path(service_dir)))
     service = subprocess.Popen([driver.route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     name = 'layerfs-control-commit-' + uuid.uuid4().hex[:12]
@@ -635,8 +636,7 @@ def execute(args, report):
     try:
         service_ready = driver.mount.line_until(service); assert 'ready' in service_ready
         port = int(service_ready.strip().rsplit(':', 1)[1])
-        report['fixture'] = stage_route.bootstrap(service_dir, port, keys['writer'], public['service'],
-                                                 bytes.fromhex(fixture['file_root']), False)
+        report['fixture'] = stage_route.bootstrap(service_dir, port, keys['writer'], public['service'], False)
         branch = report['fixture']['branch']
         witness = Witness(port, keys['writer'], public['service'], name)
         if args.case == 'commit_small_project':

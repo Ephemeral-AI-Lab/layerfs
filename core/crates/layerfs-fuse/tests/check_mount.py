@@ -38,15 +38,12 @@ os.close(other)
 assert os.pread(independent, 17, 19) == expected[19:36]
 os.close(independent)
 assert (p / 'data.bin').read_bytes() == expected
-assert os.readlink(p / 'link') == 'data.bin'
-assert (p / 'link').read_bytes() == expected
-assert (p / 'link').lstat().st_size == len('data.bin')
-try: (p / 'dangling').read_bytes()
-except FileNotFoundError: pass
-else: raise AssertionError('dangling link resolved')
+# The namespace is imported from a real host directory, and the importer refuses
+# symlinks, so this fixture declares none. Symlink creation on a live Workspace
+# is the execution-side route's separate proof.
 assert sorted(os.listdir(p / 'empty')) == []
 names = {f'entry-{i:03d}-' + 'x' * 180 for i in range(100)}
-assert set(os.listdir(p)) == names | {'data.bin','unread.bin','tool','link','dangling','empty','alias','root-readable'}
+assert set(os.listdir(p)) == names | {'data.bin','unread.bin','tool','empty','alias','root-readable'}
 for entry in os.scandir(p):
     assert entry.inode() > 0
     if entry.name in names: assert entry.is_file()

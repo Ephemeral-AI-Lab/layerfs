@@ -25,11 +25,16 @@ use std::path::{Path, PathBuf};
 
 use layerfs_content::{
     apply_edits, construct_bytes, read_all, AuthenticatedObjects, ConstructionPolicy, ContentError,
-    ContentResult, DiscardingConsumer, Edit, EditRequest, EditStream, FinalizedConsumer,
-    FinalizedObject, ObjectId, Replacements,
+    ContentResult, DiscardingConsumer, Edit, EditRequest, FinalizedConsumer, FinalizedObject,
+    ObjectId,
 };
 use layerfs_storage::{SaveHandoff, StorageError, StoragePolicy, Store};
 use layerfs_telemetry::timer::{Active, Timing, TimingReport, TimingScope};
+
+mod support;
+
+use layerfs_content::EditSource;
+use support::{Edits, Parts};
 
 type Failure = Box<dyn std::error::Error>;
 
@@ -184,7 +189,7 @@ fn noise(len: usize) -> Vec<u8> {
 struct Fixture {
     base: Vec<u8>,
     edits: Vec<Edit>,
-    replacements: Replacements,
+    replacements: Parts,
 }
 
 fn fixture(case: Case, threshold: u64) -> Result<Fixture, Failure> {
@@ -217,7 +222,7 @@ fn fixture(case: Case, threshold: u64) -> Result<Fixture, Failure> {
             (base, edits)
         }
     };
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     for edit in &edits {
         replacements.push(noise(edit.replacement_len() as usize));
     }
@@ -351,7 +356,7 @@ fn run() -> Result<(), Failure> {
             .map(|edit| edit.replacement_len())
             .sum::<u64>()
     );
-    let stream = EditStream::new(fixture.base.len() as u64, fixture.edits.clone())?;
+    let stream = Edits::new(fixture.base.len() as u64, fixture.edits.clone())?;
     println!(
         "stream: {} edit(s), base {} -> final {} bytes",
         stream.len(),
@@ -370,7 +375,7 @@ fn run_c1(
     options: &Options,
     policy: ConstructionPolicy,
     fixture: &Fixture,
-    stream: &EditStream,
+    stream: &Edits,
 ) -> Result<(), Failure> {
     let (provider, root) = Provider::build(policy, &fixture.base)?;
     println!("base root: {root}");
@@ -527,7 +532,7 @@ fn run_pipeline(
     options: &Options,
     policy: ConstructionPolicy,
     fixture: &Fixture,
-    stream: &EditStream,
+    stream: &Edits,
 ) -> Result<(), Failure> {
     let store_path = options.output.join("store.sqlite");
     let policy_row = StoragePolicy::new(1, options.threshold, 8, 4).validated()?;
@@ -637,8 +642,6 @@ fn run_pipeline(
         &options.output.join("pipeline-readback.json"),
     )
 }
-
-use layerfs_content::EditSource;
 
 /// Independent read provider backed by a real Store connection.
 ///

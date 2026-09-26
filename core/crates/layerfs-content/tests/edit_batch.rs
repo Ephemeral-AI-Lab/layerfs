@@ -10,12 +10,14 @@ mod support;
 
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, EditSource,
-    EditStream, ObjectId, Replacements,
+    ObjectId,
 };
-use support::{disabled_scope, noise, patterned, read_back, MemoryStore};
+use support::{
+    disabled_scope, edits::Edits, edits::Parts, noise, patterned, read_back, MemoryStore,
+};
 
 /// Independent model: apply each edit to the running result, in order.
-fn model_apply(base: &[u8], edits: &[Edit], source: &Replacements) -> Vec<u8> {
+fn model_apply(base: &[u8], edits: &[Edit], source: &Parts) -> Vec<u8> {
     let mut result = base.to_vec();
     let mut previous_result_end = 0_u64;
     for (index, edit) in edits.iter().enumerate() {
@@ -59,8 +61,8 @@ fn candidates(bytes: &[u8]) -> (MemoryStore, ObjectId) {
 fn apply(
     store: &MemoryStore,
     root: ObjectId,
-    stream: &EditStream,
-    replacements: &Replacements,
+    stream: &Edits,
+    replacements: &Parts,
 ) -> (MemoryStore, ObjectId, u64) {
     let policy = ConstructionPolicy::frozen_default();
     let mut result = store.merged_clone();
@@ -83,10 +85,10 @@ fn apply(
 }
 
 /// Checks bytes, length and root against the model and a fresh construction.
-fn expect(name: &str, base: &[u8], edits: Vec<Edit>, replacements: &Replacements) {
+fn expect(name: &str, base: &[u8], edits: Vec<Edit>, replacements: &Parts) {
     let expected = model_apply(base, &edits, replacements);
     let (base_store, base_root) = candidates(base);
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     assert_eq!(
         stream.final_len(),
         expected.len() as u64,
@@ -101,8 +103,8 @@ fn expect(name: &str, base: &[u8], edits: Vec<Edit>, replacements: &Replacements
 }
 
 /// Deterministic replacement bytes for the declared length of every edit.
-fn replacements_for(edits: &[Edit]) -> Replacements {
-    let mut source = Replacements::new();
+fn replacements_for(edits: &[Edit]) -> Parts {
+    let mut source = Parts::new();
     for edit in edits {
         source.push(noise(edit.replacement_len() as usize));
     }
@@ -132,7 +134,7 @@ fn adjacent_edits_stay_separate_segments() {
 #[test]
 fn delete_only_streams_are_monotonic_in_result_coordinates() {
     let base = patterned(3_000);
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     expect(
         "delete-only",
         &base,
@@ -178,19 +180,17 @@ fn many_small_edits_are_applied_in_one_pass() {
 
 #[test]
 fn an_overlapping_stream_is_rejected_before_any_work() {
-    let error =
-        EditStream::new(1_000, vec![Edit::delete(10, 100), Edit::delete(5, 20)]).unwrap_err();
+    let error = Edits::new(1_000, vec![Edit::delete(10, 100), Edit::delete(5, 20)]).unwrap_err();
     assert!(matches!(error, ContentError::InvalidEdit { .. }));
-    let error =
-        EditStream::new(1_000, vec![Edit::insert(10, 40), Edit::overwrite(20, 30)]).unwrap_err();
+    let error = Edits::new(1_000, vec![Edit::insert(10, 40), Edit::overwrite(20, 30)]).unwrap_err();
     assert!(
         matches!(error, ContentError::InvalidEdit { .. }),
         "a range inside an earlier replacement is rejected, not merged"
     );
     // Adjacent edits are allowed and remain two segments.
-    assert!(EditStream::new(1_000, vec![Edit::delete(10, 100), Edit::delete(100, 200)]).is_ok());
+    assert!(Edits::new(1_000, vec![Edit::delete(10, 100), Edit::delete(100, 200)]).is_ok());
     // The same result-coordinate start as the previous replacement is allowed.
-    assert!(EditStream::new(1_000, vec![Edit::insert(10, 40), Edit::insert(50, 5)]).is_ok());
+    assert!(Edits::new(1_000, vec![Edit::insert(10, 40), Edit::insert(50, 5)]).is_ok());
 }
 
 #[test]
@@ -198,10 +198,10 @@ fn every_object_the_edit_emits_is_reachable_from_its_root() {
     let base = noise(200_000);
     let (base_store, base_root) = candidates(&base);
     let known: Vec<ObjectId> = base_store.order().iter().map(|(id, _)| *id).collect();
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(1_000));
     let stream =
-        EditStream::new(base.len() as u64, vec![Edit::overwrite(70_000, 71_000)]).expect("valid");
+        Edits::new(base.len() as u64, vec![Edit::overwrite(70_000, 71_000)]).expect("valid");
     let (result_store, root, _) = apply(&base_store, base_root, &stream, &replacements);
     let bytes = read_back(&result_store, root).expect("reads back");
     assert_eq!(bytes.len(), base.len());

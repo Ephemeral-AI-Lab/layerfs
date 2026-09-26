@@ -297,7 +297,7 @@ fn command_matches(command: &HistoryCommand, result: &HistoryResult) -> bool {
     matches!(
         (command, result),
         (
-            HistoryCommand::InitLayerStack { .. } | HistoryCommand::ImportNativeDirectory { .. },
+            HistoryCommand::ImportNativeDirectory { .. },
             HistoryResult::StackCreated(_)
         ) | (HistoryCommand::StageChanges(_), HistoryResult::Stage(_))
             | (

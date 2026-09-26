@@ -1,11 +1,11 @@
 //! Closed operation profile. Root bytes are logical identities, never paths.
 use super::{
-    Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
-    BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
-    HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES,
-    PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
-    WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
-    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
+    Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, PreparedChanges, BRANCH_BYTES,
+    COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
+    HISTORY_PROFILE, LAYER_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE,
+    STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_ATTACH_OPCODE,
+    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE, WORKSPACE_EXEC_OPCODE,
+    WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
     WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
@@ -266,8 +266,7 @@ impl Operation {
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryCommand(
-                HistoryCommand::InitLayerStack { .. }
-                | HistoryCommand::ImportNativeDirectory { .. }
+                HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
             ) => true,
@@ -323,8 +322,7 @@ impl Operation {
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
-                HistoryCommand::InitLayerStack { .. }
-                | HistoryCommand::ImportNativeDirectory { .. }
+                HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
             ) => false,
@@ -705,78 +703,8 @@ fn check_prepared_additions(
     Ok(())
 }
 
-fn check_manifest(entries: &[ManifestEntry]) -> Result<(), Failure> {
-    if entries.is_empty() {
-        return Err(Code::InvalidInput.into());
-    }
-    if entries.len() > MANIFEST_ENTRIES {
-        return Err(Code::Capacity.into());
-    }
-    for (index, entry) in entries.iter().enumerate() {
-        if index == 0 {
-            if entry.kind != 2
-                || !entry.name.is_empty()
-                || entry.content.is_some()
-                || !entry.target.is_empty()
-            {
-                return Err(Code::InvalidInput.into());
-            }
-        } else if entry.name.is_empty()
-            || entry.name.len() > 255
-            || entry.name.contains(&0)
-            || usize::from(entry.parent) >= index
-        {
-            return Err(Code::InvalidInput.into());
-        }
-        if entry.mtime_nanoseconds > 999_999_999 {
-            return Err(Code::InvalidInput.into());
-        }
-        let mask = match entry.kind {
-            2 => 0o1777,
-            1 | 3 => 0o777,
-            _ => return Err(Code::InvalidInput.into()),
-        };
-        if entry.mode & !mask != 0 {
-            return Err(Code::InvalidInput.into());
-        }
-        match entry.kind {
-            2 => {
-                if entry.content.is_some() || !entry.target.is_empty() {
-                    return Err(Code::InvalidInput.into());
-                }
-            }
-            1 => {
-                if entry.content.is_none() || !entry.target.is_empty() {
-                    return Err(Code::InvalidInput.into());
-                }
-            }
-            _ => {
-                if entry.content.is_some()
-                    || entry.target.is_empty()
-                    || entry.target.len() > MANIFEST_TARGET_BYTES
-                    || entry.target.contains(&0)
-                    || entry.mode != 0o777
-                {
-                    return Err(Code::InvalidInput.into());
-                }
-            }
-        }
-    }
-    let mut seen = std::collections::BTreeSet::new();
-    for entry in entries.iter().skip(1) {
-        if !seen.insert((entry.parent, entry.name.as_slice())) {
-            return Err(Code::InvalidInput.into());
-        }
-    }
-    Ok(())
-}
-
 fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {
     match command {
-        HistoryCommand::InitLayerStack { name, manifest, .. } => {
-            check_name(name)?;
-            check_manifest(manifest)
-        }
         HistoryCommand::ImportNativeDirectory { name, .. } => check_name(name),
         HistoryCommand::Fork {
             stack,

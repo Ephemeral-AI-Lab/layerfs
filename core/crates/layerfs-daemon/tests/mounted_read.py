@@ -56,28 +56,28 @@ def line_until(process, timeout=15):
     raise RuntimeError(f"missing readiness: {data.decode(errors='replace')}")
 
 
-def seed_namespace(daemon, executable):
-    roots = []
-    for identity, payload in enumerate((DATA, executable), 1):
-        kind, body = route.exchange(daemon, identity, 20, route.save_file_metadata(len(payload)), body=route.save_file_body(payload))
-        assert kind == 6 and body[0] == 2, body
-        roots.append(body[1:33])
+def seed_source(source, executable):
+    """Write the namespace the kernel will read into the import directory.
+
+    The native-directory importer is the only namespace-initialization route, so
+    the fixture is a real host directory: names, modes and file bytes come from
+    the filesystem, and the Service saves them through its normal import path.
+    """
+    for name in ("data.bin", "unread.bin", *NAMES):
+        (source / name).write_bytes(DATA)
+    (source / "tool").write_bytes(executable)
+    (source / "root-readable").write_bytes(DATA)
+    (source / "empty").mkdir()
+    for name, mode in (("unread.bin", 0o644), ("tool", 0o755), ("root-readable", 0o000)):
+        os.chmod(source / name, mode)
+
+
+def seed_namespace(daemon):
     # Consume serial 1 through ordinary initialization before the tested root.
-    primer = (b"\x01" + b"\x50" * 16 + route.blob(b"primer") + bytes(range(32))
-              + struct.pack(">H", 1) + route.manifest_entry(0, b"", 2, 0o755, 0, 0))
+    primer = b"\x09" + b"\x50" * 16 + route.blob(b"primer") + bytes(range(32))
     kind, body = route.exchange(daemon, 3, route.COMMAND_OPCODE, primer, route.HISTORY_PROFILE)
     assert kind == 6, body
-    entries = [route.manifest_entry(0, b"", 2, 0o755, 1700000000, 0)]
-    for name in ("data.bin", "unread.bin", *NAMES):
-        entries.append(route.manifest_entry(0, name.encode(), 1, 0o644,
-                                           (1 << 64) - 1, 123456789, roots[0]))
-    entries += [route.manifest_entry(0, b"tool", 1, 0o755, 1700000001, 0, roots[1]),
-                route.manifest_entry(0, b"root-readable", 1, 0, 1700000001, 0, roots[0]),
-                route.manifest_entry(0, b"link", 3, 0o777, 1700000002, 0, target=b"data.bin"),
-                route.manifest_entry(0, b"dangling", 3, 0o777, 1700000003, 0, target=b"absent"),
-                route.manifest_entry(0, b"empty", 2, 0o755, 1700000004, 0)]
-    payload = (b"\x01" + b"\x51" * 16 + route.blob(b"mounted") + bytes(range(32))
-               + struct.pack(">H", len(entries)) + b"".join(entries))
+    payload = b"\x09" + b"\x51" * 16 + route.blob(b"mounted") + bytes(range(32))
     kind, body = route.exchange(daemon, 4, route.COMMAND_OPCODE, payload, route.HISTORY_PROFILE)
     assert kind == 6, body
     tag, created = route.history(body)
@@ -179,7 +179,8 @@ def run(args, report):
     env = os.environ.copy()
     peers = (f'1,{client_public},{int(time.time()) + 3600},127;'
              f'2,{route.public_key(denied_key)},{int(time.time()) + 3600},1')
-    env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=peers,
+    source = route.native_directory(temp)
+    env.update(LAYERFS_IMPORT_ROOT=str(source), LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=peers,
                LAYERFS_STORE=str(temp / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0',
                LAYERFS_TELEMETRY='off', LAYERFS_HISTORY_CATALOG=str(temp / 'history.sqlite'),
                LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_CREATE='1',
@@ -199,7 +200,8 @@ def run(args, report):
         executable = checked(['docker', 'run', '--rm', '--network', 'none', args.image,
                               'cat', '/usr/bin/true']).stdout
         assert len(executable) > 8192
-        root, branch, file_root, root_serial = seed_namespace(daemon, executable)
+        seed_source(source, executable)
+        root, branch, file_root, root_serial = seed_namespace(daemon)
         daemon.stdin.close(); assert daemon.wait(timeout=10) == 0
         daemon = None
         report.update(root=root.hex(), branch=branch.hex(), root_serial=root_serial,

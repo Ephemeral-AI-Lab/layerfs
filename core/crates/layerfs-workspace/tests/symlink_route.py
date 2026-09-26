@@ -22,17 +22,15 @@ driver.NOT_RUN = ['mounted/kernel SYMLINK', 'native create capacity failure rema
                   'hard RSS/cgroup memory bound', 'crash/restart recovery']
 
 
-def bootstrap(service_dir, port, private, public, content, wide):
+def bootstrap(service_dir, port, private, public, wide):
     selector = argparse.ArgumentParser(add_help=False)
     selector.add_argument('--case')
-    extras = ()
+    directories = ()
     if selector.parse_known_args()[0].case == 'refusals':
         assert not wide
-        entry = driver.shared.route.manifest_entry
-        extras = (entry(0, b'no-write', 2, 0o500, 1700000030, 1),
-                  entry(0, b'no-search', 2, 0o600, 1700000031, 2))
-    return driver.shared.bootstrap(service_dir, port, private, public, content, wide,
-                                   manifest_extras=extras)
+        directories = (('no-write', 0o500), ('no-search', 0o600))
+    return driver.shared.bootstrap(service_dir, port, private, public, wide,
+                                   directories=directories)
 
 
 driver.BOOTSTRAP = bootstrap

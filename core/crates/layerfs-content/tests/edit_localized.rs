@@ -26,9 +26,9 @@ use std::collections::BTreeSet;
 use layerfs_content::file::mapping::{decode_file_state, decode_node_with_context, ExtentNode};
 use layerfs_content::{
     apply_edits, construct_bytes, AuthenticatedObjects, ConstructionPolicy, Edit, EditRequest,
-    EditStream, FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole, Replacements,
+    FinalizedConsumer, FinalizedObject, ObjectId, ObjectRole,
 };
-use support::{disabled_scope, noise, reachable, MemoryStore};
+use support::{disabled_scope, edits::Edits, edits::Parts, noise, reachable, MemoryStore};
 
 /// Provider that records every demanded object.
 struct Recorder<'a> {
@@ -231,9 +231,9 @@ fn edit(store: &MemoryStore, root: ObjectId, len: u64, edit: Edit, source_len: u
     };
     let mut ledger = Ledger::default();
     let policy = ConstructionPolicy::frozen_default();
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(source_len as usize));
-    let stream = EditStream::new(len, vec![edit]).expect("valid edit stream");
+    let stream = Edits::new(len, vec![edit]).expect("valid edit stream");
     let edited = disabled_scope(|scope| {
         apply_edits(
             policy,
@@ -624,11 +624,11 @@ fn edit_counters(
     };
     let mut ledger = Ledger::default();
     let policy = ConstructionPolicy::frozen_default();
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     if source_len > 0 {
         replacements.push(noise(source_len as usize));
     }
-    let stream = EditStream::new(len, vec![edit]).expect("valid edit stream");
+    let stream = Edits::new(len, vec![edit]).expect("valid edit stream");
     let edited = disabled_scope(|scope| {
         apply_edits(
             policy,
@@ -670,10 +670,9 @@ fn a_page_two_passes_reach_is_demanded_once_for_the_operation() {
     let mut ledger = Ledger::default();
     let policy = ConstructionPolicy::frozen_default();
     let removed = end - start;
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(removed as usize));
-    let stream =
-        EditStream::new(bytes.len() as u64, vec![Edit::overwrite(start, end)]).expect("stream");
+    let stream = Edits::new(bytes.len() as u64, vec![Edit::overwrite(start, end)]).expect("stream");
     let edited = disabled_scope(|scope| {
         apply_edits(
             policy,

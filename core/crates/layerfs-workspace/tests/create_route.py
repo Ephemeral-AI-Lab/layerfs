@@ -23,18 +23,19 @@ driver.NOT_RUN = ['mounted/kernel CREATE', 'native handle-based resize API', 'ke
                   'hard RSS/cgroup memory bound', 'crash/restart recovery']
 
 
-def bootstrap(service_dir, port, private, public, content, wide):
+def bootstrap(service_dir, port, private, public, wide):
     selector = argparse.ArgumentParser(add_help=False)
     selector.add_argument('--case')
     case = selector.parse_known_args()[0].case
-    extras = ()
-    if case in ('flags_permissions', 'refusals'):
+    directories, files = (), ()
+    if case == 'refusals':
         assert not wide
-        entry = driver.shared.route.manifest_entry
-        extras = (entry(0, b'search-only', 2, 0o500, 1700000030, 1),
-                  entry(3, b'existing', 1, 0o600, 1700000031, 2, content),
-                  entry(0, b'link', 3, 0o777, 1700000032, 3, target=b'data.bin'))
-    return driver.shared.bootstrap(service_dir, port, private, public, content, wide, manifest_extras=extras)
+        directories = (('search-only', 0o500),)
+    elif case == 'flags_permissions':
+        assert not wide
+        files = (('existing', 0o600),)
+    return driver.shared.bootstrap(service_dir, port, private, public, wide,
+                                   directories=directories, files=files)
 
 
 driver.BOOTSTRAP = bootstrap

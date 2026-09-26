@@ -7,6 +7,7 @@
 
 pub mod artifact;
 pub mod digest;
+pub mod edits;
 pub mod expected;
 pub mod gitoid;
 pub mod history;

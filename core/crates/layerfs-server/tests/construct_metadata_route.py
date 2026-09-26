@@ -86,8 +86,7 @@ def execute(args, report):
     try:
         ready = shared.mount.line_until(service); assert 'ready' in ready
         port = int(ready.strip().rsplit(':', 1)[1])
-        report['bootstrap'] = shared.stage_route.bootstrap(directory, port, keys[1], public[0],
-                                                           bytes.fromhex(fixture['file_root']), False)
+        report['bootstrap'] = shared.stage_route.bootstrap(directory, port, keys[1], public[0], False)
         for i in range(4):
             clients.append(Principal(directory / f'principal-{i + 1}', port, keys[i + 1], public[0], i + 1))
         full, metadata_only, legacy31, legacy127 = clients

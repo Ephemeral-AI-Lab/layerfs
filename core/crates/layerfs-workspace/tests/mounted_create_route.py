@@ -23,17 +23,16 @@ driver.NOT_RUN = ['native capacity failure remains open', 'unprivileged later-op
                   'crash/restart recovery', 'in-place failed-coherence repair']
 
 
-def bootstrap(service_dir, port, private, public, content, wide):
+def bootstrap(service_dir, port, private, public, wide):
     selector = argparse.ArgumentParser(add_help=False)
     selector.add_argument('--case')
-    extras = ()
+    directories, symlinks = (), ()
     if selector.parse_known_args()[0].case == 'existing':
         assert not wide
-        entry = driver.shared.route.manifest_entry
-        extras = (entry(0, b'directory', 2, 0o755, 1700000030, 1),
-                  entry(0, b'link', 3, 0o777, 1700000031, 2, target=b'data.bin'))
-    return driver.shared.bootstrap(service_dir, port, private, public, content, wide,
-                                   manifest_extras=extras)
+        directories = (('directory', 0o755),)
+        symlinks = (('link', 'data.bin'),)
+    return driver.shared.bootstrap(service_dir, port, private, public, wide,
+                                   directories=directories, symlinks=symlinks)
 
 
 driver.BOOTSTRAP = bootstrap

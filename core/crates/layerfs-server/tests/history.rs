@@ -12,6 +12,7 @@ use layerfs_storage::Store;
 use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
 use std::{
     io::Cursor,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -227,30 +228,46 @@ fn construct(service: &Service, peer: &VerifiedPeer, id: u64, bytes: &[u8]) -> R
     }
 }
 
-/// One manifest root directory plus one regular file named `a`.
-fn manifest(file: Root) -> Vec<ManifestEntry> {
-    vec![
-        ManifestEntry {
-            parent: 0,
-            name: Vec::new(),
-            kind: 2,
-            mode: 0o755,
-            mtime_seconds: 1_700_000_000,
-            mtime_nanoseconds: 5,
-            content: None,
-            target: Vec::new(),
-        },
-        ManifestEntry {
-            parent: 0,
-            name: b"a".to_vec(),
-            kind: 1,
-            mode: 0o644,
-            mtime_seconds: 1_700_000_001,
-            mtime_nanoseconds: 6,
-            content: Some(file),
-            target: Vec::new(),
-        },
-    ]
+/// Writes the bytes of one regular file into a fixture directory.
+fn write_file(root: &Path, name: &str, bytes: &[u8]) {
+    std::fs::write(root.join(name), bytes).unwrap();
+}
+
+/// Creates a fixture directory holding `a` with exactly `bytes`.
+fn directory_with_file(root: &Path, bytes: &[u8]) {
+    std::fs::create_dir_all(root).unwrap();
+    write_file(root, "a", bytes);
+}
+
+/// Binds one fresh fixture directory as the Service's import root.
+///
+/// The directory is created empty every time, so a case that reuses a name
+/// cannot import an earlier case's files.
+fn import_root(fixture: &mut Fixture, name: &str) -> PathBuf {
+    let source = fixture._temp.0.join(name);
+    let _ = std::fs::remove_dir_all(&source);
+    std::fs::create_dir_all(&source).unwrap();
+    fixture.service.set_import_root(&source).unwrap();
+    source
+}
+
+/// The inode serial, kind, content root and metadata root of one path.
+fn entry_roots(fixture: &Fixture, id: u64, root: Root, path: &[u8]) -> (u64, u8, Root, Root) {
+    stat_roots(stat(&fixture.service, &fixture.peer, id, root, path))
+}
+
+/// The full stat surface of one path as the direct service route reports it.
+fn stat_fields(fixture: &Fixture, id: u64, root: Root, path: &[u8]) -> (u64, u8, Root, u32) {
+    match stat(&fixture.service, &fixture.peer, id, root, path) {
+        Response::Stat {
+            serial,
+            kind,
+            content,
+            mode,
+            ..
+        } => (serial, kind, content, mode),
+        other => panic!("expected a stat reply, got {other:?}"),
+    }
 }
 
 struct Initialized {
@@ -263,18 +280,25 @@ struct Initialized {
     metadata_root: Root,
 }
 
-fn initialize(fixture: &Fixture, seed: [u8; 32], file_root: Root, next: u64) -> Initialized {
+/// Initializes the fixture namespace over the only namespace-initialization route.
+///
+/// `file` is the regular file's content. The Service scans and saves the
+/// directory itself, so the returned [`Initialized::file_root`] is the canonical
+/// root the import published for those exact bytes, read back through the public
+/// stat surface rather than assumed.
+fn initialize(fixture: &mut Fixture, seed: [u8; 32], file: &[u8], next: u64) -> Initialized {
     let stack_body = [0x51; 16];
     let branch_body = [0x61; 16];
+    let source = import_root(fixture, "source");
+    directory_with_file(&source, file);
     let response = call(
         &fixture.service,
         &fixture.peer,
         next,
-        Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
             stack: stack_body,
             name: b"main".to_vec(),
             scope_seed: seed,
-            manifest: manifest(file_root),
         }),
     )
     .unwrap();
@@ -292,13 +316,8 @@ fn initialize(fixture: &Fixture, seed: [u8; 32], file_root: Root, next: u64) -> 
     )
     .unwrap();
     let snapshot = snapshot(response);
-    let (_, _, _, metadata_root) = stat_roots(stat(
-        &fixture.service,
-        &fixture.peer,
-        next + 2,
-        snapshot.effective_root,
-        b"a",
-    ));
+    let (_, _, file_root, metadata_root) =
+        entry_roots(fixture, next + 2, snapshot.effective_root, b"a");
     Initialized {
         stack: record.stack,
         branch: snapshot.branch.branch,
@@ -507,6 +526,136 @@ fn native_directory_import_spills_ordering_without_an_entry_cap() {
 }
 
 #[test]
+fn native_import_gives_each_file_its_own_content_root() {
+    let mut fixture = fixture("import-roots", ALL);
+    let source = import_root(&mut fixture, "source");
+    write_file(&source, "a", b"original");
+    write_file(&source, "b", b"changed");
+    let created = stack_wire(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            1,
+            Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
+                stack: [0x60; 16],
+                name: b"roots".to_vec(),
+                scope_seed: [0x61; 32],
+            }),
+        )
+        .unwrap(),
+    );
+    let original = construct(&fixture.service, &fixture.peer, 2, b"original");
+    let replacement = construct(&fixture.service, &fixture.peer, 3, b"changed");
+    let genesis = match result(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            4,
+            Operation::HistoryQuery(HistoryQuery::GetLayer {
+                layer: created.head_layer,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::Layer(layer) => layer.root,
+        other => panic!("{other:?}"),
+    };
+    let (_, _, a_content, _) = stat_roots(stat(&fixture.service, &fixture.peer, 5, genesis, b"a"));
+    let (_, _, b_content, _) = stat_roots(stat(&fixture.service, &fixture.peer, 6, genesis, b"b"));
+    assert_ne!(a_content, b_content);
+    assert_eq!(a_content, original);
+    assert_eq!(b_content, replacement);
+    // A stage that changes only `a` must leave `b` on its own root.
+    let base = snapshot(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            6,
+            Operation::HistoryCommand(HistoryCommand::Fork {
+                stack: created.stack,
+                branch: [0x62; 16],
+                name: b"work".to_vec(),
+                source: HistoryForkSource::Layer(created.head_layer),
+            }),
+        )
+        .unwrap(),
+    );
+    let (a_serial, a_kind, _, a_metadata) = stat_roots(stat(
+        &fixture.service,
+        &fixture.peer,
+        7,
+        base.effective_root,
+        b"a",
+    ));
+    let staged = stage(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            8,
+            Operation::HistoryCommand(HistoryCommand::StageChanges(PreparedChanges {
+                directory_metadata: Vec::new(),
+                new_directories: Vec::new(),
+                new_file_serials: Vec::new(),
+                new_symlink_serials: Vec::new(),
+                workspace: [0x63; 32],
+                branch: base.branch.branch,
+                expected_head: None,
+                expected_base: base.branch.base_layer,
+                generation: 1,
+                base: base.effective_root,
+                scope: base.scope,
+                root_serial: 1,
+                directories: vec![DirectoryChange {
+                    parent: 1,
+                    changes: vec![],
+                }],
+                inodes: vec![InodeChange {
+                    serial: a_serial,
+                    kind: a_kind,
+                    content: replacement,
+                    metadata: a_metadata,
+                }],
+            })),
+        )
+        .unwrap(),
+    );
+    let committed = match result(
+        call(
+            &fixture.service,
+            &fixture.peer,
+            9,
+            Operation::HistoryCommand(HistoryCommand::CommitStaged {
+                workspace: staged.workspace,
+                token: staged.token,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
+        other => panic!("{other:?}"),
+    };
+    let (_, _, after_a, _) = stat_roots(stat(
+        &fixture.service,
+        &fixture.peer,
+        10,
+        committed.root,
+        b"a",
+    ));
+    let (_, _, after_b, _) = stat_roots(stat(
+        &fixture.service,
+        &fixture.peer,
+        11,
+        committed.root,
+        b"b",
+    ));
+    assert_eq!(after_a, replacement);
+    assert_eq!(
+        after_b, replacement,
+        "b must not move when only a was staged"
+    );
+}
+
+#[test]
 fn legacy_mask_grants_no_history() {
     let fixture = fixture("legacy", LEGACY);
     let failure = call(
@@ -560,26 +709,17 @@ fn history_profile_and_opcode_must_agree() {
 
 #[test]
 fn empty_namespace_initializes_and_reads_back() {
-    let fixture = fixture("empty", ALL);
+    let mut fixture = fixture("empty", ALL);
     let seed = [9; 32];
+    import_root(&mut fixture, "source");
     let response = call(
         &fixture.service,
         &fixture.peer,
         1,
-        Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
             stack: [0x51; 16],
             name: b"main".to_vec(),
             scope_seed: seed,
-            manifest: vec![ManifestEntry {
-                parent: 0,
-                name: Vec::new(),
-                kind: 2,
-                mode: 0o755,
-                mtime_seconds: 1_700_000_000,
-                mtime_nanoseconds: 0,
-                content: None,
-                target: Vec::new(),
-            }],
         }),
     )
     .unwrap();
@@ -635,70 +775,26 @@ fn empty_namespace_initializes_and_reads_back() {
 }
 
 #[test]
-fn manifest_initialization_builds_a_real_namespace() {
-    let fixture = fixture("manifest", ALL);
-    let file = construct(&fixture.service, &fixture.peer, 1, b"payload");
-    let seed = [11; 32];
+fn native_import_initialization_builds_a_real_namespace() {
+    let mut fixture = fixture("import-namespace", ALL);
+    let source = import_root(&mut fixture, "source");
+    std::fs::create_dir(source.join("dir")).unwrap();
+    write_file(&source, "file", b"payload");
+    let nested = source.join("dir");
+    write_file(&nested, "nested", b"payload");
+    std::fs::set_permissions(
+        nested.join("nested"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
     let response = call(
         &fixture.service,
         &fixture.peer,
-        2,
-        Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        1,
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
             stack: [0x52; 16],
             name: b"main".to_vec(),
-            scope_seed: seed,
-            manifest: vec![
-                ManifestEntry {
-                    parent: 0,
-                    name: Vec::new(),
-                    kind: 2,
-                    mode: 0o755,
-                    mtime_seconds: 1,
-                    mtime_nanoseconds: 0,
-                    content: None,
-                    target: Vec::new(),
-                },
-                ManifestEntry {
-                    parent: 0,
-                    name: b"dir".to_vec(),
-                    kind: 2,
-                    mode: 0o755,
-                    mtime_seconds: 2,
-                    mtime_nanoseconds: 0,
-                    content: None,
-                    target: Vec::new(),
-                },
-                ManifestEntry {
-                    parent: 0,
-                    name: b"file".to_vec(),
-                    kind: 1,
-                    mode: 0o644,
-                    mtime_seconds: 3,
-                    mtime_nanoseconds: 0,
-                    content: Some(file),
-                    target: Vec::new(),
-                },
-                ManifestEntry {
-                    parent: 0,
-                    name: b"link".to_vec(),
-                    kind: 3,
-                    mode: 0o777,
-                    mtime_seconds: 4,
-                    mtime_nanoseconds: 0,
-                    content: None,
-                    target: b"file".to_vec(),
-                },
-                ManifestEntry {
-                    parent: 1,
-                    name: b"nested".to_vec(),
-                    kind: 1,
-                    mode: 0o600,
-                    mtime_seconds: 5,
-                    mtime_nanoseconds: 0,
-                    content: Some(file),
-                    target: Vec::new(),
-                },
-            ],
+            scope_seed: [11; 32],
         }),
     )
     .unwrap();
@@ -708,7 +804,7 @@ fn manifest_initialization_builds_a_real_namespace() {
         call(
             &fixture.service,
             &fixture.peer,
-            3,
+            2,
             Operation::HistoryQuery(HistoryQuery::GetLayer { layer: root }),
         )
         .unwrap(),
@@ -719,7 +815,7 @@ fn manifest_initialization_builds_a_real_namespace() {
     let listing = call(
         &fixture.service,
         &fixture.peer,
-        4,
+        3,
         Operation::Inspect {
             root: layer.root,
             query: Inspect::List {
@@ -734,34 +830,71 @@ fn manifest_initialization_builds_a_real_namespace() {
     match listing {
         Response::List { entries, .. } => {
             let names: Vec<Vec<u8>> = entries.into_iter().map(|(name, _)| name).collect();
-            assert_eq!(
-                names,
-                vec![b"dir".to_vec(), b"file".to_vec(), b"link".to_vec()]
-            );
+            assert_eq!(names, vec![b"dir".to_vec(), b"file".to_vec()]);
         }
         other => panic!("expected a listing, got {other:?}"),
     }
-    let link = call(
+    let nested = call(
         &fixture.service,
         &fixture.peer,
-        5,
+        4,
         Operation::Inspect {
             root: layer.root,
-            query: Inspect::Readlink {
-                path: b"link".to_vec(),
+            query: Inspect::List {
+                path: b"dir".to_vec(),
+                after: Vec::new(),
+                entries: 16,
+                bytes: 4096,
             },
         },
     )
     .unwrap();
-    assert_eq!(link, Response::Link(b"file".to_vec()));
+    match nested {
+        Response::List { entries, .. } => {
+            let names: Vec<Vec<u8>> = entries.into_iter().map(|(name, _)| name).collect();
+            assert_eq!(names, vec![b"nested".to_vec()]);
+        }
+        other => panic!("expected a nested listing, got {other:?}"),
+    }
+    // The nested file carries the mode the operator set on disk, and its bytes
+    // come back through the published root rather than the source directory.
+    let (_, kind, content, mode) = stat_fields(&fixture, 5, layer.root, b"dir/nested");
+    assert_eq!(kind, 1);
+    assert_eq!(mode, 0o600);
+    let mut output = Vec::new();
+    assert!(fixture
+        .service
+        .handle(
+            &fixture.peer,
+            &Request {
+                id: 6,
+                generation: 1,
+                store: 1,
+                profile: 1,
+                deadline_ms: 60_000,
+                response_bytes: 64,
+                operation: Operation::ReadFile {
+                    root: content,
+                    start: 0,
+                    end: 7,
+                },
+            },
+            &mut Cursor::new(Vec::new()),
+            &mut output,
+        )
+        .0
+        .is_ok());
+    assert_eq!(output, b"payload");
 }
 
 #[test]
 fn stage_commit_add_layer_and_read_back() {
-    let fixture = fixture("lifecycle", ALL);
+    let mut fixture = fixture("lifecycle", ALL);
     let first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [13; 32], first, 3);
+    let init = initialize(&mut fixture, [13; 32], b"first", 3);
+    // The import re-saved the same bytes through production code and published
+    // the same canonical file root the generic final-file save produced.
     assert_eq!(init.file_root, first);
 
     let workspace = [0x71; 32];
@@ -903,10 +1036,10 @@ fn stage_commit_add_layer_and_read_back() {
 
 #[test]
 fn stale_loser_retains_its_exact_stage() {
-    let fixture = fixture("stale", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let mut fixture = fixture("stale", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [17; 32], first, 3);
+    let init = initialize(&mut fixture, [17; 32], b"first", 3);
     let winner = [0x81; 32];
     let loser = [0x82; 32];
     let winner_stage = stage(
@@ -997,9 +1130,9 @@ fn stale_loser_retains_its_exact_stage() {
 
 #[test]
 fn multiple_no_change_stages_are_up_to_date() {
-    let fixture = fixture("uptodate", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
-    let init = initialize(&fixture, [19; 32], first, 2);
+    let mut fixture = fixture("uptodate", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let init = initialize(&mut fixture, [19; 32], b"first", 2);
     let (_, _, content, metadata) =
         stat_roots(stat(&fixture.service, &fixture.peer, 9, init.root, b"a"));
     for (index, workspace) in [[0x91; 32], [0x92; 32]].into_iter().enumerate() {
@@ -1048,10 +1181,10 @@ fn multiple_no_change_stages_are_up_to_date() {
 
 #[test]
 fn delayed_discard_token_cannot_consume_a_replacement_stage() {
-    let fixture = fixture("tokens", ALL);
+    let mut fixture = fixture("tokens", ALL);
     let first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [23; 32], first, 3);
+    let init = initialize(&mut fixture, [23; 32], b"first", 3);
     let workspace = [0xa1; 32];
     let original = stage(
         call(
@@ -1145,10 +1278,10 @@ fn delayed_discard_token_cannot_consume_a_replacement_stage() {
 
 #[test]
 fn already_published_source_is_up_to_date_before_stale_head_refusal() {
-    let fixture = fixture("publish", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let mut fixture = fixture("publish", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [29; 32], first, 3);
+    let init = initialize(&mut fixture, [29; 32], b"first", 3);
     let workspace = [0xb1; 32];
     let staged = stage(
         call(
@@ -1233,10 +1366,10 @@ fn already_published_source_is_up_to_date_before_stale_head_refusal() {
 
 #[test]
 fn wrong_role_root_is_refused() {
-    let fixture = fixture("role", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let mut fixture = fixture("role", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [31; 32], first, 3);
+    let init = initialize(&mut fixture, [31; 32], b"first", 3);
     let workspace = [0xc1; 32];
     let mut prepared = changes(&init, workspace, second, 1);
     // A regular file's content root may not be claimed as a symlink target.
@@ -1268,10 +1401,10 @@ fn wrong_role_root_is_refused() {
 
 #[test]
 fn rebasing_by_editing_a_token_is_refused() {
-    let fixture = fixture("rebase", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let mut fixture = fixture("rebase", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [37; 32], first, 3);
+    let init = initialize(&mut fixture, [37; 32], b"first", 3);
     let workspace = [0xd1; 32];
     let mut prepared = changes(&init, workspace, second, 1);
     prepared.base = [0xAB; 32];
@@ -1344,10 +1477,10 @@ fn inode_reservations_are_scope_wide_and_never_recycled() {
 
 #[test]
 fn metadata_only_commands_never_touch_the_content_store() {
-    let fixture = fixture("metadatonly", ALL);
-    let first = construct(&fixture.service, &fixture.peer, 1, b"first");
+    let mut fixture = fixture("metadatonly", ALL);
+    let _first = construct(&fixture.service, &fixture.peer, 1, b"first");
     let second = construct(&fixture.service, &fixture.peer, 2, b"second-version");
-    let init = initialize(&fixture, [47; 32], first, 3);
+    let init = initialize(&mut fixture, [47; 32], b"first", 3);
 
     let workspace = [0xe1; 32];
     let staged = stage(
@@ -1403,9 +1536,9 @@ fn metadata_only_commands_never_touch_the_content_store() {
 
 #[test]
 fn history_pages_are_bounded_and_cursors_are_bound_to_their_range() {
-    let fixture = fixture("pages", ALL);
-    let file = construct(&fixture.service, &fixture.peer, 1, b"payload");
-    let init = initialize(&fixture, [59; 32], file, 2);
+    let mut fixture = fixture("pages", ALL);
+    let _file = construct(&fixture.service, &fixture.peer, 1, b"payload");
+    let init = initialize(&mut fixture, [59; 32], b"payload", 2);
     for (index, body) in [[0x01; 16], [0x02; 16], [0x03; 16]].into_iter().enumerate() {
         let _ = call(
             &fixture.service,
@@ -1513,9 +1646,9 @@ fn history_pages_are_bounded_and_cursors_are_bound_to_their_range() {
 
 #[test]
 fn read_only_reopen_supports_reads_and_refuses_every_mutation() {
-    let fixture = fixture("reopen", ALL);
-    let file = construct(&fixture.service, &fixture.peer, 1, b"payload");
-    let init = initialize(&fixture, [61; 32], file, 2);
+    let mut fixture = fixture("reopen", ALL);
+    let _file = construct(&fixture.service, &fixture.peer, 1, b"payload");
+    let init = initialize(&mut fixture, [61; 32], b"payload", 2);
 
     let reader =
         sqlite::open_read_only(&fixture.catalog_path, b"layerfs-test-authority", [71; 32]).unwrap();
@@ -1671,63 +1804,50 @@ fn encoded_record_widths_match_the_catalog_bounds() {
     );
 }
 
-fn directory(parent: u16, name: &[u8]) -> ManifestEntry {
-    ManifestEntry {
-        parent,
-        name: name.to_vec(),
-        kind: 2,
-        mode: 0o755,
-        mtime_seconds: 0,
-        mtime_nanoseconds: 0,
-        content: None,
-        target: vec![],
-    }
-}
+/// One directory tree plus the canonical page every listing must return.
+type DirectoryCase<'a> = (&'a [&'a str], &'a [(&'a str, &'a [&'a str])]);
 
 #[test]
 fn empty_and_interleaved_directories_have_real_canonical_pages() {
-    let f = fixture("directory-regression", ALL);
-    for (index, (manifest, paths)) in [
-        (vec![directory(0, b"")], vec![b"".as_slice()]),
+    let mut f = fixture("directory-regression", ALL);
+    // Declared directories, then the canonical page every listing must return:
+    // a real bounded page with the expected children, in name order.
+    let cases: [DirectoryCase; 4] = [
+        (&[], &[("", &[])]),
+        (&["a"], &[("", &["a"]), ("a", &[])]),
+        (&["a", "a/x"], &[("", &["a"]), ("a", &["x"]), ("a/x", &[])]),
         (
-            vec![directory(0, b""), directory(0, b"a")],
-            vec![b"a".as_slice()],
-        ),
-        (
-            vec![directory(0, b""), directory(0, b"a"), directory(1, b"x")],
-            vec![b"a/x".as_slice()],
-        ),
-        (
-            vec![
-                directory(0, b""),
-                directory(0, b"a"),
-                directory(1, b"x"),
-                directory(0, b"b"),
-                directory(1, b"y"),
+            &["a", "a/x", "b", "b/y"],
+            &[
+                ("", &["a", "b"]),
+                ("a", &["x"]),
+                ("a/x", &[]),
+                ("b", &["y"]),
+                ("b/y", &[]),
             ],
-            vec![b"a/x".as_slice(), b"a/y", b"b"],
         ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    ];
+    for (index, (directories, listings)) in cases.into_iter().enumerate() {
+        let source = import_root(&mut f, &format!("source{index}"));
+        for path in directories {
+            std::fs::create_dir_all(source.join(path)).unwrap();
+        }
         let response = call(
             &f.service,
             &f.peer,
             1,
-            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+            Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
                 stack: [index as u8 + 1; 16],
                 name: format!("s{index}").into_bytes(),
                 scope_seed: [index as u8 + 1; 32],
-                manifest,
             }),
         )
         .unwrap();
         let created = match result(response) {
             HistoryResult::StackCreated(created) => created,
-            _ => panic!(),
+            other => panic!("{other:?}"),
         };
-        for path in paths {
+        for (path, expected) in listings {
             let listed = call(
                 &f.service,
                 &f.peer,
@@ -1735,7 +1855,7 @@ fn empty_and_interleaved_directories_have_real_canonical_pages() {
                 Operation::Inspect {
                     root: created.root,
                     query: Inspect::List {
-                        path: path.to_vec(),
+                        path: path.as_bytes().to_vec(),
                         after: vec![],
                         entries: 128,
                         bytes: 16384,
@@ -1743,13 +1863,20 @@ fn empty_and_interleaved_directories_have_real_canonical_pages() {
                 },
             )
             .unwrap();
-            assert_eq!(
-                listed,
-                Response::List {
-                    entries: vec![],
-                    continuation: None
-                }
-            );
+            let Response::List {
+                entries,
+                continuation,
+            } = listed
+            else {
+                panic!("expected a listing for {path:?}, got {listed:?}");
+            };
+            let names: Vec<Vec<u8>> = entries.into_iter().map(|(name, _)| name).collect();
+            let expected: Vec<Vec<u8>> = expected
+                .iter()
+                .map(|name| name.as_bytes().to_vec())
+                .collect();
+            assert_eq!(names, expected, "listing {path:?} of case {index}");
+            assert_eq!(continuation, None, "listing {path:?} of case {index}");
         }
     }
 }
@@ -1762,15 +1889,16 @@ fn branch_root_descriptor_validates_content_scope_profile_and_actual_serial() {
     f.catalog
         .reserve_inodes(&layerfs_history::ReserveRequest { scope, count: 8 })
         .unwrap();
+    let mut f = f;
+    import_root(&mut f, "source");
     let response = call(
         &f.service,
         &f.peer,
         1,
-        Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+        Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
             stack: [1; 16],
             name: b"main".to_vec(),
             scope_seed: seed,
-            manifest: vec![directory(0, b"")],
         }),
     )
     .unwrap();
@@ -1980,10 +2108,10 @@ impl HistoryCatalog for RefusingCommit {
 #[test]
 fn composite_failure_keeps_acknowledged_stage_distinct_from_absence() {
     for unknown in [false, true] {
-        let f = fixture_using("composite-context", ALL, Some(unknown));
-        let file = construct(&f.service, &f.peer, 1, b"original");
+        let mut f = fixture_using("composite-context", ALL, Some(unknown));
+        let _file = construct(&f.service, &f.peer, 1, b"original");
         let replacement = construct(&f.service, &f.peer, 2, b"replacement");
-        let init = initialize(&f, [9; 32], file, 3);
+        let init = initialize(&mut f, [9; 32], b"first", 3);
         for native in [false, true] {
             let workspace = if native { [2; 32] } else { [1; 32] };
             let operation = Operation::HistoryCommand(HistoryCommand::Commit(changes(
@@ -2042,10 +2170,10 @@ fn composite_failure_keeps_acknowledged_stage_distinct_from_absence() {
 
 #[test]
 fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
-    let f = fixture("stack-context", ALL);
+    let mut f = fixture("stack-context", ALL);
     let file = construct(&f.service, &f.peer, 1, b"one");
     let second = construct(&f.service, &f.peer, 2, b"two");
-    let init = initialize(&f, [11; 32], file, 3);
+    let init = initialize(&mut f, [11; 32], b"one", 3);
     let committed = call(
         &f.service,
         &f.peer,
@@ -2111,32 +2239,56 @@ fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
 
 #[test]
 fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
-    let f = fixture("disjoint-stale", ALL);
+    let mut f = fixture("disjoint-stale", ALL);
     let original = construct(&f.service, &f.peer, 1, b"original");
-    let replacement = construct(&f.service, &f.peer, 2, b"changed");
-    let mut entries = manifest(original);
-    let mut b = entries[1].clone();
-    b.name = b"b".to_vec();
-    entries.push(b);
+    let untouched = construct(&f.service, &f.peer, 2, b"untouched");
+    let replacement = construct(&f.service, &f.peer, 3, b"changed");
+    let source = import_root(&mut f, "source");
+    write_file(&source, "a", b"original");
+    write_file(&source, "b", b"untouched");
     let created = stack_wire(
         call(
             &f.service,
             &f.peer,
             3,
-            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+            Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
                 stack: [1; 16],
                 name: b"main".to_vec(),
                 scope_seed: [15; 32],
-                manifest: entries,
             }),
         )
         .unwrap(),
+    );
+    // The genesis filesystem root, read through the published genesis Layer.
+    let genesis = match result(
+        call(
+            &f.service,
+            &f.peer,
+            4,
+            Operation::HistoryQuery(HistoryQuery::GetLayer {
+                layer: created.head_layer,
+            }),
+        )
+        .unwrap(),
+    ) {
+        HistoryResult::Layer(layer) => layer.root,
+        other => panic!("{other:?}"),
+    };
+    // The import published exactly the roots the generic save produced for the
+    // same bytes, so the stages below address the files they name.
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 15, genesis, b"a")).2,
+        original
+    );
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 16, genesis, b"b")).2,
+        untouched
     );
     let base = snapshot(
         call(
             &f.service,
             &f.peer,
-            4,
+            5,
             Operation::HistoryCommand(HistoryCommand::Fork {
                 stack: created.stack,
                 branch: [1; 16],
@@ -2149,7 +2301,7 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
     let mut stages = vec![];
     for (index, path) in [b"a", b"b"].into_iter().enumerate() {
         let (serial, kind, _, metadata) =
-            stat_roots(stat(&f.service, &f.peer, 5, base.effective_root, path));
+            stat_roots(stat(&f.service, &f.peer, 6, base.effective_root, path));
         let change = PreparedChanges {
             directory_metadata: Vec::new(),
             new_directories: Vec::new(),
@@ -2178,7 +2330,7 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
             call(
                 &f.service,
                 &f.peer,
-                6,
+                7,
                 Operation::HistoryCommand(HistoryCommand::StageChanges(change)),
             )
             .unwrap(),
@@ -2187,7 +2339,7 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
     let winner = call(
         &f.service,
         &f.peer,
-        7,
+        8,
         Operation::HistoryCommand(HistoryCommand::CommitStaged {
             workspace: stages[0].workspace,
             token: stages[0].token,
@@ -2219,12 +2371,25 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
         })
     );
     assert_eq!(
-        stat_roots(stat(&f.service, &f.peer, 8, winner.root, b"a")).2,
+        stat_roots(stat(&f.service, &f.peer, 9, winner.root, b"a")).2,
         replacement
     );
+    // The published Commit addresses only the first change: `b` is a different
+    // inode with its own genesis root, and it kept that root exactly.
     assert_eq!(
-        stat_roots(stat(&f.service, &f.peer, 9, winner.root, b"b")).2,
-        original
+        stat_roots(stat(&f.service, &f.peer, 10, winner.root, b"b")).2,
+        untouched
+    );
+    let a_serial = stat_roots(stat(&f.service, &f.peer, 11, base.effective_root, b"a")).0;
+    let b_serial = stat_roots(stat(&f.service, &f.peer, 12, base.effective_root, b"b")).0;
+    assert_ne!(a_serial, b_serial);
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 13, winner.root, b"a")).0,
+        a_serial
+    );
+    assert_eq!(
+        stat_roots(stat(&f.service, &f.peer, 14, winner.root, b"b")).0,
+        b_serial
     );
 }
 
@@ -2237,10 +2402,8 @@ fn complete_read_attributes_match_over_authenticated_transport() {
         server::serve,
     };
     use std::time::{Duration, Instant};
-    let fixture = fixture("read-attributes", ALL);
+    let mut fixture = fixture("read-attributes", ALL);
     let payload = vec![37; 131_073];
-    let file = construct(&fixture.service, &fixture.peer, 1, &payload);
-    let empty = construct(&fixture.service, &fixture.peer, 2, &[]);
     let seed = [81; 32];
     call(
         &fixture.service,
@@ -2252,49 +2415,30 @@ fn complete_read_attributes_match_over_authenticated_transport() {
         }),
     )
     .unwrap();
-    let mut entries = manifest(file);
-    entries[0].mtime_seconds = -2;
-    entries[0].mtime_nanoseconds = 750_000_000;
-    entries.push(ManifestEntry {
-        parent: 0,
-        name: b"empty".to_vec(),
-        kind: 1,
-        mode: 0o600,
-        mtime_seconds: 0,
-        mtime_nanoseconds: 0,
-        content: Some(empty),
-        target: Vec::new(),
-    });
-    entries.push(ManifestEntry {
-        parent: 0,
-        name: b"link".to_vec(),
-        kind: 3,
-        mode: 0o777,
-        mtime_seconds: 4,
-        mtime_nanoseconds: 5,
-        content: None,
-        target: b"a".to_vec(),
-    });
-    entries.push(ManifestEntry {
-        parent: 0,
-        name: b"dir".to_vec(),
-        kind: 2,
-        mode: 0o1777,
-        mtime_seconds: 6,
-        mtime_nanoseconds: 7,
-        content: None,
-        target: Vec::new(),
-    });
+    // The operator's own directory metadata is the source of the portable
+    // values: modes are set explicitly so they do not depend on the umask.
+    let source = import_root(&mut fixture, "source");
+    write_file(&source, "a", &payload);
+    write_file(&source, "empty", b"");
+    let directory = source.join("dir");
+    std::fs::create_dir(&directory).unwrap();
+    for (path, mode) in [
+        (source.clone(), 0o755),
+        (source.join("a"), 0o644),
+        (source.join("empty"), 0o600),
+        (directory.clone(), 0o1777),
+    ] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+    }
     let created = match result(
         call(
             &fixture.service,
             &fixture.peer,
             4,
-            Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+            Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory {
                 stack: [82; 16],
                 name: b"attrs".to_vec(),
                 scope_seed: seed,
-                manifest: entries,
             }),
         )
         .unwrap(),
@@ -2302,6 +2446,8 @@ fn complete_read_attributes_match_over_authenticated_transport() {
         HistoryResult::StackCreated(created) => created,
         other => panic!("{other:?}"),
     };
+    // The eight reservation objects precede every imported serial, so the
+    // namespace root is exactly the ninth.
     assert_eq!(created.root_serial, 9);
     let query = |root, path: &[u8]| Operation::Inspect {
         root,
@@ -2314,7 +2460,6 @@ fn complete_read_attributes_match_over_authenticated_transport() {
         (&b""[..], 2, 0),
         (&b"a"[..], 1, 131_073),
         (&b"empty"[..], 1, 0),
-        (&b"link"[..], 3, 1),
         (&b"dir"[..], 2, 0),
     ]
     .into_iter()
@@ -2338,8 +2483,6 @@ fn complete_read_attributes_match_over_authenticated_transport() {
                 Response::Attributes {
                     serial: 9,
                     references: 0,
-                    mtime: -2,
-                    nanoseconds: 750_000_000,
                     ..
                 }
             ));
@@ -2397,7 +2540,14 @@ fn complete_read_attributes_match_over_authenticated_transport() {
             .code,
         Code::MissingObject
     );
-    assert!(call(&fixture.service, &fixture.peer, 32, query(file, b"")).is_err());
+    // A file root is not a directory root, so the empty path has no attributes.
+    assert!(call(
+        &fixture.service,
+        &fixture.peer,
+        32,
+        query([0x92; 32], b"nested")
+    )
+    .is_err());
     assert_eq!(
         call(
             &fixture.service,

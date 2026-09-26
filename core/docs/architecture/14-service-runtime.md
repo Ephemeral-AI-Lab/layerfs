@@ -55,10 +55,13 @@ opcodes 3 (`ConstructFile`), 4 (`EditFile`) and 5
 The direct Workspace range entrypoints and projected range wire fields are
 absent. Status response envelopes are now 219 bytes and writable-status
 response envelopes 405 bytes. The Linux adapter implements no ioctl callback.
-`InitLayerStack`, `AddLayer` and
+`ImportNativeDirectory`, `AddLayer` and
 `DiscardStage` remain in the history grammar because the active Linux history
-route in `core/crates/layerfs-daemon/tests/history_route.py` uses them. The
-older sections below describe their stated source periods, not this cutover.
+route in `core/crates/layerfs-daemon/tests/history_route.py` uses them.
+`ImportNativeDirectory` is the only namespace-initialization route: the pathless
+`InitLayerStack` command and its manifest payload are retired, and
+history-command tag 1 stays unassigned. The older sections below describe their
+stated source periods, not this cutover.
 
 The agent-facing project Init route is based on `main` at
 `7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.
@@ -1066,8 +1069,8 @@ Grant0x04 now explicitly authorizes file or symlink content construction, includ
 legacy mask31; no other authority follows from that bit. Service validates empty
 input before acquiring its one save, then calls the existing C1 symlink builder
 through SaveHandoff and the common finish/retained-failure/abort path. No inode,
-namespace, Stage or Commit is created. Empty object targets do not relax the
-history manifest's nonempty rule. [Round45](proposal/fuse-workspace-snapshot-overlay/45-construct-symlink.md)
+namespace, Stage or Commit is created. Empty object targets are refused by the
+constructor itself, independently of any initialization payload. [Round45](proposal/fuse-workspace-snapshot-overlay/45-construct-symlink.md)
 records exact checks and qualifications; fresh symlink admission remains separate.
 
 The prepared fresh-symlink extension after source commit
