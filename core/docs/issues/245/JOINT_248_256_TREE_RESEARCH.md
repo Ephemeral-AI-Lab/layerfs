@@ -83,21 +83,21 @@ The source files for page ownership alone already contain more than 2,300 physic
 | File leaf / branch | 124 extents / 248 child refs | Extent record is 32 B; child ref is 16 B. |
 | Keyed leaf | 128 cells maximum, byte-filled | Cell costs 4 B framing + key + value. |
 | Ownership ledger | 62 owner slots per 4 KiB ledger file | Custody slots and metadata pages both need owner records. |
-| One distinct 1-byte payload | 8 KiB | 4 KiB header + 4 KiB aligned data. |
+| One acquired 1-byte private payload | 8 KiB | 4 KiB header + 4 KiB aligned data, even if another write has identical bytes. |
 | First dirty mutation reserve | 345 × 4 KiB = 1.348 MiB | Candidate 137 pages plus completion escrow 208 pages. |
 | Current shared page slots | 65,536 | This count can bind before a 1 GiB disk quota. |
 | File length / extent length | 4 GiB / 2^24−1 B | A contiguous 4 GiB Base/Zero range needs 257 extent records. |
 
 Sources: [page formats](../../../crates/layerfs-workspace/src/backing/metadata_pages.rs), [ledger/slots](../../../crates/layerfs-workspace/src/backing/ownership.rs), [payload segments](../../../crates/layerfs-workspace/src/backing/segments.rs), [reservations](../../../crates/layerfs-workspace/src/backing/metadata.rs), and [SaveFile contract](../../../crates/layerfs-bridge/src/contract/request.rs).
 
-Let A be unique retained metadata page files across all pinned roots, J allocated ledger files at slot high water, and b_i the lengths of distinct retained payloads. The tracked backing blocks are:
+Let A be unique retained metadata page files across all pinned roots, J allocated ledger files at slot high water, and b_i the lengths of retained payload acquisitions. Shared page references count once, but byte-identical private payload acquisitions have different local identities. The allocated backing blocks are:
 
     D = 4 KiB × (A + J)
         + Σ_i [4 KiB × ceil(b_i / 1 MiB)
                + 4 KiB × ceil(b_i / 4 KiB)]
-        + outstanding reservations and uncertain allocations.
+        + uncertain physical allocations.
 
-This excludes ext4 inode/directory/journal overhead, canonical Store objects, and OS file-backed cache. Sharing a page across generations counts it once; path-copied pages and frozen readers keep distinct pages and payloads charged until released. A logical Base extent reads canonical bytes and a Zero extent allocates no private payload.
+Quota admission additionally includes outstanding reservations, which are not necessarily allocated disk blocks. This excludes ext4 inode/directory/journal overhead, canonical Store objects, and OS file-backed cache. Sharing a page across generations counts it once; path-copied pages and frozen readers keep distinct pages and payloads charged until released. A logical Base extent reads canonical bytes and a Zero extent allocates no private payload.
 
 ### Resource-budget illustration
 
@@ -220,6 +220,40 @@ there too. Actual FUSE WRITE size, name distribution, concurrent generations,
 ext4 metadata, page-cache growth and cleanup timing determine real high water.
 These figures must be checked with public-route backing status and filesystem
 allocation counters before being used as a capacity promise.
+
+### Where CDC, CAS and encoded deltas change the disk total
+
+The table above estimates **Workspace private backing only**. It does not
+estimate the canonical Store's incremental bytes. The two layers use different
+physical representations:
+
+| Layer | New bytes from a write | Reuse or encoding |
+| --- | --- | --- |
+| Workspace private backing, before Commit | An aligned Local payload per accepted acquisition, plus path-copied extent/keyed pages and ownership records. | Base extents refer to existing canonical data; Zero extents need no payload; pinned generations share unchanged private pages. Byte-identical Local acquisitions are not content-addressed or compressed here. |
+| Canonical Store, during Commit | Only newly needed canonical file/namespace objects and their physical pack/index records. | C1 retains unchanged chunk/subtree identities when editing a chunked base; new chunked-file payload uses CDC. C2 checks CAS membership, compresses eligible payloads, and selects a PREFIX delta against an eligible base only when its encoded record wins. Small files use whole-file objects under the configured cutoff. |
+
+Thus a 4 KiB overwrite in a 500 MiB canonical file can need roughly 20 KiB
+of private backing without copying the 500 MiB base; Commit may reuse most
+canonical objects, but its new Store bytes depend on the base representation,
+chunk boundaries, content and metadata changes. Conversely, 1,025 byte-identical
+one-byte file writes still use roughly 12.414 MiB of private backing in
+the illustration above. Their identical whole-file content can map to one
+canonical object through CAS at Commit, while their distinct names/inodes still
+create namespace metadata. A fresh 256 MiB file still needs roughly 264.21 MiB
+of private backing under that WRITE shape even when its canonical Store result
+compresses or deduplicates well. None of these Store savings lowers the
+pre-Commit private quota requirement.
+
+The end-to-end high water can include live private backing, a Commit input
+spool, new Store packs/index/WAL and retained old Store objects at once. There
+is no content-independent ratio of canonical Store growth to logical file
+size: repeated bytes, already-present chunks and compressible data differ
+from unique incompressible input. Measure each layer separately on the same
+public SDK/FUSE workload before making a total-disk or throughput claim. See
+[`SaveFile` handling](../../../crates/layerfs-server/src/service/save/content.rs),
+[CDC construction](../../../crates/layerfs-content/src/file/mapping/build.rs),
+[CAS membership](../../../crates/layerfs-storage/src/cas/save.rs), and
+[delta selection](../../../crates/layerfs-storage/src/encoding/delta/select.rs).
 
 The live keyed tree already has [find/update/next](../../../crates/layerfs-workspace/src/backing/metadata_index.rs), with maximum-key branch fences. Ordinary create uses a path-local keyed insertion. Current [directory deletion/rebind](../../../crates/layerfs-workspace/src/overlay/directories.rs) enumerates up to 128 names and rebuilds an E or T tree, so repeated updates can be quadratic in directory width. #256 needs path-local delete/rebalance, a persistent key cursor and a multilevel ordered builder. That builder must seal and transfer finished pages progressively: reconciliation currently reserves only 64 pages and 26 slot credits, and a RootOwner refuses its 129th temporary page. Those limits cannot build the roughly 3,521-page global tree in the 65,536-file example even with free quota. Its 128 dirty identities/names, 32 KiB prepared input, 256 active nodes, shallow keyed-tree level and 256-cell ordered builder are separate ceilings. The receiver and C1 also materialize rows. Service currently calls C1 with no ordering backing, so the reducer's first spill after 4,096 distinct pending serials fails; passing the existing FileBacking fixes that refusal but not the proportional receiver/C1 vectors and sets. Existing-base alias/cycle validation has a separate 4,096-visited-binding work limit that can block a wide directory rebind; it does not necessarily block fresh regular-file additions. The old prepared codec also uses u16 total counts, which refuse exactly 65,536 rows even if 128 and 32 KiB checks are removed. A 65,536-file one-directory input is about 6.69–7.69 MiB of prepared rows before frame overhead, but still needs a wide-count streamed format, bounded receiving state and charged ordering work.
 
