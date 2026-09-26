@@ -15,7 +15,7 @@ PREPEND = """set -eu
 truncate -s 10489856 large.bin
 i=79
 while [ "$i" -ge 0 ]; do
-  dd if=large.bin of=large.bin ibs=131072 obs=4096 skip="$i" seek="$((i*32+1))" count=1 conv=notrunc 2>/dev/null
+  dd if=large.bin of=large.bin bs=131072 skip="$i" seek="$((i*131072+4096))" count=1 oflag=seek_bytes conv=notrunc 2>/dev/null
   i=$((i-1))
 done
 dd if=/fixtures/v2/patch-4k.bin of=large.bin bs=4096 count=1 conv=notrunc 2>/dev/null
@@ -25,7 +25,7 @@ EXTRA = (
     ("append-10mib-v1", "large", "printf APPEND >> large.bin", 1),
     ("resize-10mib-v1", "large", "truncate -s 5242880 large.bin; truncate -s 10485761 large.bin", 0),
     ("temp-replace-v1", "large", "cp /fixtures/v2/patch-4k.bin large.bin.next; mv -f large.bin.next large.bin", 1),
-    ("prepend-4k-10mib-v1", "large", PREPEND, 1),
+    ("prepend-4k-10mib-v2", "large", PREPEND, 1),
 )
 
 
@@ -51,20 +51,36 @@ def expected(name, shapes):
         files["large.bin"] = old[:5 << 20] + bytes((5 << 20) + 1)
     elif name == "temp-replace-v1":
         files["large.bin"] = b"P" * 4096
-    elif name == "prepend-4k-10mib-v1":
+    elif name == "prepend-4k-10mib-v2":
         files["large.bin"] = b"P" * 4096 + old
     else:
         raise ValueError(name)
     return files
 
 
-def prepare(output):
+def prepare(output, reuse=None):
     output.mkdir(parents=True, exist_ok=False)
-    shell.prepare(output / "base")
-    data = json.loads((output / "base/prepared.json").read_text())
-    functional = output / "functional"
-    shutil.copytree(output / "base/masters", functional / "masters")
-    shutil.copytree(output / "base/fixture", functional / "fixture")
+    if reuse:
+        data = json.loads(reuse.read_text())
+        current = shell.identities()
+        if (current["source_dirty"] or data["source"]["product_seal"] != current["product_seal"]
+                or data["source"]["harness_seal"] != current["harness_seal"]):
+            raise ValueError("reuse requires the same sealed product and benchmark harness")
+        for master in data["masters"].values():
+            for kind in ("store", "history"):
+                if shell.digest(Path(master["path"]) / f"{kind}.sqlite") != master[f"{kind}_sha256"]:
+                    raise ValueError(f"closed master {kind} changed")
+        source = reuse.parent / "functional"
+        functional = output / "functional"
+        shutil.copytree(source, functional)
+        data["source"] = current
+        data["prepared_master_reuse"] = {"source": str(reuse), "method": "closed sealed master byte copy"}
+    else:
+        shell.prepare(output / "base")
+        data = json.loads((output / "base/prepared.json").read_text())
+        functional = output / "functional"
+        shutil.copytree(output / "base/masters", functional / "masters")
+        shutil.copytree(output / "base/fixture", functional / "fixture")
     shapes, _ = shell.recipe()
     for name, _, _, _ in EXTRA:
         (functional / "fixture" / f"{name}.tsv").write_text(shell.manifest(expected(name, shapes)))
@@ -116,6 +132,8 @@ def run(prepared_path, output, selection):
                                            "source": data["source"], "prepared": str(prepared_path),
                                            "cases": results, "functional_script_sha256": seal(__file__)})
     print(json.dumps(results, sort_keys=True))
+    if any(row["functional_status"] != "PASS" or row["cleanup_status"] != "PASS" for row in results):
+        raise SystemExit(1)
 
 
 def main():
@@ -123,13 +141,14 @@ def main():
     commands = parser.add_subparsers(dest="action", required=True)
     p = commands.add_parser("prepare")
     p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--reuse", type=Path)
     p = commands.add_parser("run")
     p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--case")
     args = parser.parse_args()
     if args.action == "prepare":
-        prepare(args.output)
+        prepare(args.output, args.reuse)
     else:
         run(args.prepared, args.output, args.case)
 
