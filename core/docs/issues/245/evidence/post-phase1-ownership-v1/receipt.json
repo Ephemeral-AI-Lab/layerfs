@@ -1,0 +1,53 @@
+{
+  "case": "post-phase-1 ownership work counts (issue #248/#256 shared slice 1)",
+  "status": "PASS",
+  "kind": "count-driven diagnostic; not a timed phase and not a cache-qualified measurement",
+  "source": {
+    "base_commit": "f74dbe77da12fa533587be8a578375bce3f19373",
+    "product_inputs_sha256": "a4821c74fcb011b8dd47a7e5a1efe7cec07d9fa61ea9853e84f6ab0c788a7312",
+    "branch": "codex/issue245-post-phase1-implementation"
+  },
+  "build": {
+    "profile": "release",
+    "locked": true,
+    "toolchain": "cargo 1.85.1 (d73d2caf9 2024-12-31) / rustc 1.85.1 (4eb161250 2025-03-15)",
+    "target": "aarch64-unknown-linux-gnu",
+    "cargo_target_dir": "/src/core/target-linux (worktree-local)",
+    "rustflags": "--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2 (repository-root .cargo/config.toml, aarch64)",
+    "test_binary": "core/target-linux/release/deps/backing_ownership-c014c0290f8229b0",
+    "test_binary_sha256": "76072814acbfba544a05be2a9e59be3a04b7eb2d7effeb294597d088ae841544"
+  },
+  "environment": {
+    "container": "layerfs-i245-phase1",
+    "container_image_id": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "image": "rust:1.85.1-bookworm",
+    "image_digest": "rust@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "cpus": 8,
+    "fixture_root": "Docker named volume layerfs-i245-src mounted at /src (ext4, 4096-byte blocks); TMPDIR=/src/tmp",
+    "filesystem": "fstatfs EXT4_SUPER_MAGIC, block size 4096, as the private-backing profile requires"
+  },
+  "command": "TMPDIR=/src/tmp CARGO_TARGET_DIR=/src/core/target-linux cargo test --release --locked --manifest-path core/Cargo.toml -p layerfs-workspace --test backing_ownership -- --nocapture --test-threads=1",
+  "wall": "0.35 s test wall (the complete command includes a 0.53 s incremental build)",
+  "result": {
+    "tests": "3 passed, 0 failed",
+    "routine_scans_total_for_1024_retained_inputs": 523776,
+    "routine_scan_pairs": "N(N+1)/2 for N accepted writes while every earlier input stays retained",
+    "lookup_scans_total": 0,
+    "routine_per_write_by_checkpoint": {
+      "1": 0.0,
+      "8": 4.0,
+      "64": 35.5,
+      "256": 159.5,
+      "512": 383.5,
+      "1024": 767.5
+    },
+    "scoped_control": "reader_and_owner_pins_survive_routine_maintenance reports 32896 routine examinations for 256 writes behind one pinned owner; the deliberate scoped reclaim pass is counted in lookup_scans"
+  },
+  "cache_contract": "uncontrolled and not claimed: no timed phase is reported, no page-cache invalidation or residency check was applied, and no number here is a speedup, rate or admission PASS",
+  "limits": [
+    "in-process public Workspace API (WorkspaceHost/Workspace::own_payload/backing_status), not the mounted FUSE or daemon route",
+    "the counts describe one host process lifetime; they are not a throughput or RSS bound",
+    "no Commit, namespace, C1 or Store path is exercised"
+  ],
+  "raw": "before-count-trace.txt (complete stdout of the command above)"
+}

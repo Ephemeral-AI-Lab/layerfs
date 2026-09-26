@@ -8,25 +8,28 @@ use std::{io, sync::Arc, time::Instant};
 
 impl PayloadHost {
     pub fn has_external_pins(&self, incarnation: [u8; 32]) -> Result<bool, WorkspaceError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .records
-            .iter()
-            .any(|record| {
-                record.directory.incarnation == incarnation && Arc::strong_count(record) > 1
-            }))
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut examined = 0u64;
+        let found = state.records.iter().any(|record| {
+            examined += 1;
+            record.directory.incarnation == incarnation && Arc::strong_count(record) > 1
+        });
+        state.note_lookup(examined);
+        Ok(found)
     }
     pub fn remaining(&self, incarnation: [u8; 32]) -> Result<usize, WorkspaceError> {
-        Ok(self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut examined = 0u64;
+        let count = state
             .records
             .iter()
-            .filter(|record| record.directory.incarnation == incarnation)
-            .count())
+            .filter(|record| {
+                examined += 1;
+                record.directory.incarnation == incarnation
+            })
+            .count();
+        state.note_lookup(examined);
+        Ok(count)
     }
     pub fn maintain(self: &Arc<Self>, deadline: Instant) -> Result<(), WorkspaceError> {
         self.reclaim_registered(None, deadline).map(|_| ())
@@ -42,8 +45,11 @@ impl PayloadHost {
         &self,
         incarnation: Option<[u8; 32]>,
     ) -> Result<Option<Arc<Record>>, WorkspaceError> {
-        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let mut examined = 0u64;
+        let mut selected = None;
         for record in &state.records {
+            examined += 1;
             if Arc::strong_count(record) != 1
                 || incarnation.is_some_and(|id| record.directory.incarnation != id)
             {
@@ -66,9 +72,15 @@ impl PayloadHost {
             {
                 continue;
             }
-            return Ok(Some(record.clone()));
+            selected = Some(record.clone());
+            break;
         }
-        Ok(None)
+        if incarnation.is_none() {
+            state.note_routine(examined);
+        } else {
+            state.note_lookup(examined);
+        }
+        Ok(selected)
     }
     // None selects healthy consumer-wide maintenance; Some is deliberate scoped cleanup.
     fn reclaim_registered(

@@ -30,6 +30,12 @@ pub struct PayloadHost {
 }
 pub struct State {
     pub records: Vec<Arc<Record>>,
+    /// Ownership records visited by consumer-wide routine reclamation. This is
+    /// ordinary product telemetry: it is the quantity that must not grow with
+    /// the number of earlier acquisitions when one more write is accepted.
+    pub routine_scans: u64,
+    /// Ownership records visited by an indexed or deliberate scoped lookup.
+    pub lookup_scans: u64,
     capacity_charge: Charge,
     next: u64,
     pub allocated: u64,
@@ -40,6 +46,14 @@ pub struct State {
     pub metadata_reserved: u64,
     pub metadata_stopped: bool,
     pub metadata_complete: bool,
+}
+impl State {
+    pub(crate) fn note_routine(&mut self, count: u64) {
+        self.routine_scans = self.routine_scans.saturating_add(count);
+    }
+    pub(crate) fn note_lookup(&mut self, count: u64) {
+        self.lookup_scans = self.lookup_scans.saturating_add(count);
+    }
 }
 pub struct Record {
     pub id: u64,
@@ -151,6 +165,8 @@ impl PayloadHost {
             directories: Arc::new(AtomicUsize::new(0)),
             state: Mutex::new(State {
                 records: Vec::new(),
+                routine_scans: 0,
+                lookup_scans: 0,
                 capacity_charge: budget.reserve(0)?,
                 next: 1,
                 allocated: 0,
@@ -210,6 +226,8 @@ impl PayloadHost {
             payloads: state.records.len(),
             retained_payloads: retained,
             failed_payloads: failed,
+            routine_scans: state.routine_scans,
+            lookup_scans: state.lookup_scans,
             readers: slots[1..3].iter().filter(|slot| slot.is_none()).count(),
             acquiring: slots[0].is_none(),
             cleaning: slots[3].is_none(),

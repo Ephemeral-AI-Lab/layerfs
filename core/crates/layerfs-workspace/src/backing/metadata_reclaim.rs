@@ -30,19 +30,25 @@ impl RootOwner {
         if frame.phase == 0 {
             if owner.role == 2 {
                 let host = arena.host()?;
-                let state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+                let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+                let mut examined = 0u64;
                 let payload = state
                     .records
                     .iter()
-                    .find(|p| p.id == owner.payload)
-                    .ok_or(WorkspaceError::Io)?;
+                    .find(|p| {
+                        examined += 1;
+                        p.id == owner.payload
+                    })
+                    .cloned();
+                state.note_lookup(examined);
+                drop(state);
+                let payload = payload.ok_or(WorkspaceError::Io)?;
                 let mut record = payload.state.lock().map_err(|_| WorkspaceError::Io)?;
                 if record.custody != Some((arena.id, frame.page)) {
                     return Err(WorkspaceError::Io);
                 }
                 record.custody = None;
                 drop(record);
-                drop(state);
                 self.state
                     .lock()
                     .map_err(|_| WorkspaceError::Io)?
@@ -284,11 +290,13 @@ impl RootOwner {
                 // No uncertain write is eligible for this path. The owned marker
                 // is released only after explicit cleanup observes that condition.
                 let host = self.arena.host()?;
-                let records = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+                let mut records = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
+                let mut examined = 0u64;
                 let record = records
                     .records
                     .iter()
                     .find(|record| {
+                        examined += 1;
                         record
                             .state
                             .lock()
@@ -296,6 +304,7 @@ impl RootOwner {
                     })
                     .cloned()
                     .ok_or(WorkspaceError::Io)?;
+                records.note_lookup(examined);
                 drop(records);
                 record.state.lock().map_err(|_| WorkspaceError::Io)?.custody = None;
                 self.state

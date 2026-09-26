@@ -234,6 +234,11 @@ pub struct BackingStatus {
     pub payloads: usize,
     pub retained_payloads: usize,
     pub failed_payloads: usize,
+    /// Ownership records visited by consumer-wide routine reclamation. A
+    /// healthy accepted mutation must not walk every earlier acquisition.
+    pub routine_scans: u64,
+    /// Ownership records visited by an indexed or deliberate scoped lookup.
+    pub lookup_scans: u64,
     pub readers: usize,
     pub acquiring: bool,
     pub cleaning: bool,

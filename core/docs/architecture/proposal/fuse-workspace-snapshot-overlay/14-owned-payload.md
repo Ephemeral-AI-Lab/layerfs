@@ -65,6 +65,36 @@ so two retained reader windows and an acquisition do not consume cleanup's scrat
 No extra worker, save lane, wait queue, cache growth or compactor is introduced.
 The 4,096-input ceiling is a declared compatibility limit, not npm qualification.
 
+### Routine private-ownership work counts (2026-09-26, #248/#256 phase 1)
+
+Source pin: `f74dbe77da12fa533587be8a578375bce3f19373` plus the first
+post-Phase-1 ownership slice committed with this note. Earlier sections of this
+page keep their own pins.
+
+`Workspace::backing_status()` reports two saturating lifetime counts of the
+private ownership registry in addition to its byte and slot aggregates:
+
+| Field | Meaning |
+| --- | --- |
+| `routine_scans` | Ownership records visited by consumer-wide *routine* reclamation selection (`OwnershipHost::maintain`, which every accepted mutation runs before it admits its own input). |
+| `lookup_scans` | Ownership records visited by an id or custody lookup, an incarnation census, or the deliberate scoped `reclaim_payloads` pass. |
+
+They are product telemetry like the projection counters: an operator can see how
+much routine private work one accepted mutation pays, and a count never gates an
+operation. They are not timers, RSS, Store reads or a performance claim, and a
+lifetime total is never a per-phase number.
+
+The counts exist because the quantity that must not grow is work, not wall time:
+with `N` earlier retained acquisitions the routine selection walked the whole
+registry before the next input was admitted, so `N` accepted writes paid
+`N(N+1)/2` record examinations. The measured baseline for 1,024 retained
+one-byte inputs through the public `Workspace::own_payload` route is 523,776
+routine examinations and zero by-id examinations
+(`OWNERSHIP_TRACE routine_per_write` rising 0.0, 4.0, 35.5, 159.5, 383.5, 767.5
+at 1, 8, 64, 256, 512 and 1,024 accepted writes). This section records the
+instrumented baseline only; the indexed registry and work-driven reclamation
+that make `routine_scans` independent of `N` are their own later change.
+
 ## Disk equation and format
 
 Let `A=H=4096`, `S=1048576`, and `L` be the admitted logical input length:
