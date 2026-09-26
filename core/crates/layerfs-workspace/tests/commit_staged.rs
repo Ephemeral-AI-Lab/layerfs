@@ -328,7 +328,16 @@ mod linux {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let second_root = committed(&f, &stage_b, &second).root;
+        let CommitOutcomeWire::Committed(second_commit) = &second.outcome else {
+            panic!("second Commit must publish B2")
+        };
+        assert_eq!(second.generation, stage_b.stage().generation);
+        assert_eq!(second.stage_token, Some(stage_b.stage().token));
+        assert_eq!(second_commit.root, stage_b.stage().candidate_root);
+        assert_eq!(snapshot(&f).branch.head_commit, Some(second_commit.commit));
+        assert!(f.workspace.status().unwrap().revision >= second.revision);
+        assert!(f.workspace.status().unwrap().submission.is_none());
+        let second_root = second_commit.root;
         let second_file = attr(f.native.attributes(second_root, b"data.bin"));
         assert_eq!(second_file.2, data.2 + 2);
         assert_eq!(f.native.bytes(second_file.1, data.2, 2), b"AB");
