@@ -185,6 +185,33 @@ registry, but the daemon has one selected mount and one control session. The
 transition and coordinates its Workspace-count policy with
 [#219](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219).
 
+### What “writes continue during Commit” currently proves
+
+“Non-pausing” must name **which route and phase**. The E gate proves an
+accepted mounted FUSE write while a real successor-builder page **read** was
+held, followed by a correct first and second Commit. It does not prove that
+every write can complete immediately during every Commit phase. The current
+gate ownership is:
+
+| Commit phase | Current interaction with mounted writes |
+| --- | --- |
+| Capture G | A short state ordering point pins the old root and advances the live generation. A caller may wait for this point. |
+| Prepare/lower a frozen file | [`lower_file`](../../../crates/layerfs-workspace/src/commit/lower.rs) holds the shared metadata `writer()` gate **through the full extent cursor walk**. A mounted mutation uses deadline-bounded `writer_until`; it can wait for that walk and reach its deadline. |
+| Supply replacement bytes | [`ReplacementSource::pull`](../../../crates/layerfs-workspace/src/commit/source.rs) reacquires `writer()` and a backing window for each pull, then reads the frozen sequence and payloads. A pull can contend with mounted work; the entire transfer is not covered by the E overlap proof. |
+| Remote canonical construction and Branch publication | The local writer gate is not held continuously through the remote call, but its `Source::pull` callbacks take it as above. Shared transport/Store admission can also contend. |
+| Reconcile saved head onto live G+1 | [`reconcile_commit`](../../../crates/layerfs-workspace/src/commit/reconcile.rs) takes two deadline-bounded ordering points. Its successor build is ungated; if a write advances the live revision during the build, it rebuilds from the newer root before install. The strict E test exercised this read-side window. A blocked page write with an unfinished metadata allocation is a different schedule and can still refuse a competing write. |
+| Separate SDK Exec plus Commit | Today's daemon admits one control session and holds one lifecycle lock through both calls, so independent `WorkspaceApi::exec` and Commit calls cannot overlap through that control route. #249 owns this interface-level concurrency. |
+
+The target is **no gate held for work proportional to `P`, `R`, replacement
+bytes, remote I/O or canonical construction**. An immutable frozen-root reader
+should use bounded read leases/windows; mutations should take only bounded
+publication/ordering holds. Instrument maximum gate-hold time, write wait time,
+deadline outcomes, window ownership and accepted revisions at each Commit
+phase, with deterministic barriers. A deadline, genuine quota exhaustion or
+unresolved ownership may still prevent progress. Continuous writers may force
+reconcile to rebuild until its original deadline; “non-pausing writes” is not
+a guarantee that Commit itself is wait-free or will always succeed.
+
 ## 5. “Bounded” means three different budgets
 
 | Budget | What must be charged or measured | False inference to avoid |

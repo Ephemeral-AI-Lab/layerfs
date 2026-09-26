@@ -17,11 +17,13 @@ remain INELIGIBLE. This folder is not a product implementation or release
 contract.
 
 The target keeps index pages and payloads in local private backing. A Commit
-pins one immutable generation while the same FUSE mount accepts later writes
-into the next. The strict E gate proved an accepted mounted write during a
-held successor-builder page read, followed by a second sequential Commit at
-`b2cd0df23`. The remaining 4,096 final-run and daemon-control concurrency
-limits are tracked by #248 and #249 below.
+pins one immutable generation; admitted later FUSE writes enter the next. The
+strict E gate proved one such write during a held successor-builder page read,
+followed by a second sequential Commit at `b2cd0df23`. Other Commit phases
+still take a metadata writer gate during frozen-file walks and transfer pulls;
+see the [phase-by-phase audit](ARCHITECTURE_COMPLEXITY_RESEARCH.md#what-writes-continue-during-commit-currently-proves).
+The remaining 4,096 final-run and daemon-control concurrency limits are
+tracked by #248 and #249 below.
 
 - [Scalable range-based COW architecture](ARCHITECTURE.md) describes current
   and proposed data paths, immutable generation capture, streaming Commit,
