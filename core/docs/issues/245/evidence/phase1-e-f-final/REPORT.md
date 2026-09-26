@@ -2,12 +2,12 @@
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
 > Source of the initial proof below: `ff3dbcfe0eb0269e39981372b23bd84c0f9a1ccc`.
-> The dated continuation at the end records product source `f9de81520`.
+> The dated continuations below record each later product source separately.
 
-The frozen F comparison passes at the final product source `b2cd0df23`.
-The strict E timing gate also passes there: B was accepted while a real
-successor-builder page read was held by an external Linux syscall barrier.
-The earlier open checkpoint and failed diagnostics remain below.
+The strict E timing gate and a newly matched frozen F comparison pass at the
+current-main merged product source `3b3312d4` (product code from `fac85c68b`).
+The prior E/F pass at `b2cd0df23`, its F-1 control and all earlier failed
+diagnostics keep their original identities below.
 The #232 structural-shift and 56-shape gates, the load-bearing selection, and
 the separate namespace ceilings remain open. The numbers below are one attempt
 per registered case at each named source, not a latency or release claim.
@@ -343,7 +343,77 @@ Commit `b2cd0df23` used the same first-parent/staged-tree
 LOC 56,650 → 56,670 (**+20**), legacy reference 68,728 → 68,728 (0), combined
 125,378 → 125,398 (**+20**). Test and documentation changes contribute zero.
 
-**Final E/F lane disposition:** strict E timing proof **PASS** and frozen F
+**Pre-merge E/F lane disposition:** strict E timing proof **PASS** and frozen F
 comparison **PASS** at `b2cd0df23`. The historical five-second Exec `Unknown`,
 #232's 56 shapes, load-bearing selection and namespace ceilings remain open as
 separate work, with their earlier evidence unchanged.
+
+## 2026-09-26 current-main integration: new matched F source
+
+`fac85c68b` merges current `main` after resolving the SDK Init runner's
+release/lite verifier selection together with this branch's Exec/FUSE registry,
+and the SDK proof-root test's unique counter. `3ae873bd5` removes an unused
+test import found by warning-denying Clippy. The resulting product seal is
+`1fee67de6224add2fd3b27adeea5f054ed501f482dced8df98fa62a53cf65087`;
+the broad benchmark harness seal also changed to
+`d12b542bc43a34a8addd29f17943f0a2ae4f29c9dbf06569f5e69cbbbd51d11f`.
+The earlier F-1 control is therefore not used to qualify this source.
+
+[The new target](../phase1-f-main-merge/TARGET.md) was committed as
+`3b3312d4` **before** candidate preparation. Its one-attempt control source
+`ae8cc3a3e2b849caa9b0376c605665d5f4eb7d6a` is the pre-D/E
+`fdfc41032` tree merged with the same `main` and identical SDK Init conflict
+resolution; the source branch is `codex/issue245-f-control-main`. Its product
+seal is `f97bb05a479f9412be0291f5fda0512431f005d9d17901edcdbf1307a0732ea0`.
+Control preparation and the four raw receipts are in that worktree at
+`benchmark-results/fs-bench-pro/issue245-shell-package-f-main-control-prepared-01/prepared.json`
+and `benchmark-results/fs-bench-pro/issue245-shell-package-f-main-control-01/`.
+All four control functional, cleanup and sealed-verifier results are PASS.
+The target freezes the same 2× per-case complete-wall rule, unchanged
+registered command and 9 s verifier limits, one construction worker,
+independent byte-copy clones and latency `INELIGIBLE`.
+
+One new candidate preparation at clean source `3b3312d4` records image
+`sha256:8f2e6a9a65cc00e15867646e366b7605d8d82f1325523bd09c504fe0de132bd5`,
+the same harness seal and registry SHA-256
+`1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c`.
+Its one arm per registered case is in
+`benchmark-results/fs-bench-pro/issue245-shell-package-f-main-candidate-01/`;
+each case retains `receipt.json`, raw output, independent verifier and hashes.
+The old F-1 control and candidate arms were not rerun or relabeled.
+
+| Case | Candidate complete wall s / new frozen maximum s | Functional / cleanup / verifier | F comparative cell | Latency cell |
+| --- | ---: | --- | --- | --- |
+| `mixed-refresh-v1` | 2.329108 / 4.238090 | PASS / PASS / PASS, verifier 0.064372 s | PASS | INELIGIBLE |
+| `overwrite-4k-v1` | 0.919545 / 1.838790 | PASS / PASS / PASS, verifier 0.194045 s | PASS | INELIGIBLE |
+| `repeated-one-byte-v1` | 1.094965 / 2.474078 | PASS / PASS / PASS, verifier 0.072758 s | PASS | INELIGIBLE |
+| `failed-command-no-commit-v1` | 5.830173 / 11.752407 | PASS / PASS / PASS, verifier 0.039657 s; zero Commit calls, old head retained | PASS | INELIGIBLE |
+
+The merged source also passes the strict E syscall-held builder-read route at
+`issue245-route-harness/e-builder-main-merge-final-01/result.json`: B was
+accepted while the read was held, live revision 3 → 4, first install rebuilt,
+exact first/second/live generations and old head verified, cleanup PASS.
+The route used rebuilt release host binaries, the release musl test binary,
+the retained independent 64 MiB fixture and the pinned route image; its
+complete functional command took 4.009 s. All 24 release-profile musl
+Workspace suites pass at `musl-workspace-main-merge-01/result.json`.
+Full locked Core release tests pass (`core-test-main-merge-final.log`), as do
+warning-denying release Clippy (`core-clippy-main-merge-final.log`), formatting,
+the 296-file product boundary scan, nine tool unit tests and 57 benchmark
+harness tests (four skipped). The Clippy command first failed on the merged
+test import before `3ae873bd5`; its covering rerun passed. No CI or root
+preflight claim applies.
+
+The current-main merge's first-parent production LOC comparison is Core
+56,670 → 56,675 (**+5**), legacy reference 68,728 unchanged, combined
+125,398 → 125,403 (**+5**). The following test-only fix and target document
+each report production delta 0 in their commit messages. The original
+`git diff --check` on the merge's staged tree flagged two trailing-space
+lines inside `core/docs/benchmark/fs-bench-pro/issue-231/evidence/verifier-pipeline-20260924/profile-instrument.diff` from `main`; that historical
+diff was retained byte-for-byte.
+
+**Current merged E/F disposition:** strict E timing proof **PASS** and the new
+matched F comparison **PASS**. All F latency cells remain `INELIGIBLE` under
+the uncontrolled container FUSE/backing cache contract. The five-second
+historical Exec `Unknown`, #232's 56 shapes, load-bearing selection and
+namespace ceilings remain separate open work.
