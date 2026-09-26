@@ -41,6 +41,12 @@ timer. These are target behaviors, not current product claims.
 - [Joint #248/#256 tree and resource research](JOINT_248_256_TREE_RESEARCH.md)
   pins the post-#252 source, calculates file and namespace capacities, compares
   current and target costs, and proposes responsibility-based modules and LOC.
+- [Post-Phase-1 implementation contract](POST_PHASE1_IMPLEMENTATION_SPEC.md)
+  maps #245/#248/#256/#258/#249/#219 to one public shell route, target cost
+  bounds, remaining ceilings, source ownership, provisional LOC and proof gates.
+- [Workspace shell brainstorm mini v1](SHELL_BRAINSTORM_MINI_V1.md) freezes a
+  13-cell public API diagnostic selection covering all ten load-bearing
+  categories; its registry and future runner are separate from Phase 1 evidence.
 - [Resource-constraint lift plan](RESOURCE_CONSTRAINT_LIFT_PLAN.md) inventories
   the remaining file, Exec, page-reference and live-state ceilings, assigns
   their lift paths and defines the multi-Workspace concurrency proof.
