@@ -11,19 +11,30 @@ mounted POSIX/FUSE path. Phase 1 addresses the previously observed root
 lockfile rename failure, repeated piece-index work, large-shift progress
 failures and verification eligibility. The architecture also identifies the
 file, namespace and Commit interfaces that must scale before much larger
-package workloads can be claimed. No document here is a product
-implementation, performance PASS or release contract.
+package workloads can be claimed. The [E/F report](evidence/phase1-e-f-final/REPORT.md)
+records a frozen comparative wall PASS at its source seal; its latency cells
+remain INELIGIBLE. This folder is not a product implementation or release
+contract.
 
 The target keeps index pages and payloads in local private backing. A Commit
-pins one immutable generation while the same FUSE mount accepts later writes
-into the next; a second sequential Commit should do the same after the first
-is reconciled. Current source has generation capture, but successful
-reconciliation under overlapping writes remains unproven and is an explicit
-verification gate.
+pins one immutable generation; admitted later FUSE writes enter the next. The
+strict E gate proved one such write during a held successor-builder page read,
+followed by a second sequential Commit at `b2cd0df23`. Other Commit phases
+still take a metadata writer gate during frozen-file walks and transfer pulls;
+see the [phase-by-phase audit](ARCHITECTURE_COMPLEXITY_RESEARCH.md#what-writes-continue-during-commit-currently-proves).
+The remaining 4,096 final-run and daemon-control concurrency limits are
+tracked by #248 and #249 below.
 
 - [Scalable range-based COW architecture](ARCHITECTURE.md) describes current
   and proposed data paths, immutable generation capture, streaming Commit,
   resource limits and unresolved concurrency invariants.
+- [Architecture and complexity research](ARCHITECTURE_COMPLEXITY_RESEARCH.md)
+  maps the private file tree, payload backing, canonical Commit result and
+  daemon ownership to explicit asymptotic costs and proof gates. Its companion
+  studies cover the [private backing and page tree](PRIVATE_BACKING_AND_PAGE_TREE.md)
+  and [final-delta Commit](FINAL_DELTA_COMMIT_COMPLEXITY.md). The
+  [animated Commit timeline](assets/incremental-commit-private-backing.gif)
+  follows the shell, live Workspace, private backing, frozen root and Store.
 - [Implementation plan](IMPLEMENTATION_PLAN.md) sequences root-cause repair,
   local index work, Commit transport, concurrency proof and prospective gates.
 - [Phase 1 verification](VERIFICATION_PHASE1.md) distinguishes the retained
@@ -43,10 +54,9 @@ verification gate.
 - [D/E/F finish handoff](HANDOFF_D_E_F.md) is the prior assignment: the four
   gating design decisions are recorded and owner-approved, and its §8 remains
   binding; everything it marks done stays done.
-- [E/F continuation handoff](HANDOFF_E_F_CONTINUATION.md) is the current
-  assignment: package D, the route harness and the frozen F target are done and
-  verified, package E is in flight, and the candidate arm and the leftovers are
-  specified with their gates and stop conditions.
+- [E/F continuation handoff](HANDOFF_E_F_CONTINUATION.md) is the dated
+  assignment that specified E/F gates and stop conditions before their final
+  outcome was recorded in the report below.
 
 ## Checkpoint (2026-09-26)
 
@@ -59,19 +69,22 @@ verification gate.
 | F pre-optimization control arm | ✅ collected and qualifying (4/4 functional PASS) | `issue245-shell-package-v3-control-01` |
 | ~5.5 s cleanup diagnosis | ✅ explained and fixed | cleanup ~0.5 s in every passing row |
 | Evidence blocker 2 (route harness) | ✅ closed this round | eight route cases PASS on the final source, receipts in `benchmark-results/fs-bench-pro/issue245-route-harness/*-f/` |
-| Package D (streaming transport) | ✅ closed this round | `036847824` (+342 LOC); descriptors as body-stream prefix, bounded replay spool, ceilings removed |
-| Package E (generations + reconcile) | 🟡 in flight, uncommitted | `writer_until` + reconcile restructure in the working tree; retry path, gate test and route verification remain |
+| Package D (streaming transport) | ✅ closed this round | `036847824` (+342 LOC); descriptors as body-stream prefix, bounded replacement replay spool; earlier 256-edit/8 MiB ceilings retired, 4,096 final-run ceiling remains |
+| Package E (generations + reconcile) | ✅ final functional gates PASS | strict mounted write accepted while a real successor-builder page read was held at `b2cd0df23`; [E/F final report](evidence/phase1-e-f-final/REPORT.md) |
 | Package F target freeze | ✅ frozen this round | [phase1-f-target/TARGET.md](evidence/phase1-f-target/TARGET.md), `bf9c3f5e0` |
-| Package F candidate arm | ⬜ not started | needs a fresh `prepare` at the frozen post-E source |
+| Package F candidate arm | ✅ frozen comparative wall envelope PASS; latency INELIGIBLE | final source `b2cd0df23`; all four functional/cleanup/verifier cells PASS in [E/F final report](evidence/phase1-e-f-final/REPORT.md) |
 | Three latent extent-sequence defects | ✅ fixed this round | `0d4834f81` (over-ceiling implicit base), `036847824` (O(pages) descend, post-insertion `Io`) |
+| Fixed 4,096 final-run ceiling | ⬜ open after D/E/F | [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) owns the cross-layer final-delta path and its resource bounds |
+| Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon/session concurrency and per-Workspace Commit serialization |
 
-The four decisions that gate the remaining work (D's frame protocol, E's
-reconcile shape, the harness route, F's comparative target) were made with the
-owner on 2026-09-26 and are binding — see
-[HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). The streaming wire (D) and the route
-harness are closed; what remains is continuous generations (E) and the
-before/after proof (F's candidate arm), plus the deferred gates in
-[HANDOFF_E_F_CONTINUATION.md §3](HANDOFF_E_F_CONTINUATION.md).
+The four decisions for D/E/F and their original handoff remain in
+[HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). D, E and the frozen F comparative
+selection are complete at the stated scope. The [final report](evidence/phase1-e-f-final/REPORT.md)
+records E's strict overlap gate at `b2cd0df23` and the cache-ineligible F
+latency cells. [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248)
+and then [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) are
+separate follow-ups. The older continuation handoffs remain dated assignments,
+not current status reports.
 
 The first repair round is recorded in
 [Phase 1 ordinary-shell repair](evidence/phase1-ordinary-shell-repair/REPORT.md):
@@ -79,9 +92,9 @@ three defects on the shared namespace path were localized from a labelled
 mounted diagnostic, fixed, and re-verified. The mixed package refresh and the
 two rename shapes now pass with an independent full-tree oracle, the four #243
 correctness oracles still hold, and every latency row stays **INELIGIBLE**. The
-piece index, the streaming Commit, the continuously writable Commit proof and
-the frozen Phase 1 performance selection remain **NOT_RUN**; this folder still
-holds no release candidate and no admission result.
+piece index, streaming Commit and continuously writable Commit claims in that
+**earlier repair report** were NOT_RUN then. Later outcomes are recorded above;
+this folder still holds no release candidate or cold-cache latency admission.
 
 The retained [#243 Phase 2 report](../243/evidence/phase2-ordinary-shell-v1/REPORT.md)
 records a mixed-refresh functional FAIL and three functional observations with

@@ -2,6 +2,12 @@
 
 > **Status:** Current planning checklist; no release candidate exists.
 
+This is the original #245 design baseline. Its “CURRENT” diagram and 1,024 /
+256 / 8 MiB limits describe source **before** packages A–F; they are not the
+state at `74ac30e28`. For the implemented private tree, remaining 4,096-run
+limit, strict E/F evidence and post-validation algorithm targets, see the
+[source-pinned architecture and complexity research](ARCHITECTURE_COMPLEXITY_RESEARCH.md).
+
 This design keeps one writable LayerFS FUSE mount and the existing `Base` / `Local` / `Zero` range overlay. The public entrypoint remains [`WorkspaceApi::exec(command)`](../../../crates/layerfs-api/sdk/src/workspace.rs), which launches `/bin/sh -c` in the mounted Workspace. It interprets POSIX/FUSE operations, never command text. No edit tool, ioctl, classifier, kernel OverlayFS mount, or whole-file copy-up is part of this route. The immediate evidence is the [ordinary-shell Phase 2 report](../243/evidence/phase2-ordinary-shell-v1/REPORT.md): root lockfile replacement failed with `EIO`; the 4 KiB overwrite and 16 one-byte writes passed functionally, but their latency was cache-ineligible. The rename failure needs its own root-cause repair; changing a piece index cannot fix it.
 
 ## Before and after
