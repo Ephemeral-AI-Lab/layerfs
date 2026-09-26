@@ -91,14 +91,15 @@ actual content and cannot be assigned a universal file-size ratio. The
 [joint tree study](JOINT_248_256_TREE_RESEARCH.md) gives formulas and concrete
 page/file-count illustrations.
 
-Remove fixed *aggregate* refusals for 128 names/dirty inodes, 4,096 retained
-payloads/visited bindings, 32 KiB prepared metadata, 65,536 page
+Remove fixed *aggregate* refusals for 128 names/dirty inodes, 4,096 visited
+bindings, 32 KiB prepared metadata, 65,536 page
 slots, fixed temporary-page/ledger tables, 256 live nodes, 128 handles, 1,024
 cookies, 32 roots and 11 arenas where resources remain available. Fixed page
 fanout, transport frames, 128 KiB FUSE callbacks and bounded resident windows
-remain batch sizes with continuation. #252 removed the explicit 4,096-final-run
-refusal; #248 proves no downstream replacement cap or unacceptable work remains
-there. #249 removes the whole-Exec 30 s product
+remain batch sizes with continuation. #252 removed both the 4,096 retained
+payload admission and the explicit 4,096-final-run refusal; #248 still needs
+indexed payload lookup, nonquadratic cleanup and proof that no downstream
+replacement cap or unacceptable work remains. #249 removes the whole-Exec 30 s product
 timer and fixed concurrent/lifetime Exec counts; its command lease still owns
 real PIDs, FDs, output buffers and cleanup. #219 selects the live Workspace
 count separately. The current 4 GiB logical file format, path/name grammar,
@@ -141,6 +142,24 @@ Each production file stays below 1,000 physical lines; `lib.rs` and `mod.rs`
 stay below 200. Every actual commit records exact first-parent before/after
 production LOC, including migration subtotals.
 
+## Implementation slices and stop conditions
+
+| Order | Slice | Finish before the next dependent claim |
+| ---: | --- | --- |
+| 0 | Pin current source, public case/fixture identities, cache/resource scopes and exact-root compatibility for the existing accepted domain. Preserve #243/#245 historical receipts. | The [13-cell mini contract](SHELL_BRAINSTORM_MINI_V1.md) is committed before its runner; no unqualified wall number is promoted to a speed gate. |
+| 1 | Implement **one shared** page/payload ownership substrate for #248 and #256: charged page/ledger capacity, payload-ID lookup, work-triggered reclaim, progressive reserves, grouped ledger I/O only where custody stays exact. | Narrow writes and many tiny writes preserve atomic local roots and pinned G1/G2; count traces show no scan of earlier acquisitions per write. Quota/unknown failures retain their owners. |
+| 2 | Complete #248's file path: balanced extent splice at height transitions, persistent frozen cursor across lower/upload pulls, short writer-gate holds and bounded C1 replay. Measure C1 node visits before replacing its current exact-root split/join algorithm. | Public 4,097 separated writes and Commit preserve exact bytes/root/head; no historical-write scan or count refusal; G2 can mutate during every declared Commit phase. A new C1 builder requires an explicit canonical-identity proof or ruling. |
+| 3 | Complete #256's keyed namespace path and prepared stream: point delete/rebind, ordered cursors, charged live pins, wide counts, validated replay spool and C1 bounded ordering. | Public 129, 257 and 1,025 changed-name/file Commit cases pass full-tree and old-head oracles. A single generation publishes one head; read, readdir and cleanup remain bounded by resources. |
+| 4 | Complete #258's inherited-directory move on the same keyed namespace substrate. | A base-resident directory with descendants moves without a full subtree copy; old paths disappear, new inherited paths resolve, open handles survive and invalid deep paths fail before publication. |
+| 5 | Complete #249's per-sandbox Workspace registry and shared event-driven Exec leases; add #219's selected positive Workspace-count policy over that registry. | Multiple mounts and overlapping Exec on one or several Workspaces work with no fixed Exec count or whole-command timer; one Commit per Workspace, independent Store admission across Workspaces, exact lease cleanup and count=1/2/3 policy. |
+| 6 | Integrate under #245 using the full registered load-bearing cases and combined file-plus-namespace generations. | Two incremental heads compare against their immediate predecessor; old heads remain readable; exact physical/RAM/CPU and callback receipts distinguish resource refusal from a hidden count; every result is PASS, FAIL, INELIGIBLE or NOT_RUN. |
+
+Code verification is per changed Core component with locked Cargo tests,
+clippy, fmt and the product-boundary guard. Public performance rows are taken
+once only after the relevant source, workload, cache contract and budget are
+frozen. A cache-ineligible mini timing can motivate a count-driven diagnostic;
+it cannot authorize a performance PASS or a shorter workload.
+
 ## Proof gates before claiming this architecture
 
 Public SDK/FUSE acceptance must include #248's 4,097 separated final runs;
@@ -150,6 +169,6 @@ Workspace counts 1/2/3; two incremental Commits with a G2 write accepted during
 G1 construction; old-head exact bytes; and precise cleanup/resource refusals.
 Record actual callback and page/ledger counts, private and Store bytes, spool,
 RSS/page cache, Exec/Commit/cleanup wall, and every nonpassing row. The
-[mini benchmark](SHELL_BRAINSTORM_MINI_V1.md) is an early API smoke and cost
+[proposed mini benchmark](SHELL_BRAINSTORM_MINI_V1.md) is an early API smoke and cost
 diagnostic for all ten brainstorm categories, not a substitute for these
 full-size gates or a cold-cache performance admission.

@@ -3,7 +3,7 @@
 > **Status:** Research; informative and not a product contract.
 >
 > Prospective exploratory benchmark specification for [#245](https://github.com/Ephemeral-AI-Lab/layerfs/issues/245).
-> Freeze this document and [the registry](../../../benchmark/fs-bench-pro/registry/workspace-shell-brainstorm-mini-v1.json) before implementing the runner or collecting a sample. No row below is measured yet.
+> This document and [the registry](../../../benchmark/fs-bench-pro/registry/workspace-shell-brainstorm-mini-v1.json) are committed before runner implementation or sampling. The runner is not implemented and no row below is measured yet.
 
 ## Claim and public operation
 
@@ -134,7 +134,7 @@ log cell requires the complete committed file and empty Exec output. Other
 cells require empty output, confirmed zero exit and the declared Commit.
 Every failure is retained as `FAIL`, `INELIGIBLE` or `NOT_RUN` with its reason.
 
-The runner supports `self-check`, `prepare --output FRESH`, and
+The planned runner will support `self-check`, `prepare --output FRESH`, and
 `run --prepared PREPARED_JSON --output FRESH`; `run` executes all 13 cells in
 registry order. Preparation reuses one validated master and release build;
 execution clones it once per cell. `prepared.json`, build/image/seed logs and
