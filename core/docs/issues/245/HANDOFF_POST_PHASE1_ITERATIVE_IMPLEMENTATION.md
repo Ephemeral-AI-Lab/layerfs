@@ -220,6 +220,22 @@ unless a measured case requires the tighter shape.
 
 These follow phase 2's closure; they are not a substitute for 2.R1-2.R2.
 
+**The `binary_plus_tree/` module layout is not a phase-3 deliverable.** It is the
+SRP *destination* the [joint study](JOINT_248_256_TREE_RESEARCH.md#srp-extraction-plan)
+proposes, and the [spec](POST_PHASE1_IMPLEMENTATION_SPEC.md) permits it only
+"where current code cannot be reused". Phase 3's gate is behavioural - point
+mutation, ordered cursor, lifted counts, one head - and moving files buys
+reviewability, not behaviour. Relocate a responsibility only when the change that
+needs the room lands with it, keep the old reexports while one responsibility
+moves, report the move as migration (net production LOC ~0) and never as an
+algorithmic improvement. The trigger is the 999-physical-line ceiling: at this
+head `metadata_pieces.rs` has 964 lines, `ownership.rs` 943 and `metadata.rs` 897,
+while the keyed files phase 3 edits (`metadata_index.rs` 428,
+`metadata_build.rs` 79, `metadata_pages.rs` 539) have room. If the keyed delete,
+rebalance and ordered cursor do not fit those files, split them into
+`binary_plus_tree/keyed/{format,update,delete,cursor,build}.rs` in the same commit
+as the behaviour that needs it.
+
 The pin is measured, not guessed. `tests/wide_namespace.rs` creates 200 names in
 one directory through the public API and, at `c30fe68a0`, reports
 `create 127: Capacity` with `dirty_inodes: 128`, `revision: 127` and 1.9 MiB
