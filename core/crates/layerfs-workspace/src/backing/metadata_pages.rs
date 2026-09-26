@@ -252,6 +252,10 @@ pub fn encode_pieces_leaf(
     seal(bytes);
     Ok(())
 }
+/// Encodes one branch page. A branch holds at least one child: ordinary packing
+/// gives it two or more, and a fold that collapses a node lifts its single
+/// remaining child inside a page of the node's own level rather than leaving the
+/// tree with children at two depths.
 pub fn encode_pieces_branch(
     incarnation: [u8; 32],
     r: PageRef,
@@ -259,7 +263,7 @@ pub fn encode_pieces_branch(
     children: &[ChildRef],
     bytes: &mut [u8],
 ) -> Result<(), WorkspaceError> {
-    if bytes.len() != PAGE || children.len() < 2 || level == 0 {
+    if bytes.len() != PAGE || children.is_empty() || level == 0 {
         return Err(WorkspaceError::Capacity);
     }
     bytes.copy_from_slice(&open_page(
@@ -371,7 +375,7 @@ pub fn decode_pieces_branch(
         children.push(child);
         at += ChildRef::BYTES;
     }
-    if children.len() < 2 {
+    if children.is_empty() {
         return Err(WorkspaceError::Io);
     }
     Ok((level, children))

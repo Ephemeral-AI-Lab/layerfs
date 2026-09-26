@@ -849,12 +849,144 @@ fn tree(f: &Fixture, root: PageRef) -> Vec<(PageRef, u8, usize)> {
     out
 }
 
+/// Every structural rule the readers rely on, checked over a whole tree: a
+/// branch holds at least one child, every child of a branch declares exactly one
+/// level below its parent, and a leaf holds whole extent records. Answers the
+/// leaf count, the root's declared level and how many branches hold one child.
+fn structure(f: &Fixture, root: PageRef) -> (usize, u8, usize) {
+    let root_level = f.with_window(|window| f.store.page(root, window)[48]);
+    let mut leaves = 0;
+    let mut spines = 0;
+    let mut pending = vec![(root, None)];
+    while let Some((page, parent)) = pending.pop() {
+        let bytes = f.with_window(|window| f.store.page(page, window));
+        let level = bytes[48];
+        if let Some(parent) = parent {
+            assert_eq!(
+                level + 1,
+                parent,
+                "page {page:?} declares level {level} below its parent's {parent}"
+            );
+        }
+        if level == 0 {
+            let used = metadata_pages::body_used(&bytes).unwrap();
+            assert!(used > 0 && used % metadata_pages::RECORD == 0);
+            leaves += 1;
+            continue;
+        }
+        let (declared, children) =
+            metadata_pages::decode_pieces_branch(INCARNATION, page, &bytes, MAX_FILE).unwrap();
+        assert_eq!(declared, level);
+        assert!(!children.is_empty(), "branch {page:?} holds no child");
+        if children.len() == 1 {
+            spines += 1;
+        }
+        for child in &children {
+            pending.push((child.page, Some(level)));
+        }
+    }
+    assert!(leaves > 0);
+    (leaves, root_level, spines)
+}
+
+/// One level-indexed sequence whose root is two levels above its leaves: 249
+/// leaf pages of 124 one-byte extents, packed into two level-1 branches.
+fn two_level_fixture() -> (Fixture, PageRef, u64) {
+    let f = Fixture::new();
+    let records = 124 * 249;
+    let length = records as u64;
+    let root = f.build(&separated(length), length).unwrap();
+    (f, root, length)
+}
+
 /// `count` one-byte private extents that never merge: every acquisition has its
 /// own identity, exactly as a sequence of separated writes does.
 fn separated(count: u64) -> Vec<Piece> {
     (0..count)
         .map(|at| local(0, 1, at + 1, (at % 4096 + 1) as u32))
         .collect()
+}
+
+#[test]
+fn a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth() {
+    let (f, root, length) = two_level_fixture();
+    let (leaves, level, spines) = structure(&f, root);
+    assert_eq!((leaves, level, spines), (249, 2, 0));
+    // The root's first child is a level-1 branch over 125 leaf pages, so it
+    // covers exactly 125 * 124 one-byte extents.
+    let child = 125 * 124;
+    let spliced = f
+        .splice(
+            root,
+            0,
+            child,
+            0,
+            length,
+            length,
+            &[local(0, child, 900_001, 4_001)],
+        )
+        .unwrap();
+    assert_eq!(spliced.length, length);
+    // The whole child collapsed to one leaf page. It keeps its own level: the
+    // sibling branch beside it is untouched, so a shallower page there would
+    // leave the root's children at two depths and the cursor would refuse the
+    // tree.
+    let (leaves, level, spines) = structure(&f, spliced.root);
+    assert_eq!(spines, 1, "the collapsed child must be lifted, not dropped");
+    assert_eq!(level, 2);
+    // 124 untouched leaf pages plus the collapsed child's one.
+    assert_eq!(leaves, 125);
+    let mut expected = vec![format!("0:L:0:{child}")];
+    for at in child..length {
+        expected.push(format!("{at}:L:0:1"));
+    }
+    assert_eq!(f.render(spliced.root, length), expected.join(" "));
+    // A second fold over the same collapsed child replaces its lifted page
+    // instead of stacking another level above it.
+    let again = f
+        .splice(
+            spliced.root,
+            0,
+            child,
+            0,
+            length,
+            length,
+            &[local(0, child, 900_002, 4_002)],
+        )
+        .unwrap();
+    let (leaves, level, spines) = structure(&f, again.root);
+    assert_eq!(spines, 1);
+    assert_eq!(leaves, 125, "a repeated collapse must not stack a level");
+    assert_eq!(level, 2);
+    assert_eq!(
+        f.walk(again.root, length).len(),
+        1 + (length - child) as usize
+    );
+    // The earlier generation still reads exactly what it published.
+    assert_eq!(f.render(spliced.root, length), expected.join(" "));
+}
+
+#[test]
+fn a_fold_that_removes_a_whole_branch_drops_its_level() {
+    let (f, root, length) = two_level_fixture();
+    let child = 125 * 124;
+    // Delete the whole first child: the folded branch answers with no page at
+    // all, so the root keeps its other child and nothing is lifted for it.
+    let spliced = f
+        .splice(root, 0, child, 0, length, length - child, &[] as &[Piece])
+        .unwrap();
+    assert_eq!(spliced.length, length - child);
+    let (leaves, level, spines) = structure(&f, spliced.root);
+    assert_eq!(spines, 0);
+    assert_eq!(level, 1, "the root loses the level it no longer needs");
+    assert_eq!(leaves as u64, (length - child) / 124);
+    let walked = f.walk(spliced.root, length - child);
+    assert_eq!(walked.len(), (length - child) as usize);
+    assert_eq!(walked[0].0, 0);
+    assert_eq!(
+        walked.iter().map(|(_, piece)| piece.length).sum::<u64>(),
+        length - child
+    );
 }
 
 #[test]

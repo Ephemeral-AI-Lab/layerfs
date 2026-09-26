@@ -25,8 +25,9 @@ use std::time::{Duration, Instant};
 const LEAF_RECORDS: usize = (PAGE - metadata_pages::HEADER) / RECORD;
 /// Branch capacity in child references.
 const BRANCH_CHILDREN: usize = (PAGE - metadata_pages::HEADER) / ChildRef::BYTES;
-/// Declared structural ceiling. The tree is canonical — every non-root branch
-/// keeps at least two children — so its height only grows with the extent count.
+/// Declared structural ceiling. Every branch keeps at least one child, and only
+/// a fold that collapses a node leaves it with one, so the tree's height is a
+/// function of its extent count and never of its edit history.
 const MAX_HEIGHT: u8 = metadata_pages::LEVEL_LIMIT;
 
 /// One page store behind the extent-sequence traversal. In production this is
@@ -391,7 +392,7 @@ pub fn replace<S: PieceStore + ?Sized>(
             level: 0,
         }
     } else {
-        let (rebuilt, covered) = walk.descend(old, splice, 0, 0)?;
+        let (rebuilt, covered) = walk.descend(old, splice, 0, 0, true)?;
         if covered != splice.start {
             return Err(WorkspaceError::Io);
         }
@@ -534,13 +535,17 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
     /// Folds one subtree in order, answering the pages that replace it at its
     /// own level. `lower` is the subtree's logical start and `source` the byte
     /// offset its first `Base` extent reads from; both are carried so a leaf
-    /// can tell where the replaced interval begins and ends.
+    /// can tell where the replaced interval begins and ends. `top` marks the
+    /// sequence's own root, which answers at whatever level its content still
+    /// needs: a root that collapses to one page loses a level, while an inner
+    /// node keeps its own so every leaf stays at the same depth.
     fn descend(
         &mut self,
         page: PageRef,
         splice: Splice,
         lower: u64,
         source: u64,
+        top: bool,
     ) -> Result<(Level, u64), WorkspaceError> {
         let bytes = self.store.read(page, self.window)?;
         let length = metadata_pages::piece_body_length(&bytes)?;
@@ -626,14 +631,12 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                     level.append(&mut self.leaves);
                     level.push(child);
                 } else {
-                    let (nested, _) = self.descend(child.page, splice, covered, reads)?;
+                    let (nested, _) = self.descend(child.page, splice, covered, reads, false)?;
                     if nested.level != branch_level - 1 {
-                        // A folded child that no longer fills its own level
-                        // would leave this branch's children at two depths.
-                        // Rebuilding that needs rebalancing across siblings,
-                        // which this splice does not do, so it refuses here
-                        // instead of publishing a tree its own cursor cannot
-                        // read. The level-aware balance work in #248 owns it.
+                        // `descend` answers at the level of the node it
+                        // replaced, so this cannot happen; a mismatch would
+                        // publish children at two depths and is refused rather
+                        // than written.
                         return Err(WorkspaceError::Capacity);
                     }
                     level.extend(nested.pages);
@@ -649,7 +652,11 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             // to this level before the pages above it are written.
             self.close_leaf()?;
             level.append(&mut self.leaves);
-            let rebuilt = pack_level(self.store, level, branch_level - 1, self.window)?;
+            let rebuilt = if top {
+                pack_level(self.store, level, branch_level - 1, self.window)?
+            } else {
+                lift(self.store, level, branch_level, self.window)?
+            };
             // The merge point the parent folds at: the subtree's end, or the
             // interval's start when the subtree reaches past it.
             Ok((rebuilt, covered.min(splice.start)))
@@ -827,14 +834,66 @@ impl RootOwner {
 /// and its callers stay on one module path.
 pub use super::metadata_cursor::{cursor, piece_at, Cursor};
 
+/// Answers one rebuilt node at its own declared level.
+///
+/// `children` are the node's rebuilt children, every one of them at
+/// `level - 1`. `pack_level` writes the branch pages above them, which answers
+/// at `level` as soon as it has two children to place. A fold can leave a node
+/// with one child, or with none at all, when the interval it replaced covered
+/// the whole node: the collapse is repaired here rather than refused.
+///
+/// Nothing to place is answered as an empty level, so the parent drops the
+/// node. A single child is lifted inside one branch page of its own level, so
+/// every path from the root to a leaf keeps the same depth: a sibling that did
+/// not collapse must not end up beside a page one level shallower. The lifted
+/// page replaces the node one for one, so a collapse never adds a page to the
+/// tree and never grows its height. Rebalancing the collapsed child against a
+/// sibling would also restore the two-child shape at the cost of reading and
+/// rewriting that sibling's children, and it can still leave a node with one
+/// child when the whole tree holds only three of them; preserving the level is
+/// what the cursor and every later splice actually require.
+fn lift<S: PieceStore + ?Sized>(
+    store: &S,
+    mut children: Vec<ChildRef>,
+    level: u8,
+    window: &mut Window,
+) -> Result<Level, WorkspaceError> {
+    if level == 0 {
+        return Err(WorkspaceError::Io);
+    }
+    if children.len() > 1 {
+        return pack_level(store, children, level - 1, window);
+    }
+    let Some(child) = children.pop() else {
+        return Ok(Level {
+            pages: Vec::new(),
+            level,
+        });
+    };
+    if child.length == 0 {
+        return Err(WorkspaceError::Io);
+    }
+    let incarnation = store.incarnation();
+    let page = store.write(level, window, |r, bytes| {
+        metadata_pages::encode_pieces_branch(incarnation, r, level, &[child], bytes).map(|()| r)
+    })?;
+    Ok(Level {
+        pages: vec![ChildRef {
+            page,
+            length: child.length,
+        }],
+        level,
+    })
+}
+
 /// Writes the branch levels above `lower`, whose pages all declare
 /// `child_level`. The result is one page at the level above them, or, when the
 /// children collapse to a single page, that page at its own level.
 ///
 /// Chunk boundaries are balanced rather than greedy: 249 pages split into 125
-/// and 124, never 248 and a single child. Every branch keeps at least two
-/// children, which is what the page codec requires and what keeps the tree's
-/// height a function of its extent count.
+/// and 124, never 248 and a single child. A level of two or more pages therefore
+/// becomes branches of two or more children, which is what `lift` relies on to
+/// tell a normal rebuild from a collapsed node.
 fn pack_level<S: PieceStore + ?Sized>(
     store: &S,
     mut lower: Vec<ChildRef>,

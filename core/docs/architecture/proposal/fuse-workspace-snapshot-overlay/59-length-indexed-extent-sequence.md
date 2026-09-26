@@ -59,8 +59,10 @@ identity and an 8-byte subtree logical length. Levels are **relative**: a branch
 directly above the leaves declares `1`, and every branch declares exactly one
 below its parent, so the root declares the tree's height. A reader accepts a
 root at any declared level `1 ..= 7` and requires each deeper branch to declare
-one below its parent. Every non-root branch keeps at least two children, so the
-tree is canonical and its height is exactly what the extent count requires.
+one below its parent. A branch holds at least one child. Ordinary packing gives
+every branch two or more children, so the tree is canonical and its height is
+exactly what the extent count requires; a fold that replaces a whole node
+leaves it with one, which is lifted rather than refused ([§8](#8-collapsed-node-lifting-2026-09-26-248-phase-2)).
 
 `MAX_EXTENT` is `2^24 - 1`. A larger extent is stored as several adjacent parts,
 which is a page boundary and never a new logical byte. The declared level
@@ -191,14 +193,10 @@ parse, so the whole sequence was unreadable at the maximum the format claims to
 represent. The bound is now `MAX_FILE`. One base read of exactly 4 GiB
 round-trips as 257 records and reads back byte-exact.
 
-**Still open in this slice.** A fold that replaces an entire sibling subtree
-with a single page leaves that child below its own level. Rebuilding it needs
-rebalancing across siblings (borrow or merge), which this change does not
-implement: such a splice is **refused** with `Capacity` rather than publishing a
-tree whose children sit at two depths. The condition is a whole branch level of
-one child being replaced at once, so a narrow write anywhere in a tall file is
-unaffected; the level-aware balance work in
-[#248](https://github.com/EasyAI-Lab/layerfs/issues/248) owns closing it.
+**Left open in this slice.** A fold that replaces an entire sibling subtree
+with a single page left that child below its own level and was **refused** with
+`Capacity` rather than publishing a tree whose children sit at two depths. [§8](#8-collapsed-node-lifting-2026-09-26-248-phase-2)
+closes it by lifting the collapsed node instead.
 
 **Counted evidence.** Through the page-format-identical in-memory store the
 external tests use: 4,097 separated one-byte runs read back exactly and one
@@ -206,3 +204,57 @@ narrow splice reads 2 and writes 2 pages; 65,536 separated runs make 529 leaf
 pages and one narrow splice reads 3 and writes 3 pages; 249 leaf pages pack into
 branches every one of which holds at least two children. These are work counts
 from the same traversal the mounted path uses, not a latency or capacity claim.
+
+## 8. Collapsed-node lifting (2026-09-26, #248 phase 2)
+
+Written against the source this section is committed with, on top of the
+[§7](#7-level-preserving-rebuild-and-balanced-packing-2026-09-26-248-phase-2)
+rebuild. It closes the `Capacity` refusal §7 records as still open. No
+canonical Store format, file format version or public API changes.
+
+**The refusal.** §7 makes `descend` answer at the level of the node it replaced,
+which is what keeps every leaf at one depth. A node whose rebuilt children
+number one or zero cannot answer at its own level: `pack_level` answers with the
+single page it was given, one level below, and the parent refused the splice
+with `Capacity` rather than hang a shallower page beside its siblings. That
+happens when one fold replaces the whole content of a subtree — a large
+truncation, a range rewrite covering a branch, or a coarse rewrite of a
+fragmented file. It is reachable through ordinary POSIX calls and it refused a
+file the format can represent.
+
+**The repair.** `lift` answers one rebuilt inner node at its own declared level
+(§2 now states the rule this needs):
+
+| Rebuilt children | Answer |
+| --- | --- |
+| two or more | `pack_level` writes the branch pages above them, as before. |
+| exactly one | that child is lifted inside one branch page of its own level: a branch with one child. |
+| none | an empty level, so the parent drops the node. |
+
+The lifted page replaces the node one for one, so a collapse neither adds a page
+to the tree nor changes its height, and a repeated collapse over the same range
+rewrites the same single page instead of stacking another level. The root is the
+one node that does not lift: `replace` passes it down as the sequence's own
+root, and a root that collapses to a single page simply adopts it and loses a
+level.
+
+Rebalancing the collapsed child against a sibling — borrowing one of the
+sibling's children, or merging both into balanced nodes — also restores a
+two-child shape, at the cost of reading and rewriting that sibling's subtree.
+It cannot restore it at all when the tree holds three pages in total: two
+children cannot be spread over three pages without leaving one node with one
+child. Preserving the level is what the cursor, the encoder and every later
+splice actually require, so the smaller repair is the one that holds for every
+count.
+
+**Counted evidence.** Through the page-format-identical in-memory store: a
+two-level tree of 249 leaf pages folds its whole first level-1 child (125 leaf
+pages, 15,500 bytes) into one page, which is lifted, and the tree stays
+height-uniform with 125 leaves and the same 30,876 bytes readable in order; a
+second fold over the same child keeps exactly those 125 leaves and one lifted
+page rather than adding a level; deleting that whole child instead answers with
+no page, drops the node and lets the root lose a level, leaving the untouched
+124 leaf pages readable. Every case checks that each branch's children declare
+exactly one level below their parent and that the earlier generation still reads
+what it published. These are structural and work counts from the same traversal
+the mounted path uses, not a capacity or latency claim.
