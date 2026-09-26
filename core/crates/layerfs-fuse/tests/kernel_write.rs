@@ -99,7 +99,7 @@ mod linux {
     #[ignore = "requires real privileged Linux FUSE and native service"]
     fn kernel_write_no_range_ioctl() {
         let f = Fixture::new(Gate::None);
-        let data = data(&f, Some(8192));
+        let data = data(&f, None);
         let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
         let file = open_mounted(&f, "data.bin", false);
         let mut request = [0_u8; 88];
