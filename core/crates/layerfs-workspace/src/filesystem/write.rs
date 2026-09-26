@@ -468,7 +468,11 @@ impl Workspace {
             }
         }
         self.maintain_backing(deadline)?;
-        let _writer = host.writer()?;
+        // The mounted publication waits for a current holder instead of
+        // refusing: reconciliation holds the gate only for its two short
+        // ordering points, and that microsecond overlap must never surface as
+        // `EBUSY` to a shell command.
+        let _writer = host.writer_until(deadline)?;
         let (expected_revision, generation, dirty, old_root, needs_completion, frozen, append) = {
             let s = self.state()?;
             self.available(&s)?;

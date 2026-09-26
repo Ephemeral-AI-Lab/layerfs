@@ -173,12 +173,14 @@ impl Workspace {
             // covers this position, reads only the pages on its path, and
             // derives the extent's logical start from those pages.
             let (start, piece) = {
+                // The mounted read path waits for a current holder instead of
+                // refusing, for the same reason as the mounted publication.
                 let _view = self
                     .host
                     .metadata
                     .as_ref()
                     .ok_or(WorkspaceError::Unsupported)?
-                    .writer()?;
+                    .writer_until(deadline)?;
                 let mut lease = host.window(1, 3)?;
                 root.arena.piece_at(
                     inode.pieces,

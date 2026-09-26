@@ -7,7 +7,12 @@ mod linux {
     use super::support::*;
     use layerfs_bridge::contract::*;
     use layerfs_workspace::*;
-    use std::time::{Duration, Instant};
+    use std::{
+        fs::File,
+        os::unix::fs::FileExt,
+        process::Command,
+        time::{Duration, Instant},
+    };
 
     fn check(id: &str) {
         println!("COMMIT_CHECK {id} PASS");
@@ -254,6 +259,93 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "requires privileged mounted FUSE and commit_staged_route.py"]
+    fn commit_mounted_successor() {
+        let f = Fixture::new(Gate::CommitReply);
+        let before = snapshot(&f);
+        let data = attr(f.native.attributes(before.effective_root, b"data.bin"));
+        let old_tail = f.native.bytes(data.1, data.2 - 1, 1);
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().to_path_buf();
+        let append = |script: &str| {
+            let output = Command::new("/bin/sh")
+                .arg("-c")
+                .arg(script)
+                .current_dir(&path)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        append("set -eu; printf A >> data.bin");
+        let stage_a = f.workspace.stage(deadline()).unwrap();
+        let ws = f.workspace.clone();
+        let selected = stage_a.clone();
+        let committing = std::thread::spawn(move || ws.commit_staged(&selected, deadline()));
+        f.native.wait_commit();
+        append("set -eu; printf B >> data.bin");
+        let file = File::open(path.join("data.bin")).unwrap();
+        let mut bytes = [0; 2];
+        assert_eq!(file.read_at(&mut bytes, data.2).unwrap(), 2);
+        assert_eq!(&bytes, b"AB");
+        drop(file);
+        f.native.release_commit();
+        let first = committing.join().unwrap().unwrap();
+        let first_root = committed(&f, &stage_a, &first).root;
+        let first_file = attr(f.native.attributes(first_root, b"data.bin"));
+        assert_eq!(first_file.2, data.2 + 1);
+        assert_eq!(f.native.bytes(first_file.1, data.2, 1), b"A");
+
+        let stage_b = f.workspace.stage(deadline()).unwrap();
+        {
+            let mut observed = f.native.observations.lock().unwrap();
+            observed.commit_entered = false;
+            observed.commit_released = false;
+        }
+        let ws = f.workspace.clone();
+        let selected = stage_b.clone();
+        let committing = std::thread::spawn(move || ws.commit_staged(&selected, deadline()));
+        f.native.wait_commit();
+        let writing = std::thread::spawn({
+            let path = path.clone();
+            move || {
+                Command::new("/bin/sh")
+                    .arg("-c")
+                    .arg("set -eu; for c in 0 1 2 3 4 5 6 7; do printf %s \"$c\" >> data.bin; done")
+                    .current_dir(path)
+                    .output()
+                    .unwrap()
+            }
+        });
+        f.native.release_commit();
+        let second = committing.join().unwrap().unwrap();
+        let output = writing.join().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let second_root = committed(&f, &stage_b, &second).root;
+        let second_file = attr(f.native.attributes(second_root, b"data.bin"));
+        assert_eq!(second_file.2, data.2 + 2);
+        assert_eq!(f.native.bytes(second_file.1, data.2, 2), b"AB");
+        let file = File::open(path.join("data.bin")).unwrap();
+        let mut live = [0; 10];
+        assert_eq!(file.read_at(&mut live, data.2).unwrap(), 10);
+        assert_eq!(&live, b"AB01234567");
+        drop(file);
+        let old_head = attr(f.native.attributes(before.effective_root, b"data.bin"));
+        assert_eq!(old_head.2, data.2);
+        assert_eq!(f.native.bytes(old_head.1, data.2 - 1, 1), old_tail);
+        assert_eq!(f.native.bytes(first_file.1, data.2, 1), b"A");
+        mount.unmount(deadline()).unwrap();
+        check("mounted-three-generation-convergence-keeps-old-heads-and-ordered-writes");
+    }
+
+    #[test]
     #[ignore = "requires commit_staged_route.py live native service"]
     fn commit_selectors() {
         let f = Fixture::new(Gate::None);
@@ -377,6 +469,11 @@ mod linux {
         let f = Fixture::new(Gate::CommitCompletionFailure);
         let data = f.lookup(b"data.bin");
         f.edit(b"data.bin", 10, 14, b"GGGG");
+        let handle = f
+            .workspace
+            .open(data.serial, ReferenceScope::Local)
+            .unwrap();
+        let old_reply = f.workspace.read(handle, 10, 4, deadline()).unwrap();
         let stage = f.workspace.stage(deadline()).unwrap();
         f.edit(b"data.bin", 10, 14, b"LIVE");
         let restore = RestoreLimit;
@@ -399,10 +496,29 @@ mod linux {
         let actual = snapshot(&f);
         assert_eq!(actual.effective_root, stage.stage().candidate_root);
         assert_eq!(f.workspace.getattr(data.serial).unwrap().size, data.size);
-        retained_failure(&f, &stage);
         println!("COMMIT_FAILURE {failure:?}");
+        let calls = count_commits(&f);
+        let report = f.workspace.commit_staged(&stage, deadline()).unwrap();
+        committed(&f, &stage, &report);
+        assert_eq!(count_commits(&f), calls);
+        assert_eq!(
+            f.native.bytes(
+                attr(
+                    f.native
+                        .attributes(stage.stage().candidate_root, b"data.bin")
+                )
+                .1,
+                10,
+                4
+            ),
+            b"GGGG"
+        );
+        assert_eq!(f.read(handle, 10, 4), b"LIVE");
+        assert_eq!(old_reply.as_ref(), b"GGGG");
+        drop(old_reply);
         observe(&f);
-        check("known-C5-success-survives-native-reconciliation-failure");
+        close(&f, &[handle], &[data.serial]);
+        check("known-C5-success-retries-local-reconciliation-without-replay");
     }
 
     #[test]

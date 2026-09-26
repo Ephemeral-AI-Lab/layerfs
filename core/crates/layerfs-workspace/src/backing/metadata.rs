@@ -14,7 +14,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc, Mutex, Weak,
     },
-    time::Instant,
+    time::{Duration, Instant},
 };
 pub const CANDIDATE_BYTES: u64 = 137 * 4096;
 pub const ESCROW: u64 = 208 * 4096;
@@ -142,6 +142,28 @@ impl MetadataHost {
             host: self.clone(),
             _memory: memory,
         })
+    }
+    /// Acquires the writer gate, waiting deadline-bounded for a current holder.
+    ///
+    /// Every hold is short - one state read, one splice, one install - so a
+    /// caller that meets contention waits for the holder instead of refusing
+    /// with `Busy`: the Commit reconciliation's two ordering points and the
+    /// mounted mutation paths must never turn a microsecond overlap into an
+    /// `EBUSY` a shell command observes. The wait ends at the caller's own
+    /// operation deadline, never past it.
+    pub fn writer_until(self: &Arc<Self>, deadline: Instant) -> Result<Writer, WorkspaceError> {
+        loop {
+            match self.writer() {
+                Ok(writer) => return Ok(writer),
+                Err(WorkspaceError::Busy) => {
+                    if Instant::now() >= deadline {
+                        return Err(WorkspaceError::Deadline);
+                    }
+                    std::thread::sleep(Duration::from_micros(200));
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
     pub fn arena(
         self: &Arc<Self>,

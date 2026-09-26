@@ -1074,6 +1074,13 @@ allocate or install this local result does not undo a known successful remote
 Commit: retain that known outcome plus G/D1 and report incomplete local
 reconciliation. Do not re-submit the remote Commit or clean the old graph on a
 guess. Further submission remains blocked until exact local disposition is safe.
+The E-1 implementation (source parent `6bb143e91`, updated with this source
+change) builds from a pinned G+1 root outside the writer gate. It holds the gate
+at the input snapshot and at the final compare/install, and rebuilds if G+1
+moved. Only the converged tree is sealed. An explicit Stage/CommitStaged with a
+known C5 outcome and reconcile-phase local failure may repeat that local install
+through the same selector; the C5 token is never sent again. Unknown outcomes
+remain retained.
 The completion path must not clear a global dirty map, retarget a handle by
 pathname, refresh to someone else's latest Branch root, or drop a newer inode
 version because its
