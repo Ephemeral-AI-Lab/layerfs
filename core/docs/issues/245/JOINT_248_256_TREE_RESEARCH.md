@@ -147,7 +147,79 @@ A keyed leaf cell costs 4 B framing plus key and value. With a 16-byte or 32-byt
 
 The raw live-page column excludes the R result tree that Commit writes while saving each changed file. At 65,536 files that second tree adds about 6.152 MiB before ledgers, reservations, G1/G2 pins or canonical Store output. The global page count includes the dirty parent marker; omitting it undercounts the exact 65,536 boundary by one page.
 
-A 1 MiB **E-tree-only** allocation could densely hold roughly 27,071 16-byte names or 18,648 32-byte names; with one D and I record per new empty file, the same raw page budget holds roughly 4,004 or 3,762. A 1 MiB *whole private-backing quota* admits no first dirty mutation today because its upfront reservation is 1.348 MiB. Many directories with one file each consume at least one E root page per directory and therefore differ sharply from one wide directory. If every new file has a distinct one-byte payload, add 8 KiB per file plus custody ledger capacity: 1,025 such payloads already add about 8.0 MiB.
+A 1 MiB **E-tree-only** allocation could densely hold roughly 27,071 16-byte names or 18,648 32-byte names; with one D and I record per new empty file, the same raw page budget holds roughly 4,004 or 3,762. A 1 MiB *whole private-backing quota* admits no first dirty mutation today because its upfront reservation is 1.348 MiB. Many directories with one file each consume at least one E root page per directory and therefore differ sharply from one wide directory. A distinct one-byte payload adds 8 KiB **and its nonempty file needs at least one 4 KiB extent leaf**. For 1,025 such files with 16-byte names, 68 shared namespace pages, 1,025 file leaves, 1,025 payload custody slots and the payloads themselves imply at least 35 ledger pages and about **12.414 MiB** of tracked live backing before COW transients or ext4 directory/inode overhead. The in-flight Commit result tree adds about 0.102 MiB of pages. This corrects the earlier payload-only 8 MiB illustration; it did not include one extent leaf per populated file.
+
+### Mount, mutation and Commit are different disk costs
+
+A clean Workspace attach allocates host and Workspace state, including fixed
+node/handle/cookie tables, in **RAM**. It creates a mount directory and an
+incarnation-scoped private-backing directory, but does not copy the attached
+canonical namespace or file contents into private page/payload files. Reading
+an inherited file may fill process or OS cache; that cache is memory, not
+private-backing disk. The directories themselves have filesystem-specific
+inode/block overhead outside the tracked page formula. See
+[`WorkspaceHost::attach`](../../../crates/layerfs-workspace/src/runtime/host.rs),
+[`PayloadHost::initialize`](../../../crates/layerfs-workspace/src/backing/payload.rs),
+and [`MetadataHost::arena`](../../../crates/layerfs-workspace/src/backing/metadata.rs).
+
+```text
+Store C0: large canonical file and directory tree
+    | mount Workspace W
+    v
+W active root: Base -> C0       private backing: directories, no file copy
+    | one WRITE X
+    v
+W active R1: Base | Local(X)    private: P_X + extent/keyed pages + ledger
+    | Commit freezes R1; later WRITE Y enters R2
+    v
+G1 pinned R1; G2 active R2      private: shared pages + P_X + P_Y + new paths
+    | Commit publishes C1; G2 reanchors after known outcome
+    v
+Store C1 plus G2 Local(Y)       old private owners reclaim when last pin ends
+```
+
+| One accepted mutation | Incremental private-backing shape |
+| --- | --- |
+| Create an empty file | Inode, dirty identity and parent-name keyed cells; no file extent leaf or payload. Packed among other cells when directory/index pages have room. |
+| Create an empty directory | Directory record, dirty identity and parent-name binding; an empty child needs no content payload. Its first local binding or tombstone can require a separate 4 KiB E/T page. |
+| Write `b` bytes | One aligned Local payload (4 KiB header per 1 MiB segment plus 4 KiB-rounded data), a file-extent path and an inode/dirty keyed path, with ownership-ledger updates. Shared old pages are not recopied. |
+| Truncate/grow a sparse file | Zero/Base extents and metadata pages; a Zero range stores no corresponding private payload bytes. |
+| Rename or link within the mount | Changed parent bindings/tombstones and sometimes moved-inode metadata; file payload is shared, not copied. A base-resident directory move is still unsupported and is tracked by [#258](https://github.com/Ephemeral-AI-Lab/layerfs/issues/258). |
+| Remove a name or empty directory | Tombstone/keyed paths; an unreferenced Local payload and old pages reclaim only after all handles, roots and uncertain outcomes release them. Recursive removal performs many such mutations. |
+| POSIX copy into the mount | Reads its source, then writes all copied bytes as new Local payload. A cross-filesystem `mv` may also be implemented by the tool as copy+unlink; an in-mount rename does not copy bytes. |
+
+For one frozen final state, **physical live backing** is unique reachable
+4 KiB metadata pages plus ownership ledger files plus the aligned Local
+payload files in the formula above. **Quota headroom** also includes reserved
+candidate/Commit space; a first dirty mutation currently reserves 1.348 MiB
+even if its eventual physical files use only tens of KiB. **Cumulative disk
+write traffic** can be much larger than live backing because every accepted
+COW root publication writes new pages and ledger updates, then retires old
+ones. During Commit, G1 and later G2 can both pin different pages/payloads;
+shared pages are counted once. Service replay spools and canonical Store
+objects are additional disk outside Workspace private backing. None of these
+three quantities should be reported as another one.
+
+The following are *optimistic algebraic illustrations*, not admissions. They
+assume densely packed live trees, prompt reclaim, no older pinned generation,
+one 4 KiB private page per indicated leaf, 62 owner slots per 4 KiB ledger,
+and omit ext4 metadata, candidate transients and Store/spool bytes:
+
+| Shape | Payload files | Live private metadata and ledgers | Raw live backing illustration |
+| --- | ---: | ---: | ---: |
+| Existing canonical 500 MiB file, one 4 KiB overwrite | 8 KiB | Roughly one extent leaf, one keyed page and one ledger = 12 KiB | **~20 KiB**, not 500 MiB; quota still needs the first-mutation reserve. |
+| 1,025 new **empty** files in one directory, 16-byte names | 0 | 68 keyed pages + at least 2 ledgers = 280 KiB | **~0.273 MiB**; the Commit R result tree adds ~0.102 MiB temporarily. |
+| 1,025 new **one-byte** files in that directory | 1,025 × 8 KiB = 8.008 MiB | 68 keyed pages + 1,025 file leaves + at least 35 ledgers = 4.406 MiB | **~12.414 MiB**; R pages add ~0.102 MiB during Commit. |
+| One fresh 256 MiB file in 2,048 maximum-sized 128 KiB FUSE WRITEs | 256 MiB data + 8 MiB payload headers | ~18 file-tree pages, one keyed page and ~34 ledgers = ~0.207 MiB | **~264.21 MiB**. Smaller actual callback chunks raise header and extent overhead. |
+| One fresh 1 GiB file in 8,192 such WRITEs | 1 GiB data + 32 MiB payload headers | ~68 file-tree pages, one keyed page and ~134 ledgers = ~0.793 MiB | **~1,056.79 MiB**, already above today's shared 1 GiB private quota. |
+
+The currently configured 1 GiB private-backing quota belongs to one
+`WorkspaceHost` and is **shared across its Workspaces**; it is not a free
+1 GiB allocation for each mount. The 16 MiB host memory budget is shared
+there too. Actual FUSE WRITE size, name distribution, concurrent generations,
+ext4 metadata, page-cache growth and cleanup timing determine real high water.
+These figures must be checked with public-route backing status and filesystem
+allocation counters before being used as a capacity promise.
 
 The live keyed tree already has [find/update/next](../../../crates/layerfs-workspace/src/backing/metadata_index.rs), with maximum-key branch fences. Ordinary create uses a path-local keyed insertion. Current [directory deletion/rebind](../../../crates/layerfs-workspace/src/overlay/directories.rs) enumerates up to 128 names and rebuilds an E or T tree, so repeated updates can be quadratic in directory width. #256 needs path-local delete/rebalance, a persistent key cursor and a multilevel ordered builder. That builder must seal and transfer finished pages progressively: reconciliation currently reserves only 64 pages and 26 slot credits, and a RootOwner refuses its 129th temporary page. Those limits cannot build the roughly 3,521-page global tree in the 65,536-file example even with free quota. Its 128 dirty identities/names, 32 KiB prepared input, 256 active nodes, shallow keyed-tree level and 256-cell ordered builder are separate ceilings. The receiver and C1 also materialize rows. Service currently calls C1 with no ordering backing, so the reducer's first spill after 4,096 distinct pending serials fails; passing the existing FileBacking fixes that refusal but not the proportional receiver/C1 vectors and sets. Existing-base alias/cycle validation has a separate 4,096-visited-binding work limit that can block a wide directory rebind; it does not necessarily block fresh regular-file additions. The old prepared codec also uses u16 total counts, which refuse exactly 65,536 rows even if 128 and 32 KiB checks are removed. A 65,536-file one-directory input is about 6.69–7.69 MiB of prepared rows before frame overhead, but still needs a wide-count streamed format, bounded receiving state and charged ordering work.
 
