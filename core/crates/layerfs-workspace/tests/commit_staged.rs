@@ -516,6 +516,19 @@ mod linux {
         assert_eq!(f.read(handle, 10, 4), b"LIVE");
         assert_eq!(old_reply.as_ref(), b"GGGG");
         drop(old_reply);
+        let (next, _) = commit(&f);
+        assert_eq!(
+            f.native.bytes(
+                attr(
+                    f.native
+                        .attributes(next.stage().candidate_root, b"data.bin")
+                )
+                .1,
+                10,
+                4
+            ),
+            b"LIVE"
+        );
         observe(&f);
         close(&f, &[handle], &[data.serial]);
         check("known-C5-success-retries-local-reconciliation-without-replay");
