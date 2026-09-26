@@ -440,7 +440,6 @@ fn rooted(serial: u64, kind: u8, content: Root, metadata: Root, fresh: bool) -> 
     }
 }
 
-
 /// The exact totals of these rows.
 fn stream_totals(
     directories: &[DirectoryChange],
