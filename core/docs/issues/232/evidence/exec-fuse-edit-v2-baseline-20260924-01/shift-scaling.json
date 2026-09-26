@@ -1,0 +1,162 @@
+[
+  {
+    "blocks": 4,
+    "edit_ns": 81175583,
+    "moved_bytes": 522240,
+    "ns_per_block": 20293895.75,
+    "scenario_id": "delete-middle-4k-on-1mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 4,
+    "edit_ns": 75515042,
+    "moved_bytes": 522240,
+    "ns_per_block": 18878760.5,
+    "scenario_id": "replace-shrink-middle-4k-to-2k-on-1mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 4,
+    "edit_ns": 75009166,
+    "moved_bytes": 523264,
+    "ns_per_block": 18752291.5,
+    "scenario_id": "replace-grow-middle-2k-to-4k-on-1mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 4,
+    "edit_ns": 105851292,
+    "moved_bytes": 524288,
+    "ns_per_block": 26462823.0,
+    "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 8,
+    "edit_ns": 205883084,
+    "moved_bytes": 1048576,
+    "ns_per_block": 25735385.5,
+    "scenario_id": "prepend-head-4k-on-1mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 40,
+    "edit_ns": 2731504917,
+    "moved_bytes": 5240832,
+    "ns_per_block": 68287622.925,
+    "scenario_id": "delete-middle-4k-on-10mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 40,
+    "edit_ns": 2711581167,
+    "moved_bytes": 5240832,
+    "ns_per_block": 67789529.175,
+    "scenario_id": "replace-shrink-middle-4k-to-2k-on-10mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 40,
+    "edit_ns": 2810934041,
+    "moved_bytes": 5241856,
+    "ns_per_block": 70273351.025,
+    "scenario_id": "replace-grow-middle-2k-to-4k-on-10mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 40,
+    "edit_ns": 2733451708,
+    "moved_bytes": 5242880,
+    "ns_per_block": 68336292.7,
+    "scenario_id": "insert-middle-4k-on-10mib-ops-1-exec-v2",
+    "status": "COMPLETE"
+  },
+  {
+    "blocks": 80,
+    "edit_ns": 5003548709,
+    "moved_bytes": 10485760,
+    "ns_per_block": 62544358.8625,
+    "scenario_id": "prepend-head-4k-on-10mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 400,
+    "edit_ns": 5002628083,
+    "moved_bytes": 52426752,
+    "ns_per_block": 12506570.2075,
+    "scenario_id": "delete-middle-4k-on-100mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 400,
+    "edit_ns": 5003310500,
+    "moved_bytes": 52426752,
+    "ns_per_block": 12508276.25,
+    "scenario_id": "replace-shrink-middle-4k-to-2k-on-100mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 400,
+    "edit_ns": 5003439167,
+    "moved_bytes": 52427776,
+    "ns_per_block": 12508597.9175,
+    "scenario_id": "replace-grow-middle-2k-to-4k-on-100mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 400,
+    "edit_ns": 5002777459,
+    "moved_bytes": 52428800,
+    "ns_per_block": 12506943.6475,
+    "scenario_id": "insert-middle-4k-on-100mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 800,
+    "edit_ns": 5002074083,
+    "moved_bytes": 104857600,
+    "ns_per_block": 6252592.60375,
+    "scenario_id": "prepend-head-4k-on-100mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 2000,
+    "edit_ns": 5002944958,
+    "moved_bytes": 262141952,
+    "ns_per_block": 2501472.479,
+    "scenario_id": "delete-middle-4k-on-500mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 2000,
+    "edit_ns": 5003202625,
+    "moved_bytes": 262141952,
+    "ns_per_block": 2501601.3125,
+    "scenario_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 2000,
+    "edit_ns": 5003917583,
+    "moved_bytes": 262141952,
+    "ns_per_block": 2501958.7915,
+    "scenario_id": "replace-grow-middle-2k-to-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 2000,
+    "edit_ns": 5002840584,
+    "moved_bytes": 262141952,
+    "ns_per_block": 2501420.292,
+    "scenario_id": "replace-shrink-middle-4k-to-2k-on-500mib-ops-1-exec-v2",
+    "status": "FAIL"
+  },
+  {
+    "blocks": 4000,
+    "edit_ns": 5004684542,
+    "moved_bytes": 524283904,
+    "ns_per_block": 1251171.1355,
+    "scenario_id": "prepend-head-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+    "status": "FAIL"
+  }
+]

@@ -151,6 +151,17 @@ pub struct DiagProfile {
     pub finish_drop_ns: u64,
     /// The whole `SaveOperation::finish` call, from entry to return.
     pub finish_call_ns: u64,
+    /// Objects and canonical bytes still in the batch at finish entry.
+    pub finish_batch_objects: u64,
+    pub finish_batch_bytes: u64,
+    /// Private index sizes immediately before separate postcommit copies.
+    pub finish_pool_entries: u64,
+    pub finish_pool_bytes: u64,
+    pub finish_candidate_entries: u64,
+    pub finish_candidate_bytes: u64,
+    /// A poisoned disposable index lock prevented that postcommit copy.
+    pub finish_pool_clone_skipped: u64,
+    pub finish_candidate_clone_skipped: u64,
     /// The object-row `INSERT` of one seal, separate from the pack write that
     /// shares its bucket.
     pub insert_objects_ns: u64,
@@ -211,6 +222,14 @@ impl DiagProfile {
             finish_drain_ns,
             finish_drop_ns,
             finish_call_ns,
+            finish_batch_objects,
+            finish_batch_bytes,
+            finish_pool_entries,
+            finish_pool_bytes,
+            finish_candidate_entries,
+            finish_candidate_bytes,
+            finish_pool_clone_skipped,
+            finish_candidate_clone_skipped,
             insert_objects_ns,
             release_connection_ns,
             release_compression_ns,

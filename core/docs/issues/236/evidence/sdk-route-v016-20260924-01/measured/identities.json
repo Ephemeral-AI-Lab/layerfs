@@ -1,0 +1,15 @@
+{
+  "cache_contract": "uncontrolled OS/source cache; diagnostic only",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "image_id": "sha256:cabfe428d4db68e122ed3f7f40fe9ca0dd7cf0693e8b283b3259faf1cbe1e6ab",
+  "probe_binary_sha256": "e4465fa6c3161c2d8dbc1523a0572d3f82b45359c792b449ca3c0ddfa59f085a",
+  "probe_source_sha256": "32644fcdc591c5041b74c65489139021d4863191c8c2a49f370aa60bda133c6e",
+  "route": "legacy managed container create+start+connect -> FUSE session create -> Exec+drain -> Commit -> End(Clean)",
+  "sample_count": 1,
+  "source_commit": "44cf748486863ab7c21ca47e731bd88e2b9a7b4a",
+  "source_status": "",
+  "source_tag": "v0.1.6",
+  "source_tree": "3e022b48a31e06d4e072950c4396f0b2c70d56dd",
+  "telemetry_run": 158346226275044432702605434904043184547,
+  "telemetry_source_commit": "cd8a25800e201927571ccc469344068655db7599"
+}

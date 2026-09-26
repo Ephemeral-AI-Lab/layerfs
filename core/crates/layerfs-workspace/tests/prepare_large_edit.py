@@ -49,7 +49,7 @@ def main():
         raise TimeoutError('large fixture preparation exceeded its 60-second budget')
     signal.signal(signal.SIGALRM, expired); signal.alarm(60)
     try:
-        report['binary_sha256'] = {name: sha(route.BIN / name) for name in ('layerfs-daemon', 'layerfs-service', 'examples/public_key')}
+        report['binary_sha256'] = {name: sha(route.BIN / name) for name in ('layerfs-daemon', 'layerfs-server', 'examples/public_key')}
         data = args.output / 'service'; data.mkdir()
         report['store_master_sha256'] = sha(args.store_master)
         shutil.copyfile(args.store_master, data / 'store.sqlite')
@@ -63,13 +63,14 @@ def main():
                    LAYERFS_HISTORY_BINDING='pair1-mounted-read', LAYERFS_HISTORY_INCARNATION='1',
                    LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_TELEMETRY='off',
                    LAYERFS_CONSTRUCTION_WORKERS='1')
-        service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+        service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         readiness = mounted.line_until(service, timeout=10)
         assert 'ready' in readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
         daemon, _ = route.start_daemon(data, port, client_key, server_public, 1, None)
-        daemon.stdin.write(route.begin(1, 3, struct.pack('>Q', SIZE)))
+        daemon.stdin.write(route.begin(1, 20, route.save_file_metadata(SIZE)))
+        daemon.stdin.write(route.frame(3, 1, struct.pack('>QQQ', 1, 0, SIZE)))
         digest = hashlib.sha256()
         cycle = bytes(range(251)) * 67
         for offset in range(0, SIZE, route.FRAME_BYTES):
@@ -77,7 +78,7 @@ def main():
             chunk = cycle[offset % 251:offset % 251 + length]
             assert len(chunk) == length
             digest.update(chunk); daemon.stdin.write(route.frame(3, 1, chunk))
-        daemon.stdin.write(route.frame(4, 1, struct.pack('>Q', SIZE))); daemon.stdin.flush()
+        daemon.stdin.write(route.frame(4, 1, struct.pack('>Q', SIZE + 24))); daemon.stdin.flush()
         kind, body = route.receive(daemon, timeout=10)
         assert kind == 6 and body[0] == 2, body
         content = body[1:33]; report['input_sha256'] = digest.hexdigest(); report['file_root'] = content.hex()

@@ -1,0 +1,641 @@
+{
+  "case_order": [
+    "mixed-refresh-v1",
+    "overwrite-4k-v1",
+    "repeated-one-byte-v1",
+    "failed-command-no-commit-v1"
+  ],
+  "generator_sha256": "b7f623bc5606c05e5a5cb557023c5e1477d4ad1f50d1c6af0bb4b6b6afa96e98",
+  "rows": [
+    {
+      "callback_status_counts": {
+        "getattr": 198,
+        "lookup": 159,
+        "open": 1,
+        "other": 0,
+        "range_edit": 0,
+        "range_state": 0,
+        "read": 0,
+        "readdir": 0,
+        "rename": 2,
+        "setattr": 0,
+        "write": 36
+      },
+      "cleanup_status": "PASS",
+      "commit_ns": 0,
+      "complete_command_wall_ns": 7072205916,
+      "daemon_operations_lft1": [
+        {
+          "clock": "local-monitor",
+          "closed_ns": 1282983667,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            200000000,
+            150000000
+          ],
+          "first_ns": 121523166,
+          "gaps": 0,
+          "incarnation": 13611,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 12287042,
+          "last_ns": 1280556417,
+          "last_probe_ns": 22209,
+          "namespace": 17807997691647538993,
+          "opened_ns": 128268250,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "98e95e2d3daa5f30959a69e7040e61f7",
+          "sampled_max_rss": 38518784,
+          "samples": 117,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6111750,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 1148593918,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 1154714001,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      ],
+      "driver_detail": "Exec status Some(1): mv: can't rename 'package-lock.json.next': I/O error\n",
+      "driver_exit_code": 1,
+      "exec_ns": 1156069583,
+      "finish_substep_lines": 0,
+      "functional_status": "FAIL",
+      "host_operation_lft1": {
+        "clock": "local-monitor",
+        "closed_ns": 1461287792,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          179594000,
+          226422000
+        ],
+        "first_ns": 301436709,
+        "gaps": 0,
+        "incarnation": 1228400101262,
+        "key": 243000,
+        "kind": "operation",
+        "largest_gap_ns": 12280583,
+        "last_ns": 1460685250,
+        "last_probe_ns": 5500,
+        "namespace": 7,
+        "opened_ns": 305208459,
+        "pid": 85242,
+        "resource_status": "sampled",
+        "role": 1,
+        "run": "98e95e2d3daa5f30959a69e7040e61f7",
+        "sampled_max_rss": 15417344,
+        "samples": 117,
+        "scope": "process-shared",
+        "selected": 3,
+        "source": "getrusage+libproc",
+        "success": false,
+        "timing": {
+          "children": [
+            {
+              "children": [],
+              "elapsed_ns": 1156069834,
+              "name": "exec"
+            }
+          ],
+          "elapsed_ns": 1156076667,
+          "name": "sdk.shell_package",
+          "outcome": "error"
+        },
+        "v": 1
+      },
+      "piece_count_lines": 0,
+      "piece_page_lines": 0,
+      "raw_sha256": {
+        "driver.stderr": "7d12a67b8a9ff2222aa19ab901cfefa26f2cc667607c516e7a583aebdd5a6789",
+        "driver.stdout": "bda5c5372eb6f011e84a37a0ded9804db9faddc318b23b29d20d780f0c876f64",
+        "receipt.json": "34097a0b8595cdf23f1b1a58641a2b9a4a4bfdff1aeadbefcecf9124e9325c83"
+      },
+      "row_status": "FAIL",
+      "scenario_id": "mixed-refresh-v1",
+      "verifier": {
+        "command": [
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/case.verify",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/store.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/mixed-refresh-v1/history.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/package.tsv",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/mixed-refresh-v1.tsv"
+        ],
+        "exit_code": 1,
+        "status": "FAIL",
+        "wall_ns": 11186458
+      }
+    },
+    {
+      "callback_status_counts": {
+        "getattr": 4,
+        "lookup": 1,
+        "open": 1,
+        "other": 0,
+        "range_edit": 0,
+        "range_state": 0,
+        "read": 0,
+        "readdir": 0,
+        "rename": 0,
+        "setattr": 0,
+        "write": 1
+      },
+      "cleanup_status": "PASS",
+      "commit_ns": 24186291,
+      "complete_command_wall_ns": 909020500,
+      "daemon_operations_lft1": [
+        {
+          "clock": "local-monitor",
+          "closed_ns": 141516708,
+          "concurrency": 1,
+          "cpu_shared_ns": [
+            20000000,
+            10000000
+          ],
+          "first_ns": 120525625,
+          "gaps": 0,
+          "incarnation": 14321,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 10175042,
+          "last_ns": 140553042,
+          "last_probe_ns": 20250,
+          "namespace": 14522064863659147379,
+          "opened_ns": 124838833,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "343d24062d6038d986c808a9a94c71d2",
+          "sampled_max_rss": 35913728,
+          "samples": 3,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6576833,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 10086167,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 16676834,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        },
+        {
+          "clock": "local-monitor",
+          "closed_ns": 165701333,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            0,
+            0
+          ],
+          "first_ns": 140553042,
+          "gaps": 0,
+          "incarnation": 14321,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 11188708,
+          "last_ns": 160572458,
+          "last_probe_ns": 26167,
+          "namespace": 14522064863659147379,
+          "opened_ns": 143614375,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "343d24062d6038d986c808a9a94c71d2",
+          "sampled_max_rss": 36044800,
+          "samples": 3,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 22076917,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 22086125,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        }
+      ],
+      "driver_detail": "",
+      "driver_exit_code": 0,
+      "exec_ns": 17845333,
+      "finish_substep_lines": 0,
+      "functional_status": "PASS",
+      "host_operation_lft1": {
+        "clock": "local-monitor",
+        "closed_ns": 340037042,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          5822000,
+          8475000
+        ],
+        "first_ns": 291981375,
+        "gaps": 0,
+        "incarnation": 1228570439896,
+        "key": 243000,
+        "kind": "operation",
+        "largest_gap_ns": 10047417,
+        "last_ns": 332021459,
+        "last_probe_ns": 15833,
+        "namespace": 7,
+        "opened_ns": 297999209,
+        "pid": 85371,
+        "resource_status": "sampled",
+        "role": 1,
+        "run": "343d24062d6038d986c808a9a94c71d2",
+        "sampled_max_rss": 31064064,
+        "samples": 5,
+        "scope": "process-shared",
+        "selected": 3,
+        "source": "getrusage+libproc",
+        "success": true,
+        "timing": {
+          "children": [
+            {
+              "children": [],
+              "elapsed_ns": 17846167,
+              "name": "exec"
+            },
+            {
+              "children": [],
+              "elapsed_ns": 24186542,
+              "name": "commit"
+            }
+          ],
+          "elapsed_ns": 42035083,
+          "name": "sdk.shell_package"
+        },
+        "v": 1
+      },
+      "piece_count_lines": 0,
+      "piece_page_lines": 0,
+      "raw_sha256": {
+        "driver.stderr": "ef5ad64a966b8b6e783d0c71c79eecd51839e8d4acdfffb55e8f2b8755eb3a38",
+        "driver.stdout": "a17cf1a0e0dd8bd9692c532c2c0ab4a8a9efdb929e3c888f5a7776a714b868b7",
+        "receipt.json": "305e3b35d5cc3b531748d6e82e0d23684dcebd4b4bd67f8f0b7d0b68ca1ce1d5"
+      },
+      "row_status": "INELIGIBLE",
+      "scenario_id": "overwrite-4k-v1",
+      "verifier": {
+        "command": [
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/overwrite-4k-v1/case.verify",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/overwrite-4k-v1/store.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/overwrite-4k-v1/history.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/large.tsv",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/overwrite-4k-v1.tsv"
+        ],
+        "exit_code": 0,
+        "status": "PASS",
+        "wall_ns": 166071250
+      }
+    },
+    {
+      "callback_status_counts": {
+        "getattr": 34,
+        "lookup": 16,
+        "open": 16,
+        "other": 0,
+        "range_edit": 0,
+        "range_state": 0,
+        "read": 0,
+        "readdir": 0,
+        "rename": 0,
+        "setattr": 0,
+        "write": 16
+      },
+      "cleanup_status": "PASS",
+      "commit_ns": 33894583,
+      "complete_command_wall_ns": 1119838584,
+      "daemon_operations_lft1": [
+        {
+          "clock": "local-monitor",
+          "closed_ns": 339642125,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            50000000,
+            30000000
+          ],
+          "first_ns": 130586333,
+          "gaps": 0,
+          "incarnation": 14430,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 10475583,
+          "last_ns": 330977791,
+          "last_probe_ns": 17791,
+          "namespace": 13847346607020008765,
+          "opened_ns": 132136500,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "75e657d66cb523bececd4d5fb50f216e",
+          "sampled_max_rss": 35958784,
+          "samples": 21,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6409791,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 201080500,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 207504250,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        },
+        {
+          "clock": "local-monitor",
+          "closed_ns": 373661500,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            0,
+            0
+          ],
+          "first_ns": 340471250,
+          "gaps": 0,
+          "incarnation": 14430,
+          "key": 6,
+          "kind": "operation",
+          "largest_gap_ns": 11764041,
+          "last_ns": 370652583,
+          "last_probe_ns": 33750,
+          "namespace": 13847346607020008765,
+          "opened_ns": 341111750,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "75e657d66cb523bececd4d5fb50f216e",
+          "sampled_max_rss": 36089856,
+          "samples": 4,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 32013000,
+                "name": "daemon.commit"
+              }
+            ],
+            "elapsed_ns": 32549125,
+            "name": "WorkspaceCommit"
+          },
+          "v": 1
+        }
+      ],
+      "driver_detail": "",
+      "driver_exit_code": 0,
+      "exec_ns": 208897833,
+      "finish_substep_lines": 0,
+      "functional_status": "PASS",
+      "host_operation_lft1": {
+        "clock": "local-monitor",
+        "closed_ns": 549800167,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          26067000,
+          31475000
+        ],
+        "first_ns": 300814167,
+        "gaps": 0,
+        "incarnation": 1228596563822,
+        "key": 243000,
+        "kind": "operation",
+        "largest_gap_ns": 12090541,
+        "last_ns": 540895625,
+        "last_probe_ns": 9834,
+        "namespace": 7,
+        "opened_ns": 307002625,
+        "pid": 85499,
+        "resource_status": "sampled",
+        "role": 1,
+        "run": "75e657d66cb523bececd4d5fb50f216e",
+        "sampled_max_rss": 34553856,
+        "samples": 25,
+        "scope": "process-shared",
+        "selected": 3,
+        "source": "getrusage+libproc",
+        "success": true,
+        "timing": {
+          "children": [
+            {
+              "children": [],
+              "elapsed_ns": 208898042,
+              "name": "exec"
+            },
+            {
+              "children": [],
+              "elapsed_ns": 33894875,
+              "name": "commit"
+            }
+          ],
+          "elapsed_ns": 242796209,
+          "name": "sdk.shell_package"
+        },
+        "v": 1
+      },
+      "piece_count_lines": 0,
+      "piece_page_lines": 0,
+      "raw_sha256": {
+        "driver.stderr": "9b6ab0e45797ee9784a3a67aad5aef1e8948ad80f16dab7631fa1d5a8aa91239",
+        "driver.stdout": "c29387cd616508b5e11d39f125f084532b10ee7e547d67e566be8833f77fb820",
+        "receipt.json": "1ac7a75cf486a08e385f893e7352cc1f03a5644151c9ce3c8b551f0fa31b90b7"
+      },
+      "row_status": "INELIGIBLE",
+      "scenario_id": "repeated-one-byte-v1",
+      "verifier": {
+        "command": [
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/case.verify",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/store.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/history.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/repeated.tsv",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/repeated-one-byte-v1.tsv"
+        ],
+        "exit_code": 0,
+        "status": "PASS",
+        "wall_ns": 95472792
+      }
+    },
+    {
+      "callback_status_counts": {
+        "getattr": 7,
+        "lookup": 4,
+        "open": 1,
+        "other": 0,
+        "range_edit": 0,
+        "range_state": 0,
+        "read": 0,
+        "readdir": 0,
+        "rename": 0,
+        "setattr": 1,
+        "write": 1
+      },
+      "cleanup_status": "PASS",
+      "commit_ns": 0,
+      "complete_command_wall_ns": 5872131416,
+      "daemon_operations_lft1": [
+        {
+          "clock": "local-monitor",
+          "closed_ns": 154443251,
+          "concurrency": 2,
+          "cpu_shared_ns": [
+            20000000,
+            10000000
+          ],
+          "first_ns": 120717042,
+          "gaps": 0,
+          "incarnation": 14552,
+          "key": 4,
+          "kind": "operation",
+          "largest_gap_ns": 10081875,
+          "last_ns": 150431834,
+          "last_probe_ns": 26333,
+          "namespace": 2689376991977098218,
+          "opened_ns": 127787792,
+          "pid": 1,
+          "resource_status": "sampled",
+          "role": 2,
+          "run": "a1c22dcfcc43c22d2b80da94ffedc2e1",
+          "sampled_max_rss": 36102144,
+          "samples": 4,
+          "scope": "process-shared",
+          "selected": 3,
+          "source": "procfs+sysconf",
+          "success": true,
+          "timing": {
+            "children": [
+              {
+                "children": [],
+                "elapsed_ns": 6338375,
+                "name": "daemon.exec_spawn"
+              },
+              {
+                "children": [],
+                "elapsed_ns": 20295000,
+                "name": "daemon.exec_output"
+              }
+            ],
+            "elapsed_ns": 26653500,
+            "name": "WorkspaceExec"
+          },
+          "v": 1
+        }
+      ],
+      "driver_detail": "",
+      "driver_exit_code": 0,
+      "exec_ns": 28023375,
+      "finish_substep_lines": 0,
+      "functional_status": "PASS",
+      "host_operation_lft1": {
+        "clock": "local-monitor",
+        "closed_ns": 323459416,
+        "concurrency": 2,
+        "cpu_shared_ns": [
+          5708000,
+          7002000
+        ],
+        "first_ns": 292439583,
+        "gaps": 0,
+        "incarnation": 1228626013262,
+        "key": 243000,
+        "kind": "operation",
+        "largest_gap_ns": 11087292,
+        "last_ns": 322092000,
+        "last_probe_ns": 11333,
+        "namespace": 7,
+        "opened_ns": 295431750,
+        "pid": 85629,
+        "resource_status": "sampled",
+        "role": 1,
+        "run": "a1c22dcfcc43c22d2b80da94ffedc2e1",
+        "sampled_max_rss": 12009472,
+        "samples": 4,
+        "scope": "process-shared",
+        "selected": 3,
+        "source": "getrusage+libproc",
+        "success": true,
+        "timing": {
+          "children": [
+            {
+              "children": [],
+              "elapsed_ns": 28023500,
+              "name": "exec"
+            }
+          ],
+          "elapsed_ns": 28025916,
+          "name": "sdk.shell_package"
+        },
+        "v": 1
+      },
+      "piece_count_lines": 0,
+      "piece_page_lines": 0,
+      "raw_sha256": {
+        "driver.stderr": "e4e8c01cd55c1767b5464cff76088be7e13056f5a3d95885c7e2812a25836641",
+        "driver.stdout": "3328038e70f4b0d5f79341c7d5cf42c224ec2c65491cc971e66f8e0ec882d582",
+        "receipt.json": "56745e5c2156f84bf86126d265e60fad9093c052e48d2f6fd4f7de1551a9a3aa"
+      },
+      "row_status": "INELIGIBLE",
+      "scenario_id": "failed-command-no-commit-v1",
+      "verifier": {
+        "command": [
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/case.verify",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/store.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/history.sqlite",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/package.tsv",
+          "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/failed-command-no-commit-v1.tsv"
+        ],
+        "exit_code": 0,
+        "status": "PASS",
+        "wall_ns": 53376375
+      }
+    }
+  ],
+  "schema": "issue243-shell-derived-v1"
+}

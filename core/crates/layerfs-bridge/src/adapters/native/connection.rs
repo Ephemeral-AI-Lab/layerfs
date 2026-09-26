@@ -272,6 +272,22 @@ pub fn connect_until(
     connect_with_deadline(address, selector, private, server, Some(deadline))
 }
 
+/// The TCP half of one native connection attempt, under the ordinary deadline.
+pub fn connect_tcp_until(address: SocketAddr, deadline: Instant) -> Result<TcpStream, Failure> {
+    connect_tcp(address, Some(deadline))
+}
+
+/// Authenticate a connected socket under the same deadline as its TCP attempt.
+pub fn authenticate_until(
+    stream: TcpStream,
+    selector: u32,
+    private: &[u8; 32],
+    server: &[u8; 32],
+    deadline: Instant,
+) -> Result<Connection, Failure> {
+    authenticate(stream, selector, private, server, Some(deadline))
+}
+
 fn connect_with_deadline(
     address: SocketAddr,
     selector: u32,
@@ -279,6 +295,11 @@ fn connect_with_deadline(
     server: &[u8; 32],
     deadline: Option<Instant>,
 ) -> Result<Connection, Failure> {
+    let stream = connect_tcp(address, deadline)?;
+    authenticate(stream, selector, private, server, deadline)
+}
+
+fn connect_tcp(address: SocketAddr, deadline: Option<Instant>) -> Result<TcpStream, Failure> {
     let phase_limit = Duration::from_secs(5);
     let remaining = deadline
         .map_or(Some(phase_limit), |end| {
@@ -288,6 +309,17 @@ fn connect_with_deadline(
         .ok_or(Code::Deadline)?;
     let stream = TcpStream::connect_timeout(&address, remaining.min(phase_limit))?;
     stream.set_nodelay(true)?;
+    Ok(stream)
+}
+
+fn authenticate(
+    stream: TcpStream,
+    selector: u32,
+    private: &[u8; 32],
+    server: &[u8; 32],
+    deadline: Option<Instant>,
+) -> Result<Connection, Failure> {
+    let phase_limit = Duration::from_secs(5);
     let phase_end = Instant::now() + phase_limit;
     let mut io = Socket {
         stream,

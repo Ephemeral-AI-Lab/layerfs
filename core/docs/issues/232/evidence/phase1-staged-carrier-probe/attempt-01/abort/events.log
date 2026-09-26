@@ -1,0 +1,12 @@
+open fh=40
+callback cmd=0xc080f542 fh=40 flags=IoctlFlags(0x0) in=128 out=128
+reply BEGIN rc=0 bytes=128
+caller BEGIN cmd=0xc080f542 rc=0 errno=None
+callback cmd=0x4080f545 fh=40 flags=IoctlFlags(0x0) in=128 out=0
+reply ABORT rc=0 bytes=0
+caller ABORT cmd=0x4080f545 rc=0 errno=None
+callback cmd=0x4080f544 fh=40 flags=IoctlFlags(0x0) in=128 out=0
+reply errno=Errno(9)
+caller APPLY after abort cmd=0x4080f544 rc=-1 errno=Some(9)
+release fh=40 stage=none
+final revision=0 publications=0 stage_present=false unmounted=true

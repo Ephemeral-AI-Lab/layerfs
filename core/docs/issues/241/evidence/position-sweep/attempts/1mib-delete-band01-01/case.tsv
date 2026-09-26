@@ -1,0 +1,9 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-delete-band01
+operation	delete
+offset	96547
+status	STARTED
+status	FAIL	primary=bounded mounted read: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); cleanup=unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })
+sandbox_delete	Ok(())
+sandbox_absent	true

@@ -1,0 +1,17 @@
+{
+  "cache_contract": "uncontrolled OS/source cache; diagnostic only",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "daemon_binary_sha256": "f375a89893b98c65be45c75241e3cbb9a852c94f9353f4327bf80affb3c0b1fe",
+  "dockerfile_sha256": "9762e691b23df7b03b175cb778e531bd154b76b42788d0401f373d7e468698d0",
+  "harness_source_sha256": "71f207d0386ac5cd611c8287364137988d56d87efd089b858655617820b21589",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "image_base_digest": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "image_id": "sha256:4aaefea1c88db91c8f7537d70248346ed0159e90362fcd1b76712f6a0c80b346",
+  "reporter_sha256": "0e25046f97aac90f42e1732ccbe870096c26695314234e77b900ece1f278f5d5",
+  "sample_count": 1,
+  "sdk_test_binary_sha256": "a43fa05226e327772d9f68ede70c13ef10336f4786c7d7dbfac3e02b77cf86a5",
+  "source_commit": "af04f21ae8aef3193f38691065005b85a8338827",
+  "source_status": "",
+  "source_tree": "8396e458d06e3a1a81ef6d09597ec37e55e5084b",
+  "telemetry_run": 26328131599693058236814400991271997240
+}

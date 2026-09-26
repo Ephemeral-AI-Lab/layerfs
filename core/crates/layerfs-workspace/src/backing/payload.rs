@@ -18,8 +18,7 @@ use std::{
     time::Instant,
 };
 
-const MAX_PAYLOADS: usize = 4096;
-pub(crate) struct PayloadHost {
+pub struct PayloadHost {
     pub budget: Arc<Budget>,
     pub quota: u64,
     pub common: Arc<Directory>,
@@ -29,7 +28,7 @@ pub(crate) struct PayloadHost {
     _windows_charge: Charge,
     _charge: Charge,
 }
-pub(crate) struct State {
+pub struct State {
     pub records: Vec<Arc<Record>>,
     capacity_charge: Charge,
     next: u64,
@@ -42,14 +41,14 @@ pub(crate) struct State {
     pub metadata_stopped: bool,
     pub metadata_complete: bool,
 }
-pub(crate) struct Record {
+pub struct Record {
     pub id: u64,
     pub length: u64,
     pub directory: Arc<Directory>,
     pub state: Mutex<RecordState>,
     _charge: Charge,
 }
-pub(crate) struct RecordState {
+pub struct RecordState {
     pub ready: bool,
     pub created: u32,
     pub completed: u64,
@@ -63,7 +62,7 @@ pub(crate) struct RecordState {
     pub custody: Option<(u64, super::metadata_pages::PageRef)>,
 }
 #[derive(Clone, Copy)]
-pub(crate) struct Partial {
+pub struct Partial {
     pub index: u32,
     pub identity: Option<(u64, u64)>,
     pub allocated: Option<u64>,
@@ -75,7 +74,7 @@ pub struct OwnedPayload {
     pub(crate) host: Arc<PayloadHost>,
     pub(crate) record: Arc<Record>,
 }
-pub(crate) struct WindowLease {
+pub struct WindowLease {
     host: Arc<PayloadHost>,
     index: usize,
     pub window: Option<Box<Window>>,
@@ -296,9 +295,6 @@ impl PayloadHost {
         if state.stopped {
             return Err(WorkspaceError::Busy);
         }
-        if state.records.len() == MAX_PAYLOADS {
-            return Err(WorkspaceError::Capacity);
-        }
         if state
             .allocated
             .checked_add(state.reserved)
@@ -314,9 +310,13 @@ impl PayloadHost {
             let capacity = state
                 .records
                 .capacity()
-                .saturating_mul(2)
-                .clamp(1, MAX_PAYLOADS);
-            let mut capacity_charge = self.budget.reserve(capacity * size_of::<Arc<Record>>())?;
+                .max(1)
+                .checked_mul(2)
+                .ok_or(WorkspaceError::Capacity)?;
+            let bytes = capacity
+                .checked_mul(size_of::<Arc<Record>>())
+                .ok_or(WorkspaceError::Capacity)?;
+            let mut capacity_charge = self.budget.reserve(bytes)?;
             let mut records = Vec::new();
             records
                 .try_reserve_exact(capacity)

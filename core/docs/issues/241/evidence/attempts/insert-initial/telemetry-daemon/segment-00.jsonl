@@ -1,0 +1,2 @@
+LFT1 {"v":1,"namespace":241,"run":"000000000000000000000000000000f1","pid":15,"role":2,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":118625,"incarnation":63910,"user_ns":0,"source":"procfs+sysconf","probe_ns":44792,"selected":3,"system_ns":0,"rss":1073152}
+LFT1 {"v":1,"kind":"run-summary","run":"000000000000000000000000000000f1","pid":15,"role":2,"namespace":241,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}

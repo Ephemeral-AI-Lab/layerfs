@@ -1,0 +1,8 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/range_position_sweep.rs (core/target/debug/deps/range_position_sweep-876e77313ce4c106)
+
+running 1 test
+test mounted_public_sdk_position_sweep ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 255.58s
+

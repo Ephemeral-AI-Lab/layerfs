@@ -1,0 +1,17 @@
+
+running 12 tests
+test a_cursor_seeks_and_reads_only_the_path_it_needs ... ok
+test a_refused_splice_leaves_the_published_sequence_unchanged ... ok
+test a_shared_subtree_is_not_rewritten ... ok
+test an_unchanged_old_generation_stays_readable_after_a_splice ... ok
+test appends_at_the_end_and_extends_with_zeros ... ok
+test covers_a_hole_and_a_position_past_the_end ... ok
+test one_cursor_walk_never_holds_the_whole_sequence ... ok
+test overwrites_inside_one_extent_without_touching_its_neighbours ... ok
+test reads_a_sequence_in_order_with_derived_starts ... ok
+test refuses_a_page_that_does_not_declare_the_length_indexed_format ... ok
+test refuses_a_replacement_beyond_the_base_or_past_max_file ... ok
+test splits_an_extent_larger_than_a_leaf_into_page_sized_parts ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

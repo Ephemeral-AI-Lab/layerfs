@@ -415,6 +415,16 @@ impl Workspace {
         })
     }
 
+    /// Records one projection callback for this Workspace.
+    ///
+    /// The adapter calls this at its single entry point, so the counts describe
+    /// what the kernel actually asked for. Recording never gates the callback.
+    pub fn record_projection_call(&self, op: crate::filesystem::projection_counters::ProjectionOp) {
+        if let Ok(mut state) = self.state() {
+            state.counters.record(op);
+        }
+    }
+
     pub fn begin_projection_reply(
         &self,
         deadline: Instant,

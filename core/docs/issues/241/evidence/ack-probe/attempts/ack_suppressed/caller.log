@@ -1,0 +1,6 @@
+initial_size=8192 initial_mtime=1700000000
+ioctl=Ok(()) errno=None
+fstat=Ok((8192, 1700000000))
+boundary=Ok("4a4b4c000102030405060708090a0b0c")
+eof=Ok("")
+decision=UNCERTAIN ioctl_calls=1 retry_calls=0

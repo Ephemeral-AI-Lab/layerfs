@@ -1,0 +1,58 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "uncontrolled OS/source cache; no cold or warm claim",
+  "diagnostic_status": "INCOMPLETE_MISSING_ROUTE",
+  "four_call_totals_ns": {
+    "daemon_control_wall_ns": 125255376,
+    "docker_port_ns": 98735583,
+    "hello_ns": 49363542,
+    "sdk_wall_ns": 276912834
+  },
+  "functional_status": "PASS",
+  "host_run_summary": {
+    "delivery": "best-effort",
+    "dropped": 1,
+    "failed": 0,
+    "kind": "run-summary",
+    "namespace": 1,
+    "overflow": false,
+    "pid": 76484,
+    "role": 1,
+    "run": "fffc583ab9672642f43094a9be7019af",
+    "v": 1
+  },
+  "kind": "sdk-owner-lookup-cause-diagnostic",
+  "performance_admission": "INELIGIBLE",
+  "phases": [
+    {
+      "daemon_control_wall_ns": 39577083,
+      "docker_port_ns": 24297541,
+      "hello_ns": 13576792,
+      "name": "mount",
+      "sdk_wall_ns": 78677125
+    },
+    {
+      "daemon_control_wall_ns": 31684209,
+      "docker_port_ns": 26351209,
+      "hello_ns": 12723000,
+      "name": "exec",
+      "sdk_wall_ns": 71794000
+    },
+    {
+      "daemon_control_wall_ns": 51852667,
+      "docker_port_ns": 25269250,
+      "hello_ns": 8864667,
+      "name": "commit",
+      "sdk_wall_ns": 86652792
+    },
+    {
+      "daemon_control_wall_ns": 2141417,
+      "docker_port_ns": 22817583,
+      "hello_ns": 14199083,
+      "name": "unmount",
+      "sdk_wall_ns": 39788917
+    }
+  ],
+  "source_commit": "e448f534a1aecd79d2bcc0cd72305a6104d994dc",
+  "telemetry_run": 340263387238162298188565702861443307951
+}

@@ -1,0 +1,28 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "test",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "--test",
+    "sdk_range_exec",
+    "mounted_sdk_exec_confirms_before_explicit_commit",
+    "--",
+    "--nocapture"
+  ],
+  "environment_overrides": {
+    "LAYERFS_TEST_IMAGE": "sha256:b5f63144fd930441365ee222db547c11214550c44f6c64bfbba236946b418ffc"
+  },
+  "started_unix_ns": 1790256707023625000,
+  "complete_command_wall_ns": 2899247583,
+  "exit_code": 0,
+  "timed_out": false,
+  "source_commit": "8493d8f8b59216438468758b51e4c5d3b296e9d4",
+  "source_tree_dirty": false,
+  "cache_state": "uncontrolled; functional only",
+  "concurrency": "another worktree may have functional checks; no timed performance run declared"
+}

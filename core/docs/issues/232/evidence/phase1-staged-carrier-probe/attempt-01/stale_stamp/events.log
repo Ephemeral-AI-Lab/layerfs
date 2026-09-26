@@ -1,0 +1,6 @@
+open fh=40
+callback cmd=0xc080f542 fh=40 flags=IoctlFlags(0x0) in=128 out=128
+reply errno=Errno(116)
+caller BEGIN stale cmd=0xc080f542 rc=-1 errno=Some(116)
+release fh=40 stage=none
+final revision=0 publications=0 stage_present=false unmounted=true

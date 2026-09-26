@@ -1,0 +1,34 @@
+{
+  "compatibility_key": {
+    "benchmark_init_sha256": "f3fa5771038fe40495d9c3de7b777ea652c8fd8b50efba5172489a9dcb7d7aae",
+    "cargo_lock_sha256": "791a62b55b22d18ce827d49e500326d68a163384629e9c2865b893d8c5914efe",
+    "fixture_bytes": 524283904,
+    "fixture_generator_seed": 5494771174636671793,
+    "fixture_sha256": "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f"
+  },
+  "compatibility_key_sha256": "abb75286d103f640",
+  "first_use_wall_ns": 1931063042,
+  "fixture_bytes": 524283904,
+  "fixture_canonical_root": "6c74b4ba6ad67f352a0bd85879a2f16a77511286bf9a73883d5c8858d2eded8f",
+  "fixture_extent_count": 26994,
+  "fixture_sha256": "f1b6c61d9c126beba89dd2a310f727fd63cbbf131b793a78fe21247238c98c1f",
+  "genesis_layer": "3260dfd2b041ebe6705bb5deb88883e01128f289879828e94c55937463bca617ab",
+  "genesis_root": "5cf6c1b9f8baf0b0f0a9f2176faceaca689c5244c56383cb6656e695d0e08750",
+  "genesis_root_serial": 1,
+  "history": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-524283904-abb75286d103f640/history.sqlite",
+  "history_bytes": 86016,
+  "init_receipt": {
+    "genesis_layer": "3260dfd2b041ebe6705bb5deb88883e01128f289879828e94c55937463bca617ab",
+    "operation_ns": 1911858958,
+    "project_id": "31855bc68787d5ba6c183a86d1ab30d483",
+    "root": "5cf6c1b9f8baf0b0f0a9f2176faceaca689c5244c56383cb6656e695d0e08750",
+    "root_serial": 1,
+    "stack_body": "855bc68787d5ba6c183a86d1ab30d483",
+    "status": "COMPLETE"
+  },
+  "project_id": "31855bc68787d5ba6c183a86d1ab30d483",
+  "route": "sdk-exec-fuse-range-splice-commit-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-master-v1",
+  "store": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/benchmark-results/prepared/master-524283904-abb75286d103f640/store.sqlite",
+  "store_bytes": 582324224
+}

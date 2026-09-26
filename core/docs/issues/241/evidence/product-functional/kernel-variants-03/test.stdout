@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::kernel_range_variants ... FAILED
+
+failures:
+
+failures:
+    linux::kernel_range_variants
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.07s
+

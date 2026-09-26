@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::write_frontier ... COMMIT_RESOURCE WorkspaceStatus { submission: None, generation: 2, revision: 1090, dirty_inodes: 0, mounted: false, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 0, projection_replies: 0, projection_calls: [("lookup", 0), ("getattr", 0), ("read", 0), ("write", 0), ("readdir", 0), ("open", 0), ("setattr", 0), ("rename", 0), ("other", 0)], upstream_calls: 4, coherence: None, cookies: 0, accounted_bytes: 2306666 } BackingStatus { quota_bytes: 67108864, allocated_bytes: 8548352, reserved_bytes: 0, payloads: 1024, retained_payloads: 1024, failed_payloads: 0, readers: 0, acquiring: false, cleaning: false, admission_stopped: false, accounting_complete: true } MetadataStatus { allocated_pages: 22, reusable_pages: 3, reserved_slots: 0, roots: 4, external_roots: 0, allocated_bytes: 159744, reserved_bytes: 0, working_bytes: 8600, accounting_complete: true, admission_stopped: false }
+WRITE_CHECK final-file-save-streams-1024-separated-runs PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 37.03s
+

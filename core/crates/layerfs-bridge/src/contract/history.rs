@@ -52,9 +52,8 @@ pub const fn permission_bit(opcode: u8) -> Option<u8> {
     match opcode {
         1 => Some(1 << 0),
         2 => Some(1 << 1),
-        3 | super::CONSTRUCT_SYMLINK_OPCODE => Some(1 << 2),
-        4 => Some(1 << 3),
-        5 => Some(1 << 4),
+        super::CONSTRUCT_SYMLINK_OPCODE => Some(1 << 2),
+        super::SAVE_FILE_OPCODE => Some(1 << 3),
         QUERY_OPCODE => Some(1 << 5),
         COMMAND_OPCODE => Some(1 << 6),
         super::UPDATE_PORTABLE_METADATA_OPCODE | super::CONSTRUCT_PORTABLE_METADATA_OPCODE => {

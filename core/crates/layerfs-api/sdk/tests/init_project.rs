@@ -1,20 +1,16 @@
 //! Public SDK import proofs with independent Store/history reads.
 use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
-use layerfs_history::{sqlite, HistoryCatalog, HistoryCatalogConfig, LayerStackId};
-use layerfs_sdk::{Client, Error, Host, Project};
-use layerfs_service::{Grant, Service, StoreAccess};
-use layerfs_storage::Store;
-use layerfs_telemetry::{operation::OperationRecorder, timer::Timing};
+use layerfs_history::{sqlite, HistoryCatalog, LayerStackId};
+use layerfs_sdk::{Error, HistoryMode, Project, ProjectApi, Server, ServerConfig};
+use layerfs_server::Service;
+use layerfs_telemetry::runtime::Runtime;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     io::Cursor,
     path::{Path, PathBuf},
     process::Command,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 const BINDING: &[u8] = b"issue236-sdk-proof";
@@ -30,7 +26,9 @@ fn repo() -> PathBuf {
 }
 
 fn proof_root() -> PathBuf {
-    let root = repo().join("core/target/issue236-proof").join(format!(
+    let parent = repo().join("core/target/issue236-proof");
+    std::fs::create_dir_all(&parent).unwrap();
+    let root = parent.join(format!(
         "{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -39,49 +37,31 @@ fn proof_root() -> PathBuf {
             .as_nanos(),
         NEXT_PROOF_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir(&root).unwrap();
     root
 }
 
-fn service(store_path: &Path, history_path: &Path, peer: &VerifiedPeer, create: bool) -> Service {
-    let store = Timing::disabled("store", |timing| {
-        if create {
-            Store::create(store_path, Store::default_policy(), timing.child("create"))
+fn server(store_path: &Path, history_path: &Path, create: bool) -> Server {
+    let config = ServerConfig {
+        store_path: store_path.to_path_buf(),
+        history_path: history_path.to_path_buf(),
+        binding_key: BINDING.to_vec(),
+        incarnation: 1,
+        cursor_key: CURSOR_KEY,
+        history: if create {
+            HistoryMode::Create
         } else {
-            Store::open(store_path, timing.child("open"))
-        }
-    })
-    .0
-    .unwrap();
-    let history: Arc<dyn HistoryCatalog> = if create {
-        Arc::new(
-            sqlite::create(
-                history_path,
-                &HistoryCatalogConfig {
-                    binding_key: BINDING.to_vec(),
-                    incarnation: 1,
-                    cursor_key: CURSOR_KEY,
-                },
-            )
-            .unwrap(),
-        )
-    } else {
-        Arc::new(sqlite::open_read_only(history_path, BINDING, CURSOR_KEY).unwrap())
+            HistoryMode::OpenWritable
+        },
+        service_host: "host.docker.internal".into(),
+        runtime: Runtime::disabled(),
+        telemetry_run: None,
     };
-    Service::new(
-        vec![StoreAccess {
-            id: 1,
-            store,
-            history: Some(history),
-            grants: vec![Grant {
-                public_key: *peer.public_key(),
-                operations: 127,
-                expires_unix: u64::MAX,
-            }],
-        }],
-        OperationRecorder::disabled(),
-    )
-    .unwrap()
+    if create {
+        Server::create(config).unwrap()
+    } else {
+        Server::open(config).unwrap()
+    }
 }
 
 fn call(
@@ -286,7 +266,6 @@ fn verify_inventory(
 #[test]
 fn public_sdk_imports_fresh_100_and_1000_file_fixtures() {
     let root = proof_root();
-    let peer = VerifiedPeer::from_private(&[0x42; 32]).unwrap();
     for (case, expected_files, expected_bytes) in [
         ("namespace-100-compact-v3", 100, 5_000_000),
         ("namespace-1000-compact-v3", 1_000, 20_000_000),
@@ -296,13 +275,10 @@ fn public_sdk_imports_fresh_100_and_1000_file_fixtures() {
         let (source, manifest, digest) = fixture(case, &run);
         let store_path = run.join("store.sqlite");
         let history_path = run.join("history.sqlite");
-        let writer = service(&store_path, &history_path, &peer, true);
-        let project = Client::new(&writer, &peer, 1)
-            .init_project(case, &source)
-            .unwrap();
+        let writer = server(&store_path, &history_path, true);
+        let project = ProjectApi::new(&writer).init(case, &source).unwrap();
         assert_eq!(project.id[0], 0x31);
         assert_eq!(project.genesis_layer[0], 0x32);
-        assert_eq!(project.mount_workspace().unwrap_err(), Error::Unsupported);
         drop(writer);
 
         let history = sqlite::open_read_only(&history_path, BINDING, CURSOR_KEY).unwrap();
@@ -314,8 +290,14 @@ fn public_sdk_imports_fresh_100_and_1000_file_fixtures() {
         let layer = history.layer(stack.head_layer).unwrap().unwrap();
         assert_eq!(*layer.root.as_bytes(), project.root);
         drop(history);
-        let reader = service(&store_path, &history_path, &peer, false);
-        let (files, bytes) = verify_inventory(&reader, &peer, &project, &manifest, &digest);
+        let reader = server(&store_path, &history_path, false);
+        let (files, bytes) = verify_inventory(
+            reader.service(),
+            &reader.peer().unwrap(),
+            &project,
+            &manifest,
+            &digest,
+        );
         assert_eq!((files, bytes), (expected_files, expected_bytes));
         let tree = std::env::var("LAYERFS_PROOF_TREE").unwrap_or_else(|_| "unbound".to_string());
         let receipt = format!("route=host-direct-sdk-v1\nfixture_profile=core-sdk-init-fixture-v1\ncase={case}\nsource_tree={tree}\nmanifest_sha256={digest}\nfiles={files}\nbytes={bytes}\nproject_id={}\ngenesis_layer={}\nroot={}\nroot_serial={}\nstatus=PASS\n",
@@ -343,15 +325,14 @@ fn host_setup_exposes_the_same_sdk_init() {
     let source = root.join("source");
     std::fs::create_dir(&source).unwrap();
     std::fs::write(source.join("one"), b"A").unwrap();
-    let host = Host::create(
+    let server = server(
         &root.join("store.sqlite"),
         &root.join("history.sqlite"),
-        BINDING,
-        &hex(&[0x44; 32]),
-        &hex(&CURSOR_KEY),
-    )
-    .unwrap();
-    let project = host.client().init_project("host-project", &source).unwrap();
+        true,
+    );
+    let project = ProjectApi::new(&server)
+        .init("host-project", &source)
+        .unwrap();
     assert_eq!((project.id[0], project.genesis_layer[0]), (0x31, 0x32));
 }
 
@@ -366,17 +347,17 @@ fn source_refusals_duplicates_and_concurrent_bindings() {
     std::fs::write(b.join("only-b"), b"B").unwrap();
     let link = root.join("link");
     std::os::unix::fs::symlink(&a, &link).unwrap();
-    let peer = VerifiedPeer::from_private(&[0x43; 32]).unwrap();
-    let service = service(
+    let server = server(
         &root.join("store.sqlite"),
         &root.join("history.sqlite"),
-        &peer,
         true,
     );
-    let client = Client::new(&service, &peer, 1);
+    let service = server.service();
+    let peer = server.peer().unwrap();
+    let projects = ProjectApi::new(&server);
     for invalid in [&link, &a.join("only-a"), &root.join("missing")] {
         assert!(matches!(
-            client.init_project("bad", invalid),
+            projects.init("bad", invalid),
             Err(Error::Backend(Failure {
                 code: Code::InvalidInput,
                 ..
@@ -384,12 +365,12 @@ fn source_refusals_duplicates_and_concurrent_bindings() {
         ));
     }
     let (one, two) = std::thread::scope(|scope| {
-        let left = scope.spawn(|| client.init_project("left", &a).unwrap());
-        let right = scope.spawn(|| client.init_project("right", &b).unwrap());
+        let left = scope.spawn(|| projects.init("left", &a).unwrap());
+        let right = scope.spawn(|| projects.init("right", &b).unwrap());
         (left.join().unwrap(), right.join().unwrap())
     });
     assert!(matches!(
-        client.init_project("left", &a),
+        projects.init("left", &a),
         Err(Error::Backend(Failure {
             code: Code::Integrity,
             unknown: false,
@@ -401,7 +382,7 @@ fn source_refusals_duplicates_and_concurrent_bindings() {
         (&two, b"only-b".as_slice(), b"only-a".as_slice()),
     ] {
         call(
-            &service,
+            service,
             &peer,
             1,
             Operation::Inspect {

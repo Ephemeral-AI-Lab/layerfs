@@ -60,17 +60,11 @@ mod linux {
             )
             .unwrap();
         let payload = second.own_payload(1, &mut &b"B"[..], deadline()).unwrap();
+        let second_handle = second.open(data.serial, ReferenceScope::Local).unwrap();
         second
-            .edit_file_range(
-                &WorkspacePath::new(b"data.bin").unwrap(),
-                &RangeEdit {
-                    start: 0,
-                    end: 1,
-                    replacement: payload,
-                },
-                deadline(),
-            )
+            .write_file(second_handle, 0, &payload, deadline())
             .unwrap();
+        second.release(second_handle).unwrap();
         let workspace = f.workspace.clone();
         let saving = std::thread::spawn(move || workspace.stage(deadline()));
         f.native.wait_entered();
@@ -285,18 +279,23 @@ mod linux {
         assert_eq!(f.branch(), branch);
         f.counts(1);
         let observed = f.native.observations.lock().unwrap();
-        let edits = observed
+        let replacement = observed
             .operations
             .iter()
             .find_map(|op| {
-                if let Operation::EditFile { edits, .. } = op {
-                    Some(edits)
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    replacement,
+                    ..
+                } = op
+                {
+                    Some(*replacement)
                 } else {
                     None
                 }
             })
             .unwrap();
-        assert_eq!(edits.iter().map(|e| e.replacement).sum::<u64>(), 8);
+        assert_eq!(replacement, 8);
         drop(observed);
         check("normalized-splice-lowering-and-streamed-exact-input");
         stage_retained(&f, selector);
@@ -531,7 +530,7 @@ mod linux {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::EditFile { .. }))
+                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
                 .count(),
             0
         );

@@ -30,8 +30,9 @@ def product_inputs():
     """Include new product files even before their first Git commit."""
     paths = [route.ROOT / '.cargo/config.toml', route.ROOT / 'core/Cargo.toml',
              route.ROOT / 'core/Cargo.lock']
-    for package in (route.ROOT / 'core/crates').iterdir():
-        paths.append(package / 'Cargo.toml')
+    for manifest in (route.ROOT / 'core/crates').rglob('Cargo.toml'):
+        package = manifest.parent
+        paths.append(manifest)
         for group in ('src', 'sql'):
             paths.extend(path for path in (package / group).rglob('*') if path.is_file())
     digest = hashlib.sha256()
@@ -58,7 +59,7 @@ def line_until(process, timeout=15):
 def seed_namespace(daemon, executable):
     roots = []
     for identity, payload in enumerate((DATA, executable), 1):
-        kind, body = route.exchange(daemon, identity, 3, struct.pack(">Q", len(payload)), body=payload)
+        kind, body = route.exchange(daemon, identity, 20, route.save_file_metadata(len(payload)), body=route.save_file_body(payload))
         assert kind == 6 and body[0] == 2, body
         roots.append(body[1:33])
     # Consume serial 1 through ordinary initialization before the tested root.
@@ -185,7 +186,7 @@ def run(args, report):
                LAYERFS_HISTORY_INCARNATION='1', LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(),
                LAYERFS_CONSTRUCTION_WORKERS='1')
     service_log = (args.output / 'service.stderr').open('w')
-    service = subprocess.Popen([route.BIN / 'layerfs-service'], env=env, stdin=subprocess.PIPE,
+    service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     daemon = mounted = None
     name = f'layerfs-pair1-read-{os.getpid()}'
@@ -204,7 +205,7 @@ def run(args, report):
         report.update(root=root.hex(), branch=branch.hex(), root_serial=root_serial,
                       executable_sha256=hashlib.sha256(executable).hexdigest(),
                       linux_binary_sha256=hashlib.sha256(args.linux_daemon.read_bytes()).hexdigest(),
-                      host_binary_sha256=hashlib.sha256((route.BIN / 'layerfs-service').read_bytes()).hexdigest())
+                      host_binary_sha256=hashlib.sha256((route.BIN / 'layerfs-server').read_bytes()).hexdigest())
         mount_env = os.environ.copy()
         mount_env.update(LAYERFS_ENDPOINT=f'host.docker.internal:{port}', LAYERFS_SELECTOR='1',
                          LAYERFS_PRIVATE_KEY=client_key, LAYERFS_SERVER_KEY=server_public,

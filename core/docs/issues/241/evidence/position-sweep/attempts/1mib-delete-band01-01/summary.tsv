@@ -1,0 +1,6 @@
+selected	1
+attempted	1
+cleanup	true
+sandbox_delete	Ok(())
+sandbox_list	Ok([])
+failures	["1mib-delete-band01 @96547: primary=bounded mounted read: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); cleanup=unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })"]

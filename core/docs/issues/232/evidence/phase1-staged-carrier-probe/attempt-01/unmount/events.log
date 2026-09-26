@@ -1,0 +1,4 @@
+open fh=40
+callback cmd=0xc080f542 fh=40 flags=IoctlFlags(0x0) in=128 out=128
+reply BEGIN rc=0 bytes=128
+caller BEGIN cmd=0xc080f542 rc=0 errno=None

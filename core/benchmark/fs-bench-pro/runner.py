@@ -26,7 +26,7 @@ BINARY_DIR = "release/examples"
 VERIFY_TIMEOUT_S = 9.5
 SAMPLE_POLICY = "stride64-size-log2-endpoints-v1"
 BUILD = ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
-         "-p", "layerfs-sdk", "-p", "layerfs-service",
+         "-p", "layerfs-sdk", "-p", "layerfs-server",
          "--example", "benchmark_init", "--example", "verify_namespace"]
 BINARIES = ("benchmark_init", "verify_namespace")
 

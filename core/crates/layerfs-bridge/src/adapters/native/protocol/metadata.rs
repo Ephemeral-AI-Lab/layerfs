@@ -133,6 +133,8 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         Operation::WorkspaceUnmount { .. } => Encoder::bounded(WORKSPACE_UNMOUNT_REQUEST_BYTES),
         Operation::WorkspaceMount { .. } => Encoder::bounded(WORKSPACE_MOUNT_REQUEST_BYTES),
         Operation::WorkspaceAttach { .. } => Encoder::bounded(WORKSPACE_ATTACH_REQUEST_BYTES),
+        Operation::WorkspaceOpen { .. } => Encoder::bounded(WORKSPACE_OPEN_REQUEST_BYTES),
+        Operation::WorkspaceExec { .. } => Encoder::bounded(WORKSPACE_EXEC_REQUEST_BYTES),
         Operation::WorkspaceCommit { .. } => Encoder::bounded(WORKSPACE_COMMIT_REQUEST_BYTES),
         Operation::WorkspaceCloseClean { .. } => {
             Encoder::bounded(WORKSPACE_CLOSE_CLEAN_REQUEST_BYTES)
@@ -158,7 +160,22 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.u64(*start)?;
             e.u64(*end)?;
         }
-        Operation::ConstructFile { length } => e.u64(*length)?,
+        Operation::SaveFile {
+            base,
+            base_length,
+            length,
+            extents,
+            replacement,
+        } => {
+            e.u8(u8::from(base.is_some()))?;
+            if let Some(root) = base {
+                e.put(root)?;
+            }
+            e.u64(*base_length)?;
+            e.u64(*length)?;
+            e.u64(*extents)?;
+            e.u64(*replacement)?;
+        }
         Operation::ConstructSymlink { target } => e.blob(target)?,
         Operation::Inspect { root, query } => {
             e.put(root)?;
@@ -190,44 +207,6 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                 }
             }
         }
-        Operation::EditFile {
-            root,
-            base_length,
-            edits,
-        } => {
-            e.put(root)?;
-            e.u64(*base_length)?;
-            e.count(edits.len())?;
-            for v in edits {
-                e.u64(v.start)?;
-                e.u64(v.end)?;
-                e.u64(v.replacement)?;
-            }
-        }
-        Operation::UpdatePreparedFilesystem {
-            base,
-            scope,
-            root_serial,
-            directories,
-            inodes,
-            new_directories,
-            directory_metadata,
-            new_file_serials,
-            new_symlink_serials,
-        } => {
-            e.put(base)?;
-            e.put(scope)?;
-            e.u64(*root_serial)?;
-            put_directories(&mut e, directories)?;
-            put_inodes(&mut e, inodes)?;
-            put_additions(
-                &mut e,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-            )?;
-        }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
         Operation::WorkspaceStatus {
@@ -256,6 +235,34 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
         } => {
             e.blob(workspace)?;
             e.put(incarnation)?;
+        }
+        Operation::SandboxHello => {}
+        Operation::WorkspaceOpen {
+            workspace,
+            incarnation,
+            instance,
+            project,
+            branch,
+            commit,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.put(instance)?;
+            e.put(project)?;
+            e.put(branch)?;
+            e.u8(u8::from(commit.is_some()))?;
+            if let Some(commit) = commit {
+                e.put(commit)?;
+            }
+        }
+        Operation::WorkspaceExec {
+            workspace,
+            incarnation,
+            command,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(command)?;
         }
         Operation::UpdatePortableMetadata {
             base,
@@ -710,48 +717,23 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             };
             Operation::Inspect { root, query }
         }
-        3 => Operation::ConstructFile { length: d.u64()? },
+        SAVE_FILE_OPCODE => {
+            let base = match d.u8()? {
+                0 => None,
+                1 => Some(d.root()?),
+                _ => return Err(Code::InvalidInput.into()),
+            };
+            Operation::SaveFile {
+                base,
+                base_length: d.u64()?,
+                length: d.u64()?,
+                extents: d.u64()?,
+                replacement: d.u64()?,
+            }
+        }
         CONSTRUCT_SYMLINK_OPCODE => Operation::ConstructSymlink {
             target: d.blob(SYMLINK_TARGET_BYTES)?,
         },
-        4 => {
-            let root = d.root()?;
-            let base_length = d.u64()?;
-            let count = d.count(256, 24)?;
-            let mut edits = Vec::with_capacity(count);
-            for _ in 0..count {
-                edits.push(Edit {
-                    start: d.u64()?,
-                    end: d.u64()?,
-                    replacement: d.u64()?,
-                });
-            }
-            Operation::EditFile {
-                root,
-                base_length,
-                edits,
-            }
-        }
-        5 => {
-            let base = d.root()?;
-            let scope = d.root()?;
-            let root_serial = d.u64()?;
-            let directories = take_directories(&mut d)?;
-            let inodes = take_inodes(&mut d)?;
-            let (new_directories, directory_metadata, new_file_serials, new_symlink_serials) =
-                take_additions(&mut d, inodes.len())?;
-            Operation::UpdatePreparedFilesystem {
-                base,
-                scope,
-                root_serial,
-                directories,
-                inodes,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-            }
-        }
         6 => Operation::HistoryQuery(take_query(&mut d)?),
         7 => Operation::HistoryCommand(take_command(&mut d)?),
         WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {
@@ -777,6 +759,34 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
         WORKSPACE_COMMIT_OPCODE => Operation::WorkspaceCommit {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
+        },
+        SANDBOX_HELLO_OPCODE => Operation::SandboxHello,
+        WORKSPACE_OPEN_OPCODE => Operation::WorkspaceOpen {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            instance: d.root()?,
+            project: d
+                .take(STACK_BYTES)?
+                .try_into()
+                .map_err(|_| Code::InvalidInput)?,
+            branch: d
+                .take(BRANCH_BYTES)?
+                .try_into()
+                .map_err(|_| Code::InvalidInput)?,
+            commit: match d.u8()? {
+                0 => None,
+                1 => Some(
+                    d.take(COMMIT_BYTES)?
+                        .try_into()
+                        .map_err(|_| Code::InvalidInput)?,
+                ),
+                _ => return Err(Code::InvalidInput.into()),
+            },
+        },
+        WORKSPACE_EXEC_OPCODE => Operation::WorkspaceExec {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            command: d.blob(4096)?,
         },
         UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
             base: d.root()?,

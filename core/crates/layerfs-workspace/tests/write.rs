@@ -116,30 +116,20 @@ mod linux {
         let edits: Vec<_> = observed.operations[begin..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root,
+                if let Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
+                    replacement,
+                    ..
                 } = op
                 {
-                    Some((*root, *base_length, edits.clone()))
+                    Some((*root, *base_length, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(
-            edits,
-            vec![(
-                g.1,
-                28,
-                vec![Edit {
-                    start: 4,
-                    end: 5,
-                    replacement: 1
-                }]
-            )]
-        );
+        assert_eq!(edits, vec![(g.1, 28, 1)]);
         assert!(!observed.operations.iter().any(|op| matches!(
             op,
             Operation::HistoryCommand(HistoryCommand::StageChanges(_))
@@ -300,64 +290,77 @@ mod linux {
     }
 
     #[test]
-    #[ignore = "requires write_route.py exact8MiB combined input fixture"]
+    #[ignore = "requires write_route.py past-8MiB combined input fixture"]
     fn write_envelope() {
         let f = Fixture::new(Gate::None);
         let (data, h) = open(&f, FileAccess::ReadWrite, false);
         f.workspace.set_len(data.serial, 0, deadline()).unwrap();
-        let end = 8 * 1024 * 1024u64;
+        // The replay ceiling is gone: a replacement larger than the retired
+        // 8 MiB bound now lowers and streams as one edit whose replacement
+        // total is the declared stream total, and the exact final bytes -
+        // one whole zero gap plus the payload - publish through Commit.
+        let end = 9 * 1024 * 1024u64;
         write(&f, h, end - 1, b"x");
+        write(&f, h, end - 2, b"y");
         let before = f.workspace.status().unwrap();
-        let input = f.own(b"y");
-        assert!(matches!(
-            f.workspace.write_file(h, end, &input, deadline()),
-            Err(WorkspaceError::Capacity)
-        ));
-        assert_eq!(f.workspace.status().unwrap().revision, before.revision);
-        assert_eq!(payload_bytes(&input), b"y");
-        for offset in (0..end - 1).step_by(MAX_READ_BYTES) {
-            let length = ((end - 1 - offset) as usize).min(MAX_READ_BYTES);
+        assert_eq!(before.dirty_inodes, 1);
+        for offset in (0..end - 2).step_by(MAX_READ_BYTES) {
+            let length = ((end - 2 - offset) as usize).min(MAX_READ_BYTES);
             assert_eq!(f.read(h, offset, length), vec![0; length]);
         }
-        assert_eq!(f.read(h, end - 1, 1), b"x");
+        assert_eq!(f.read(h, end - 2, 2), b"yx");
         let report = f.workspace.commit(deadline()).unwrap();
         let content = saved(&f, &report);
         assert_eq!(content.2, end);
-        assert_eq!(f.native.bytes(content.1, end - 2, 2), [0, b'x']);
-        drop(input);
+        assert_eq!(f.native.bytes(content.1, end - 3, 3), [0, b'y', b'x']);
+        let observed = f.native.observations.lock().unwrap();
+        let totals: Vec<u64> = observed
+            .operations
+            .iter()
+            .filter_map(|o| {
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    replacement,
+                    ..
+                } = o
+                {
+                    Some(*replacement)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(totals, vec![end]);
+        drop(observed);
         observe(&f);
         close(&f, data, &[h]);
-        check("Zero-gap-and-local-input-share-exact-8MiB-lowering-envelope");
+        check("Zero-gap-and-local-input-stream-past-the-retired-8MiB-replay-ceiling");
     }
 
     #[test]
-    #[ignore = "requires write_route.py full256-edit frontier selection"]
+    #[ignore = "requires write_route.py multi-edit frontier selection"]
     fn write_frontier() {
         let f = Fixture::new(Gate::None);
         let (data, h) = open(&f, FileAccess::ReadWrite, false);
-        for i in 0..256u64 {
+        let runs = 1_024u64;
+        for i in 0..runs {
             write(&f, h, i * 2, b"x");
         }
-        let before = f.workspace.status().unwrap();
-        let next = f.own(b"y");
-        assert!(matches!(
-            f.workspace.write_file(h, 512, &next, deadline()),
-            Err(WorkspaceError::Capacity)
-        ));
-        assert_eq!(f.workspace.status().unwrap().revision, before.revision);
         for i in 0..64u64 {
             write(&f, h, i * 2, b"y");
         }
+        assert!(f.workspace.backing_status().unwrap().payloads >= runs as usize);
         let report = f
             .workspace
             .commit(Instant::now() + Duration::from_secs(25))
             .unwrap();
         let content = saved(&f, &report);
-        let bytes = f.native.bytes(content.1, 0, 514);
+        let span = (runs * 2 + 2) as usize;
+        let bytes = f.native.bytes(content.1, 0, span);
         for (i, byte) in bytes.iter().enumerate() {
             assert_eq!(
                 *byte,
-                if i < 512 && i % 2 == 0 {
+                if i < runs as usize * 2 && i % 2 == 0 {
                     if i < 128 {
                         b'y'
                     } else {
@@ -369,26 +372,31 @@ mod linux {
             );
         }
         let observed = f.native.observations.lock().unwrap();
-        let edits: Vec<_> = observed
+        let declared: Vec<(u64, u64)> = observed
             .operations
             .iter()
             .filter_map(|o| {
-                if let Operation::EditFile { edits, .. } = o {
-                    Some(edits)
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    extents,
+                    replacement,
+                    ..
+                } = o
+                {
+                    Some((*extents, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].len(), 256);
+        assert_eq!(declared.len(), 1);
+        assert!(declared[0].0 >= runs);
+        assert_eq!(declared[0].1, runs);
         drop(observed);
-        drop(next);
         observe(&f);
         close(&f, data, &[h]);
-        check("256-write-frontier-refuses257-and-repeated-overwrites-reuse-capacity");
+        check("final-file-save-streams-1024-separated-runs");
     }
-
     #[test]
     #[ignore = "requires native candidate-quota refusal"]
     fn write_quota() {
@@ -565,30 +573,20 @@ mod linux {
         let edits: Vec<_> = observed.operations[begin..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root,
+                if let Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
+                    replacement,
+                    ..
                 } = op
                 {
-                    Some((*root, *base_length, edits.clone()))
+                    Some((*root, *base_length, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(
-            edits,
-            vec![(
-                g.1,
-                32,
-                vec![Edit {
-                    start: 32,
-                    end: 32,
-                    replacement: 12
-                }]
-            )]
-        );
+        assert_eq!(edits, vec![(g.1, 32, 12)]);
         drop(observed);
         observe(&f);
         close(&f, data, &[h]);

@@ -48,13 +48,26 @@ pub fn telemetry(role: u8) -> Runtime {
             return Runtime::disabled();
         }
     };
+    let interval_ms = match std::env::var("LAYERFS_TELEMETRY_INTERVAL_MS") {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(value @ 10..=1000) => value,
+            _ => {
+                layerfs_bridge::adapters::native::pipe::diagnostic(
+                    "telemetry initialization: invalid interval\n",
+                );
+                return Runtime::disabled();
+            }
+        },
+        Err(std::env::VarError::NotPresent) => 100,
+        Err(_) => return Runtime::disabled(),
+    };
     match Runtime::start(Configuration {
         enabled: true,
         timing: true,
         monitor: MonitorConfig {
             cpu: true,
             memory: true,
-            interval_ms: 100,
+            interval_ms,
             history: 600,
             windows: 32,
         },
@@ -88,12 +101,14 @@ pub(crate) fn env(name: &str) -> Result<String, layerfs_bridge::contract::Failur
 pub(crate) struct WorkspaceLaunch {
     pub config: layerfs_workspace::WorkspaceConfig,
     pub attach: layerfs_workspace::AttachOptions,
+    pub idle: bool,
 }
 
 pub(crate) struct ControlConfig {
     pub listen: std::net::SocketAddr,
     pub peers: Vec<layerfs_bridge::adapters::native::connection::Peer>,
     pub grants: Vec<ControlGrant>,
+    pub identity: Option<layerfs_bridge::contract::SandboxHelloWire>,
 }
 
 pub(crate) struct ControlGrant {
@@ -146,7 +161,6 @@ pub(crate) fn control(
             .parse::<u8>()
             .map_err(|_| Code::InvalidInput)?;
         if fields.next().is_some()
-            || operations & !63 != 0
             || peers
                 .iter()
                 .any(|peer: &Peer| peer.selector == selector || peer.public == public)
@@ -164,10 +178,25 @@ pub(crate) fn control(
             operations,
         });
     }
+    let identity = match std::env::var("LAYERFS_SANDBOX_ID") {
+        Ok(sandbox) => {
+            let sandbox = u128::from_str_radix(&sandbox, 16)
+                .map_err(|_| Code::InvalidInput)?
+                .to_be_bytes();
+            let mut instance = [0; 32];
+            std::io::Read::read_exact(&mut std::fs::File::open("/dev/urandom")?, &mut instance)?;
+            let identity = layerfs_bridge::contract::SandboxHelloWire { sandbox, instance };
+            identity.validate()?;
+            Some(identity)
+        }
+        Err(std::env::VarError::NotPresent) => None,
+        _ => return Err(Code::InvalidInput.into()),
+    };
     Ok(Some(ControlConfig {
         listen,
         peers,
         grants,
+        identity,
     }))
 }
 
@@ -188,13 +217,16 @@ pub(crate) fn workspace(
     if args.is_empty() {
         return Ok(None);
     }
-    if args.len() != 7
-        || !matches!(args[0].as_str(), "--mount-readonly" | "--mount-writable")
+    let idle = args[0] == "--idle-sandbox";
+    if (idle && args.len() != 4)
+        || (!idle
+            && (args.len() != 7
+                || !matches!(args[0].as_str(), "--mount-readonly" | "--mount-writable")))
         || args.iter().any(|s| s.len() > 256)
     {
         return Err(Code::InvalidInput.into());
     }
-    let writable = args[0] == "--mount-writable";
+    let writable = idle || args[0] == "--mount-writable";
     let number = |text: &str| {
         text.parse::<u32>()
             .map_err(|_| Failure::from(Code::InvalidInput))
@@ -219,7 +251,9 @@ pub(crate) fn workspace(
     let disk = std::env::var_os("LAYERFS_WORKSPACE_DISK_BUDGET_BYTES")
         .map(|value| positive(value.to_str().ok_or(Code::InvalidInput)?))
         .transpose()?;
-    let base = if let Some(hex) = args[4].strip_prefix("branch:") {
+    let base = if idle {
+        Base::Root([0; 32])
+    } else if let Some(hex) = args[4].strip_prefix("branch:") {
         if hex.len() != 34 || !hex.is_ascii() {
             return Err(Code::InvalidInput.into());
         }
@@ -235,7 +269,7 @@ pub(crate) fn workspace(
     } else {
         Base::Root(key(&args[4])?)
     };
-    if writable && (disk.is_none() || !matches!(base, Base::Branch(_))) {
+    if writable && (disk.is_none() || (!idle && !matches!(base, Base::Branch(_)))) {
         return Err(Code::InvalidInput.into());
     }
     Ok(Some(WorkspaceLaunch {
@@ -255,12 +289,13 @@ pub(crate) fn workspace(
             } else {
                 WorkspaceAccess::ReadOnly
             },
-            id: args[1].clone(),
-            incarnation: key(&args[2])?,
-            store: number(&args[3])?,
+            id: if idle { "idle".into() } else { args[1].clone() },
+            incarnation: if idle { [0; 32] } else { key(&args[2])? },
+            store: number(&args[if idle { 1 } else { 3 }])?,
             base,
-            owner_uid: number(&args[5])?,
-            owner_gid: number(&args[6])?,
+            owner_uid: number(&args[if idle { 2 } else { 5 }])?,
+            owner_gid: number(&args[if idle { 3 } else { 6 }])?,
         },
+        idle,
     }))
 }

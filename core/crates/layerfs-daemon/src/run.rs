@@ -1,16 +1,13 @@
 //! Native process/connection assembly; filesystem semantics stay in Workspace.
+use crate::transport::Transport;
 use layerfs_bridge::{
-    adapters::native::{
-        client::Client,
-        connection::{connect, connect_until},
-        pipe,
-    },
+    adapters::native::{client::Client, connection::connect, pipe, reusable_inspect_refusal},
     contract::*,
 };
 use layerfs_workspace::{OperationDelivery, WorkspaceHost};
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -40,6 +37,17 @@ impl ConnectionConfig {
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let launch = crate::config::workspace(std::env::args().skip(1).collect())?;
     let control_config = crate::config::control(launch.is_some())?;
+    if launch.as_ref().is_some_and(|launch| launch.idle)
+        && !control_config.as_ref().is_some_and(|control| {
+            control.identity.is_some()
+                && control
+                    .grants
+                    .iter()
+                    .any(|grant| grant.operations == u8::MAX)
+        })
+    {
+        return Err(Failure::from(Code::InvalidInput).into());
+    }
     if launch
         .as_ref()
         .is_some_and(|launch| launch.attach.access == layerfs_workspace::WorkspaceAccess::LocalEdit)
@@ -86,20 +94,45 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     signals.add(nix::sys::signal::Signal::SIGINT);
     signals.add(nix::sys::signal::Signal::SIGTERM);
     signals.thread_block()?;
+    let control_telemetry = telemetry.clone();
+    // One session across delivery threads. The lock already serializes calls;
+    // request IDs allocated before this lock can arrive in reverse order.
+    let session = Mutex::new(None::<(u64, Transport)>);
     let delivery: OperationDelivery = Arc::new(move |request, input, output, deadline| {
-        // Every call is one attempt. The existing server closes on any failure,
-        // including PathNotFound; a later independent lookup needs a new session.
+        // Every call is one attempt. Only a complete missing-name Inspect
+        // refusal may keep its authenticated session.
         let result = telemetry
             .recorder()
-            .run(request.id, request.operation.label(), |_| {
-                let mut client = Client::new(connect_until(
-                    connection.address,
-                    connection.selector,
-                    &connection.private,
-                    &connection.server,
-                    deadline,
-                )?)?;
-                client.call_until(request, input, output, deadline)
+            .run(request.id, request.operation.label(), |scope| {
+                let mut session = session.lock().map_err(|_| Failure::from(Code::Io))?;
+                if session
+                    .as_ref()
+                    .is_some_and(|(last_id, _)| request.id <= *last_id)
+                {
+                    *session = None;
+                }
+                let (last_id, transport) = session.get_or_insert_with(|| {
+                    (
+                        0,
+                        Transport::new(
+                            connection.address,
+                            connection.selector,
+                            connection.private,
+                            connection.server,
+                        ),
+                    )
+                });
+                let result = transport.call(request, input, output, deadline, scope);
+                if result
+                    .as_ref()
+                    .err()
+                    .is_some_and(|error| !reusable_inspect_refusal(request, error))
+                {
+                    *session = None;
+                } else {
+                    *last_id = request.id;
+                }
+                result
             });
         telemetry.publish(result.1);
         result.0
@@ -107,6 +140,39 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut control = None;
     let profile = launch.attach.clone();
     let host = WorkspaceHost::new(launch.config, delivery)?;
+    if launch.idle {
+        let lifecycle = Arc::new(crate::lifecycle::Lifecycle::new_idle(host, profile));
+        let (config, (listener, address)) = control_config
+            .zip(control_listener)
+            .ok_or_else(|| Failure::from(Code::InvalidInput))?;
+        control = Some(crate::control::Control::start(
+            config,
+            listener,
+            control_private,
+            Arc::clone(&lifecycle),
+            control_telemetry.clone(),
+        )?);
+        pipe::diagnostic(&format!("sandbox control ready {address}\n"));
+        loop {
+            if let Err(error) = signals.wait() {
+                pipe::diagnostic(&format!("signal wait retained: {error}\n"));
+                continue;
+            }
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let cleanup = (|| -> Result<(), Box<dyn std::error::Error>> {
+                lifecycle.shutdown(deadline, control.as_ref())?;
+                control
+                    .as_mut()
+                    .ok_or_else(|| Failure::from(Code::Io))?
+                    .stop(deadline)?;
+                Ok(())
+            })();
+            match cleanup {
+                Ok(()) => return Ok(()),
+                Err(error) => pipe::diagnostic(&format!("sandbox shutdown retained: {error}\n")),
+            }
+        }
+    }
     let attach_deadline = Instant::now() + Duration::from_secs(10);
     let workspace = match host.attach(launch.attach, attach_deadline) {
         Ok(workspace) => workspace,
@@ -151,6 +217,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             listener,
             control_private,
             Arc::clone(&lifecycle),
+            control_telemetry.clone(),
         ) {
             Ok(started) => {
                 control = Some(started);

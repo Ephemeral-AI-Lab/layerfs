@@ -1,0 +1,16 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	10mib-overwrite-band13
+operation	overwrite
+offset	9113539
+status	STARTED
+edit_sandbox_id	12d3f85437d605d6d0851b59a6230a8d
+10mib-overwrite-band13-edit-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+10mib-overwrite-band13-edit-docker-top_exit	ExitStatus(unix_wait_status(0))
+10mib-overwrite-band13-edit-daemon_exit	ExitStatus(unix_wait_status(0))
+10mib-overwrite-band13-edit_observation_wait_ns	6005018959
+10mib-overwrite-band13-edit-docker-top-late_exit	ExitStatus(unix_wait_status(0))
+10mib-overwrite-band13-edit-daemon-late_exit	ExitStatus(unix_wait_status(0))
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	FAIL	mount: UncertainMount { id: WorkspaceId("fdd749fe8c250e0fd5cfecc68da80f92"), cause: Failure { code: Unknown, unknown: true, cleanup: None, history: None } }

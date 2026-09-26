@@ -51,14 +51,20 @@ fn mutation_result_data_is_rejected_before_any_output() {
                 store: 1,
                 profile: if history { 2 } else { 1 },
                 deadline_ms: 10000,
-                response_bytes: 1024,
+                response_bytes: if history { 1024 } else { 0 },
                 operation: if history {
                     Operation::HistoryCommand(HistoryCommand::ReserveInodes {
                         scope: [1; 32],
                         count: 1,
                     })
                 } else {
-                    Operation::ConstructFile { length: 0 }
+                    Operation::SaveFile {
+                        base: None,
+                        base_length: 0,
+                        length: 0,
+                        extents: 0,
+                        replacement: 0,
+                    }
                 },
             };
             let error = client.call(&request, &mut input, &mut output).unwrap_err();

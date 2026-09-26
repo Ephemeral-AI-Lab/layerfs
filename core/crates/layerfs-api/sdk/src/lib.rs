@@ -1,6 +1,17 @@
-//! Host-direct agent SDK. Project initialization is the only live method.
-mod client;
-mod host;
-pub use client::Client;
-pub use host::Host;
-pub use layerfs_api_core::{Error, Project, Workspace};
+//! Agent SDK over one composed host Server and its sandbox owner.
+//!
+//! The three implementation modules are the whole product surface: `project`
+//! (Init and Branch fork), `sandbox` (create, list, delete) and `workspace`
+//! (mount, exec, commit, status, unmount).
+mod project;
+mod sandbox;
+mod workspace;
+pub use layerfs_api_core::{
+    Branch, DeleteError, Error, ExecResult, Mount, Project, SandboxId, SandboxInfo, SandboxStatus,
+    WorkspaceError, WorkspaceId, WorkspaceStatus,
+};
+pub use layerfs_bridge::contract::{CommitOutcomeWire, WorkspaceCommitReportWire};
+pub use layerfs_server::{HistoryMode, Server, ServerConfig};
+pub use project::{ProjectApi, BRANCH_BODY_BYTES};
+pub use sandbox::SandboxApi;
+pub use workspace::WorkspaceApi;

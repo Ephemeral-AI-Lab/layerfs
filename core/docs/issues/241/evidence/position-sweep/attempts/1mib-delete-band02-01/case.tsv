@@ -1,0 +1,9 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-delete-band02
+operation	delete
+offset	135511
+status	STARTED
+status	FAIL	canonical oracle e438a78f1a7bd56385aec6b4bed0a8c615b0ed5dd49bb5254ca19a61a3e85aa9/55/1044480/b449fc658a5b0e5ec45e114812635d54150dd21f94faacb9ed0cd9945058213f != a19785724d7631bb51c0a867f2b2ff4d8a4b06317c48239f39fcd75cba940b09/54/1044480/b449fc658a5b0e5ec45e114812635d54150dd21f94faacb9ed0cd9945058213f
+sandbox_delete	Ok(())
+sandbox_absent	true

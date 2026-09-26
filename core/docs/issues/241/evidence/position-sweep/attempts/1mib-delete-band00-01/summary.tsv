@@ -1,0 +1,6 @@
+selected	1
+attempted	1
+cleanup	true
+sandbox_delete	Ok(())
+sandbox_list	Ok([])
+failures	["1mib-delete-band00 @45395: unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })"]

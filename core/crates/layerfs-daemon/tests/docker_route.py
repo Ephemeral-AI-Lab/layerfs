@@ -150,7 +150,7 @@ def main():
             server_key=os.urandom(32).hex();client_key=os.urandom(32).hex();server_public=public(server_key);client_public=public(client_key)
             with socket.socket() as s:s.bind(("127.0.0.1",0));port=s.getsockname()[1]
             env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server_key,LAYERFS_PEERS=f"1,{client_public},{int(time.time())+3600},31",LAYERFS_STORE=str(path),LAYERFS_LISTEN=f"0.0.0.0:{port}",LAYERFS_TELEMETRY=args.telemetry,LAYERFS_RUN_ID="192",LAYERFS_NAMESPACE="1",LAYERFS_TELEMETRY_DIRECTORY=str(Path(temp)/"service-telemetry"))
-            service=subprocess.Popen([BIN/"layerfs-service"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            service=subprocess.Popen([BIN/"layerfs-server"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             evidence["service_pid"]=service.pid
             line=service.stderr.readline();assert b"ready" in line,line
             diagnostics.append(Diagnostics(service.stderr));evidence["ready"]=line.decode().strip()
@@ -229,7 +229,7 @@ def main():
             evidence["service_exit"]=service.returncode;evidence["daemon_exit"]=daemon.returncode
             assert service.returncode==daemon.returncode==0
             # Reopen the Store in a new native process and read via a new Docker daemon.
-            service=subprocess.Popen([BIN/"layerfs-service"],env={**env,"LAYERFS_PRIVATE_KEY":server_key,"LAYERFS_TELEMETRY_DIRECTORY":str(Path(temp)/"service-telemetry")},stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            service=subprocess.Popen([BIN/"layerfs-server"],env={**env,"LAYERFS_PRIVATE_KEY":server_key,"LAYERFS_TELEMETRY_DIRECTORY":str(Path(temp)/"service-telemetry")},stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
             assert b"ready" in service.stderr.readline();diagnostics.append(Diagnostics(service.stderr))
             subprocess.run(["docker","rm",container],check=True,stdout=subprocess.DEVNULL)
             daemon=start_daemon(command,env,diagnostics)
@@ -280,6 +280,6 @@ def main():
         evidence["cleanup"]="PASS"
         evidence["source_head"]=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
         evidence["lock_sha256"]=hashlib.sha256((ROOT/"core/Cargo.lock").read_bytes()).hexdigest()
-        for name,path in {"service":BIN/"layerfs-service","daemon":TARGET/"aarch64-unknown-linux-musl/debug/layerfs-daemon"}.items():evidence[name+"_sha256"]=hashlib.sha256(path.read_bytes()).hexdigest()
+        for name,path in {"service":BIN/"layerfs-server","daemon":TARGET/"aarch64-unknown-linux-musl/debug/layerfs-daemon"}.items():evidence[name+"_sha256"]=hashlib.sha256(path.read_bytes()).hexdigest()
         (args.output/"result.json").write_text(json.dumps(evidence,indent=2)+"\n")
 if __name__=="__main__":main()

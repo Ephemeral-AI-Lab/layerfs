@@ -64,7 +64,13 @@ fn fixed_framing_rejects_lengths_states_and_truncations() {
 #[test]
 fn all_operation_metadata_roundtrips_and_caps_are_checked() {
     let operations = vec![
-        Operation::ConstructFile { length: MAX_FILE },
+        Operation::SaveFile {
+            base: None,
+            base_length: 0,
+            length: MAX_FILE,
+            extents: 1,
+            replacement: MAX_FILE,
+        },
         Operation::ReadFile {
             root: [1; 32],
             start: 0,
@@ -79,33 +85,12 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
                 bytes: 16384,
             },
         },
-        Operation::EditFile {
-            root: [2; 32],
+        Operation::SaveFile {
+            base: Some([2; 32]),
             base_length: 6,
-            edits: vec![Edit {
-                start: 0,
-                end: 1,
-                replacement: 3,
-            }],
-        },
-        Operation::UpdatePreparedFilesystem {
-            directory_metadata: Vec::new(),
-            new_directories: Vec::new(),
-            new_file_serials: Vec::new(),
-            new_symlink_serials: Vec::new(),
-            base: [1; 32],
-            scope: [2; 32],
-            root_serial: 1,
-            directories: vec![DirectoryChange {
-                parent: 1,
-                changes: vec![(b"f".to_vec(), Some(2))],
-            }],
-            inodes: vec![InodeChange {
-                serial: 2,
-                kind: 1,
-                content: [3; 32],
-                metadata: [4; 32],
-            }],
+            length: 9,
+            extents: 2,
+            replacement: 3,
         },
     ];
     for operation in operations {
@@ -115,7 +100,11 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
             store: 1,
             profile: 1,
             deadline_ms: 10000,
-            response_bytes: MAX_FILE,
+            response_bytes: if matches!(operation, Operation::SaveFile { .. }) {
+                0
+            } else {
+                MAX_FILE
+            },
             operation,
         };
         let encoded = encode_request(&r).unwrap();
@@ -127,41 +116,78 @@ fn all_operation_metadata_roundtrips_and_caps_are_checked() {
         surplus.push(0);
         assert!(decode_request(1, &surplus).is_err());
     }
-    let r = Request {
+    let save = |extents: u64, replacement: u64, length: u64| Request {
         id: 1,
         generation: 0,
         store: 1,
         profile: 1,
         deadline_ms: 10000,
-        response_bytes: MAX_FILE,
-        operation: Operation::EditFile {
-            root: [0; 32],
+        response_bytes: 0,
+        operation: Operation::SaveFile {
+            base: Some([2; 32]),
             base_length: 5,
-            edits: vec![
-                Edit {
-                    start: 0,
-                    end: 0,
-                    replacement: u64::MAX,
-                },
-                Edit {
-                    start: 0,
-                    end: 0,
-                    replacement: 1,
-                },
-            ],
+            length,
+            extents,
+            replacement,
         },
     };
-    assert!(r.validate().is_err());
+    assert!(save(2, 1, 5).validate().is_ok());
+    assert!(save(4_097, 1, 5).validate().is_ok());
+    assert!(save(0, 1, 5).validate().is_err());
+    assert!(save(1, MAX_FILE + 1, MAX_FILE).validate().is_err());
+    let huge_base = Request {
+        deadline_ms: 10000,
+        operation: Operation::SaveFile {
+            base: Some([2; 32]),
+            base_length: MAX_FILE + 1,
+            length: 5,
+            extents: 1,
+            replacement: 1,
+        },
+        ..save(1, 1, 5)
+    };
+    assert!(huge_base.validate().is_err());
+}
+
+#[test]
+fn final_file_stream_charges_extent_records_separately_from_file_length() {
+    let unbounded = Request {
+        id: 1,
+        generation: 1,
+        store: 1,
+        profile: 1,
+        deadline_ms: 10_000,
+        response_bytes: 0,
+        operation: Operation::SaveFile {
+            base: Some([3; 32]),
+            base_length: 1 << 40,
+            length: MAX_FILE,
+            extents: 4_097,
+            replacement: 1 << 32,
+        },
+    };
+    assert!(unbounded.validate().is_err());
+    assert_eq!(
+        unbounded.operation.input_length().unwrap(),
+        4_097 * 24 + (1 << 32)
+    );
+    let bounded = Request {
+        operation: Operation::SaveFile {
+            base: Some([3; 32]),
+            base_length: MAX_FILE,
+            length: MAX_FILE,
+            extents: 2,
+            replacement: 1 << 20,
+        },
+        ..unbounded
+    };
+    assert!(bounded.validate().is_ok());
+    assert_eq!(bounded.operation.input_length().unwrap(), 48 + (1 << 20));
 }
 
 #[test]
 fn terminal_types_and_explicit_continuation_roundtrip() {
     let values = [
-        Response::FilesystemSaved {
-            root: [1; 32],
-            inserted: 4,
-            reused: 2,
-        },
         Response::List {
             entries: vec![(b"a".to_vec(), 2)],
             continuation: Some(b"a".to_vec()),
@@ -188,7 +214,13 @@ fn remote_budget_only_shortens_the_declared_duration() {
         profile: 1,
         deadline_ms: 1000,
         response_bytes: 0,
-        operation: Operation::ConstructFile { length: 0 },
+        operation: Operation::SaveFile {
+            base: None,
+            base_length: 0,
+            length: 0,
+            extents: 0,
+            replacement: 0,
+        },
     };
     let bytes = encode_request_with_budget(&request, 37).unwrap();
     let remote = decode_request(request.id, &bytes).unwrap();
@@ -206,16 +238,32 @@ fn declared_large_input_has_a_size_consistent_frame_and_time_budget() {
         store: 1,
         profile: 1,
         deadline_ms: MAX_OPERATION_MS,
-        response_bytes: MAX_FILE,
-        operation: Operation::ConstructFile { length: MAX_FILE },
+        response_bytes: 0,
+        operation: Operation::SaveFile {
+            base: None,
+            base_length: 0,
+            length: MAX_FILE,
+            extents: 1,
+            replacement: MAX_FILE,
+        },
     };
     request.validate().unwrap();
     assert!(frame_budget(MAX_FILE) > MAX_FILE / FRAME_BYTES as u64);
-    request.operation = Operation::ConstructFile {
+    request.operation = Operation::SaveFile {
+        base: None,
+        base_length: 0,
         length: MAX_FILE + 1,
+        extents: 1,
+        replacement: MAX_FILE + 1,
     };
-    assert_eq!(request.validate().unwrap_err().code, Code::Capacity);
-    request.operation = Operation::ConstructFile { length: 0 };
+    assert!(request.validate().is_err());
+    request.operation = Operation::SaveFile {
+        base: None,
+        base_length: 0,
+        length: 0,
+        extents: 0,
+        replacement: 0,
+    };
     request.deadline_ms = MAX_OPERATION_MS + 1;
     assert_eq!(request.validate().unwrap_err().code, Code::InvalidInput);
 }

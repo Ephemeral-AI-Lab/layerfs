@@ -1,0 +1,23 @@
+{
+  "cursor_key_location": "retained locally with mode 0600; omitted from committed evidence",
+  "files": {
+    "history.sqlite": {
+      "boundary": "post performance and verifier; whole file, not service.finish",
+      "bytes": 86016,
+      "freelist_count": 0,
+      "page_count": 21,
+      "page_size": 4096,
+      "sha256": "7565fedc395e004a39d480862fa64cccdba4edd4b72f7681fc4660cdf9f52ce3"
+    },
+    "store.sqlite": {
+      "boundary": "post performance and verifier; whole file, not service.finish",
+      "bytes": 583901184,
+      "freelist_count": 0,
+      "page_count": 142554,
+      "page_size": 4096,
+      "sha256": "cf15a038e924b2e86804ac317345d3e838b7e9c95d492399ebe6bfb7b42b8c33"
+    }
+  },
+  "full_local_run_path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1b-finish-500mib-01",
+  "status": "INELIGIBLE"
+}

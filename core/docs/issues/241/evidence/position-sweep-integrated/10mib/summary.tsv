@@ -1,0 +1,5 @@
+selected	66
+attempted	46
+cleanup	true
+sandbox_list	Ok([])
+failures	["10mib-delete-band13 @8584572: primary=baseline exec: Failure(Failure { code: Unknown, unknown: true, cleanup: None, history: None }); cleanup=unmount: Failure(Failure { code: Io, unknown: false, cleanup: None, history: None })"]

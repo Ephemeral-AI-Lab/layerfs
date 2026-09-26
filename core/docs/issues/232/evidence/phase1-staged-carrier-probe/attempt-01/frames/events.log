@@ -1,0 +1,15 @@
+open fh=40
+callback cmd=0x5000f54f fh=40 flags=IoctlFlags(0x0) in=4096 out=0
+reply frame rc=0 bytes=0
+caller frame-4096 cmd=0x5000f54f rc=0 errno=None
+callback cmd=0x6000f54f fh=40 flags=IoctlFlags(0x0) in=8192 out=0
+reply frame rc=0 bytes=0
+caller frame-8192 cmd=0x6000f54f rc=0 errno=None
+callback cmd=0x7000f54f fh=40 flags=IoctlFlags(0x0) in=12288 out=0
+reply frame rc=0 bytes=0
+caller frame-12288 cmd=0x7000f54f rc=0 errno=None
+callback cmd=0x7ff0f54f fh=40 flags=IoctlFlags(0x0) in=16368 out=0
+reply frame rc=0 bytes=0
+caller frame-16368 cmd=0x7ff0f54f rc=0 errno=None
+release fh=40 stage=none
+final revision=0 publications=0 stage_present=false unmounted=true

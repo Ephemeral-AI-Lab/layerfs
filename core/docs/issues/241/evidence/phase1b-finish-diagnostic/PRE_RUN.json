@@ -1,0 +1,88 @@
+{
+  "cache_contract": "macOS Store page residency checked; Linux FUSE backing declared warm/ineligible for cold claim",
+  "cargo_lock_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+  "cases": [
+    {
+      "command": [
+        "python3",
+        "core/benchmark/fs-bench-pro/runner.py",
+        "run",
+        "--case",
+        "insert-middle-4k-on-1mib-ops-1-exec-v4",
+        "--out",
+        "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1b-finish-1mib-01",
+        "--verification",
+        "inline"
+      ],
+      "delete_length": 0,
+      "edit_start": 524288,
+      "expected_range_edit_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "fixture_bytes": 1048576,
+      "label": "1mib",
+      "output": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1b-finish-1mib-01",
+      "prepared_master_sha256": "1bace836c2146ae4d2dc67f744750f4b089754ea7315a811b7e296595d0a68fc",
+      "replacement_bytes": 4096,
+      "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v4"
+    },
+    {
+      "command": [
+        "python3",
+        "core/benchmark/fs-bench-pro/runner.py",
+        "run",
+        "--case",
+        "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4",
+        "--out",
+        "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1b-finish-500mib-01",
+        "--verification",
+        "inline"
+      ],
+      "delete_length": 0,
+      "edit_start": 262141952,
+      "expected_range_edit_callbacks": 1,
+      "expected_range_state_callbacks": 2,
+      "expected_shifted_suffix_bytes": 0,
+      "fixture_bytes": 524283904,
+      "label": "500mib",
+      "output": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1b-finish-500mib-01",
+      "prepared_master_sha256": "bc8b32f6097cd520bbf6e33c610cf399a76c8aa7fe0bdd0dca887bf442a3f1e2",
+      "replacement_bytes": 4096,
+      "scenario_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4"
+    }
+  ],
+  "complete_command_budget_ns": 15000000000,
+  "daemon_sha256": "8282a80ebd948e09dadc81c320c3d9f2c142574678290a5fec23fcbddb54341f",
+  "driver_source_commit": "b131482630098cd6adc398996d897854579aad80",
+  "driver_source_tree_before_manifest": "c7c39005acfd7547447621a77e991199fe803384",
+  "editor_sha256": "5b4ba2cdf4fb7d109a40ea88acb44ab9288f3fcd0f440015948c5f23c53c3361",
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_FINISH_DIAGNOSTIC": "1"
+  },
+  "execution_source_ref": "codex/issue241-phase1b-diagnostic-v1",
+  "harness_seal": "aa6f92edc1124fbbfc9b0f73d489947e3c623d4cc5322c5ee8294b4196d3d55b",
+  "host_build_record": "host-build.json",
+  "image_id": "sha256:078d691e57d6b02c9f7033fea0a1f857536559b444031a9f610cb3ddf7f795e9",
+  "image_record": "image.json",
+  "independent_verifier_strictly_less_than_ns": 10000000000,
+  "instrumented_product_commit": "8ad98a118d6640e8c67740334fa8ffa88335aceb",
+  "master_records": {
+    "1048576": "master-1048576.json",
+    "524283904": "master-524283904.json"
+  },
+  "no_historical_receipt_relabel": true,
+  "no_resample_at_identity": true,
+  "operation_timer": "LFT1 only; caller Exec then Commit; Service/daemon LFT1 retained",
+  "phase_page_count": "UNAVAILABLE; post-run SQLite page_count is Store-wide observation only",
+  "physical_read_counter": "macOS proc_pid_rusage_v2 process-wide disk_read_bytes delta, not finish-exclusive",
+  "product_seal": "a419adeba1c3b7c0cf3ea8fb8cab8d8725f9e90316ddd8c9d938040aec7edbfa",
+  "registry_sha256": "9decc295b688083db7b1f6899ebbc315eeeddfa28d0fafe68537507d12394fbb",
+  "release_binaries_sha256": {
+    "benchmark_edit": "2cd11af2f87661abb5ce9a9aed71e035306f1017f662d26e8b01bd774fc59620",
+    "benchmark_init": "47510b3ddefb7d4573462a79b60df706ea8c27c2b99ce14711756c5e043b7895",
+    "verify_edit": "de0d2c6b08c251ecb5de5d8b5cad73beed65f8ab39a331af3ecba69082a67458"
+  },
+  "schema": "issue241-phase1b-finish-pre-run-v1",
+  "status": "PROSPECTIVE"
+}

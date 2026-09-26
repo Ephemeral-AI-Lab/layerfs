@@ -18,9 +18,6 @@ use std::io::Read;
 
 use crate::error::{ContentError, ContentResult};
 
-/// Largest number of edits one operation may carry.
-pub const MAXIMUM_EDITS_PER_OPERATION: usize = 4_096;
-
 /// One replacement range in current-result coordinates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Edit {
@@ -97,13 +94,6 @@ pub struct EditStream {
 impl EditStream {
     /// Validates `edits` against `base_len` and accumulates the final length.
     pub fn new(base_len: u64, edits: Vec<Edit>) -> ContentResult<Self> {
-        if edits.len() > MAXIMUM_EDITS_PER_OPERATION {
-            return Err(ContentError::BoundedCapacityExceeded {
-                what: "edit.stream",
-                limit: MAXIMUM_EDITS_PER_OPERATION as u64,
-                actual: edits.len() as u64,
-            });
-        }
         let mut length = base_len;
         let mut previous_end = 0_u64;
         for edit in &edits {
@@ -161,6 +151,41 @@ impl EditStream {
     /// The edits in order.
     pub fn edits(&self) -> &[Edit] {
         &self.edits
+    }
+}
+
+/// Validated replayable final-change sequence. Implementations may keep fixed
+/// records on disk; construction never needs the sequence resident as a vector.
+pub trait EditSequence {
+    /// Length of the authenticated base file.
+    fn base_len(&self) -> u64;
+    /// Length after all validated replacements.
+    fn final_len(&self) -> u64;
+    /// Number of final replacement runs.
+    fn len(&self) -> usize;
+    /// Reads one validated run by index from bounded backing.
+    fn edit_at(&self, index: usize) -> ContentResult<Edit>;
+    /// Whether the sequence retains the base unchanged.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl EditSequence for EditStream {
+    fn base_len(&self) -> u64 {
+        self.base_len
+    }
+    fn final_len(&self) -> u64 {
+        self.final_len
+    }
+    fn len(&self) -> usize {
+        self.edits.len()
+    }
+    fn edit_at(&self, index: usize) -> ContentResult<Edit> {
+        self.edits
+            .get(index)
+            .copied()
+            .ok_or(ContentError::InvalidEdit { what: "edit index" })
     }
 }
 
@@ -296,7 +321,7 @@ pub enum Segment {
 /// is yielded as its own segment, so a caller never has to reconstruct the gaps
 /// itself.
 pub struct Plan<'a> {
-    stream: &'a EditStream,
+    stream: &'a dyn EditSequence,
     index: usize,
     base_cursor: u64,
     result_cursor: u64,
@@ -305,7 +330,7 @@ pub struct Plan<'a> {
 
 impl<'a> Plan<'a> {
     /// Cursor over the beginning of `stream`.
-    pub fn new(stream: &'a EditStream) -> Self {
+    pub fn new(stream: &'a dyn EditSequence) -> Self {
         Self {
             stream,
             index: 0,
@@ -318,7 +343,7 @@ impl<'a> Plan<'a> {
     /// Next piece of the result, or `None` after the trailing retained run.
     pub fn advance(&mut self) -> ContentResult<Option<Segment>> {
         if let Some((index, start, end, len)) = self.pending_replace.take() {
-            let edit = self.stream.edits[index];
+            let edit = self.stream.edit_at(index)?;
             self.base_cursor = end;
             self.result_cursor = edit
                 .start()
@@ -331,17 +356,17 @@ impl<'a> Plan<'a> {
                 len,
             }));
         }
-        if self.index >= self.stream.edits.len() {
-            if self.base_cursor < self.stream.base_len {
+        if self.index >= self.stream.len() {
+            if self.base_cursor < self.stream.base_len() {
                 let segment = Segment::Retain {
-                    base: (self.base_cursor, self.stream.base_len),
+                    base: (self.base_cursor, self.stream.base_len()),
                 };
-                self.base_cursor = self.stream.base_len;
+                self.base_cursor = self.stream.base_len();
                 return Ok(Some(segment));
             }
             return Ok(None);
         }
-        let edit = self.stream.edits[self.index];
+        let edit = self.stream.edit_at(self.index)?;
         let retained =
             edit.start()
                 .checked_sub(self.result_cursor)
@@ -355,7 +380,7 @@ impl<'a> Plan<'a> {
         let removal_end = retain_end
             .checked_add(edit.removed_len())
             .ok_or(ContentError::LengthOverflow)?;
-        if removal_end > self.stream.base_len {
+        if removal_end > self.stream.base_len() {
             return Err(ContentError::InvalidEdit {
                 what: "range beyond base length",
             });

@@ -2,11 +2,11 @@
 use layerfs_bridge::contract::{
     Code, Failure, Response, WorkspaceAttachOutcome, WorkspaceAttachWire,
     WorkspaceAttachmentProgress, WorkspaceAttachmentState, WorkspaceAttachmentWire,
-    WorkspaceStatusWire,
+    WorkspaceStatusWire, PROJECTION_CLASSES, PROJECTION_CLASS_LABELS,
 };
 use layerfs_fuse::{MountError, MountFailure, MountHandle};
 use layerfs_workspace::{
-    AttachOptions, Attachment, AttachmentCleanupProgress, Workspace, WorkspaceAccess,
+    AttachOptions, Attachment, AttachmentCleanupProgress, Base, Workspace, WorkspaceAccess,
     WorkspaceError, WorkspaceHost,
 };
 use std::{io, sync::Mutex, time::Instant};
@@ -31,6 +31,17 @@ pub(crate) struct Selected {
 }
 
 impl Lifecycle {
+    pub fn new_idle(host: WorkspaceHost, profile: AttachOptions) -> Self {
+        Self {
+            host,
+            profile,
+            slot: Mutex::new(Slot {
+                selected: None,
+                mount: None,
+            }),
+        }
+    }
+
     pub fn new(
         host: WorkspaceHost,
         profile: AttachOptions,
@@ -74,6 +85,34 @@ impl Lifecycle {
         let mut options = self.profile.clone();
         options.id = id.into();
         options.incarnation = incarnation;
+        self.attach_with_options(slot, workspace, incarnation, options, deadline)
+    }
+
+    pub fn attach_selected(
+        &self,
+        slot: &mut Slot,
+        workspace: &[u8],
+        incarnation: [u8; 32],
+        base: Base,
+        deadline: Instant,
+    ) -> Result<Response, Failure> {
+        let id = std::str::from_utf8(workspace).map_err(|_| Code::InvalidInput)?;
+        let mut options = self.profile.clone();
+        options.id = id.into();
+        options.incarnation = incarnation;
+        options.base = base;
+        self.attach_with_options(slot, workspace, incarnation, options, deadline)
+    }
+
+    fn attach_with_options(
+        &self,
+        slot: &mut Slot,
+        workspace: &[u8],
+        incarnation: [u8; 32],
+        options: AttachOptions,
+        deadline: Instant,
+    ) -> Result<Response, Failure> {
+        let id = std::str::from_utf8(workspace).map_err(|_| Code::InvalidInput)?;
         let mut result = Box::new(WorkspaceAttachWire {
             workspace: workspace.into(),
             incarnation,
@@ -189,6 +228,26 @@ impl Lifecycle {
     }
 }
 
+/// Maps the Workspace's labeled projection counts into the fixed wire classes.
+///
+/// A class the Workspace does not report is a contract mismatch, not a zero.
+fn projection_counts(
+    local: &layerfs_workspace::WorkspaceStatus,
+) -> Result<[u64; PROJECTION_CLASSES], Failure> {
+    let mut counts = [0u64; PROJECTION_CLASSES];
+    for (label, count) in &local.projection_calls {
+        let slot = PROJECTION_CLASS_LABELS
+            .iter()
+            .position(|name| name == label)
+            .ok_or(Code::Integrity)?;
+        counts[slot] = *count;
+    }
+    if local.projection_calls.len() != PROJECTION_CLASSES {
+        return Err(Code::Integrity.into());
+    }
+    Ok(counts)
+}
+
 fn close_workspace(workspace: &Workspace, deadline: Instant) -> Result<(), WorkspaceError> {
     if workspace.status()?.closed {
         return Ok(());
@@ -212,6 +271,8 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         handles: local.handles as u64,
         cookies: local.cookies as u64,
         consumer_accounted_bytes: local.accounted_bytes as u64,
+        projection: projection_counts(&local)?,
+        upstream_calls: local.upstream_calls,
     };
     result.validate()?;
     if workspace.access_mode() == WorkspaceAccess::LocalEdit {

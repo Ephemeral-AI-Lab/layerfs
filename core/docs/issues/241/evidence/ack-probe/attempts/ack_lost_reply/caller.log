@@ -1,0 +1,3 @@
+initial_size=8192 initial_mtime=1700000000
+ioctl=Err(Os { code: 103, kind: ConnectionAborted, message: "Connection aborted" }) errno=Some(103)
+decision=UNCERTAIN ioctl_calls=1 retry_calls=0

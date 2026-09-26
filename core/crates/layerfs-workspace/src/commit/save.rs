@@ -1,5 +1,5 @@
 //! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
-use super::{lower::Dirty, source::ReplacementSource};
+use super::{lower::Dirty, source::ReplacementSource, upload};
 use crate::{
     overlay::snapshot::{SavedInode, Submission},
     *,
@@ -62,7 +62,7 @@ impl Workspace {
                             state.source_failure = Some(failure.clone());
                         }
                     })?;
-                let response = self.host.call_input(
+                let response = self.remote_call(
                     (self.inner.store, captured.generation),
                     Operation::ConstructSymlink { target },
                     &mut &[][..],
@@ -86,45 +86,56 @@ impl Workspace {
                 root
             } else {
                 let plan = self.lower_file(submission, inode, deadline)?;
-                if plan.edits.is_empty() && !inode.fresh {
+                // An exact zero is a version whose selected content is its
+                // own base; a splice that shared an untouched subtree records
+                // `u16::MAX` instead and is always lowered.
+                if plan.changes == 0 && inode.edits == 0 && !inode.fresh {
                     inode.base
                 } else {
                     submission.phase(StagePhase::FileSave, Some(serial))?;
                     let mut source =
                         ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
+                    let mut upload = upload::FileUpload::new(
+                        self.clone(),
+                        captured.root.clone(),
+                        plan.inode,
+                        plan.extents,
+                        &mut source,
+                    );
                     let remote = first_remote
                         .take()
                         .map_or_else(|| self.begin(true, deadline), Ok)?;
-                    let response = self.host.call_input(
+                    let response = self.remote_call(
                         (self.inner.store, captured.generation),
-                        if inode.fresh {
-                            Operation::ConstructFile {
-                                length: inode.length,
-                            }
-                        } else {
-                            Operation::EditFile {
-                                root: inode.base,
-                                base_length: inode.base_length,
-                                edits: plan.edits,
-                            }
+                        Operation::SaveFile {
+                            base: (!inode.fresh).then_some(inode.base),
+                            base_length: inode.base_length,
+                            length: inode.length,
+                            extents: plan.extents,
+                            replacement: inode.replacement,
                         },
-                        &mut source,
+                        &mut upload,
                         0,
                         &mut std::io::sink(),
                         deadline,
                     );
                     drop(remote);
-                    if let Some(failure) = source.failure.take() {
+                    if let Some(failure) = upload.source_failure() {
                         submission
                             .state
                             .lock()
                             .map_err(|_| WorkspaceError::Io)?
                             .source_failure = Some(failure);
                     }
-                    let Response::Saved { root, length, .. } = response? else {
+                    let Response::Saved {
+                        root: saved_root,
+                        length,
+                        ..
+                    } = response?
+                    else {
                         return Err(WorkspaceError::InvalidInput);
                     };
-                    if length != inode.length || !source.complete() {
+                    if length != inode.length || !upload.complete() {
                         return Err(WorkspaceError::InvalidInput);
                     }
                     submission
@@ -133,7 +144,7 @@ impl Workspace {
                         .map_err(|_| WorkspaceError::Io)?
                         .status
                         .saved_files += 1;
-                    root
+                    saved_root
                 }
             };
             {
@@ -150,7 +161,7 @@ impl Workspace {
             let remote = first_remote
                 .take()
                 .map_or_else(|| self.begin(true, deadline), Ok)?;
-            let response = self.host.call_input(
+            let response = self.remote_call(
                 (self.inner.store, captured.generation),
                 if inode.fresh {
                     Operation::ConstructPortableMetadata {
@@ -278,7 +289,7 @@ impl Workspace {
         let captured = submission.capture()?;
         submission.phase(StagePhase::StageChanges, None)?;
         let remote = first_remote.take().ok_or(WorkspaceError::Io)?;
-        let response = self.host.call_input(
+        let response = self.remote_call(
             (self.inner.store, captured.generation),
             Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
             &mut &[][..],

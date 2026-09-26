@@ -1,0 +1,155 @@
+{
+  "binary_sha256": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "34",
+    "lookup": "16",
+    "open": "16",
+    "other": "0",
+    "range_edit": "0",
+    "range_state": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "16"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/history.sqlite",
+    "store": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8/benchmark_shell",
+    "run",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/case.before",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/store.sqlite",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/history.sqlite",
+    "sha256:8405f00c4f318f2fffdedc5cec3ec2bb81f8b378bad45e76b881ecdcbbfcf71a"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 1119838584,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+    "cleanup_ns": 516157333,
+    "commit_called": true,
+    "commit_ns": 33894583,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 21142,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 208897833,
+    "head_commit": "122ada9055694aa23f1d21c922a71a8d71fc55bc37b21aed57f297a3b1a82445b0",
+    "mode": "run",
+    "operation_ns": 242799000,
+    "projection_counts": "lookup=16,getattr=34,read=0,write=16,readdir=0,open=16,setattr=0,rename=0,other=0,range_state=0,range_edit=0",
+    "range_accepted_payload_bytes": 0,
+    "sandbox_delete_ok": true,
+    "scenario_id": "repeated-one-byte-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+  "image_id": "sha256:8405f00c4f318f2fffdedc5cec3ec2bb81f8b378bad45e76b881ecdcbbfcf71a",
+  "lft1": {
+    "event_count": 67,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 549800167,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        26067000,
+        31475000
+      ],
+      "first_ns": 300814167,
+      "gaps": 0,
+      "incarnation": 1228596563822,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12090541,
+      "last_ns": 540895625,
+      "last_probe_ns": 9834,
+      "namespace": 7,
+      "opened_ns": 307002625,
+      "pid": 85499,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "75e657d66cb523bececd4d5fb50f216e",
+      "sampled_max_rss": 34553856,
+      "samples": 25,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 208898042,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 33894875,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 242796209,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+    "genesis_layer": "32835065a7cdd815339d13130e1a4ace3b09494d7a954297794eaabe62622475ff",
+    "genesis_root": "302433ba12b11f0bbb30db7d5358455aeca9e883786ec230cb041cd5f2b917f6",
+    "genesis_root_serial": 1,
+    "history_sha256": "34a028cd7c4d833c01c842c0f2e33780703e9c260c8b094e428995672c4db36a",
+    "init_wall_ns": 24511666,
+    "old_commit": "12791ee8cd12c7e109901821ea45981bfdf270e881e533206f69d85e4033f2a730",
+    "old_manifest_sha256": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+    "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/masters/repeated",
+    "project_id": "31b4e2a93c0ccfde3aa4b67b2e7330ccef",
+    "seed_wall_ns": 899729834,
+    "store_sha256": "df6fa9029ffe81b93c1868d8b410302170f9267e1dc60a8fb8824a555fb3ad8d",
+    "verify_wall_ns": 52678667
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "repeated-one-byte-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "i=0; while [ \"$i\" -lt 16 ]; do printf X | dd of=repeated.bin bs=1 seek=\"$i\" conv=notrunc 2>/dev/null; i=$((i + 1)); done",
+  "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+  "source_tree": "98285433d132d646be9fd0a4295256f21857977c",
+  "verifier": {
+    "command": [
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/case.verify",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/store.sqlite",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/repeated-one-byte-v1/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/repeated.tsv",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/repeated-one-byte-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 95472792
+  },
+  "verifier_sha256": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+}

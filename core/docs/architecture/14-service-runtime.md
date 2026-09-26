@@ -22,6 +22,43 @@ their separate source bases.
 The Init ordering-backing correction describes product commit
 `0042a909ac3f16a5041aa51d76f96522a58352c8`; older sections retain
 their separate source bases.
+The #243 range-ioctl retirement describes the FUSE source in the same commit
+as this note. Historical range-ioctl paragraphs below describe the earlier
+opt-in carrier. The #252 follow-up removes the remaining FUSE ioctl override;
+the pinned `fuser` default refuses unimplemented ioctl requests with `ENOSYS`.
+Ordinary Workspace writes continue through FUSE WRITE and the internal
+Workspace piece operations.
+The #232 Exec progress rule below describes the bridge and daemon source in
+the same commit as that rule; earlier sections retain their stated bases.
+
+The #252 generic file-save cutover describes the product source in the same
+commit as this note. The public mutation route is `WorkspaceApi::exec(command)`
+through ordinary FUSE writes, resize and rename, followed by explicit Commit.
+The captured Workspace file is lowered as one ordered `Base`/`Local`/`Zero`
+sequence. Bridge opcode 20 (`SaveFile`) carries an optional authenticated base
+root, base and final lengths, a `u64` record count, 24-byte final-extent records
+and the non-base bytes. Each non-base byte, including zero ranges, is charged to
+the body; the Service checks zero-range bytes before opening its C2 save. The
+logical file limit is 4 GiB, the descriptor-plus-byte wire budget is 8 GiB,
+and the Service's derived-record and byte spools have a separate 8 GiB disk
+budget. Record count has no fixed admission ceiling; Service input uses a
+64 KiB transfer window and at most 64 KiB of retained replacement bytes,
+plus bounded C1/C2 state. The existing C1 edit algorithm remains
+an internal canonical builder, including its mapping partition and root identity.
+The #252 follow-up corrects the Workspace extent cursor's nonzero-offset seek:
+it accumulates each preceding branch child's length before selecting a child,
+so repeated streamed reads into a multi-leaf frozen file reach the right extent.
+One file save precedes one metadata save and C5 Branch-head publication; a
+failed or interrupted stream cannot publish a partial head. Old file-save
+opcodes 3 (`ConstructFile`), 4 (`EditFile`) and 5
+(`UpdatePreparedFilesystem`) and their dedicated codecs/handlers are absent.
+The direct Workspace range entrypoints and projected range wire fields are
+absent. Status response envelopes are now 219 bytes and writable-status
+response envelopes 405 bytes. The Linux adapter implements no ioctl callback.
+`InitLayerStack`, `AddLayer` and
+`DiscardStage` remain in the history grammar because the active Linux history
+route in `core/crates/layerfs-daemon/tests/history_route.py` uses them. The
+older sections below describe their stated source periods, not this cutover.
 
 The agent-facing project Init route is based on `main` at
 `7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.
@@ -31,8 +68,231 @@ that Service directly. The Service generates a stack body and scope seed for
 each call, runs its normal authorization and writer admission, and returns the
 published genesis record. The native daemon request retains its startup-bound
 root. Invalid sources are refused before the import call; name collisions are
-refused by C5 publication. Workspace lifecycle and exec remain unsupported.
+refused by C5 publication. The later agent SDK implementation below adds
+Workspace lifecycle and Exec through the distinct daemon control authority.
 This route has no benchmark qualification from older daemon-host receipts.
+
+The follow-on agent route is described against worktree base
+`13773c5896c30c19047bdfabced4aa25efb27034` plus the product changes in
+this commit. `ProjectApi::init` retains the host-direct Service import;
+`layerfs-sdk::Client::init_project` remains a compatibility delegation.
+`layerfs-sandbox` owns one concrete Docker deployment profile and an in-memory
+Sandbox ID to daemon registry. Each created container starts its daemon idle,
+reports an assigned Sandbox ID and fresh daemon instance over authenticated
+control, and receives no Workspace at creation. The owner checks that identity
+at creation and each routing lookup. Workspace IDs route through an owner
+binding to one Sandbox ID, daemon instance and Workspace incarnation. An owner
+process restart loses the in-memory registry and requires external lifecycle
+reconciliation; there is no persistent sandbox directory in this revision.
+The control-session refinement after source commit
+`f61f575f4c5355fefdde347e68294329bc28545c` retains the authenticated
+connection used by checked `SandboxHello` and sends the Workspace operation as
+the next request on that connection. It still checked the Docker-published port
+on every lookup at that revision. The original fixed-port refinement after
+source commit `c45e93d4a7eb2a8f41d1803f704a881f41fe5282` selected a free
+loopback port at Create, released its reservation, and then requested that
+mapping from Docker. The #241 correction based on source
+`a23507d1303d82c4a96595c4f1db01a113ee84ea` lets Docker allocate a loopback
+port with container launch. The owner retains the assigned Sandbox ID before
+launch, records the endpoint only after one checked `docker port` query, and
+refuses routes while that endpoint is pending. Workspace calls use the recorded
+endpoint and still authenticate Hello and check the daemon instance before
+mutation. Docker may assign a different port after container restart; if the
+recorded endpoint fails, a changed published mapping classifies the old route
+as stale without replaying its operation or changing the recorded endpoint.
+A failed launch or port query retains the Sandbox ID for cleanup; it does not
+retry or choose another route.
+The fixed deployment profile uses two CPUs, 512 MiB memory/swap, 64 PIDs,
+a read-only image root with a 16 MiB `/tmp`, `/dev/fuse` and `SYS_ADMIN`, and
+a separate writable Workspace volume. The image digest must contain both the
+daemon binary and `/bin/sh`; readiness checks the authenticated daemon and shell.
+
+Control profile 3 adds Hello (opcode 17), selected Workspace Open (18), and
+Exec (19) to the existing authenticated codec. Open carries a Project ID,
+Branch ID, optional exact Commit ID and expected daemon instance; the daemon
+rejects an instance mismatch before attaching, resolves and checks the
+selected history before writable attachment, and mounts the resulting FUSE
+Workspace. Entered failed or uncertain attachment retains custody and never silently
+changes the Branch. Exec runs `/bin/sh -c` in the mounted directory, caps each
+output stream at 8,192 bytes, returns truncation flags and exit status, and
+kills its process group at its 30-second deadline. Exec never publishes; only
+the existing explicit Workspace Commit operation does. Unmount detaches FUSE
+but keeps dirty Workspace ownership. A daemon instance change invalidates old
+Workspace bindings; a Sandbox ID alone grants no control authority. These
+operations have no benchmark receipt or performance qualification here.
+The Exec readiness refinement after source commit
+`61431f3e0` polls the child stdout/stderr pipes for output or closure rather
+than parking for a fixed 5 ms while either pipe remains open. The deadline,
+8 KiB stream caps and process-group cleanup stay the same. If both pipes close
+before the child exits, the bounded 5 ms process-status wait remains.
+While waiting for a mounted Exec child, the daemon checks the Workspace's
+accepted revision at most once per second. An increase sends one authenticated
+`ResultData [0]` progress record on that Exec response. The client accepts that
+exact marker for Exec without counting logical result bytes; unrelated operations
+still reject it. A marker acknowledges published Workspace mutation, not child
+completion or Commit. No marker is sent for an unchanged revision. The existing
+five-second no-wire-progress limit, 30-second Exec request deadline and bounded
+response-frame count remain in force.
+The control acceptor revision after source commit
+`00e7374ff1e6d86d176aab90379bf040a3cf036f` waits for listener readiness
+instead of sleeping for a fixed 10 ms when no connection is queued. Its poll
+still checks stop admission within 10 ms, and it retains the single live or
+closing session limit and immediate refusal of excess connections.
+
+The #236 route speed alignment is based on product checkpoint
+`bad49805cb4cacdd29ed15ed5f44e20274e63a3a` plus the changes in this commit. It
+changes transport lifetimes, adds bounded diagnostic spans and counts, and
+alters no format, bound or authorization rule.
+
+**Daemon-to-host transport reuse.** The daemon delivery closure previously
+opened a fresh authenticated Service connection per upstream request, so a
+Mount that issues `HistoryQuery` and `Inspect`, and a Commit that issues
+`EditFile`, `UpdatePortableMetadata` and `HistoryCommand`, each paid a TCP
+connect and a Noise handshake. The native server already admits many successful
+requests per connection. `layerfs-daemon::transport` retains one session across
+delivery threads and serves their consecutive upstream calls on it. The daemon
+serializes those calls under one mutex. Reuse is bounded and failure-closed: a
+session is dropped on every error except a definite missing-name Inspect
+refusal, so an uncertain mutation is never resent; a session idle beyond two
+seconds is closed and replaced, staying well inside the server's five-second
+idle limit. Request IDs
+are allocated before the mutex, so a lower ID can arrive after a higher one;
+the daemon closes the session before such a call and starts a fresh authenticated
+connection. This preserves the native `Client`'s per-session increasing-ID rule
+without rewriting request identities. Authorization, deadlines, response bounds
+and existing operation counts are unchanged. This shared-session correction is
+based on source `50414c386a4f6b71dfc074dee685ca21d63f1eb0` plus the run.rs
+change recorded with this document; it has no mounted qualification yet.
+
+**Daemon and owner spans.** Bounded child timing scopes now divide the real
+route: `daemon.workspace_attach` and `daemon.fuse_mount` inside selected
+Workspace Open, `daemon.exec_spawn` and `daemon.exec_output` inside Exec, and
+`daemon.commit` around native Commit. Daemon-to-Service calls record
+`daemon.service_connect` for a fresh TCP/Noise connection,
+`daemon.service_hello` for its checked protocol Hello, and
+`daemon.service_call` through request delivery and terminal receipt. Reused
+sessions omit the first two children. The owner records
+`owner.docker_launch`, `owner.docker_port`, `owner.daemon_ready` and
+`owner.shell_ready` inside Create, which previously reported one undivided
+window. These are ordinary product telemetry: they add no test-only branch and
+change no result.
+The #241 liveness and capacity text uses source basis
+`31083d4316905cdb055349ffa07107f9a5a0c8d0` and the shared capacity
+correction committed with this document; it carries no performance or release
+qualification claim.
+The #241 connection diagnosis uses source basis `a8fb5697e` plus the
+observation change in this commit. The bridge exposes the existing bounded TCP
+connect and Noise authentication steps separately; the daemon records them as
+children of `daemon.service_connect` under the same absolute deadline. The
+acceptor emits at most eight immediate capacity-drop lines and one shutdown
+summary with accepted, admitted, reaped, live, peak-live and dropped counts,
+plus the acceptor's terminal error code when it exits unexpectedly.
+Missing shutdown summary makes that diagnostic incomplete. These observations
+do not classify the historical `Unknown` cause or change admission behavior.
+The subsequent #241 missing-path correction uses source basis `9a377c85f`
+plus the coordinated client, server and daemon change in this commit. After
+a complete zero-input Inspect refusal with `PathNotFound` or `NotFound`, the
+server drains the input and sends the exact failure frame, then both sides
+retain the authenticated session for the next increasing request ID. Every
+other failure, including uncertain delivery, closes it. This removes the
+confirmed reconnect between missing-path lookup and inode reservation;
+it does not establish why one historical connection stalled.
+The first mounted SDK check at `dde88f114` showed that the daemon's outer
+delivery closure still discarded the synchronized session on a known Inspect
+refusal. The follow-up source change in this document's commit applies the
+same refusal classification there and advances its retained request ID.
+
+**Bounded Workspace control session.** `layerfs-sandbox::session` retains at
+most one authenticated control connection across rapid Workspace calls. A
+retained socket is handed back only after a Hello on that same socket confirms
+the live daemon still reports the instance the caller validated, so a restarted
+daemon cannot answer an operation addressed to its predecessor; a socket the
+restart closed fails that check and the caller performs a fresh checked lookup.
+Only a successful operation retains the session, so a broken or uncertain
+operation is never resent, and the idle bound stays inside the control server's
+five-second idle timeout and one-session admission. A refused operation is
+reported as `Stale` only when the live daemon is reachable and reports a
+different instance than the route was bound to; every other refusal keeps its
+own cause. The public SDK surface is unchanged.
+
+**Projection counts.** `layerfs-workspace::filesystem::projection_counters`
+holds fixed-size saturating counts of projection callbacks (`lookup`, `getattr`,
+`read`, `write`, `readdir`, `open`, `setattr`, `rename`, `other`, `range_state`,
+`range_edit`) and of upstream
+host Service calls issued by that Workspace. The FUSE adapter records each
+callback at its single entry point, `setattr` and `rename` included, and
+`Workspace::remote_call` counts each upstream call. The counts appear in
+`WorkspaceStatus` as `projection_calls` and `upstream_calls`. They are
+diagnostic product telemetry and never gate an operation; no cache, backing or
+write path is altered by counting. Published range
+edits also saturating-count their accepted replacement payload bytes and
+physical suffix payload bytes copied; a piece splice records zero shifted
+bytes even when the logical suffix is large. An edit that publishes but later
+fails notification remains counted as accepted.
+
+The Linux projected range EDIT checks the held descriptor's writable,
+nonappend state and current stamp under a mutation permit before acquiring
+private replacement payload bytes. Workspace repeats the stamp and handle
+checks at preparation and final publication, so the early refusal avoids
+backing work for an already stale request without weakening the final CAS.
+Source basis for these corrections: `11e08d9ac` plus the same-commit
+`layerfs-fuse/src/range_ioctl.rs` and `layerfs-workspace/src/filesystem/write.rs`
+changes.
+Projected range edits use the writable descriptor's admitted rights and repeat
+its handle/stamp checks at publication; a mode change does not revoke an
+already-open writable descriptor. Path-based edits and handleless size changes
+retain their separate permission check.
+
+The Linux adapter validates LFB3/LFD3/LFA3/LFX3 version-3 ioctl frames.
+BEGIN reserves declared logical bytes under an 8 MiB per-mount aggregate
+budget and a 32-stage cap, binds a random token to the descriptor and exact
+Workspace stamp, and changes no Workspace bytes. Ordered DATA stores at most
+the declared literal bytes and hashes Zero runs through a fixed scratch
+buffer; ABORT, descriptor release, mount stop, destroy and a 30-second
+deadline discard private stages. A mount-owned sweeper enforces deadline
+cleanup while idle and is joined during unmount. APPLY validates complete
+length, digest and stamp, consumes the token, obtains one projection mutation
+permit, owns only the literal bytes as one Workspace payload and submits one
+ordered Bytes/Zero splice. Workspace validates the combined logical length
+against 8 MiB and the result against 4 GiB; Zero parts become sparse Zero
+pieces, while Bytes parts address successive offsets in that one payload.
+The final exact-stamp publication advances one revision; no DATA call
+publishes. LFS2/LFE2 inline behavior is unchanged. Source basis: parent
+`ae11f56e9739bcf1a0e4e603978afe32c79511e1` plus the same-commit
+FUSE and Workspace range-stream changes.
+
+The daemon status wire carries the same counts in the fixed
+`layerfs_bridge::contract::PROJECTION_CLASS_LABELS` order plus `upstream_calls`,
+`range_accepted_payload_bytes` and `range_shifted_suffix_bytes`,
+so a caller reads bounded classes rather than a variable-length map. A Workspace
+that does not report exactly those classes is refused as `Integrity` instead of
+being read as zeros. The public SDK exposes one read-only route for them,
+`WorkspaceApi::status`, which accepts either the plain status response or the
+local-edit writable observation for the same request. The counts describe what
+the kernel asked the mounted projection for; the two separate range fields
+describe accepted physical byte work. Status profile 4 fails closed on profile
+3 requests because the fixed response grew from 219 to 251 bytes (writable
+status 405 to 437). The status call is never part of an acknowledgement
+boundary.
+
+The sandbox owner now accepts an optional telemetry run identity at assembly.
+When present, it forwards the existing daemon telemetry stream and supplies a
+10 ms monitor interval and a sandbox-specific namespace. The daemon's one
+runtime records authenticated control operations and upstream Service calls;
+the host Service records its own operations when its application assembly
+enables that recorder. CPU and RSS windows are process-shared samples, not
+exclusive call costs or exact memory peaks. The opt-in functional diagnostic
+and its non-admission cache/resource limits are declared in
+[`telemetry-diagnostic.md`](../issues/236/telemetry-diagnostic.md).
+After the one-connection diagnostic at source commit
+`0edc58ce8d4f21115a1eb27e2964290426f418bc`, the host owner accepts the
+application's existing telemetry runtime as well. Each checked lookup records
+Docker port discovery and authenticated Hello as separate local-process LFT1
+operations at that source. With the fixed-port refinement, only authenticated
+Hello remains on the per-call route; Docker port verification occurs at Create.
+Disabled telemetry performs no observation work; the owner shares the host SDK
+and Service recorder when enabled. These substeps remain diagnostic and do not
+change cache state or deadlines.
 
 The SDK-owned host setup extension is based on source commit
 `611620360261a2195b21dd178753572ffe2164be`. `layerfs-sdk::Host::create`
@@ -117,12 +377,23 @@ No request carries a native Store path or independent construction capacities.
 entry code constructs it. Direct callers use `VerifiedPeer::from_private` using the same authorized
 private key; a caller-chosen numeric principal is insufficient.
 
-The Service source follows the same request flow: `service.rs` owns admission
-and dispatch; `read/` holds content and catalog queries; `save/` holds content
-and catalog mutations plus shared filesystem construction. `save/import/` owns
-native scanning and namespace construction, with bounded producer messages in
-`save/import/batch/`. `server/` contains process configuration and socket
-serving. `project.rs` exposes request-scoped Project Init to the SDK.
+The Service source follows the same request flow inside the
+`layerfs-server` package: `service/handler.rs` owns admission and dispatch;
+`service/read/` holds content and catalog queries; `service/save/` holds content
+and catalog mutations plus shared filesystem construction;
+`service/save/import/` owns native scanning and namespace construction, with
+bounded producer messages in `service/save/import/batch/`;
+`service/init_project.rs` exposes request-scoped Project Init to the SDK. Native
+assembly is grouped separately: `host/config.rs` reads operator configuration,
+`host/store.rs` builds Stores, catalogs, grants and the acceptor's session bound,
+`host/acceptor.rs` is the single bounded connection acceptor used by both entry
+points, and `host/assembly.rs` is the one concrete `Server` that binds a Store,
+its history catalog, the authorized `Service`, the loopback listener and the
+sandbox owner together. `src/bin/layerfs-server.rs` is the only process
+entrypoint: it calls `host::run`, which is the operator-configured assembly over
+the same acceptor. The package was renamed from `layerfs-service` and its
+listener moved from `server/` to `host/` as a source relocation; no second
+acceptor exists.
 `records.rs` converts catalog identities and wire records. The
 `lib.rs` and `mod.rs` files only declare or export these modules.
 
@@ -132,6 +403,23 @@ replacement parts before the save, preserving current-result coordinates. Known
 failures retain the available typed cause and checked cleanup disposition. Unknown
 C2 outcomes are not aborted or replayed on a guess. A successful content-object or filesystem
 root is returned only after validated input finality and successful C2 `finish`.
+
+For a save's existing `service.finish` LFT1 span, the Store records one
+`storage.finish.drain` child and one `storage.finish.owner` child. The owner
+records bounded children for pack seal, transaction begin when needed,
+candidate flush, ownership publication, ordinal/watermark work, SQLite
+commit, and the separate postcommit PoolIndex and Candidates clones. A
+disabled recorder leaves those nodes absent without changing the save's
+result; failed scopes retain their completed parents and children. The
+`SaveProfile` diagnostic carries pending-batch object/byte counts and each
+index's entry/live-byte count or a skipped-lock marker. With
+`LAYERFS_FINISH_DIAGNOSTIC` set, the Service writes one fixed count line after
+successful finish, including existing object, pack, statement and pooled
+fetch counts. Exact per-finish SQLite page and OS physical-read counts are
+unavailable in the safe product API; any external process I/O/page reading
+must keep its broader attribution. Source basis: parent
+`501addcd1693f6e2afb15599a7db966a200ca5ab` plus the same-commit
+storage/Service instrumentation.
 
 Prepared updates verify the original scope/root serial, existing identities and
 retained references. They send final bindings only for changed names. Directory
@@ -165,7 +453,7 @@ List still returns names/serials rather than complete child attributes. A consum
 requiring per-entry kinds issues bounded Attributes calls for its page under one
 remaining callback deadline. This establishes no batching or request-count gain.
 
-`WorkspaceStatus` is a separate daemon-control operation: profile 3, opcode 8,
+`WorkspaceStatus` is a separate daemon-control operation: current profile 4, opcode 8,
 positive request ID, zero Store/generation/result-body fields and at most 5,000 ms.
 It supplies a 1–63-byte managed ID and nonzero 32-byte producer incarnation. Its
 metadata is at most 124 bytes and it accepts no input or ResultData body. The
@@ -176,7 +464,9 @@ the exact Workspace/incarnation. Service grants never confer that authority.
 
 Response tag 10 encodes the echoed ID/incarnation, three state flags and five
 u64 observations: active operations, nodes, handles, cookies and aggregate
-`consumer_accounted_bytes`. Its maximum is 139 bytes including the tag. Reserved
+`consumer_accounted_bytes`, followed by the fixed projection/upstream counts
+and two physical range-byte totals described above. Its current maximum is
+251 bytes including the tag. Reserved
 flag bits and inconsistent closed-state counts are rejected. Native matching
 requires the exact request ID/incarnation binding and no output body. This is
 current local state, never an earlier edit/Commit receipt or recovery protocol.
@@ -237,7 +527,8 @@ Body/data frames contain 1..=16384 bytes; metadata is <=32768 bytes. No empty-bo
 frame, in-band cancellation, per-chunk ACK or object RPC is accepted. Local stdin
 uses the same plaintext frame schema; credentials never come from those frames.
 
-The transport admits `session_capacity(budget) = budget + MAX_READ_OPERATIONS`
+The host acceptor uses the bridge contract's
+`session_capacity(budget) = budget + MAX_READ_OPERATIONS` for
 persistent/handshaking/closing sessions, plus one synchronous accept/refusal
 socket slot. At the default budget of two that is four sessions and **five
 application connection resources in total**, as before; a raised writer budget
@@ -251,6 +542,9 @@ live sockets, and collects completed workers for at most two seconds. If core wo
 is still running, explicit process exit preserves an unresolved outcome; detached
 workers are not labelled cleanup. Kernel socket state, backlog, stack mappings
 and RSS are separate observed domains.
+The composed Server's flag-driven acceptor polls only its listener; stdin is
+polled solely by the operator `Stop::Stdin` mode. A closed stdin therefore
+cannot turn an idle composed host into a polling loop.
 
 The [resource profile](proposal/service-daemon-transport/implementation/10-resource-profile.md)
 records the aggregate byte/count ownership vector. At the default budget it
@@ -296,9 +590,10 @@ seconds. The existing `connect` retains its separate five-second connect and
 authentication/HELLO caps. A consumer using `connect_until` also passes the same
 deadline to `Client::call_until`, so setup cannot grant a fresh operation budget.
 Connection errors retain their existing typed mapping; socket timeouts can still
-be reported as Io. Every failed Client operation closes that session, including
-confirmed logical absence; consumers must not reuse a failed client or replay
-the failed operation implicitly.
+be reported as Io. A complete missing-name Inspect refusal is the one
+synchronized error that permits session reuse. Every other failed Client
+operation closes the session; consumers must not replay a failed operation
+implicitly.
 
 ## Single-crate telemetry
 
@@ -872,3 +1167,55 @@ cache state; the full prepared tree, its one complete upload Commit, incremental
 Commits and matched R6 remain unqualified, and Round43's capacity failure stays
 open. [Round49](proposal/fuse-workspace-snapshot-overlay/49-fresh-file-streaming.md)
 records the selectors, the diagnostic trace and the open failure.
+
+## 14.4 SDK-only product route assembly
+
+Source basis: the commit that introduces this section
+(`git log -1 --format=%H -- core/docs/architecture/14-service-runtime.md`).
+
+The replacement-product package `layerfs-server` now owns both the authorized
+operation code under `src/service/` and native assembly under `src/host/`.
+`layerfs-sdk` depends on it and never the reverse, so the dependency direction
+stays acyclic. `Server::create` prepares a fresh Store for a first Init and
+`Server::open` opens a prepared Store clone; both build the same authority from
+an explicit `ServerConfig`: the Store, its history catalog, the authorized
+`Service` with host and daemon peer grants, the loopback acceptor the sandbox
+calls back on, and `Server::owner()`, which assembles the `SandboxOwner` bound to
+that listener. The SDK constructs `ProjectApi` from a borrowed `Server`,
+`ProjectApi::fork` publishes a Branch through the ordinary authorized Service,
+and `SandboxApi`/`WorkspaceApi` are constructed from the borrowed `SandboxOwner`.
+The former SDK `Host` and forwarding `Client` are retired; every Init caller now
+calls `ProjectApi::init` directly. Existing #236 receipts keep their original
+source and build identity because this is a relocation and a new composition
+surface, not a measured change.
+
+Four product surfaces complete that route:
+
+* `ProjectApi::fork` publishes a named Branch from a project's genesis Layer as
+  an ordinary authorized history command, returning a typed `Branch` with its
+  base Layer, head Commit, resolved roots and allocation scope.
+* `Server::open` reopens a prepared Store clone together with its history
+  catalog. `HistoryMode` makes the ownership explicit: `Create` is a fresh
+  catalog and `OpenWritable` is one existing, closed catalog taken into this
+  process's continuity (`layerfs_history::sqlite::open_writable`), validated for
+  application identity, schema version, table set, metadata row and
+  binding-derived identity exactly as the read-only open does. Nothing is
+  migrated, repaired or promoted; a mismatch is refused.
+* `SandboxApi::delete` delegates to `SandboxOwner::delete`, which stops the
+  owned daemon within a bounded grace period, then removes the owned container
+  and its named Workspace volume, confirming each before it drops the matching
+  registry bindings. `DeleteError` keeps the Sandbox ID, the cause and which
+  resources still exist, so a partial outcome is recorded and retried
+  explicitly. An unknown ID is refused and can never name an arbitrary
+  container; a retained `CreateError.sandbox` ID is deletable even when
+  readiness never completed. Dropping a `Server` or an owner is not a cleanup
+  receipt.
+  The #241 diagnostic `delete_with_logs` uses the same owned route. After a
+  successful bounded stop and before container removal it streams up to 8 MiB
+  of raw daemon stderr into the caller's sink, with a separate capture result
+  for command/write failure or truncation. Log collection has a 3 s command
+  bound and cannot skip container or volume cleanup; ordinary `delete` does
+  not collect logs. This addition is based on the #241 Phase 4 source change
+  after `cb1bdb70e97628c2c38055ff2600e070e742010e`.
+* `WorkspaceApi::status` exposes the bounded projection and upstream counts
+  described above after the acknowledgement, never between Edit and Commit.

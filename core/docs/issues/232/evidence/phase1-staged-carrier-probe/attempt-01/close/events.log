@@ -1,0 +1,11 @@
+open fh=40
+callback cmd=0xc080f542 fh=40 flags=IoctlFlags(0x0) in=128 out=128
+reply BEGIN rc=0 bytes=128
+caller BEGIN cmd=0xc080f542 rc=0 errno=None
+release fh=40 stage=discarded
+open fh=41
+callback cmd=0x5080f543 fh=41 flags=IoctlFlags(0x0) in=4224 out=0
+reply errno=Errno(9)
+caller DATA old token cmd=0x5080f543 rc=-1 errno=Some(9)
+release fh=41 stage=none
+final revision=0 publications=0 stage_present=false unmounted=true

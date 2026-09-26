@@ -1,12 +1,17 @@
 //! Daemon-targeted control; service grants confer no control authority.
 use super::{Code, Failure, Root};
 
-pub const WORKSPACE_STATUS_PROFILE: u16 = 3;
+pub const WORKSPACE_STATUS_PROFILE: u16 = 4;
 pub const WORKSPACE_STATUS_OPCODE: u8 = 8;
 pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
-pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 139;
+pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 219;
+/// Fixed, bounded projection callback classes reported by status.
+pub const PROJECTION_CLASSES: usize = 9;
+pub const PROJECTION_CLASS_LABELS: [&str; PROJECTION_CLASSES] = [
+    "lookup", "getattr", "read", "write", "readdir", "open", "setattr", "rename", "other",
+];
 pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_UNMOUNT_REQUEST_BYTES: usize = 124;
@@ -24,6 +29,24 @@ pub const WORKSPACE_ATTACH_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ATTACH_REQUEST_BYTES: usize = 124;
 pub const WORKSPACE_ATTACH_RESULT_BYTES: usize = 100;
 pub const WORKSPACE_ATTACHMENT_RESULT_BYTES: usize = 103;
+pub const SANDBOX_HELLO_OPCODE: u8 = 17;
+pub const WORKSPACE_OPEN_OPCODE: u8 = 18;
+pub const WORKSPACE_OPEN_REQUEST_BYTES: usize = 244;
+pub const WORKSPACE_OPEN_MAX_MS: u32 = 15_000;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SandboxHelloWire {
+    pub sandbox: [u8; 16],
+    pub instance: Root,
+}
+impl SandboxHelloWire {
+    pub fn validate(&self) -> Result<(), Failure> {
+        if self.sandbox == [0; 16] || self.instance == [0; 32] {
+            return Err(Code::InvalidInput.into());
+        }
+        Ok(())
+    }
+}
 
 /// Attachment can retain any native or upstream failure classification.
 /// This does not widen the existing Mount/Unmount/CloseClean outcome profile.
@@ -116,6 +139,13 @@ pub struct WorkspaceStatusWire {
     pub cookies: u64,
     /// Aggregate accounted Workspace allocations across the owning consumer.
     pub consumer_accounted_bytes: u64,
+    /// Bounded projection callback counts in `PROJECTION_CLASS_LABELS` order.
+    ///
+    /// These are ordinary product counts of what the kernel asked the mounted
+    /// projection for; they never gate an operation.
+    pub projection: [u64; PROJECTION_CLASSES],
+    /// Upstream host Service calls this Workspace has issued.
+    pub upstream_calls: u64,
 }
 
 impl WorkspaceStatusWire {

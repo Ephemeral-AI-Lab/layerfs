@@ -1,0 +1,19 @@
+{
+  "cache_claim": null,
+  "case_id": "issue241-silent-exec-control-v1",
+  "command": "sleep 6",
+  "daemon_sha256": "6ee522f458ddf89945d8cd5f1503a4286d0abced6f081afd3e527fcdfa096589",
+  "fixture": "new four-byte source through public SDK ProjectApi::init",
+  "image_id": "sha256:03d791bd1c133c438f621eb713ef933a33adf00e0ac5c79eb37c9436bfbc1a27",
+  "image_receipt_sha256": "8ffbf88d7b6fe8133995e4aadd732d61db56c94a02964d59914b56161a41f7db",
+  "output": "/Users/yifanxu/.codex/worktrees/issue241-ioctl-feasibility/layerfs/core/target/issue241-silent-exec-control-v1-01/attempt-01",
+  "performance_sample": false,
+  "schema": "issue241-silent-exec-control-identity-v1",
+  "source_clean": true,
+  "source_commit": "f3d51dda7099fe024a39de8a88df49b40c76735f",
+  "source_tree": "545130ec100ae195347fcdfa8e6d88e1d1cabcee",
+  "status": "FROZEN_BEFORE_ATTEMPT",
+  "test_binary_sha256": "93aa3ca1735558c094e8cd8ea31ab05394ff857a8464d45687817687f9eefded",
+  "test_build": "cargo +1.85.1 test --manifest-path core/Cargo.toml --locked -p layerfs-sdk --test exec_liveness_control --no-run",
+  "test_source_sha256": "c432823059bd6d825eacac32bac1b896a85fe7a54b06cac5d5fccd7f0ce89838"
+}

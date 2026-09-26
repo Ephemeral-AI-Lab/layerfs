@@ -15,7 +15,7 @@ pub fn serve(
         &VerifiedPeer,
         &Request,
         &mut dyn Read,
-        &mut dyn Write,
+        &mut Output<'_>,
         Instant,
     ) -> Result<Response, Failure>,
 ) -> Result<(), Failure> {
@@ -81,11 +81,19 @@ pub fn serve(
                 bytes: encode_response(&response)?,
             })?,
             Err(error) => {
-                let _ = connection.send.write(&Frame {
+                let frame = Frame {
                     kind: Kind::Failure,
                     id: request.id,
                     bytes: encode_request_failure(&request, &error)?,
-                });
+                };
+                if super::reusable_inspect_refusal(&request, &error)
+                    && std::io::copy(&mut input, &mut std::io::sink()).is_ok()
+                    && input.complete()
+                {
+                    connection.send.write(&frame)?;
+                    continue;
+                }
+                let _ = connection.send.write(&frame);
                 // Preserve the terminal frame before closing a socket with unread
                 // upload bytes. Input enforces the same frame/length/deadline bounds;
                 // the client cancels its upload after receiving this failure.

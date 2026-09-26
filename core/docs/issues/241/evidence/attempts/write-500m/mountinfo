@@ -1,0 +1,1 @@
+88 142 0:67 / /probe/write-500m/mnt rw,nosuid,nodev,noatime - fuse layerfs rw,user_id=0,group_id=0,default_permissions,max_read=1048576

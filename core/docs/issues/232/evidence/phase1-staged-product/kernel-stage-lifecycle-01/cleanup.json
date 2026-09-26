@@ -1,0 +1,6 @@
+{
+  "post_cleanup_inspect_exit_codes": {
+    "container": 1,
+    "volume": 1
+  }
+}

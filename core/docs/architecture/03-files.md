@@ -6,6 +6,14 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 `1884e3eca`; scope, method, measurement status and upkeep are stated in the
 [index](README.md).
 
+The #252 Service input adapter in `layerfs-server/src/service/save/file_stream.rs`
+describes the product source in the same commit as this note. It accepts one
+validated frozen final `Base`/`Local`/`Zero` extent sequence, derives ordered C1
+edits in a bounded disk spool for existing files, and calls the unchanged C1
+canonical edit builder. A fresh file uses the same wire operation and C1's
+streaming constructor. This changes the Service input route, not the file's
+canonical format or C1 partition rules; older sections keep their source pin.
+
 ---
 
 ## 3. File construction (C1)

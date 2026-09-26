@@ -1,0 +1,26 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	500mib-capped-delete-band09
+operation	delete
+offset	312623261
+status	STARTED
+edit_sandbox_id	645f247e0d8ccf76ce48962f061a4df9
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	20967166
+baseline_exec_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+verifier_read_callbacks	8
+fresh_sandbox_id	9f9cfad39650badf42ff8abc939740ea
+fresh_unmount	Ok(())
+fresh_sandbox_delete	Ok(())
+fresh_sandbox_absent	true
+old_sandbox_id	10f24900cc36459827f989f6e0f85c22
+old_unmount	Ok(())
+old_sandbox_delete	Ok(())
+old_sandbox_absent	true
+source_sandbox_id	2d38cc2c4304208b1bb7b0d7a5ac7cb2
+source_unmount	Ok(())
+source_sandbox_delete	Ok(())
+source_sandbox_absent	true
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	PASS	new_commit=[18, 223, 68, 219, 166, 178, 87, 43, 242, 195, 145, 111, 16, 245, 79, 67, 44, 19, 250, 100, 123, 7, 229, 246, 58, 65, 204, 102, 104, 255, 224, 106, 164]	old_commit=[18, 189, 239, 200, 174, 103, 156, 167, 104, 102, 200, 116, 18, 88, 75, 121, 43, 164, 234, 6, 217, 141, 36, 92, 222, 3, 152, 133, 5, 42, 106, 0, 196]	sha256=2dbc68577b2f4eccadd561786c1d2fccfe01faa4f1d79719900e5e40fc3fefde	canonical_root=3ba98fd350a168eba14137099c3b7353fffb581520b408f595d858b6210ecf2e	canonical_count=26995	final_bytes=524279808	verifier_read_callbacks=8

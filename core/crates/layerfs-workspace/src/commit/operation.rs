@@ -37,7 +37,7 @@ impl Workspace {
             let remote = first_remote
                 .take()
                 .map_or_else(|| self.begin(true, deadline), Ok)?;
-            let response = self.host.call_input(
+            let response = self.remote_call(
                 (self.inner.store, submission.capture()?.generation),
                 Operation::HistoryCommand(HistoryCommand::Commit(changes)),
                 &mut &[][..],

@@ -1,0 +1,147 @@
+{
+  "binary_sha256": "cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "7",
+    "lookup": "4",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "1",
+    "write": "1"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/history.sqlite",
+    "store": "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/store.sqlite"
+  },
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "command": [
+    "benchmark-results/issue252-functional/prepared-04/base/binary-archive/cf91a8753c5efd32df83615b3dc4320d087a9a9c1d18142611e99c80d9c77cf7/benchmark_shell",
+    "run",
+    "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/case.before",
+    "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/store.sqlite",
+    "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/history.sqlite",
+    "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 5853683083,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "cleanup_ns": 5503394250,
+    "commit_called": false,
+    "commit_ns": 0,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 11630,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 22544834,
+    "head_commit": "",
+    "mode": "run",
+    "operation_ns": 22550584,
+    "projection_counts": "lookup=4,getattr=7,read=0,write=1,readdir=0,open=1,setattr=1,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "failed-command-no-commit-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+  "image_id": "sha256:068b0f2c75e934a1ccb3822fb6d8202ed1bf7a5e948b5f0bc52e80c0f0c6fe47",
+  "lft1": {
+    "event_count": 43,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 308979417,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        2563000,
+        2337000
+      ],
+      "first_ns": 280096459,
+      "gaps": 0,
+      "incarnation": 2788259031310,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 11791166,
+      "last_ns": 300056792,
+      "last_probe_ns": 9833,
+      "namespace": 7,
+      "opened_ns": 286431000,
+      "pid": 90541,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "8fc3867bc2dfe344efeadb37327e3548",
+      "sampled_max_rss": 10584064,
+      "samples": 3,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 22544958,
+            "name": "exec"
+          }
+        ],
+        "elapsed_ns": 22546625,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "genesis_layer": "32173aeaccc60554463f47d83fabcc1903757c0f0dd0a84249fcd2b61bb4ef2bfa",
+    "genesis_root": "5d0fac8fecba1cf013f598675929def59856a7440a3766b8e6b75b6f48385c34",
+    "genesis_root_serial": 1,
+    "history_sha256": "aad3e24c4ae67fd7a76a6276d2467337efcf950b724b47e739596de11a4c4661",
+    "init_wall_ns": 1979233208,
+    "old_commit": "121203cab3d8f59107760e5b1aae6bc01297dee1092b0d2c815acdbf5699decc5b",
+    "old_manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/masters/package",
+    "project_id": "318b666c517cc920a4018dc0d47aee2a39",
+    "seed_wall_ns": 1592497166,
+    "store_sha256": "2d0fe173cded5579f6a29de134c6989cdc2a8da593ebdb73b4002690438c7d99",
+    "verify_wall_ns": 682372209
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "failed-command-no-commit-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "set -eu\nprintf 'BAD' > node_modules/@fixture/core/package.json\nfalse",
+  "source_commit": "0560a0cd558cc55bf08efcd5f7b38de204ef690f",
+  "source_tree": "db9b0313f935ad37e23f80d75d6ed29532ecc973",
+  "verifier": {
+    "command": [
+      "benchmark-results/issue252-functional/prepared-04/base/binary-archive/ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b/verify_shell",
+      "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/case.verify",
+      "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/store.sqlite",
+      "benchmark-results/issue252-functional/run-04/failed-command-no-commit-v1/history.sqlite",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/package.tsv",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs/benchmark-results/issue252-functional/prepared-04/functional/fixture/failed-command-no-commit-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 38416042
+  },
+  "verifier_sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+}

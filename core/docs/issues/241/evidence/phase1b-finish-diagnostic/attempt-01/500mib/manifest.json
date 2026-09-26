@@ -1,0 +1,77 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 1106,
+      "sha256": "93e5e09dbb70b26554553e36d4192c311cc0e97c4a0ce93d5564bdd95405c66f"
+    },
+    "cursor-key.txt": {
+      "bytes": 65,
+      "sha256": "ce10f0240da01a88c0e022794d69e3a5ed5011939dfc448c4d364ac9c5ebfbc1"
+    },
+    "report.txt": {
+      "bytes": 170,
+      "sha256": "b1d23a1db002f08cd88bb21d29ef1df522c72af40e5677c9a481ea012a1cbe88"
+    },
+    "run.json": {
+      "bytes": 19603,
+      "sha256": "c19e0ffba40467532ce60d8d27d4c491237f75a384dfedf23018ee124699366d"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/case.txt": {
+      "bytes": 1759,
+      "sha256": "6e21298200b86a9f1bcb6c54bfa7bc9597c7db276ed082965e2e7cb12617b307"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/driver-receipt.json": {
+      "bytes": 2337,
+      "sha256": "4f9283fb25a6bfdb310a98c4abb8ccf9971a79ec73728cab708dc599ef5430b3"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/driver.raw.stderr": {
+      "bytes": 36024,
+      "sha256": "5f036d1e9194170a81f2a221b590decb0e60f817681bdf148a47dc9b4defde1e"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/driver.stderr": {
+      "bytes": 1005,
+      "sha256": "3b2d1d9a78179ed8dc32397c110ee1c4b234951c0fabdfea1634d3af5ea81168"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/driver.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "7565fedc395e004a39d480862fa64cccdba4edd4b72f7681fc4660cdf9f52ce3"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/perf.jsonl": {
+      "bytes": 2436,
+      "sha256": "818d5845f97568e2ff4f0bee89443e5ad08b1941f331efd501f6d5036bc013e4"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/receipt.json": {
+      "bytes": 16401,
+      "sha256": "7285428ee12640b7bf64c6a5762f050bdefaea7f730d91cecb9e9e4fc28f1198"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/store.sqlite": {
+      "bytes": 583901184,
+      "sha256": "cf15a038e924b2e86804ac317345d3e838b7e9c95d492399ebe6bfb7b42b8c33"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/telemetry.lft1": {
+      "bytes": 35018,
+      "sha256": "ebb263fdd2245a5578b26bb5652e8ed0542f38d5a2752be98d70cca0934dbcde"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/verification.json": {
+      "bytes": 3353,
+      "sha256": "9aed39053ca7226aeabfd949d1f6dcfc07be1ffc37ce4a5ca06dd4f7e357eb54"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/verifier-case.txt": {
+      "bytes": 1963,
+      "sha256": "9b9a19f6f469a06ecc44b42c66f96d148ae930fae8a41fb47209da10e3e12bcf"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/verifier.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v4/verifier.stdout": {
+      "bytes": 1996,
+      "sha256": "3c0b7f10117cdd95d8b19cd708d0372eebd56f7831854059d545688a31e2f19e"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

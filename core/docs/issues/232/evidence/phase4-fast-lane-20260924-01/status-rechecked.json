@@ -1,0 +1,14 @@
+{
+  "g2_target_ms": 5.63,
+  "outcome": {
+    "raw_edit_commit_ns": 41451208,
+    "status": "INELIGIBLE",
+    "status_reasons": [
+      "fuse-backing-domain-served-by-resident-pages-not-invalidatable"
+    ]
+  },
+  "raw_edit_commit_ns": 41451208,
+  "resample": false,
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-status-recheck-v1"
+}

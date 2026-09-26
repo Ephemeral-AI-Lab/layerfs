@@ -269,16 +269,19 @@ pub fn keep_name(
     let mut names: Vec<Vec<u8>> = crate::backing::metadata_index::vector(128)?;
     let mut lower = vec![b'T'];
     let mut removed = false;
-    while let Some(cell) = candidate.arena.next(
-        directory.tombstones,
-        &lower,
-        !names.is_empty(),
-        window,
-        deadline,
-    )? {
+    // The cursor advances by the cell this walk last visited, which is not the
+    // same as the last cell it kept: the cleared name is visited exactly once
+    // even when it is the first removal record the page holds.
+    let mut first = true;
+    while let Some(cell) =
+        candidate
+            .arena
+            .next(directory.tombstones, &lower, !first, window, deadline)?
+    {
         if names.len() == 128 || cell.key() <= lower.as_slice() {
             return Err(WorkspaceError::Capacity);
         }
+        first = false;
         let existing = tombstone(cell.key())?;
         if existing == name {
             removed = true;

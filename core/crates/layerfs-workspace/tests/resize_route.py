@@ -5,7 +5,7 @@ import stage_route as driver
 
 driver.CASES = {
     'semantics': ['shrink-reextend-keeps-zero-tail-alias-handles-and-old-reply'],
-    'envelope': ['zero-input-exact-eight-MiB-bound-without-payload-allocation'],
+    'envelope': ['zero-input-streams-past-the-retired-eight-MiB-envelope-without-payload-allocation'],
     'successor': ['frozen-zero-range-and-live-shrink-reextend-use-exact-next-base'],
     'overwritten_zero': ['live-overwrite-of-frozen-zero-saves-only-new-bytes'],
     'metadata_only': ['same-length-resize-saves-metadata-without-file-input'],

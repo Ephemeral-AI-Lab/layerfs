@@ -1,0 +1,40 @@
+{
+  "compatibility_key": {
+    "benchmark_init_sha256": "47510b3ddefb7d4573462a79b60df706ea8c27c2b99ce14711756c5e043b7895",
+    "cargo_lock_sha256": "a370d4f7beacef2fe274bb432fadc86052e5bd30a2bd2365afb453f3c7b43855",
+    "fixture_bytes": 1048576,
+    "fixture_generator_seed": 5494771174636671793,
+    "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc"
+  },
+  "compatibility_key_sha256": "3a9d0a1f73e2b444",
+  "first_use_wall_ns": 1733069542,
+  "fixture_bytes": 1048576,
+  "fixture_canonical_root": "8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078",
+  "fixture_extent_count": 54,
+  "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+  "genesis_layer": "328058f42bb88a2250ae1e446f2aa80ca2fd1dd2c153d3c3d88ba4e3f0e2625fed",
+  "genesis_root": "967578cb18628a9973048e6edb53cd3bedb7cd61b18f0767f71a79ae7a942c31",
+  "genesis_root_serial": 1,
+  "history": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/prepared/master-v3-1048576-3a9d0a1f73e2b444/history.sqlite",
+  "history_bytes": 86016,
+  "history_sha256": "18c003549a89c4a09353696217d089de86c61df737f761aba22c7eb57bd6e973",
+  "init_receipt": {
+    "genesis_layer": "328058f42bb88a2250ae1e446f2aa80ca2fd1dd2c153d3c3d88ba4e3f0e2625fed",
+    "operation_ns": 16086208,
+    "project_id": "315d016e789d5f7072278143fab4509dc2",
+    "root": "967578cb18628a9973048e6edb53cd3bedb7cd61b18f0767f71a79ae7a942c31",
+    "root_serial": 1,
+    "stack_body": "5d016e789d5f7072278143fab4509dc2",
+    "status": "COMPLETE"
+  },
+  "legacy_unsealed_master": "not reused or promoted",
+  "producer_binary_sha256": "47510b3ddefb7d4573462a79b60df706ea8c27c2b99ce14711756c5e043b7895",
+  "producer_source_commit": "8ad98a118d6640e8c67740334fa8ffa88335aceb",
+  "producer_source_tree": "a5e1e58cab1c1ec8a9105b588fd47e8cb6c857d6",
+  "project_id": "315d016e789d5f7072278143fab4509dc2",
+  "route": "sdk-exec-fuse-range-splice-commit-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-master-v3",
+  "store": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/prepared/master-v3-1048576-3a9d0a1f73e2b444/store.sqlite",
+  "store_bytes": 2691072,
+  "store_sha256": "1bace836c2146ae4d2dc67f744750f4b089754ea7315a811b7e296595d0a68fc"
+}

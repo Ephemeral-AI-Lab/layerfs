@@ -1,0 +1,150 @@
+{
+  "binary_sha256": "95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "7",
+    "lookup": "4",
+    "open": "1",
+    "other": "0",
+    "range_edit": "0",
+    "range_state": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "1",
+    "write": "1"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/history.sqlite",
+    "store": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/95f98c61a302e0a1520232cda187492d90d046ba4e2bbb15b84d0fde5e6753c8/benchmark_shell",
+    "run",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/case.before",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/store.sqlite",
+    "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/history.sqlite",
+    "sha256:8405f00c4f318f2fffdedc5cec3ec2bb81f8b378bad45e76b881ecdcbbfcf71a"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 5872131416,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "cleanup_ns": 5503635375,
+    "commit_called": false,
+    "commit_ns": 0,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 11601,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 28023375,
+    "head_commit": "",
+    "mode": "run",
+    "operation_ns": 28029541,
+    "projection_counts": "lookup=4,getattr=7,read=0,write=1,readdir=0,open=1,setattr=1,rename=0,other=0,range_state=0,range_edit=0",
+    "range_accepted_payload_bytes": 0,
+    "sandbox_delete_ok": true,
+    "scenario_id": "failed-command-no-commit-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f",
+  "image_id": "sha256:8405f00c4f318f2fffdedc5cec3ec2bb81f8b378bad45e76b881ecdcbbfcf71a",
+  "lft1": {
+    "event_count": 43,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 323459416,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        5708000,
+        7002000
+      ],
+      "first_ns": 292439583,
+      "gaps": 0,
+      "incarnation": 1228626013262,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 11087292,
+      "last_ns": 322092000,
+      "last_probe_ns": 11333,
+      "namespace": 7,
+      "opened_ns": 295431750,
+      "pid": 85629,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "a1c22dcfcc43c22d2b80da94ffedc2e1",
+      "sampled_max_rss": 12009472,
+      "samples": 4,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 28023500,
+            "name": "exec"
+          }
+        ],
+        "elapsed_ns": 28025916,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "genesis_layer": "32b805e68abf05b1b2d3a45b74d98fb9c221ddc6d978b039be8d7a793dc2b4756b",
+    "genesis_root": "957da0cdd541bd24262a8127fb0c80b1ab31813b10315edaabe1c3aed41f3724",
+    "genesis_root_serial": 1,
+    "history_sha256": "c543bcb6765a81c4d3a3fc944f78e2b486b4ec8091a80d787eb2c1b17d9da828",
+    "init_wall_ns": 1960699208,
+    "old_commit": "12f0f47f6f5db132901410696edf79fc5d43e12285c8b96ff3180a419cc085b61e",
+    "old_manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "path": "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/masters/package",
+    "project_id": "310831b65bf6730c5449ceb85b107d84c4",
+    "seed_wall_ns": 1635848667,
+    "store_sha256": "10bd23e8f09fb99841535ff87a0aad5fbdfdb4b1bf1a1d265e74cb5056713864",
+    "verify_wall_ns": 691113250
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "f21596bb5d47b53a395d055279522dd54ee1727af242781ca6392224277b4587",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "failed-command-no-commit-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "set -eu\nprintf 'BAD' > node_modules/@fixture/core/package.json\nfalse",
+  "source_commit": "6d7421c6de85d2cce19c2810fc34e9b453a8030a",
+  "source_tree": "98285433d132d646be9fd0a4295256f21857977c",
+  "verifier": {
+    "command": [
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/binary-archive/228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d/verify_shell",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/case.verify",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/store.sqlite",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-attempt-01/failed-command-no-commit-v1/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/package.tsv",
+      "benchmark-results/fs-bench-pro/issue243-shell-package-v1-prepared-02/fixture/failed-command-no-commit-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 53376375
+  },
+  "verifier_sha256": "228357f51c46f5d7237b5367c15170e26adbca384bc2446dcd29792ff86c855d"
+}

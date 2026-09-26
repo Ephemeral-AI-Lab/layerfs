@@ -4,16 +4,19 @@ use crate::{
     lifecycle::{mount_failure_code, Lifecycle},
 };
 use layerfs_bridge::{
-    adapters::native::{connection::accept, server::serve},
+    adapters::native::{connection::accept, payload::Output, server::serve},
     contract::{
         Code, Failure, Operation, Request, Response, VerifiedPeer, WorkspaceLifecycleOutcome,
         WorkspaceLifecycleWire,
     },
 };
 use layerfs_fuse::MountError;
+use layerfs_telemetry::timer::{Active, TimingScope};
+use nix::poll::{poll, PollFd, PollFlags};
 use std::{
     io::{self, Read},
     net::{Shutdown, TcpListener, TcpStream},
+    os::fd::AsFd,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, TryLockError,
@@ -31,6 +34,8 @@ struct Session {
 struct Target {
     lifecycle: Arc<Lifecycle>,
     stopping: Arc<AtomicBool>,
+    identity: Option<layerfs_bridge::contract::SandboxHelloWire>,
+    telemetry: layerfs_telemetry::runtime::Runtime,
 }
 
 pub(crate) struct Control {
@@ -44,12 +49,15 @@ impl Control {
         listener: TcpListener,
         private: [u8; 32],
         lifecycle: Arc<Lifecycle>,
+        telemetry: layerfs_telemetry::runtime::Runtime,
     ) -> Result<Self, Failure> {
         listener.set_nonblocking(true)?;
         let stopping = Arc::new(AtomicBool::new(false));
         let target = Target {
             lifecycle,
             stopping: Arc::clone(&stopping),
+            identity: config.identity.clone(),
+            telemetry,
         };
         let worker = thread::Builder::new()
             .name("layerfs-control".into())
@@ -109,7 +117,8 @@ fn run(
             let stream = match listener.accept() {
                 Ok((stream, _)) => stream,
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    thread::park_timeout(Duration::from_millis(10));
+                    let mut ready = [PollFd::new(listener.as_fd(), PollFlags::POLLIN)];
+                    poll(&mut ready, 10u16).map_err(|_| Code::Io)?;
                     continue;
                 }
                 Err(_) => return Err(Code::Io.into()),
@@ -128,8 +137,25 @@ fn run(
                 .stack_size(2 * 1024 * 1024)
                 .spawn(move || {
                     if let Ok(connection) = accept(stream, &private, &config.peers) {
-                        let _ = serve(connection, |peer, request, input, _, deadline| {
-                            dispatch(&target, &config.grants, peer, request, input, deadline)
+                        let _ = serve(connection, |peer, request, input, output, deadline| {
+                            let (result, diagnostic) = target.telemetry.recorder().run(
+                                request.id,
+                                request.operation.label(),
+                                |scope| {
+                                    dispatch(
+                                        &target,
+                                        &config.grants,
+                                        peer,
+                                        request,
+                                        input,
+                                        output,
+                                        deadline,
+                                        scope,
+                                    )
+                                },
+                            );
+                            target.telemetry.publish(diagnostic);
+                            result
                         });
                     }
                 })?;
@@ -162,19 +188,38 @@ fn authorized(grants: &[ControlGrant], peer: &VerifiedPeer, operation: u8) -> Re
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "control authority and Exec output remain explicit"
+)]
 fn dispatch(
     target: &Target,
     grants: &[ControlGrant],
     peer: &VerifiedPeer,
     request: &Request,
     input: &mut dyn Read,
+    output: &mut Output<'_>,
     deadline: Instant,
+    scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     request.validate()?;
     if Instant::now() >= deadline {
         return Err(Code::Deadline.into());
     }
     let (requested_workspace, requested_incarnation, operation) = match &request.operation {
+        Operation::SandboxHello => {
+            authorized(grants, peer, 64)?;
+            if input.read(&mut [0u8; 1])? != 0 {
+                return Err(Code::InvalidInput.into());
+            }
+            authorized(grants, peer, 64)?;
+            if target.stopping.load(Ordering::Acquire) {
+                return Err(Code::Busy.into());
+            }
+            return Ok(Response::SandboxHello(
+                target.identity.clone().ok_or(Code::Unsupported)?,
+            ));
+        }
         Operation::WorkspaceStatus {
             workspace,
             incarnation,
@@ -199,6 +244,16 @@ fn dispatch(
             workspace,
             incarnation,
         } => (workspace, incarnation, 32),
+        Operation::WorkspaceOpen {
+            workspace,
+            incarnation,
+            ..
+        } => (workspace, incarnation, 16),
+        Operation::WorkspaceExec {
+            workspace,
+            incarnation,
+            ..
+        } => (workspace, incarnation, 128),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -210,6 +265,11 @@ fn dispatch(
         return Err(Code::Deadline.into());
     }
     authorized(grants, peer, operation)?;
+    if let Operation::WorkspaceOpen { instance, .. } = &request.operation {
+        if target.identity.as_ref().map(|identity| identity.instance) != Some(*instance) {
+            return Err(Code::Denied.into());
+        }
+    }
     if target.stopping.load(Ordering::Acquire) {
         return Err(Code::Busy.into());
     }
@@ -268,6 +328,68 @@ fn dispatch(
     if target.stopping.load(Ordering::Acquire) {
         return Err(Code::Busy.into());
     }
+    if let Operation::WorkspaceOpen {
+        project,
+        branch,
+        commit,
+        ..
+    } = &request.operation
+    {
+        let attached = scope.child("daemon.workspace_attach").run(|_| {
+            target.lifecycle.attach_selected(
+                &mut slot,
+                requested_workspace,
+                *requested_incarnation,
+                layerfs_workspace::Base::BranchAt {
+                    project: *project,
+                    branch: *branch,
+                    commit: *commit,
+                },
+                native_deadline,
+            )
+        })?;
+        let Response::WorkspaceAttach(mut result) = attached else {
+            return Err(Code::Integrity.into());
+        };
+        if result.outcome == layerfs_bridge::contract::WorkspaceAttachOutcome::Completed {
+            let workspace = slot
+                .selected
+                .as_ref()
+                .and_then(|s| s.workspace.as_ref())
+                .ok_or(Code::Io)?;
+            let mounted = scope
+                .child("daemon.fuse_mount")
+                .run(|_| crate::lifecycle::mount(workspace, native_deadline));
+            match mounted {
+                Ok(mount) => slot.mount = Some(mount),
+                Err(mut failure) => {
+                    slot.mount = failure.retained.take();
+                    result.outcome = layerfs_bridge::contract::WorkspaceAttachOutcome::Retained(
+                        mount_failure_code(&failure.cause),
+                    );
+                }
+            }
+        }
+        return Ok(Response::WorkspaceAttach(result));
+    }
+    if let Operation::WorkspaceExec { command, .. } = &request.operation {
+        if slot.mount.is_none() {
+            return Err(Code::Busy.into());
+        }
+        let workspace = slot
+            .selected
+            .as_ref()
+            .and_then(|s| s.workspace.as_ref())
+            .ok_or(Code::Busy)?;
+        return crate::execution::execute(
+            workspace,
+            requested_incarnation,
+            command,
+            output,
+            native_deadline,
+            scope,
+        );
+    }
     if operation == 16 {
         return target.lifecycle.attach(
             &mut slot,
@@ -279,7 +401,9 @@ fn dispatch(
     if operation == 32 {
         let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
         let workspace = selected.workspace.as_ref().ok_or(Code::Busy)?;
-        return crate::control_commit::commit(selected, workspace, native_deadline);
+        return scope
+            .child("daemon.commit")
+            .run(|_| crate::control_commit::commit(selected, workspace, native_deadline));
     }
     let outcome = if operation == 2 {
         match slot.mount.as_mut() {

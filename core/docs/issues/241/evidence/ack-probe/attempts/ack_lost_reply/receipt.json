@@ -1,0 +1,26 @@
+{
+  "case": "ack_lost_reply",
+  "command": [
+    "docker",
+    "exec",
+    "-e",
+    "PROBE_CASE=ack_lost_reply",
+    "-e",
+    "PROBE_ROOT=/probe/ack_lost_reply",
+    "layerfs-241-ack-probe-80496bdb",
+    "/runner/range_ioctl_ack_probe-eac4f53eedc9a66a",
+    "--ignored",
+    "--exact",
+    "linux::probe",
+    "--nocapture"
+  ],
+  "started_unix_ns": 1790252079342541000,
+  "complete_command_wall_ns": 92446125,
+  "exit_code": 0,
+  "timed_out": false,
+  "docker_cp_exit_code": 0,
+  "cache_state": "uncontrolled; semantic diagnostic only",
+  "source_commit": "80496bdbc9bc34ff31cf537af0ababc7eb8371e7",
+  "source_sha256": "2cb244ce1716e336614bcd73ee5f59962a0be25e1124a7b00c46b2a09ecb8dba",
+  "binary_sha256": "b4f094b6e8c0bf1885c28dfbecf73145e195cd63c1e984b314b9d8cc4c8de7d5"
+}

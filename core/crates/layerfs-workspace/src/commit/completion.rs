@@ -45,25 +45,12 @@ impl CommitAttempt {
         let charge = host.memory(2048)?;
         let failure_charge = host.memory(4096)?;
         let context = &submission.capture()?.context;
-        let mut name = vector(context.branch.name.len())?;
-        name.extend_from_slice(&context.branch.name);
-        let next = BranchContext::new(
-            BranchSnapshotWire {
-                branch: BranchWire {
-                    name,
-                    branch: context.branch.branch,
-                    stack: context.branch.stack,
-                    base_layer: context.branch.base_layer,
-                    head_commit: context.branch.head_commit,
-                },
-                head_root: context.head_root,
-                base_root: context.base_root,
-                effective_root: context.effective_root,
-                root_serial: context.root_serial,
-                scope: context.scope,
-                profile: context.profile,
-            },
-            &workspace.host.budget,
+        let next = Self::context(
+            workspace,
+            submission,
+            context.branch.head_commit,
+            context.head_root,
+            context.effective_root,
         )?;
         let root = host.reconciliation_root(&submission.capture()?.root.arena, &submission.fund)?;
         Ok(Arc::new(Self {
@@ -84,6 +71,56 @@ impl CommitAttempt {
             failure_charge: Mutex::new(Some(failure_charge)),
             _charge: charge,
         }))
+    }
+    /// Builds one branch context from the capture with the given head and roots.
+    fn context(
+        workspace: &Workspace,
+        submission: &Submission,
+        head: Option<[u8; 33]>,
+        head_root: Option<[u8; 32]>,
+        effective_root: [u8; 32],
+    ) -> Result<BranchContext, WorkspaceError> {
+        let context = &submission.capture()?.context;
+        let mut name = vector(context.branch.name.len())?;
+        name.extend_from_slice(&context.branch.name);
+        BranchContext::new(
+            BranchSnapshotWire {
+                branch: BranchWire {
+                    name,
+                    branch: context.branch.branch,
+                    stack: context.branch.stack,
+                    base_layer: context.branch.base_layer,
+                    head_commit: head,
+                },
+                head_root,
+                base_root: context.base_root,
+                effective_root,
+                root_serial: context.root_serial,
+                scope: context.scope,
+                profile: context.profile,
+            },
+            &workspace.host.budget,
+        )
+    }
+    /// The successor context a published outcome installs: the captured branch
+    /// with its head and canonical root replaced by the outcome's.
+    ///
+    /// `reserve` builds one before the command so a capacity refusal happens
+    /// before publication; a resume whose first pass consumed it rebuilds the
+    /// identical context from the same capture and the same known outcome.
+    pub(crate) fn successor(
+        workspace: &Workspace,
+        submission: &Submission,
+        head: Option<[u8; 33]>,
+        canonical: [u8; 32],
+    ) -> Result<BranchContext, WorkspaceError> {
+        Self::context(
+            workspace,
+            submission,
+            head,
+            head.map(|_| canonical),
+            canonical,
+        )
     }
     pub fn phase(&self, submission: &Submission, phase: CommitPhase) -> Result<(), WorkspaceError> {
         let mut status = self.status.lock().map_err(|_| WorkspaceError::Io)?;
@@ -133,8 +170,18 @@ impl CommitAttempt {
         let Ok(mut charge) = self.failure_charge.lock() else {
             return cause;
         };
-        let Some(charge) = charge.take() else {
-            return cause;
+        // A resumed attempt fails again with the same retained state; each
+        // failure records its own disposition, so the charge is re-reserved
+        // when a previous failure consumed it.
+        let charge = match charge.take() {
+            Some(charge) => charge,
+            None => match submission.fund.host.upgrade() {
+                Some(host) => match host.memory(4096) {
+                    Ok(charge) => charge,
+                    Err(_) => return cause,
+                },
+                None => return cause,
+            },
         };
         let observed_stage = match &cause {
             WorkspaceError::Service(f) => {
@@ -199,6 +246,19 @@ impl Workspace {
                 return Err(WorkspaceError::InvalidInput);
             }
             super::save::validate_stage(submission, self.inner.incarnation, selector.stage())?;
+            submission.clone()
+        };
+        // A retained submission whose C5 outcome is known and whose
+        // reconciliation failed locally resumes on the same selector: the token
+        // is spent, so the resume re-validates the known outcome and repeats
+        // only the local install instead of the command.
+        if let Some(attempt) = resumable(&submission) {
+            return match self.resume_staged(&submission, &attempt, deadline) {
+                Ok(report) => Ok(report),
+                Err(error) => Err(attempt.fail(&submission, error)),
+            };
+        }
+        {
             let status = submission.status()?;
             if status.phase != StagePhase::Staged || status.failure.is_some() {
                 return Err(WorkspaceError::Busy);
@@ -207,8 +267,7 @@ impl Workspace {
                 .commit_claimed
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .map_err(|_| WorkspaceError::Busy)?;
-            submission.clone()
-        };
+        }
         let remote = match self.begin(true, deadline) {
             Ok(remote) => remote,
             Err(error) => {
@@ -240,7 +299,7 @@ impl Workspace {
     ) -> Result<CommitReport, WorkspaceError> {
         attempt.phase(submission, CommitPhase::CommitStaged)?;
         let stage = attempt.stage.as_ref().ok_or(WorkspaceError::Io)?.stage();
-        let response = self.host.call_input(
+        let response = self.remote_call(
             (self.inner.store, stage.generation),
             Operation::HistoryCommand(HistoryCommand::CommitStaged {
                 workspace: stage.workspace,
@@ -288,6 +347,39 @@ impl Workspace {
         // mixed successor/fund descendants must return to ordinary quota.
         submission.fund.finish()?;
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
+        self.installed(submission, attempt, outcome, revision)
+    }
+    /// Repeats only the local install of a retained attempt whose outcome is
+    /// known: the command is not re-issued (its token is spent) and the progress
+    /// fund is already finished, so the recorded outcome is re-validated and
+    /// reconciliation is re-entered.
+    fn resume_staged(
+        &self,
+        submission: &Submission,
+        attempt: &CommitAttempt,
+        deadline: Instant,
+    ) -> Result<CommitReport, WorkspaceError> {
+        let outcome = attempt.known.get().ok_or(WorkspaceError::Io)?.clone();
+        let (root, head) = validate_outcome(submission, attempt.stage.as_ref(), &outcome)?;
+        {
+            let mut s = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
+            s.known_root = Some(root);
+            s.known_head = head;
+            s.installed_revision = None;
+        }
+        attempt.phase(submission, CommitPhase::Reconcile)?;
+        attempt.root.repair_pending_for_retry(deadline)?;
+        let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
+        self.installed(submission, attempt, outcome, revision)
+    }
+    /// Retires the retained submission once its successor is installed.
+    fn installed(
+        &self,
+        submission: &Submission,
+        attempt: &CommitAttempt,
+        outcome: CommitOutcomeWire,
+        revision: u64,
+    ) -> Result<CommitReport, WorkspaceError> {
         attempt.phase(submission, CommitPhase::Complete)?;
         let retained = {
             let mut state = self.state()?;
@@ -311,6 +403,29 @@ impl Workspace {
             revision,
         })
     }
+}
+/// Claims a retained attempt's resumable reconciliation, if it has one.
+///
+/// Resumable means the C5 outcome is known (the token is spent and the Commit is
+/// published), the recorded failure was local to reconciliation, and nothing was
+/// installed. Claiming clears the disposition under the attempt's status lock,
+/// so two callers cannot resume one attempt concurrently and a resume that fails
+/// again records the disposition anew. Unknown outcomes keep the retained wedge:
+/// that is custody, not a bug.
+fn resumable(submission: &Submission) -> Option<Arc<CommitAttempt>> {
+    let attempt = submission.commit.get()?.clone();
+    attempt.known.get()?;
+    {
+        let mut status = attempt.status.lock().ok()?;
+        if status.phase != CommitPhase::Reconcile
+            || status.failure != Some(CommitFailureDisposition::KnownCommitLocalFailure)
+            || status.installed_revision.is_some()
+        {
+            return None;
+        }
+        status.failure = None;
+    }
+    Some(attempt)
 }
 fn validate_outcome(
     submission: &Submission,

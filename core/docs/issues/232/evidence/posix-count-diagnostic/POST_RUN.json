@@ -1,0 +1,40 @@
+{
+  "harness_seal": "3c51e92850f6a66033bec48838e130d29eaf8db6cb1d18a856c95328882f840a",
+  "image_id": "sha256:a925ad7893bf64b0d854e28ad2dd827dc9febbb6710c3e5cbf22d6e044c5e88c",
+  "performance_admission": "INELIGIBLE; uncontrolled Linux FUSE backing cache",
+  "product_seal": "d125b8b35848b84288b30b954153419e33c2c9cf2fadf62876305279ee051e0f",
+  "rows": {
+    "10mib": {
+      "cache_status": "INELIGIBLE",
+      "complete_command_wall_ns": 3752478834,
+      "history_bytes": 86016,
+      "history_sha256": "e2d429e90e3f09b43001b73a6bc9bc2548e702c53997714514693b0d57d83517",
+      "raw_stderr_sha256": "909bb9f89c310d92d2d18158f91d1a91987aea09419e46c0c745e279029af2cb",
+      "raw_stdout_sha256": "669f580c37e7f34c483861a6ce5676dfb704b10b3296439ea755b7ed8b9c3b84",
+      "source_commit": "5a1b8e9f2208cccb939aa035d869bab20a859239",
+      "status": "PASS",
+      "store_bytes": 14798848,
+      "store_sha256": "56440eb4148327bee1407550f0606b80469571764c5687b16433ed10a59ab733",
+      "verifier_status": "PASS",
+      "verifier_wall_note": "completed before the 10 s subprocess timeout; exact wall not recorded by this diagnostic runner",
+      "verifier_wall_ns": null
+    },
+    "1mib": {
+      "cache_status": "INELIGIBLE",
+      "complete_command_wall_ns": 2761911708,
+      "history_bytes": 86016,
+      "history_sha256": "6ca58293314d81ec9a03d13b2c589df328219aadaf8b1c124d6c10301ed426b0",
+      "raw_stderr_sha256": "553ef768b6cdb194bd3dc78aef96d6e3829c286e67b2010e7d59a5f68beea149",
+      "raw_stdout_sha256": "073711eb509ce0f9779a0c34b164c84ab3c078d78a88c926ae0db20f94f0ed0c",
+      "source_commit": "5a1b8e9f2208cccb939aa035d869bab20a859239",
+      "status": "PASS",
+      "store_bytes": 4263936,
+      "store_sha256": "f99b8c75bceac8682b91fca25262e63631e2351cb6d1d1427a15d4186280fe7c",
+      "verifier_status": "PASS",
+      "verifier_wall_note": "completed before the 10 s subprocess timeout; exact wall not recorded by this diagnostic runner",
+      "verifier_wall_ns": null
+    }
+  },
+  "schema": "issue232-posix-count-post-run-v1",
+  "status": "COMPLETE_DIAGNOSTIC"
+}

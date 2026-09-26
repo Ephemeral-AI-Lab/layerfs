@@ -22,6 +22,22 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ## 15. Counters and receipts
 
+### #232 Phase 1C count diagnostic (2026-09-25)
+
+When `LAYERFS_COMPLEXITY_DIAGNOSTIC` is set, the Linux daemon emits
+`LFS_PIECE_COUNT` once after a successful piece splice, `LFS_PIECE_PAGES`
+after a successful piece-index build, and `LFS_PIECE_LOWER` after a successful
+Commit lowering. `prefix_visits` includes the first piece that terminates the
+prefix loop; `suffix_visits` is the complete second pass over old pieces;
+`replacement_visits` and `summary_visits` count their respective loops.
+`LFS_PIECE_PAGES.written` counts only piece-index leaf/root pages, not other
+inode-index pages. The host Service emits `LFS_C1_EDIT_COUNT` from the
+successful `ConstructedFile::counters`; its `cdc_input_bytes` is the declared
+replacement stream length that `FastCdc::scan` checked, not physical reads.
+These lines are scoped diagnostic work counts, not operation timers, RSS,
+SQLite page reads or a performance PASS. The Phase 1C receipt must retain the
+producer logs and bind them to its one SDK Exec/Commit call and exact image.
+
 ### #190 pooled-read instrumentation (2026-09-20)
 
 This addition describes the instrumentation working tree based on

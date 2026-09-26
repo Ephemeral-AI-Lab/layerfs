@@ -15,4 +15,4 @@ mod query;
 mod rows;
 mod staging;
 
-pub use open::{create, open_read_only, SqliteCatalog};
+pub use open::{create, open_read_only, open_writable, SqliteCatalog};

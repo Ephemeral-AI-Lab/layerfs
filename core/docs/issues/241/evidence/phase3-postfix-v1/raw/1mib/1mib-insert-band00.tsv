@@ -1,0 +1,30 @@
+schema	issue241-position-functional-v1
+manifest_sha256	e12509411e225e6eea497dc08e3cc0730f1c2ab7ce3f104cfc232eb16c7f2b6a
+case_id	1mib-insert-band00
+operation	insert
+offset	32446
+status	STARTED
+edit_sandbox_id	c003dbdfc4d3f8cd659cbc85e7541b77
+edit_unmount	Ok(())
+baseline_exec_elapsed_ns	27223208
+baseline_exec_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+verifier_read_callbacks	8
+fresh_sandbox_id	0eeaf736f6567bc6950cc190ff35d403
+fresh_unmount	Ok(())
+1mib-insert-band00-fresh-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-fresh-docker-top_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-fresh-daemon_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-fresh_observation_wait_ns	6002065500
+1mib-insert-band00-fresh-docker-top-late_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-fresh-daemon-late_exit	ExitStatus(unix_wait_status(0))
+fresh_sandbox_delete	Ok(())
+fresh_sandbox_absent	true
+1mib-insert-band00-edit-docker-inspect_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-edit-docker-top_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-edit-daemon_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-edit_observation_wait_ns	6006338000
+1mib-insert-band00-edit-docker-top-late_exit	ExitStatus(unix_wait_status(0))
+1mib-insert-band00-edit-daemon-late_exit	ExitStatus(unix_wait_status(0))
+edit_sandbox_delete	Ok(())
+edit_sandbox_absent	true
+status	FAIL	fresh: bounded mounted read status: ExecResult { exit_status: Some(1), stdout: [], stderr: [115, 116, 97, 116, 58, 32, 99, 97, 110, 39, 116, 32, 115, 116, 97, 116, 32, 39, 112, 97, 121, 108, 111, 97, 100, 46, 98, 105, 110, 39, 58, 32, 73, 47, 79, 32, 101, 114, 114, 111, 114, 10], stdout_truncated: false, stderr_truncated: false }

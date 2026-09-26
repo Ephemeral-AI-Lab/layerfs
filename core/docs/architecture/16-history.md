@@ -29,6 +29,9 @@ Implementation specification and its pre-publication audit:
   described below; older sections keep their pins.
 - **Init ordering-backing correction:** product commit
   `0042a909ac3f16a5041aa51d76f96522a58352c8`.
+- **Agent selected-Commit Workspace attachment:** worktree base
+  `13773c5896c30c19047bdfabced4aa25efb27034` plus the product changes in
+  this commit. Earlier evidence and source pins retain their original identity.
 - **#237 unmerged research prototype:** the same-commit `history_bootstrap.rs`
   diff based on `e6e528c3f830db07bffc8643cc0d18db8abf10b7` reuses the
   preceding entry's metadata root only when kind, mode and mtime are equal.
@@ -75,9 +78,18 @@ layerfs-history ──► layerfs-content   (scalar identity types only)
                  ──► blake3           (domain-separated derivation)
                  ──► rusqlite         (optional, `native` feature)
 
-layerfs-history ◄── layerfs-service   (composition, authorization, bootstrap)
+layerfs-history ◄── layerfs-server    (composition, authorization, bootstrap)
 layerfs-bridge  does not depend on layerfs-history at all
 ```
+
+`layerfs_history::sqlite::open_writable` reopens one existing, closed catalog
+for writable continuity in the new owning process: it validates the same
+application identity, schema version, application-table set, singleton metadata
+row and binding-derived catalog identity as the read-only open, then opens the
+same file read-write under the declared MEMORY-journal/no-sync profile. It
+exists for a prepared Store/history byte copy that a caller must fork, commit or
+allocate against; it is not a migration, repair or promotion, and an
+incomplete, foreign or inconsistent catalog is refused.
 
 The `native` feature is the only provider switch. Building the crate with
 `--no-default-features` compiles the portable contract and no SQLite provider; it
@@ -201,6 +213,13 @@ a Branch forked from the Layer it produced, or an explicit future rebase.
 
 Forking from a historical Commit uses **that Commit's** base Layer, never the
 source Branch's current base.
+
+The agent Workspace mount resolves a supplied Commit through the Branch's
+bounded `CommitHistory` ancestry query before attachment. It checks Project
+ownership and uses that Commit's exact root and base Layer for the writable
+Workspace. The live Branch is unchanged. Staging later compares the captured
+head and base with the live Branch, so an edit from an older Commit is refused
+with the existing `HeadMoved` conflict rather than replacing newer history.
 
 ## 16.5 Admission, multi-writer and continuity
 

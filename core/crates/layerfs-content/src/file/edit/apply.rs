@@ -16,7 +16,7 @@ use crate::error::{ContentError, ContentResult};
 use crate::file::content::{begin_whole_file_object, ConstructedFile, WHOLE_VALUE_HEADER};
 use crate::file::edit::compare::{compare_replacements, NoOpVerdict};
 use crate::file::edit::finish::{emit_empty_representation, emit_file_state};
-use crate::file::edit::input::{EditSource, EditStream, Plan, ReplacementReader, Segment};
+use crate::file::edit::input::{EditSequence, EditSource, Plan, ReplacementReader, Segment};
 use crate::file::view::FileView;
 use crate::object::{
     AdvisoryPredecessors, AuthenticatedObjects, FinalizedConsumer, FinalizedObject, ObjectId,
@@ -29,7 +29,7 @@ pub struct EditRequest<'a> {
     /// Root of the immutable base.
     pub root: ObjectId,
     /// Validated ordered edits in current-result coordinates.
-    pub edits: &'a EditStream,
+    pub edits: &'a dyn EditSequence,
     /// Bounded replacement byte source.
     pub source: &'a dyn EditSource,
 }
@@ -153,7 +153,7 @@ pub fn apply_edits(
 fn assemble_into(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
-    stream: &EditStream,
+    stream: &dyn EditSequence,
     source: &dyn EditSource,
     pages: &mut crate::file::mapping::PageCache,
     out: &mut Vec<u8>,
@@ -166,7 +166,7 @@ fn assemble_into(
 fn assemble_inner(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
-    stream: &EditStream,
+    stream: &dyn EditSequence,
     source: &dyn EditSource,
     pages: &mut crate::file::mapping::PageCache,
     out: &mut Vec<u8>,
@@ -271,7 +271,8 @@ fn replace_chunked(
     // derived once, at emission.
     let mut result_len = state.logical_len;
     let mut objects = crate::file::edit::tree::EditObjects::new(reader, consumer, pages);
-    for (index, declared) in request.edits.edits().iter().enumerate() {
+    for index in 0..request.edits.len() {
+        let declared = request.edits.edit_at(index)?;
         let replacement_len = declared.replacement_len();
         let (left, tail) = edit.child("edit.split").run(|_| {
             crate::file::edit::tree::split(&mut objects, summary, declared.start(), true)
@@ -432,7 +433,7 @@ enum Stream<'a> {
 impl<'a> PlanReader<'a> {
     fn new(
         view: &'a FileView,
-        stream: &'a EditStream,
+        stream: &'a dyn EditSequence,
         source: &'a dyn EditSource,
     ) -> ContentResult<Self> {
         let payload = view

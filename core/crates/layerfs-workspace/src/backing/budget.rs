@@ -4,11 +4,11 @@ use std::sync::{
     Arc,
 };
 
-pub(crate) struct Budget {
+pub struct Budget {
     limit: usize,
     used: AtomicUsize,
 }
-pub(crate) struct Charge {
+pub struct Charge {
     budget: Arc<Budget>,
     bytes: usize,
 }

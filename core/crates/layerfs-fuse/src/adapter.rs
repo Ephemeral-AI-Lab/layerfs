@@ -1,9 +1,10 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
 use crate::replies::{attributes, errno, inode, kind, serial};
+use crate::trace::trace;
 use fuser::*;
 use layerfs_workspace::{
-    FileAccess, FileCreateOptions, FileOpenOptions, ProjectionReplyPermit, ReferenceScope,
-    Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+    filesystem::projection_counters::ProjectionOp, FileAccess, FileCreateOptions, FileOpenOptions,
+    ProjectionReplyPermit, ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
 };
 use std::{
     ffi::OsStr,
@@ -38,10 +39,10 @@ pub(crate) struct Adapter {
 }
 
 impl Adapter {
-    fn root(&self) -> u64 {
+    pub(crate) fn root(&self) -> u64 {
         self.workspace.root().serial
     }
-    fn guard(&self, req: &Request) -> Result<(), Errno> {
+    pub(crate) fn guard(&self, req: &Request) -> Result<(), Errno> {
         if self.stopping.load(Ordering::Acquire) {
             return Err(Errno::ENODEV);
         }
@@ -50,16 +51,17 @@ impl Adapter {
         }
         Ok(())
     }
-    fn handle(&self, ino: INodeNo, fh: FileHandle) -> Result<(), Errno> {
+    pub(crate) fn handle(&self, ino: INodeNo, fh: FileHandle) -> Result<(), Errno> {
         let attrs = self.workspace.handle_attributes(fh.0).map_err(errno)?;
         if attrs.serial != serial(ino, self.root()) {
             return Err(Errno::EBADF);
         }
         Ok(())
     }
-    fn observe(&self, req: &Request) -> Result<ProjectionReplyPermit, Errno> {
+    fn observe(&self, req: &Request, op: ProjectionOp) -> Result<ProjectionReplyPermit, Errno> {
         // Callbacks retain this guard in their outer scope through reply emission.
         self.guard(req)?;
+        self.workspace.record_projection_call(op);
         self.workspace
             .begin_projection_reply(Instant::now() + CALLBACK_BUDGET)
             .map_err(errno)
@@ -132,7 +134,7 @@ impl Filesystem for Adapter {
     }
 
     fn lookup(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Lookup);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .lookup(
@@ -161,7 +163,7 @@ impl Filesystem for Adapter {
     }
 
     fn getattr(&self, req: &Request, ino: INodeNo, fh: Option<FileHandle>, reply: ReplyAttr) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Getattr);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             let value = match fh {
                 Some(handle) => {
@@ -181,7 +183,7 @@ impl Filesystem for Adapter {
     }
 
     fn access(&self, req: &Request, ino: INodeNo, mask: AccessFlags, reply: ReplyEmpty) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             if !self.writable && mask.bits() & 2 != 0 {
                 return Err(Errno::EROFS);
@@ -202,7 +204,7 @@ impl Filesystem for Adapter {
     }
 
     fn open(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Open);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -246,7 +248,12 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyData,
     ) {
-        let permit = self.observe(req);
+        trace(
+            "read",
+            None,
+            &format!("ino={} offset={offset} size={size}", ino.0),
+        );
+        let permit = self.observe(req, ProjectionOp::Read);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -269,7 +276,7 @@ impl Filesystem for Adapter {
     }
 
     fn readlink(&self, req: &Request, ino: INodeNo, reply: ReplyData) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit.as_ref().map_err(|error| *error).and_then(|_| {
             self.workspace
                 .readlink(serial(ino, self.root()), Instant::now() + CALLBACK_BUDGET)
@@ -316,7 +323,7 @@ impl Filesystem for Adapter {
     }
 
     fn opendir(&self, req: &Request, ino: INodeNo, requested: OpenFlags, reply: ReplyOpen) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Other);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -340,7 +347,7 @@ impl Filesystem for Adapter {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
-        let permit = self.observe(req);
+        let permit = self.observe(req, ProjectionOp::Readdir);
         let result = permit
             .as_ref()
             .map_err(|error| *error)
@@ -438,7 +445,15 @@ impl Filesystem for Adapter {
         flags: Option<BsdFileFlags>,
         reply: ReplyAttr,
     ) {
+        trace(
+            "setattr",
+            None,
+            &format!("ino={} size={size:?} mode={mode:?}", ino.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        // The callback class is counted as observed, before any refusal, so the
+        // count describes what the kernel asked for rather than what succeeded.
+        self.workspace.record_projection_call(ProjectionOp::Setattr);
         let request = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -533,7 +548,13 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        trace(
+            "write",
+            None,
+            &format!("ino={} offset={offset} len={}", ino.0, data.len()),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -587,6 +608,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -634,7 +656,13 @@ impl Filesystem for Adapter {
         _umask: u32,
         reply: ReplyEntry,
     ) {
+        trace(
+            "mkdir",
+            Some(name),
+            &format!("parent={} mode={mode:o}", parent.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -669,7 +697,9 @@ impl Filesystem for Adapter {
         }
     }
     fn unlink(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        trace("unlink", Some(name), &format!("parent={}", parent.0));
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -690,7 +720,9 @@ impl Filesystem for Adapter {
         }
     }
     fn rmdir(&self, req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEmpty) {
+        trace("rmdir", Some(name), &format!("parent={}", parent.0));
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -718,6 +750,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -758,6 +791,18 @@ impl Filesystem for Adapter {
         reply: ReplyEmpty,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        trace(
+            "rename",
+            Some(name),
+            &format!(
+                "parent={} new_parent={} new_name={} flags={:#x}",
+                parent.0,
+                new_parent.0,
+                String::from_utf8_lossy(new_name.as_bytes()),
+                flags.bits()
+            ),
+        );
+        self.workspace.record_projection_call(ProjectionOp::Rename);
         // RENAME_NOREPLACE is the only selected flag; exchange and whiteout stay
         // unsupported and are refused before any publication.
         let noreplace = match flags.bits() {
@@ -804,6 +849,7 @@ impl Filesystem for Adapter {
         reply: ReplyEntry,
     ) {
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);
@@ -841,7 +887,13 @@ impl Filesystem for Adapter {
         requested: i32,
         reply: ReplyCreate,
     ) {
+        trace(
+            "create",
+            Some(name),
+            &format!("parent={} mode={mode:o} flags={requested:#x}", parent.0),
+        );
         let deadline = Instant::now() + CALLBACK_BUDGET;
+        self.workspace.record_projection_call(ProjectionOp::Write);
         let mut permit = self.guard(req).and_then(|()| {
             if !self.writable {
                 return Err(Errno::EROFS);

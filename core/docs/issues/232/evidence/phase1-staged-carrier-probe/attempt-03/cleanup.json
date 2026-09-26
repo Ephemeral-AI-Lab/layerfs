@@ -1,0 +1,9 @@
+{
+  "container_removed_with": "docker rm -f layerfs-232-stage-09489a48",
+  "mount_detached_by_probe": true,
+  "post_cleanup_inspect_exit_codes": {
+    "container": 1,
+    "volume": 1
+  },
+  "volume_removed_with": "docker volume rm layerfs-232-stage-09489a48"
+}

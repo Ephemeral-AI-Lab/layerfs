@@ -556,13 +556,18 @@ impl SaveOperation {
         // call's 257.5 ms in none of its named parts. See `DiagProfile`.
         let call_started = std::time::Instant::now();
         let mut drain_ns = 0_u64;
-        let result = scope.run(|_finish| {
+        let (drain_objects, drain_bytes) = self.pending();
+        let result = scope.run(|finish| {
             let drain_started = std::time::Instant::now();
-            let remaining = self.batch.drain();
-            self.flush(remaining)?;
+            finish.child("storage.finish.drain").run(|_| {
+                let remaining = self.batch.drain();
+                self.flush(remaining)
+            })?;
             drain_ns = drain_started.elapsed().as_nanos() as u64;
             let owner = self.owner.as_mut().ok_or(StorageError::Aborted)?;
-            let counters = owner.finish()?;
+            let counters = finish
+                .child("storage.finish.owner")
+                .run(|owner_scope| owner.finish(owner_scope))?;
             Ok(SaveOutcome::from(counters))
         });
         match result {
@@ -612,6 +617,8 @@ impl SaveOperation {
                 let drop_ns = drop_started.elapsed().as_nanos() as u64;
                 outcome.profile.diag.accumulate(&release);
                 outcome.profile.diag.finish_drain_ns = drain_ns;
+                outcome.profile.diag.finish_batch_objects = drain_objects as u64;
+                outcome.profile.diag.finish_batch_bytes = drain_bytes;
                 outcome.profile.diag.finish_drop_ns = drop_ns;
                 outcome.profile.diag.finish_call_ns = call_started.elapsed().as_nanos() as u64;
                 Ok(outcome)

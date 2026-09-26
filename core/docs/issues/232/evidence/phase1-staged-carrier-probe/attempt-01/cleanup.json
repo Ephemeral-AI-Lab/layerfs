@@ -1,0 +1,9 @@
+{
+  "container_removed_with": "docker rm -f layerfs-232-stage-d75d4a9a",
+  "failed_mount_detached_with": "docker exec layerfs-232-stage-d75d4a9a umount -l /probe/unmount/mnt",
+  "post_cleanup_inspect_exit_codes": {
+    "container": 1,
+    "volume": 1
+  },
+  "volume_removed_with": "docker volume rm layerfs-232-stage-d75d4a9a"
+}

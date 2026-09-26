@@ -1,6 +1,6 @@
 use super::host::Host;
 use crate::{backing::budget::Charge, *};
-use layerfs_bridge::contract::{Operation, Response, Root};
+use layerfs_bridge::contract::{Operation, Response, Root, Source};
 use std::{
     io::Write,
     path::{Path, PathBuf},
@@ -83,6 +83,8 @@ pub(crate) struct State {
     pub carried: Vec<u64>,
     pub closed: bool,
     pub active: usize,
+    /// Bounded per-operation projection and upstream counts for this Workspace.
+    pub counters: crate::filesystem::projection_counters::ProjectionCounters,
     pub tables: Option<Charge>,
 }
 pub(crate) struct Node {
@@ -414,8 +416,33 @@ impl Workspace {
         output: &mut dyn Write,
         deadline: Instant,
     ) -> Result<Response, WorkspaceError> {
+        self.remote_call(
+            (self.inner.store, 0),
+            operation,
+            &mut &[][..],
+            bytes,
+            output,
+            deadline,
+        )
+    }
+    /// One upstream host Service call, counted for this Workspace.
+    ///
+    /// The count is ordinary product telemetry: it is what shows whether a
+    /// route is issuing avoidable upstream requests. It never gates the call.
+    pub(crate) fn remote_call(
+        &self,
+        target: (u32, u64),
+        operation: Operation,
+        input: &mut dyn Source,
+        bytes: u64,
+        output: &mut dyn Write,
+        deadline: Instant,
+    ) -> Result<Response, WorkspaceError> {
+        if let Ok(mut state) = self.state() {
+            state.counters.record_upstream();
+        }
         self.host
-            .call(self.inner.store, operation, bytes, output, deadline)
+            .call_input(target, operation, input, bytes, output, deadline)
     }
     pub(crate) fn callback_deadline(deadline: Instant) -> Instant {
         deadline.min(Instant::now() + Duration::from_secs(10))

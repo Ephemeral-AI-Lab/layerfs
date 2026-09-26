@@ -1,0 +1,38 @@
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-telemetry)
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-content)
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-api/core)
+    Checking layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs/core/crates/layerfs-sandbox)
+error: for loop over a single element
+   --> crates/layerfs-bridge/tests/history_protocol.rs:710:5
+    |
+710 | /     for operation in [Operation::SaveFile {
+711 | |         base: Some([1; 32]),
+712 | |         base_length: 1,
+713 | |         length: 1,
+...   |
+718 | |         assert!(!operation.metadata_mutation());
+719 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#single_element_loop
+    = note: `-D clippy::single-element-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::single_element_loop)]`
+help: try
+    |
+710 ~     {
+711 +         let operation = Operation::SaveFile {
+712 +         base: Some([1; 32]),
+713 +         base_length: 1,
+714 +         length: 1,
+715 +         extents: 1,
+716 +         replacement: 0,
+717 +     };
+718 +         assert!(operation.content_mutation());
+719 +         assert!(!operation.metadata_mutation());
+720 +     }
+    |
+
+error: could not compile `layerfs-bridge` (test "history_protocol") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

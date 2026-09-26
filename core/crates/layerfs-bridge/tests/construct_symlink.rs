@@ -40,7 +40,7 @@ fn constructor_has_exact_bounds_opaque_target_and_shared_content_grant() {
         let r = request(&target);
         assert_eq!(r.operation.opcode(), 16);
         assert_eq!(permission_bit(16), Some(4));
-        assert_eq!(permission_bit(3), Some(4));
+        assert_eq!(permission_bit(3), None);
         assert!(r.operation.content_mutation() && r.operation.mutation());
         assert!(!r.operation.metadata_mutation() && !r.operation.read_only());
         assert_eq!(r.operation.input_length().unwrap(), 0);

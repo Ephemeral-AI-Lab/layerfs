@@ -416,3 +416,36 @@ The final diff check also removed one trailing space in the external Python
 driver. The executed pre-whitespace driver is retained in the local SHA256
 driver archive; this formatting-only adjustment did not repeat passing product
 operations or rewrite their driver identities.
+
+## #241 projected handle range edit
+
+Source base `241096083f29fba74835581b4f3297c015924e8c`; the platform-neutral
+Workspace source change is committed with this addendum. The earlier R3b
+local-path implementation and its receipts above keep their original scope.
+
+`RangeStamp` names the exact mounted-file inode, Workspace incarnation,
+generation and global revision. `Workspace::projected_range_state(handle,
+inode)` observes that stamp, current length and portable mtime through one
+READY projected file handle under the Workspace state lock. It remains a
+read-only observation when the mount is read-only or a notification is pending
+or failed; `writable` is false in those states. The Linux adapter owns its
+wire format and ioctl command numbers, not this Workspace API.
+
+`ProjectionMutationPermit::edit_file_range(handle, stamp, &RangeEdit,
+deadline)` consumes one already admitted projected mutation permit. The
+existing owned payload, writable nonappend projected handle, current inode,
+generation and revision are checked before candidate construction and again
+before publication. A stale stamp has its own `StaleStamp` error; ordinary
+permit contention remains `Busy`. Empty deletion plus empty replacement is
+refused without a revision or mtime change. Valid insert, delete and overwrite
+reuse the R3b piece splice, owned-payload custody, exact candidate publication,
+mtime/length update and existing projection notification completion. A later
+notification failure retains `CoherenceFailure` and its accepted receipt; it
+does not roll back the already visible private mutation. At publication, the
+range counter charges accepted replacement bytes and zero physically copied
+suffix payload bytes. Logical offset shifts are metadata, not copied payload.
+
+This addition does not make a Linux ioctl or SDK Exec/Commit result by itself.
+The adapter's real mounted coherence, final ABI and end-to-end verification
+remain separate gates under #241; no latency or cold-cache claim follows from
+the Workspace tests.

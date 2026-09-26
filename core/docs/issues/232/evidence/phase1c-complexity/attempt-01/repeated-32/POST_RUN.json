@@ -1,0 +1,21 @@
+{
+  "cursor_key": "retained locally, mode 0600; omitted from committed evidence",
+  "files": {
+    "history.sqlite": {
+      "boundary": "post attempt and verifier; Store-wide, not a timed phase",
+      "bytes": 86016,
+      "page_count": 21,
+      "page_size": 4096,
+      "sha256": "435dad4110eeab28385e1463aa6ed5b0a7ffa6cffde8bc26efecc78829ac9191"
+    },
+    "store.sqlite": {
+      "boundary": "post attempt and verifier; Store-wide, not a timed phase",
+      "bytes": 4272128,
+      "page_count": 1043,
+      "page_size": 4096,
+      "sha256": "ff1daa44c8486d95a71a36e7e0b9318a46b4a2cc32598b92bf35c1813c239467"
+    }
+  },
+  "full_local_run_path": "/Users/yifanxu/.codex/worktrees/4cc0/layerfs/benchmark-results/fs-bench-pro/phase1c-repeated-32-01",
+  "status": "INELIGIBLE"
+}

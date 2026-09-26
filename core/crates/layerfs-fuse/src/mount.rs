@@ -114,6 +114,7 @@ pub struct MountHandle {
     #[cfg(target_os = "linux")]
     stopping: Arc<AtomicBool>,
     #[cfg(target_os = "linux")]
+    #[cfg(target_os = "linux")]
     unmounter: Option<SessionUnmounter>,
     #[cfg(target_os = "linux")]
     worker: Option<JoinHandle<io::Result<()>>>,

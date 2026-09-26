@@ -17,6 +17,8 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 The base-less build-count correction in this page describes product commit
 `64ea3ea8aa213edb8991e958829aeb87c6bfd16d`; older sections retain their
 own source pin.
+The Service/Bridge file-save limits below describe the #252 source in the same
+commit as this note; older flow diagrams retain their historical source pins.
 
 Chapter numbers are global to the set. This paper holds chapters 7 and 9;
 **chapter 8** (module map) and **chapter 10** (what the set does not claim) are in
@@ -222,6 +224,16 @@ where, because a limit that is stated but not enforced is not a limit.
 | concurrent reads per service process | 2 | `MAX_READ_OPERATIONS` |
 | sessions per Store | budget + 2, +1 refusal slot | `session_capacity` |
 | delta depth (whole-file / chunk / metadata) | 8 / 4 / 8 defaults, ≤ 50 | policy validation |
+
+### Service/Bridge — final file save (#252)
+
+| Limit | Value | Enforced by |
+| --- | ---: | --- |
+| logical final file | 4 GiB | `MAX_FILE` and final-sequence validation |
+| wire descriptor records | 24 B each; count charged by bytes, no fixed count cap | `Operation::SaveFile::input_length` |
+| descriptor plus non-base byte body | 8 GiB | `MAX_SAVE_STREAM_BYTES` |
+| derived edit, zero-range and byte spools | 8 GiB total | `file_stream::SPOOL_DISK_BYTES` |
+| Service resident replacement window | 64 KiB | `file_stream::WINDOW_BYTES` |
 
 ### Three bounds that are easy to misread
 

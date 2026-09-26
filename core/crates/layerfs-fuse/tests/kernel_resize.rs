@@ -250,7 +250,7 @@ mod linux {
             .unwrap()
             .operations
             .iter()
-            .any(|op| matches!(op, Operation::EditFile { .. })));
+            .any(|op| matches!(op, Operation::SaveFile { base: Some(_), .. })));
         assert_eq!(read(&file, 0, 4), [0, 1, 2, 3]);
         drop(file);
         finish(&f, data, &mut mount);

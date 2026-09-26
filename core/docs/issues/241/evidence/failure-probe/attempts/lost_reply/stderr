@@ -1,0 +1,4 @@
+
+thread 'linux::probe' panicked at crates/layerfs-fuse/tests/range_ioctl_failure_probe.rs:308:17:
+assertion failed: matches!(err.raw_os_error(), Some(libc::EIO | libc::ENOTCONN))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

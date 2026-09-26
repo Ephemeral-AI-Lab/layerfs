@@ -108,6 +108,11 @@ pub struct WorkspaceConfig {
 pub enum Base {
     Root(Root),
     Branch([u8; 17]),
+    BranchAt {
+        project: [u8; 17],
+        branch: [u8; 17],
+        commit: Option<[u8; 33]>,
+    },
 }
 #[derive(Clone, Debug)]
 pub struct AttachOptions {
@@ -166,6 +171,8 @@ pub enum WorkspaceError {
     InvalidInput,
     Capacity,
     Busy,
+    /// A projected edit's expected mounted-file version is no longer current.
+    StaleStamp,
     Closed,
     NotFound,
     NotDirectory,
@@ -258,7 +265,7 @@ impl std::fmt::Display for WorkspaceError {
 }
 impl std::error::Error for WorkspaceError {}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct WorkspaceStatus {
     pub submission: Option<SubmissionStatus>,
     pub generation: u64,
@@ -273,6 +280,10 @@ pub struct WorkspaceStatus {
     pub handles: usize,
     pub projection_handles: usize,
     pub projection_replies: usize,
+    /// Bounded per-operation projection callback counts for this Workspace.
+    pub projection_calls: Vec<(&'static str, u64)>,
+    /// Upstream host Service calls this Workspace has issued.
+    pub upstream_calls: u64,
     pub coherence: Option<CoherenceStatus>,
     pub cookies: usize,
     pub accounted_bytes: usize,
@@ -341,11 +352,6 @@ impl AsRef<[u8]> for WorkspacePath {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
-}
-pub struct RangeEdit {
-    pub start: u64,
-    pub end: u64,
-    pub replacement: crate::OwnedPayload,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MutationReceipt {

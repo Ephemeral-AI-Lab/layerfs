@@ -1,0 +1,249 @@
+{
+  "acknowledgement_boundary": "WorkspaceApi::commit",
+  "admission_eligible": false,
+  "cache": {
+    "linux-fuse-backing": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "linux-fuse-backing",
+      "method": "declared-warm-not-invalidatable-v1",
+      "reason": "the per-case sandbox creates a fresh backing directory and spool inside the container; no host-side or product-side invalidation exists, and a benchmark-only eviction between Edit and Commit is forbidden, so Commit may read the bytes Edit just wrote from resident backing pages",
+      "status": "INELIGIBLE"
+    },
+    "macos-store": {
+      "contract": "exec-fuse-edit-cache-v1",
+      "domain": "macos-store",
+      "files": {
+        "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/history.sqlite": {
+          "bytes": 86016,
+          "pages": 6,
+          "resident_pages": 0
+        },
+        "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/store.sqlite": {
+          "bytes": 2691072,
+          "pages": 165,
+          "resident_pages": 0
+        }
+      },
+      "method": "darwin-mmap-msync-invalidate-mincore-v1",
+      "pages_checked": 171,
+      "resident_pages": 0,
+      "resident_pages_before": 0,
+      "status": "PASS"
+    }
+  },
+  "cache_contract": "exec-fuse-edit-cache-v1",
+  "cache_wall_ns": 3051459,
+  "case_file": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/case.txt",
+  "cleanup_ns": 491334541,
+  "clone_copy_wall_ns": 1095083,
+  "clone_method": "independent-writable-byte-copy",
+  "clone_sha256": {
+    "history": "25e8cb8b950f5cce3ec166e0f4e6f88806c707d0670adde90c2dde8700f5e82a",
+    "store": "9ac3fc8216a551a9e86413e2113795ed5029e11a3837208d9b83f518780ef6da"
+  },
+  "clone_sha256_verified": true,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/binary-archive/51471c27f169944a42b60b4a0d4dc9ad5a0fdb98b2bff7940da1a32f097248f0/benchmark_edit",
+    "branch_body=db40325818abc146345cb29ae6c82c06;canonical_count_expected=56;canonical_root_expected=9f557d08f00e034cac5eab1d3a3a7e86d69c560f1fa7c502d4234f52b3ab5984;carrier_protocol=linux-projected-range-request-v2;command=/layerfs-bench/bin/layerfs-edit-tool splice --file payload.bin --offset 524288 --delete-length 0 --length 4096 --payload /layerfs-bench/payloads/insert-middle-4k.bin --expect-size 1048576 --output-version 4;delete_len=0;edit_start=524288;editor_algorithm=linux-fuse-ioctl-range-splice-v2;expected_mode=416;family_id=edit_length_changing;final_bytes=1052672;final_sha256=a95ad28f6fb8fecf9670fcbb1ed044ce88bb406ee1be5cd899078a54bba1c78b;fixture_bytes=1048576;fixture_canonical_root=8fafdf06fac9dbdffb7ccb6b1bde3b2460c387ef1abc55717dee8be401ff6078;fixture_extent_count=54;fixture_mode=416;full_file_digest=1;g2_target_ms=5.3;genesis_layer=3220ee4d6fd9bde1a028434d88f4998a0ab0f0db58a518dca3fae60b15202112fa;genesis_root=30d02d714eedde94e429c472ae24581a9b901d5bc77f8cfbd4c8fa275d15ca1b;genesis_root_serial=1;operation_contract_id=workspace-exec-fuse-range-splice-commit-v4;project_id=31d5a2286207954c258ff6288971bf7879;replacement_kind=inline;replacement_len=4096;replacement_sha256=568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616;route=sdk-exec-fuse-range-splice-commit-v1;scenario_id=insert-middle-4k-on-1mib-ops-1-exec-v4;stack_body=d5a2286207954c258ff6288971bf7879;telemetry_run=328462947206529713922138466940493272208;window0_bytes=131072;window0_offset=458752;window0_sha256=17a968e35b8a97b3bac76564126bd89f7653ab8750e8dd54e6ad0a698371dfe4;window1_bytes=65536;window1_offset=987136;window1_sha256=3f414f5fa2c24dad7fa317375ee2b5b793299b88477a228503ef39c171975566;window_count=2",
+    "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/history.sqlite",
+    "sha256:9f24110e647ba22a4d0d995df6d25ec414552aef4222a5f4ca9ad82785a6edda",
+    "exec-insert-middle-4k-on-1mib-ops-1-exec-v4"
+  ],
+  "commit_ns": 22073125,
+  "complete_command_budget_ns": 15000000000,
+  "complete_command_status": "PASS",
+  "complete_command_wall_ns": 1641659208,
+  "driver": {
+    "acknowledgement_boundary": "WorkspaceApi::commit",
+    "branch_id": "11db40325818abc146345cb29ae6c82c06",
+    "caller_pid": 3411,
+    "cleanup_ns": 491334541,
+    "commit_ns": 22073125,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 13948,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "delete_len": 0,
+    "detail": "commit_outcome=COMMITTED revision=3",
+    "edit_commit_ns": 47631917,
+    "edit_ns": 25548042,
+    "edit_start": 524288,
+    "family_id": "edit_length_changing",
+    "final_bytes": 1052672,
+    "fixture_bytes": 1048576,
+    "g2_target_ms": 5.3,
+    "head_commit": "1290bf60607e201b48c206afb655fb447836659e24ecf47cf1990457b2bdd886f4",
+    "history": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/history.sqlite",
+    "image": "sha256:9f24110e647ba22a4d0d995df6d25ec414552aef4222a5f4ca9ad82785a6edda",
+    "observed_mtime_nanoseconds": 468183509,
+    "observed_mtime_seconds": 1790296898,
+    "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+    "operation_entrypoint": "WorkspaceApi::exec",
+    "operation_surface": "workspace-posix-fuse",
+    "preparation_ns": 418424916,
+    "projection_counts": "lookup=1,getattr=7,read=3,write=0,readdir=0,open=1,setattr=0,rename=0,other=0,range_state=2,range_edit=1",
+    "range_accepted_payload_bytes": 4096,
+    "range_shifted_suffix_bytes": 0,
+    "replacement_len": 4096,
+    "replacement_sha256": "568c5408a3f292d4a593d5ffa43736b790b6a5dac749427b0ad53c765e672616",
+    "replay": false,
+    "route": "sdk-exec-fuse-range-splice-commit-v1",
+    "sandbox": "67427b1d7d71f87c0c313a19e46c5091",
+    "sandbox_delete_container_removed": false,
+    "sandbox_delete_ok": true,
+    "sandbox_delete_volume_removed": false,
+    "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v4",
+    "schema": "core-fs-bench-pro-exec-fuse-edit-performance-v1",
+    "service_endpoint_port": 62983,
+    "status": "COMPLETE",
+    "store": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/store.sqlite",
+    "telemetry_run": "f71ba99dd6a60a04a471c837ec049490",
+    "unmount_ok": true,
+    "upstream_calls": 8
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "edit_commit_ns": 47631917,
+  "edit_ns": 25548042,
+  "family_id": "edit_length_changing",
+  "folder": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4",
+  "g2_target_ms": 5.3,
+  "gate_profile": "post-verifier-cleanup-v1",
+  "history": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/history.sqlite",
+  "identity": {
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [],
+    "harness_seal": "9e9d56ea7540e38c99f6d69c7a1abeedc1524aefb413a09bf815e3ce73d782fd",
+    "product_seal": "adff3c732ba428e243799464737f458763c8fa194db9df0127eb0df1e1b0e2d6",
+    "source_commit": "374e9636abb9ae10a041e0f71b1c07e84f2128f4",
+    "source_dirty": false,
+    "source_tree": "41a7518625205173875e3317260d35abb95b6b16"
+  },
+  "image_id": "sha256:9f24110e647ba22a4d0d995df6d25ec414552aef4222a5f4ca9ad82785a6edda",
+  "lft1_lines": 45,
+  "master": {
+    "compatibility_key": {
+      "benchmark_init_sha256": "d41d7d2c9551dcb74aec2d4d0fa4013f4ae0e9549418788caacda556a367b74c",
+      "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+      "fixture_bytes": 1048576,
+      "fixture_generator_seed": 5494771174636671793,
+      "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc"
+    },
+    "first_use_wall_ns": 639633416,
+    "fixture_bytes": 1048576,
+    "fixture_sha256": "d7dfe3d2828aceb85177e6efbeb600f23672a326c902e525e401c1545bb05bdc",
+    "history_bytes": 86016,
+    "history_sha256": "25e8cb8b950f5cce3ec166e0f4e6f88806c707d0670adde90c2dde8700f5e82a",
+    "manifest_sha256": "78c55f9e7e0af546ae99855e7ff789b9f0a9eb78b0bca1f03d91afb63f324633",
+    "reuse": "first-use",
+    "store_bytes": 2691072,
+    "store_sha256": "9ac3fc8216a551a9e86413e2113795ed5029e11a3837208d9b83f518780ef6da"
+  },
+  "operation_contract_id": "workspace-exec-fuse-range-splice-commit-v4",
+  "operation_entrypoint": "WorkspaceApi::exec",
+  "operation_surface": "workspace-posix-fuse",
+  "performance_gate": "edit_commit_ns <= g2_target_ms at 0.01 ms precision",
+  "preparation_ns": 418424916,
+  "raw_edit_commit_ns": 47631917,
+  "repetition": 1,
+  "route": "sdk-exec-fuse-range-splice-commit-v1",
+  "sample_count": 1,
+  "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v4",
+  "scenario_version": 4,
+  "schema": "core-fs-bench-pro-exec-fuse-edit-receipt-v1",
+  "status": "INCOMPLETE",
+  "status_reasons": [
+    "caller/Service/daemon LFT1 incomplete"
+  ],
+  "store": "/Users/yifanxu/.codex/worktrees/issue241-phase4-admission/layerfs/benchmark-results/fs-bench-pro/issue241-v4-1mib-a1/sdk-exec-fuse/edit_length_changing/insert-middle-4k-on-1mib-ops-1-exec-v4/store.sqlite",
+  "telemetry": {
+    "children": {
+      "commit": {
+        "cpu_rss_attribution": "UNAVAILABLE; root is process-shared",
+        "elapsed_ns": 22073583
+      },
+      "edit": {
+        "cpu_rss_attribution": "UNAVAILABLE; root is process-shared",
+        "elapsed_ns": 25548125
+      }
+    },
+    "coverage": {
+      "edit_commit": {
+        "boundary_covered": false,
+        "clock": "local-monitor",
+        "cpu_shared_ns": [
+          8232000,
+          9978000
+        ],
+        "cpu_status": "SAMPLED",
+        "gaps": 0,
+        "largest_gap_ns": 11931584,
+        "rss_status": "SAMPLED",
+        "sampled_max_rss": 31408128,
+        "samples": 6,
+        "scope": "process-shared",
+        "source_status": "sampled",
+        "status": "SAMPLED"
+      },
+      "workspace_exec": {
+        "boundary_covered": false,
+        "clock": "local-monitor",
+        "cpu_shared_ns": [
+          20000000,
+          10000000
+        ],
+        "cpu_status": "SAMPLED",
+        "gaps": 0,
+        "largest_gap_ns": 10184167,
+        "rss_status": "SAMPLED",
+        "sampled_max_rss": 38088704,
+        "samples": 3,
+        "scope": "process-shared",
+        "source_status": "sampled",
+        "status": "SAMPLED"
+      }
+    },
+    "edit_commit_elapsed_ns": 47627291,
+    "errors": [],
+    "producers": {
+      "daemon": {
+        "bytes": 13912,
+        "events": 23,
+        "lines": 23,
+        "negative_inspect": 0,
+        "pid": 1,
+        "resource_unavailable_events": 0,
+        "sha256": "8928a385542273f7506e578dd61da94e4b243fc1a7cffbc8b76fde24ddb03067"
+      },
+      "host": {
+        "bytes": 16688,
+        "events": 22,
+        "lines": 22,
+        "negative_inspect": 0,
+        "pid": 3411,
+        "resource_unavailable_events": 0,
+        "sha256": "1223e8b3af03709e14b9587cf87d1294a73a81614a1983523ca75341b64780e4"
+      }
+    },
+    "raw_bytes": 30783,
+    "raw_sha256": "087dc913856aa0c68b8e8a2d5b6d20babc38df671aa606d2ca7d5a7c7a6734ad",
+    "reasons": [
+      "edit_commit: unsampled, gapped, or boundary-uncovered resources",
+      "workspace_exec: unsampled, gapped, or boundary-uncovered resources"
+    ],
+    "status": "UNAVAILABLE",
+    "unavailable": [
+      "edit_commit: unsampled, gapped, or boundary-uncovered resources",
+      "workspace_exec: unsampled, gapped, or boundary-uncovered resources"
+    ],
+    "workspace_exec_elapsed_ns": 24360959
+  },
+  "telemetry_raw_lines": 45,
+  "verification": {
+    "reason": "performance-only exploratory sample at this source identity; the independent verifier runs separately against this retained receipt",
+    "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v4",
+    "status": "SKIPPED"
+  }
+}

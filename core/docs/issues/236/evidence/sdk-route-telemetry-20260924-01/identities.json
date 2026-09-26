@@ -1,0 +1,19 @@
+{
+  "cache_contract": "uncontrolled OS/source cache; diagnostic only",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "daemon_binary_sha256": "c2f38e88896975ce2b6a0832aa37a1e0a9ee79d376552f3500acbe5fce6bd17d",
+  "diagnostic_contract_sha256": "f76f74f4ebac020e2ad136200f85b8c8f56f1253427fa945d63bae76a7b54ed0",
+  "harness_source_sha256": "980d9452bab6b482cde6f04b7fedf48adc7479b90e99566987f69c5b5d3539fb",
+  "host": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "image_base_digest": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "image_id": "sha256:e08b4efc6d4ea1be3e8df2fbeaccd60581ecaeb0551c1a440c9fd538ecf2e961",
+  "machine": "arm64",
+  "reporter_sha256": "05e34017c7e6bf7cf650ab47dbe35a5c7e405976660c98d5e9b052b2df6044ac",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)",
+  "sample_count": 1,
+  "sdk_test_binary_sha256": "7afa69b60887cf5418bccbc23046d55d4be77a3e58f9ad5d8b83d09f1bf3e075",
+  "source_commit": "59a12f22ab4475c3d26f417b509a9792e872ff4f",
+  "source_status": "",
+  "source_tree": "0d985268a50b2cc6f36a7e4d6d1fa0223260abd4",
+  "telemetry_run": 250721267823948268727710293441579444433
+}

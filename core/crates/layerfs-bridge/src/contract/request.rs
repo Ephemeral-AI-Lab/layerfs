@@ -3,12 +3,10 @@ use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, ManifestEntry, PreparedChanges,
     BRANCH_BYTES, COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
     HISTORY_PROFILE, LAYER_BYTES, MANIFEST_ENTRIES, MANIFEST_TARGET_BYTES, NAME_MAX_BYTES,
-    PAGE_RECORDS, QUERY_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
-    WORKSPACE_ATTACH_MAX_MS, WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_MAX_MS,
-    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_MAX_MS, WORKSPACE_COMMIT_OPCODE,
-    WORKSPACE_MOUNT_MAX_MS, WORKSPACE_MOUNT_OPCODE, WORKSPACE_STATUS_MAX_MS,
-    WORKSPACE_STATUS_OPCODE, WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_MAX_MS,
-    WORKSPACE_UNMOUNT_OPCODE,
+    PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
+    WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
+    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
+    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -27,7 +25,9 @@ pub const CONSTRUCT_SYMLINK_REQUEST_BYTES: usize = 29 + SYMLINK_TARGET_BYTES;
 /// Store's own configured budget (`max_concurrent_writes`, #216), so a busy
 /// writer set no longer refuses reads.
 pub const MAX_READ_OPERATIONS: usize = 2;
-pub const MAX_REPLAY: u64 = 8 * 1024 * 1024;
+/// Charged file-save body budget, independent of logical file length.
+pub const MAX_SAVE_STREAM_BYTES: u64 = MAX_FILE * 2;
+pub const SAVE_FILE_OPCODE: u8 = 20;
 
 /// Persistent/handshaking/closing sessions a transport admits for one Store.
 ///
@@ -71,29 +71,19 @@ pub enum Operation {
         root: Root,
         query: Inspect,
     },
-    ConstructFile {
+    /// Frozen final Base/Local/Zero sequence. The body is `extents` 24-byte
+    /// records (kind, origin offset, length), then all Local/Zero bytes.
+    SaveFile {
+        base: Option<Root>,
+        base_length: u64,
         length: u64,
+        extents: u64,
+        replacement: u64,
     },
     /// Saves an opaque symlink target; does not allocate or attach an inode.
     ConstructSymlink {
         /// Zero through 4,096 opaque bytes without NUL; no path normalization.
         target: Vec<u8>,
-    },
-    EditFile {
-        root: Root,
-        base_length: u64,
-        edits: Vec<Edit>,
-    },
-    UpdatePreparedFilesystem {
-        base: Root,
-        scope: Root,
-        root_serial: u64,
-        directories: Vec<DirectoryChange>,
-        inodes: Vec<InodeChange>,
-        new_directories: Vec<DirectoryMetadata>,
-        directory_metadata: Vec<DirectoryMetadata>,
-        new_file_serials: Vec<u64>,
-        new_symlink_serials: Vec<u64>,
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
@@ -126,6 +116,23 @@ pub enum Operation {
     WorkspaceCommit {
         workspace: Vec<u8>,
         incarnation: Root,
+    },
+    /// Authenticated control readiness and daemon identity, independent of a Workspace.
+    SandboxHello,
+    /// Attach and mount the exact selected Project/Branch/Commit in an idle daemon.
+    WorkspaceOpen {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        instance: Root,
+        project: [u8; STACK_BYTES],
+        branch: [u8; BRANCH_BYTES],
+        commit: Option<[u8; COMMIT_BYTES]>,
+    },
+    /// Execute one shell command in the selected mounted Workspace.
+    WorkspaceExec {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        command: Vec<u8>,
     },
     /// Saves an updated attribute tree; does not attach it to an inode or Branch.
     UpdatePortableMetadata {
@@ -163,12 +170,6 @@ pub enum Inspect {
         path: Vec<u8>,
     },
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Edit {
-    pub start: u64,
-    pub end: u64,
-    pub replacement: u64,
-}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectoryChange {
     pub parent: u64,
@@ -196,10 +197,8 @@ impl Operation {
         match self {
             Self::ReadFile { .. } => 1,
             Self::Inspect { .. } => 2,
-            Self::ConstructFile { .. } => 3,
+            Self::SaveFile { .. } => SAVE_FILE_OPCODE,
             Self::ConstructSymlink { .. } => CONSTRUCT_SYMLINK_OPCODE,
-            Self::EditFile { .. } => 4,
-            Self::UpdatePreparedFilesystem { .. } => 5,
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
             Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
@@ -208,6 +207,9 @@ impl Operation {
             Self::WorkspaceMount { .. } => WORKSPACE_MOUNT_OPCODE,
             Self::WorkspaceAttach { .. } => WORKSPACE_ATTACH_OPCODE,
             Self::WorkspaceCommit { .. } => WORKSPACE_COMMIT_OPCODE,
+            Self::SandboxHello => SANDBOX_HELLO_OPCODE,
+            Self::WorkspaceOpen { .. } => WORKSPACE_OPEN_OPCODE,
+            Self::WorkspaceExec { .. } => WORKSPACE_EXEC_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
             Self::ConstructPortableMetadata { .. } => CONSTRUCT_PORTABLE_METADATA_OPCODE,
         }
@@ -216,10 +218,8 @@ impl Operation {
         match self {
             Self::ReadFile { .. } => "ReadFile",
             Self::Inspect { .. } => "Inspect",
-            Self::ConstructFile { .. } => "ConstructFile",
+            Self::SaveFile { .. } => "SaveFile",
             Self::ConstructSymlink { .. } => "ConstructSymlink",
-            Self::EditFile { .. } => "EditFile",
-            Self::UpdatePreparedFilesystem { .. } => "UpdatePreparedFilesystem",
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
             Self::WorkspaceStatus { .. } => "WorkspaceStatus",
@@ -228,6 +228,9 @@ impl Operation {
             Self::WorkspaceMount { .. } => "WorkspaceMount",
             Self::WorkspaceAttach { .. } => "WorkspaceAttach",
             Self::WorkspaceCommit { .. } => "WorkspaceCommit",
+            Self::SandboxHello => "SandboxHello",
+            Self::WorkspaceOpen { .. } => "WorkspaceOpen",
+            Self::WorkspaceExec { .. } => "WorkspaceExec",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
             Self::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
         }
@@ -238,11 +241,10 @@ impl Operation {
             Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::HistoryQuery(_)
-            | Self::WorkspaceStatus { .. } => true,
-            Self::ConstructFile { .. }
+            | Self::WorkspaceStatus { .. }
+            | Self::SandboxHello => true,
+            Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::WorkspaceUnmount { .. }
@@ -250,6 +252,8 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
             | Self::HistoryCommand(_) => false,
         }
     }
@@ -257,10 +261,8 @@ impl Operation {
     /// True for an operation that writes canonical content or a filesystem root.
     pub const fn content_mutation(&self) -> bool {
         match self {
-            Self::ConstructFile { .. }
+            Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryCommand(
@@ -277,6 +279,9 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
+            | Self::SandboxHello
             | Self::HistoryQuery(_)
             | Self::HistoryCommand(
                 HistoryCommand::Fork { .. }
@@ -309,10 +314,11 @@ impl Operation {
             | Self::WorkspaceMount { .. }
             | Self::WorkspaceAttach { .. }
             | Self::WorkspaceCommit { .. }
-            | Self::ConstructFile { .. }
+            | Self::WorkspaceOpen { .. }
+            | Self::WorkspaceExec { .. }
+            | Self::SandboxHello
+            | Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryQuery(_)
@@ -332,10 +338,16 @@ impl Operation {
     }
     pub fn input_length(&self) -> Result<u64, Failure> {
         match self {
-            Self::ConstructFile { length } => Ok(*length),
-            Self::EditFile { edits, .. } => edits.iter().try_fold(0u64, |sum, e| {
-                sum.checked_add(e.replacement).ok_or(Code::Capacity.into())
-            }),
+            Self::SaveFile {
+                extents,
+                replacement,
+                ..
+            } => {
+                let descriptors = extents.checked_mul(24).ok_or(Code::Capacity)?;
+                descriptors
+                    .checked_add(*replacement)
+                    .ok_or_else(|| Code::Capacity.into())
+            }
             _ => Ok(0),
         }
     }
@@ -351,6 +363,9 @@ impl Request {
             | Operation::WorkspaceMount { .. }
             | Operation::WorkspaceAttach { .. }
             | Operation::WorkspaceCommit { .. } => WORKSPACE_STATUS_PROFILE,
+            Operation::SandboxHello
+            | Operation::WorkspaceOpen { .. }
+            | Operation::WorkspaceExec { .. } => WORKSPACE_STATUS_PROFILE,
             _ => 1,
         };
         if self.profile != profile {
@@ -359,7 +374,15 @@ impl Request {
         if self.id == 0 || self.deadline_ms == 0 || self.deadline_ms > MAX_OPERATION_MS {
             return Err(invalid());
         }
-        if self.response_bytes > MAX_FILE || self.operation.input_length()? > MAX_FILE {
+        if self.response_bytes > MAX_FILE {
+            return Err(Code::Capacity.into());
+        }
+        let stream_limit = if matches!(self.operation, Operation::SaveFile { .. }) {
+            MAX_SAVE_STREAM_BYTES
+        } else {
+            MAX_FILE
+        };
+        if self.operation.input_length()? > stream_limit {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
@@ -393,78 +416,36 @@ impl Request {
                     return Err(invalid());
                 }
             }
-            Operation::WorkspaceStatus {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceUnmount {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceCloseClean {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceMount {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceAttach {
-                workspace,
-                incarnation,
-            }
-            | Operation::WorkspaceCommit {
-                workspace,
-                incarnation,
-            } => {
-                super::control::check_workspace_identity(workspace, incarnation)?;
-                let maximum = match self.operation {
-                    Operation::WorkspaceUnmount { .. } => WORKSPACE_UNMOUNT_MAX_MS,
-                    Operation::WorkspaceCloseClean { .. } => WORKSPACE_CLOSE_CLEAN_MAX_MS,
-                    Operation::WorkspaceMount { .. } => WORKSPACE_MOUNT_MAX_MS,
-                    Operation::WorkspaceAttach { .. } => WORKSPACE_ATTACH_MAX_MS,
-                    Operation::WorkspaceCommit { .. } => WORKSPACE_COMMIT_MAX_MS,
-                    _ => WORKSPACE_STATUS_MAX_MS,
-                };
-                if self.store != 0
-                    || self.generation != 0
-                    || self.response_bytes != 0
-                    || self.deadline_ms > maximum
-                {
-                    return Err(invalid());
-                }
-            }
+            Operation::SandboxHello
+            | Operation::WorkspaceStatus { .. }
+            | Operation::WorkspaceUnmount { .. }
+            | Operation::WorkspaceCloseClean { .. }
+            | Operation::WorkspaceMount { .. }
+            | Operation::WorkspaceAttach { .. }
+            | Operation::WorkspaceCommit { .. }
+            | Operation::WorkspaceOpen { .. }
+            | Operation::WorkspaceExec { .. } => super::workspace_request::validate(self)?,
             Operation::ReadFile { start, end, .. } => {
                 if start > end || end - start > self.response_bytes {
                     return Err(invalid());
                 }
             }
-            Operation::EditFile {
-                base_length, edits, ..
+            Operation::SaveFile {
+                base,
+                base_length,
+                length,
+                extents,
+                replacement,
             } => {
-                if edits.len() > 256
-                    || *base_length > MAX_FILE
-                    || self.operation.input_length()? > MAX_REPLAY
+                if *base_length > MAX_FILE
+                    || *length > MAX_FILE
+                    || *replacement > *length
+                    || (*extents == 0 && *length != 0)
+                    || (base.is_none() && *base_length != 0)
+                    || base.as_ref().is_some_and(|root| *root == [0; 32])
+                    || self.response_bytes != 0
                 {
-                    return Err(Code::Capacity.into());
-                }
-                let mut length = *base_length;
-                let mut previous = 0;
-                for edit in edits {
-                    if edit.start < previous || edit.start > edit.end || edit.end > length {
-                        return Err(invalid());
-                    }
-                    length = length
-                        .checked_sub(edit.end - edit.start)
-                        .and_then(|n| n.checked_add(edit.replacement))
-                        .ok_or_else(invalid)?;
-                    previous = edit
-                        .start
-                        .checked_add(edit.replacement)
-                        .ok_or_else(invalid)?;
-                    if length > MAX_FILE {
-                        return Err(Code::Capacity.into());
-                    }
+                    return Err(invalid());
                 }
             }
             Operation::Inspect { query, .. } => match query {
@@ -489,46 +470,6 @@ impl Request {
                     }
                 }
             },
-            Operation::UpdatePreparedFilesystem {
-                root_serial,
-                directories,
-                inodes,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-                ..
-            } => {
-                if *root_serial == 0 || *root_serial > i64::MAX as u64 {
-                    return Err(invalid());
-                }
-                if directories.len() > 128 || inodes.len() > 128 {
-                    return Err(Code::Capacity.into());
-                }
-                check_prepared_additions(
-                    *root_serial,
-                    directories,
-                    inodes,
-                    new_directories,
-                    directory_metadata,
-                    new_file_serials,
-                    new_symlink_serials,
-                )?;
-                let mut count = 0usize;
-                for directory in directories {
-                    count = count
-                        .checked_add(directory.changes.len())
-                        .ok_or(Code::Capacity)?;
-                    if count > 128 {
-                        return Err(Code::Capacity.into());
-                    }
-                    for (name, _) in &directory.changes {
-                        if name.is_empty() || name.len() > 255 {
-                            return Err(invalid());
-                        }
-                    }
-                }
-            }
             _ => {}
         }
         match &self.operation {

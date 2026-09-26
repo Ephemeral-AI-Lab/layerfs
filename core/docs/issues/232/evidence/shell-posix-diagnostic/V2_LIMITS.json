@@ -1,0 +1,152 @@
+{
+  "baseline_failures": [
+    "delete-middle-4k-on-100mib-ops-1",
+    "delete-middle-4k-on-500mib-ops-1",
+    "insert-middle-4k-on-100mib-ops-1",
+    "insert-middle-4k-on-500mib-result-capped-v2-ops-1",
+    "prepend-head-4k-on-100mib-ops-1",
+    "prepend-head-4k-on-10mib-ops-1",
+    "prepend-head-4k-on-500mib-result-capped-v2-ops-1",
+    "replace-grow-middle-2k-to-4k-on-100mib-ops-1",
+    "replace-grow-middle-2k-to-4k-on-500mib-result-capped-v2-ops-1",
+    "replace-shrink-middle-4k-to-2k-on-100mib-ops-1",
+    "replace-shrink-middle-4k-to-2k-on-500mib-ops-1"
+  ],
+  "cases": [
+    {
+      "minimum_shift_blocks": 4,
+      "over_replay_limit": false,
+      "scenario_id": "insert-middle-4k-on-1mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 524288
+    },
+    {
+      "minimum_shift_blocks": 40,
+      "over_replay_limit": false,
+      "scenario_id": "insert-middle-4k-on-10mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 5242880
+    },
+    {
+      "minimum_shift_blocks": 400,
+      "over_replay_limit": true,
+      "scenario_id": "insert-middle-4k-on-100mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 52428800
+    },
+    {
+      "minimum_shift_blocks": 2000,
+      "over_replay_limit": true,
+      "scenario_id": "insert-middle-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+      "shifted_suffix_bytes": 262141952
+    },
+    {
+      "minimum_shift_blocks": 4,
+      "over_replay_limit": false,
+      "scenario_id": "delete-middle-4k-on-1mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 522240
+    },
+    {
+      "minimum_shift_blocks": 40,
+      "over_replay_limit": false,
+      "scenario_id": "delete-middle-4k-on-10mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 5240832
+    },
+    {
+      "minimum_shift_blocks": 400,
+      "over_replay_limit": true,
+      "scenario_id": "delete-middle-4k-on-100mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 52426752
+    },
+    {
+      "minimum_shift_blocks": 2000,
+      "over_replay_limit": true,
+      "scenario_id": "delete-middle-4k-on-500mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 262141952
+    },
+    {
+      "minimum_shift_blocks": 8,
+      "over_replay_limit": false,
+      "scenario_id": "prepend-head-4k-on-1mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 1048576
+    },
+    {
+      "minimum_shift_blocks": 80,
+      "over_replay_limit": true,
+      "scenario_id": "prepend-head-4k-on-10mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 10485760
+    },
+    {
+      "minimum_shift_blocks": 800,
+      "over_replay_limit": true,
+      "scenario_id": "prepend-head-4k-on-100mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 104857600
+    },
+    {
+      "minimum_shift_blocks": 4000,
+      "over_replay_limit": true,
+      "scenario_id": "prepend-head-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+      "shifted_suffix_bytes": 524283904
+    },
+    {
+      "minimum_shift_blocks": 4,
+      "over_replay_limit": false,
+      "scenario_id": "replace-grow-middle-2k-to-4k-on-1mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 523264
+    },
+    {
+      "minimum_shift_blocks": 40,
+      "over_replay_limit": false,
+      "scenario_id": "replace-grow-middle-2k-to-4k-on-10mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 5241856
+    },
+    {
+      "minimum_shift_blocks": 400,
+      "over_replay_limit": true,
+      "scenario_id": "replace-grow-middle-2k-to-4k-on-100mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 52427776
+    },
+    {
+      "minimum_shift_blocks": 2000,
+      "over_replay_limit": true,
+      "scenario_id": "replace-grow-middle-2k-to-4k-on-500mib-result-capped-v2-ops-1-exec-v2",
+      "shifted_suffix_bytes": 262141952
+    },
+    {
+      "minimum_shift_blocks": 4,
+      "over_replay_limit": false,
+      "scenario_id": "replace-shrink-middle-4k-to-2k-on-1mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 522240
+    },
+    {
+      "minimum_shift_blocks": 40,
+      "over_replay_limit": false,
+      "scenario_id": "replace-shrink-middle-4k-to-2k-on-10mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 5240832
+    },
+    {
+      "minimum_shift_blocks": 400,
+      "over_replay_limit": true,
+      "scenario_id": "replace-shrink-middle-4k-to-2k-on-100mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 52426752
+    },
+    {
+      "minimum_shift_blocks": 2000,
+      "over_replay_limit": true,
+      "scenario_id": "replace-shrink-middle-4k-to-2k-on-500mib-ops-1-exec-v2",
+      "shifted_suffix_bytes": 262141952
+    }
+  ],
+  "classification": "source-and-registry deduction; no new performance sample",
+  "fresh_file_500mib_source_bound": {
+    "current_max_pieces": 1024,
+    "file_bytes": 524288000,
+    "max_fuse_write_bytes": 131072,
+    "minimum_write_callbacks": 4000,
+    "qualification": "each current WRITE owns a distinct payload record; adjacent Local pieces require one payload identity to coalesce"
+  },
+  "in_place_shift_cases": 20,
+  "over_limit_matches_all_baseline_failures": true,
+  "registered_cases": 56,
+  "registry": "core/benchmark/fs-bench-pro/registry/workspace-exec-edit-v2.json",
+  "replay_limit_bytes": 8388608,
+  "schema": "issue232-v2-posix-replay-limit-analysis-v1",
+  "shift_cases_over_replay_limit": 11
+}

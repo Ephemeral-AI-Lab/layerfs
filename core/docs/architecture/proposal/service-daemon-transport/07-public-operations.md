@@ -92,14 +92,21 @@ See [C1 construction](../../../../crates/layerfs-content/src/file/content.rs).
 
 Preserve C1's current-result coordinates and declared edit order. Its supported
 edit stream rejects edits reaching into earlier introduced replacement bytes;
-do not sort/coalesce records in the transport. The service validates checked
-offset/length arithmetic and C1 applicability before execution.
+do not sort/coalesce records in the transport. The `Begin` frame declares the
+descriptor count and replacement total; the descriptors ride the body stream as
+its prefix, followed by the replacement bytes in edit order. The service parses
+the prefix, validates the checked offset/length arithmetic (ordering, overlap,
+accumulated final length inside the file ceiling) and C1 applicability, and
+replays the replacement bytes from the bounded spool it took them into — a
+resident window for small totals, one service-side file for large ones.
 
-`EditSource` can reread replacement parts. The initial route reserves capped
-service memory for stable replacement input; a one-pass network stream is not
-that capability. Refuse oversized/unsupported input before mutation, with no
-automatic container spool or alternate algorithm. See [edit input](../../../../crates/layerfs-content/src/file/edit/input.rs)
-and [edit application](../../../../crates/layerfs-content/src/file/edit/apply.rs).
+`EditSource` can reread replacement parts; the spool is that capability. The
+retired 256-edit and 8 MiB replay caps are gone: the descriptor count is bounded
+by the explicit per-operation edit budget shared with the builder (4,096), the
+replacement total by the file ceiling, and both are refused before a stream byte
+flows. See [edit input](../../../../crates/layerfs-content/src/file/edit/input.rs),
+[edit application](../../../../crates/layerfs-content/src/file/edit/apply.rs)
+and [the service's streaming edit input](../../../../crates/layerfs-server/src/service/save/edit_stream.rs).
 
 ### UpdatePreparedFilesystem
 

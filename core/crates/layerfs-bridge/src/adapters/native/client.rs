@@ -163,7 +163,7 @@ impl Client {
                                 r.operation,
                                 Operation::HistoryCommand(
                                     HistoryCommand::ImportNativeDirectory { .. }
-                                )
+                                ) | Operation::WorkspaceExec { .. }
                             ) {
                                 if frame.bytes != [0] {
                                     return Err(delivery(r));
@@ -202,11 +202,19 @@ impl Client {
                 }
             })();
             cancel.store(true, Ordering::Release);
-            if response.is_err() {
+            let reusable = response
+                .as_ref()
+                .err()
+                .is_some_and(|error| super::reusable_inspect_refusal(r, error));
+            if response.is_err() && !reusable {
                 receive.close();
             }
             let upload = upload.join().map_err(|_| delivery(r))?;
             match response {
+                Err(e) if reusable => {
+                    upload?;
+                    Err(e)
+                }
                 Err(e) => Err(e),
                 Ok(value) => {
                     upload.map_err(|_| delivery(r))?;
@@ -214,7 +222,11 @@ impl Client {
                 }
             }
         });
-        if result.is_err() {
+        if result
+            .as_ref()
+            .err()
+            .is_some_and(|error| !super::reusable_inspect_refusal(r, error))
+        {
             self.closed = true;
             self.connection.receive.close();
         }
@@ -415,6 +427,35 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
                 && result.validate().is_ok()
                 && bytes == 0
         }
+        (Operation::SandboxHello, Response::SandboxHello(hello)) => {
+            hello.validate().is_ok() && bytes == 0
+        }
+        (
+            Operation::WorkspaceOpen {
+                workspace,
+                incarnation,
+                ..
+            },
+            Response::WorkspaceAttach(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceExec {
+                workspace,
+                incarnation,
+                ..
+            },
+            Response::WorkspaceExec(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
         (
             Operation::WorkspaceCommit {
                 workspace,
@@ -468,25 +509,11 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }
-        (Operation::ConstructFile { length }, Response::Saved { length: actual, .. }) => {
+        (Operation::SaveFile { length, .. }, Response::Saved { length: actual, .. }) => {
             length == actual && bytes == 0
         }
         (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
             target.len() as u64 == *length && bytes == 0
-        }
-        (
-            Operation::EditFile {
-                base_length, edits, ..
-            },
-            Response::Saved { length, .. },
-        ) => {
-            edits.iter().try_fold(*base_length, |n, e| {
-                n.checked_sub(e.end - e.start)?.checked_add(e.replacement)
-            }) == Some(*length)
-                && bytes == 0
-        }
-        (Operation::UpdatePreparedFilesystem { .. }, Response::FilesystemSaved { .. }) => {
-            bytes == 0
         }
         (
             Operation::Inspect {

@@ -1,0 +1,399 @@
+schema	issue241-baseline-exec-liveness-diagnostic-v1
+command_template	printf baseline > .position-baseline[-NNN]
+planned_exec_count	128
+cache	functional-uncontrolled;admission-ineligible
+status	STARTED
+sandbox_id	a80615f370eb546c50419d3794677af6
+mount	Ok(Mount { id: WorkspaceId("2eecc8ec578a98d8030140219b7837f4"), location: "/layerfs/workspace/2eecc8ec578a98d8030140219b7837f4" })
+held_incomplete_handshakes	0
+exec_000_command	printf baseline > .position-baseline-000
+exec_000_elapsed_ms	22
+exec_000_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_001_command	printf baseline > .position-baseline-001
+exec_001_elapsed_ms	20
+exec_001_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_002_command	printf baseline > .position-baseline-002
+exec_002_elapsed_ms	22
+exec_002_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_003_command	printf baseline > .position-baseline-003
+exec_003_elapsed_ms	22
+exec_003_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_004_command	printf baseline > .position-baseline-004
+exec_004_elapsed_ms	24
+exec_004_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_005_command	printf baseline > .position-baseline-005
+exec_005_elapsed_ms	22
+exec_005_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_006_command	printf baseline > .position-baseline-006
+exec_006_elapsed_ms	24
+exec_006_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_007_command	printf baseline > .position-baseline-007
+exec_007_elapsed_ms	27
+exec_007_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_008_command	printf baseline > .position-baseline-008
+exec_008_elapsed_ms	28
+exec_008_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_009_command	printf baseline > .position-baseline-009
+exec_009_elapsed_ms	30
+exec_009_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_010_command	printf baseline > .position-baseline-010
+exec_010_elapsed_ms	30
+exec_010_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_011_command	printf baseline > .position-baseline-011
+exec_011_elapsed_ms	36
+exec_011_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_012_command	printf baseline > .position-baseline-012
+exec_012_elapsed_ms	36
+exec_012_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_013_command	printf baseline > .position-baseline-013
+exec_013_elapsed_ms	35
+exec_013_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_014_command	printf baseline > .position-baseline-014
+exec_014_elapsed_ms	38
+exec_014_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_015_command	printf baseline > .position-baseline-015
+exec_015_elapsed_ms	36
+exec_015_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_016_command	printf baseline > .position-baseline-016
+exec_016_elapsed_ms	38
+exec_016_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_017_command	printf baseline > .position-baseline-017
+exec_017_elapsed_ms	39
+exec_017_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_018_command	printf baseline > .position-baseline-018
+exec_018_elapsed_ms	39
+exec_018_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_019_command	printf baseline > .position-baseline-019
+exec_019_elapsed_ms	40
+exec_019_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_020_command	printf baseline > .position-baseline-020
+exec_020_elapsed_ms	59
+exec_020_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_021_command	printf baseline > .position-baseline-021
+exec_021_elapsed_ms	50
+exec_021_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_022_command	printf baseline > .position-baseline-022
+exec_022_elapsed_ms	52
+exec_022_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_023_command	printf baseline > .position-baseline-023
+exec_023_elapsed_ms	42
+exec_023_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_024_command	printf baseline > .position-baseline-024
+exec_024_elapsed_ms	47
+exec_024_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_025_command	printf baseline > .position-baseline-025
+exec_025_elapsed_ms	57
+exec_025_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_026_command	printf baseline > .position-baseline-026
+exec_026_elapsed_ms	45
+exec_026_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_027_command	printf baseline > .position-baseline-027
+exec_027_elapsed_ms	47
+exec_027_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_028_command	printf baseline > .position-baseline-028
+exec_028_elapsed_ms	52
+exec_028_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_029_command	printf baseline > .position-baseline-029
+exec_029_elapsed_ms	51
+exec_029_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_030_command	printf baseline > .position-baseline-030
+exec_030_elapsed_ms	54
+exec_030_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_031_command	printf baseline > .position-baseline-031
+exec_031_elapsed_ms	59
+exec_031_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_032_command	printf baseline > .position-baseline-032
+exec_032_elapsed_ms	62
+exec_032_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_033_command	printf baseline > .position-baseline-033
+exec_033_elapsed_ms	54
+exec_033_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_034_command	printf baseline > .position-baseline-034
+exec_034_elapsed_ms	50
+exec_034_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_035_command	printf baseline > .position-baseline-035
+exec_035_elapsed_ms	45
+exec_035_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_036_command	printf baseline > .position-baseline-036
+exec_036_elapsed_ms	49
+exec_036_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_037_command	printf baseline > .position-baseline-037
+exec_037_elapsed_ms	51
+exec_037_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_038_command	printf baseline > .position-baseline-038
+exec_038_elapsed_ms	60
+exec_038_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_039_command	printf baseline > .position-baseline-039
+exec_039_elapsed_ms	61
+exec_039_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_040_command	printf baseline > .position-baseline-040
+exec_040_elapsed_ms	63
+exec_040_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_041_command	printf baseline > .position-baseline-041
+exec_041_elapsed_ms	62
+exec_041_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_042_command	printf baseline > .position-baseline-042
+exec_042_elapsed_ms	57
+exec_042_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_043_command	printf baseline > .position-baseline-043
+exec_043_elapsed_ms	68
+exec_043_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_044_command	printf baseline > .position-baseline-044
+exec_044_elapsed_ms	64
+exec_044_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_045_command	printf baseline > .position-baseline-045
+exec_045_elapsed_ms	48
+exec_045_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_046_command	printf baseline > .position-baseline-046
+exec_046_elapsed_ms	49
+exec_046_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_047_command	printf baseline > .position-baseline-047
+exec_047_elapsed_ms	47
+exec_047_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_048_command	printf baseline > .position-baseline-048
+exec_048_elapsed_ms	59
+exec_048_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_049_command	printf baseline > .position-baseline-049
+exec_049_elapsed_ms	55
+exec_049_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_050_command	printf baseline > .position-baseline-050
+exec_050_elapsed_ms	59
+exec_050_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_051_command	printf baseline > .position-baseline-051
+exec_051_elapsed_ms	57
+exec_051_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_052_command	printf baseline > .position-baseline-052
+exec_052_elapsed_ms	60
+exec_052_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_053_command	printf baseline > .position-baseline-053
+exec_053_elapsed_ms	61
+exec_053_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_054_command	printf baseline > .position-baseline-054
+exec_054_elapsed_ms	60
+exec_054_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_055_command	printf baseline > .position-baseline-055
+exec_055_elapsed_ms	61
+exec_055_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_056_command	printf baseline > .position-baseline-056
+exec_056_elapsed_ms	66
+exec_056_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_057_command	printf baseline > .position-baseline-057
+exec_057_elapsed_ms	60
+exec_057_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_058_command	printf baseline > .position-baseline-058
+exec_058_elapsed_ms	58
+exec_058_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_059_command	printf baseline > .position-baseline-059
+exec_059_elapsed_ms	68
+exec_059_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_060_command	printf baseline > .position-baseline-060
+exec_060_elapsed_ms	61
+exec_060_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_061_command	printf baseline > .position-baseline-061
+exec_061_elapsed_ms	53
+exec_061_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_062_command	printf baseline > .position-baseline-062
+exec_062_elapsed_ms	57
+exec_062_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_063_command	printf baseline > .position-baseline-063
+exec_063_elapsed_ms	65
+exec_063_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_064_command	printf baseline > .position-baseline-064
+exec_064_elapsed_ms	64
+exec_064_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_065_command	printf baseline > .position-baseline-065
+exec_065_elapsed_ms	64
+exec_065_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_066_command	printf baseline > .position-baseline-066
+exec_066_elapsed_ms	67
+exec_066_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_067_command	printf baseline > .position-baseline-067
+exec_067_elapsed_ms	60
+exec_067_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_068_command	printf baseline > .position-baseline-068
+exec_068_elapsed_ms	70
+exec_068_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_069_command	printf baseline > .position-baseline-069
+exec_069_elapsed_ms	56
+exec_069_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_070_command	printf baseline > .position-baseline-070
+exec_070_elapsed_ms	58
+exec_070_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_071_command	printf baseline > .position-baseline-071
+exec_071_elapsed_ms	62
+exec_071_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_072_command	printf baseline > .position-baseline-072
+exec_072_elapsed_ms	52
+exec_072_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_073_command	printf baseline > .position-baseline-073
+exec_073_elapsed_ms	62
+exec_073_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_074_command	printf baseline > .position-baseline-074
+exec_074_elapsed_ms	65
+exec_074_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_075_command	printf baseline > .position-baseline-075
+exec_075_elapsed_ms	58
+exec_075_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_076_command	printf baseline > .position-baseline-076
+exec_076_elapsed_ms	70
+exec_076_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_077_command	printf baseline > .position-baseline-077
+exec_077_elapsed_ms	70
+exec_077_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_078_command	printf baseline > .position-baseline-078
+exec_078_elapsed_ms	52
+exec_078_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_079_command	printf baseline > .position-baseline-079
+exec_079_elapsed_ms	71
+exec_079_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_080_command	printf baseline > .position-baseline-080
+exec_080_elapsed_ms	56
+exec_080_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_081_command	printf baseline > .position-baseline-081
+exec_081_elapsed_ms	50
+exec_081_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_082_command	printf baseline > .position-baseline-082
+exec_082_elapsed_ms	59
+exec_082_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_083_command	printf baseline > .position-baseline-083
+exec_083_elapsed_ms	50
+exec_083_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_084_command	printf baseline > .position-baseline-084
+exec_084_elapsed_ms	62
+exec_084_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_085_command	printf baseline > .position-baseline-085
+exec_085_elapsed_ms	61
+exec_085_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_086_command	printf baseline > .position-baseline-086
+exec_086_elapsed_ms	63
+exec_086_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_087_command	printf baseline > .position-baseline-087
+exec_087_elapsed_ms	65
+exec_087_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_088_command	printf baseline > .position-baseline-088
+exec_088_elapsed_ms	64
+exec_088_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_089_command	printf baseline > .position-baseline-089
+exec_089_elapsed_ms	66
+exec_089_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_090_command	printf baseline > .position-baseline-090
+exec_090_elapsed_ms	66
+exec_090_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_091_command	printf baseline > .position-baseline-091
+exec_091_elapsed_ms	70
+exec_091_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_092_command	printf baseline > .position-baseline-092
+exec_092_elapsed_ms	69
+exec_092_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_093_command	printf baseline > .position-baseline-093
+exec_093_elapsed_ms	61
+exec_093_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_094_command	printf baseline > .position-baseline-094
+exec_094_elapsed_ms	61
+exec_094_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_095_command	printf baseline > .position-baseline-095
+exec_095_elapsed_ms	64
+exec_095_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_096_command	printf baseline > .position-baseline-096
+exec_096_elapsed_ms	65
+exec_096_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_097_command	printf baseline > .position-baseline-097
+exec_097_elapsed_ms	66
+exec_097_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_098_command	printf baseline > .position-baseline-098
+exec_098_elapsed_ms	64
+exec_098_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_099_command	printf baseline > .position-baseline-099
+exec_099_elapsed_ms	69
+exec_099_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_100_command	printf baseline > .position-baseline-100
+exec_100_elapsed_ms	66
+exec_100_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_101_command	printf baseline > .position-baseline-101
+exec_101_elapsed_ms	73
+exec_101_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_102_command	printf baseline > .position-baseline-102
+exec_102_elapsed_ms	69
+exec_102_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_103_command	printf baseline > .position-baseline-103
+exec_103_elapsed_ms	77
+exec_103_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_104_command	printf baseline > .position-baseline-104
+exec_104_elapsed_ms	63
+exec_104_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_105_command	printf baseline > .position-baseline-105
+exec_105_elapsed_ms	65
+exec_105_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_106_command	printf baseline > .position-baseline-106
+exec_106_elapsed_ms	55
+exec_106_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_107_command	printf baseline > .position-baseline-107
+exec_107_elapsed_ms	73
+exec_107_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_108_command	printf baseline > .position-baseline-108
+exec_108_elapsed_ms	61
+exec_108_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_109_command	printf baseline > .position-baseline-109
+exec_109_elapsed_ms	62
+exec_109_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_110_command	printf baseline > .position-baseline-110
+exec_110_elapsed_ms	57
+exec_110_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_111_command	printf baseline > .position-baseline-111
+exec_111_elapsed_ms	60
+exec_111_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_112_command	printf baseline > .position-baseline-112
+exec_112_elapsed_ms	73
+exec_112_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_113_command	printf baseline > .position-baseline-113
+exec_113_elapsed_ms	75
+exec_113_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_114_command	printf baseline > .position-baseline-114
+exec_114_elapsed_ms	71
+exec_114_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_115_command	printf baseline > .position-baseline-115
+exec_115_elapsed_ms	62
+exec_115_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_116_command	printf baseline > .position-baseline-116
+exec_116_elapsed_ms	75
+exec_116_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_117_command	printf baseline > .position-baseline-117
+exec_117_elapsed_ms	68
+exec_117_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_118_command	printf baseline > .position-baseline-118
+exec_118_elapsed_ms	65
+exec_118_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_119_command	printf baseline > .position-baseline-119
+exec_119_elapsed_ms	64
+exec_119_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_120_command	printf baseline > .position-baseline-120
+exec_120_elapsed_ms	68
+exec_120_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_121_command	printf baseline > .position-baseline-121
+exec_121_elapsed_ms	64
+exec_121_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_122_command	printf baseline > .position-baseline-122
+exec_122_elapsed_ms	72
+exec_122_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_123_command	printf baseline > .position-baseline-123
+exec_123_elapsed_ms	79
+exec_123_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_124_command	printf baseline > .position-baseline-124
+exec_124_elapsed_ms	75
+exec_124_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_125_command	printf baseline > .position-baseline-125
+exec_125_elapsed_ms	77
+exec_125_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_126_command	printf baseline > .position-baseline-126
+exec_126_elapsed_ms	76
+exec_126_result	Ok(ExecResult { exit_status: Some(0), stdout: [], stderr: [], stdout_truncated: false, stderr_truncated: false })
+exec_127_command	printf baseline > .position-baseline-127
+exec_127_elapsed_ms	13
+exec_127_result	Ok(ExecResult { exit_status: Some(1), stdout: [], stderr: [47, 98, 105, 110, 47, 115, 104, 58, 32, 99, 97, 110, 39, 116, 32, 99, 114, 101, 97, 116, 101, 32, 46, 112, 111, 115, 105, 116, 105, 111, 110, 45, 98, 97, 115, 101, 108, 105, 110, 101, 45, 49, 50, 55, 58, 32, 78, 111, 32, 115, 112, 97, 99, 101, 32, 108, 101, 102, 116, 32, 111, 110, 32, 100, 101, 118, 105, 99, 101, 10], stdout_truncated: false, stderr_truncated: false })
+docker_inspect_status	ExitStatus(unix_wait_status(0))
+docker_top_status	ExitStatus(unix_wait_status(0))
+docker_logs_status	ExitStatus(unix_wait_status(0))
+unmount	Ok(())
+sandbox_delete	Ok(())
+sandbox_absent	true
+status	FAIL

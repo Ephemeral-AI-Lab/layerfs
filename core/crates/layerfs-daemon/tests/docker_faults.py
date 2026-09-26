@@ -17,7 +17,7 @@ def main():
         server_key=os.urandom(32).hex();keys=[os.urandom(32).hex(),os.urandom(32).hex()];pub=[public(k)for k in keys];server_public=public(server_key)
         with socket.socket() as s:s.bind(("127.0.0.1",0));port=s.getsockname()[1]
         env=os.environ.copy();env.update(LAYERFS_PRIVATE_KEY=server_key,LAYERFS_PEERS=f"1,{pub[0]},{int(time.time())+3600},31;2,{pub[1]},{int(time.time())+3600},1",LAYERFS_STORE=str(Path(temp)/"store.sqlite"),LAYERFS_LISTEN=f"0.0.0.0:{port}",LAYERFS_TELEMETRY="forward"if args.selection in ("envelope","large-repeat","large-distinct")else"off",LAYERFS_RUN_ID="192",LAYERFS_NAMESPACE="1")
-        service=subprocess.Popen([BIN/"layerfs-service"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE);assert b"ready" in service.stderr.readline();diagnostics.append(Diagnostics(service.stderr))
+        service=subprocess.Popen([BIN/"layerfs-server"],env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE);assert b"ready" in service.stderr.readline();diagnostics.append(Diagnostics(service.stderr))
         def spawn(principal=1,telemetry="off",drain=True,endpoint=None):
             name=f"layerfs-issue192-fault-{os.getpid()}-{len(names)}";names.append(name)
             denv=env.copy();denv.update(LAYERFS_PRIVATE_KEY=keys[principal-1],LAYERFS_SERVER_KEY=server_public,LAYERFS_ENDPOINT=endpoint or f"host.docker.internal:{port}",LAYERFS_SELECTOR=str(principal),LAYERFS_TELEMETRY=telemetry,LAYERFS_RUN_ID="192",LAYERFS_NAMESPACE=str(len(names)+10))

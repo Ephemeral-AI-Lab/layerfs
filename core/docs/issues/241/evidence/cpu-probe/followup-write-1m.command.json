@@ -1,0 +1,1 @@
+{"argv": ["docker", "exec", "-e", "PROBE_CASE=write-1m", "-e", "PROBE_ROOT=/probe/write-1m", "layerfs-241-cpu-followup-09f30", "/runner/range_ioctl_cpu_probe-1aff9fc4deff40ad", "--ignored", "--exact", "linux::probe", "--nocapture"], "complete_command_wall_ns": 82120458, "exit_code": 0}

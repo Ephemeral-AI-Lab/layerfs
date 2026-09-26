@@ -57,6 +57,11 @@ impl Workspace {
                 .filter(|handle| handle.scope == ReferenceScope::Projection)
                 .count(),
             projection_replies: state.projection.as_ref().map_or(0, |p| p.replies),
+            projection_calls: crate::filesystem::projection_counters::ProjectionOp::ALL
+                .iter()
+                .map(|op| (op.label(), state.counters.count(*op)))
+                .collect(),
+            upstream_calls: state.counters.upstream(),
             coherence: state.projection.as_ref().map(|p| p.status),
             cookies: state.cookies.len(),
             accounted_bytes: self.host.budget.used(),

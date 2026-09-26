@@ -88,21 +88,19 @@ contract. A semantic operation MUST NOT be replaced by a shell reconstruction,
 temporary-file algorithm, direct Store mutation, test hook, internal helper,
 or environment-specific shortcut.
 
-### LayerFS SDK file-edit invariant
+### Retired SDK range-edit family
 
-All active LayerFS **SDK file-edit claims**, in performance and verification,
-MUST perform their measured edit through one of:
+The former LayerFS SDK range-edit claims used one of:
 
 ```text
 Client::edit_workspace_file_range
 Client::edit_workspace_file_ranges
 ```
 
-The shell runner may orchestrate the call, but it MUST NOT mutate the file.
-The active edit families MUST NOT use container Exec, direct POSIX writes,
-temporary-copy/rename, `copy_file_range`, reflink/clone, or a FUSE write as a
-substitute. A real FUSE projection MAY be attached and read after the SDK call
-to prove visibility, but edit-caused FUSE writes MUST be zero.
+Those contracts identify historical SDK-only receipts. Issue #252 retires their
+product entrypoints and active benchmark selection; their original receipts and
+operation labels remain unchanged. No new SDK range-edit performance row is
+admissible on the generic shell route.
 
 Historical results from a different operation surface remain archival evidence
 only. They MUST NOT be registered in an active SDK edit family, paired with an

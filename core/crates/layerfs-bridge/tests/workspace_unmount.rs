@@ -56,7 +56,7 @@ fn unmount_is_an_exact_bounded_lifecycle_mutation_without_store_grants() {
     assert_eq!(permission_bit(10), None);
     assert_eq!(permission_bit(9), Some(0x80));
     assert_eq!(decode_request(1, &encode_request(&r).unwrap()).unwrap(), r);
-    for profile in [0, 1, 2, 4] {
+    for profile in [0, 1, 2, 3] {
         let mut invalid = r.clone();
         invalid.profile = profile;
         assert_eq!(invalid.validate().unwrap_err().code, Code::Unsupported);
@@ -239,7 +239,7 @@ fn authenticated_entered_attempts_and_pre_admission_failures_remain_distinct() {
                     assert_eq!(received.operation, request().operation);
                     assert_eq!(
                         (received.store, received.generation, received.profile),
-                        (0, 0, 3)
+                        (0, 0, WORKSPACE_STATUS_PROFILE)
                     );
                     assert!((1..=WORKSPACE_UNMOUNT_MAX_MS).contains(&received.deadline_ms));
                     let mut bytes = Vec::new();

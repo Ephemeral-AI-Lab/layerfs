@@ -3,6 +3,11 @@
 > **Status: one public operation implemented; full Pair 1 remains open.**
 > Exact implementation parent: `0b2c729bdb3f026f12beb667ccdc15c52853280f`.
 > Product input seal: `31d3ba50b403e2fe6e61b4b6e79a56b002fd22510869f35e8df249e67ff9af89`.
+> E-1 concurrency and retry update: source parent `6bb143e91`; this change
+> documents the implementation committed with it. Earlier receipts retain their
+> original source identities and results.
+> Builder I/O overlap update: prior product source `f9de81520`; this change documents
+> the implementation committed with it. Earlier receipts keep their identities.
 > This extends [Stage](16-stage-capture.md) through the existing C5 CommitStaged
 > route. Native SDK proofs below are not mounted-write or performance results.
 
@@ -27,9 +32,17 @@ controls are not introduced in this round.
 Temporary local admission failure leaves the stage usable. The existing remote
 operation permit is acquired before reserving the completion attempt or recording
 its permanent identity. A local Busy therefore sends no request and consumes no
-attempt. After a real attempt begins, failures retain G, D1 and its exact outcome;
-there is no automatic retry, token substitution, local reconciliation resume,
-implicit DiscardStage or restart recovery. The active remote permit is released
+attempt. After a real attempt begins, failures retain G, D1 and its exact outcome.
+A retained reconcile-phase `KnownCommitLocalFailure` with a validated known C5
+outcome can resume local reconciliation through `commit_staged` with the same
+selector. It does not resend the consumed C5 token or finish the fund twice.
+When a failed local page allocation has complete accounting, retry first
+unlinks its identity-checked pending file, restores the candidate's slot credit
+and refreshes arena admission. An incomplete or uncertain allocation remains
+blocked; retry never guesses at ownership.
+Unknown outcomes, denied commits and consumed stages retain their custody wedge;
+there is no automatic retry, token substitution, implicit DiscardStage or restart
+recovery. The active remote permit is released
 as soon as the logical call returns, before validation, local I/O and cleanup.
 All remote and backing I/O occurs outside the Workspace state/registry locks.
 
@@ -76,8 +89,22 @@ After known C5 success, the old completion fund is finished/refunded before
 constructing the mixed successor tree; the 64-page candidate reservation is
 already owned separately. Later cleanup releases ordinary allocation and never
 recreates that finished fund or misclassifies live D1 pages as G-funded pages.
+The successor builder reads a pinned live root without the writer gate, so G+1
+writes can publish while it builds. A short, deadline-bounded gate hold captures
+each input root; a second compares the live revision/root and installs. If a
+writer moved the frontier, reconciliation rebuilds from the newer root within
+the same deadline. Intermediate trees stay temporary; only the converged tree
+is sealed. Mounted writes and reads wait for a current gate holder up to their
+deadline instead of exposing a transient `Busy`.
+Routine metadata and payload maintenance defer eligible cleanup while the
+builder owns their shared backing I/O window. The still-charged owners remain
+eligible for a later pass; explicit metadata reclaim keeps its deadline-bounded
+wait, and explicit payload reclaim keeps its contention result. A mounted write
+can therefore publish during the build without mistaking routine cleanup for
+required foreground work. The deadline and window count are unchanged.
+
 The new overlay, Branch context, canonical base, baseline epoch and revision are
-installed together under one short state lock. Only eligible old roots are
+installed together under the final gate and state lock. Only eligible old roots are
 reclaimed outside that lock. Reader-pinned/captured graphs and failed cleanup
 remain charged. Success clears the submission; later explicit Stage starts from
 the acknowledged base and submits only the new dirty frontier.

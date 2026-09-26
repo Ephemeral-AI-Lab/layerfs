@@ -1,0 +1,3 @@
+mount 79 142 0:65 / /probe/notifier_after_unmount/mnt rw,nosuid,nodev,noatime - fuse layerfs-241-failure rw,user_id=0,group_id=0,default_permissions
+unmounted
+real notifier after unmount: Ok(())

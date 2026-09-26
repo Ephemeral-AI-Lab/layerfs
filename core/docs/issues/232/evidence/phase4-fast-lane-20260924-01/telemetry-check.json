@@ -1,0 +1,27 @@
+{
+  "raw_lft1": "/Users/yifanxu/.codex/worktrees/bb50/layerfs/benchmark-results/fs-bench-pro/sdk-exec-fuse/workspace_exec_edit_length_preserving/overwrite-middle-4k-on-1mib-ops-1-exec-v1/telemetry.lft1",
+  "raw_lft1_sha256": "1d9f0ead563f041315a817c6de6df4c0f186039d3914c13eb877346f7f6bb428",
+  "resample": false,
+  "scenario_id": "overwrite-middle-4k-on-1mib-ops-1-exec-v1",
+  "schema": "core-fs-bench-pro-exec-fuse-edit-telemetry-recheck-v1",
+  "telemetry": {
+    "caller_root_present": true,
+    "child_elapsed_ns": {
+      "commit": 22428291,
+      "edit": 19018584
+    },
+    "child_labels": [
+      "edit",
+      "commit"
+    ],
+    "commit_child": true,
+    "edit_child": true,
+    "malformed_lines": 0,
+    "operation_records": 15,
+    "root_count": 1,
+    "root_label": "sdk.edit_commit.fuse",
+    "root_resource_status": "sampled",
+    "root_success": true,
+    "status": "PASS"
+  }
+}

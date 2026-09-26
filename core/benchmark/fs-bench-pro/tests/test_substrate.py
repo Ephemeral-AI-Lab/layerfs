@@ -29,9 +29,9 @@ class Substrate(unittest.TestCase):
         self.assertLess(runner.VERIFY_TIMEOUT_S, 10)
         self.assertFalse(hasattr(runner.init, "_route"))
         driver = (runner.CORE / "crates/layerfs-api/sdk/examples/benchmark_init.rs").read_text()
-        self.assertIn("client.init_project(", driver)
-        self.assertIn("Host::create(", driver)
-        for backend in ("layerfs_bridge", "layerfs_history", "layerfs_service", "layerfs_storage"):
+        self.assertIn("ProjectApi::new(", driver)
+        self.assertIn("Server::create(", driver)
+        for backend in ("layerfs_bridge", "layerfs_history", "layerfs_sandbox", "layerfs_storage"):
             self.assertNotIn(f"use {backend}", driver)
 
     def test_explicit_large_cases_remain_separate_from_default_family(self):

@@ -56,7 +56,13 @@ fn early_failure_is_delivered_while_the_bounded_upload_closes() {
             profile: 1,
             deadline_ms: 5000,
             response_bytes: 0,
-            operation: Operation::ConstructFile { length: 1 },
+            operation: Operation::SaveFile {
+                base: None,
+                base_length: 0,
+                length: 1,
+                extents: 1,
+                replacement: 1,
+            },
         };
         connection
             .send

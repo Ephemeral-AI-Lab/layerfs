@@ -61,7 +61,7 @@ def execute(args, report, started):
 
     ownership('planned', format='json-lines', case=args.case, output=str(args.output),
         worktree=str(shared.ROOT), driver_pid=os.getpid(), driver_process_group=os.getpgrp(),
-        service_pid=None, service_executable=str(shared.route.BIN / 'layerfs-service'),
+        service_pid=None, service_executable=str(shared.route.BIN / 'layerfs-server'),
         service_directory=str(args.output / 'service'), container=name, volume=volume,
         owner_permission_root='/stage/owner-host' if args.case == 'refusals' else None)
     report['ownership_journal'] = str(owners)
@@ -92,7 +92,7 @@ def execute(args, report, started):
         LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
         LAYERFS_HISTORY_BINDING='pair1-stage', LAYERFS_HISTORY_INCARNATION='1',
         LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
-    service = subprocess.Popen([shared.route.BIN / 'layerfs-service'], env=env,
+    service = subprocess.Popen([shared.route.BIN / 'layerfs-server'], env=env,
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ownership('service-started', service_pid=service.pid)
     created = made_volume = False
@@ -254,7 +254,7 @@ def main():
             product_inputs_sha256=shared.mounted.product_inputs(), driver_sha256=sha(ENTRY_SOURCE),
             test_source_sha256=sha(TEST_SOURCE), test_binary_sha256=sha(args.test_binary),
             helper_source_sha256=sha(Path(__file__).parent / 'support/native_workspace.rs'),
-            binaries={name: sha(args.binaries / name) for name in ('layerfs-service', 'layerfs-daemon', 'examples/public_key')},
+            binaries={name: sha(args.binaries / name) for name in ('layerfs-server', 'layerfs-daemon', 'examples/public_key')},
             resource_isolation=space.as_fields(),
             image_id=shared.mounted.checked(['docker', 'image', 'inspect', '--format', '{{.Id}}', args.image], text=True).stdout.strip(),
             caller_dependencies_sha256={str(Path(module.__file__).resolve().relative_to(shared.ROOT)): sha(Path(module.__file__))

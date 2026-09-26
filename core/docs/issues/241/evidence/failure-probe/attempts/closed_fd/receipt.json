@@ -1,0 +1,25 @@
+{
+  "case": "closed_fd",
+  "command": [
+    "docker",
+    "exec",
+    "-e",
+    "PROBE_CASE=closed_fd",
+    "-e",
+    "PROBE_ROOT=/probe/closed_fd",
+    "layerfs-241-failure-probe-d7ade911",
+    "/runner/range_ioctl_failure_probe-66c5fa7842234956",
+    "--ignored",
+    "--exact",
+    "linux::probe",
+    "--nocapture"
+  ],
+  "started_unix_ns": 1790250045949178000,
+  "complete_command_wall_ns": 89023833,
+  "exit_code": 0,
+  "timed_out": false,
+  "docker_cp_exit_code": 0,
+  "cache_state": "uncontrolled; no cold/performance claim",
+  "source_commit": "d7ade911ede2620cabac889dbfbd1030dbd27767",
+  "binary_sha256": "828db65baa90dd2914636128802de1445ed4b5b5cda6cefa3427667e5a8728ac"
+}

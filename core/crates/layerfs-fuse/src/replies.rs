@@ -4,8 +4,12 @@ use layerfs_workspace::{NodeAttributes, NodeKind, ServiceCode, WorkspaceError};
 use std::time::{Duration, UNIX_EPOCH};
 
 pub(crate) fn errno(error: WorkspaceError) -> Errno {
+    if std::env::var_os("LAYERFS_FUSE_ERROR_DIAGNOSTIC").is_some() {
+        eprintln!("LFS_FUSE_ERROR v=1 error={error:?}");
+    }
     match error {
         WorkspaceError::InvalidInput => Errno::EINVAL,
+        WorkspaceError::StaleStamp => Errno::ESTALE,
         WorkspaceError::Capacity => Errno::ENOSPC,
         WorkspaceError::Busy => Errno::EBUSY,
         WorkspaceError::Closed => Errno::ENODEV,

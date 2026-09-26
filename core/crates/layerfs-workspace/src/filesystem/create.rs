@@ -472,6 +472,17 @@ impl Workspace {
             &metadata_pages::entry_key(name)?,
             &directories::entry(serial, child_attr.kind)?,
         )?);
+        // One name owns a binding or a removal, never both. This delta may still
+        // shadow the name from an earlier operation of the same generation - an
+        // unlink of a canonical binding, or a rename source - so binding it here
+        // clears that removal record. Without this the delta would hold both, the
+        // effective namespace would hide the name it has just bound, and lowering
+        // would refuse the two rows.
+        let tombstones = parent_directory.tombstones;
+        parent_directory.tombstones =
+            directories::keep_name(&candidate, parent_directory, name, window, deadline)?;
+        let replaced_removal =
+            tombstones != PageRef::NULL && parent_directory.tombstones != tombstones;
         parent_directory.entries =
             candidate.update(parent_directory.entries, entry, window, deadline)?;
         let mut updates = vector(4)?;
@@ -503,16 +514,14 @@ impl Workspace {
                     inode.pieces = candidate.build_pieces(
                         &[Piece {
                             kind: PieceKind::Base,
-                            start: 0,
                             length: inode.length,
                             offset: 0,
                             payload: 0,
                             custody: PageRef::NULL,
                         }],
+                        inode.length,
                         window,
-                        deadline,
                     )?;
-                    inode.count = 1;
                 }
                 updates.push(Cell::new(
                     &metadata_pages::inode_key(serial),
@@ -531,16 +540,14 @@ impl Workspace {
                 inode.pieces = candidate.build_pieces(
                     &[Piece {
                         kind: PieceKind::Local,
-                        start: 0,
                         length: payload.len(),
                         offset: 0,
                         payload: payload.record.id,
                         custody,
                     }],
+                    inode.length,
                     window,
-                    deadline,
                 )?;
-                inode.count = 1;
                 inode.edits = 1;
             }
             updates.push(Cell::new(
@@ -692,8 +699,12 @@ impl Workspace {
         state.dirty_directories += new_directories;
         state.fresh_files += usize::from(file);
         state.fresh_symlinks += usize::from(symlink);
-        state.directory_names += 1;
-        state.directory_bytes += name_bytes;
+        // The removal record this binding replaced is one row the generation no
+        // longer holds: the binding takes its place rather than adding to it.
+        if !replaced_removal {
+            state.directory_names += 1;
+            state.directory_bytes += name_bytes;
+        }
         if let (Some(projection), Some(_)) = (&mut state.projection, &delivery) {
             projection.status = CoherenceStatus::Pending {
                 receipt,
