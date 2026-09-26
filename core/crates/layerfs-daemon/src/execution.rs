@@ -1,4 +1,6 @@
 //! Bounded shell execution inside one mounted Workspace.
+use crate::lifecycle::failure_code;
+use layerfs_bridge::adapters::native::payload::Output;
 use layerfs_bridge::contract::{
     Code, Failure, Response, WorkspaceExecWire, WORKSPACE_EXEC_OUTPUT_BYTES,
 };
@@ -54,10 +56,16 @@ pub(crate) fn execute(
     workspace: &Workspace,
     incarnation: &[u8; 32],
     command: &[u8],
+    output: &mut Output<'_>,
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
     let command = std::str::from_utf8(command).map_err(|_| Code::InvalidInput)?;
+    let mut revision = workspace
+        .status()
+        .map_err(|error| failure_code(&error))?
+        .revision;
+    let mut observed_at = Instant::now();
     let mut child = scope.child("daemon.exec_spawn").run(|_| {
         Command::new("/bin/sh")
             .arg("-c")
@@ -96,6 +104,17 @@ pub(crate) fn execute(
                 }
                 if status.is_some() && stdout.is_none() && stderr.is_none() {
                     return Ok(status);
+                }
+                if observed_at.elapsed() >= Duration::from_secs(1) {
+                    let current = workspace
+                        .status()
+                        .map_err(|error| failure_code(&error))?
+                        .revision;
+                    if current > revision {
+                        output.progress()?;
+                        revision = current;
+                    }
+                    observed_at = Instant::now();
                 }
                 if Instant::now() >= deadline {
                     return Err(Failure {

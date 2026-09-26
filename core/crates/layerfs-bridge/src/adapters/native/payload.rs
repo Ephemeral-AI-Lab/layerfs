@@ -97,6 +97,15 @@ impl<'a> Output<'a> {
             })
             .map_err(io::Error::other)
     }
+    /// Authenticated progress for a response with no logical stream bytes.
+    pub fn progress(&mut self) -> io::Result<()> {
+        self.ready()?;
+        let result = self
+            .send_part(vec![0])
+            .and_then(|()| self.send.flush().map_err(io::Error::other));
+        self.failed = result.is_err();
+        result
+    }
     fn send_pending(&mut self) -> io::Result<()> {
         if self.pending_len == 0 {
             return Ok(());
