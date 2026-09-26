@@ -1,10 +1,12 @@
-# #245 E/F finish: live successor, known-outcome retry, and frozen comparison
+# #245 E/F checkpoint: live successor, known-outcome retry, and frozen comparison
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> Product source for the final proof: `ff3dbcfe0eb0269e39981372b23bd84c0f9a1ccc`
-> (`codex/issue245-range-cow-plan`). This report adds no product change.
+> Source of the initial proof below: `ff3dbcfe0eb0269e39981372b23bd84c0f9a1ccc`.
+> The dated continuation at the end records product source `f9de81520`.
 
-The E implementation and the frozen F comparison are complete at this source.
+The frozen F comparison passes at both recorded product sources. E's stable
+routes pass; a deterministic observation of B accepted *inside* the successor
+build remains open, as the continuation records.
 The #232 structural-shift and 56-shape gates, the load-bearing selection, and
 the separate namespace ceilings remain open. The numbers below are one attempt
 per registered case at each named source, not a latency or release claim.
@@ -63,10 +65,10 @@ write could advance revision after B2 installed. The changed source/test
 identities were run in fresh directories; none of those failures was relabeled
 or removed. The corresponding final gates above pass.
 
-## F: frozen comparative target and both candidate identities
+## F: frozen comparative target and candidate identities
 
 [The target](../phase1-f-target/TARGET.md) was frozen before D/E. The control
-at `fdfc41032` was not rerun. The final candidate preparation is
+at `fdfc41032` was not rerun. The second candidate preparation is
 `benchmark-results/fs-bench-pro/issue245-shell-package-f-candidate-prepared-02/prepared.json`:
 source `ff3dbcfe0`, product seal
 `9c364e2f2a8469914b1caa430246a406f06417eff3d9911d41161530b9443397`,
@@ -154,6 +156,8 @@ totals below report migration coexistence, not an algorithmic LOC claim.
 | `fcf4acbd8` | 56,642 → 56,642 | 125,370 → 125,370 | 0 |
 | `84ecbc753` | 56,642 → 56,642 | 125,370 → 125,370 | 0 |
 | `ff3dbcfe0` | 56,642 → 56,641 | 125,370 → 125,369 | −1 |
+| `d6bc594f2` | 56,641 → 56,641 | 125,369 → 125,369 | 0 |
+| `f9de81520` | 56,641 → 56,650 | 125,369 → 125,378 | +9 |
 
 Open work: #232's 56 ordinary-shell shapes still need a separately committed
 exact-command/oracle amendment before a new campaign; the load-bearing cases
@@ -170,3 +174,85 @@ python3 core/benchmark/fs-bench-pro/shell_package.py run --prepared benchmark-re
 python3 core/crates/layerfs-workspace/tests/commit_staged_route.py --fixture benchmark-results/fs-bench-pro/issue245-route-harness/fixture-e-05/result.json --binaries benchmark-results/fs-bench-pro/issue245-route-harness/binaries --test-binary core/target/aarch64-unknown-linux-musl/release/deps/commit_staged-1abfb5a82f37531c --output benchmark-results/fs-bench-pro/issue245-route-harness/e-final-mounted-successor-01 --case mounted_successor
 python3 core/benchmark/fs-bench-pro/runner.py run --case prepend-head-4k-on-10mib-ops-1-exec-v2 --out benchmark-results/fs-bench-pro/issue245-historical-prepend-10mib-01 --verification inline
 ```
+
+## 2026-09-26 continuation: metadata-window collision and strict overlap gate
+
+The first mounted observation above wrote B after capture while the C5 reply
+was held. That proves generation separation but does **not** prove B was
+accepted between the successor builder's input snapshot and its install. A
+stricter, labelled functional diagnostic attempted to release an already-open
+mounted writer after `CommitPhase::Reconcile` became observable. These were
+new test schedules, **not** F performance samples. Every output remains under
+`benchmark-results/fs-bench-pro/issue245-route-harness/` with its own
+`result.json`, stdout and stderr:
+
+| Diagnostic directory suffix | Retained result |
+| --- | --- |
+| `e-build-overlap-diagnostic-01` | FAIL before the test: pinned `rust:1.85.1-bookworm` image absent; restored for later attempts |
+| `e-build-overlap-diagnostic-02` | FAIL: a combined phase/page poll never caught its narrow observation window |
+| `e-build-overlap-diagnostic-03` | FAIL: B's mounted `printf` returned I/O error while reconciliation was active |
+| `e-build-overlap-diagnostic-04` | FAIL: FUSE diagnostic mapped that write to `WorkspaceError::Busy` |
+| `e-build-overlap-diagnostic-05` | FAIL: waiting at the metadata writer acquisitions alone did not remove B's `Busy` |
+| `e-build-overlap-diagnostic-06` | FAIL: B still returned `Busy`; Workspace status showed phase `Reconcile`, revision 130, dirty frontier 65 and no installed revision |
+| `e-build-overlap-diagnostic-07` | FAIL: count-driven diagnostic identified `LFS_WINDOW_BUSY first=3 end=4` before the FUSE `Busy` response |
+| `e-build-overlap-diagnostic-08` | FAIL: B was accepted after the window fix; a test assertion incorrectly used shell-process exit as the Commit install boundary |
+| `e-build-overlap-diagnostic-09` | FAIL: the stress fixture's 64 fresh G2 identities led to a known local reconcile `Io`; this is outside the existing-file E selection |
+| `e-build-overlap-diagnostic-10` | FAIL: with 32 existing G2 files, B was accepted after the first install (report revision 35, pre-B revision 34) |
+| `e-build-overlap-diagnostic-11` | FAIL: with 100 existing G2 files, B was again accepted after the first install (report revision 103, pre-B revision 102) |
+
+The `-09` source inspection suggests the fresh-file stress reached the
+`Current::counted` fresh-identity skip and dirty-count check; the receipt
+establishes `Io`, not an independently instrumented exact error site. No
+namespace bound was raised and no such result was promoted to an E pass.
+Temporary diagnostic markers and the experimental test/harness edits were
+removed before the product commit.
+
+The `-07` receipt located an actual transient resource collision. Reconcile's
+ungated build owned backing I/O window `3..4`; routine metadata maintenance,
+reached by a mounted write before publication, requested that same window with
+an immediate `Busy` result. Commit `f9de81520` makes maintenance wait for the
+window up to its existing deadline **before** taking the writer gate. It adds
+no window, worker, cache exception or longer deadline. The affected
+[CommitStaged architecture](../../../../architecture/proposal/fuse-workspace-snapshot-overlay/17-commit-staged.md)
+was updated in that commit. This fixed the observed window refusal; it did not
+create a deterministic public barrier inside `build_ordered`.
+
+At `f9de81520`, a newly sealed fixture
+`benchmark-results/fs-bench-pro/issue245-route-harness/fixture-e-window-final-01/result.json`
+and route summary
+`benchmark-results/fs-bench-pro/issue245-route-harness/window-final-routes-summary-01.json`
+record all ten selected routes **PASS** in fresh `window-final-*-01/`
+directories, including reconcile retry and the stable three-generation
+mounted observation. The 24 release-profile musl workspace suites also PASS
+at `benchmark-results/fs-bench-pro/issue245-route-harness/musl-workspace-window-final-01/result.json`.
+Full release-profile Core tests (`core-test-window-final.log`), warning-denying
+Clippy, formatting, the product boundary check and nine tool unit tests PASS.
+These passing routes do not relabel the strict `-10`/`-11` observations.
+
+The new product seal required a new F candidate preparation and one new arm:
+`benchmark-results/fs-bench-pro/issue245-shell-package-f-candidate-prepared-03/prepared.json`
+and `benchmark-results/fs-bench-pro/issue245-shell-package-f-candidate-03/`.
+Source `f9de81520`, product seal
+`2279ea61b264fcfb38fbf33f3960565cdb358b4532c1fa0fecec54ea9406cf26`,
+the unchanged harness seal and registry SHA above, image
+`sha256:d6e7ddf91f0ac863b0f7a6909e4c815b5374423c4807e66894eef325f8ad8f5b`,
+one construction worker, independent `shutil.copyfile` clones. The control
+was not rerun. The preceding candidate arms remain in place; no wall was
+selected by taking the best of them.
+
+| Case | Complete wall s / frozen maximum s | Functional / cleanup / verifier | F comparative cell | Latency cell |
+| --- | ---: | --- | --- | --- |
+| `mixed-refresh-v1` | 2.226766 / 4.391426 | PASS / PASS / PASS, verifier 0.094569 s | PASS | INELIGIBLE |
+| `overwrite-4k-v1` | 0.920098 / 1.632815 | PASS / PASS / PASS, verifier 0.161633 s | PASS | INELIGIBLE |
+| `repeated-one-byte-v1` | 1.130367 / 2.176802 | PASS / PASS / PASS, verifier 0.098476 s | PASS | INELIGIBLE |
+| `failed-command-no-commit-v1` | 5.968702 / 11.764124 | PASS / PASS / PASS, verifier 0.052225 s | PASS | INELIGIBLE |
+
+**E/F lane disposition:** F's frozen comparative target is met at the latest
+product seal. E's code, known-outcome retry and stable mounted observations
+pass, and the diagnosed metadata-window `Busy` is repaired. The stricter
+requirement to prove an accepted B write specifically *inside* the ungated
+successor build is **OPEN**: the public phase signal preceded two writes that
+landed after install, and no test-only product hook or time/budget relaxation
+was introduced to force a pass. The five-second historical Exec `Unknown`,
+#232's 56 shapes, load-bearing selection and namespace ceilings remain open
+as stated above.
