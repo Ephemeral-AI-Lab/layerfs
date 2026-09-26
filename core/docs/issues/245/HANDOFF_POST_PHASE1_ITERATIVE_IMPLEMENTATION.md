@@ -13,12 +13,12 @@
 `codex/issue245-post-phase1-implementation`, based on `f74dbe77d`. Phase 1 is
 done (`b298d175d`, `7e6cac877`). Phase 2's code is implemented
 (`5a9a9fc5f`, `0c3e455bd`, `95f8ada8e`, `c3fd065c6`, `74ec83e30`, `11f257ed1`,
-`e8a97c8c6`), and **its closure is still open on the three items in
+`e8a97c8c6`), and **its closure is still open on the two items in
 [Phase 2 remaining](#phase-2-remaining--close-the-open-items)**: a deterministic
-overlap check for the writer-gate property, the phase's own 4,097-run shape
-through the mounted route, and one scope decision about the directory-lowering
-gate holds. Phase 3 is open, and its first measured refusal is pinned at
-`c30fe68a0`.
+overlap check for the writer-gate property, and one scope decision about the
+directory-lowering gate holds. The 4,097-separated-run public row is not one of
+them: it belongs to the mini-benchmark lane. Phase 3 is open, and its first
+measured refusal is pinned at `c30fe68a0`.
 
 ## Owner revision, 2026-09-26: implementation and focused tests only
 
@@ -81,7 +81,7 @@ source, keeping the docs research PR reviewable. Preserve other owners' work.
 
 **Start here.** Phase 1 is done and phase 2's code is implemented on the lane
 branch named above. The current assignment is **the remainder of phase 2**:
-items 2.R1-2.R3 under
+items 2.R1-2.R2 under
 [Phase 2 remaining](#phase-2-remaining--close-the-open-items). They are evidence
 and scope items, not a rewrite: do not change phase 2's accepted behaviour, do
 not re-run its passing suites for reassurance, and do not re-open a defect it
@@ -165,7 +165,7 @@ it; it is not a benchmark row to register.
 | Phase | Implementation focus | Closure: code property and its focused tests |
 | ---: | --- | --- |
 | 1 | Shared #248/#256 page and payload ownership: charged allocation, indexed payload lookup, work-driven reclamation and exact pinned-root custody. | Routine maintenance work does not grow with earlier acquisitions; quota and failure paths keep every owner. **Done** (`b298d175d`, `7e6cac877`): indexed registry, release-list reclamation, `routine_scans`/`lookup_scans` counts, four external tests in `tests/backing_ownership.rs`. |
-| 2 | #248 file extent and frozen Commit path: height transitions, monotone cursors, short writer-gate holds, bounded C1 replay. | The extent tree stays height-uniform at every count and pack shape; a splice's page visits are `O(H + touched)` rather than `O(H per leaf)`; no Commit phase holds the metadata writer gate across a frozen walk or a transfer pull; C1 consumes a replayable stream. **Code implemented** (`5a9a9fc5f`, `0c3e455bd`, `95f8ada8e`, `c3fd065c6`, `74ec83e30`, `11f257ed1`, `e8a97c8c6`): level-preserving rebuild and balanced packing, collapsed-node lifting instead of a refusal, boundary insertions placed in the leaf that carries them (before this, appending to any file of about 125 extents refused), a monotone `O(H + L)` cursor, one walk per Commit phase under a bounded read lease with a `metadata_reads` counter, and a spooled-replay confirmation. Covered by `tests/pieces_sequence.rs` (33 cases, including a fourteen-count boundary sweep), `tests/commit_progress.rs` and `layerfs-server/tests/direct.rs`. **Closure open on 2.R1-2.R3 below** - the code properties above are met, but the writer-gate property has no deterministic check, the phase's own 4,097-run shape is not exercised through the mounted route, and the scope of "no Commit phase" for the namespace-lowering holds is undecided. |
+| 2 | #248 file extent and frozen Commit path: height transitions, monotone cursors, short writer-gate holds, bounded C1 replay. | The extent tree stays height-uniform at every count and pack shape; a splice's page visits are `O(H + touched)` rather than `O(H per leaf)`; no Commit phase holds the metadata writer gate across a frozen walk or a transfer pull; C1 consumes a replayable stream. **Code implemented** (`5a9a9fc5f`, `0c3e455bd`, `95f8ada8e`, `c3fd065c6`, `74ec83e30`, `11f257ed1`, `e8a97c8c6`): level-preserving rebuild and balanced packing, collapsed-node lifting instead of a refusal, boundary insertions placed in the leaf that carries them (before this, appending to any file of about 125 extents refused), a monotone `O(H + L)` cursor, one walk per Commit phase under a bounded read lease with a `metadata_reads` counter, and a spooled-replay confirmation. Covered by `tests/pieces_sequence.rs` (33 cases, including a fourteen-count boundary sweep), `tests/commit_progress.rs` and `layerfs-server/tests/direct.rs`. **Closure open on 2.R1-2.R2 below** - the code properties above are met, but the writer-gate property has no deterministic check and the scope of "no Commit phase" for the namespace-lowering holds is undecided. The 4,097-separated-run public row is a mini-benchmark-lane item, not a phase-2 closure item, by owner direction. |
 | 3 | #256 keyed namespace, live pins, prepared stream and C1 ordering. | Path-local binding/tombstone mutation, no 128-name or 32 KiB admission, ordered cursor traversal that visits each reached leaf once, and one published head. Focused tests: create/rename/delete/recreate across a wide directory, a many-identity generation, and an ordered whole-tree walk. **In progress** (`c30fe68a0`: `tests/wide_namespace.rs` pins the first refusal and no product source changes). **Remaining: slices 3.1-3.4 below.** |
 | 4 | #258 stable canonical origin for inherited directory moves. | A base-resident directory moves without a subtree copy-up, descendants resolve through a stable origin, invalid destinations are refused before publication, and old paths disappear. Focused tests: inherited move, move-back, held handles, deep/invalid paths. |
 | 5 | #249 multi-Workspace daemon registry and lightweight concurrent Exec; #219 operator Workspace-count policy. | Per-Workspace Commit slot only, no whole-Exec timer, no fixed Exec count, lease cleanup, and a selected Workspace count of 1/2/3 enforced by the daemon registry. Focused tests: registry admission and refusal, two Workspaces, overlapping Exec, count policy. |
@@ -173,9 +173,9 @@ it; it is not a benchmark row to register.
 
 ### Phase 2 remaining — close the open items
 
-Phase 2's code properties are implemented and covered; three items decide whether
-the phase may be called closed. None of them authorizes a workload change, a
-timeout increase or a debug binary.
+Phase 2's code properties are implemented and covered; two items decide whether
+the phase may be called closed. Neither authorizes a workload change, a timeout
+increase or a debug binary.
 
 **2.R1 - a deterministic overlap check for the writer-gate property.** The claim
 is "no Commit phase holds the metadata writer gate across a frozen walk or a
@@ -193,26 +193,22 @@ read was held, how many were held, and the mutation's outcome. If one phase
 cannot be held deterministically, prove the phases separately and say which half
 covers which; do not generalize one held read into "the walk holds no gate".
 
-**2.R2 - the phase's own count through the mounted route.** The owner revision
-requires the implementation to make the 4,097-separated-run row *possible*, not
-to measure it. At the extent level 4,097 runs are covered; through the mounted
-route 384 are. The route does not reach 4,097 inside the 30-second test rule
-because one accepted write costs roughly 50-100 metadata page reads, each an
-open, a `pread`, a SHA-256 verify and a ledger update, as
-`BackingStatus::metadata_reads` reports. Either (a) reduce that per-write page
-cost, diagnosing from the count first and changing product code second, until a
-4,097-write route case fits the rule with its correctness checks intact, or
-(b) if an explicit smaller count is accepted instead, take the largest shape that
-fits, record the per-write count and the limit next to it, and never present it as
-the 4,097 row. Do not shrink the workload and call it the gate, and do not raise
-the timeout.
-
-**2.R3 - one scope decision.** `commit/directories.rs` still takes the writer gate
+**2.R2 - one scope decision.** `commit/directories.rs` still takes the writer gate
 around its namespace reads. Phase 2's sentence says "no Commit phase", while the
 namespace walk belongs to #256. Decide and record which reading holds: narrow
 those holds here if the sentence covers every Commit phase, or state in the row
 that it covers the file phases its title names and let #256 narrow them. Either
 answer is acceptable; leaving it unstated is not.
+
+The 4,097-separated-run public row is **not** a phase-2 closure item. By owner
+direction it is verified in the mini-benchmark lane
+([mini contract](SHELL_BRAINSTORM_MINI_V1.md)), which stays unimplemented during
+these phases; the implementation's obligation is only that the shape is
+representable, and that is already covered at the extent level by
+`tests/pieces_sequence.rs` (4,097 separated runs) and through the mounted route by
+`tests/commit_progress.rs` (384 appended writes, a declared smaller count).
+Nobody should size a phase-2 test to that row, and nobody should present the
+smaller route shape as it.
 
 One thing that is *not* open: a collapsed extent node is repaired by
 level-preserving lifting, not by sibling rebalancing. The closure property - a
@@ -222,7 +218,7 @@ unless a measured case requires the tighter shape.
 
 ### Phase 3 remaining — ordered slices
 
-These follow phase 2's closure; they are not a substitute for 2.R1-2.R3.
+These follow phase 2's closure; they are not a substitute for 2.R1-2.R2.
 
 The pin is measured, not guessed. `tests/wide_namespace.rs` creates 200 names in
 one directory through the public API and, at `c30fe68a0`, reports
