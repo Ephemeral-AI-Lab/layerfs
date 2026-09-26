@@ -17,10 +17,14 @@ and 15-second complete-command budget. No latency or release admission is
 claimed. The raw failed or successful attempt is retained, never retried to
 select an outcome.
 
-Before the attempt, freeze the source/tree, product/harness seals, binary and
-image hashes, registry/workload identity, validated master bytes, exact
-command and fresh output path in a local `FREEZE.json`. Use
-`benchmark-results/fs-bench-pro/issue232-exec-progress-timed-diagnostic-02`
+The planned `-02` invocation stopped before the measured child: v2 attempted
+to reuse the first diagnostic's append-only case directory. That raw outer
+output remains on disk as a non-attempt. The runner now gives v2 the fresh
+per-attempt `--out` directory already used by v3/v4. At the new committed
+source, freeze the source/tree, product/harness seals, binary and image hashes,
+registry/workload identity, validated master bytes, exact command and fresh
+output path in a new local `FREEZE.json`. Use
+`benchmark-results/fs-bench-pro/issue232-exec-progress-timed-diagnostic-03`
 as the output and `--verification skipped`. Compare FUSE callback entry times
 with the daemon's Exec interval and caller's five-second failure. If callbacks
 continue throughout the interval while the control socket sends no terminal,

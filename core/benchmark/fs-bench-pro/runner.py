@@ -655,8 +655,7 @@ def run_exec_edit(selection, out, verification="inline"):
         receipt = edit_route.sample(results, row, binaries, image["image_id"], identity,
                                     cursor_key, telemetry_run,
                                     os.urandom(16).hex(), verification,
-                                    attempt_root=out if contract in (edit_insert_v3, edit_insert_v4)
-                                    else None)
+                                    attempt_root=out)
     write_json(out / "run.json", {"schema": "core-fs-bench-pro-exec-fuse-run-v1",
                                   "selection": selection, "identity": identity,
                                   "selection_mode": "registered-case", "image": image,
