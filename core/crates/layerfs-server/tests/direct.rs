@@ -604,6 +604,13 @@ fn a_spooled_final_stream_replays_many_runs_with_exact_bytes() {
         panic!("saved")
     };
     assert_eq!(saved_length, length);
+    // The accepted edit boundaries are part of the canonical mapping. A fresh
+    // construction of equal bytes may chunk differently, so pin this route's
+    // identity rather than requiring it to equal the fresh-file root.
+    assert_eq!(
+        hex(&saved),
+        "9982e4f8d975154d26347bf31880cef94d9f4ad46986c45a39046b322f3825f6"
+    );
     for (root, wanted) in [(old, &base), (saved, &expected)] {
         let mut observed = Vec::new();
         assert_eq!(

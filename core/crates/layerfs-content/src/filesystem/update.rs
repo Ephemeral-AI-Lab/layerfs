@@ -389,7 +389,6 @@ fn run_body<'b>(
     // Every other supplied value keeps the content root the caller named, unless
     // this operation rebuilt that inode's own directory.
     if initial_counts.is_none() {
-        let mut updates = Vec::with_capacity(input.inode_rows());
         let mut values = input.inodes()?;
         while let Some(update) = values.next_row()? {
             if contents.contains_key(&update.serial) || unreachable.contains_key(&update.serial) {
@@ -397,11 +396,7 @@ fn run_body<'b>(
                 // value is never a final row, so it must not enter the reduction.
                 continue;
             }
-            updates.push((update.serial, update.value));
-        }
-        drop(values);
-        for (serial, value) in updates {
-            reducer.note_value(serial, value)?;
+            reducer.note_value(update.serial, update.value)?;
         }
     }
     if checked.topology.table.is_some() {
@@ -539,11 +534,18 @@ fn run_body<'b>(
 /// rebound keeps the record it already has.
 fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, ()>> {
     let mut bound: BTreeMap<u64, ()> = BTreeMap::new();
+    let limit = usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX);
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
                 bound.insert(*child, ());
+                if bound.len() > limit {
+                    return Err(ContentError::ObjectLimitExceeded {
+                        limit,
+                        actual: bound.len(),
+                    });
+                }
             }
         }
     }

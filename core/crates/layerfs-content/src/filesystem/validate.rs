@@ -86,17 +86,10 @@ fn charge_site(
     *slot = slot.saturating_add(delta);
 }
 
-/// Entries the effective-tree cycle check may inspect before it refuses.
-///
-/// This is a declared work limit, not a property of the tree: a legal rename of a
-/// directory whose effective subtree is larger than this is refused with the same
-/// error a genuine cycle gets, because proving it acyclic would cost more entries
-/// than the operation declared it would walk. The figure is part of the
-/// operation's resource contract, the entries the walk examines are charged to
-/// `ValidationWork::entries_examined` so a caller can see how close it came, and
-/// both consequences of its per-walk scope are stated with
-/// [`MAXIMUM_WALK_ENTRIES`](crate::filesystem::limits::MAXIMUM_WALK_ENTRIES).
-pub const MAXIMUM_CYCLE_CHECK_ENTRIES: usize = crate::filesystem::limits::MAXIMUM_WALK_ENTRIES;
+/// Bounded validation work derived from the caller's ordering-memory budget.
+fn walk_limit(input: &dyn PreparedRows) -> usize {
+    usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX)
+}
 /// Serial demands one allocator-precondition wave may make.
 pub const ALLOCATION_CHECK_BATCH: usize = 64;
 
@@ -169,6 +162,17 @@ pub fn check<'a>(
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
     check_input(input)?;
+    let limit = walk_limit(input);
+    let rows = input
+        .directory_rows()
+        .max(input.inode_rows())
+        .max(input.new_rows());
+    if rows > limit {
+        return Err(ContentError::ObjectLimitExceeded {
+            limit,
+            actual: rows,
+        });
+    }
     let topology =
         FilesystemTopology::load(reader, input.base(), input.scope(), input.root_serial())?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
@@ -185,11 +189,19 @@ pub fn check<'a>(
     // must classify and every child it binds. One grouped demand answers them all,
     // and the loop below then reads the memo — the same verdicts in the same
     // order, with one descent instead of one per binding.
-    let mut state = ValidationState::new();
+    let mut state = ValidationState::new(limit);
     if let Some(table) = topology.table {
         let mut demanded: Vec<u64> = Vec::new();
         let mut rows = input.directories()?;
+        let mut names = 0usize;
         while let Some(update) = rows.next_row()? {
+            names = names.saturating_add(update.changes.len());
+            if names > limit {
+                return Err(ContentError::ObjectLimitExceeded {
+                    limit,
+                    actual: names,
+                });
+            }
             if update.parent != input.root_serial() && !input.is_new(update.parent)? {
                 demanded.push(update.parent);
             }
@@ -201,6 +213,12 @@ pub fn check<'a>(
                 }
             }
         }
+        if demanded.len() > limit.saturating_mul(2) {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit: limit.saturating_mul(2),
+                actual: demanded.len(),
+            });
+        }
         drop(rows);
         let prefetch_before = work.inode_pages_read;
         state.prefetch(reader, table, demanded, work)?;
@@ -208,7 +226,15 @@ pub fn check<'a>(
     }
     let bindings_before = work.inode_pages_read;
     let mut rows = input.directories()?;
+    let mut names = 0usize;
     while let Some(update) = rows.next_row()? {
+        names = names.saturating_add(update.changes.len());
+        if names > limit {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit,
+                actual: names,
+            });
+        }
         if update.parent == input.root_serial() && input.base().is_none() {
             // The root directory of a new filesystem is built by this operation.
         } else if update.parent == input.root_serial() {
@@ -324,12 +350,6 @@ pub fn check<'a>(
 }
 
 /// Refuses a stored non-file inode that keeps its base binding and gains another.
-///
-/// A directory or a symlink has exactly one parent. A batch that names one
-/// again may only restate the binding the base already has, or move it after
-/// unbinding the old name in the same final-state batch. One listing per
-/// candidate parent answers "which name does the base bind it under", bounded by
-/// the same page ceiling as every other directory read.
 fn check_parent_aliases(
     reader: &dyn AuthenticatedObjects,
     input: &dyn PreparedRows,
@@ -355,8 +375,12 @@ fn check_parent_aliases(
     // The candidate children this batch binds under a new name.
     let mut candidates: BTreeMap<u64, ()> = BTreeMap::new();
     for (parent, names) in &by_parent {
+        let update = input.directory_for(*parent)?;
         for name in names {
-            if let Some(child) = single_binding(input, parent, name)? {
+            if let Some(child) = update
+                .as_ref()
+                .and_then(|row| binding_in(&row.changes, name))
+            {
                 candidates.insert(child, ());
             }
         }
@@ -364,6 +388,14 @@ fn check_parent_aliases(
     let Some(root) = topology.base else {
         return Ok(());
     };
+    let mut changes: BTreeMap<u64, BTreeMap<Vec<u8>, Option<u64>>> = BTreeMap::new();
+    let mut rows = input.directories()?;
+    while let Some(update) = rows.next_row()? {
+        let parent = changes.entry(update.parent).or_default();
+        for (name, binding) in update.changes {
+            parent.insert(name.as_bytes().to_vec(), binding);
+        }
+    }
     // The one binding a non-file child has may sit in a directory this batch
     // never names, so the walk covers the base tree once, bounded by the same
     // entry ceiling as every other whole-tree check.
@@ -376,6 +408,17 @@ fn check_parent_aliases(
             continue;
         }
         let record = state.lookup_one(reader, table, parent, work)?;
+        let update = if by_parent.contains_key(&parent) {
+            input.directory_for(parent)?
+        } else {
+            None
+        };
+        let restated: BTreeSet<&[u8]> = by_parent
+            .get(&parent)
+            .into_iter()
+            .flatten()
+            .map(Vec::as_slice)
+            .collect();
         let mut after = None;
         loop {
             let mut directory = DirectoryReadWork::default();
@@ -392,7 +435,7 @@ fn check_parent_aliases(
             work.entries_examined = work
                 .entries_examined
                 .saturating_add(page.entries.len() as u64);
-            if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+            if visited > walk_limit(input) {
                 return Err(ContentError::InvalidRecord("cycle check work limit"));
             }
             for (key, serial) in page.entries {
@@ -400,26 +443,7 @@ fn check_parent_aliases(
                 // base; a name it restates or drops is the caller's own edit. The
                 // binding it states is this operation's edge either way, so the
                 // walk follows it and it counts against the same ceiling.
-                let restated = by_parent.get(&parent).is_some_and(|names| {
-                    names.iter().any(|name| name.as_slice() == key.as_bytes())
-                });
-                if restated {
-                    for name in by_parent.get(&parent).into_iter().flatten() {
-                        let Some(child) = single_binding(input, &parent, name)? else {
-                            continue;
-                        };
-                        visited = visited.saturating_add(1);
-                        if visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
-                            return Err(ContentError::InvalidRecord("cycle check work limit"));
-                        }
-                        work.entries_examined = work.entries_examined.saturating_add(1);
-                        if state
-                            .lookup_optional(reader, table, child, work)?
-                            .is_some_and(|value| value.kind == InodeKind::Directory)
-                        {
-                            pending.push(child);
-                        }
-                    }
+                if restated.contains(key.as_bytes()) {
                     continue;
                 }
                 if state
@@ -440,10 +464,36 @@ fn check_parent_aliases(
                 None => break,
             }
         }
+        // Follow each changed binding once, including names absent from the
+        // base. Repeating the whole changed row for every restated base name
+        // used to turn an N-name permutation into N² charged visits.
+        for name in by_parent.get(&parent).into_iter().flatten() {
+            let Some(child) = update
+                .as_ref()
+                .and_then(|row| binding_in(&row.changes, name))
+            else {
+                continue;
+            };
+            visited = visited.saturating_add(1);
+            if visited > walk_limit(input) {
+                return Err(ContentError::InvalidRecord("cycle check work limit"));
+            }
+            work.entries_examined = work.entries_examined.saturating_add(1);
+            if state
+                .lookup_optional(reader, table, child, work)?
+                .is_some_and(|value| value.kind == InodeKind::Directory)
+            {
+                pending.push(child);
+            }
+        }
     }
     for (parent, names) in &by_parent {
+        let update = input.directory_for(*parent)?;
         for name in names {
-            let Some(child) = single_binding(input, parent, name)? else {
+            let Some(child) = update
+                .as_ref()
+                .and_then(|row| binding_in(&row.changes, name))
+            else {
                 continue;
             };
             let Some(base) = bound.get(&child) else {
@@ -456,7 +506,7 @@ fn check_parent_aliases(
                     legal = true;
                     break;
                 }
-                if !base_binding_survives(input, *base_parent, base_name, child)? {
+                if !base_binding_survives(&changes, *base_parent, base_name, child) {
                     legal = true;
                     break;
                 }
@@ -469,76 +519,51 @@ fn check_parent_aliases(
     Ok(())
 }
 
-/// The child one `(parent, name)` pair in this batch binds.
-fn single_binding(
-    input: &dyn PreparedRows,
-    parent: &u64,
+/// The child one name in an already-loaded, sorted update binds.
+fn binding_in(
+    changes: &[(crate::filesystem::path::PathName, Option<u64>)],
     name: &[u8],
-) -> ContentResult<Option<u64>> {
-    Ok(input.directory_for(*parent)?.and_then(|update| {
-        update
-            .changes
-            .iter()
-            .find(|(changed, _)| changed.as_bytes() == name)
-            .and_then(|(_, binding)| *binding)
-    }))
+) -> Option<u64> {
+    changes
+        .binary_search_by(|(changed, _)| changed.as_bytes().cmp(name))
+        .ok()
+        .and_then(|index| changes[index].1)
 }
 
 /// True when the base still binds `child` under `base_name` in `base_parent`.
 fn base_binding_survives(
-    input: &dyn PreparedRows,
+    changes: &BTreeMap<u64, BTreeMap<Vec<u8>, Option<u64>>>,
     base_parent: u64,
     base_name: &[u8],
     child: u64,
-) -> ContentResult<bool> {
-    match input.directory_for(base_parent)? {
-        Some(update) => match update
-            .changes
-            .iter()
-            .find(|(changed, _)| changed.as_bytes() == base_name)
-        {
-            Some((_, binding)) => Ok(*binding == Some(child)),
-            None => Ok(true),
-        },
-        None => Ok(true),
-    }
+) -> bool {
+    changes
+        .get(&base_parent)
+        .and_then(|names| names.get(base_name))
+        .is_none_or(|binding| *binding == Some(child))
 }
 
-/// The base records one validation reads, memoized across its three walks.
-///
-/// Validation demands base inode records in three passes — the decision loop, the
-/// alias walk and the effective-cycle walk — and the passes overlap: a serial the
-/// first pass read is demanded again by the second and third. The memo answers a
-/// repeated demand **without a read while still charging the demand**, so
-/// `inode_demands` (the work-limit charge) is unchanged and only the I/O moves.
-///
-/// **Absence is memoized too, and the demand charge is what stays bit-identical.**
-/// This row's batches bind serials they are allocating, so those serials are
-/// absent from the base by construction; measured on this row, 27,436 of
-/// validation's 27,662 inode-page reads were absent-serial descents, and half of
-/// them were the identical descent bought twice — once by the binding loop and
-/// once by the cycle walk. Remembering absence removes the repeated read and keeps
-/// the *charge*: an absent memo hit charges one demand exactly as the descent it
-/// replaces charged one (`lookup_many` charges a demand per serial it answers at a
-/// leaf), so `inode_demands` and `objects_read` are unchanged while the pages and
-/// waves fall.
-///
-/// **The memo is sound because the base is immutable for its lifetime.** It lives
-/// for one `check` call, and `FilesystemTopology::load` binds one base root that
-/// every site reads through the same `InodeTable`, so a serial absent once is
-/// absent for the whole call. The memo is bounded by the serials the operation
-/// actually demands — one entry per demanded serial, in one of the two maps —
-/// which is the same bound the lazy path's own demand set has.
+/// Memoizes authenticated base records and absence within a resource-sized
+/// window. Eviction changes physical reads, never the logical demand charge.
 struct ValidationState {
     records: BTreeMap<u64, InodeValue>,
     absent: BTreeSet<u64>,
+    limit: usize,
 }
 
 impl ValidationState {
-    fn new() -> Self {
+    fn new(limit: usize) -> Self {
         Self {
             records: BTreeMap::new(),
             absent: BTreeSet::new(),
+            limit: limit.max(1),
+        }
+    }
+
+    fn make_room(&mut self) {
+        if self.records.len() + self.absent.len() >= self.limit {
+            self.records.clear();
+            self.absent.clear();
         }
     }
 
@@ -568,6 +593,7 @@ impl ValidationState {
         work.read_waves = work.read_waves.saturating_add(inode.read_waves);
         work.inode_pages_read = work.inode_pages_read.saturating_add(inode.pages_read);
         for (serial, value) in missing.into_iter().zip(found) {
+            self.make_room();
             match value {
                 Some(value) => {
                     self.records.insert(serial, value);
@@ -611,6 +637,7 @@ impl ValidationState {
         let found = lookup_many(reader, table, &[serial], &mut inode)?;
         charge_inode(work, inode);
         let value = found.into_iter().next().flatten();
+        self.make_room();
         match value {
             Some(value) => {
                 self.records.insert(serial, value);
@@ -717,7 +744,7 @@ fn check_root_invariants(input: &dyn PreparedRows) -> ContentResult<()> {
 ///
 /// A cycle can only be formed by binding a directory below itself, so only the
 /// directories this operation rebinds need the walk. The work is bounded by
-/// [`MAXIMUM_CYCLE_CHECK_ENTRIES`]; exceeding it is an explicit refusal, never a
+/// the caller's ordering-memory budget; exceeding it is an explicit refusal, never a
 /// claim that the tree was proven acyclic. A directory this operation allocates
 /// has no stored page yet, so the walk of it follows this operation's own
 /// bindings instead.
@@ -736,6 +763,7 @@ fn check_effective_cycles(
     }
     let cycles_before = work.inode_pages_read;
     let table = checked.topology.table;
+    let mut visited = 0_usize;
     let mut rows = checked.input.directories()?;
     while let Some(update) = rows.next_row()? {
         for (_, binding) in &update.changes {
@@ -763,7 +791,6 @@ fn check_effective_cycles(
             // operation rebinds still holds every name it already had plus the
             // changes, so a cycle formed by two changes is visible here.
             let mut pending = vec![(seed, *child)];
-            let mut visited = 0_usize;
             let mut seen: BTreeSet<u64> = BTreeSet::new();
             while let Some((base_root, serial)) = pending.pop() {
                 if !seen.insert(serial) {
@@ -775,11 +802,20 @@ fn check_effective_cycles(
                     .map(|update| update.changes)
                     .unwrap_or_default();
                 let entries = match base_root {
-                    Some(content_root) => {
-                        effective_entries(reader, content_root, &changes, &mut visited, work)?
-                    }
+                    Some(content_root) => effective_entries(
+                        reader,
+                        content_root,
+                        &changes,
+                        &mut visited,
+                        walk_limit(checked.input),
+                        work,
+                    )?,
                     None => effective_entries_without_base(&changes),
                 };
+                visited = visited.saturating_add(entries.len());
+                if visited > walk_limit(checked.input) {
+                    return Err(ContentError::InvalidRecord("cycle check work limit"));
+                }
                 for (_, entry_serial) in entries {
                     if entry_serial == update.parent || entry_serial == *child {
                         return Err(ContentError::InvalidRecord("effective tree cycle"));
@@ -792,6 +828,12 @@ fn check_effective_cycles(
                         if entry.kind == InodeKind::Directory {
                             pending.push((Some(entry.content_root), entry_serial));
                         }
+                    } else if checked
+                        .input
+                        .value_for(entry_serial)?
+                        .is_some_and(|value| value.kind == InodeKind::Directory)
+                    {
+                        pending.push((None, entry_serial));
                     }
                 }
             }
@@ -898,6 +940,7 @@ fn effective_entries(
     content_root: ObjectId,
     changes: &[(crate::filesystem::path::PathName, Option<u64>)],
     visited: &mut usize,
+    limit: usize,
     work: &mut ValidationWork,
 ) -> ContentResult<Vec<(crate::filesystem::path::PathName, u64)>> {
     let mut base = Vec::new();
@@ -918,7 +961,7 @@ fn effective_entries(
         work.entries_examined = work
             .entries_examined
             .saturating_add(page.entries.len() as u64);
-        if *visited > MAXIMUM_CYCLE_CHECK_ENTRIES {
+        if *visited > limit {
             return Err(ContentError::InvalidRecord("cycle check work limit"));
         }
         match page.continuation {

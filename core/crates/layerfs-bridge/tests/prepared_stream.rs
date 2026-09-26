@@ -6,6 +6,18 @@
 //! writer and the reader, then one deliberate lie per check.
 
 use layerfs_bridge::contract::*;
+use std::io::{self, Read};
+
+struct FailingEof<'a>(&'a [u8]);
+impl Read for FailingEof<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        if self.0.is_empty() {
+            Err(io::ErrorKind::BrokenPipe.into())
+        } else {
+            Read::read(&mut self.0, bytes)
+        }
+    }
+}
 
 #[derive(Default)]
 struct Recorded {
@@ -165,6 +177,16 @@ fn a_declared_stream_round_trips_row_for_row() {
     assert_eq!(recorded.directories[1].changes[1].0, b"b".to_vec());
     assert_eq!(recorded.identities.len(), identities.len());
     assert_eq!(recorded.identities[0].serial(), 1);
+}
+
+#[test]
+fn an_io_error_at_the_trailing_byte_check_is_not_eof() {
+    let (directories, identities) = sample();
+    let totals = totals(&directories, &identities);
+    let body = write(&directories, &identities);
+    let mut reader = FailingEof(&body);
+    let mut recorded = Recorded::default();
+    assert!(read_prepared_stream(&totals, 1, &mut reader, &mut recorded).is_err());
 }
 
 #[test]

@@ -881,7 +881,9 @@ fn lift<S: PieceStore + ?Sized>(
         return Err(WorkspaceError::Io);
     }
     if children.len() > 1 {
-        return pack_level(store, children, level - 1, window);
+        // A parent can accept several replacement pages at this level. Only
+        // the root may keep packing until it becomes one page.
+        return pack_once(store, children, level - 1, window);
     }
     let Some(child) = children.pop() else {
         return Ok(Level {
@@ -916,40 +918,51 @@ fn lift<S: PieceStore + ?Sized>(
 fn pack_level<S: PieceStore + ?Sized>(
     store: &S,
     mut lower: Vec<ChildRef>,
-    child_level: u8,
+    mut child_level: u8,
     window: &mut Window,
 ) -> Result<Level, WorkspaceError> {
-    let incarnation = store.incarnation();
-    let mut level = child_level;
     while lower.len() > 1 {
-        let branch = level.checked_add(1).ok_or(WorkspaceError::Capacity)?;
-        if branch > MAX_HEIGHT {
-            return Err(WorkspaceError::Capacity);
-        }
-        let chunks = lower.len().div_ceil(BRANCH_CHILDREN);
-        let base = lower.len() / chunks;
-        let extra = lower.len() % chunks;
-        let mut upper = vector(chunks)?;
-        let mut at = 0usize;
-        for index in 0..chunks {
-            let take = base + usize::from(index < extra);
-            let chunk = &lower[at..at + take];
-            at += take;
-            let length = chunk.iter().try_fold(0u64, |sum, c| {
-                sum.checked_add(c.length).ok_or(WorkspaceError::Io)
-            })?;
-            let page = store.write(branch, window, |r, bytes| {
-                metadata_pages::encode_pieces_branch(incarnation, r, branch, chunk, bytes)
-                    .map(|()| r)
-            })?;
-            upper.push(ChildRef { page, length });
-        }
-        lower = upper;
-        level = branch;
+        let packed = pack_once(store, lower, child_level, window)?;
+        lower = packed.pages;
+        child_level = packed.level;
     }
     Ok(Level {
         pages: lower,
-        level,
+        level: child_level,
+    })
+}
+
+fn pack_once<S: PieceStore + ?Sized>(
+    store: &S,
+    lower: Vec<ChildRef>,
+    child_level: u8,
+    window: &mut Window,
+) -> Result<Level, WorkspaceError> {
+    let branch = child_level.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+    if branch > MAX_HEIGHT {
+        return Err(WorkspaceError::Capacity);
+    }
+    let chunks = lower.len().div_ceil(BRANCH_CHILDREN);
+    let base = lower.len() / chunks;
+    let extra = lower.len() % chunks;
+    let mut upper = vector(chunks)?;
+    let mut at = 0usize;
+    for index in 0..chunks {
+        let take = base + usize::from(index < extra);
+        let chunk = &lower[at..at + take];
+        at += take;
+        let length = chunk.iter().try_fold(0u64, |sum, c| {
+            sum.checked_add(c.length).ok_or(WorkspaceError::Io)
+        })?;
+        let page = store.write(branch, window, |r, bytes| {
+            metadata_pages::encode_pieces_branch(store.incarnation(), r, branch, chunk, bytes)
+                .map(|()| r)
+        })?;
+        upper.push(ChildRef { page, length });
+    }
+    Ok(Level {
+        pages: upper,
+        level: branch,
     })
 }
 

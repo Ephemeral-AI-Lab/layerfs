@@ -23,7 +23,9 @@ use crate::service::{error::content, read::content::id};
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::rows::{RowSource, RowSpool};
-use layerfs_content::filesystem::{DirectoryUpdate, FilesystemRead, InodeUpdate, PathName};
+use layerfs_content::filesystem::{
+    DirectoryUpdate, FilesystemRead, FilesystemResources, InodeUpdate, PathName,
+};
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, ContentResult, FilesystemObjects};
 use layerfs_telemetry::timer::{Active, TimingScope};
@@ -52,6 +54,20 @@ pub(crate) fn receive<'a>(
     body: &mut dyn Read,
     deadline: Instant,
 ) -> Result<Received, Failure> {
+    // C1's validation keeps indexed rows in memory. Refuse a declaration that
+    // cannot fit its configured ordering budget before decoding any wide row.
+    let limit = FilesystemResources::default().ordering_bytes / 1024;
+    if [
+        changes.totals.directories,
+        changes.totals.names,
+        changes.totals.identities,
+        changes.totals.fresh,
+    ]
+    .into_iter()
+    .any(|count| count > limit)
+    {
+        return Err(Code::Capacity.into());
+    }
     let bytes = changes.stream_bytes()?;
     let path = spool_path();
     let mut spool = RowSpool::create(
@@ -255,27 +271,20 @@ pub(crate) fn check_subjects(
     spool: &RowSpool,
     batch: usize,
 ) -> ContentResult<()> {
-    let mut wave: Vec<(u64, bool)> = Vec::with_capacity(batch.max(1));
+    let batch = batch.max(1);
+    let mut wave: Vec<(u64, bool)> = Vec::with_capacity(batch);
     let mut rows = spool.directories()?;
-    loop {
-        wave.clear();
-        while wave.len() < batch.max(1) {
-            let Some(row) = rows.next_row()? else {
-                break;
-            };
-            wave.push((row.parent, spool.is_new(row.parent)?));
-            for (_, binding) in &row.changes {
-                if let Some(serial) = binding {
-                    if wave.len() == batch.max(1) {
-                        break;
-                    }
-                    wave.push((*serial, spool.is_new(*serial)?));
-                }
+    while let Some(row) = rows.next_row()? {
+        for serial in std::iter::once(row.parent).chain(row.changes.iter().filter_map(|(_, b)| *b))
+        {
+            wave.push((serial, spool.is_new(serial)?));
+            if wave.len() == batch {
+                check_wave(fs, &wave)?;
+                wave.clear();
             }
         }
-        if wave.is_empty() {
-            break;
-        }
+    }
+    if !wave.is_empty() {
         check_wave(fs, &wave)?;
     }
     drop(rows);

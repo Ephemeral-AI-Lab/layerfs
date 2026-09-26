@@ -43,9 +43,9 @@ impl RootOwner {
                 // The custody page was this payload's last live reference. When
                 // no operator still holds it, routine reclamation may now take
                 // it: name it instead of leaving it for a later registry walk.
-                if Arc::strong_count(&payload) == 2 {
-                    host.payloads.note_released(payload.id);
-                }
+                let payload_id = payload.id;
+                drop(payload);
+                host.payloads.note_released(payload_id);
                 self.state
                     .lock()
                     .map_err(|_| WorkspaceError::Io)?
@@ -80,12 +80,17 @@ impl RootOwner {
                 if count > edges.len() {
                     return Err(WorkspaceError::Io);
                 }
-                if frame.next < count {
-                    let r = edges[frame.next];
-                    let count = arena.change_refs(r, -1, window, deadline)?;
+                // The decoded edges stay in this local vector while ledger I/O
+                // reuses the window. Advance every surviving edge from one page
+                // read; only a newly unowned child requires a descent.
+                let mut next = frame.next;
+                while next < count {
+                    let (advanced, released) =
+                        arena.change_refs_run(&edges[next..count], -1, true, window, deadline)?;
+                    next += advanced;
                     let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                    s.cleanup.last_mut().ok_or(WorkspaceError::Io)?.next += 1;
-                    if count == 0 {
+                    s.cleanup.last_mut().ok_or(WorkspaceError::Io)?.next = next;
+                    if let Some(r) = released {
                         if s.cleanup.len() == 12 {
                             return Err(WorkspaceError::Capacity);
                         }
@@ -94,8 +99,8 @@ impl RootOwner {
                             next: 0,
                             phase: 0,
                         });
+                        return Ok(());
                     }
-                    return Ok(());
                 }
             }
             self.state

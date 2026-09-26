@@ -197,11 +197,7 @@ impl Workspace {
             canonical,
             ..
         } = resolved;
-        if let Some(node) = state
-            .nodes
-            .iter_mut()
-            .find(|node| node.attr.serial == attr.serial)
-        {
+        if let Ok(node) = state.node_mut(attr.serial) {
             if canonical
                 && node.baseline == baseline
                 && (node.original != original
@@ -236,7 +232,7 @@ impl Workspace {
             // count this state already tracks, not from a single name.
             node.names = state.resolved_names(&attr);
             *node.references(scope) = 1;
-            state.nodes.push(node);
+            state.push_node(node);
         }
         Ok(state.presented(attr))
     }

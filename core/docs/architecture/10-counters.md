@@ -1,5 +1,10 @@
 # Counters and receipts
 
+> **Current-source correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, replace the fixed validation-walk counter ceiling with
+> a resource-derived cumulative allowance and expose separate Workspace ledger
+> read/write counts.
+
 > **Status:** Research; source-backed description of the current tree. Informative,
 > not a product contract.
 
@@ -231,7 +236,7 @@ three of them are not counts at all.
 | ---: | --- | --- | --- | --- |
 | 1 | `MAXIMUM_READ_DEMANDS` | content `filesystem/objects.rs` | ids per C1 read wave | count — **read batch** |
 | 2 | `READ_OBJECT_LIMIT` | storage `policy.rs` | ids per C2 read wave | count — **read batch** |
-| 3 | `MAXIMUM_WALK_ENTRIES` | content `filesystem/limits.rs` | entries per cycle walk | count |
+| 3 | `validate::walk_limit` | content `filesystem/validate.rs` | entries across one operation's cycle walks | resource-derived count |
 | 4 | `MAXIMUM_EDITS_PER_OPERATION` | content `file/edit/input.rs` | edits per stream | count |
 | 5 | `MAXIMUM_ATTRIBUTE_KEYS` | content `filesystem/limits.rs` | keys per listing | count |
 | 6 | `DEFAULT_MAXIMUM_PENDING` | content `references/reduce.rs` | reducer pending rows | count |
@@ -270,7 +275,7 @@ with batching; `filesystem_limits.rs` pins it that way
 | `BATCH_CANONICAL_BYTES_LIMIT` | 512 KiB | usually binds first: 512 average objects ≈ 512 KiB only at ~1 KiB each |
 | `TRANSACTION_ROW_LIMIT` | 8,191 | one transaction spans many waves |
 | `TRANSACTION_CANONICAL_BYTES_LIMIT` | 4 MiB − 1 | `2²²−1`, an encoding ceiling, not a round number |
-| `MAXIMUM_WALK_ENTRIES` | 4,096 | charged per existing-tree cycle walk; base-less build reachability walks its supplied bindings without this cap |
+| `validate::walk_limit` | `floor(ordering_bytes / 1024)` | charged cumulatively across an operation's existing-tree cycle walks |
 | `READ_WAVE_OBJECTS` | 32 | mapping read waves; ≤ 1 MiB payloads |
 | `EDIT_DEFERRED_LIMIT` | 8 MiB − 1 | binds by failing the operation, never by dropping state |
 | `DEPENDENCY_PACK_CACHE_BYTES` | 4 MiB | released wholesale; costs reads, never correctness |

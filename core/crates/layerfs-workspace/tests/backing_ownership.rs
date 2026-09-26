@@ -263,6 +263,63 @@ fn released_inputs_are_reclaimed_by_the_next_write() {
 }
 
 #[test]
+fn simultaneous_last_owner_drops_leave_one_release_candidate() {
+    use std::sync::Barrier;
+    let f = Fixture::new(8 * MIB);
+    let payload = f.own(b"x");
+    let barrier = Arc::new(Barrier::new(9));
+    let workers = (0..8)
+        .map(|_| {
+            let owner = payload.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                drop(owner);
+            })
+        })
+        .collect::<Vec<_>>();
+    drop(payload);
+    barrier.wait();
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    let next = f.own(b"y");
+    assert_eq!(f.status().payloads, 1);
+    assert_eq!(f.status().routine_scans, 1);
+    drop(next);
+    f.clean();
+}
+
+#[test]
+fn a_failed_release_preserves_later_release_candidates() {
+    use std::os::unix::fs::FileExt;
+    let f = Fixture::new(8 * MIB);
+    let first = f.own(b"a");
+    let second = f.own(b"b");
+    drop(first);
+    drop(second);
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(f.backing().join("p-0000000000000001-00000000"))
+        .unwrap();
+    let mut original = [0];
+    assert_eq!(file.read_at(&mut original, 0).unwrap(), 1);
+    assert_eq!(file.write_at(&[original[0] ^ 0xff], 0).unwrap(), 1);
+    let failed = f.workspace.own_payload(1, &mut &b"c"[..], deadline());
+    assert!(matches!(failed, Err(WorkspaceError::Backing(_))));
+    assert_eq!(file.write_at(&original, 0).unwrap(), 1);
+    let next = f.own(b"d");
+    assert_eq!(
+        f.status().payloads,
+        2,
+        "failed first and new; second was reclaimed"
+    );
+    drop(next);
+    f.clean();
+}
+
+#[test]
 fn refused_admission_preserves_its_existing_owners() {
     let f = Fixture::new(SEGMENT);
     let held = f.own(b"a");

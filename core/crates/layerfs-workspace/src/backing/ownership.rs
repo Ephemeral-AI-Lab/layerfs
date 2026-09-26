@@ -13,6 +13,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::Instant,
 };
+mod ledger_batch;
 const RECORDS: u32 = 62;
 #[derive(Clone, Copy)]
 pub struct CleanupFrame {
@@ -303,6 +304,7 @@ impl Arena {
         }
         let index = (r.slot - 1) / RECORDS;
         let file = self.ledger_file(index, false, BackingPhase::Read)?;
+        self.ledger_reads.fetch_add(1, Ordering::Relaxed);
         segments::read(&file, window, 0, PAGE)
             .map_err(|error| self.read_error(BackingPhase::Read, error))?;
         drop(file);
@@ -324,12 +326,14 @@ impl Arena {
         clock(deadline).map_err(|error| self.failure(BackingPhase::Write, error.kind()))?;
         let index = (r.slot - 1) / RECORDS;
         let file = self.ledger_file(index, true, BackingPhase::Write)?;
+        self.ledger_reads.fetch_add(1, Ordering::Relaxed);
         segments::read(&file, window, 0, PAGE)
             .map_err(|error| self.read_error(BackingPhase::Write, error))?;
         ledger_check(self, index, &window.0[..PAGE])?;
         let at = HEADER + ((r.slot - 1) % RECORDS) as usize * 64;
         window.0[at..at + 64].copy_from_slice(&record.bytes());
         metadata_pages::seal(&mut window.0[..PAGE]);
+        self.ledger_writes.fetch_add(1, Ordering::Relaxed);
         let result = segments::write(&file, window, 0, PAGE);
         drop(file);
         if let Err(error) = result {
@@ -359,7 +363,24 @@ impl Arena {
             owner.refs.checked_sub(delta.unsigned_abs())
         }
         .ok_or(WorkspaceError::Io)?;
-        self.set_owner(r, owner, window, deadline)?;
+        // `read_owner` left the authenticated ledger page in this window.
+        // A second read of the same 4 KiB page for this one reference change
+        // doubles ledger I/O on every COW publication and reclaim.
+        clock(deadline).map_err(|error| self.failure(BackingPhase::Write, error.kind()))?;
+        let index = (r.slot - 1) / RECORDS;
+        let file = self.ledger_file(index, true, BackingPhase::Write)?;
+        let at = HEADER + ((r.slot - 1) % RECORDS) as usize * 64;
+        window.0[at..at + 64].copy_from_slice(&owner.bytes());
+        metadata_pages::seal(&mut window.0[..PAGE]);
+        self.ledger_writes.fetch_add(1, Ordering::Relaxed);
+        if let Err(error) = segments::write(&file, window, 0, PAGE) {
+            self.host()?.quarantine(self, true);
+            self.state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .unrecoverable = true;
+            return Err(self.failure(BackingPhase::Write, error.kind()));
+        }
         Ok(owner.refs)
     }
     fn allocate_slot(
@@ -426,6 +447,7 @@ impl Arena {
             window.0[8..40].copy_from_slice(&self.directory.incarnation);
             window.0[40..44].copy_from_slice(&index.to_be_bytes());
             metadata_pages::seal(&mut window.0[..PAGE]);
+            self.ledger_writes.fetch_add(1, Ordering::Relaxed);
             let identity = candidate.create_file(&ledger_name(index), window, deadline)?;
             {
                 let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -600,10 +622,7 @@ impl Arena {
         {
             return Err(WorkspaceError::Io);
         }
-        Ok(OwnedPayload {
-            host: host.payloads.clone(),
-            record: record.clone(),
-        })
+        Ok(OwnedPayload::new(host.payloads.clone(), record.clone()))
     }
     pub(super) fn free_slot(
         &self,
@@ -642,6 +661,7 @@ impl Arena {
             let index = count - 1;
             let name = ledger_name(index);
             let file = self.ledger_file(index, false, BackingPhase::Cleanup)?;
+            self.ledger_reads.fetch_add(1, Ordering::Relaxed);
             segments::read(&file, window, 0, PAGE)
                 .map_err(|error| self.read_error(BackingPhase::Cleanup, error))?;
             ledger_check(self, index, &window.0[..PAGE])?;
@@ -857,17 +877,7 @@ impl RootOwner {
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
-        self.state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .edge_progress = Some((r, 0));
-        for (index, edge) in edges.into_iter().enumerate() {
-            self.arena.change_refs(edge, 1, window, deadline)?;
-            self.state
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .edge_progress = Some((r, index + 1));
-        }
+        self.add_page_edges(r, &edges, window, deadline)?;
         let mut owner = self.arena.read_owner(r, window, deadline)?;
         owner.edges = true;
         self.arena.set_owner(r, owner, window, deadline)?;
@@ -920,17 +930,7 @@ impl RootOwner {
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
-        self.state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .edge_progress = Some((r, 0));
-        for (index, edge) in super::metadata_index::edges(&data)?.into_iter().enumerate() {
-            self.arena.change_refs(edge, 1, window, deadline)?;
-            self.state
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .edge_progress = Some((r, index + 1));
-        }
+        self.add_page_edges(r, &super::metadata_index::edges(&data)?, window, deadline)?;
         let mut owner = self.arena.read_owner(r, window, deadline)?;
         owner.edges = true;
         self.arena.set_owner(r, owner, window, deadline)?;

@@ -44,6 +44,7 @@ pub fn edges_raw(
                         refs.push(record.custody);
                     }
                 }
+                refs.sort_unstable_by_key(|r| (r.slot, r.epoch));
                 Ok(refs)
             } else {
                 let (_, children) = metadata_pages::decode_pieces_branch(
@@ -56,6 +57,7 @@ pub fn edges_raw(
                 for child in children {
                     refs.push(child.page);
                 }
+                refs.sort_unstable_by_key(|r| (r.slot, r.epoch));
                 Ok(refs)
             }
         }
@@ -92,6 +94,7 @@ fn cells_edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
             refs.push(r)
         }
     }
+    refs.sort_unstable_by_key(|r| (r.slot, r.epoch));
     Ok(refs)
 }
 pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
@@ -102,9 +105,9 @@ pub fn edges(page: &PageData) -> Result<Vec<PageRef>, WorkspaceError> {
 /// which may carry the kind byte alone and no name at all.
 pub(crate) fn key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
     match key.first() {
-        Some(b'E' | b'T') if key.len() <= 256 => Ok(3),
-        Some(b'D') if key.len() == 17 => Ok(2),
-        Some(b'I' | b'N' | b'R') if key.len() == 9 => Ok(2),
+        Some(b'E' | b'T') if key.len() <= 256 => Ok(metadata_pages::LEVEL_LIMIT),
+        Some(b'D') if key.len() == 17 => Ok(metadata_pages::LEVEL_LIMIT),
+        Some(b'I' | b'N' | b'R') if key.len() == 9 => Ok(metadata_pages::LEVEL_LIMIT),
         _ => Err(WorkspaceError::Io),
     }
 }
@@ -112,7 +115,7 @@ pub(crate) fn key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
 /// must carry at least one name byte: a bare kind byte is only a cursor bound.
 pub(crate) fn stored_key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
     let limit = key_limit(key)?;
-    if limit == 3 && key.len() < 2 {
+    if matches!(key.first(), Some(b'E' | b'T')) && key.len() < 2 {
         return Err(WorkspaceError::Io);
     }
     Ok(limit)
@@ -232,8 +235,14 @@ impl RootOwner {
         window: &mut Window,
         deadline: Instant,
     ) -> Result<PageRef, WorkspaceError> {
-        let limit = key_limit(updates.first().ok_or(WorkspaceError::InvalidInput)?.key())?;
-        if updates.len() > if limit == 3 { 1 } else { 4 }
+        let first = updates.first().ok_or(WorkspaceError::InvalidInput)?.key();
+        let limit = key_limit(first)?;
+        if updates.len()
+            > if matches!(first.first(), Some(b'E' | b'T')) {
+                1
+            } else {
+                4
+            }
             || updates
                 .windows(2)
                 .any(|pair| pair[0].key() >= pair[1].key())

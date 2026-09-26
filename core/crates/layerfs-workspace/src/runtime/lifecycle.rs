@@ -123,8 +123,12 @@ impl Workspace {
         let mut state = self.state()?;
         state.closed = true;
         state.nodes = Vec::new();
+        state.node_index.clear();
+        state.node_index_charge.resize(0)?;
         state.handles = Vec::new();
-        state.cookies = Vec::new();
+        state.cookies.clear();
+        state.cookie_names.clear();
+        state.cookie_charge.resize(0)?;
         state.tables = None;
         drop(state);
         self.host

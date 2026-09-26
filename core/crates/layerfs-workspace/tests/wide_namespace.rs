@@ -57,7 +57,7 @@ struct Serials(AtomicU64);
 
 fn delivery(serials: Arc<Serials>) -> OperationDelivery {
     Arc::new(
-        move |request, input, _output, deadline| match &request.operation {
+        move |request, input, _output, _deadline| match &request.operation {
             Operation::HistoryQuery(HistoryQuery::GetBranch { branch }) => Ok(Response::History(
                 Box::new(HistoryResult::BranchSnapshot(BranchSnapshotWire {
                     branch: BranchWire {
@@ -377,19 +377,9 @@ fn one_unlink_of_a_wide_directory_rewrites_one_path() {
 /// #256's own count for this property is 1,025 changed files and names. This
 /// case is `#[ignore]`d because that shape costs 44.7 s through the mounted
 /// route on the phase-3 machine - each create copies a page path and writes a
-/// name, and the run is one test command, over the 30 s rule - not because the
-/// property is unproven: run it on demand,
-///
-/// `TMPDIR=/src/tmp cargo test --release --locked --manifest-path core/Cargo.toml
-/// -p layerfs-workspace --test wide_namespace -- --ignored --nocapture`
-///
-/// All 1,025 creations are admitted. The complete listing that follows is what
-/// refuses, and the refusal is the fixed 1,024-entry cookie table
-/// (`runtime::state::COOKIE_LIMIT`), not the generation frontier: making a
-/// wide readdir walk bounded by charged resources is the same #256 list as the
-/// `NODES`/`COOKIES` constants, and this case pins where it stands.
+/// All 1,025 creations and their complete listing are admitted while the
+/// Workspace's declared memory and disk budgets have room.
 #[test]
-#[ignore = "#256: the 1,025-identity shape costs 44.7 s through the mounted route, over the 30 s command rule"]
 fn a_generation_admits_many_identities_while_its_budget_has_room() {
     const MANY: usize = 1_025;
     let (path, host, workspace) = mounted("many", 25, 64 * 1024 * 1024);
@@ -412,16 +402,15 @@ fn a_generation_admits_many_identities_while_its_budget_has_room() {
     // created in: the parent's own record moves with its first new name.
     assert_eq!(status.dirty_inodes, MANY + 1);
     assert_eq!(status.revision, MANY as u64);
-    // Every creation above was admitted; the walk below is what refuses, and
-    // what it refuses with is named rather than reported as an unnamed miss.
+    // Every creation and every listed cookie fits charged resources.
     let handle = workspace
         .opendir(ROOT_SERIAL, ReferenceScope::Local)
         .unwrap();
     let mut cookie = 0;
     let mut listed = 0;
-    let refusal = loop {
+    loop {
         match workspace.readdir(handle, cookie, MAX_DIRECTORY_ENTRIES, deadline()) {
-            Ok(page) if page.entries().is_empty() => break None,
+            Ok(page) if page.entries().is_empty() => break,
             Ok(page) => {
                 for entry in page.entries() {
                     if entry.name != b"." && entry.name != b".." {
@@ -430,18 +419,43 @@ fn a_generation_admits_many_identities_while_its_budget_has_room() {
                     cookie = entry.cookie;
                 }
             }
-            Err(error) => break Some(error),
+            Err(error) => panic!("listing refused after {listed}: {error:?}"),
         }
-    };
-    println!("FRONTIER_LISTING listed={listed} refusal={refusal:?}");
-    assert_eq!(listed, 1_022, "the walk stops at the cookie table");
-    assert!(
-        matches!(refusal, Some(WorkspaceError::Capacity)),
-        "a complete listing of {MANY} names refuses at the cookie table"
-    );
+    }
+    println!("FRONTIER_LISTING listed={listed}");
+    assert_eq!(listed, MANY);
     drop(workspace);
     drop(host);
     fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+#[ignore = "labelled diagnostic; not an acceptance or benchmark sample"]
+fn create_cost_by_64_public_calls() {
+    let (path, host, workspace) = mounted("create-cost", 27, 64 * 1024 * 1024);
+    let mut started = Instant::now();
+    let mut previous = workspace.backing_status().unwrap();
+    for index in 0..256 {
+        workspace
+            .mknod(ROOT_SERIAL, &name("f", index), 0o644, 0, deadline())
+            .unwrap();
+        if (index + 1) % 64 == 0 {
+            let current = workspace.backing_status().unwrap();
+            eprintln!(
+                "DIAGNOSTIC_CREATE accepted={} interval_ms={} metadata_reads={} ledger_reads={} ledger_writes={}",
+                index + 1,
+                started.elapsed().as_millis(),
+                current.metadata_reads - previous.metadata_reads,
+                current.ledger_reads - previous.ledger_reads,
+                current.ledger_writes - previous.ledger_writes,
+            );
+            previous = current;
+            started = Instant::now();
+        }
+    }
+    drop(workspace);
+    drop(host);
+    fs::remove_dir_all(path).unwrap();
 }
 
 /// A spent budget refuses precisely and publishes nothing.

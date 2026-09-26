@@ -741,10 +741,9 @@ fn merge_inputs_and_output_are_covered_by_the_declared_ceiling() {
 
 #[test]
 fn a_build_has_no_independent_cycle_walk_limit() {
-    // A base-less build walks only its supplied bindings. The existing-tree
-    // cycle walk still has its separate work limit, but this build has no
-    // arbitrary count refusal and charges every supplied entry.
-    let limit = layerfs_content::filesystem::validate::MAXIMUM_CYCLE_CHECK_ENTRIES;
+    // A base-less build walks only its supplied bindings. The former fixed
+    // 4,096 boundary is charged as work and can be crossed under resources.
+    let limit = 4_096;
     let scope = layerfs_content::filesystem::scope_for_seed([0x6d; 32]);
     let temp = TempDir::new("bounds-cycle-limit");
     let mut backing = RecordingBacking::with_capacity(temp.path(), 64 << 20);
@@ -810,18 +809,11 @@ fn a_build_has_no_independent_cycle_walk_limit() {
     let _ = backing.cleanup_failed();
 }
 
-/// R2-F7: the declared entry ceiling also caps one operation's rebinding work.
-///
-/// The ceiling bounds **each** whole-tree walk an operation performs, and a rename
-/// of a directory walks that directory's effective subtree. A directory whose
-/// subtree exceeds the ceiling therefore cannot be rebound at all, however small
-/// the change is - and a tree that large is reachable, because several operations
-/// can grow it one under-limit step at a time. Both halves are pinned here: the
-/// second operation grows the directory past the ceiling and is accepted, and the
-/// rename of the directory it produced is refused by the ceiling.
+/// A subtree past the former fixed 4,096-entry ceiling can still be renamed
+/// when the caller's ordering-memory resource covers the actual walk.
 #[test]
-fn a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound() {
-    let limit = layerfs_content::filesystem::validate::MAXIMUM_CYCLE_CHECK_ENTRIES;
+fn a_directory_larger_than_the_former_walk_ceiling_can_be_rebound() {
+    let limit = 4_096;
     let mut session = Session::new(1).expect("empty");
     let parent = session.allocate();
     let child = session.allocate();
@@ -892,24 +884,14 @@ fn a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound() {
         .apply(&directories, &inodes, &new_inodes)
         .expect("growing a large directory does not walk it");
 
-    // Step three: rename the directory. The rename is small, but the effective
-    // cycle check walks the directory it rebinds, so the ceiling refuses it with
-    // the limit's own message rather than reporting a cycle.
+    // Step three: the rename pays for its effective walk and succeeds.
     let directories = vec![DirectoryUpdate {
         parent: 1,
         changes: vec![(name("d"), None), (name("moved"), Some(parent))],
     }];
-    let outcome = session.apply(&directories, &[], &[]);
-    assert!(
-        matches!(
-            outcome,
-            Err(layerfs_content::ContentError::InvalidRecord(
-                "cycle check work limit"
-            ))
-        ),
-        "a rename of a directory over the ceiling is refused by that ceiling, not \
-         reported as a cycle: {outcome:?}"
-    );
+    session
+        .apply(&directories, &[], &[])
+        .expect("resource-backed rename");
     let _ = child;
 }
 

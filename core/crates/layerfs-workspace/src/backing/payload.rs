@@ -7,7 +7,7 @@ use super::{
 use crate::*;
 use layerfs_bridge::contract::Source;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet},
     fs, io,
     mem::size_of,
     ops::Range,
@@ -22,8 +22,8 @@ use std::{
 /// One registry entry: the `u64` payload id, the `Arc` value and this entry's
 /// share of a `BTreeMap` node. The map allocates its nodes itself, so the
 /// retained memory is charged at this fixed worst-case entry size instead of
-/// the exact node layout. A candidate queue entry is one further id, covered by
-/// the 64 bytes of slack the per-record charge already holds.
+/// the exact node layout. One candidate-set entry per record is covered by the
+/// 64 bytes of slack the per-record charge already holds.
 const REGISTRY_ENTRY_BYTES: usize = 32;
 pub struct PayloadHost {
     pub budget: Arc<Budget>,
@@ -35,7 +35,7 @@ pub struct PayloadHost {
     /// page was just released. This is the whole routine-reclamation work list:
     /// `maintain` drains it instead of walking the registry, so accepting one
     /// more write never costs work proportional to earlier acquisitions.
-    candidates: Mutex<VecDeque<u64>>,
+    candidates: Mutex<BTreeSet<u64>>,
     windows: Mutex<[Option<Box<Window>>; 4]>,
     _windows_charge: Charge,
     _charge: Charge,
@@ -107,17 +107,17 @@ pub struct Partial {
 pub struct OwnedPayload {
     pub(crate) host: Arc<PayloadHost>,
     pub(crate) record: Arc<Record>,
+    // Fields drop in declaration order. The last notifier therefore runs only
+    // after every OwnedPayload has released its record reference.
+    _release: Arc<ReleaseNotice>,
 }
-impl Drop for OwnedPayload {
+struct ReleaseNotice {
+    host: Arc<PayloadHost>,
+    id: u64,
+}
+impl Drop for ReleaseNotice {
     fn drop(&mut self) {
-        // The registry holds one reference to a live record, so exactly two
-        // means this drop leaves the registry as the only owner: the moment
-        // routine reclamation may consider it. A retained reader, commit
-        // source or clone holds its own reference and enqueues the record when
-        // its own last one goes away.
-        if Arc::strong_count(&self.record) == 2 {
-            self.host.note_released(self.record.id);
-        }
+        self.host.note_released(self.id);
     }
 }
 pub struct WindowLease {
@@ -195,7 +195,7 @@ impl PayloadHost {
             quota,
             common,
             directories: Arc::new(AtomicUsize::new(0)),
-            candidates: Mutex::new(VecDeque::new()),
+            candidates: Mutex::new(BTreeSet::new()),
             state: Mutex::new(State {
                 records: BTreeMap::new(),
                 routine_scans: 0,
@@ -243,6 +243,10 @@ impl PayloadHost {
         if state.records.remove(&id).is_none() {
             return Ok(());
         }
+        self.candidates
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .remove(&id);
         let entries = state.records.len();
         state.charge_registry(entries)
     }
@@ -254,15 +258,26 @@ impl PayloadHost {
     /// themselves triggers, so the record is re-enqueued at that point rather
     /// than found by a walk.
     pub(crate) fn note_released(&self, id: u64) {
-        if let Ok(mut queue) = self.candidates.lock() {
-            queue.push_back(id);
+        if let Ok(state) = self.state.lock() {
+            if state.records.contains_key(&id) {
+                if let Ok(mut queue) = self.candidates.lock() {
+                    queue.insert(id);
+                }
+            }
         }
     }
     /// Takes the current release list, leaving the queue empty.
-    pub(crate) fn take_released(&self) -> Vec<u64> {
+    pub(crate) fn take_released(&self) -> BTreeSet<u64> {
         match self.candidates.lock() {
-            Ok(mut queue) => queue.drain(..).collect(),
-            Err(_) => Vec::new(),
+            Ok(mut queue) => std::mem::take(&mut *queue),
+            Err(_) => BTreeSet::new(),
+        }
+    }
+    pub(crate) fn restore_released(&self, ids: BTreeSet<u64>) {
+        if let Ok(state) = self.state.lock() {
+            if let Ok(mut queue) = self.candidates.lock() {
+                queue.extend(ids.into_iter().filter(|id| state.records.contains_key(id)));
+            }
         }
     }
     pub fn directory(
@@ -311,6 +326,8 @@ impl PayloadHost {
             routine_scans: state.routine_scans,
             lookup_scans: state.lookup_scans,
             metadata_reads: 0,
+            ledger_reads: 0,
+            ledger_writes: 0,
             readers: slots[1..3].iter().filter(|slot| slot.is_none()).count(),
             acquiring: slots[0].is_none(),
             cleaning: slots[3].is_none(),
@@ -651,15 +668,23 @@ impl PayloadHost {
             Ok(())
         })();
         match result {
-            Ok(()) => Ok(OwnedPayload {
-                host: self.clone(),
-                record,
-            }),
+            Ok(()) => Ok(OwnedPayload::new(self.clone(), record)),
             Err(error) => Err(self.failure(&record, phase, &error)),
         }
     }
 }
 impl OwnedPayload {
+    pub(crate) fn new(host: Arc<PayloadHost>, record: Arc<Record>) -> Self {
+        let release = Arc::new(ReleaseNotice {
+            host: host.clone(),
+            id: record.id,
+        });
+        Self {
+            host,
+            record,
+            _release: release,
+        }
+    }
     pub fn len(&self) -> u64 {
         self.record.length
     }
@@ -707,6 +732,9 @@ impl Workspace {
             .metadata
             .as_ref()
             .map_or(Ok(0), |host| host.page_reads())?;
+        if let Some(host) = &self.host.metadata {
+            (status.ledger_reads, status.ledger_writes) = host.ledger_io()?;
+        }
         Ok(status)
     }
 }

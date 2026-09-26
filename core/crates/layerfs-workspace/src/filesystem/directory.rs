@@ -1,5 +1,5 @@
 use crate::{
-    runtime::state::{Cookie, COOKIE_LIMIT},
+    runtime::state::{cookie_key, Cookie, COOKIE_ENTRY_BYTES},
     *,
 };
 use std::{mem::size_of, time::Instant};
@@ -34,8 +34,8 @@ impl Workspace {
             } else {
                 let position = state
                     .cookies
-                    .iter()
-                    .find(|entry| entry.handle == handle && entry.id == cookie)
+                    .get(&cookie)
+                    .filter(|entry| entry.handle == handle)
                     .ok_or(WorkspaceError::InvalidInput)?;
                 (position.dots, position.after[..position.len].to_vec())
             };
@@ -98,39 +98,44 @@ impl Workspace {
                 .iter()
                 .filter(|entry| {
                     let (dots, name) = position(&entry.name);
-                    !state.cookies.iter().any(|old| {
-                        old.handle == handle && old.dots == dots && &old.after[..old.len] == name
-                    })
+                    !state
+                        .cookie_names
+                        .contains_key(&cookie_key(handle, dots, name))
                 })
                 .count();
-            if state.cookies.len() + required > COOKIE_LIMIT {
-                return Err(WorkspaceError::Capacity);
-            }
+            let count = state
+                .cookies
+                .len()
+                .checked_add(required)
+                .ok_or(WorkspaceError::Capacity)?;
+            state.cookie_charge.resize(
+                count
+                    .checked_mul(COOKIE_ENTRY_BYTES)
+                    .ok_or(WorkspaceError::Capacity)?,
+            )?;
             state
                 .next_cookie
                 .checked_add(required as u64)
                 .ok_or(WorkspaceError::Capacity)?;
             for entry in &mut entries {
                 let (dots, name) = position(&entry.name);
-                if let Some(existing) = state.cookies.iter().find(|position| {
-                    position.handle == handle
-                        && position.dots == dots
-                        && &position.after[..position.len] == name
-                }) {
-                    entry.cookie = existing.id;
+                let key = cookie_key(handle, dots, name);
+                if let Some(&existing) = state.cookie_names.get(&key) {
+                    entry.cookie = existing;
                     continue;
                 }
                 let id = state.next_cookie;
                 state.next_cookie += 1;
-                let mut after = [0; 255];
-                after[..name.len()].copy_from_slice(name);
-                state.cookies.push(Cookie {
+                state.cookies.insert(
                     id,
-                    handle,
-                    after,
-                    len: name.len(),
-                    dots,
-                });
+                    Cookie {
+                        handle,
+                        after: key.2,
+                        len: name.len(),
+                        dots,
+                    },
+                );
+                state.cookie_names.insert(key, id);
                 entry.cookie = id;
             }
         }

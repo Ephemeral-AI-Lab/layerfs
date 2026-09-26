@@ -3,6 +3,7 @@ use crate::{backing::budget::Charge, *};
 use layerfs_bridge::contract::{Operation, Response, Root, Source};
 use std::{
     cell::RefCell,
+    collections::BTreeMap,
     io::Write,
     path::{Path, PathBuf},
     sync::{
@@ -14,7 +15,8 @@ use std::{
 
 pub(crate) const NODE_LIMIT: usize = 256;
 pub(crate) const HANDLE_LIMIT: usize = 128;
-pub(crate) const COOKIE_LIMIT: usize = 1024;
+/// Two ordered indexes and their nodes, including the fixed 255-byte name.
+pub(crate) const COOKIE_ENTRY_BYTES: usize = 2 * std::mem::size_of::<Cookie>() + 192;
 pub(crate) const PATH_BYTES: usize = 4096;
 pub(crate) const CALL_SCRATCH: usize = 128 * 1024;
 
@@ -41,6 +43,8 @@ pub(crate) struct State {
     pub branch: Option<Arc<BranchContext>>,
     pub baseline: u64,
     pub nodes: Vec<Node>,
+    pub node_index: BTreeMap<u64, usize>,
+    pub node_index_charge: Charge,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
@@ -53,7 +57,9 @@ pub(crate) struct State {
     pub directory_names: usize,
     pub directory_bytes: usize,
     pub handles: Vec<Handle>,
-    pub cookies: Vec<Cookie>,
+    pub cookies: BTreeMap<u64, Cookie>,
+    pub cookie_names: BTreeMap<(u64, u8, [u8; 255]), u64>,
+    pub cookie_charge: Charge,
     pub next_handle: u64,
     pub next_cookie: u64,
     pub mounted: bool,
@@ -62,7 +68,8 @@ pub(crate) struct State {
     /// effective namespace still binds. A fresh identity at zero has no
     /// canonical identity to save, so lowering drops it instead of declaring an
     /// unbound fresh inode. Reset when a capture starts the next generation.
-    pub fresh: Vec<FreshName>,
+    pub fresh: BTreeMap<u64, u32>,
+    pub fresh_charge: RefCell<Charge>,
     /// One entry per directory this generation created whose declaration the
     /// canonical state has not accepted yet. A fresh directory serial exists in
     /// the service only after the first Commit that names it, so lowering must
@@ -113,12 +120,6 @@ pub(crate) struct Node {
     /// created in the generation, a lower bound for one inherited from a base.
     pub names: u32,
 }
-/// One regular inode this generation created and its live name count.
-#[derive(Clone, Copy)]
-pub(crate) struct FreshName {
-    pub serial: u64,
-    pub names: u32,
-}
 #[derive(Clone)]
 pub(crate) struct Handle {
     pub id: u64,
@@ -132,11 +133,15 @@ pub(crate) struct Handle {
     pub view: Option<crate::filesystem::namespace_view::View>,
 }
 pub(crate) struct Cookie {
-    pub id: u64,
     pub handle: u64,
     pub after: [u8; 255],
     pub len: usize,
     pub dots: u8,
+}
+pub(crate) fn cookie_key(handle: u64, dots: u8, name: &[u8]) -> (u64, u8, [u8; 255]) {
+    let mut after = [0; 255];
+    after[..name.len()].copy_from_slice(name);
+    (handle, dots, after)
 }
 pub(crate) struct OperationGuard {
     pub workspace: Workspace,
@@ -183,18 +188,33 @@ impl Node {
     }
 }
 impl State {
-    // ponytail: scans are bounded by 256 nodes; use an index if that profile grows.
+    /// Reserve the next fresh-name index node before publishing a create.
+    pub fn reserve_fresh(&self) -> Result<(), WorkspaceError> {
+        let entries = self
+            .fresh
+            .len()
+            .checked_add(1)
+            .ok_or(WorkspaceError::Capacity)?;
+        let bytes = entries.checked_mul(96).ok_or(WorkspaceError::Capacity)?;
+        self.fresh_charge.borrow_mut().resize(bytes)
+    }
+    /// The charged serial index makes lookup independent of earlier live nodes.
     pub fn node(&self, serial: u64) -> Result<&Node, WorkspaceError> {
-        self.nodes
-            .iter()
-            .find(|node| node.attr.serial == serial)
+        self.node_index
+            .get(&serial)
+            .and_then(|index| self.nodes.get(*index))
             .ok_or(WorkspaceError::NotFound)
     }
     pub fn node_mut(&mut self, serial: u64) -> Result<&mut Node, WorkspaceError> {
-        self.nodes
-            .iter_mut()
-            .find(|node| node.attr.serial == serial)
-            .ok_or(WorkspaceError::NotFound)
+        let index = *self
+            .node_index
+            .get(&serial)
+            .ok_or(WorkspaceError::NotFound)?;
+        self.nodes.get_mut(index).ok_or(WorkspaceError::NotFound)
+    }
+    pub fn push_node(&mut self, node: Node) {
+        self.node_index.insert(node.attr.serial, self.nodes.len());
+        self.nodes.push(node);
     }
     pub fn handle(&self, id: HandleId, directory: bool) -> Result<Handle, WorkspaceError> {
         self.handles
@@ -222,6 +242,13 @@ impl State {
     /// budget: a generation that resolves more identities than one chunk holds
     /// pays for the next chunk, and a spent budget is what refuses.
     pub fn reserve_nodes(&mut self) -> Result<(), WorkspaceError> {
+        let index_bytes = self
+            .nodes
+            .len()
+            .checked_add(1)
+            .and_then(|count| count.checked_mul(96))
+            .ok_or(WorkspaceError::Capacity)?;
+        self.node_index_charge.resize(index_bytes)?;
         if self.nodes.len() < self.nodes.capacity() {
             return Ok(());
         }
@@ -240,6 +267,7 @@ impl State {
         }
         Ok(())
     }
+    #[expect(clippy::too_many_arguments, reason = "frontier counters mirror the published metadata fields")]
     pub fn frontier_bytes(
         &self,
         host: &Arc<Host>,
@@ -295,11 +323,11 @@ impl State {
     /// had lost every name becomes a counted dirty identity again.
     pub fn created(&mut self, serial: u64) {
         let mut revived = false;
-        if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
-            revived = entry.names == 0;
-            entry.names = entry.names.saturating_add(1);
+        if let Some(names) = self.fresh.get_mut(&serial) {
+            revived = *names == 0;
+            *names = names.saturating_add(1);
         } else {
-            self.fresh.push(FreshName { serial, names: 1 });
+            self.fresh.insert(serial, 1);
         }
         if revived {
             self.dirty_inodes = self.dirty_inodes.saturating_add(1);
@@ -311,7 +339,7 @@ impl State {
     /// identity keeps no live-name count here: its other names are not this
     /// delta's, so removing one of them never leaves it unbound.
     pub fn linked(&mut self, serial: u64) {
-        if self.fresh.iter().any(|entry| entry.serial == serial) {
+        if self.fresh.contains_key(&serial) {
             self.created(serial);
         }
     }
@@ -344,10 +372,10 @@ impl State {
     pub fn unlinked(&mut self, serial: u64) {
         let mut unbound = false;
         let mut owned = false;
-        if let Some(entry) = self.fresh.iter_mut().find(|e| e.serial == serial) {
-            unbound = entry.names == 1;
-            entry.names = entry.names.saturating_sub(1);
-        } else if let Some(node) = self.nodes.iter().find(|node| node.attr.serial == serial) {
+        if let Some(names) = self.fresh.get_mut(&serial) {
+            unbound = *names == 1;
+            *names = names.saturating_sub(1);
+        } else if let Ok(node) = self.node(serial) {
             owned = node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0;
         }
         if unbound {
@@ -371,6 +399,13 @@ impl State {
                 || node.projection_lookups > 0
                 || node.handles > 0
         });
+        self.node_index.clear();
+        for (index, node) in self.nodes.iter().enumerate() {
+            self.node_index.insert(node.attr.serial, index);
+        }
+        self.node_index_charge
+            .resize(self.nodes.len() * 96)
+            .expect("shrinking the node index charge cannot fail");
     }
     /// The attributes one caller sees: a regular inode presents its live
     /// namespace link count as `references`. Other kinds are not linkable and
@@ -389,20 +424,17 @@ impl State {
     /// keeps the canonical count its resolution selected until the next Commit
     /// republishes it.
     fn live_names(&self, serial: u64) -> Option<u64> {
-        if let Some(node) = self.nodes.iter().find(|node| node.attr.serial == serial) {
+        if let Ok(node) = self.node(serial) {
             return Some(node.names as u64);
         }
-        self.fresh
-            .iter()
-            .find(|entry| entry.serial == serial)
-            .map(|entry| entry.names as u64)
+        self.fresh.get(&serial).map(|names| *names as u64)
     }
     /// The live namespace link count a newly resolved identity starts from:
     /// this generation's tracked count for an identity it created, otherwise
     /// the count the resolution itself selected.
     pub(crate) fn resolved_names(&self, attr: &NodeAttributes) -> u32 {
-        match self.fresh.iter().find(|entry| entry.serial == attr.serial) {
-            Some(entry) => entry.names,
+        match self.fresh.get(&attr.serial) {
+            Some(names) => *names,
             None => u32::try_from(attr.references).unwrap_or(u32::MAX),
         }
     }
@@ -527,7 +559,14 @@ impl Workspace {
             .ok_or(WorkspaceError::BadHandle)?;
         let handle = state.handles.swap_remove(index);
         state.node_mut(handle.serial)?.handles -= 1;
-        state.cookies.retain(|cookie| cookie.handle != id);
+        state.cookies.retain(|_, cookie| cookie.handle != id);
+        state.cookie_names.retain(|(handle, _, _), _| *handle != id);
+        let cookie_bytes = state
+            .cookies
+            .len()
+            .checked_mul(COOKIE_ENTRY_BYTES)
+            .ok_or(WorkspaceError::Capacity)?;
+        state.cookie_charge.resize(cookie_bytes)?;
         state.collect(self.inner.root.serial);
         drop(state);
         drop(handle);

@@ -142,8 +142,7 @@ impl WorkspaceHost {
                     + 2 * CALL_SCRATCH
                     + MAX_READ_BYTES
                     + NODE_LIMIT * size_of::<Node>()
-                    + HANDLE_LIMIT * size_of::<Handle>()
-                    + COOKIE_LIMIT * size_of::<Cookie>(),
+                    + HANDLE_LIMIT * size_of::<Handle>(),
             )
             .ok_or(WorkspaceError::Capacity)?;
         let minimum = minimum
@@ -385,13 +384,14 @@ impl WorkspaceHost {
             let tables = self
                 .inner
                 .budget
-                .reserve(HANDLE_LIMIT * size_of::<Handle>() + COOKIE_LIMIT * size_of::<Cookie>())?;
+                .reserve(HANDLE_LIMIT * size_of::<Handle>())?;
+            let cookie_charge = self.inner.budget.reserve(0)?;
             // The node table's first chunk is charged exactly as the admission
             // floor above counts it; every later chunk is charged as it grows.
             let node_charge = self.inner.budget.reserve(NODE_LIMIT * size_of::<Node>())?;
             let mut nodes = Vec::new();
             let mut handles = Vec::new();
-            let mut cookies = Vec::new();
+            let cookies = std::collections::BTreeMap::new();
             nodes
                 .try_reserve_exact(NODE_LIMIT)
                 .map_err(|_| WorkspaceError::Capacity)?;
@@ -401,10 +401,9 @@ impl WorkspaceHost {
             if handles.capacity() != HANDLE_LIMIT {
                 return Err(WorkspaceError::Capacity);
             }
-            cookies
-                .try_reserve_exact(COOKIE_LIMIT)
-                .map_err(|_| WorkspaceError::Capacity)?;
             nodes.push(Node::new(attr, content, metadata, &[], attr.serial));
+            let node_index = std::collections::BTreeMap::from([(attr.serial, 0)]);
+            let node_index_charge = self.inner.budget.reserve(96)?;
             let branch = branch_snapshot
                 .map(|mut snapshot| {
                     if snapshot.root_serial.is_none() {
@@ -448,6 +447,8 @@ impl WorkspaceHost {
                     branch,
                     baseline: 1,
                     nodes,
+                    node_index,
+                    node_index_charge,
                     overlay: None,
                     completion: None,
                     submission: None,
@@ -461,11 +462,14 @@ impl WorkspaceHost {
                     directory_bytes: 0,
                     handles,
                     cookies,
+                    cookie_names: std::collections::BTreeMap::new(),
+                    cookie_charge,
                     next_handle: 1,
                     next_cookie: 1,
                     mounted: false,
                     projection: None,
-                    fresh: Vec::new(),
+                    fresh: std::collections::BTreeMap::new(),
+                    fresh_charge: std::cell::RefCell::new(self.inner.budget.reserve(0)?),
                     declared: Vec::new(),
                     unbound: Vec::new(),
                     carried: Vec::new(),

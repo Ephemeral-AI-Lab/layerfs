@@ -56,35 +56,6 @@ pub const PORTABLE_ATTRIBUTE_DOMAIN: &str = "portable";
 /// read path can return. The constant is derived from that maximum rather than
 /// restated, so the two cannot drift apart.
 pub const MAXIMUM_ATTRIBUTE_VALUE_BYTES: usize = crate::file::cdc::MAXIMUM_CHUNK_BYTES;
-/// Bindings one whole-tree validation walk may examine before it refuses.
-///
-/// The ceiling is charged **once per walk, not once per operation**: the
-/// effective-cycle check walks the subtree of every directory the operation
-/// rebinds, and each of those walks gets its own allowance, so an operation that
-/// rebinds N directories may spend up to N times this many entries. Two
-/// consequences follow, and both are part of the operation's contract rather than
-/// accidents of the implementation:
-///
-/// - one `build_filesystem` call is refused above 4,096 bindings: a build that
-///   states exactly 4,096 is accepted, 4,097 is the first refusal, because the
-///   single reachability walk charges every entry the tree states, so a tree
-///   larger than that is reached by several operations that each stay under the
-///   ceiling; and
-/// - an existing directory whose effective subtree reaches the ceiling can
-///   never be renamed or relocated, however small the change is, because the
-///   walk of the base tree charges the rest of the tree beside the rebound
-///   directory first, and exceeding a work bound is an explicit refusal - the
-///   same error a genuine cycle gets, never a claim that the tree was proven
-///   acyclic.
-///
-/// The boundary figures above are stated in **bindings the walk charges**. The
-/// round-2 review first reported the build consequence as "4,095 accepted /
-/// 4,096 refused" counting only the files inside the built directory, which
-/// excludes the directory's own binding edge; a round-4 verification probe
-/// reproduced the tight figures through the public API and this doc states
-/// them.
-pub const MAXIMUM_WALK_ENTRIES: usize = 4_096;
-
 /// Largest keys one attribute-key listing may return.
 ///
 /// A declared operation bound, not a format bound: the attribute grammar bounds a

@@ -1,5 +1,12 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **Prepared-stream correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, check declared row totals against C1's ordering-memory
+> budget before decoding the body. Subject validation flushes a read wave within
+> a directory row and resumes with its next binding, so filling a wave never
+> skips the row's remainder. The Bridge propagates an I/O error from the final
+> trailing-byte read instead of treating it as EOF. The wire format is unchanged.
+
 > **Status:** Current general guide.
 
 This describes the issue #192 implementation candidate for v0.1.7; it is not a

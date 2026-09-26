@@ -1,5 +1,13 @@
 # Length-indexed extent sequence for one file
 
+> **Current-source correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, keep the page format and canonical Store format intact.
+> A non-root overflow now produces multiple pages at the level its parent
+> expects; only the root folds those pages to a single root. The external
+> `pieces_sequence` test inserts into a full non-root branch of 248 leaves and
+> checks the new and pinned old roots. The earlier level-preserving rules below
+> still apply to collapses.
+
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Dated 2026-09-25. Describes the implementation landed on branch
 > `codex/issue245-range-cow-plan` for issue #245 packages A–C, written against

@@ -1,5 +1,10 @@
 # Filesystem trees
 
+> **Current-source correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, bound C1's prepared-update validation frontier by the
+> caller's ordering-memory resource instead of a fixed 4,096-entry walk count.
+> The older source pins below document their respective historical sections.
+
 > **Status:** Research; informative and not a product contract.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
@@ -385,3 +390,28 @@ does not hold every row its update declared, `check_input` refuses a source whos
 cursors end anywhere but the declared totals, and both the slot table and every
 payload are charged against a declared capacity before they are written. Dropping
 the spool removes its file; `cleanup` is the checked form of the same act.
+
+### 5.9 Validation frontier and update corrections after phases 1–3
+
+Validation derives a resident-entry allowance as
+`floor(FilesystemResources.ordering_bytes / 1024)`. Row counts, changed names,
+the reachability frontier and each effective-tree walk are checked against that
+declared resource. The effective-cycle allowance is cumulative across one
+operation's rebound directories. The memo of authenticated base records and
+absent serials evicts when full; eviction can add reads but cannot admit an
+unchecked binding. The service checks prepared totals before decoding a wide
+row, so one declared row cannot allocate past this validation allowance.
+
+A newly allocated directory is followed through its own changed bindings during
+update cycle validation. The parent-alias pass visits each changed binding once,
+indexes changed names and their final bindings for lookup, and does not decode
+the same spool row for every restated name. C1 sends final typed values to the
+reference reducer as rows arrive rather than making a second vector of all
+values. The server checks every binding in a directory row even when a read wave
+fills partway through that row. The Bridge treats an I/O error during its final
+trailing-byte read as an error, not end of stream.
+
+The Workspace's keyed namespace pages now use the common level-7 physical page
+limit for all key kinds. This lifts the former level-3 tombstone and level-2
+inode/directory ceilings without changing an encoded page. The physical page
+slot format and other representation ceilings remain separate constraints.

@@ -899,6 +899,34 @@ fn two_level_fixture() -> (Fixture, PageRef, u64) {
     (f, root, length)
 }
 
+#[test]
+fn an_insert_splits_a_full_non_root_branch_at_its_own_level() {
+    let f = Fixture::new();
+    let length = 495 * 124;
+    let root = f.build(&separated(length), length).unwrap();
+    assert_eq!(structure(&f, root), (495, 2, 0));
+    // The first level-1 child has 248 full leaves. Inserting inside its last
+    // leaf requires two level-1 replacements beneath the unchanged root.
+    let at = 248 * 124 - 1;
+    let changed = f
+        .splice(
+            root,
+            at,
+            at,
+            0,
+            length,
+            length + 1,
+            &[local(0, 1, 900_001, 4_001)],
+        )
+        .unwrap();
+    assert_eq!(changed.length, length + 1);
+    assert_eq!(structure(&f, changed.root).0, 496);
+    let walked = f.walk(changed.root, changed.length);
+    assert_eq!(walked.len() as u64, length + 1);
+    assert_eq!(walked[at as usize].1.payload, 900_001);
+    assert_eq!(f.walk(root, length).len() as u64, length);
+}
+
 /// `count` one-byte private extents that never merge: every acquisition has its
 /// own identity, exactly as a sequence of separated writes does.
 fn separated(count: u64) -> Vec<Piece> {

@@ -649,6 +649,92 @@ fn an_update_cycling_two_declared_new_directories_is_refused() {
 }
 
 #[test]
+fn an_update_with_a_disconnected_fresh_directory_cycle_is_refused() {
+    let (mut session, _d, _e, _f) = nested();
+    let a = session.allocate();
+    let b = session.allocate();
+    let c = session.allocate();
+    let outcome = session.apply(
+        &[
+            DirectoryUpdate {
+                parent: a,
+                changes: vec![(name("b"), Some(b))],
+            },
+            DirectoryUpdate {
+                parent: b,
+                changes: vec![(name("c"), Some(c))],
+            },
+            DirectoryUpdate {
+                parent: c,
+                changes: vec![(name("a"), Some(a))],
+            },
+        ],
+        &[
+            InodeUpdate {
+                serial: a,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: b,
+                value: directory("unused"),
+            },
+            InodeUpdate {
+                serial: c,
+                value: directory("unused"),
+            },
+        ],
+        &[a, b, c],
+    );
+    assert!(
+        matches!(
+            outcome,
+            Err(ContentError::InvalidRecord("effective tree cycle"))
+        ),
+        "a disconnected fresh cycle must be refused: {outcome:?}"
+    );
+}
+
+#[test]
+fn a_permutation_of_65_directory_bindings_is_one_linear_walk() {
+    let mut session = Session::new(1).expect("empty");
+    let serials: Vec<u64> = (0..65).map(|_| session.allocate()).collect();
+    let mut directories = vec![DirectoryUpdate {
+        parent: 1,
+        changes: serials
+            .iter()
+            .enumerate()
+            .map(|(index, serial)| (name(&format!("d{index:03}")), Some(*serial)))
+            .collect(),
+    }];
+    directories.extend(serials.iter().map(|serial| DirectoryUpdate {
+        parent: *serial,
+        changes: Vec::new(),
+    }));
+    let values: Vec<InodeUpdate> = serials
+        .iter()
+        .map(|serial| InodeUpdate {
+            serial: *serial,
+            value: directory("unused"),
+        })
+        .collect();
+    session
+        .apply(&directories, &values, &serials)
+        .expect("base");
+    let rotated = DirectoryUpdate {
+        parent: 1,
+        changes: (0..65)
+            .map(|index| {
+                (
+                    name(&format!("d{index:03}")),
+                    Some(serials[(index + 1) % 65]),
+                )
+            })
+            .collect(),
+    };
+    session.apply(&[rotated], &[], &[]).expect("permutation");
+}
+
+#[test]
 fn a_build_cycle_that_the_root_holds_is_refused() {
     // The root binds `a`, and `a` holds `b` and `b` holds `a`. Every declared
     // directory has a binding, so the disconnected-record rule cannot see it and

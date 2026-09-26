@@ -43,6 +43,8 @@ pub struct Arena {
     /// since it was created. It shows whether a walk re-reads a path it already
     /// holds, and it never gates a read.
     pub reads: AtomicU64,
+    pub ledger_reads: AtomicU64,
+    pub ledger_writes: AtomicU64,
     pub state: Mutex<ArenaState>,
     pub ledger_charge: Mutex<MetadataCharge>,
     pub _charge: MetadataCharge,
@@ -179,6 +181,15 @@ impl MetadataHost {
             .map(|arena| arena.reads.load(Ordering::Relaxed))
             .fold(0u64, u64::saturating_add))
     }
+    pub fn ledger_io(&self) -> Result<(u64, u64), WorkspaceError> {
+        let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(arenas.iter().fold((0u64, 0u64), |(reads, writes), arena| {
+            (
+                reads.saturating_add(arena.ledger_reads.load(Ordering::Relaxed)),
+                writes.saturating_add(arena.ledger_writes.load(Ordering::Relaxed)),
+            )
+        }))
+    }
     pub fn arena(
         self: &Arc<Self>,
         directory: Arc<Directory>,
@@ -197,6 +208,8 @@ impl MetadataHost {
             directory,
             host: Arc::downgrade(self),
             reads: AtomicU64::new(0),
+            ledger_reads: AtomicU64::new(0),
+            ledger_writes: AtomicU64::new(0),
             state: Mutex::new(ArenaState {
                 next: 1,
                 reserved_slots: 0,

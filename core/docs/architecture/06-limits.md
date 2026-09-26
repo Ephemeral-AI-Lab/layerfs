@@ -1,5 +1,10 @@
 # End-to-end flows and declared limits
 
+> **Current-source correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, replace the fixed 4,096-entry validation walk ceiling
+> with a cumulative allowance derived from the operation's declared ordering
+> memory. The historical tables below are updated at their former entry.
+
 > **Status:** Research; informative and not a product contract.
 
 The issue #192 schema 8 changes, including the configured per-Store writer
@@ -136,7 +141,7 @@ one component rather than split across both.
    C1: update_filesystem(&mut FilesystemObjects{reader, consumer}, input, backing)
         │
         ├── validate::check           ──► CheckedInput + FilesystemTopology
-        │                                   (bounded MAXIMUM_WALK_ENTRIES per walk)
+        │                                   (ordering bytes / 1024, per operation)
         ├── directory bindings merge  ──► sorted B+tree engine (LFS6NSP)
         │        └── observes every original → final binding edge
         ├── reference reduce          ──► ReferenceReducer → FinalRows
@@ -187,7 +192,7 @@ where, because a limit that is stated but not enforced is not a limit.
 | name component | 255 B | `MAXIMUM_NAME_BYTES` |
 | path | 4,096 B / 256 components | `path.rs` |
 | operation scratch | 4 MiB | `MAXIMUM_OPERATION_SCRATCH_BYTES` |
-| validation walk | 4,096 bindings **per walk** | `MAXIMUM_WALK_ENTRIES` |
+| validation walk | `floor(ordering_bytes / 1024)` entries across rebound directories | `validate::walk_limit` |
 | read wave | 4,096 objects | `objects::MAXIMUM_READ_DEMANDS` |
 | symlink target | 4,096 B | `MAXIMUM_SYMLINK_TARGET_BYTES` |
 | attribute domain / key | 64 B / 255 B | `limits` |

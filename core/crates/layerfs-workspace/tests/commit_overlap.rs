@@ -876,7 +876,11 @@ fn a_namespace_lowering_page_read_is_held_with_the_writer_gate_free() {
     // An ordinary mounted mutation, taken while the lowering's page read is
     // stopped in the kernel.
     let probe = f.probe();
-    assert_eq!(probe.0, Ok(()), "a mounted mutation runs while the lowering is held");
+    assert_eq!(
+        probe.0,
+        Ok(()),
+        "a mounted mutation runs while the lowering is held"
+    );
     assert!(
         charge < baseline + WORKING,
         "the held lowering read runs with the writer gate free: charge={charge} baseline={baseline}"

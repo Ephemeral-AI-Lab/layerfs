@@ -511,7 +511,13 @@ impl<'a> StreamReader<'a> {
     /// The body must be exactly the bytes the request declared.
     fn finish(self) -> Result<(), Failure> {
         let mut byte = [0_u8; 1];
-        if self.remaining != 0 || self.input.read(&mut byte).unwrap_or(0) != 0 {
+        if self.remaining != 0
+            || self
+                .input
+                .read(&mut byte)
+                .map_err(|_| Failure::from(Code::InvalidInput))?
+                != 0
+        {
             return Err(Code::InvalidInput.into());
         }
         Ok(())

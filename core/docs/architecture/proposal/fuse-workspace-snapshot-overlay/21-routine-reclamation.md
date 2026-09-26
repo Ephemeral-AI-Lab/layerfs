@@ -1,5 +1,35 @@
 # Routine healthy-owner reclamation before admission
 
+> **Current-source correction:** the changes committed with this paragraph,
+> based on `7499d6d56`, supersede the historical no-queue implementation and
+> fixed cookie-table statements below. They change no private page format.
+
+## Release and ledger correction after #245 phases 1–3
+
+Routine payload selection uses a deduplicated, per-record-charged candidate set.
+The final `OwnedPayload` notifier runs after its record reference has dropped;
+the custody-release path also drops its temporary record reference before it
+queues the ID. A candidate observed during another temporary pin remains queued
+for the next pass. A cleanup failure preserves every later candidate in the
+drained set. Routine cleanup removes only healthy records, so it does not rescan
+all retained records to re-derive admission flags; deliberate scoped cleanup
+still re-derives them after it may remove failed records.
+
+Page ownership edges are sorted by ledger slot before reference accounting, in
+both publication and cleanup. Consecutive edges on one authenticated 4 KiB ledger
+page are applied by one read and one write. A successful batch advances the
+retained progress cursor; reclaim stops a batch at the first newly unowned child
+and descends before continuing its parent. The page itself is decoded once per
+cleanup visit, rather than once per surviving edge. `BackingStatus` exposes
+separate metadata-page and ledger read/write counts for diagnosis. The ordinary
+single-reference path also writes the authenticated ledger page left by its
+read without rereading it.
+
+Live nodes, fresh-name counts and directory cookies now have charged indexes.
+Cookie capacity follows the Workspace memory budget, with no 1,024-entry table
+refusal. The complete 1,025-name listing is an external Linux release test;
+the public API diagnostic remains separately labelled and ignored by default.
+
 > **Status: implemented and natively verified; Pair 1 remains open.**
 > Exact implementation parent: `1f9cceb73ba0ede11c86120b73b2015f900d1dd8`.
 > Product input seal: `e50c36e824564e3eb4375c638b43ac642fb4020fa15b3274bbea1abf06d4b0ab`.

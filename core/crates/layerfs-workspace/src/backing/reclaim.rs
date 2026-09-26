@@ -11,6 +11,13 @@ use std::{
     time::Instant,
 };
 
+enum ReleasedRecord {
+    Gone,
+    Held,
+    Ineligible,
+    Ready(Arc<Record>),
+}
+
 impl PayloadHost {
     pub fn has_external_pins(&self, incarnation: [u8; 32]) -> Result<bool, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -53,15 +60,15 @@ impl PayloadHost {
     /// an owner with outstanding reservations: those keep their charge until
     /// the deliberate scoped pass releases them. The reference count is read
     /// while the registry holds the only clone, so `1` is the whole registry.
-    fn released_record(&self, id: u64) -> Result<Option<Arc<Record>>, WorkspaceError> {
+    fn released_record(&self, id: u64) -> Result<ReleasedRecord, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if !state.records.contains_key(&id) {
-            return Ok(None);
+            return Ok(ReleasedRecord::Gone);
         }
         state.note_routine(1);
         let record = state.records.get(&id).ok_or(WorkspaceError::Io)?;
         if Arc::strong_count(record) != 1 {
-            return Ok(None);
+            return Ok(ReleasedRecord::Held);
         }
         let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
         if owner.custody.is_some()
@@ -75,9 +82,9 @@ impl PayloadHost {
             || owner.completed != record.length
             || owner.created != segments::segment_count(record.length)
         {
-            return Ok(None);
+            return Ok(ReleasedRecord::Ineligible);
         }
-        Ok(Some(record.clone()))
+        Ok(ReleasedRecord::Ready(record.clone()))
     }
     /// The next scoped-cleanup candidate after `after`, in registry order.
     ///
@@ -120,10 +127,10 @@ impl PayloadHost {
         clock(deadline)
             .map_err(|error| super::payload::bare_failure(BackingPhase::Cleanup, error.kind()))?;
         let routine = incarnation.is_none();
-        let released = if routine {
+        let mut released = if routine {
             self.take_released()
         } else {
-            Vec::new()
+            Default::default()
         };
         if routine && released.is_empty() {
             return Ok(CleanupReport {
@@ -137,9 +144,7 @@ impl PayloadHost {
             // window; keep the charged records for a later pass rather than
             // rejecting the mounted mutation that asked for maintenance.
             Err(WorkspaceError::Busy) if routine => {
-                for id in released {
-                    self.note_released(id);
-                }
+                self.restore_released(released);
                 return Ok(CleanupReport {
                     remaining_payloads: self.registry_len()?,
                     ..CleanupReport::default()
@@ -150,14 +155,31 @@ impl PayloadHost {
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = CleanupReport::default();
         if routine {
-            for id in released {
-                let Some(record) = self.released_record(id)? else {
-                    continue;
+            while let Some(id) = released.pop_first() {
+                let record = match self.released_record(id) {
+                    Ok(record) => record,
+                    Err(error) => {
+                        released.insert(id);
+                        self.restore_released(released);
+                        return Err(error);
+                    }
+                };
+                let record = match record {
+                    ReleasedRecord::Ready(record) => record,
+                    ReleasedRecord::Held => {
+                        self.note_released(id);
+                        continue;
+                    }
+                    ReleasedRecord::Gone | ReleasedRecord::Ineligible => continue,
                 };
                 if let Err(error) = self.reclaim_record(&record, window, deadline, &mut report) {
+                    self.restore_released(released);
                     return Err(self.failure(&record, BackingPhase::Cleanup, &error));
                 }
-                self.unregister(record.id)?;
+                if let Err(error) = self.unregister(record.id) {
+                    self.restore_released(released);
+                    return Err(error);
+                }
                 report.payloads_released += 1;
             }
         } else {
@@ -172,9 +194,10 @@ impl PayloadHost {
                 report.payloads_released += 1;
             }
         }
-        // The aggregate admission flags are re-derived once per pass, not once
-        // per released owner: the loop above must stay linear in its releases.
-        {
+        // Routine reclamation accepts only healthy records. Removing one cannot
+        // change the aggregate admission flags; the deliberate scoped path can
+        // remove failed records and must re-derive them.
+        if !routine {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             self.refresh(&mut state)?;
         }

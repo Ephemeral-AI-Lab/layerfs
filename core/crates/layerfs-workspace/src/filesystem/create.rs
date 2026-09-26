@@ -350,7 +350,7 @@ impl Workspace {
             let mut state = self.state()?;
             self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
-            if link_serial.is_none() && state.nodes.iter().any(|node| node.attr.serial == serial) {
+            if link_serial.is_none() && state.node_index.contains_key(&serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
             }
             state.completion.is_none()
@@ -594,14 +594,10 @@ impl Workspace {
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
-        if link_serial.is_none() && state.nodes.iter().any(|node| node.attr.serial == serial) {
+        if link_serial.is_none() && state.node_index.contains_key(&serial) {
             return Err(WorkspaceError::Service(Code::Unknown.into()));
         }
-        let parent_node = state
-            .nodes
-            .iter()
-            .position(|node| node.attr.serial == parent)
-            .ok_or(WorkspaceError::Busy)?;
+        let parent_node = *state.node_index.get(&parent).ok_or(WorkspaceError::Busy)?;
         check_access(state.nodes[parent_node].attr, self.inner.root.uid, 3)?;
         state.frontier_bytes(
             &self.host,
@@ -612,6 +608,9 @@ impl Workspace {
             state.directory_names + 1,
             state.directory_bytes + name_bytes,
         )?;
+        if file && link_serial.is_none() {
+            state.reserve_fresh()?;
+        }
         let handle = if let Some(options) = open {
             let (id, next) = super::open::handle_slot(&state)?;
             Some((
@@ -658,11 +657,7 @@ impl Workspace {
         if let Some(serial) = link_serial {
             // A hard link adds one name to the shared inode. The destination name
             // is this operation's only new lookup reference on that inode.
-            match state
-                .nodes
-                .iter()
-                .position(|entry| entry.attr.serial == serial)
-            {
+            match state.node_index.get(&serial).copied() {
                 Some(index) => {
                     state.nodes[index].names = state.nodes[index]
                         .names
@@ -676,7 +671,7 @@ impl Workspace {
                     linked.baseline = 0;
                     *linked.references(reference) = 1;
                     linked.names = 1;
-                    state.nodes.push(linked);
+                    state.push_node(linked);
                 }
             }
             state.linked(serial);
@@ -684,7 +679,7 @@ impl Workspace {
             if file {
                 state.created(serial);
             }
-            state.nodes.push(node);
+            state.push_node(node);
         }
         if let Some((handle, next)) = handle {
             state.next_handle = next;

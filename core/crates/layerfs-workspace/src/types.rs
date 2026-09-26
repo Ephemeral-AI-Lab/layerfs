@@ -243,6 +243,10 @@ pub struct BackingStatus {
     /// its path, so this does not grow with the frames one frozen transfer is
     /// replayed in.
     pub metadata_reads: u64,
+    /// Ownership-ledger 4 KiB reads and writes, including COW publication and
+    /// reclamation. These are separate from metadata page reads.
+    pub ledger_reads: u64,
+    pub ledger_writes: u64,
     pub readers: usize,
     pub acquiring: bool,
     pub cleaning: bool,

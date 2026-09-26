@@ -370,6 +370,7 @@ impl Workspace {
             state.directory_bytes = 0;
             *state.frontier.borrow_mut() = None;
             state.fresh.clear();
+            state.fresh_charge.borrow_mut().resize(0)?;
             state.submission = Some(submission.clone());
             Ok(())
         })();
