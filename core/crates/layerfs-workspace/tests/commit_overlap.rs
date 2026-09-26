@@ -15,6 +15,16 @@
 //! The barrier is checked against a control: a page read taken while the gate
 //! *is* held must refuse the same mutation. Without that control a barrier that
 //! never intercepted anything would report every phase as clean.
+//!
+//! Two Commit phases are held, because each owns a different frozen walk. The
+//! first is the extent transfer (`FROZEN`): the read belongs to the replay of
+//! the captured file sequence. The second is #256's slice 3.3 namespace
+//! lowering (`NAMESPACE`): the read is a page of the captured tree, taken after
+//! every save has been acknowledged, and the lowering walks the frontier, the
+//! namespace records, the inode records and a directory's entry and removal
+//! leaves under no writer gate. Each arm reports the read it held, the reads it
+//! answered while looking for it, the charge the gate would have added, and the
+//! mutation's outcome.
 #![cfg(target_os = "linux")]
 use layerfs_bridge::contract::*;
 use layerfs_workspace::*;
@@ -36,6 +46,10 @@ const SCOPE: Root = [9; 32];
 const PROFILE: Root = [10; 32];
 const ROOT_SERIAL: u64 = 7;
 const METADATA: Root = [13; 32];
+/// Content root the delivery acknowledges for an empty save. The arm that
+/// reaches the lowering saves the names it creates, so the exact bytes are its
+/// own zero-length sequence and the root only has to be stable.
+const SAVED: Root = [14; 32];
 /// One small acquisition per write, so the frozen sequence spans several
 /// extents and one write phase walks more than one leaf. The shape is small on
 /// purpose: the barrier turns every metadata page read on the Commit thread
@@ -274,6 +288,14 @@ impl Barrier {
 struct Observed {
     frames: AtomicU64,
     bytes: AtomicU64,
+    /// Content saves the delivery acknowledged, and the metadata saves that
+    /// followed them. The namespace lowering runs only after both, so they are
+    /// how a reader tells a lowering page read from one inside a save.
+    saved: AtomicU64,
+    metadata: AtomicU64,
+    /// Serials this delivery has already handed out, so a second creation is
+    /// never given an identity the first one owns.
+    reservations: AtomicU64,
     /// Set when the test wants the delivery to park its first transfer pull, so
     /// the barrier can be armed before the frame is served.
     park: AtomicBool,
@@ -374,6 +396,27 @@ impl Fixture {
     fn status(&self) -> WorkspaceStatus {
         self.workspace.status().unwrap()
     }
+    /// Binds `count` more empty names in the root, so the Commit's lowering owns
+    /// a name run of its own to walk.
+    fn widen(&self, count: usize) {
+        for index in 0..count {
+            self.workspace
+                .mknod(
+                    ROOT_SERIAL,
+                    format!("w{index:03}").as_bytes(),
+                    0o644,
+                    0,
+                    deadline_after(20_000),
+                )
+                .unwrap_or_else(|error| panic!("widen {index}: {error:?}"));
+        }
+    }
+    fn saved(&self) -> u64 {
+        self.observed.saved.load(Ordering::Acquire)
+    }
+    fn metadata_saved(&self) -> u64 {
+        self.observed.metadata.load(Ordering::Acquire)
+    }
     /// The exact charge a held writer gate adds, so a reader can tell a held
     /// gate from a free one without taking the gate.
     fn gate_charge(&self) -> usize {
@@ -437,6 +480,10 @@ enum Outcome {
     /// The transfer replays every frame and then refuses the save, so the Commit
     /// stops at its file-save stage and never needs a canonical Store.
     Unsupported,
+    /// Every save is acknowledged, so the Commit reaches its namespace lowering.
+    /// The composite command that follows is still refused, so the arm stops
+    /// after the lowering and never needs a canonical Store either.
+    Saved,
 }
 
 fn delivery(observed: Arc<Observed>, outcome: Outcome) -> OperationDelivery {
@@ -479,16 +526,17 @@ fn delivery(observed: Arc<Observed>, outcome: Outcome) -> OperationDelivery {
                 ..
             } => Err(Code::NotFound.into()),
             Operation::HistoryCommand(HistoryCommand::ReserveInodes { scope, count }) => {
+                let start = 1_000 + observed.reservations.fetch_add(*count, Ordering::AcqRel);
                 Ok(Response::History(Box::new(HistoryResult::Reservation {
                     scope: *scope,
-                    start: 1000,
+                    start,
                     count: *count,
                 })))
             }
             // The transfer body: one descriptor per extent plus every
             // replacement byte, in frames. The fence parks the chosen pull so
             // the test can arm the barrier before that frame is served.
-            Operation::SaveFile { .. } => {
+            Operation::SaveFile { length, .. } => {
                 let cancel = AtomicBool::new(false);
                 let mut buffer = [0u8; 4096];
                 loop {
@@ -506,27 +554,52 @@ fn delivery(observed: Arc<Observed>, outcome: Outcome) -> OperationDelivery {
                         }
                     }
                 }
-                let _ = outcome;
-                Err(Code::Unsupported.into())
+                if outcome != Outcome::Saved {
+                    return Err(Code::Unsupported.into());
+                }
+                observed.saved.fetch_add(1, Ordering::AcqRel);
+                Ok(Response::Saved {
+                    root: SAVED,
+                    length: *length,
+                    inserted: 0,
+                    reused: 0,
+                })
             }
+            // The replies echo the selected fields and the base root the caller
+            // states: the Workspace checks every one of them against the
+            // identity it is saving, so a placeholder value would stop the
+            // Commit before its lowering.
             Operation::UpdatePortableMetadata {
-                base, kind, mode, ..
-            } => Ok(Response::MetadataSaved {
-                base: *base,
-                kind: *kind,
-                mode: *mode,
-                mtime_seconds: 1,
-                mtime_nanoseconds: 0,
-                metadata: METADATA,
-                inserted: 0,
-                reused: 1,
-            }),
-            Operation::ConstructPortableMetadata { kind, mode, .. } => {
+                base,
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } => {
+                observed.metadata.fetch_add(1, Ordering::AcqRel);
+                Ok(Response::MetadataSaved {
+                    base: *base,
+                    kind: *kind,
+                    mode: *mode,
+                    mtime_seconds: *mtime_seconds,
+                    mtime_nanoseconds: *mtime_nanoseconds,
+                    metadata: *base,
+                    inserted: 0,
+                    reused: 1,
+                })
+            }
+            Operation::ConstructPortableMetadata {
+                kind,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } => {
+                observed.metadata.fetch_add(1, Ordering::AcqRel);
                 Ok(Response::MetadataConstructed {
                     kind: *kind,
                     mode: *mode,
-                    mtime_seconds: 1,
-                    mtime_nanoseconds: 0,
+                    mtime_seconds: *mtime_seconds,
+                    mtime_nanoseconds: *mtime_nanoseconds,
                     metadata: METADATA,
                     inserted: 1,
                     reused: 0,
@@ -739,6 +812,101 @@ fn a_frozen_walk_page_read_is_held_with_the_writer_gate_free() {
         PAYLOAD_BYTES
     );
     assert!(f.bytes() > 0, "the transfer carried bytes in frames");
+    f.close();
+}
+
+/// The namespace lowering, held: a page read of the frozen directory walk is
+/// stopped in the kernel with the writer gate free, and an ordinary mounted
+/// mutation runs while it is held.
+///
+/// This is 2.R1's other half. The frozen extent transfer above is one Commit
+/// phase; #256's slice 3.3 lowering - the frontier walk, the namespace records,
+/// the inode records and a directory's entry and removal leaves - is another,
+/// and it takes no writer gate either. The predicate is deliberately the
+/// *absence* of the gate after every save has been acknowledged: if the gate
+/// came back across the lowering, no page read would match it and this case
+/// fails with the reads it saw instead.
+#[test]
+fn a_namespace_lowering_page_read_is_held_with_the_writer_gate_free() {
+    /// Names beyond the written file, so the lowering walks a real name run.
+    const WIDE: usize = 8;
+    let f = Fixture::new("namespace", Outcome::Saved);
+    f.widen(WIDE);
+    let baseline = f.gate_charge() as u64;
+    let saved = f.saved();
+    let metadata = f.metadata_saved();
+    let (listener, committer) = committing(&f);
+    let barrier = listener.recv_timeout(Duration::from_secs(5)).unwrap();
+    let mut scans = 0u64;
+    let mut reads_at_lowering = None;
+    let mut seen: Vec<String> = Vec::new();
+    let held = barrier
+        .hold_where(Duration::from_millis(10_000), |held| {
+            scans += 1;
+            if seen.len() < 40 {
+                seen.push(format!("{}:{}", held.name(), held.offset));
+            }
+            let free = (f.gate_charge() as u64) < baseline + WORKING;
+            // Every save this generation owns is acknowledged before the
+            // lowering runs, and the lowering runs before the composite command.
+            // The read must be one of the frozen tree's own pages: a ledger read
+            // is bookkeeping, not a walk.
+            let ready = free
+                && f.saved() > saved
+                && f.metadata_saved() > metadata
+                && held.name().starts_with("m-page-");
+            if ready && reads_at_lowering.is_none() {
+                reads_at_lowering = Some(f.metadata_reads());
+            }
+            ready
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "no lowering page read was held: scans={scans} reads={} charge={} baseline={baseline} saved={} metadata={} seen={seen:?} phase={:?}",
+                f.metadata_reads(),
+                f.gate_charge(),
+                f.saved(),
+                f.metadata_saved(),
+                f.commit_phase(),
+            )
+        });
+    let reads_at_lowering = reads_at_lowering.expect("the held read set the counter");
+    let phase = f.commit_phase();
+    let charge = f.gate_charge() as u64;
+    // An ordinary mounted mutation, taken while the lowering's page read is
+    // stopped in the kernel.
+    let probe = f.probe();
+    assert_eq!(probe.0, Ok(()), "a mounted mutation runs while the lowering is held");
+    assert!(
+        charge < baseline + WORKING,
+        "the held lowering read runs with the writer gate free: charge={charge} baseline={baseline}"
+    );
+    assert_eq!(
+        phase,
+        Some(CommitPhase::Preparing),
+        "the read belongs to the preparation, not to the composite command"
+    );
+    assert!(
+        !committer.is_finished(),
+        "the Commit thread is still inside the lowering's read"
+    );
+    barrier.answer(&held);
+    release_and_drain(&barrier, &committer);
+    let result = committer.join().unwrap();
+    assert!(matches!(result, Err(WorkspaceError::Commit(_))));
+    let lowering_reads = f.metadata_reads() - reads_at_lowering;
+    println!(
+        "COMMIT_OVERLAP NAMESPACE page={} offset={} length={} phase={phase:?} baseline_charge={baseline} charge={charge} scans={scans} saves={} metadata={} lowering_reads={lowering_reads} mutation=Ok(())",
+        held.name(),
+        held.offset,
+        held.length,
+        f.saved(),
+        f.metadata_saved(),
+    );
+    assert!(
+        lowering_reads > 0,
+        "the lowering's own page reads are counted, not inferred"
+    );
     f.close();
 }
 
