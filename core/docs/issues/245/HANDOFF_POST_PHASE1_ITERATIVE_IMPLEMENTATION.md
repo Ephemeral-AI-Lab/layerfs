@@ -9,6 +9,18 @@
 > Its `f74dbe77da12fa533587be8a578375bce3f19373` product source pin is
 > historical: inspect the current source before editing.
 
+**Lane state, 2026-09-26.** The implementation lane is
+`codex/issue245-post-phase1-implementation`, based on `f74dbe77d`. Phases 1 and 2
+are implemented there (`b298d175d`, `7e6cac877`, `5a9a9fc5f`, `0c3e455bd`,
+`95f8ada8e`, `c3fd065c6`, `74ec83e30`, `11f257ed1`, `e8a97c8c6`); phase 3 is
+open and its first measured refusal is pinned at `c30fe68a0`. Phase 2 closed with
+two stated evidence limits, recorded in
+[#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) and
+[#245](https://github.com/Ephemeral-AI-Lab/layerfs/issues/245): the writer-gate
+property is enforced by construction but has no deterministic overlap check, and
+the 4,097-separated-run shape is exercised at the extent level and at 384 writes
+through the mounted route, not at 4,097 through the route.
+
 ## Owner revision, 2026-09-26: implementation and focused tests only
 
 This revision supersedes every *measured-gate* requirement below for the
@@ -67,6 +79,18 @@ Read `AGENTS.md`, `core/AGENTS.md`, `docs/general/benchmark_rules.md`,
 the documents are source-pinned plans, not proof that later code is unchanged.
 Use an isolated implementation worktree/branch based on the latest compatible
 source, keeping the docs research PR reviewable. Preserve other owners' work.
+
+**Start here.** Phases 1 and 2 are implemented on the lane branch named above,
+and phases 4-6 are untouched. The current assignment is the remaining phase-3
+work: slices 3.1-3.4 under
+[Phase 3 remaining](#phase-3-remaining--ordered-slices), beginning from the
+refusal `core/crates/layerfs-workspace/tests/wide_namespace.rs` already pins. Do
+not re-open phase 2 and do not re-run its suites: its result stands with the two
+evidence limits the lane state records. Phase 3's closure properties are
+unchanged by this revision - path-local binding and tombstone mutation, no
+128-name or 32 KiB admission, an ordered traversal that visits each reached leaf
+once, and one published head - and nothing here licenses a benchmark row in
+their place.
 
 ### Product contract
 
@@ -142,11 +166,58 @@ it; it is not a benchmark row to register.
 | Phase | Implementation focus | Closure: code property and its focused tests |
 | ---: | --- | --- |
 | 1 | Shared #248/#256 page and payload ownership: charged allocation, indexed payload lookup, work-driven reclamation and exact pinned-root custody. | Routine maintenance work does not grow with earlier acquisitions; quota and failure paths keep every owner. **Done** (`b298d175d`, `7e6cac877`): indexed registry, release-list reclamation, `routine_scans`/`lookup_scans` counts, four external tests in `tests/backing_ownership.rs`. |
-| 2 | #248 file extent and frozen Commit path: height transitions, monotone cursors, short writer-gate holds, bounded C1 replay. | The extent tree stays height-uniform at every count and pack shape; a splice's page visits are `O(H + touched)` rather than `O(H per leaf)`; no Commit phase holds the metadata writer gate across a frozen walk or a transfer pull; C1 consumes a replayable stream. **Partially done** (`5a9a9fc5f`): level-preserving rebuild, balanced packing and the exact 4 GiB bound, covered by `tests/pieces_sequence.rs`. **Remaining:** sibling rebalancing so a collapsed child never refuses, monotone cursor advance, gate-hold narrowing, C1 replay confirmation. |
-| 3 | #256 keyed namespace, live pins, prepared stream and C1 ordering. | Path-local binding/tombstone mutation, no 128-name or 32 KiB admission, ordered cursor traversal that visits each reached leaf once, and one published head. Focused tests: create/rename/delete/recreate across a wide directory, a many-identity generation, and an ordered whole-tree walk. |
+| 2 | #248 file extent and frozen Commit path: height transitions, monotone cursors, short writer-gate holds, bounded C1 replay. | The extent tree stays height-uniform at every count and pack shape; a splice's page visits are `O(H + touched)` rather than `O(H per leaf)`; no Commit phase holds the metadata writer gate across a frozen walk or a transfer pull; C1 consumes a replayable stream. **Done** (`5a9a9fc5f`, `0c3e455bd`, `95f8ada8e`, `c3fd065c6`, `74ec83e30`, `11f257ed1`, `e8a97c8c6`): level-preserving rebuild and balanced packing, collapsed-node lifting instead of a refusal, boundary insertions placed in the leaf that carries them (before this, appending to any file of about 125 extents refused), a monotone `O(H + L)` cursor, one walk per Commit phase under a bounded read lease with no writer gate and a `metadata_reads` counter, and a spooled-replay confirmation. Covered by `tests/pieces_sequence.rs` (33 cases, including a fourteen-count boundary sweep), `tests/commit_progress.rs` and `layerfs-server/tests/direct.rs`. **Stated limits:** no deterministic writer-gate overlap check (needs the E/F page-read barrier); 4,097 runs exercised at the extent level and 384 through the mounted route. |
+| 3 | #256 keyed namespace, live pins, prepared stream and C1 ordering. | Path-local binding/tombstone mutation, no 128-name or 32 KiB admission, ordered cursor traversal that visits each reached leaf once, and one published head. Focused tests: create/rename/delete/recreate across a wide directory, a many-identity generation, and an ordered whole-tree walk. **In progress** (`c30fe68a0`: `tests/wide_namespace.rs` pins the first refusal and no product source changes). **Remaining: slices 3.1-3.4 below.** |
 | 4 | #258 stable canonical origin for inherited directory moves. | A base-resident directory moves without a subtree copy-up, descendants resolve through a stable origin, invalid destinations are refused before publication, and old paths disappear. Focused tests: inherited move, move-back, held handles, deep/invalid paths. |
 | 5 | #249 multi-Workspace daemon registry and lightweight concurrent Exec; #219 operator Workspace-count policy. | Per-Workspace Commit slot only, no whole-Exec timer, no fixed Exec count, lease cleanup, and a selected Workspace count of 1/2/3 enforced by the daemon registry. Focused tests: registry admission and refusal, two Workspaces, overlapping Exec, count policy. |
 | 6 | #245 integration: combined file-plus-namespace generation, two sequential Commits against the immediate predecessor, G2 writes retained during G1 construction, exact old/new heads. | Focused tests over the public API; no benchmark artifact required. |
+
+### Phase 3 remaining — ordered slices
+
+The pin is measured, not guessed. `tests/wide_namespace.rs` creates 200 names in
+one directory through the public API and, at `c30fe68a0`, reports
+`create 127: Capacity` with `dirty_inodes: 128`, `revision: 127` and 1.9 MiB
+accounted. That refusal is `State::frontier_bytes`, not a directory page, so the
+slices below start where the refusal actually is. The case is `#[ignore]`d with
+the admission as its reason; it must pass unchanged once 3.1 and 3.2 land.
+
+| Slice | Where | What the code must do | Focused tests that prove it |
+| ---: | --- | --- | --- |
+| 3.1 | `backing/metadata_index.rs`, `overlay/directories.rs` | Add a path-local keyed delete (leaf removal, sibling borrow or merge on underflow, root collapse) and a persistent ordered key cursor that keeps its path across leaves; rewrite `keep_name`/`drop_entry`/`remove_name` as point mutations instead of rebuilding a whole page from a resident `Vec` of at most 128 names; drop `Directory::parse`'s `count > 128` and resident-128 caps while keeping the `u16` count and charging the local delta. | `tests/wide_namespace.rs` (200 names, rename/unlink/recreate) plus counted cases: one name walk visits each reached leaf once, and one rename or unlink rewrites only its path. |
+| 3.2 | `runtime/state.rs` (`frontier_bytes`), `overlay/snapshot.rs`, `commit/reconcile.rs` | Compute the generation frontier charge from the actual dirty/name/row counts and reserve it from the host budget, so a refusal is a real budget refusal rather than `dirty > 128 \|\| names > 128` or a computed prepared size over `METADATA_BYTES` (32 KiB). Keep the prepared-namespace accounting exact so 3.3 can declare it. | A many-identity generation (at least 1,025 created files and names) admitted while the declared budget has room; a declared-budget exhaustion that refuses precisely and publishes nothing. |
+| 3.3 | `commit/directories.rs`, `commit/lower.rs` | Lower the frozen namespace with the 3.1 cursors: one ordered pass per record kind, exact declared totals, no `vector(128 + …)`, no `rows.len() == 128`, no `changes.len() == 128`, and still exactly one filesystem root and one head per generation. | Exact rows for a wide directory; old and new listing oracles; one published head. |
+| 3.4 | `bridge/contract/request.rs`, the server's prepared-changes path, C1's filesystem input | Carry the prepared namespace as an ordered, replayable, quota-charged stream with exact declared totals - the `SaveFile`/`FileInput` spool seam is the model to reuse, not a new file builder - validate it once into a bounded spool, and feed C1's ordered builder from that spool without a resident vector proportional to rows. Keep `expected_head`, one publication and canonical identity for previously accepted inputs. | 129/257/1,025 changed-name or changed-file generations through the public API with a full-tree oracle; a resident cost that does not grow with the row count; one canonical filesystem root. |
+
+Phase 3 closes only with all four slices. If 3.4 cannot be completed, deliver
+3.1-3.3 with the prepared namespace still resident and report that plainly as the
+remaining half; do not call the phase closed. Check `layerfs-content`'s
+filesystem validation limits (the 4,096-binding walk) before claiming a wide
+rebind passes, since a lifted workspace cap can simply move the refusal
+downstream.
+
+Unverified candidates, from source reading only - do **not** treat them as proven
+refusals and do not cite them as such: `RootOwner::write_page`/`write_raw_page`
+refuse at 128 temporary pages per publication, `Arena::reserve_ledger_identity`
+refuses a candidate whose allowance is 64 pages, and the arena's ledger identity
+table is clamped at 1,058 entries. No case in this lane covers a publication that
+writes more than 128 pages or a candidate with a 64-page allowance.
+
+### Environment recipe for the Linux checks
+
+The private backing requires the Linux direct-I/O profile: an ext4-compatible
+filesystem (its magic and 4096-byte blocks) with `TMPDIR` inside that filesystem.
+`overlayfs`, or a `TMPDIR` outside the volume, fails with `Unsupported` or
+`Denied` for reasons unrelated to the code under test; a source tree extracted
+with macOS ownership makes `WorkspaceHost::attach` refuse with `Denied`.
+
+The recipe used for phases 1 and 2: a `rust:1.85.1-bookworm` container holding the
+worktree at `/src` on an ext2/3 volume, source files owned by root, and
+`TMPDIR=/src/tmp`. Mounted FUSE, prepared Store masters and the native Python
+route fixtures are optional here: the focused cases under `core/crates/*/tests/`
+drive `WorkspaceHost` and `Workspace` (and, for the service, `layerfs-server`'s
+in-process `Service` with a real Store) through a fake `OperationDelivery`, so a
+Commit, a wide namespace or a frozen transfer can be exercised without a daemon
+image or a privileged mount.
 
 ### Tests, not benchmarks
 
