@@ -167,6 +167,10 @@ fn routine_reclamation_does_not_rescan_earlier_acquisitions() {
             continue;
         }
         let status = f.status();
+        assert_eq!(
+            status.routine_scans, 0,
+            "routine selection examined an earlier acquisition"
+        );
         let writes = (index + 1 - previous.0) as f64;
         println!(
             "OWNERSHIP_TRACE accepted={} payloads={} writes={} routine_scans={} routine_per_write={:.3} lookup_scans={} allocated_bytes={}",
@@ -180,34 +184,82 @@ fn routine_reclamation_does_not_rescan_earlier_acquisitions() {
         );
         previous = (index + 1, status.routine_scans, status.lookup_scans);
     }
+    let accepted = CHECKPOINTS[CHECKPOINTS.len() - 1];
     let status = f.status();
     assert!(status.accounting_complete && !status.admission_stopped);
-    assert_eq!(status.payloads, CHECKPOINTS[CHECKPOINTS.len() - 1]);
+    assert_eq!(status.payloads, accepted);
     assert_eq!(status.allocated_bytes, status.payloads as u64 * SEGMENT);
     assert_eq!(status.failed_payloads, 0);
     assert_eq!(status.retained_payloads, status.payloads);
+    assert_eq!(
+        status.routine_scans, 0,
+        "one accepted write may not examine any earlier acquisition"
+    );
+    assert_eq!(status.lookup_scans, 0);
     for payload in &held {
         assert_eq!(payload.len(), PAYLOAD);
         verify(payload, 0, PAYLOAD);
         assert!(payload.reader(PAYLOAD..PAYLOAD + 1).is_err());
     }
+    // Work-driven reclamation still releases exactly the owners a trigger
+    // named: five released inputs cost five examinations on the next write, not
+    // a walk over the thousand that stay retained.
+    let released = 5;
+    for _ in 0..released {
+        held.pop();
+    }
+    let extra = f.own(b"x");
+    let status = f.status();
+    assert_eq!(status.payloads, accepted - released + 1);
+    assert_eq!(status.routine_scans, released as u64);
+    verify(&extra, 0, PAYLOAD);
+    drop(extra);
     println!(
-        "OWNERSHIP_RESOURCE retained={} routine_scans={} lookup_scans={}",
-        status.payloads, status.routine_scans, status.lookup_scans
+        "OWNERSHIP_RESOURCE retained={} released={} routine_scans={} lookup_scans={}",
+        status.payloads, released, status.routine_scans, status.lookup_scans
     );
     drop(held);
     let cleanup = f.workspace.reclaim_payloads(deadline()).unwrap();
+    assert_eq!(cleanup.payloads_released, accepted - released + 1);
     let status = f.status();
-    assert_eq!(
-        cleanup.payloads_released,
-        CHECKPOINTS[CHECKPOINTS.len() - 1]
-    );
     assert_eq!(status.payloads, 0);
     // The same counter observes the deliberate scoped walk at teardown, so a
     // zero routine count above is an absence of walks rather than a dead field.
     assert!(status.lookup_scans > 0);
     f.clean();
     pass("routine-reclamation-does-not-rescan-earlier-acquisitions");
+}
+
+#[test]
+fn released_inputs_are_reclaimed_by_the_next_write() {
+    // The churn contract: an input whose last owner is gone is released by the
+    // next accepted write, so a long sequence of accepted-and-dropped inputs
+    // holds one charged record and one 8 KiB segment at a time. Each release
+    // costs exactly one examination; no walk of the registry is involved.
+    let f = Fixture::new(8 * MIB);
+    for index in 0..512u64 {
+        let payload = f.own(&[(index % 251) as u8]);
+        let status = f.status();
+        assert_eq!(status.payloads, 1);
+        assert_eq!(status.allocated_bytes, SEGMENT);
+        assert_eq!(status.routine_scans, index);
+        assert_eq!(status.failed_payloads, 0);
+        drop(payload);
+    }
+    let status = f.status();
+    assert_eq!(status.payloads, 1);
+    let reclaimed = f.workspace.reclaim_payloads(deadline()).unwrap();
+    assert_eq!(
+        (reclaimed.payloads_released, reclaimed.remaining_payloads),
+        (1, 0)
+    );
+    assert_eq!(f.status().payloads, 0);
+    println!(
+        "OWNERSHIP_RESOURCE churn=512 payloads={} routine_scans={} lookup_scans={}",
+        status.payloads, status.routine_scans, status.lookup_scans
+    );
+    f.clean();
+    pass("released-inputs-are-reclaimed-by-the-next-write");
 }
 
 #[test]
@@ -271,18 +323,28 @@ fn reader_and_owner_pins_survive_routine_maintenance() {
     for index in 0..256 {
         churn.push(f.own(&[(index % 251) as u8]));
     }
-    drop(churn);
-    let status = f.status();
-    assert!(
-        status.payloads >= 1,
-        "a pinned or just-released owner cannot vanish from the account"
+    let held = f.status();
+    assert_eq!(held.payloads, 257);
+    assert_eq!(
+        held.routine_scans, 0,
+        "no owner was released while these 257 were live"
     );
-    assert!(status.retained_payloads >= 1);
+    assert_eq!(held.retained_payloads, held.payloads);
+    drop(churn);
+    let extra = f.own(b"z");
+    let status = f.status();
+    assert_eq!(
+        status.routine_scans, 256,
+        "one pass examines exactly the released owners, never the pinned one"
+    );
+    assert_eq!(status.payloads, 2);
     verify(&pinned, 0, PAYLOAD);
+    verify(&extra, 0, PAYLOAD);
     drop(reader);
+    drop(extra);
     drop(pinned);
     println!(
-        "OWNERSHIP_RESOURCE pinned_survived=1 payloads={} routine_scans={} lookup_scans={}",
+        "OWNERSHIP_RESOURCE pinned_survived=1 released=256 payloads={} routine_scans={} lookup_scans={}",
         status.payloads, status.routine_scans, status.lookup_scans
     );
     f.workspace.reclaim_payloads(deadline()).unwrap();

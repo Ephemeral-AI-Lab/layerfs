@@ -1,0 +1,90 @@
+{
+  "case": "post-Phase-1 shared #248/#256 ownership substrate: indexed registry and work-driven reclamation",
+  "status": "PASS",
+  "kind": "count-driven diagnostic plus the existing functional owned-payload route; no timed phase and no cache-qualified measurement",
+  "source": {
+    "first_parent": "026e5acfa40e5ca3f8f82ae729a316395b0641e6",
+    "product_inputs_sha256": "cf34a7a5bbda6bb7b9fe22941c91b220b1ce8db345386cafd7789adafa82fe9e",
+    "branch": "codex/issue245-post-phase1-implementation",
+    "note": "payload_route.py read `git rev-parse HEAD` before this commit existed, so its `source` field names the first parent; the product_inputs_sha256 it recorded is recomputed here over the committed product source and is identical."
+  },
+  "change": {
+    "registry": "State.records is BTreeMap<payload-id, Arc<Record>> in id order; by-id lookup is O(log N) and is what Arena::payload (one frozen Commit piece) and the cleanup frame's payload owner use",
+    "custody_ownership": "RootState.custodies carries (PageRef, payload-id) so releasing custody is an indexed lookup, not a registry walk",
+    "routine_reclamation": "PayloadHost keeps a release list; a record enters it when its last external OwnedPayload reference drops or its custody page is released, and maintain() drains that list instead of searching the registry",
+    "scoped_pass": "reclaim(incarnation) keeps an ordered cursor over the registry and re-derives the aggregate admission flags once per pass, so releasing N owners costs O(N)",
+    "charged_registry": "the registry is charged REGISTRY_ENTRY_BYTES = 32 per entry (map entry plus its share of a node) instead of the old doubling vector-capacity reserve"
+  },
+  "build": {
+    "profile": "release",
+    "locked": true,
+    "toolchain": "cargo 1.85.1 (d73d2caf9 2024-12-31) / rustc 1.85.1 (4eb161250 2025-03-15)",
+    "target": "aarch64-unknown-linux-gnu",
+    "cargo_target_dir": "/src/core/target-linux (worktree-local)",
+    "rustflags": "--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2 (repository-root .cargo/config.toml)",
+    "test_binary": "core/target-linux/release/deps/backing_ownership-c014c0290f8229b0",
+    "test_binary_sha256": "a3f9b0004aa439a3cd1056a50ae592dd0d0317fa31a94777c34554e9e5dab435"
+  },
+  "counts": {
+    "command": "TMPDIR=/src/tmp CARGO_TARGET_DIR=/src/core/target-linux cargo test --release --locked --manifest-path core/Cargo.toml -p layerfs-workspace --test backing_ownership -- --nocapture --test-threads=1",
+    "tests": "4 passed, 0 failed",
+    "wall": "0.47 s test wall",
+    "retained_1024_routine_scans": 0,
+    "retained_1024_routine_scans_before": 523776,
+    "retained_1024_lookup_scans": 0,
+    "released_5_routine_scans": 5,
+    "released_256_behind_one_pinned_reader_routine_scans": 256,
+    "churn_512_routine_scans": 511,
+    "scoped_pass_control": "the deliberate reclaim_payloads pass still reports non-zero lookup_scans and releases exactly the owners it reports"
+  },
+  "route": {
+    "driver": "core/crates/layerfs-workspace/tests/payload_route.py",
+    "mode": "functional-owned-payload",
+    "status": "PASS",
+    "cleanup": "PASS",
+    "checks": {
+      "unaligned-segment-ranges": "PASS",
+      "reader-pins-and-admission": "PASS",
+      "empty-deadline-and-quota": "PASS",
+      "failed-input-retention": "PASS",
+      "native-short-write-retention": "PASS",
+      "corruption-and-explicit-cleanup": "PASS",
+      "local-progress-and-window-headroom": "PASS",
+      "large-stream-and-residency": "PASS",
+      "clean-close": "PASS",
+      "exact-block-quota-reuse": "PASS",
+      "unowned-collider-retention": "PASS",
+      "stale-path-and-filesystem-refusal": "PASS",
+      "native-enospc-retention": "PASS"
+    },
+    "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+    "filesystem": [
+      "ext4   /payload",
+      "ext4   /enospc",
+      "4096 9622"
+    ],
+    "test_binary_sha256": "0ccdb22613f84c764585a05e3ef25b5d5d0c5f1f5260365080d70bc859e4eb23",
+    "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "container_image_id_here": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "product_inputs_sha256": "cf34a7a5bbda6bb7b9fe22941c91b220b1ce8db345386cafd7789adafa82fe9e",
+    "invocation": "docker exec -e LAYERFS_PAYLOAD_TEST_ROOT=/payload -e LAYERFS_PAYLOAD_ENOSPC_ROOT=/enospc -e LAYERFS_PAYLOAD_RESIDENCY_ORACLE=/work/core/crates/layerfs-workspace/tests/payload_residency.py -e LAYERFS_CONSTRUCTION_WORKERS=1 layerfs-payload-70eda7ac58f64e74 /work/core/target-linux/release/deps/payload-a28b5c4d47e7fe91 --ignored --nocapture --test-threads=1",
+    "command_wall_seconds": 1.2975765420123935,
+    "raw": "payload-route/result.json and payload-route/test.stdout"
+  },
+  "checks": {
+    "boundary_guard": "python3 core/tools/check_product_boundary.py: PASS (295 files)",
+    "tool_unit_tests": "python3 -m unittest discover -s core/tools -p 'test_*.py': PASS (9 tests)",
+    "clippy": "cargo clippy --release --locked --manifest-path core/Cargo.toml --workspace --all-targets: no error and no warning in any changed file; the 10 warning sites that remain are pre-existing ones in other test targets",
+    "fmt": "cargo fmt --all -- --check (core manifest): PASS"
+  },
+  "not_run": [
+    "the mounted FUSE/daemon route, Commit, C1/C5 and the Store fixtures (the Linux stage fixture is not prepared in this environment)",
+    "the wider workspace test suite and every #[ignore]d route other than payload_route.py",
+    "any timed, cache-qualified or performance row"
+  ],
+  "limits": [
+    "the counts are one host process lifetime over the in-process public Workspace API, not the mounted route",
+    "the 13-check payload route is the existing functional selection; it is not re-admitted or relabelled here",
+    "no number in this receipt is a speedup, rate, RSS bound or admission PASS"
+  ]
+}

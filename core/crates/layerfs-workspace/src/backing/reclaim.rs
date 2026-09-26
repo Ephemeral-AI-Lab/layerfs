@@ -4,13 +4,18 @@ use super::{
     segments::{self, Window, ALIGN},
 };
 use crate::*;
-use std::{io, sync::Arc, time::Instant};
+use std::{
+    io,
+    ops::Bound::{Excluded, Unbounded},
+    sync::Arc,
+    time::Instant,
+};
 
 impl PayloadHost {
     pub fn has_external_pins(&self, incarnation: [u8; 32]) -> Result<bool, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let mut examined = 0u64;
-        let found = state.records.iter().any(|record| {
+        let found = state.records.values().any(|record| {
             examined += 1;
             record.directory.incarnation == incarnation && Arc::strong_count(record) > 1
         });
@@ -22,7 +27,7 @@ impl PayloadHost {
         let mut examined = 0u64;
         let count = state
             .records
-            .iter()
+            .values()
             .filter(|record| {
                 examined += 1;
                 record.directory.incarnation == incarnation
@@ -41,48 +46,72 @@ impl PayloadHost {
     ) -> Result<CleanupReport, WorkspaceError> {
         self.reclaim_registered(Some(incarnation), deadline)
     }
-    fn select_record(
+    /// The record a trigger named, when it is still reclaimable right now.
+    ///
+    /// Routine reclamation never touches an owner that is still externally
+    /// referenced or still carrying custody, an incomplete or failed owner, or
+    /// an owner with outstanding reservations: those keep their charge until
+    /// the deliberate scoped pass releases them. The reference count is read
+    /// while the registry holds the only clone, so `1` is the whole registry.
+    fn released_record(&self, id: u64) -> Result<Option<Arc<Record>>, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if !state.records.contains_key(&id) {
+            return Ok(None);
+        }
+        state.note_routine(1);
+        let record = state.records.get(&id).ok_or(WorkspaceError::Io)?;
+        if Arc::strong_count(record) != 1 {
+            return Ok(None);
+        }
+        let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if owner.custody.is_some()
+            || !owner.ready
+            || !owner.complete
+            || owner.admission_blocked
+            || owner.failure.is_some()
+            || owner.partial.is_some()
+            || owner.next_cleanup != 0
+            || owner.reserved != 0
+            || owner.completed != record.length
+            || owner.created != segments::segment_count(record.length)
+        {
+            return Ok(None);
+        }
+        Ok(Some(record.clone()))
+    }
+    /// The next scoped-cleanup candidate after `after`, in registry order.
+    ///
+    /// The deliberate pass walks each reached record once instead of restarting
+    /// at the head for every release, so releasing `N` owners costs `O(N)`.
+    fn next_scoped(
         &self,
-        incarnation: Option<[u8; 32]>,
-    ) -> Result<Option<Arc<Record>>, WorkspaceError> {
+        incarnation: [u8; 32],
+        after: u64,
+    ) -> Result<Option<(u64, Arc<Record>)>, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let mut examined = 0u64;
-        let mut selected = None;
-        for record in &state.records {
+        let mut found = None;
+        for (id, record) in state.records.range((Excluded(after), Unbounded)) {
             examined += 1;
-            if Arc::strong_count(record) != 1
-                || incarnation.is_some_and(|id| record.directory.incarnation != id)
+            if Arc::strong_count(record) != 1 || record.directory.incarnation != incarnation {
+                continue;
+            }
+            if record
+                .state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .custody
+                .is_some()
             {
                 continue;
             }
-            let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
-            if owner.custody.is_some() {
-                continue;
-            }
-            if incarnation.is_none()
-                && (!owner.ready
-                    || !owner.complete
-                    || owner.admission_blocked
-                    || owner.failure.is_some()
-                    || owner.partial.is_some()
-                    || owner.next_cleanup != 0
-                    || owner.reserved != 0
-                    || owner.completed != record.length
-                    || owner.created != segments::segment_count(record.length))
-            {
-                continue;
-            }
-            selected = Some(record.clone());
+            found = Some((*id, record.clone()));
             break;
         }
-        if incarnation.is_none() {
-            state.note_routine(examined);
-        } else {
-            state.note_lookup(examined);
-        }
-        Ok(selected)
+        state.note_lookup(examined);
+        Ok(found)
     }
-    // None selects healthy consumer-wide maintenance; Some is deliberate scoped cleanup.
+    // None drains the recorded release list; Some is deliberate scoped cleanup.
     fn reclaim_registered(
         self: &Arc<Self>,
         incarnation: Option<[u8; 32]>,
@@ -91,35 +120,28 @@ impl PayloadHost {
         clock(deadline)
             .map_err(|error| super::payload::bare_failure(BackingPhase::Cleanup, error.kind()))?;
         let routine = incarnation.is_none();
-        let mut selected = if routine {
-            self.select_record(None)?
+        let released = if routine {
+            self.take_released()
         } else {
-            None
+            Vec::new()
         };
-        if routine && selected.is_none() {
+        if routine && released.is_empty() {
             return Ok(CleanupReport {
-                remaining_payloads: self
-                    .state
-                    .lock()
-                    .map_err(|_| WorkspaceError::Io)?
-                    .records
-                    .len(),
+                remaining_payloads: self.registry_len()?,
                 ..CleanupReport::default()
             });
         }
         let mut lease = match self.window(3, 4) {
             Ok(lease) => lease,
             // Routine reclamation is opportunistic. A live builder owns this
-            // window; keep the charged record for a later pass rather than
+            // window; keep the charged records for a later pass rather than
             // rejecting the mounted mutation that asked for maintenance.
             Err(WorkspaceError::Busy) if routine => {
+                for id in released {
+                    self.note_released(id);
+                }
                 return Ok(CleanupReport {
-                    remaining_payloads: self
-                        .state
-                        .lock()
-                        .map_err(|_| WorkspaceError::Io)?
-                        .records
-                        .len(),
+                    remaining_payloads: self.registry_len()?,
                     ..CleanupReport::default()
                 });
             }
@@ -127,29 +149,36 @@ impl PayloadHost {
         };
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = CleanupReport::default();
-        loop {
-            let record = match selected.take() {
-                Some(record) => Some(record),
-                None => self.select_record(incarnation)?,
-            };
-            let Some(record) = record else {
-                break;
-            };
-            if let Err(error) = self.reclaim_record(&record, window, deadline, &mut report) {
-                return Err(self.failure(&record, BackingPhase::Cleanup, &error));
+        if routine {
+            for id in released {
+                let Some(record) = self.released_record(id)? else {
+                    continue;
+                };
+                if let Err(error) = self.reclaim_record(&record, window, deadline, &mut report) {
+                    return Err(self.failure(&record, BackingPhase::Cleanup, &error));
+                }
+                self.unregister(record.id)?;
+                report.payloads_released += 1;
             }
-            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-            state.records.retain(|current| current.id != record.id);
-            // Excluded failed owners and metadata quarantine remain in this account.
-            self.refresh(&mut state)?;
-            report.payloads_released += 1;
+        } else {
+            let incarnation = incarnation.ok_or(WorkspaceError::Io)?;
+            let mut cursor = 0u64;
+            while let Some((id, record)) = self.next_scoped(incarnation, cursor)? {
+                cursor = id;
+                if let Err(error) = self.reclaim_record(&record, window, deadline, &mut report) {
+                    return Err(self.failure(&record, BackingPhase::Cleanup, &error));
+                }
+                self.unregister(record.id)?;
+                report.payloads_released += 1;
+            }
         }
-        report.remaining_payloads = self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .records
-            .len();
+        // The aggregate admission flags are re-derived once per pass, not once
+        // per released owner: the loop above must stay linear in its releases.
+        {
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            self.refresh(&mut state)?;
+        }
+        report.remaining_payloads = self.registry_len()?;
         Ok(report)
     }
     fn reclaim_record(

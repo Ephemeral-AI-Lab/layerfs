@@ -7,6 +7,7 @@ use super::{
 use crate::*;
 use layerfs_bridge::contract::Source;
 use std::{
+    collections::{BTreeMap, VecDeque},
     fs, io,
     mem::size_of,
     ops::Range,
@@ -18,18 +19,32 @@ use std::{
     time::Instant,
 };
 
+/// One registry entry: the `u64` payload id, the `Arc` value and this entry's
+/// share of a `BTreeMap` node. The map allocates its nodes itself, so the
+/// retained memory is charged at this fixed worst-case entry size instead of
+/// the exact node layout. A candidate queue entry is one further id, covered by
+/// the 64 bytes of slack the per-record charge already holds.
+const REGISTRY_ENTRY_BYTES: usize = 32;
 pub struct PayloadHost {
     pub budget: Arc<Budget>,
     pub quota: u64,
     pub common: Arc<Directory>,
     pub directories: Arc<AtomicUsize>,
     pub state: Mutex<State>,
+    /// Payload ids whose last external owner just went away or whose custody
+    /// page was just released. This is the whole routine-reclamation work list:
+    /// `maintain` drains it instead of walking the registry, so accepting one
+    /// more write never costs work proportional to earlier acquisitions.
+    candidates: Mutex<VecDeque<u64>>,
     windows: Mutex<[Option<Box<Window>>; 4]>,
     _windows_charge: Charge,
     _charge: Charge,
 }
 pub struct State {
-    pub records: Vec<Arc<Record>>,
+    /// Live ownership records, indexed by monotonically increasing payload id.
+    /// Iteration is insertion order, which is what the deliberate scoped pass
+    /// and the status aggregates rely on. A by-id lookup is `O(log N)`.
+    pub records: BTreeMap<u64, Arc<Record>>,
     /// Ownership records visited by consumer-wide routine reclamation. This is
     /// ordinary product telemetry: it is the quantity that must not grow with
     /// the number of earlier acquisitions when one more write is accepted.
@@ -53,6 +68,11 @@ impl State {
     }
     pub(crate) fn note_lookup(&mut self, count: u64) {
         self.lookup_scans = self.lookup_scans.saturating_add(count);
+    }
+    /// Charges the indexed registry for the entries it now holds.
+    pub(crate) fn charge_registry(&mut self, entries: usize) -> Result<(), WorkspaceError> {
+        self.capacity_charge
+            .resize(REGISTRY_ENTRY_BYTES.saturating_mul(entries))
     }
 }
 pub struct Record {
@@ -87,6 +107,18 @@ pub struct Partial {
 pub struct OwnedPayload {
     pub(crate) host: Arc<PayloadHost>,
     pub(crate) record: Arc<Record>,
+}
+impl Drop for OwnedPayload {
+    fn drop(&mut self) {
+        // The registry holds one reference to a live record, so exactly two
+        // means this drop leaves the registry as the only owner: the moment
+        // routine reclamation may consider it. A retained reader, commit
+        // source or clone holds its own reference and enqueues the record when
+        // its own last one goes away.
+        if Arc::strong_count(&self.record) == 2 {
+            self.host.note_released(self.record.id);
+        }
+    }
 }
 pub struct WindowLease {
     host: Arc<PayloadHost>,
@@ -163,8 +195,9 @@ impl PayloadHost {
             quota,
             common,
             directories: Arc::new(AtomicUsize::new(0)),
+            candidates: Mutex::new(VecDeque::new()),
             state: Mutex::new(State {
-                records: Vec::new(),
+                records: BTreeMap::new(),
                 routine_scans: 0,
                 lookup_scans: 0,
                 capacity_charge: budget.reserve(0)?,
@@ -182,6 +215,55 @@ impl PayloadHost {
             _windows_charge: windows_charge,
             _charge: charge,
         }))
+    }
+    /// The record registered under `id`, if it is still registered.
+    pub(crate) fn registered(&self, id: u64) -> Result<Option<Arc<Record>>, WorkspaceError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .records
+            .get(&id)
+            .cloned())
+    }
+    /// The number of ownership records the registry currently holds.
+    pub(crate) fn registry_len(&self) -> Result<usize, WorkspaceError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .records
+            .len())
+    }
+    /// Drops one released record from the registry. The caller has already
+    /// released its segments and bytes, and re-derives the aggregate admission
+    /// flags once its pass finishes rather than once per released owner.
+    pub(crate) fn unregister(&self, id: u64) -> Result<(), WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.records.remove(&id).is_none() {
+            return Ok(());
+        }
+        let entries = state.records.len();
+        state.charge_registry(entries)
+    }
+    /// Names one record a trigger has just released for routine reclamation.
+    ///
+    /// A candidate that is not eligible when it is drained is simply dropped
+    /// from the queue: both transitions into routine eligibility - the last
+    /// external owner going away and the custody page being released - are
+    /// themselves triggers, so the record is re-enqueued at that point rather
+    /// than found by a walk.
+    pub(crate) fn note_released(&self, id: u64) {
+        if let Ok(mut queue) = self.candidates.lock() {
+            queue.push_back(id);
+        }
+    }
+    /// Takes the current release list, leaving the queue empty.
+    pub(crate) fn take_released(&self) -> Vec<u64> {
+        match self.candidates.lock() {
+            Ok(mut queue) => queue.drain(..).collect(),
+            Err(_) => Vec::new(),
+        }
     }
     pub fn directory(
         &self,
@@ -213,7 +295,7 @@ impl PayloadHost {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let mut failed = 0;
         let mut retained = 0;
-        for record in &state.records {
+        for record in state.records.values() {
             let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
             failed += usize::from(owner.failure.is_some());
             retained += usize::from(Arc::strong_count(record) > 1 || owner.custody.is_some());
@@ -260,7 +342,7 @@ impl PayloadHost {
                 .allocated
                 .checked_add(state.reserved)
                 .is_none_or(|used| used > self.quota);
-        for record in &state.records {
+        for record in state.records.values() {
             let owner = record.state.lock().map_err(|_| WorkspaceError::Io)?;
             complete &= owner.complete;
             stopped |= owner.admission_blocked;
@@ -324,26 +406,8 @@ impl PayloadHost {
                 io::ErrorKind::StorageFull,
             ));
         }
-        if state.records.len() == state.records.capacity() {
-            let capacity = state
-                .records
-                .capacity()
-                .max(1)
-                .checked_mul(2)
-                .ok_or(WorkspaceError::Capacity)?;
-            let bytes = capacity
-                .checked_mul(size_of::<Arc<Record>>())
-                .ok_or(WorkspaceError::Capacity)?;
-            let mut capacity_charge = self.budget.reserve(bytes)?;
-            let mut records = Vec::new();
-            records
-                .try_reserve_exact(capacity)
-                .map_err(|_| WorkspaceError::Capacity)?;
-            capacity_charge.resize(records.capacity() * size_of::<Arc<Record>>())?;
-            records.append(&mut state.records);
-            drop(std::mem::replace(&mut state.records, records));
-            state.capacity_charge = capacity_charge;
-        }
+        let entries = state.records.len() + 1;
+        state.charge_registry(entries)?;
         let id = state.next;
         state.next = id.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let record = Arc::new(Record {
@@ -366,7 +430,7 @@ impl PayloadHost {
             _charge: charge,
         });
         state.reserved += bytes;
-        state.records.push(record.clone());
+        state.records.insert(id, record.clone());
         Ok(record)
     }
     fn observe(&self, record: &Record, amount: u64) -> io::Result<()> {

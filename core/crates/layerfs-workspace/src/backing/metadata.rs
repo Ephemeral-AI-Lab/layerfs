@@ -74,7 +74,9 @@ pub struct RootState {
     pub ledger_table: Option<LedgerTable>,
     pub completion_generation: Option<u64>,
     pub pending: Option<Pending>,
-    pub custodies: Vec<PageRef>,
+    /// The candidate's one custody page with the payload it names, so releasing
+    /// it is an indexed lookup rather than a walk of the ownership registry.
+    pub custodies: Vec<(PageRef, u64)>,
     pub cleanup: Vec<super::ownership::CleanupFrame>,
     pub cleanup_failed: bool,
 }
@@ -806,7 +808,7 @@ impl RootOwner {
                     .map_err(|_| WorkspaceError::Io)?
                     .custodies
                     .last()
-                    .copied()
+                    .map(|(page, _)| *page)
             };
             let Some(page) = page else { break };
             if self.arena.change_refs(page, -1, window, deadline)? == 0 {

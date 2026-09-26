@@ -84,16 +84,45 @@ much routine private work one accepted mutation pays, and a count never gates an
 operation. They are not timers, RSS, Store reads or a performance claim, and a
 lifetime total is never a per-phase number.
 
-The counts exist because the quantity that must not grow is work, not wall time:
-with `N` earlier retained acquisitions the routine selection walked the whole
-registry before the next input was admitted, so `N` accepted writes paid
-`N(N+1)/2` record examinations. The measured baseline for 1,024 retained
-one-byte inputs through the public `Workspace::own_payload` route is 523,776
-routine examinations and zero by-id examinations
-(`OWNERSHIP_TRACE routine_per_write` rising 0.0, 4.0, 35.5, 159.5, 383.5, 767.5
-at 1, 8, 64, 256, 512 and 1,024 accepted writes). This section records the
-instrumented baseline only; the indexed registry and work-driven reclamation
-that make `routine_scans` independent of `N` are their own later change.
+The counts exist because the quantity that must not grow is work, not wall time.
+The instrumented baseline for 1,024 retained one-byte inputs through the public
+`Workspace::own_payload` route is 523,776 routine examinations and zero by-id
+examinations, with `OWNERSHIP_TRACE routine_per_write` rising 0.0, 4.0, 35.5,
+159.5, 383.5 and 767.5 at 1, 8, 64, 256, 512 and 1,024 accepted writes: routine
+selection walked the whole registry from its head before every admission, so `N`
+retained acquisitions made the next write pay `N` and the run pay `N(N+1)/2`.
+
+### Indexed registry and work-driven reclamation (2026-09-26, #248/#256 phase 1)
+
+Source pin: `f74dbe77da12fa533587be8a578375bce3f19373` plus the change committed
+with this note. The ownership registry is now `BTreeMap<payload-id, Arc<Record>>`
+in id order, so a by-id lookup is `O(log N)` and iteration is still insertion
+order. The two by-id lookups that a Commit and a custody release perform
+(`Arena::payload`, the cleanup frame's payload owner) use it, and a candidate's
+one custody page is stored with the payload id it names
+(`RootState.custodies: Vec<(PageRef, payload-id)>`) so releasing custody is also
+an indexed lookup rather than a registry walk. The deliberate scoped pass keeps
+its ordered cursor, so releasing `N` owners costs `O(N)` instead of restarting
+at the head for each one, and the aggregate admission flags are re-derived once
+per pass rather than once per released owner.
+
+Routine reclamation no longer searches for work. A record enters one release
+list at the exact moment it can become garbage - the last external
+`OwnedPayload` reference dropping, or its custody page being released - and
+`maintain` drains that list instead of walking the registry. A candidate that is
+not eligible when it is drained is dropped from the list rather than retried,
+because both transitions into eligibility are themselves triggers. A pinned
+reader, an in-flight commit source, an incomplete or failed owner and an owner
+with outstanding reservations keep their charge until the deliberate scoped pass
+releases them. The registry's retained memory is charged at
+`REGISTRY_ENTRY_BYTES = 32` per entry, the map entry plus its share of a node.
+
+The same workload now reports zero routine examinations for all 1,024 accepted
+writes, and releasing five of them costs exactly five examinations on the next
+write. What remains unbounded is only the deliberate `reclaim_payloads`/
+`close_clean` pass, which is charged as `lookup_scans` and is never on an
+acceptance path. This is a work-count description, not a latency, RSS or Store
+claim; the count receipt records the identities and limits.
 
 ## Disk equation and format
 

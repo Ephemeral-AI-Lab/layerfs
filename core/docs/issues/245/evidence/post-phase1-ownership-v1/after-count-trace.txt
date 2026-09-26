@@ -1,0 +1,25 @@
+   Compiling layerfs-workspace v0.1.6 (/src/core/crates/layerfs-workspace)
+    Finished `release` profile [optimized] target(s) in 0.53s
+     Running tests/backing_ownership.rs (core/target-linux/release/deps/backing_ownership-c014c0290f8229b0)
+
+running 4 tests
+test reader_and_owner_pins_survive_routine_maintenance ... OWNERSHIP_RESOURCE pinned_survived=1 released=256 payloads=2 routine_scans=256 lookup_scans=0
+OWNERSHIP_CHECK reader-and-owner-pins-survive-routine-maintenance PASS
+ok
+test refused_admission_preserves_its_existing_owners ... OWNERSHIP_CHECK refused-admission-preserves-its-existing-owners PASS
+ok
+test released_inputs_are_reclaimed_by_the_next_write ... OWNERSHIP_RESOURCE churn=512 payloads=1 routine_scans=511 lookup_scans=0
+OWNERSHIP_CHECK released-inputs-are-reclaimed-by-the-next-write PASS
+ok
+test routine_reclamation_does_not_rescan_earlier_acquisitions ... OWNERSHIP_TRACE accepted=1 payloads=1 writes=1 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=8192
+OWNERSHIP_TRACE accepted=8 payloads=8 writes=7 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=65536
+OWNERSHIP_TRACE accepted=64 payloads=64 writes=56 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=524288
+OWNERSHIP_TRACE accepted=256 payloads=256 writes=192 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=2097152
+OWNERSHIP_TRACE accepted=512 payloads=512 writes=256 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=4194304
+OWNERSHIP_TRACE accepted=1024 payloads=1024 writes=512 routine_scans=0 routine_per_write=0.000 lookup_scans=0 allocated_bytes=8388608
+OWNERSHIP_RESOURCE retained=1020 released=5 routine_scans=5 lookup_scans=0
+OWNERSHIP_CHECK routine-reclamation-does-not-rescan-earlier-acquisitions PASS
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+

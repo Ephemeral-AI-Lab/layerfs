@@ -563,7 +563,7 @@ impl Arena {
             .custody = Some((self.id, r));
         {
             let mut s = candidate.state.lock().map_err(|_| WorkspaceError::Io)?;
-            s.custodies.push(r);
+            s.custodies.push((r, payload.record.id));
         }
         self.set_owner(
             r,
@@ -587,18 +587,13 @@ impl Arena {
     }
     pub fn payload(&self, id: u64, custody: PageRef) -> Result<OwnedPayload, WorkspaceError> {
         let host = self.host()?;
-        let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-        let mut examined = 0u64;
-        let record = state
-            .records
-            .iter()
-            .find(|r| {
-                examined += 1;
-                r.id == id && r.directory.incarnation == self.directory.incarnation
-            })
-            .cloned();
-        state.note_lookup(examined);
-        let record = record.ok_or(WorkspaceError::Io)?;
+        // Indexed by payload id: a frozen Commit walks one piece at a time and
+        // must not rescan earlier acquisitions for each of them.
+        let record = host
+            .payloads
+            .registered(id)?
+            .filter(|record| record.directory.incarnation == self.directory.incarnation)
+            .ok_or(WorkspaceError::Io)?;
         if record.state.lock().map_err(|_| WorkspaceError::Io)?.custody != Some((self.id, custody))
         {
             return Err(WorkspaceError::Io);

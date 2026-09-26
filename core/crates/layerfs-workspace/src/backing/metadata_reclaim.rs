@@ -30,25 +30,22 @@ impl RootOwner {
         if frame.phase == 0 {
             if owner.role == 2 {
                 let host = arena.host()?;
-                let mut state = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-                let mut examined = 0u64;
-                let payload = state
-                    .records
-                    .iter()
-                    .find(|p| {
-                        examined += 1;
-                        p.id == owner.payload
-                    })
-                    .cloned();
-                state.note_lookup(examined);
-                drop(state);
-                let payload = payload.ok_or(WorkspaceError::Io)?;
+                let payload = host
+                    .payloads
+                    .registered(owner.payload)?
+                    .ok_or(WorkspaceError::Io)?;
                 let mut record = payload.state.lock().map_err(|_| WorkspaceError::Io)?;
                 if record.custody != Some((arena.id, frame.page)) {
                     return Err(WorkspaceError::Io);
                 }
                 record.custody = None;
                 drop(record);
+                // The custody page was this payload's last live reference. When
+                // no operator still holds it, routine reclamation may now take
+                // it: name it instead of leaving it for a later registry walk.
+                if Arc::strong_count(&payload) == 2 {
+                    host.payloads.note_released(payload.id);
+                }
                 self.state
                     .lock()
                     .map_err(|_| WorkspaceError::Io)?
@@ -283,35 +280,39 @@ impl RootOwner {
                     .map_err(|_| WorkspaceError::Io)?
                     .custodies
                     .last()
-                    .copied()
+                    .map(|(page, _)| *page)
                     == Some(r)
             };
             if prospective {
                 // No uncertain write is eligible for this path. The owned marker
                 // is released only after explicit cleanup observes that condition.
                 let host = self.arena.host()?;
-                let mut records = host.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-                let mut examined = 0u64;
-                let record = records
-                    .records
-                    .iter()
-                    .find(|record| {
-                        examined += 1;
-                        record
-                            .state
-                            .lock()
-                            .is_ok_and(|state| state.custody == Some((self.arena.id, r)))
-                    })
-                    .cloned()
+                let payload = self
+                    .state
+                    .lock()
+                    .map_err(|_| WorkspaceError::Io)?
+                    .custodies
+                    .last()
+                    .map(|(_, payload)| *payload)
                     .ok_or(WorkspaceError::Io)?;
-                records.note_lookup(examined);
-                drop(records);
+                let record = host
+                    .payloads
+                    .registered(payload)?
+                    .ok_or(WorkspaceError::Io)?;
+                if record.state.lock().map_err(|_| WorkspaceError::Io)?.custody
+                    != Some((self.arena.id, r))
+                {
+                    return Err(WorkspaceError::Io);
+                }
                 record.state.lock().map_err(|_| WorkspaceError::Io)?.custody = None;
                 self.state
                     .lock()
                     .map_err(|_| WorkspaceError::Io)?
                     .custodies
                     .pop();
+                if Arc::strong_count(&record) == 2 {
+                    host.payloads.note_released(record.id);
+                }
             }
             let mut owner = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -366,7 +367,7 @@ impl RootOwner {
                 if let Some(r) = s.temporary.last() {
                     (*r, 0)
                 } else if let Some(r) = s.custodies.last() {
-                    (*r, 1)
+                    (r.0, 1)
                 } else {
                     (s.root, 2)
                 }
