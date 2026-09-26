@@ -6,6 +6,8 @@
 > E-1 concurrency and retry update: source parent `6bb143e91`; this change
 > documents the implementation committed with it. Earlier receipts retain their
 > original source identities and results.
+> Builder I/O overlap update: prior product source `f9de81520`; this change documents
+> the implementation committed with it. Earlier receipts keep their identities.
 > This extends [Stage](16-stage-capture.md) through the existing C5 CommitStaged
 > route. Native SDK proofs below are not mounted-write or performance results.
 
@@ -94,11 +96,12 @@ writer moved the frontier, reconciliation rebuilds from the newer root within
 the same deadline. Intermediate trees stay temporary; only the converged tree
 is sealed. Mounted writes and reads wait for a current gate holder up to their
 deadline instead of exposing a transient `Busy`.
-Routine metadata maintenance also waits for the builder's shared backing I/O
-window before it takes the writer gate. This keeps a mounted write from seeing
-`Busy` solely because reconciliation is reading its pinned frontier, without
-holding the gate while it waits for that window. The deadline and window count
-are unchanged (source update after `d6bc594f2`).
+Routine metadata and payload maintenance defer eligible cleanup while the
+builder owns their shared backing I/O window. The still-charged owners remain
+eligible for a later pass; explicit metadata reclaim keeps its deadline-bounded
+wait, and explicit payload reclaim keeps its contention result. A mounted write
+can therefore publish during the build without mistaking routine cleanup for
+required foreground work. The deadline and window count are unchanged.
 
 The new overlay, Branch context, canonical base, baseline epoch and revision are
 installed together under the final gate and state lock. Only eligible old roots are

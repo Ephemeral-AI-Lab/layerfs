@@ -466,12 +466,18 @@ impl MetadataHost {
                 ..MetadataCleanupReport::default()
             });
         }
-        // Reconciliation builds without the writer gate but owns this I/O
-        // window. Wait for it before taking the gate, so mounted mutation
-        // maintenance cannot surface a transient Busy or block its release.
+        // Routine cleanup can stay charged for a later pass while the
+        // successor builder owns the shared I/O window. Explicit reclaim
+        // still waits to its deadline instead of pretending cleanup completed.
         let mut lease = loop {
             match self.payloads.window(3, 4) {
                 Ok(lease) => break lease,
+                Err(WorkspaceError::Busy) if routine => {
+                    return Ok(MetadataCleanupReport {
+                        remaining_roots: self.roots.lock().map_err(|_| WorkspaceError::Io)?.len(),
+                        ..MetadataCleanupReport::default()
+                    });
+                }
                 Err(WorkspaceError::Busy) if Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_micros(200));
                 }

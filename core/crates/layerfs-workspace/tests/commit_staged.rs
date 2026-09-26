@@ -14,6 +14,110 @@ mod linux {
         time::{Duration, Instant},
     };
 
+    fn page_read_listener() -> std::os::fd::OwnedFd {
+        use nix::libc;
+        use std::os::fd::FromRawFd;
+        let arch = match std::env::consts::ARCH {
+            "aarch64" => 0xc00000b7,
+            "x86_64" => 0xc000003e,
+            other => panic!("unsupported syscall architecture {other}"),
+        };
+        let stmt = |code, k| libc::sock_filter {
+            code,
+            jt: 0,
+            jf: 0,
+            k,
+        };
+        let code = [
+            stmt(0x20, 4),
+            libc::sock_filter {
+                code: 0x15,
+                jt: 0,
+                jf: 3,
+                k: arch,
+            },
+            stmt(0x20, 0),
+            libc::sock_filter {
+                code: 0x15,
+                jt: 0,
+                jf: 1,
+                k: libc::SYS_pread64 as u32,
+            },
+            stmt(0x06, libc::SECCOMP_RET_USER_NOTIF),
+            stmt(0x06, libc::SECCOMP_RET_ALLOW),
+        ];
+        let program = libc::sock_fprog {
+            len: code.len() as u16,
+            filter: code.as_ptr() as *mut _,
+        };
+        unsafe {
+            assert_eq!(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+            let fd = libc::syscall(
+                libc::SYS_seccomp,
+                libc::SECCOMP_SET_MODE_FILTER,
+                libc::SECCOMP_FILTER_FLAG_NEW_LISTENER,
+                &program,
+            );
+            assert!(fd >= 0, "{}", std::io::Error::last_os_error());
+            std::os::fd::OwnedFd::from_raw_fd(fd as i32)
+        }
+    }
+
+    fn next_page_read(
+        listener: &std::os::fd::OwnedFd,
+        wait: Duration,
+    ) -> Option<nix::libc::seccomp_notif> {
+        use nix::libc;
+        use std::os::fd::AsRawFd;
+        let mut poll = libc::pollfd {
+            fd: listener.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let ready = unsafe { libc::poll(&mut poll, 1, wait.as_millis() as i32) };
+        assert!(ready >= 0, "{}", std::io::Error::last_os_error());
+        if ready == 0 {
+            return None;
+        }
+        if poll.revents & libc::POLLIN == 0 && poll.revents & libc::POLLHUP != 0 {
+            return None;
+        }
+        assert_ne!(poll.revents & libc::POLLIN, 0);
+        let mut event = unsafe { std::mem::zeroed() };
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    listener.as_raw_fd(),
+                    libc::SECCOMP_IOCTL_NOTIF_RECV,
+                    &mut event,
+                )
+            },
+            0
+        );
+        Some(event)
+    }
+
+    fn release_page_read(listener: &std::os::fd::OwnedFd, id: u64) {
+        use nix::libc;
+        use std::os::fd::AsRawFd;
+        let mut response = libc::seccomp_notif_resp {
+            id,
+            val: 0,
+            error: 0,
+            flags: libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE as u32,
+        };
+        assert_eq!(
+            unsafe {
+                libc::ioctl(
+                    listener.as_raw_fd(),
+                    libc::SECCOMP_IOCTL_NOTIF_SEND,
+                    &mut response,
+                )
+            },
+            0
+        );
+    }
+
     fn check(id: &str) {
         println!("COMMIT_CHECK {id} PASS");
     }
@@ -352,6 +456,142 @@ mod linux {
         assert_eq!(f.native.bytes(first_file.1, data.2, 1), b"A");
         mount.unmount(deadline()).unwrap();
         check("mounted-three-generation-convergence-keeps-old-heads-and-ordered-writes");
+    }
+
+    #[test]
+    #[ignore = "requires mounted FUSE and a Linux syscall barrier on the successor builder"]
+    fn commit_mounted_build_overlap() {
+        use std::sync::mpsc;
+        std::env::set_var("LAYERFS_FUSE_ERROR_DIAGNOSTIC", "1");
+        let f = Fixture::new(Gate::CommitReply);
+        let before = snapshot(&f);
+        let data = attr(f.native.attributes(before.effective_root, b"data.bin"));
+        let old_tail = f.native.bytes(data.1, data.2 - 1, 1);
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().to_path_buf();
+        let append = |letter: &str| {
+            Command::new("/bin/sh")
+                .arg("-c")
+                .arg(format!("set -eu; printf {letter} >> data.bin"))
+                .current_dir(&path)
+                .output()
+                .unwrap()
+        };
+        assert!(append("A").status.success());
+        let stage_a = f.workspace.stage(deadline()).unwrap();
+        let (send, receive) = mpsc::sync_channel(1);
+        let ws = f.workspace.clone();
+        let selected = stage_a.clone();
+        let committing = std::thread::spawn(move || {
+            let listener = page_read_listener();
+            let task = unsafe { nix::libc::syscall(nix::libc::SYS_gettid) as u32 };
+            send.send((listener, task)).unwrap();
+            ws.commit_staged(&selected, deadline())
+        });
+        let (listener, task) = receive.recv_timeout(Duration::from_secs(5)).unwrap();
+        let c5_until = Instant::now() + Duration::from_secs(8);
+        while !f.native.observations.lock().unwrap().commit_entered {
+            if let Some(event) = next_page_read(&listener, Duration::from_millis(20)) {
+                assert_eq!(event.pid, task);
+                release_page_read(&listener, event.id);
+            }
+            assert!(Instant::now() < c5_until, "C5 reply gate was not reached");
+        }
+        assert!(append("X").status.success());
+        let pre_b = f.workspace.status().unwrap();
+        f.native.release_commit();
+        let io_until = Instant::now() + Duration::from_secs(8);
+        let private = std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap())
+            .join("private-backing/stage");
+        let held = loop {
+            let event = next_page_read(&listener, Duration::from_millis(20));
+            if let Some(event) = event {
+                assert_eq!(event.pid, task);
+                let fd = event.data.args[0] as i32;
+                let target = std::fs::read_link(format!("/proc/self/task/{task}/fd/{fd}")).unwrap();
+                let phase = f
+                    .workspace
+                    .status()
+                    .unwrap()
+                    .submission
+                    .unwrap()
+                    .commit
+                    .unwrap()
+                    .phase;
+                if target.starts_with(&private)
+                    && target
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("m-page-")
+                    && phase == CommitPhase::Reconcile
+                {
+                    println!(
+                        "COMMIT_BUILDER_IO tid={task} fd={fd} path={} syscall=pread64",
+                        target.display()
+                    );
+                    break event;
+                }
+                release_page_read(&listener, event.id);
+            }
+            assert!(
+                Instant::now() < io_until,
+                "successor page read was not observed"
+            );
+        };
+        assert_eq!(held.data.nr as i64, nix::libc::SYS_pread64);
+        let output = append("B");
+        let during = f.workspace.status().unwrap();
+        println!(
+            "COMMIT_BUILDER_B before={} after={} accepted={} stderr={}",
+            pre_b.revision,
+            during.revision,
+            output.status.success(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        release_page_read(&listener, held.id);
+        while !committing.is_finished() {
+            if let Some(event) = next_page_read(&listener, Duration::from_millis(20)) {
+                assert_eq!(event.pid, task);
+                release_page_read(&listener, event.id);
+            }
+        }
+        assert!(output.status.success());
+        assert_eq!(during.revision, pre_b.revision + 1);
+        assert_eq!(
+            during.submission.unwrap().commit.unwrap().phase,
+            CommitPhase::Reconcile
+        );
+        let first = committing.join().unwrap().unwrap();
+        assert_eq!(first.revision, during.revision + 1);
+        let first_root = committed(&f, &stage_a, &first).root;
+        let first_file = attr(f.native.attributes(first_root, b"data.bin"));
+        assert_eq!(first_file.2, data.2 + 1);
+        assert_eq!(f.native.bytes(first_file.1, data.2, 1), b"A");
+        let live = File::open(path.join("data.bin")).unwrap();
+        let mut bytes = [0; 3];
+        assert_eq!(live.read_at(&mut bytes, data.2).unwrap(), 3);
+        assert_eq!(&bytes, b"AXB");
+        drop(live);
+        let stage_b = f.workspace.stage(deadline()).unwrap();
+        let second = f.workspace.commit_staged(&stage_b, deadline()).unwrap();
+        let second_root = committed(&f, &stage_b, &second).root;
+        let second_file = attr(f.native.attributes(second_root, b"data.bin"));
+        assert_eq!(second_file.2, data.2 + 3);
+        assert_eq!(f.native.bytes(second_file.1, data.2, 3), b"AXB");
+        let live = File::open(path.join("data.bin")).unwrap();
+        assert_eq!(live.read_at(&mut bytes, data.2).unwrap(), 3);
+        assert_eq!(&bytes, b"AXB");
+        drop(live);
+        assert_eq!(
+            attr(f.native.attributes(first_root, b"data.bin")).2,
+            data.2 + 1
+        );
+        let old_head = attr(f.native.attributes(before.effective_root, b"data.bin"));
+        assert_eq!(old_head.2, data.2);
+        assert_eq!(f.native.bytes(old_head.1, data.2 - 1, 1), old_tail);
+        mount.unmount(deadline()).unwrap();
+        check("mounted-B-accepted-during-real-successor-page-read-and-old-heads-stay-exact");
     }
 
     #[test]

@@ -95,7 +95,24 @@ impl PayloadHost {
                 ..CleanupReport::default()
             });
         }
-        let mut lease = self.window(3, 4)?;
+        let mut lease = match self.window(3, 4) {
+            Ok(lease) => lease,
+            // Routine reclamation is opportunistic. A live builder owns this
+            // window; keep the charged record for a later pass rather than
+            // rejecting the mounted mutation that asked for maintenance.
+            Err(WorkspaceError::Busy) if routine => {
+                return Ok(CleanupReport {
+                    remaining_payloads: self
+                        .state
+                        .lock()
+                        .map_err(|_| WorkspaceError::Io)?
+                        .records
+                        .len(),
+                    ..CleanupReport::default()
+                });
+            }
+            Err(error) => return Err(error),
+        };
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         let mut report = CleanupReport::default();
         loop {
