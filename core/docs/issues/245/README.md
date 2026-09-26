@@ -58,6 +58,10 @@ timer. These are target behaviors, not current product claims.
 - [Load-bearing case brainstorm](LOAD_BEARING_CASES.md) proposes later
   packages, large files, namespace operations and output/log scenarios without
   claiming they are already registered or passing.
+- [Source-pinned load-bearing case review](LOAD_BEARING_CASE_REVIEW.md) checks
+  each proposal against the post-#252 product, separates functional feasibility
+  from benchmark admission, and records the base-directory-move gap as
+  [#258](https://github.com/Ephemeral-AI-Lab/layerfs/issues/258).
 - [Phase 1 implementation handoff prompt](HANDOFF_PHASE1_PROMPT.md) gives a
   new agent the reading order, before/after architecture, provisional file
   ownership and LOC range, complexity model, ordinary FUSE route, and

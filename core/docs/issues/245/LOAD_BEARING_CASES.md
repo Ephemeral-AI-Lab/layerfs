@@ -7,6 +7,14 @@ after the earlier [#243 shell selection](../243/PHASE1_CONTRACT.md) is repaired
 and verified. The sizes and commands below are proposals, not a frozen test
 selection or measured result. No success, speed, or capacity claim follows.
 
+The [post-#252 source review](LOAD_BEARING_CASE_REVIEW.md) evaluates every row
+against product source `f74dbe77da12fa533587be8a578375bce3f19373` and
+records one uncovered base-resident directory-move case as
+[#258](https://github.com/Ephemeral-AI-Lab/layerfs/issues/258). The “current”
+1,024-piece, 256-interval and 8 MiB final-replacement figures below belong to
+this earlier proposal, not the later generic `SaveFile` implementation. The
+case definitions remain proposed and have not been sampled.
+
 The caller remains the public `WorkspaceApi::exec(command)`, which runs
 `/bin/sh -c` in the mounted Workspace. Inputs live in the Linux image under
 `/fixtures/stress/`, outside the mount; no registry, network, LayerFS edit tool,
