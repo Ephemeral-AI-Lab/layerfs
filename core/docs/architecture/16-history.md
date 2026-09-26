@@ -452,9 +452,12 @@ Recorded plainly, because each is a limit rather than a plan:
   directory; a client cannot name a host path, the import refuses symlinks, and
   a second import algorithm does not exist.
 - **No new-inode or new-symlink operation on a live Workspace.** `stage_changes`
-  accepts the existing-inode prepared-update surface with its existing
-  changed-name/inode limits (128 of each). `reserve_inodes` does not silently
-  enable remote create/mkdir.
+  accepts the prepared-update surface the Workspace lowers from its own captured
+  generation; `reserve_inodes` does not silently enable remote create/mkdir. The
+  update is admitted by the exact bytes it encodes to against the 32 KiB
+  metadata frame rather than by a changed-name or changed-inode count
+  (`PreparedChanges::frame_bytes`), so the widest generation one frame carries is
+  carried and a wider one is refused as `Capacity` before any command is sent.
 - **No automatic rebase, merge, retry or conflict resolution.** C5 detects a
   stale publication, not file overlap; disjoint and overlapping same-Branch
   changes take the same expected-head check.

@@ -34,17 +34,16 @@ impl Workspace {
         first_remote: &mut Option<crate::runtime::state::OperationGuard>,
     ) -> Result<PreparedChanges, WorkspaceError> {
         let captured = submission.capture()?;
-        let mut after = 0;
         let mut count = 0;
         submission.phase(StagePhase::LocalBookkeeping, None)?;
-        while let Some((serial, inode)) = self.next_dirty(submission, after, deadline)? {
+        let mut walk = self.dirty_walk(submission, deadline)?;
+        while let Some((serial, inode)) = walk.next()? {
             if count == captured.count {
                 return Err(WorkspaceError::Io);
             }
             let Dirty::Inode(inode) = inode else {
                 // A maintained directory needs no content save, and an identity
                 // this generation created without a name needs no declaration.
-                after = serial;
                 count += 1;
                 continue;
             };
@@ -228,7 +227,6 @@ impl Workspace {
             submission.phase(StagePhase::LocalBookkeeping, Some(serial))?;
             self.persist_saved(submission, deadline)?;
             submission.phase(StagePhase::LocalBookkeeping, None)?;
-            after = serial;
             count += 1;
         }
         if count != captured.count {
@@ -258,24 +256,13 @@ impl Workspace {
             directories,
             inodes,
         };
-        let header = if changes.expected_head.is_some() {
-            228
-        } else {
-            195
-        };
-        let expected = header
-            + 73 * changes.inodes.len()
-            + 34 * captured.directories
-            + captured.name_bytes
-            + if captured.fresh_symlinks > 0 {
-                9 + 8 * (captured.fresh_files + captured.fresh_symlinks)
-            } else if captured.fresh_files > 0 {
-                7 + 8 * captured.fresh_files
-            } else {
-                usize::from(captured.directories > 0) * 5
-            };
-        if expected > layerfs_bridge::contract::METADATA_BYTES {
-            return Err(WorkspaceError::Io);
+        // One metadata frame carries the whole prepared update, so its exact
+        // encoded size is what admission compares against the frame bound. The
+        // size is measured from the rows this Commit built - not estimated from
+        // the capture's counts, which cannot see a directory that ended up with
+        // no row - and the total is the same figure the encoder will write.
+        if changes.frame_bytes()? > layerfs_bridge::contract::METADATA_BYTES {
+            return Err(WorkspaceError::Capacity);
         }
         Ok(changes)
     }

@@ -219,8 +219,38 @@ child is repaired one level up; a root that keeps one child is lifted out, so th
 published height follows the key count and never the deletion history. One shape
 is refused rather than published: a pair of pages whose cells total more than one
 page's 128 cells while their bytes are fewer than two pages' minimum, which no
-legal pair of pages can hold. `keyed::cursor` walks the same tree in key order
-and reads each reached leaf once, `O(H + L)` page reads rather than `O(H × L)`.
+legal pair of pages can hold. A page of short removal cells is that shape: a
+five-byte name gives an eleven-byte removal cell, so a page holding 128 of them
+cannot be split - both halves would be under the 1,024-byte minimum body - and
+the next removal in that directory is refused rather than published.
+
+`keyed::cursor` walks the same tree in key order and reads each reached leaf
+once, `O(H + L)` page reads rather than `O(H × L)`.
+
+### Frozen namespace lowering and the prepared frame (#256)
+
+One Commit lowers the captured generation once. The frontier walk, the namespace
+records and the inode records are three ordered passes over that one keyed tree,
+and a maintained directory's final bindings are the ordered merge of its entry
+leaves and its removal leaves. A pass reads each reached leaf once, so its page
+visits follow the tree's height and leaves rather than the number of names.
+
+| Limit | Value | Enforced by |
+| --- | ---: | --- |
+| prepared rows a Commit may lower | no count; the rows are the charged frontier | `Workspace::prepared_directories`, `State::frontier_bytes` |
+| directories, names or inodes in one prepared update | no count | `bridge::contract::check_prepared` |
+| bytes one prepared update occupies in a metadata frame | 32 KiB, measured | `PreparedChanges::frame_bytes`, `METADATA_BYTES` |
+| names one directory row may carry | no count; the row is the directory's final bindings | `commit::directories` |
+
+The prepared update is admitted by the exact bytes it encodes to, not by an
+estimate over the capture's counts: `PreparedChanges::frame_bytes` is the whole
+request body the encoder writes, the workspace compares it before sending, and
+the contract compares it again at admission, so a caller other than the
+Workspace is bounded the same way. A generation wider than one frame is refused
+as `Capacity` before any command is sent; the frame is the transport's own batch
+size, and nothing refuses a generation the frame can carry. Decoding is bounded
+by the bytes the frame still holds: a counted list is refused when its rows
+cannot fit the remaining frame, so the wire reader has no row count of its own.
 
 ### C2 — storage
 

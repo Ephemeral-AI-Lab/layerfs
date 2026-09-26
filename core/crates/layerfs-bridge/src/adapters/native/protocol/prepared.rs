@@ -3,6 +3,15 @@ use super::metadata::{put_optional, take_array, take_optional};
 use super::{Decoder, Encoder};
 use crate::contract::*;
 
+/// Fewest bytes one directory row occupies: its parent serial and its count.
+const DIRECTORY_ROW_BYTES: usize = 10;
+/// Fewest bytes one name row occupies: its length, one name byte and a serial.
+const NAME_ROW_BYTES: usize = 10;
+/// Exact bytes one typed inode value occupies.
+const INODE_ROW_BYTES: usize = 73;
+/// Exact bytes one directory declaration or patch occupies.
+const DIRECTORY_METADATA_BYTES: usize = 24;
+
 /// Writes the final directory bindings of one prepared filesystem update.
 pub(super) fn put_directories(
     e: &mut Encoder,
@@ -21,14 +30,16 @@ pub(super) fn put_directories(
 }
 
 /// Reads the final directory bindings of one prepared filesystem update.
+///
+/// Every count here is bounded by the bytes the frame still holds - one counted
+/// row per parent, one counted blob and one serial per name - so a wider
+/// generation is refused by the frame it would need rather than by a row count.
 pub(super) fn take_directories(d: &mut Decoder<'_>) -> Result<Vec<DirectoryChange>, Failure> {
-    let count = d.count(128, 10)?;
+    let count = d.count(usize::MAX, DIRECTORY_ROW_BYTES)?;
     let mut directories = Vec::with_capacity(count);
-    let mut total = 0;
     for _ in 0..count {
         let parent = d.u64()?;
-        let n = d.count(128 - total, 10)?;
-        total += n;
+        let n = d.count(usize::MAX, NAME_ROW_BYTES)?;
         let mut changes = Vec::with_capacity(n);
         for _ in 0..n {
             let name = d.blob(255)?;
@@ -54,7 +65,7 @@ pub(super) fn put_inodes(e: &mut Encoder, inodes: &[InodeChange]) -> Result<(), 
 
 /// Reads the typed final inode values of one prepared filesystem update.
 pub(super) fn take_inodes(d: &mut Decoder<'_>) -> Result<Vec<InodeChange>, Failure> {
-    let n = d.count(128, 73)?;
+    let n = d.count(usize::MAX, INODE_ROW_BYTES)?;
     let mut inodes = Vec::with_capacity(n);
     for _ in 0..n {
         inodes.push(InodeChange {
@@ -130,9 +141,8 @@ pub(super) fn take_additions(
     if !matches!(version, 1..=3) {
         return Err(Code::Unsupported.into());
     }
-    let maximum = 128 - inode_count;
-    let new_directories = take_directory_records(d, maximum)?;
-    let directory_metadata = take_directory_records(d, maximum - new_directories.len())?;
+    let new_directories = take_directory_records(d)?;
+    let directory_metadata = take_directory_records(d)?;
     let mut new_file_serials = Vec::new();
     if version >= 2 {
         let count = d.count(inode_count, 8)?;
@@ -164,11 +174,8 @@ pub(super) fn take_additions(
         new_symlink_serials,
     ))
 }
-fn take_directory_records(
-    d: &mut Decoder<'_>,
-    maximum: usize,
-) -> Result<Vec<DirectoryMetadata>, Failure> {
-    let count = d.count(maximum, 24)?;
+fn take_directory_records(d: &mut Decoder<'_>) -> Result<Vec<DirectoryMetadata>, Failure> {
+    let count = d.count(usize::MAX, DIRECTORY_METADATA_BYTES)?;
     let mut directories = Vec::with_capacity(count);
     for _ in 0..count {
         directories.push(DirectoryMetadata {

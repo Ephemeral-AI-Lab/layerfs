@@ -185,6 +185,88 @@ pub struct PreparedChanges {
     pub new_symlink_serials: Vec<u64>,
 }
 
+impl PreparedChanges {
+    /// Exact bytes this prepared update occupies in one metadata frame.
+    ///
+    /// The figure is the whole `StageChanges`/`Commit` request body - the fixed
+    /// envelope, the command tag, the identity and root fields, the directory
+    /// bindings, the typed inode values and the additions trailer - computed
+    /// from the rows themselves rather than estimated from the caller's counts.
+    /// An admission that compared an estimate against [`super::METADATA_BYTES`]
+    /// would refuse a request the frame can carry, or (worse) accept one it
+    /// cannot and fail later inside the encoder; the codec test in
+    /// `tests/history_protocol.rs` holds this arithmetic against the encoder's
+    /// own output for every trailer version.
+    pub fn frame_bytes(&self) -> Result<usize, Failure> {
+        // Envelope (generation, store, profile, remaining deadline, response
+        // budget, opcode), then the `Commit` command tag.
+        let mut total = 28usize;
+        // Workspace incarnation, Branch, optional expected head, expected base,
+        // generation, construction base and allocation scope, root serial.
+        total = total
+            .checked_add(WORKSPACE_BYTES + BRANCH_BYTES + LAYER_BYTES + 8 + 32 + 32 + 8)
+            .ok_or(Code::Capacity)?;
+        total = total
+            .checked_add(match self.expected_head {
+                Some(_) => 1 + COMMIT_BYTES,
+                None => 1,
+            })
+            .ok_or(Code::Capacity)?;
+        // Directory bindings: one counted row per parent plus one counted blob
+        // and one serial per name.
+        total = total.checked_add(2).ok_or(Code::Capacity)?;
+        for directory in &self.directories {
+            total = total.checked_add(10).ok_or(Code::Capacity)?;
+            for (name, _) in &directory.changes {
+                total = total
+                    .checked_add(10)
+                    .and_then(|n| n.checked_add(name.len()))
+                    .ok_or(Code::Capacity)?;
+            }
+        }
+        // Typed inode values: serial, kind, content root and metadata root.
+        total = total
+            .checked_add(2)
+            .and_then(|n| n.checked_add(73usize.checked_mul(self.inodes.len())?))
+            .ok_or(Code::Capacity)?;
+        // The additions trailer is absent only when it would carry nothing.
+        if !self.new_directories.is_empty()
+            || !self.directory_metadata.is_empty()
+            || !self.new_file_serials.is_empty()
+            || !self.new_symlink_serials.is_empty()
+        {
+            // One version tag, then the counted lists this version carries:
+            // the two directory record lists, the fresh-file serials whenever a
+            // trailer exists, and the fresh-symlink serials in version 3.
+            let mut trailer = 1usize;
+            for records in [&self.new_directories, &self.directory_metadata] {
+                trailer = trailer
+                    .checked_add(2)
+                    .and_then(|n| n.checked_add(24usize.checked_mul(records.len())?))
+                    .ok_or(Code::Capacity)?;
+            }
+            if !self.new_file_serials.is_empty() || !self.new_symlink_serials.is_empty() {
+                trailer = trailer
+                    .checked_add(2)
+                    .and_then(|n| {
+                        n.checked_add(8usize.checked_mul(self.new_file_serials.len())?)
+                    })
+                    .ok_or(Code::Capacity)?;
+            }
+            if !self.new_symlink_serials.is_empty() {
+                trailer = trailer
+                    .checked_add(2)
+                    .and_then(|n| {
+                        n.checked_add(8usize.checked_mul(self.new_symlink_serials.len())?)
+                    })
+                    .ok_or(Code::Capacity)?;
+            }
+            total = total.checked_add(trailer).ok_or(Code::Capacity)?;
+        }
+        Ok(total)
+    }
+}
+
 /// Every mutating history command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HistoryCommand {

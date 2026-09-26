@@ -574,24 +574,23 @@ fn check_prepared(changes: &PreparedChanges) -> Result<(), Failure> {
         &changes.directory_metadata,
         &changes.new_file_serials,
         &changes.new_symlink_serials,
-    )
+    )?;
+    // The whole prepared update travels in one metadata frame, so the exact
+    // bytes those rows occupy is what admission compares - a measured figure,
+    // not a fixed row count. Nothing here names a directory, name or inode
+    // count: a wider generation is refused by the frame it would need, and the
+    // rows a frame can carry are carried.
+    if changes.frame_bytes()? > METADATA_BYTES {
+        return Err(Code::Capacity.into());
+    }
+    Ok(())
 }
 
 fn check_prepared_lists(
     directories: &[DirectoryChange],
     inodes: &[InodeChange],
 ) -> Result<(), Failure> {
-    if directories.len() > 128 || inodes.len() > 128 {
-        return Err(Code::Capacity.into());
-    }
-    let mut count = 0usize;
     for directory in directories {
-        count = count
-            .checked_add(directory.changes.len())
-            .ok_or(Code::Capacity)?;
-        if count > 128 {
-            return Err(Code::Capacity.into());
-        }
         for (name, _) in &directory.changes {
             if name.is_empty() || name.len() > 255 {
                 return Err(Code::InvalidInput.into());
@@ -622,15 +621,14 @@ fn check_prepared_additions(
     new_file_serials: &[u64],
     new_symlink_serials: &[u64],
 ) -> Result<(), Failure> {
-    if inodes
+    // The three lists are one generation's rows, so their total is bounded by
+    // the frame the update travels in rather than by a fixed count; only the
+    // arithmetic has to describe itself.
+    inodes
         .len()
         .checked_add(new_directories.len())
         .and_then(|n| n.checked_add(directory_metadata.len()))
-        .ok_or(Code::Capacity)?
-        > 128
-    {
-        return Err(Code::Capacity.into());
-    }
+        .ok_or(Code::Capacity)?;
     if new_file_serials
         .len()
         .checked_add(new_symlink_serials.len())

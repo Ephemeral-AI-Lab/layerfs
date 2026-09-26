@@ -200,6 +200,195 @@ fn native_import_declares_progress_response_budget() {
 }
 
 #[test]
+fn prepared_frame_bytes_matches_the_encoder_for_every_trailer() {
+    // The prepared-update admission compares one figure against the metadata
+    // frame budget, so the figure has to be the encoder's own output rather
+    // than an estimate over the caller's counts: an over-estimate refuses a
+    // request the frame carries, an under-estimate fails inside the encoder
+    // after the caller already accepted the request.
+    let measure = |label: &str, changes: &PreparedChanges| {
+        let encoded = request(Operation::HistoryCommand(HistoryCommand::Commit(
+            changes.clone(),
+        )));
+        if let Err(failure) = encoded.validate() {
+            panic!("validate {label}: {failure:?}");
+        }
+        let bytes = encode_request_with_budget(&encoded, 5_000)
+            .unwrap_or_else(|failure| panic!("encode {label}: {failure:?}"));
+        assert_eq!(
+            changes.frame_bytes().expect("frame bytes"),
+            bytes.len(),
+            "declared frame bytes must be the encoded length"
+        );
+    };
+    let binding = |parent: u64, names: &[(&[u8], Option<u64>)]| DirectoryChange {
+        parent,
+        changes: names
+            .iter()
+            .map(|(name, serial)| (name.to_vec(), *serial))
+            .collect(),
+    };
+    let inode = |serial: u64, kind: u8| InodeChange {
+        serial,
+        kind,
+        content: [0x66; 32],
+        metadata: [0x77; 32],
+    };
+    // One complete update: two directory rows, one declared fresh directory,
+    // one patched directory, a fresh file and a fresh symlink.
+    let full = PreparedChanges {
+        workspace: [0x71; 32],
+        branch: [0x11; 17],
+        expected_head: Some(commit_id(0x05)),
+        expected_base: layer_id(0x03),
+        generation: 9,
+        base: [0x44; 32],
+        scope: [0x55; 32],
+        root_serial: 1,
+        directories: vec![
+            binding(1, &[(b"a".as_slice(), Some(2)), (b"z".as_slice(), None)]),
+            binding(5, &[(b"c".as_slice(), Some(2))]),
+        ],
+        inodes: vec![inode(2, 1), inode(3, 3)],
+        new_directories: vec![DirectoryMetadata {
+            serial: 5,
+            mode: 0o755,
+            mtime_seconds: -1,
+            mtime_nanoseconds: 12,
+        }],
+        directory_metadata: vec![DirectoryMetadata {
+            serial: 6,
+            mode: 0o700,
+            mtime_seconds: 1,
+            mtime_nanoseconds: 0,
+        }],
+        new_file_serials: vec![2],
+        new_symlink_serials: vec![3],
+    };
+    measure("full", &full);
+    // Every trailer version: files only, directory records only, and none.
+    let files_only = PreparedChanges {
+        new_symlink_serials: Vec::new(),
+        ..full.clone()
+    };
+    measure("files_only", &files_only);
+    let records_only = PreparedChanges {
+        new_file_serials: Vec::new(),
+        ..files_only.clone()
+    };
+    measure("records_only", &records_only);
+    let no_trailer = PreparedChanges {
+        new_directories: Vec::new(),
+        directory_metadata: Vec::new(),
+        ..records_only.clone()
+    };
+    measure("no_trailer", &no_trailer);
+    // An absent expected head shortens the fixed part by exactly its width.
+    let headless = PreparedChanges {
+        expected_head: None,
+        ..full.clone()
+    };
+    measure("headless", &headless);
+    assert_eq!(
+        full.frame_bytes().unwrap() - headless.frame_bytes().unwrap(),
+        COMMIT_BYTES
+    );
+    // A name's own width is measured rather than assumed: the same update with
+    // a 255-byte name and with a one-byte name differs by exactly 254 bytes.
+    let named = PreparedChanges {
+        directories: vec![binding(1, &[(b"a".as_slice(), Some(2))])],
+        new_directories: Vec::new(),
+        directory_metadata: Vec::new(),
+        new_file_serials: Vec::new(),
+        new_symlink_serials: Vec::new(),
+        ..full.clone()
+    };
+    let long_name = PreparedChanges {
+        directories: vec![binding(1, &[(vec![b'n'; 255].as_slice(), Some(2))])],
+        ..named.clone()
+    };
+    let short_name = PreparedChanges {
+        directories: vec![binding(1, &[(b"n".as_slice(), Some(2))])],
+        ..named.clone()
+    };
+    measure("long_name", &long_name);
+    measure("short_name", &short_name);
+    assert_eq!(
+        long_name.frame_bytes().unwrap() - short_name.frame_bytes().unwrap(),
+        254
+    );
+    // The empty prepared update is still a framed request.
+    let empty = PreparedChanges {
+        directories: Vec::new(),
+        inodes: Vec::new(),
+        expected_head: None,
+        ..no_trailer
+    };
+    measure("empty", &empty);
+}
+
+#[test]
+fn a_prepared_update_wider_than_128_rows_round_trips_and_the_frame_is_the_bound() {
+    // A prepared update used to be refused above 128 directories, 128 inodes
+    // and 128 names however much the frame could carry. The bound is now the
+    // metadata frame the update travels in: a 200-name directory is carried,
+    // and the same shape past the frame is refused as `Capacity` by the
+    // contract before any encoder sees it.
+    let wide = |names: usize| PreparedChanges {
+        workspace: [0x71; 32],
+        branch: [0x11; 17],
+        expected_head: Some(commit_id(0x05)),
+        expected_base: layer_id(0x03),
+        generation: 9,
+        base: [0x44; 32],
+        scope: [0x55; 32],
+        root_serial: 1,
+        directories: vec![DirectoryChange {
+            parent: 1,
+            changes: (0..names)
+                .map(|index| (format!("f{index:04}").into_bytes(), Some(2 + index as u64)))
+                .collect(),
+        }],
+        inodes: (0..names)
+            .map(|index| InodeChange {
+                serial: 2 + index as u64,
+                kind: 1,
+                content: [0x66; 32],
+                metadata: [0x77; 32],
+            })
+            .collect(),
+        new_directories: Vec::new(),
+        directory_metadata: vec![DirectoryMetadata {
+            serial: 1_000_000,
+            mode: 0o755,
+            mtime_seconds: -1,
+            mtime_nanoseconds: 7,
+        }],
+        new_file_serials: (0..names).map(|index| 2 + index as u64).collect(),
+        new_symlink_serials: Vec::new(),
+    };
+    let carried = wide(200);
+    let fitting = request(Operation::HistoryCommand(HistoryCommand::Commit(
+        carried.clone(),
+    )));
+    fitting.validate().expect("200 names fit one metadata frame");
+    let bytes = encode_request_with_budget(&fitting, 5_000).expect("encode");
+    assert_eq!(carried.frame_bytes().unwrap(), bytes.len());
+    assert!(bytes.len() <= METADATA_BYTES);
+    assert_eq!(decode_request(1, &bytes).expect("decode"), fitting);
+    // Past the frame the same shape is refused, and the refusal is a resource
+    // refusal rather than a malformed request.
+    let past = wide(400);
+    let oversized = request(Operation::HistoryCommand(HistoryCommand::Commit(
+        past.clone(),
+    )));
+    assert!(past.frame_bytes().unwrap() > METADATA_BYTES);
+    let refusal = oversized.validate().expect_err("past the frame");
+    assert_eq!(refusal.code, Code::Capacity);
+    assert!(encode_request_with_budget(&oversized, 5_000).is_err());
+}
+
+#[test]
 fn profile_and_opcode_must_agree() {
     // A history operation on the legacy profile, and a legacy operation on the
     // history profile, are both refused before any mutation.
@@ -337,10 +526,11 @@ fn page_and_count_bounds_are_checked() {
         .code,
         Code::Capacity
     );
-    // A request that is legal for its own declared limits but whose encoded
-    // metadata exceeds the 32 KiB envelope is refused at the encoder. The
-    // binding count makes that reachable now: 128 directory bindings of a
-    // maximal name are valid input and still encode past the envelope.
+    // A prepared update whose rows are legal but whose encoded metadata
+    // exceeds the 32 KiB envelope is refused as a resource refusal by the
+    // contract itself, before any encoder: the admission is the frame the
+    // update travels in rather than a row count. The same update used to be
+    // admitted here and refused only inside the encoder.
     let widest = vec![b'x'; 255];
     let mut changes = prepared([0x71; 32], [0x11; 17]);
     changes.directories = [1_u64, 2]
@@ -360,10 +550,11 @@ fn page_and_count_bounds_are_checked() {
             .sum::<usize>(),
         128
     );
+    assert!(changes.frame_bytes().unwrap() > METADATA_BYTES);
     let request = request(Operation::HistoryCommand(HistoryCommand::StageChanges(
         changes,
     )));
-    assert!(request.validate().is_ok());
+    assert_eq!(request.validate().unwrap_err().code, Code::Capacity);
     assert_eq!(
         encode_request_with_budget(&request, 5_000)
             .unwrap_err()
