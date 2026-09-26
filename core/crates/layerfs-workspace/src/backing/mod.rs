@@ -1,3 +1,4 @@
+pub mod binary_plus_tree;
 pub mod budget;
 pub mod directory;
 pub mod metadata;
