@@ -14,8 +14,8 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::{list_after, DirectoryReadWork};
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::inode::read::{lookup_many, InodeReadWork, InodeTable};
-use crate::filesystem::input::FilesystemInput;
 use crate::filesystem::root::{FilesystemRoot, FilesystemRootId};
+use crate::filesystem::rows::{check_input, PreparedRows};
 use crate::filesystem::sorted::finish::DirectoryRoot;
 use crate::object::inode_leaf::{InodeKind, InodeValue};
 use crate::object::{AuthenticatedObjects, ObjectId};
@@ -153,8 +153,8 @@ impl FilesystemTopology {
 
 /// One checked operation input, bound to the base it addresses.
 pub struct CheckedInput<'a> {
-    /// The validated request.
-    pub input: &'a FilesystemInput<'a>,
+    /// The validated row source.
+    pub input: &'a dyn PreparedRows,
     /// Checked base state.
     pub topology: FilesystemTopology,
     /// Bindings each child serial gains inside this operation.
@@ -164,12 +164,13 @@ pub struct CheckedInput<'a> {
 /// Checks membership, identity use and effective topology before any mutation.
 pub fn check<'a>(
     reader: &dyn AuthenticatedObjects,
-    input: &'a FilesystemInput<'a>,
+    input: &'a dyn PreparedRows,
     unreachable: &BTreeMap<u64, ()>,
     work: &mut ValidationWork,
 ) -> ContentResult<CheckedInput<'a>> {
-    input.check()?;
-    let topology = FilesystemTopology::load(reader, input.base, input.scope, input.root_serial)?;
+    check_input(input)?;
+    let topology =
+        FilesystemTopology::load(reader, input.base(), input.scope(), input.root_serial())?;
     let mut additions: BTreeMap<u64, u64> = BTreeMap::new();
     // Children with a stored record that this batch binds exactly once, by the
     // parent that binds them: the final pass decides whether that binding is the
@@ -187,33 +188,36 @@ pub fn check<'a>(
     let mut state = ValidationState::new();
     if let Some(table) = topology.table {
         let mut demanded: Vec<u64> = Vec::new();
-        for update in input.directories {
-            if update.parent != input.root_serial && !input.new_inodes.contains(&update.parent) {
+        let mut rows = input.directories()?;
+        while let Some(update) = rows.next_row()? {
+            if update.parent != input.root_serial() && !input.is_new(update.parent)? {
                 demanded.push(update.parent);
             }
             for (_, binding) in &update.changes {
                 if let Some(child) = binding {
-                    if *child != input.root_serial {
+                    if *child != input.root_serial() {
                         demanded.push(*child);
                     }
                 }
             }
         }
+        drop(rows);
         let prefetch_before = work.inode_pages_read;
         state.prefetch(reader, table, demanded, work)?;
         charge_site(work, prefetch_before, |sites| &mut sites.prefetch);
     }
     let bindings_before = work.inode_pages_read;
-    for update in input.directories {
-        if update.parent == input.root_serial && input.base.is_none() {
+    let mut rows = input.directories()?;
+    while let Some(update) = rows.next_row()? {
+        if update.parent == input.root_serial() && input.base().is_none() {
             // The root directory of a new filesystem is built by this operation.
-        } else if update.parent == input.root_serial {
+        } else if update.parent == input.root_serial() {
             // A root directory update is legal; the root's own count stays zero.
-        } else if input.new_inodes.contains(&update.parent) {
+        } else if input.is_new(update.parent)? {
             // A directory this operation allocates starts empty; its value must
             // still declare the directory kind it will have.
             let value = input
-                .value_for(update.parent)
+                .value_for(update.parent)?
                 .ok_or(ContentError::InvalidRecord("directory parent value"))?;
             if value.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
@@ -225,7 +229,7 @@ pub fn check<'a>(
             }
         } else {
             let value = input
-                .value_for(update.parent)
+                .value_for(update.parent)?
                 .ok_or(ContentError::InvalidRecord("directory parent value"))?;
             if value.kind != InodeKind::Directory {
                 return Err(ContentError::InvalidRecord("directory parent kind"));
@@ -236,7 +240,7 @@ pub fn check<'a>(
             let Some(child) = binding else {
                 continue;
             };
-            if *child == input.root_serial {
+            if *child == input.root_serial() {
                 return Err(ContentError::InvalidRecord("root directory binding"));
             }
             // The kind comes from the stored record for an existing inode and
@@ -245,7 +249,10 @@ pub fn check<'a>(
                 Some(table) => state.lookup_optional(reader, table, *child, work)?,
                 None => None,
             };
-            let previous = stored.or_else(|| input.value_for(*child));
+            let previous = match stored {
+                Some(record) => Some(record),
+                None => input.value_for(*child)?,
+            };
             let previous = previous.ok_or(ContentError::InvalidRecord("binding kind"))?;
             // Only a regular file may carry several bindings, so a file that
             // already has one keeps gaining them.
@@ -274,6 +281,7 @@ pub fn check<'a>(
             }
         }
     }
+    drop(rows);
     charge_site(work, bindings_before, |sites| &mut sites.bindings);
     let aliases_before = work.inode_pages_read;
     check_parent_aliases(
@@ -286,18 +294,21 @@ pub fn check<'a>(
         &mut state,
     )?;
     charge_site(work, aliases_before, |sites| &mut sites.aliases);
-    for update in input.directories {
+    let mut rows = input.directories()?;
+    while let Some(update) = rows.next_row()? {
         for (_, binding) in &update.changes {
             if let Some(child) = binding {
                 let _ = additions.entry(*child).or_insert(0);
             }
         }
     }
+    drop(rows);
     check_root_invariants(input)?;
-    if input.base.is_none() {
-        for update in input.inodes {
+    if input.base().is_none() {
+        let mut values = input.inodes()?;
+        while let Some(update) = values.next_row()? {
             if update.value.kind == InodeKind::Directory
-                && input.update_for(update.serial).is_none()
+                && input.directory_for(update.serial)?.is_none()
             {
                 return Err(ContentError::InvalidRecord("directory bindings missing"));
             }
@@ -321,7 +332,7 @@ pub fn check<'a>(
 /// the same page ceiling as every other directory read.
 fn check_parent_aliases(
     reader: &dyn AuthenticatedObjects,
-    input: &FilesystemInput<'_>,
+    input: &dyn PreparedRows,
     topology: &FilesystemTopology,
     by_parent: &BTreeMap<u64, Vec<Vec<u8>>>,
     unreachable: &BTreeMap<u64, ()>,
@@ -345,7 +356,7 @@ fn check_parent_aliases(
     let mut candidates: BTreeMap<u64, ()> = BTreeMap::new();
     for (parent, names) in &by_parent {
         for name in names {
-            if let Some(child) = single_binding(input, parent, name) {
+            if let Some(child) = single_binding(input, parent, name)? {
                 candidates.insert(child, ());
             }
         }
@@ -394,7 +405,7 @@ fn check_parent_aliases(
                 });
                 if restated {
                     for name in by_parent.get(&parent).into_iter().flatten() {
-                        let Some(child) = single_binding(input, &parent, name) else {
+                        let Some(child) = single_binding(input, &parent, name)? else {
                             continue;
                         };
                         visited = visited.saturating_add(1);
@@ -432,17 +443,24 @@ fn check_parent_aliases(
     }
     for (parent, names) in &by_parent {
         for name in names {
-            let Some(child) = single_binding(input, parent, name) else {
+            let Some(child) = single_binding(input, parent, name)? else {
                 continue;
             };
             let Some(base) = bound.get(&child) else {
                 continue;
             };
-            let legal = base.iter().any(|(base_name, base_parent)| {
+            let mut legal = false;
+            for (base_name, base_parent) in base {
                 // The batch restates the binding the base has, so nothing moves.
-                (base_parent == parent && base_name.as_slice() == name.as_slice())
-                    || !base_binding_survives(input, *base_parent, base_name, child)
-            });
+                if base_parent == parent && base_name.as_slice() == name.as_slice() {
+                    legal = true;
+                    break;
+                }
+                if !base_binding_survives(input, *base_parent, base_name, child)? {
+                    legal = true;
+                    break;
+                }
+            }
             if !legal {
                 return Err(ContentError::InvalidRecord("multiple parents"));
             }
@@ -452,33 +470,37 @@ fn check_parent_aliases(
 }
 
 /// The child one `(parent, name)` pair in this batch binds.
-fn single_binding(input: &FilesystemInput<'_>, parent: &u64, name: &[u8]) -> Option<u64> {
-    input.update_for(*parent).and_then(|update| {
+fn single_binding(
+    input: &dyn PreparedRows,
+    parent: &u64,
+    name: &[u8],
+) -> ContentResult<Option<u64>> {
+    Ok(input.directory_for(*parent)?.and_then(|update| {
         update
             .changes
             .iter()
             .find(|(changed, _)| changed.as_bytes() == name)
             .and_then(|(_, binding)| *binding)
-    })
+    }))
 }
 
 /// True when the base still binds `child` under `base_name` in `base_parent`.
 fn base_binding_survives(
-    input: &FilesystemInput<'_>,
+    input: &dyn PreparedRows,
     base_parent: u64,
     base_name: &[u8],
     child: u64,
-) -> bool {
-    match input.update_for(base_parent) {
+) -> ContentResult<bool> {
+    match input.directory_for(base_parent)? {
         Some(update) => match update
             .changes
             .iter()
             .find(|(changed, _)| changed.as_bytes() == base_name)
         {
-            Some((_, binding)) => *binding == Some(child),
-            None => true,
+            Some((_, binding)) => Ok(*binding == Some(child)),
+            None => Ok(true),
         },
-        None => true,
+        None => Ok(true),
     }
 }
 
@@ -632,19 +654,32 @@ fn charge_directory(work: &mut ValidationWork, directory: DirectoryReadWork) {
 
 fn check_new_identities(
     reader: &dyn AuthenticatedObjects,
-    input: &FilesystemInput<'_>,
+    input: &dyn PreparedRows,
     topology: FilesystemTopology,
     work: &mut ValidationWork,
 ) -> ContentResult<()> {
-    if input.new_inodes.is_empty() {
+    if input.new_rows() == 0 {
         return Ok(());
     }
     let Some(table) = topology.table else {
         return Ok(());
     };
-    for wave in input.new_inodes.chunks(ALLOCATION_CHECK_BATCH) {
+    // One declared wave of serials is read at a time: the batch the allocator
+    // precondition already charged, and no more.
+    let mut waves = input.new_inodes()?;
+    loop {
+        let mut wave = Vec::with_capacity(ALLOCATION_CHECK_BATCH);
+        while wave.len() < ALLOCATION_CHECK_BATCH {
+            match waves.next_row()? {
+                Some(serial) => wave.push(serial),
+                None => break,
+            }
+        }
+        if wave.is_empty() {
+            break;
+        }
         let mut inode = InodeReadWork::default();
-        let found = lookup_many(reader, table, wave, &mut inode)?;
+        let found = lookup_many(reader, table, &wave, &mut inode)?;
         charge_inode(work, inode);
         if found.iter().any(Option::is_some) {
             return Err(ContentError::InvalidRecord("reused inode serial"));
@@ -653,23 +688,26 @@ fn check_new_identities(
     Ok(())
 }
 
-fn check_root_invariants(input: &FilesystemInput<'_>) -> ContentResult<()> {
-    if input.base.is_none() {
+fn check_root_invariants(input: &dyn PreparedRows) -> ContentResult<()> {
+    let root_serial = input.root_serial();
+    if input.base().is_none() {
         let value = input
-            .value_for(input.root_serial)
+            .value_for(root_serial)?
             .ok_or(ContentError::InvalidRecord("root inode value"))?;
         if value.kind != InodeKind::Directory {
             return Err(ContentError::InvalidRecord("root inode kind"));
         }
     }
-    for update in input.directories {
+    let mut rows = input.directories()?;
+    while let Some(update) = rows.next_row()? {
         for (_, binding) in &update.changes {
-            if *binding == Some(input.root_serial) {
+            if *binding == Some(root_serial) {
                 return Err(ContentError::InvalidRecord("root directory binding"));
             }
         }
     }
-    if input.base.is_some() && input.new_inodes.contains(&input.root_serial) {
+    drop(rows);
+    if input.base().is_some() && input.is_new(root_serial)? {
         return Err(ContentError::InvalidRecord("root inode allocation"));
     }
     Ok(())
@@ -690,7 +728,7 @@ fn check_effective_cycles(
     work: &mut ValidationWork,
     state: &mut ValidationState,
 ) -> ContentResult<()> {
-    if checked.input.base.is_none() {
+    if checked.input.base().is_none() {
         let before = work.inode_pages_read;
         let result = check_build_reachability(reader, checked, unreachable, work);
         charge_site(work, before, |sites| &mut sites.reachability);
@@ -698,7 +736,8 @@ fn check_effective_cycles(
     }
     let cycles_before = work.inode_pages_read;
     let table = checked.topology.table;
-    for update in checked.input.directories {
+    let mut rows = checked.input.directories()?;
+    while let Some(update) = rows.next_row()? {
         for (_, binding) in &update.changes {
             let Some(child) = binding else {
                 continue;
@@ -709,7 +748,7 @@ fn check_effective_cycles(
             };
             let kind = match stored {
                 Some(record) => record.kind,
-                None => match checked.input.value_for(*child) {
+                None => match checked.input.value_for(*child)? {
                     Some(value) => value.kind,
                     None => continue,
                 },
@@ -732,14 +771,14 @@ fn check_effective_cycles(
                 }
                 let changes = checked
                     .input
-                    .update_for(serial)
-                    .map(|update| update.changes.as_slice())
-                    .unwrap_or(&[]);
+                    .directory_for(serial)?
+                    .map(|update| update.changes)
+                    .unwrap_or_default();
                 let entries = match base_root {
                     Some(content_root) => {
-                        effective_entries(reader, content_root, changes, &mut visited, work)?
+                        effective_entries(reader, content_root, &changes, &mut visited, work)?
                     }
-                    None => effective_entries_without_base(changes),
+                    None => effective_entries_without_base(&changes),
                 };
                 for (_, entry_serial) in entries {
                     if entry_serial == update.parent || entry_serial == *child {
@@ -781,10 +820,11 @@ fn check_build_reachability(
     // operation does not do - and could refuse a build for a subtree it never
     // builds.
     // Every directory binding this operation states, as `(parent, child)` pairs.
-    // `update_for` answers by parent serial, so the pairs come from the updates
-    // themselves rather than from a serial-keyed lookup.
+    // A directory lookup answers by parent serial, so the pairs come from the
+    // updates themselves rather than from a serial-keyed lookup.
     let mut stated: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
-    for update in checked.input.directories {
+    let mut rows = checked.input.directories()?;
+    while let Some(update) = rows.next_row()? {
         let children = update
             .changes
             .iter()
@@ -792,24 +832,26 @@ fn check_build_reachability(
             .collect::<Vec<_>>();
         stated.insert(update.parent, children);
     }
+    drop(rows);
     // The root is reached by definition: it is the walk's own starting point.
-    let declared: BTreeSet<u64> = checked
-        .input
-        .new_inodes
-        .iter()
-        .filter(|serial| **serial != checked.input.root_serial)
-        .filter(|serial| !unreachable.contains_key(serial))
-        .filter(|serial| {
-            checked
-                .input
-                .value_for(**serial)
-                .is_some_and(|value| value.kind == InodeKind::Directory)
-        })
-        .copied()
-        .collect();
+    let mut serials = checked.input.new_inodes()?;
+    let mut declared: BTreeSet<u64> = BTreeSet::new();
+    while let Some(serial) = serials.next_row()? {
+        if serial == checked.input.root_serial() || unreachable.contains_key(&serial) {
+            continue;
+        }
+        if checked
+            .input
+            .value_for(serial)?
+            .is_some_and(|value| value.kind == InodeKind::Directory)
+        {
+            declared.insert(serial);
+        }
+    }
+    drop(serials);
     let mut edges: BTreeMap<u64, u32> = declared.iter().map(|serial| (*serial, 0)).collect();
     let mut seen: BTreeSet<u64> = BTreeSet::new();
-    let mut pending = vec![checked.input.root_serial];
+    let mut pending = vec![checked.input.root_serial()];
     while let Some(serial) = pending.pop() {
         if !seen.insert(serial) {
             continue;

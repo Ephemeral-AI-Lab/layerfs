@@ -339,3 +339,49 @@ record cache, format change, or validation shortcut is introduced; validation's
 existing memo is not extended across phases. Directory value overlay remains
 outside the `directories` phase, as before. Exact roots, quota outcomes and read
 counts are checked externally; this description makes no latency claim.
+
+### 5.8 Prepared rows, cursors and the charged row spool (#256)
+
+`core/crates/layerfs-content/src/filesystem/rows/`
+
+A prepared update reaches the operation as three ordered row sequences — a
+directory's final bindings by parent serial, the typed inode values by serial, and
+the serials the caller's allocator just created — and no longer as three resident
+slices:
+
+```rust
+RowSource   { directory_rows, inode_rows, new_rows,
+              directories() -> DirectoryRowSource,
+              inodes()      -> InodeRowSource,
+              new_inodes()  -> SerialRowSource,
+              directory_for(parent) -> Option<DirectoryUpdate>,
+              value_for(serial)     -> Option<InodeValue>,
+              new_position(serial)  -> Option<usize> }
+PreparedRows: RowSource + { base, scope, root_serial, resources }
+```
+
+`FilesystemInput` is the resident implementation: it holds the three slices and
+answers the same contract by index and binary search, so every caller that
+already builds an update in memory keeps working unchanged. `PreparedUpdate` is
+the streamed one: the fixed fields plus a `&dyn RowSource` whose rows live
+somewhere else.
+
+**A cursor is a pass, not a position.** Every pass over a sequence opens its own
+cursor at the sequence's start, so the validation and the builder take the
+several passes they always took without materializing the rows between them. A
+cursor returns one decoded row, so the resident cost of a pass is one row — the
+size of one directory, which is the unit the mounted route itself produces —
+rather than the row count.
+
+`RowSpool` is the file-backed source: one fixed 32-byte slot per row (key,
+payload offset, payload length, binding count, kind) followed by the payload
+region. The slot table is sized from the declared totals when the spool is
+created, so the payload offset of the first row is known before it is written and
+no index ever has to be built or rewritten. Lookups are a binary search over a
+kind's slot run read straight from the file; a pass is one sequential walk of that
+run. A key that does not rise inside its run is refused where it is written,
+because the binary search depends on it. `RowSpool::seal` refuses a spool that
+does not hold every row its update declared, `check_input` refuses a source whose
+cursors end anywhere but the declared totals, and both the slot table and every
+payload are charged against a declared capacity before they are written. Dropping
+the spool removes its file; `cleanup` is the checked form of the same act.

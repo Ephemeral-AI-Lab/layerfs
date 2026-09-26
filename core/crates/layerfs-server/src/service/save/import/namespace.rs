@@ -22,8 +22,8 @@ use layerfs_content::filesystem::attributes::PortableMetadata;
 use layerfs_content::filesystem::references::FileBacking;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::{
-    DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources, InodeScope,
-    InodeUpdate, PathName,
+    check_input, DirectoryUpdate, FilesystemInput, FilesystemObjects, FilesystemResources,
+    InodeScope, InodeUpdate, PathName,
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, FileView, ObjectId};
@@ -123,7 +123,7 @@ pub(crate) fn build_namespace(
         new_inodes: &serials,
         resources: FilesystemResources::default(),
     };
-    input.check().map_err(content)?;
+    check_input(&input).map_err(content)?;
     progress.tick()?;
     let scratch = loop {
         let path = store.path().with_extension(format!(

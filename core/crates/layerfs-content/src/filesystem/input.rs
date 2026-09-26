@@ -18,6 +18,10 @@ use crate::error::{ContentError, ContentResult};
 use crate::filesystem::identity::InodeScope;
 use crate::filesystem::path::PathName;
 use crate::filesystem::root::FilesystemRootId;
+use crate::filesystem::rows::{
+    DirectoryRowSource, InodeRowSource, PreparedRows, RowSource, SerialRowSource,
+    SliceDirectoryRows, SliceInodeRows, SliceSerialRows,
+};
 use crate::object::inode_leaf::InodeValue;
 
 /// One directory's final binding changes.
@@ -144,90 +148,55 @@ pub struct FilesystemInput<'a> {
     pub resources: FilesystemResources,
 }
 
-/// True for the serials the compact profile can store.
-///
-/// The root's own identity has a separate check ([`InodeIdentity::new`]); this
-/// one covers the serials a binding or a supplied value names, which is where a
-/// serial the leaf grammar would reject enters the operation.
-const fn serial_in_range(serial: u64) -> bool {
-    serial > 0 && serial <= crate::filesystem::identity::MAXIMUM_INODE_SERIAL
-}
-
-impl FilesystemInput<'_> {
-    /// Checks the shape of every supplied list before any object is touched.
-    pub fn check(&self) -> ContentResult<()> {
-        self.resources.check()?;
-        if self.root_serial == 0 {
-            return Err(ContentError::InvalidRecord("root inode serial"));
-        }
-        for update in self.directories {
-            update.check()?;
-            if update
-                .changes
-                .iter()
-                .any(|(_, binding)| binding.is_some_and(|serial| !serial_in_range(serial)))
-            {
-                return Err(ContentError::InvalidRecord("inode serial"));
-            }
-        }
-        if self
+impl RowSource for FilesystemInput<'_> {
+    fn directory_rows(&self) -> usize {
+        self.directories.len()
+    }
+    fn inode_rows(&self) -> usize {
+        self.inodes.len()
+    }
+    fn new_rows(&self) -> usize {
+        self.new_inodes.len()
+    }
+    fn directories(&self) -> ContentResult<Box<dyn DirectoryRowSource + '_>> {
+        Ok(Box::new(SliceDirectoryRows::new(self.directories)))
+    }
+    fn inodes(&self) -> ContentResult<Box<dyn InodeRowSource + '_>> {
+        Ok(Box::new(SliceInodeRows::new(self.inodes)))
+    }
+    fn new_inodes(&self) -> ContentResult<Box<dyn SerialRowSource + '_>> {
+        Ok(Box::new(SliceSerialRows::new(self.new_inodes)))
+    }
+    fn directory_for(&self, parent: u64) -> ContentResult<Option<DirectoryUpdate>> {
+        Ok(self
             .directories
-            .windows(2)
-            .any(|pair| pair[0].parent >= pair[1].parent)
-        {
-            return Err(ContentError::NonCanonicalOrdering);
-        }
-        if self
-            .inodes
-            .windows(2)
-            .any(|pair| pair[0].serial >= pair[1].serial)
-        {
-            return Err(ContentError::NonCanonicalOrdering);
-        }
-        // The compact profile stores one serial in eight bytes and the tree
-        // grammar requires it below `i64::MAX`. The root's identity is checked by
-        // `InodeIdentity::new`; every other serial enters through a binding or a
-        // supplied value, so both lists are range-checked here, before any leaf
-        // byte is written.
-        if self
-            .inodes
-            .iter()
-            .any(|update| !serial_in_range(update.serial))
-        {
-            return Err(ContentError::InvalidRecord("inode serial"));
-        }
-        if self.new_inodes.windows(2).any(|pair| pair[0] >= pair[1]) {
-            return Err(ContentError::NonCanonicalOrdering);
-        }
-        if self
-            .new_inodes
-            .iter()
-            .any(|serial| *serial == 0 || (self.base.is_some() && *serial == self.root_serial))
-        {
-            return Err(ContentError::InvalidRecord("new inode serial"));
-        }
-        // A build allocates its root like any other inode: without that
-        // declaration the operation would reach the absent base with a
-        // placeholder identity and fail later for the wrong reason.
-        if self.base.is_none() && !self.new_inodes.contains(&self.root_serial) {
-            return Err(ContentError::InvalidRecord("root inode allocation"));
-        }
-        Ok(())
-    }
-
-    /// The supplied typed value for `serial`, when the caller supplied one.
-    pub fn value_for(&self, serial: u64) -> Option<InodeValue> {
-        self.inodes
-            .binary_search_by_key(&serial, |update| update.serial)
-            .ok()
-            .map(|index| self.inodes[index].value)
-    }
-
-    /// The supplied final bindings for `parent`, when it has any.
-    pub fn update_for(&self, parent: u64) -> Option<&DirectoryUpdate> {
-        self.directories
             .binary_search_by_key(&parent, |update| update.parent)
             .ok()
-            .map(|index| &self.directories[index])
+            .map(|index| self.directories[index].clone()))
+    }
+    fn value_for(&self, serial: u64) -> ContentResult<Option<InodeValue>> {
+        Ok(self
+            .inodes
+            .binary_search_by_key(&serial, |update| update.serial)
+            .ok()
+            .map(|index| self.inodes[index].value))
+    }
+    fn new_position(&self, serial: u64) -> ContentResult<Option<usize>> {
+        Ok(self.new_inodes.binary_search(&serial).ok())
+    }
+}
+
+impl PreparedRows for FilesystemInput<'_> {
+    fn base(&self) -> Option<FilesystemRootId> {
+        self.base
+    }
+    fn scope(&self) -> InodeScope {
+        self.scope
+    }
+    fn root_serial(&self) -> u64 {
+        self.root_serial
+    }
+    fn resources(&self) -> FilesystemResources {
+        self.resources
     }
 }

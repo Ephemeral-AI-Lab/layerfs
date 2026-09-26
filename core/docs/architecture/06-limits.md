@@ -241,6 +241,9 @@ visits follow the tree's height and leaves rather than the number of names.
 | directories, names or inodes in one prepared update | no count | `bridge::contract::check_prepared` |
 | bytes one prepared update occupies in a metadata frame | 32 KiB, measured | `PreparedChanges::frame_bytes`, `METADATA_BYTES` |
 | names one directory row may carry | no count; the row is the directory's final bindings | `commit::directories` |
+| prepared rows C1 holds at once | one row per open pass, whatever the row count | `filesystem::rows::RowSource` cursors |
+| prepared row spool | fixed 32-byte slot per row plus payloads, charged against a declared capacity | `filesystem::rows::RowSpool` |
+| rows one spool may hold | the totals its update declared before the first row was written | `RowSpool::create`, `RowSpool::seal` |
 
 The prepared update is admitted by the exact bytes it encodes to, not by an
 estimate over the capture's counts: `PreparedChanges::frame_bytes` is the whole
@@ -251,6 +254,16 @@ as `Capacity` before any command is sent; the frame is the transport's own batch
 size, and nothing refuses a generation the frame can carry. Decoding is bounded
 by the bytes the frame still holds: a counted list is refused when its rows
 cannot fit the remaining frame, so the wire reader has no row count of its own.
+
+C1 reads the same rows through `RowSource` rather than a resident slice, so the
+operation's own resident cost follows one row per pass and not the row count
+(`04-filesystem.md` §5.8). The 32 KiB frame above is therefore a bound on the
+*transport body* only, and it is the bound the streamed route lifts: a spool holds
+what a frame cannot, and `RowSpool` charges every slot and payload against the
+capacity its caller declares. The resident halves still in the path are the
+workspace's own lowering, the server's decoded update and the wire body itself;
+until those move to the stream, the frame remains the refusal a wide generation
+meets.
 
 ### C2 — storage
 

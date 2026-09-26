@@ -13,6 +13,7 @@ pub mod path;
 pub mod read;
 pub mod references;
 pub mod root;
+pub mod rows;
 pub mod sorted;
 pub mod symlink;
 pub mod update;
@@ -24,6 +25,7 @@ pub use objects::{FilesystemObjects, FilesystemPhases, ObjectWork};
 pub use path::{LogicalPath, PathName};
 pub use read::{DirectoryListing, FilesystemRead, FilesystemReadWork, Resolved, Stat};
 pub use root::{profile_id, scope_for_seed, FilesystemRoot, FilesystemRootId};
+pub use rows::{check_input, DirectoryRowSource, InodeRowSource, PreparedRows, SerialRowSource};
 pub use sorted::{DirectoryRoot, SortedWork, MAXIMUM_SCRATCH_BYTES};
 pub use symlink::SymlinkTarget;
 pub use update::{
