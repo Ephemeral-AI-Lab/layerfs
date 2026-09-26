@@ -1,8 +1,8 @@
 # #232 silent Exec progress diagnostics, 2026-09-26
 
 > **Status: Dated planning checkpoint; not release evidence or a product contract.**
-> The first attempt below remains FAIL. The timed follow-up is prospective in
-> [PLAN_TIMED.md](PLAN_TIMED.md) and has no result here yet.
+> The first and timed attempts below remain FAIL. The progress correction and
+> subsequent Commit-failure diagnostic do not qualify the registered case.
 
 ## First attempt: real mounted callbacks with no caller acknowledgement
 
@@ -38,9 +38,8 @@ Raw evidence hashes: `driver.stderr` (callback lines)
 `receipt.json` `3e605acdb6bd5ca88b9d75d49236def7c4295c6d10c8d8f491f1659bc2850c6b`.
 The FUSE trace reports callback entry without a timestamp or reply result, so
 its count does not prove a particular callback completed near five seconds.
-The timed follow-up will locate those entries relative to the caller failure
-before any liveness-protocol change is selected. Cache state was uncontrolled;
-the latency cell remains `INELIGIBLE`.
+The timed follow-up below locates those entries relative to the caller failure.
+Cache state was uncontrolled; the latency cell remains `INELIGIBLE`.
 
 ## Timed follow-up: callbacks continue beyond the caller failure
 
@@ -76,8 +75,80 @@ Raw SHA-256: `driver.stderr`
 `receipt.json`
 `adcd87dc7a237017e18bd8f7c74e414b1880bf6635d3a284a4ff485630d1ebc8`.
 
-The product correction will send bounded authenticated Exec progress only
-after an accepted Workspace revision advances. A silent `sleep 6` control
-must still hit the five-second no-progress boundary. The new source needs a
-separate functional attempt and independent verification; neither diagnostic
-above is replaced.
+## Release product correction: Exec passes its old silence boundary
+
+Commit `563c104dd1a628cd4f345798fb38c5ff19208546` added an authenticated
+Exec progress record only when the mounted Workspace's accepted revision
+advances, at most once per second. It kept the five-second native silence rule,
+30-second Exec deadline and bounded frame count. The client accepts only the
+exact one-byte marker for Exec, without treating it as result data. The release
+native-connection test passed. The full locked Core release tests, warning-denying
+release Clippy, formatting, boundary guard and its nine self-tests passed after
+the source correction (the first full test build needed the existing bridge
+test to import `Write`; the first Clippy run required a scoped argument-count
+expectation).
+
+The local `issue232-exec-progress-product-freeze-01/FREEZE.json` records the
+clean source, release host driver hashes, release aarch64 Linux daemon image
+`sha256:d3c54f9546cfaa77716593c910c6658025fe51d05b714bff5c31287932da0811`,
+new independent master and exact registered command. Its one attempt is under
+`issue232-exec-progress-product-01/`. The SDK Exec child reached Commit after
+**8.656598 s**; the Commit child lasted **0.117568 s**. This demonstrates that
+the caller passed the former five-second silence failure at this source. The
+Service's retained LFT1 records an `EditFile` failure after **0.064555 s**.
+Cleanup then ran until the complete command hit **15.008113 s**, so the harness
+stopped it before the driver printed a final receipt. The row is **FAIL** with
+`sample_count=0`, verifier `SKIPPED`, and no confirmed cleanup; the performance
+and cache gates remain ineligible. Raw SHA-256: `run.json`
+`7bea7de962390e2dacb7214926365c0839baa457e632829c5ae93d62e7f3154e`;
+`receipt.json`
+`d723b1c8a9b899c47dde16f1c6ec4d12923e0c020174ca1b21a36baea413d148`;
+`telemetry.lft1`
+`144a15946ad7033ab3fa174940e0ad5670e37972053bcc036c838af133c22817`.
+
+At that same release product image, the opt-in public SDK `sleep 6` control ran
+once with a release test executable. It returned typed `Unknown` after
+**5.043494 s**, made no mutation, and confirmed Sandbox deletion and absence.
+Its `result.tsv` reports `PASS_DIAGNOSTIC`; SHA-256
+`bcbc72399c00d4760070113f2703750b9ec93952b5328250c39cd020f3c68630`.
+This checks that an unchanged Workspace revision does not generate a progress
+record. It is a functional control, not a performance sample.
+
+## Commit cause diagnostic: preparing failure is known
+
+The [prospective plan](PLAN_OUTCOME.md) added an opt-in pre-cleanup result line
+to the release driver at source `35b5876d97f9207f6ff2b489932d1cd91b41e4aa`.
+The source has product seal
+`fd1bd14d83ab0b398dd263114d6f02807b5cea7b8fcdb327f10ba5a65fd75da6`
+and unchanged harness seal
+`0cf78d892e8a0e8eb5ef0131a19f03ae5bbfff4a9bf295120876bac516e49d73`.
+The frozen local `issue232-exec-outcome-freeze-01/FREEZE.json` pins release
+host driver hashes, a new independent master, and release Linux image
+`sha256:81bcd35aa877a8e249c162700c343ef187d0431b28df3073c3145885084c6a90`.
+The one labelled attempt in `issue232-exec-outcome-diagnostic-01/` retained:
+
+```text
+commit failed: Commit(WorkspaceCommitFailureWire {
+  generation: 1, phase: Preparing, disposition: KnownBeforeCommit,
+  cause: Failure { code: Io, unknown: false, cleanup: None, history: None },
+  known_stage: None, observed_stage: None, known_outcome: None,
+  observed_outcome: None, installed_revision: None
+})
+```
+
+The same fixed 15-second command wall ended this diagnostic during cleanup:
+**15.009389 s**, `sample_count=0`, no driver receipt, verifier `SKIPPED`,
+unconfirmed cleanup, status **FAIL**. No Docker container with that case name
+remained afterward, which is only an observation and does not promote cleanup
+to PASS. The exact internal cause of the Service `Io` has not been isolated.
+Raw SHA-256: `driver.stderr`
+`9a554f0b672ff7d348912a2904f94c8b365ad24f834b3ef6c03daff3058a6112`;
+`receipt.json`
+`cd088a6a230e6cd3f16b86fa0f7804473c8ec4285716ef86a982423f809c412a`;
+`telemetry.lft1`
+`ee8618e16ee9d624b359c3579993e6af34fea1021a04c4d7ec2dee17688b068d`.
+
+The five-second `Unknown` is resolved for this mounted mutation at release
+profile. The registered 10 MiB v2 row remains blocked by a known-before-Commit
+`Io` in preparation, plus missing verifier and cleanup proof. Neither source
+identity supplies release admission or a speed claim.
