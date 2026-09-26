@@ -1,5 +1,10 @@
 //! Explicit staging; file saves, filesystem construction and C5 acknowledgement stay distinct.
-use super::{lower::Dirty, source::ReplacementSource, upload};
+use super::{
+    lower::Dirty,
+    source::ReplacementSource,
+    stream::{measure_prepared_totals, PreparedStream},
+    upload,
+};
 use crate::{
     overlay::snapshot::{SavedInode, Submission},
     *,
@@ -27,12 +32,12 @@ impl Workspace {
             Err(error) => Err(submission.fail(error)),
         }
     }
-    pub(crate) fn prepare_changes(
+    pub(crate) fn prepare_changes<'a>(
         &self,
-        submission: &Submission,
+        submission: &'a Submission,
         deadline: Instant,
         first_remote: &mut Option<crate::runtime::state::OperationGuard>,
-    ) -> Result<PreparedChanges, WorkspaceError> {
+    ) -> Result<(PreparedChanges, PreparedStream<'a>), WorkspaceError> {
         let captured = submission.capture()?;
         let mut count = 0;
         submission.phase(StagePhase::LocalBookkeeping, None)?;
@@ -235,16 +240,14 @@ impl Workspace {
         if first_remote.is_none() {
             *first_remote = Some(self.begin(true, deadline)?);
         }
-        let (inodes, new_file_serials, new_symlink_serials) =
-            self.prepared_inodes(submission, deadline)?;
-        let (directories, new_directories, directory_metadata) =
-            self.prepared_directories(submission, deadline)?;
+        // The exact rows this Commit will send are measured over the frozen
+        // frontier once, then lowered again into the body: the declaration the
+        // contract admits is a figure both passes agree on, not an estimate over
+        // an earlier capture.
+        let totals = measure_prepared_totals(self, submission, deadline)?;
         let context = &captured.context;
         let changes = PreparedChanges {
-            new_file_serials,
-            new_symlink_serials,
-            directory_metadata,
-            new_directories,
+            totals,
             workspace: self.inner.incarnation,
             branch: context.branch.branch,
             expected_head: context.branch.head_commit,
@@ -253,18 +256,9 @@ impl Workspace {
             base: context.effective_root,
             scope: context.scope,
             root_serial: context.root_serial.ok_or(WorkspaceError::Io)?,
-            directories,
-            inodes,
         };
-        // One metadata frame carries the whole prepared update, so its exact
-        // encoded size is what admission compares against the frame bound. The
-        // size is measured from the rows this Commit built - not estimated from
-        // the capture's counts, which cannot see a directory that ended up with
-        // no row - and the total is the same figure the encoder will write.
-        if changes.frame_bytes()? > layerfs_bridge::contract::METADATA_BYTES {
-            return Err(WorkspaceError::Capacity);
-        }
-        Ok(changes)
+        let stream = PreparedStream::open(self, submission, deadline, changes.totals)?;
+        Ok((changes, stream))
     }
     fn stage_captured(
         &self,
@@ -272,14 +266,15 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<StageSelector, WorkspaceError> {
         let mut first_remote = None;
-        let changes = self.prepare_changes(submission, deadline, &mut first_remote)?;
+        let (changes, mut stream) =
+            self.prepare_changes(submission, deadline, &mut first_remote)?;
         let captured = submission.capture()?;
         submission.phase(StagePhase::StageChanges, None)?;
         let remote = first_remote.take().ok_or(WorkspaceError::Io)?;
         let response = self.remote_call(
             (self.inner.store, captured.generation),
             Operation::HistoryCommand(HistoryCommand::StageChanges(changes)),
-            &mut &[][..],
+            &mut stream,
             HISTORY_RESULT_BYTES as u64,
             &mut std::io::sink(),
             deadline,

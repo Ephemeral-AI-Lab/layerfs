@@ -28,10 +28,11 @@ impl Workspace {
         if let Err(error) = attempt.phase(&submission, CommitPhase::Preparing) {
             return Err(attempt.fail(&submission, error));
         }
-        let changes = match self.prepare_changes(&submission, deadline, &mut first_remote) {
-            Ok(changes) => changes,
-            Err(error) => return Err(attempt.fail(&submission, submission.fail(error))),
-        };
+        let (changes, mut stream) =
+            match self.prepare_changes(&submission, deadline, &mut first_remote) {
+                Ok(prepared) => prepared,
+                Err(error) => return Err(attempt.fail(&submission, submission.fail(error))),
+            };
         let response = (|| {
             attempt.phase(&submission, CommitPhase::CompositeCommit)?;
             let remote = first_remote
@@ -40,7 +41,7 @@ impl Workspace {
             let response = self.remote_call(
                 (self.inner.store, submission.capture()?.generation),
                 Operation::HistoryCommand(HistoryCommand::Commit(changes)),
-                &mut &[][..],
+                &mut stream,
                 HISTORY_RESULT_BYTES as u64,
                 &mut std::io::sink(),
                 deadline,

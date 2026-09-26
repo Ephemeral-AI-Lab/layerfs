@@ -1,10 +1,12 @@
 //! Native Workspace namespace mutations and unbound projection refusal.
+#[path = "support/prepared.rs"]
+mod prepared_stream;
 #[cfg(target_os = "linux")]
 #[path = "support/native_workspace.rs"]
 mod support;
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::support::*;
+    use super::{prepared_stream, support::*};
     use layerfs_bridge::{
         adapters::native::{
             client::Client, connection::connect_until, pipe, protocol::encode_request,
@@ -328,45 +330,19 @@ mod linux {
             })
             .collect();
         assert_eq!(prepared.len(), 2);
-        assert_eq!(
-            prepared[0]
-                .new_directories
-                .iter()
-                .map(|d| d.serial)
-                .collect::<Vec<_>>(),
-            vec![a.serial]
-        );
-        assert_eq!(
-            prepared[1]
-                .new_directories
-                .iter()
-                .map(|d| d.serial)
-                .collect::<Vec<_>>(),
-            vec![b.serial]
-        );
+        // One declaration, one typed identity and one name per generation: the
+        // rows themselves travel in the body the request declares, so what a
+        // proxied request states here is its exact declaration.
+        assert_eq!(prepared[0].totals.declarations, 1);
+        assert_eq!(prepared[0].totals.identities, 1);
+        assert_eq!(prepared[0].totals.directories, 1);
+        assert_eq!(prepared[0].totals.names, 0);
+        assert_eq!(prepared[1].totals.declarations, 1);
+        assert_eq!(prepared[1].totals.patches, 1);
+        assert_eq!(prepared[1].totals.identities, 2);
+        assert_eq!(prepared[1].totals.directories, 2);
+        assert_eq!(prepared[1].totals.names, 1);
         assert_eq!(prepared[1].base, frozen.candidate_root);
-        assert_eq!(
-            prepared[1]
-                .directory_metadata
-                .iter()
-                .map(|p| p.serial)
-                .collect::<Vec<_>>(),
-            vec![a.serial]
-        );
-        assert!(prepared[1].inodes.is_empty());
-        assert_eq!(
-            prepared[1].directories,
-            vec![
-                DirectoryChange {
-                    parent: a.serial,
-                    changes: vec![(b"successor".to_vec(), Some(b.serial))]
-                },
-                DirectoryChange {
-                    parent: b.serial,
-                    changes: vec![]
-                }
-            ]
-        );
         drop(operations);
         drop(stage);
         assert_eq!(publications(&f), 2);
@@ -394,35 +370,27 @@ mod linux {
             parent: first + i as u64,
             changes: vec![],
         }));
-        let new_directories = (0..names)
-            .map(|i| DirectoryMetadata {
-                serial: first + i as u64,
-                mode: 0o755,
-                mtime_seconds: 1,
-                mtime_nanoseconds: 0,
-            })
-            .collect();
-        let changes = PreparedChanges {
-            workspace: [31; 32],
-            branch: snapshot.branch.branch,
-            expected_head: snapshot.branch.head_commit,
-            expected_base: snapshot.branch.base_layer,
-            generation: 1,
-            base: snapshot.effective_root,
-            scope: snapshot.scope,
-            root_serial: snapshot.root_serial.unwrap(),
-            directories,
-            inodes: vec![file],
-            new_directories,
-            new_file_serials: Vec::new(),
-            new_symlink_serials: Vec::new(),
-            directory_metadata: vec![DirectoryMetadata {
-                serial: snapshot.root_serial.unwrap(),
-                mode: 0o755,
-                mtime_seconds: 1,
-                mtime_nanoseconds: 0,
-            }],
-        };
+        // The file's own typed row, then one declaration per fresh directory:
+        // the body carries them in serial order and the header declares them.
+        let mut identities = vec![prepared_stream::rooted(
+            file.serial,
+            file.kind,
+            file.content,
+            file.metadata,
+            false,
+        )];
+        identities.extend(
+            (0..names).map(|i| prepared_stream::declaration(first + i as u64, 0o755, 1, 0)),
+        );
+        identities.push(prepared_stream::patch(
+            snapshot.root_serial.unwrap(),
+            0o755,
+            1,
+            0,
+        ));
+        let changes = prepared_stream::header(snapshot, [31; 32], 1, &directories, &identities);
+        let body = prepared_stream::body(&directories, &identities)?;
+        let _ = body;
         encode_request(&Request {
             id: 1,
             generation: 1,
@@ -515,9 +483,9 @@ mod linux {
                 _ => None,
             })
             .unwrap();
-        assert_eq!(actual.new_directories.len(), expected);
-        assert_eq!(actual.inodes.len(), 1);
-        assert_eq!(actual.directory_metadata.len(), 1);
+        assert_eq!(actual.totals.declarations, expected as u64);
+        assert_eq!(actual.totals.rooted_identities().unwrap(), 1);
+        assert_eq!(actual.totals.patches, 1);
         let actual_bytes = encode_request(&Request {
             id: 1,
             generation: 1,

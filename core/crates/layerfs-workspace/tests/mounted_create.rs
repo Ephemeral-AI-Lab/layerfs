@@ -708,7 +708,7 @@ print('KERNEL_OPEN_EXISTING O_CREAT_path=kernel-selected-OPEN-or-CREATE explicit
                 _ => None,
             })
             .unwrap();
-        assert_eq!(p.new_file_serials, vec![born.serial]);
+        assert_eq!(p.totals.fresh, 1, "one fresh regular identity");
         assert_eq!(p.base, frozen.candidate_root);
         drop(observed);
         assert_eq!(count(&f, true), 2);

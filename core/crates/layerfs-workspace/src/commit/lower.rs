@@ -1,4 +1,5 @@
 //! Captured frontier traversal and the bounded wire representation of one request.
+use super::stream::{IdentityRow, PreparedRow};
 use crate::{
     backing::{
         binary_plus_tree::keyed::KeyCursor,
@@ -8,15 +9,14 @@ use crate::{
         segments::Window,
     },
     overlay::{
-        directories::Directory,
+        directories::{self, Directory},
         pieces::{get, Inode, PieceKind},
-        snapshot::Submission,
+        snapshot::{Captured, Submission},
     },
     *,
 };
-use layerfs_bridge::contract::{InodeChange, MAX_FILE};
+use layerfs_bridge::contract::MAX_FILE;
 use std::{cmp::Ordering, sync::Arc, time::Instant};
-type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
     Inode(Inode),
     Directory(Directory),
@@ -101,16 +101,16 @@ impl DirtyWalk {
             // record; a regular identity owns an inode record. The namespace
             // record is checked first so a directory is never mistaken for a
             // file.
-            if let Some(record) =
-                reach(&mut self.names, &metadata_pages::namespace_key(serial), window)?
-            {
+            if let Some(record) = reach(
+                &mut self.names,
+                &metadata_pages::namespace_key(serial),
+                window,
+            )? {
                 let directory = Directory::parse(record.value())?;
                 // A maintained delta may still be captured: that origin is the
                 // exact root its entries and tombstones are deltas against, and
                 // it is the same root this capture was taken from.
-                if directory.generation != self.generation
-                    || directory.revision > self.revision
-                {
+                if directory.generation != self.generation || directory.revision > self.revision {
                     return Err(WorkspaceError::Io);
                 }
                 return Ok(Some((serial, Dirty::Directory(directory))));
@@ -323,24 +323,38 @@ impl Workspace {
         }
         Ok(())
     }
-    /// One typed row per dirty regular identity, in serial order. The saved
-    /// version of each is exactly the result record this capture wrote for it;
-    /// an identity with no result record was saved by no content at all, which
-    /// only a fresh empty file can be.
-    pub(crate) fn prepared_inodes(
-        &self,
-        submission: &Submission,
+}
+/// The second section of a prepared stream: one identity row per dirty serial.
+///
+/// The rows are what the canonical state is asked to accept: a maintained
+/// directory's selected portable fields, a fresh directory's declaration, or the
+/// typed value of a regular file or symlink this Commit saved. They are produced
+/// in the same serial order the frontier walk visits, so the stream stays ordered
+/// without a sort, and each row is dropped as soon as it is handed out.
+pub(crate) struct IdentitySection<'a> {
+    captured: &'a Captured,
+    walk: DirtyWalk,
+    results: KeyCursor,
+    seen: usize,
+    identities: usize,
+    files: usize,
+    symlinks: usize,
+    declarations: usize,
+    /// True while this pass may record the declarations it emits.
+    record: bool,
+    /// True once this pass has opened its declaration bookkeeping.
+    opened: bool,
+}
+impl<'a> IdentitySection<'a> {
+    /// Opens the section over one captured frontier and the submission's results.
+    pub(crate) fn open(
+        workspace: &Workspace,
+        submission: &'a Submission,
+        captured: &'a Captured,
         deadline: Instant,
-    ) -> Result<PreparedInodes, WorkspaceError> {
-        let captured = submission.capture()?;
-        let files = captured
-            .count
-            .checked_sub(captured.directories)
-            .ok_or(WorkspaceError::Io)?;
-        let mut inodes = vector(files)?;
-        let mut fresh = vector(captured.fresh_files)?;
-        let mut symlinks = vector(captured.fresh_symlinks)?;
-        let host = self
+        record: bool,
+    ) -> Result<Self, WorkspaceError> {
+        let host = workspace
             .host
             .metadata
             .as_ref()
@@ -350,75 +364,153 @@ impl Workspace {
         // walk serves the dirty serials: one pass over the records between two
         // ascending serials instead of one root path per record.
         let saved = submission.result_ref()?;
-        let mut results = {
-            let mut lease = host.payloads.window(1, 3)?;
-            let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-            captured.root.arena.key_cursor(
-                saved,
-                &metadata_pages::result_key(0),
-                window,
-                deadline,
-            )?
-        };
-        let mut walk = self.dirty_walk(submission, deadline)?;
-        let mut seen = 0;
-        while let Some((serial, dirty)) = walk.next()? {
-            seen += 1;
-            let Dirty::Inode(inode) = dirty else {
-                continue;
-            };
-            if inodes.len() == files {
-                return Err(WorkspaceError::Io);
-            }
-            let record = {
-                let mut lease = host.payloads.window(1, 3)?;
-                let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-                reach(&mut results, &metadata_pages::result_key(serial), window)?
-            };
-            let (content, metadata) = match record {
-                Some(cell) => {
-                    let value = cell.value();
-                    if cell.value_len != 80
-                        || get(value, 0)? != inode.revision
-                        || get(value, 8)? != inode.length
-                    {
-                        return Err(WorkspaceError::Io);
+        let mut lease = host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let results = captured.root.arena.key_cursor(
+            saved,
+            &metadata_pages::result_key(0),
+            window,
+            deadline,
+        )?;
+        drop(lease);
+        let walk = workspace.dirty_walk(submission, deadline)?;
+        Ok(Self {
+            captured,
+            walk,
+            results,
+            seen: 0,
+            identities: 0,
+            files: 0,
+            symlinks: 0,
+            declarations: 0,
+            record,
+            opened: false,
+        })
+    }
+    /// The next identity row, in serial order, or `None` at the end.
+    pub(crate) fn next(
+        &mut self,
+        workspace: &Workspace,
+        submission: &Submission,
+        deadline: Instant,
+    ) -> Result<Option<PreparedRow>, WorkspaceError> {
+        let host = workspace
+            .host
+            .metadata
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let mut lease = host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        while let Some((serial, dirty)) = self.walk.next()? {
+            self.seen += 1;
+            match dirty {
+                // A maintained directory owns a namespace record and no inode
+                // record: the portable fields this generation selected are its
+                // row. A directory the canonical state has not accepted yet is
+                // declared instead, exactly once.
+                Dirty::Directory(directory) => {
+                    let fresh = matches!(directory.origin, directories::Origin::Empty)
+                        && workspace.state()?.undeclared(serial);
+                    self.identities += 1;
+                    if fresh {
+                        self.declarations += 1;
+                        if self.record {
+                            // The declarations this Commit sends are exactly the
+                            // ones a completed Commit forgets, so the submission
+                            // records them as the stream emits them. The zero
+                            // new declaration this pass leaves behind is the same
+                            // state the resident lowering left.
+                            if !self.opened {
+                                self.opened = true;
+                                submission
+                                    .state
+                                    .lock()
+                                    .map_err(|_| WorkspaceError::Io)?
+                                    .declared
+                                    .clear();
+                            }
+                            let mut state =
+                                submission.state.lock().map_err(|_| WorkspaceError::Io)?;
+                            if !state.declared.contains(&serial) {
+                                state.declared.push(serial);
+                            }
+                        }
+                        return Ok(Some(PreparedRow::Identity(
+                            IdentityRow::DirectoryDeclaration {
+                                serial,
+                                mode: directory.mode,
+                                seconds: directory.seconds,
+                                nanos: directory.nanos,
+                            },
+                        )));
                     }
-                    (
-                        value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
-                        value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
-                    )
+                    return Ok(Some(PreparedRow::Identity(IdentityRow::DirectoryPatch {
+                        serial,
+                        mode: directory.mode,
+                        seconds: directory.seconds,
+                        nanos: directory.nanos,
+                    })));
                 }
-                // A fresh empty file constructs no content, so its declaration
-                // carries no saved root.
-                None if inode.fresh && inode.length == 0 => ([0; 32], [0; 32]),
-                None => return Err(WorkspaceError::Io),
-            };
-            if inode.fresh {
-                let (list, maximum) = if inode.symlink {
-                    (&mut symlinks, captured.fresh_symlinks)
-                } else {
-                    (&mut fresh, captured.fresh_files)
-                };
-                if list.len() == maximum {
-                    return Err(WorkspaceError::Io);
+                Dirty::Inode(inode) => {
+                    if inode.constructs_file() && workspace.state()?.unbound(serial) {
+                        // A complete-file construction this generation created
+                        // that no name binds any more has no identity to save, so
+                        // lowering drops it and the walk moves on.
+                        continue;
+                    }
+                    let record = reach(
+                        &mut self.results,
+                        &metadata_pages::result_key(serial),
+                        window,
+                    )?;
+                    let (content, metadata) = match record {
+                        Some(cell) => {
+                            let value = cell.value();
+                            if cell.value_len != 80
+                                || get(value, 0)? != inode.revision
+                                || get(value, 8)? != inode.length
+                            {
+                                return Err(WorkspaceError::Io);
+                            }
+                            (
+                                value[16..48].try_into().map_err(|_| WorkspaceError::Io)?,
+                                value[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
+                            )
+                        }
+                        // A fresh empty file constructs no content, so its
+                        // declaration carries no saved root.
+                        None if inode.fresh && inode.length == 0 => ([0; 32], [0; 32]),
+                        None => return Err(WorkspaceError::Io),
+                    };
+                    if inode.fresh {
+                        let (count, maximum) = if inode.symlink {
+                            (&mut self.symlinks, self.captured.fresh_symlinks)
+                        } else {
+                            (&mut self.files, self.captured.fresh_files)
+                        };
+                        if *count == maximum {
+                            return Err(WorkspaceError::Io);
+                        }
+                        *count += 1;
+                    }
+                    self.identities += 1;
+                    return Ok(Some(PreparedRow::Identity(IdentityRow::Rooted {
+                        serial,
+                        fresh: inode.fresh,
+                        symlink: inode.symlink,
+                        content,
+                        metadata,
+                    })));
                 }
-                list.push(serial);
             }
-            inodes.push(InodeChange {
-                serial,
-                kind: if inode.symlink { 3 } else { 1 },
-                content,
-                metadata,
-            });
         }
-        if seen != captured.count
-            || inodes.len() != files
-            || fresh.len() > captured.fresh_files
-            || symlinks.len() > captured.fresh_symlinks
-        {
+        // The walk visits every dirty serial exactly once and stops at the end of
+        // this generation's dirty frontier. Every dirty serial owns exactly one
+        // row here: an inode value, a directory patch or a declaration.
+        if self.seen != self.captured.count || self.identities != self.captured.count {
             return Err(WorkspaceError::Io);
         }
-        Ok((inodes, fresh, symlinks))
+        let _ = deadline;
+        Ok(None)
     }
 }

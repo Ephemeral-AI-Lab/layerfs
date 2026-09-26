@@ -49,7 +49,7 @@ pub struct RowSpool {
     directory_rows: usize,
     inode_rows: usize,
     new_rows: usize,
-    slots: usize,
+    written: [usize; 3],
     bytes: u64,
     capacity: u64,
     sealed: bool,
@@ -99,7 +99,7 @@ impl RowSpool {
             directory_rows,
             inode_rows,
             new_rows,
-            slots: 0,
+            written: [0; 3],
             bytes: table,
             capacity,
             sealed: false,
@@ -119,26 +119,22 @@ impl RowSpool {
 
     /// Directory rows written so far.
     pub fn written_directories(&self) -> usize {
-        self.slots.min(self.directory_rows)
+        self.written[0]
     }
 
     /// Typed inode values written so far.
     pub fn written_inodes(&self) -> usize {
-        self.slots
-            .saturating_sub(self.directory_rows)
-            .min(self.inode_rows)
+        self.written[1]
     }
 
     /// Fresh serials written so far.
     pub fn written_new(&self) -> usize {
-        self.slots
-            .saturating_sub(self.directory_rows + self.inode_rows)
-            .min(self.new_rows)
+        self.written[2]
     }
 
     /// Writes one directory row's final bindings.
     pub fn push_directory(&mut self, row: &DirectoryUpdate) -> ContentResult<()> {
-        if self.slots >= self.directory_rows {
+        if self.written[0] >= self.directory_rows {
             return Err(ContentError::InvalidRecord("directory row count"));
         }
         let mut payload = Vec::new();
@@ -157,7 +153,7 @@ impl RowSpool {
 
     /// Writes one typed final inode value.
     pub fn push_inode(&mut self, row: &InodeUpdate) -> ContentResult<()> {
-        if self.written_inodes() >= self.inode_rows || self.slots < self.directory_rows {
+        if self.written[1] >= self.inode_rows {
             return Err(ContentError::InvalidRecord("inode row count"));
         }
         super::serial_in_range(row.serial)
@@ -173,8 +169,7 @@ impl RowSpool {
 
     /// Writes one serial the caller's allocator just created.
     pub fn push_serial(&mut self, serial: u64) -> ContentResult<()> {
-        if self.written_new() >= self.new_rows || self.slots < self.directory_rows + self.inode_rows
-        {
+        if self.written_new() >= self.new_rows {
             return Err(ContentError::InvalidRecord("new inode row count"));
         }
         super::serial_in_range(serial)
@@ -191,8 +186,10 @@ impl RowSpool {
         records: usize,
         payload: &[u8],
     ) -> ContentResult<()> {
-        let seen = usize::from(kind);
-        if self.slots > 0 && self.last[seen] >= key {
+        // Every row kind is one run in the table, in the order the kinds are
+        // numbered: directories, then typed values, then fresh serials.
+        let seen = usize::from(kind) - 1;
+        if self.written[seen] > 0 && self.last[seen] >= key {
             return Err(ContentError::NonCanonicalOrdering);
         }
         let length = payload.len() as u64;
@@ -205,8 +202,9 @@ impl RowSpool {
                 what: "prepared row spool",
             });
         }
+        let (start, _) = self.run(kind);
         let offset = self.bytes;
-        let slot = SPOOL_HEADER_BYTES + self.slots as u64 * SPOOL_SLOT_BYTES;
+        let slot = SPOOL_HEADER_BYTES + (start + self.written[seen]) as u64 * SPOOL_SLOT_BYTES;
         let mut record = [0_u8; SPOOL_SLOT_BYTES as usize];
         record[..8].copy_from_slice(&key.to_be_bytes());
         record[8..16].copy_from_slice(&offset.to_be_bytes());
@@ -219,7 +217,7 @@ impl RowSpool {
             .and_then(|_| self.file.seek(SeekFrom::Start(offset)))
             .and_then(|_| self.file.write_all(payload))
             .map_err(|_| ContentError::Io)?;
-        self.slots += 1;
+        self.written[seen] += 1;
         self.bytes = end;
         self.last[seen] = key;
         Ok(())
@@ -227,11 +225,9 @@ impl RowSpool {
 
     /// Refuses a spool that does not hold every row its update declared.
     pub fn seal(&mut self) -> ContentResult<()> {
-        if self.slots
-            != self
-                .directory_rows
-                .saturating_add(self.inode_rows)
-                .saturating_add(self.new_rows)
+        if self.written[0] != self.directory_rows
+            || self.written[1] != self.inode_rows
+            || self.written[2] != self.new_rows
         {
             return Err(ContentError::InvalidRecord("prepared row count"));
         }
@@ -256,7 +252,14 @@ impl RowSpool {
     }
 
     /// Reads one slot of a kind's run, or `None` past its end.
+    ///
+    /// A slot is answered only once its run has written it: the table is
+    /// reserved whole when the spool is created, so an unwritten slot would
+    /// otherwise read as the key the run has not reached yet.
     fn slot(&self, kind: u8, index: usize) -> ContentResult<Option<Slot>> {
+        if index >= self.written[usize::from(kind) - 1] {
+            return Ok(None);
+        }
         let (start, count) = self.run(kind);
         if index >= count {
             return Ok(None);
@@ -485,6 +488,15 @@ impl SerialRowSource for SpoolSerials<'_> {
             }
             None => Ok(None),
         }
+    }
+}
+
+impl RowSpool {
+    /// True once every row of every run has been written.
+    pub fn is_complete(&self) -> bool {
+        self.written[0] == self.directory_rows
+            && self.written[1] == self.inode_rows
+            && self.written[2] == self.new_rows
     }
 }
 

@@ -47,11 +47,9 @@ fn round_trip(operation: Operation) -> Request {
 }
 
 fn prepared(workspace: [u8; 32], branch: [u8; 17]) -> PreparedChanges {
+    // Two binding rows and three identity rows: one fresh file, one existing
+    // symlink and the root's own portable patch.
     PreparedChanges {
-        directory_metadata: Vec::new(),
-        new_directories: Vec::new(),
-        new_file_serials: Vec::new(),
-        new_symlink_serials: Vec::new(),
         workspace,
         branch,
         expected_head: Some([0x12; 33]),
@@ -60,16 +58,15 @@ fn prepared(workspace: [u8; 32], branch: [u8; 17]) -> PreparedChanges {
         base: [0x44; 32],
         scope: [0x55; 32],
         root_serial: 1,
-        directories: vec![DirectoryChange {
-            parent: 1,
-            changes: vec![(b"a".to_vec(), Some(2)), (b"b".to_vec(), None)],
-        }],
-        inodes: vec![InodeChange {
-            serial: 2,
-            kind: 1,
-            content: [0x66; 32],
-            metadata: [0x77; 32],
-        }],
+        totals: PreparedTotals {
+            directories: 1,
+            names: 2,
+            name_bytes: 2 * 10 + 2,
+            identities: 3,
+            patches: 1,
+            declarations: 0,
+            fresh: 1,
+        },
     }
 }
 
@@ -200,43 +197,66 @@ fn native_import_declares_progress_response_budget() {
 }
 
 #[test]
-fn prepared_frame_bytes_matches_the_encoder_for_every_trailer() {
-    // The prepared-update admission compares one figure against the metadata
-    // frame budget, so the figure has to be the encoder's own output rather
-    // than an estimate over the caller's counts: an over-estimate refuses a
-    // request the frame carries, an under-estimate fails inside the encoder
-    // after the caller already accepted the request.
-    let measure = |label: &str, changes: &PreparedChanges| {
-        let encoded = request(Operation::HistoryCommand(HistoryCommand::Commit(
-            changes.clone(),
-        )));
-        if let Err(failure) = encoded.validate() {
-            panic!("validate {label}: {failure:?}");
-        }
-        let bytes = encode_request_with_budget(&encoded, 5_000)
-            .unwrap_or_else(|failure| panic!("encode {label}: {failure:?}"));
-        assert_eq!(
-            changes.frame_bytes().expect("frame bytes"),
-            bytes.len(),
-            "declared frame bytes must be the encoded length"
-        );
+fn a_prepared_declaration_is_the_exact_body_it_describes() {
+    // The request carries the identity of an update and the exact totals of the
+    // ordered body that follows it, so the figure the contract admits is the
+    // arithmetic of those totals - not an estimate over an earlier capture, and
+    // no longer the rows themselves. A declaration whose counts cannot describe
+    // one stream is refused before anything is sent.
+    let totals = |directories: u64,
+                  names: u64,
+                  name_bytes: u64,
+                  identities: u64,
+                  patches: u64,
+                  declarations: u64,
+                  fresh: u64| PreparedTotals {
+        directories,
+        names,
+        name_bytes,
+        identities,
+        patches,
+        declarations,
+        fresh,
     };
-    let binding = |parent: u64, names: &[(&[u8], Option<u64>)]| DirectoryChange {
-        parent,
-        changes: names
-            .iter()
-            .map(|(name, serial)| (name.to_vec(), *serial))
-            .collect(),
+    let body = |totals: &PreparedTotals| totals.stream_bytes().expect("stream bytes");
+    // One directory row with two bindings - a one-byte name and a ten-byte one -
+    // then one rooted identity and one directory patch.
+    let sample = totals(1, 2, (10 + 1) + (10 + 10), 2, 1, 0, 1);
+    // Tag, one 12-byte directory row, the naming bytes, one rooted identity and
+    // one directory patch.
+    assert_eq!(body(&sample), 1 + 12 + 31 + 73 + 25);
+    sample.check().expect("declaration");
+    // An absent head changes the request and never the body it declares.
+    let with_head = request(Operation::HistoryCommand(HistoryCommand::Commit(prepared(
+        [0x71; 32], [0x11; 17],
+    ))));
+    let mut headless = with_head.clone();
+    let Operation::HistoryCommand(HistoryCommand::Commit(changes)) = &mut headless.operation else {
+        panic!("a prepared command")
     };
-    let inode = |serial: u64, kind: u8| InodeChange {
-        serial,
-        kind,
-        content: [0x66; 32],
-        metadata: [0x77; 32],
-    };
-    // One complete update: two directory rows, one declared fresh directory,
-    // one patched directory, a fresh file and a fresh symlink.
-    let full = PreparedChanges {
+    changes.expected_head = None;
+    assert_eq!(
+        headless.operation.input_length().unwrap(),
+        with_head.operation.input_length().unwrap()
+    );
+    assert_eq!(
+        encode_request(&with_head).unwrap().len() - encode_request(&headless).unwrap().len(),
+        COMMIT_BYTES
+    );
+    // Every count is checked against the rows it claims: a declaration is fresh,
+    // a patch or a declaration is one identity row, and a binding carries at
+    // least one name byte.
+    for broken in [
+        totals(1, 2, 21, 2, 1, 1, 1),
+        totals(1, 2, 21, 1, 1, 1, 2),
+        totals(0, 1, 10, 0, 0, 0, 0),
+        totals(1, 2, 20, 2, 1, 0, 1),
+    ] {
+        assert!(broken.check().is_err(), "{broken:?} must be refused");
+    }
+    // The request itself round-trips, and the header is one metadata frame
+    // whatever the body it declares.
+    let wide = PreparedChanges {
         workspace: [0x71; 32],
         branch: [0x11; 17],
         expected_head: Some(commit_id(0x05)),
@@ -245,96 +265,22 @@ fn prepared_frame_bytes_matches_the_encoder_for_every_trailer() {
         base: [0x44; 32],
         scope: [0x55; 32],
         root_serial: 1,
-        directories: vec![
-            binding(1, &[(b"a".as_slice(), Some(2)), (b"z".as_slice(), None)]),
-            binding(5, &[(b"c".as_slice(), Some(2))]),
-        ],
-        inodes: vec![inode(2, 1), inode(3, 3)],
-        new_directories: vec![DirectoryMetadata {
-            serial: 5,
-            mode: 0o755,
-            mtime_seconds: -1,
-            mtime_nanoseconds: 12,
-        }],
-        directory_metadata: vec![DirectoryMetadata {
-            serial: 6,
-            mode: 0o700,
-            mtime_seconds: 1,
-            mtime_nanoseconds: 0,
-        }],
-        new_file_serials: vec![2],
-        new_symlink_serials: vec![3],
+        totals: totals(1, 700, 700 * 11, 701, 1, 0, 700),
     };
-    measure("full", &full);
-    // Every trailer version: files only, directory records only, and none.
-    let files_only = PreparedChanges {
-        new_symlink_serials: Vec::new(),
-        ..full.clone()
-    };
-    measure("files_only", &files_only);
-    let records_only = PreparedChanges {
-        new_file_serials: Vec::new(),
-        ..files_only.clone()
-    };
-    measure("records_only", &records_only);
-    let no_trailer = PreparedChanges {
-        new_directories: Vec::new(),
-        directory_metadata: Vec::new(),
-        ..records_only.clone()
-    };
-    measure("no_trailer", &no_trailer);
-    // An absent expected head shortens the fixed part by exactly its width.
-    let headless = PreparedChanges {
-        expected_head: None,
-        ..full.clone()
-    };
-    measure("headless", &headless);
-    assert_eq!(
-        full.frame_bytes().unwrap() - headless.frame_bytes().unwrap(),
-        COMMIT_BYTES
-    );
-    // A name's own width is measured rather than assumed: the same update with
-    // a 255-byte name and with a one-byte name differs by exactly 254 bytes.
-    let named = PreparedChanges {
-        directories: vec![binding(1, &[(b"a".as_slice(), Some(2))])],
-        new_directories: Vec::new(),
-        directory_metadata: Vec::new(),
-        new_file_serials: Vec::new(),
-        new_symlink_serials: Vec::new(),
-        ..full.clone()
-    };
-    let long_name = PreparedChanges {
-        directories: vec![binding(1, &[(vec![b'n'; 255].as_slice(), Some(2))])],
-        ..named.clone()
-    };
-    let short_name = PreparedChanges {
-        directories: vec![binding(1, &[(b"n".as_slice(), Some(2))])],
-        ..named.clone()
-    };
-    measure("long_name", &long_name);
-    measure("short_name", &short_name);
-    assert_eq!(
-        long_name.frame_bytes().unwrap() - short_name.frame_bytes().unwrap(),
-        254
-    );
-    // The empty prepared update is still a framed request.
-    let empty = PreparedChanges {
-        directories: Vec::new(),
-        inodes: Vec::new(),
-        expected_head: None,
-        ..no_trailer
-    };
-    measure("empty", &empty);
+    let request = request(Operation::HistoryCommand(HistoryCommand::Commit(wide)));
+    request.validate().expect("a wide declaration is admitted");
+    let bytes = encode_request_with_budget(&request, 5_000).expect("encode");
+    assert!(bytes.len() <= METADATA_BYTES);
+    assert_eq!(decode_request(1, &bytes).expect("decode"), request);
 }
 
 #[test]
-fn a_prepared_update_wider_than_128_rows_round_trips_and_the_frame_is_the_bound() {
-    // A prepared update used to be refused above 128 directories, 128 inodes
-    // and 128 names however much the frame could carry. The bound is now the
-    // metadata frame the update travels in: a 200-name directory is carried,
-    // and the same shape past the frame is refused as `Capacity` by the
-    // contract before any encoder sees it.
-    let wide = |names: usize| PreparedChanges {
+fn a_prepared_update_wider_than_one_metadata_frame_round_trips() {
+    // A prepared update used to be refused above 128 directories, 128 inodes and
+    // 128 names, and then above the 32 KiB metadata frame. Neither is a bound any
+    // more: the declaration states the rows, the body carries them, and the
+    // charged stream bound is what a caller is measured against.
+    let wide = |names: u64| PreparedChanges {
         workspace: [0x71; 32],
         branch: [0x11; 17],
         expected_head: Some(commit_id(0x05)),
@@ -343,49 +289,49 @@ fn a_prepared_update_wider_than_128_rows_round_trips_and_the_frame_is_the_bound(
         base: [0x44; 32],
         scope: [0x55; 32],
         root_serial: 1,
-        directories: vec![DirectoryChange {
-            parent: 1,
-            changes: (0..names)
-                .map(|index| (format!("f{index:04}").into_bytes(), Some(2 + index as u64)))
-                .collect(),
-        }],
-        inodes: (0..names)
-            .map(|index| InodeChange {
-                serial: 2 + index as u64,
-                kind: 1,
-                content: [0x66; 32],
-                metadata: [0x77; 32],
-            })
-            .collect(),
-        new_directories: Vec::new(),
-        directory_metadata: vec![DirectoryMetadata {
-            serial: 1_000_000,
-            mode: 0o755,
-            mtime_seconds: -1,
-            mtime_nanoseconds: 7,
-        }],
-        new_file_serials: (0..names).map(|index| 2 + index as u64).collect(),
-        new_symlink_serials: Vec::new(),
+        totals: PreparedTotals {
+            directories: 1,
+            names,
+            // One row per name plus the name itself, and every name is `f%04u`.
+            name_bytes: (0..names)
+                .map(|index| 10 + format!("f{index:04}").len() as u64)
+                .sum(),
+            identities: names + 1,
+            patches: 1,
+            declarations: 0,
+            fresh: names,
+        },
     };
-    let carried = wide(200);
-    let fitting = request(Operation::HistoryCommand(HistoryCommand::Commit(
-        carried.clone(),
-    )));
-    fitting.validate().expect("200 names fit one metadata frame");
-    let bytes = encode_request_with_budget(&fitting, 5_000).expect("encode");
-    assert_eq!(carried.frame_bytes().unwrap(), bytes.len());
-    assert!(bytes.len() <= METADATA_BYTES);
-    assert_eq!(decode_request(1, &bytes).expect("decode"), fitting);
-    // Past the frame the same shape is refused, and the refusal is a resource
-    // refusal rather than a malformed request.
-    let past = wide(400);
-    let oversized = request(Operation::HistoryCommand(HistoryCommand::Commit(
-        past.clone(),
-    )));
-    assert!(past.frame_bytes().unwrap() > METADATA_BYTES);
-    let refusal = oversized.validate().expect_err("past the frame");
-    assert_eq!(refusal.code, Code::Capacity);
-    assert!(encode_request_with_budget(&oversized, 5_000).is_err());
+    // 200 names fit one frame (17,638 bytes); the wider generations are the ones
+    // the frame used to refuse.
+    for names in [400_u64, 1_025, 4_097] {
+        let changes = wide(names);
+        let bytes = changes.stream_bytes().expect("declaration");
+        assert!(
+            bytes > METADATA_BYTES as u64,
+            "{names} names no longer fit a frame: {bytes}"
+        );
+        let request = request(Operation::HistoryCommand(HistoryCommand::Commit(
+            changes.clone(),
+        )));
+        request.validate().expect("admitted");
+        let encoded = encode_request_with_budget(&request, 5_000).expect("encode");
+        assert!(encoded.len() <= METADATA_BYTES, "the header is one frame");
+        assert_eq!(request.operation.input_length().unwrap(), bytes);
+        assert_eq!(decode_request(1, &encoded).expect("decode"), request);
+    }
+    // Past the charged bound the refusal is a resource refusal, not a malformed
+    // request.
+    let beyond = PreparedChanges {
+        totals: PreparedTotals {
+            names: MAX_PREPARED_STREAM_BYTES,
+            name_bytes: MAX_PREPARED_STREAM_BYTES * 11,
+            ..wide(1).totals
+        },
+        ..wide(1)
+    };
+    let oversized = request(Operation::HistoryCommand(HistoryCommand::Commit(beyond)));
+    assert_eq!(oversized.validate().unwrap_err().code, Code::Capacity);
 }
 
 #[test]
@@ -526,41 +472,33 @@ fn page_and_count_bounds_are_checked() {
         .code,
         Code::Capacity
     );
-    // A prepared update whose rows are legal but whose encoded metadata
-    // exceeds the 32 KiB envelope is refused as a resource refusal by the
-    // contract itself, before any encoder: the admission is the frame the
-    // update travels in rather than a row count. The same update used to be
-    // admitted here and refused only inside the encoder.
+    // A prepared update whose declaration is legal but whose body is wider than
+    // a metadata frame is no longer refused by the frame: the request carries
+    // the declaration, and the body it describes is charged against the stream
+    // bound instead. What the contract still refuses is a declaration whose
+    // counts cannot describe one stream.
     let widest = vec![b'x'; 255];
     let mut changes = prepared([0x71; 32], [0x11; 17]);
-    changes.directories = [1_u64, 2]
-        .into_iter()
-        .map(|parent| DirectoryChange {
-            parent,
-            changes: (0..64)
-                .map(|_| (widest.clone(), Some(2)))
-                .collect::<Vec<_>>(),
-        })
-        .collect();
-    assert_eq!(
-        changes
-            .directories
-            .iter()
-            .map(|directory| directory.changes.len())
-            .sum::<usize>(),
-        128
-    );
-    assert!(changes.frame_bytes().unwrap() > METADATA_BYTES);
+    changes.totals = PreparedTotals {
+        directories: 2,
+        names: 128,
+        name_bytes: 2 * 128 * (10 + 255),
+        identities: 2,
+        patches: 2,
+        declarations: 0,
+        fresh: 0,
+    };
+    assert_eq!(changes.totals.names, 128);
+    assert!(changes.stream_bytes().unwrap() > METADATA_BYTES as u64);
     let request = request(Operation::HistoryCommand(HistoryCommand::StageChanges(
-        changes,
+        changes.clone(),
     )));
-    assert_eq!(request.validate().unwrap_err().code, Code::Capacity);
+    request.validate().expect("the declaration is admitted");
     assert_eq!(
-        encode_request_with_budget(&request, 5_000)
-            .unwrap_err()
-            .code,
-        Code::Capacity
+        request.operation.input_length().unwrap(),
+        changes.stream_bytes().unwrap()
     );
+    let _ = widest;
 }
 
 #[test]
@@ -1201,13 +1139,19 @@ fn history_wire_fixtures() -> Vec<Vec<u8>> {
     cases
 }
 
-/// The retired pathless initialization owns tag 1, so its frozen encoding is the
-/// only recorded case with no live counterpart. Its own bytes prove which case
-/// that is: a `01` tag directly after the command envelope.
+/// The frozen encodings this source no longer reproduces, and why.
+///
+/// `history-wire-a4a144af.hex` is evidence and stays exactly as recorded. Three
+/// of its cases cannot be reproduced by the current grammar: the retired
+/// pathless initialization (whose tag 1 now names the live, different
+/// `ImportNativeDirectory` payload) and the two prepared commands, whose rows
+/// moved out of the request and into the ordered body it declares.
+const FROZEN_ENCODINGS_REPLACED: [usize; 3] = [10, 13, 15];
+/// Byte the retired pathless initialization's command tag follows the envelope at.
 const HISTORY_ENVELOPE_HEX: &str = "000000000000000100000001000200001388000000000000100007";
 
 #[test]
-fn the_retired_pathless_init_encoding_is_the_only_recorded_case_without_a_live_match() {
+fn the_retired_init_and_the_prepared_commands_are_the_only_replaced_encodings() {
     use std::fmt::Write;
     let recorded: Vec<&str> = include_str!("fixtures/history-wire-a4a144af.hex")
         .lines()
@@ -1223,9 +1167,9 @@ fn the_retired_pathless_init_encoding_is_the_only_recorded_case_without_a_live_m
             hex
         })
         .collect();
-    // The frozen bytes are evidence and stay exactly as recorded. Every one of
-    // them must still be reproduced by the production encoder except the case
-    // whose operation this change deleted.
+    // The frozen bytes are evidence and stay exactly as recorded: every one of
+    // them must still be reproduced by the production encoder except the cases
+    // this change replaced, and each of those must be the case it claims to be.
     let mut missing = Vec::new();
     for (index, line) in recorded.iter().enumerate() {
         if !live.iter().any(|hex| hex == line) {
@@ -1233,18 +1177,38 @@ fn the_retired_pathless_init_encoding_is_the_only_recorded_case_without_a_live_m
         }
     }
     assert_eq!(
-        missing.len(),
-        1,
-        "unexpected drifted encodings: {missing:?}"
+        missing, FROZEN_ENCODINGS_REPLACED,
+        "the frozen encodings that no longer round-trip"
     );
-    let retired = recorded[missing[0]];
-    let tag = retired
-        .find(HISTORY_ENVELOPE_HEX)
-        .expect("history-command envelope")
-        + HISTORY_ENVELOPE_HEX.len();
-    assert_eq!(
-        &retired[tag..tag + 2],
-        "01",
-        "the only drifted encoding must be the retired pathless initialization"
-    );
+    for (index, tag) in [(10, "01"), (13, "03"), (15, "05")] {
+        let line = recorded[index];
+        let at = line
+            .find(HISTORY_ENVELOPE_HEX)
+            .unwrap_or_else(|| panic!("case {index} is a history command"))
+            + HISTORY_ENVELOPE_HEX.len();
+        assert_eq!(
+            &line[at..at + 2],
+            tag,
+            "case {index} is the command it is named for"
+        );
+    }
+    // The two prepared commands are the ones whose rows left the request: their
+    // declaration is now the whole payload, and it is smaller than the encoding
+    // that used to carry the same update inline.
+    for (index, line) in [(13, recorded[13]), (15, recorded[15])] {
+        let live_bytes = history_wire_fixtures()
+            .iter()
+            .filter(|bytes| {
+                let mut hex = String::new();
+                for byte in bytes.iter() {
+                    write!(&mut hex, "{byte:02x}").unwrap();
+                }
+                hex.starts_with(&line[..HISTORY_ENVELOPE_HEX.len() + 4]) && hex.len() != line.len()
+            })
+            .count();
+        assert!(
+            live_bytes >= 1,
+            "case {index} still has a live prepared request of its own shape"
+        );
+    }
 }

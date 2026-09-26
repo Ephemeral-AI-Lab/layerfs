@@ -227,7 +227,7 @@ the next removal in that directory is refused rather than published.
 `keyed::cursor` walks the same tree in key order and reads each reached leaf
 once, `O(H + L)` page reads rather than `O(H × L)`.
 
-### Frozen namespace lowering and the prepared frame (#256)
+### Frozen namespace lowering and the prepared stream (#256)
 
 One Commit lowers the captured generation once. The frontier walk, the namespace
 records and the inode records are three ordered passes over that one keyed tree,
@@ -235,35 +235,38 @@ and a maintained directory's final bindings are the ordered merge of its entry
 leaves and its removal leaves. A pass reads each reached leaf once, so its page
 visits follow the tree's height and leaves rather than the number of names.
 
+The lowered rows do not travel inside the request. A prepared command carries a
+*declaration* - the identity of the update plus the exact totals of the ordered
+body that follows it - and the rows themselves are written into that body one at
+a time: the changed directories by parent serial, then one identity row per dirty
+serial (an existing file or symlink with the roots this Commit saved, a fresh one,
+a maintained directory's portable patch, or a fresh directory's declaration). The
+Workspace measures the declaration by lowering the frozen frontier once without
+encoding anything and then lowers it again to write the body, so the figure the
+contract admits is a figure both passes produced rather than an estimate over an
+earlier capture.
+
 | Limit | Value | Enforced by |
 | --- | ---: | --- |
-| prepared rows a Commit may lower | no count; the rows are the charged frontier | `Workspace::prepared_directories`, `State::frontier_bytes` |
-| directories, names or inodes in one prepared update | no count | `bridge::contract::check_prepared` |
-| bytes one prepared update occupies in a metadata frame | 32 KiB, measured | `PreparedChanges::frame_bytes`, `METADATA_BYTES` |
-| names one directory row may carry | no count; the row is the directory's final bindings | `commit::directories` |
+| prepared rows one generation may carry | no count; the rows are the charged frontier | `Workspace::prepared_directories`, `State::frontier_bytes` |
+| directories, names or inodes in one prepared update | no count | `prepared_stream::PreparedTotals::check` |
+| bytes one prepared request occupies | one metadata frame; it grows with the declaration, not with the rows | `bridge::contract::check_prepared`, `METADATA_BYTES` |
+| bytes one prepared body may carry | 256 MiB, charged | `MAX_PREPARED_STREAM_BYTES` |
+| resident rows while lowering | one row, plus one declared batch in the directory phase | `commit::stream::PreparedStream` |
+| resident rows while receiving | one row, and one charged slot per row on disk | `RowSpool`, `service::save::prepared` |
 | prepared rows C1 holds at once | one row per open pass, whatever the row count | `filesystem::rows::RowSource` cursors |
-| prepared row spool | fixed 32-byte slot per row plus payloads, charged against a declared capacity | `filesystem::rows::RowSpool` |
-| rows one spool may hold | the totals its update declared before the first row was written | `RowSpool::create`, `RowSpool::seal` |
 
-The prepared update is admitted by the exact bytes it encodes to, not by an
-estimate over the capture's counts: `PreparedChanges::frame_bytes` is the whole
-request body the encoder writes, the workspace compares it before sending, and
-the contract compares it again at admission, so a caller other than the
-Workspace is bounded the same way. A generation wider than one frame is refused
-as `Capacity` before any command is sent; the frame is the transport's own batch
-size, and nothing refuses a generation the frame can carry. Decoding is bounded
-by the bytes the frame still holds: a counted list is refused when its rows
-cannot fit the remaining frame, so the wire reader has no row count of its own.
-
-C1 reads the same rows through `RowSource` rather than a resident slice, so the
-operation's own resident cost follows one row per pass and not the row count
-(`04-filesystem.md` §5.8). The 32 KiB frame above is therefore a bound on the
-*transport body* only, and it is the bound the streamed route lifts: a spool holds
-what a frame cannot, and `RowSpool` charges every slot and payload against the
-capacity its caller declares. The resident halves still in the path are the
-workspace's own lowering, the server's decoded update and the wire body itself;
-until those move to the stream, the frame remains the refusal a wide generation
-meets.
+The declaration is exact and it is checked twice: the contract recomputes the body
+length from the counts and refuses a declaration whose counts cannot describe one
+stream (`Capacity`), the transport streams exactly that many bytes, and the reader
+refuses a body that ends anywhere else. A generation wider than one metadata frame
+is therefore *carried* - the frame bounds the request, and the request is the
+declaration - and what refuses a generation is the charged stream bound and the
+spool the service receives it into. The rows a frame used to have to hold are now
+on both sides of the wire in files rather than in memory: the workspace pulls them
+from its frozen cursors, and the service writes each row into a spool before C1
+reads it back. C1 reads them through `RowSource` cursors rather than a resident
+slice (`04-filesystem.md` §5.8).
 
 ### C2 — storage
 

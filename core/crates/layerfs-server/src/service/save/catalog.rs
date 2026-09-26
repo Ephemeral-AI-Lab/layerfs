@@ -1,21 +1,32 @@
 //! Catalog changes after service admission.
 use crate::service::{
-    error::{catalog as failure, content, storage},
+    error::{catalog as failure, storage},
     read::content::id,
     records::*,
     save::{
         filesystem::{self, PreparedUpdate},
         import::{namespace, scan},
-        validation::validate_inode_role,
     },
 };
 use layerfs_bridge::contract::HistoryResult;
 use layerfs_bridge::contract::*;
-use layerfs_content::{filesystem::scope_for_seed, object::inode_leaf::InodeKind};
+use layerfs_content::filesystem::scope_for_seed;
 use layerfs_history::*;
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
-use std::{io::Write, path::Path, time::Instant};
+use std::{
+    io::{Read, Write},
+    path::Path,
+    time::Instant,
+};
+
+/// The body a command may read and the progress stream it writes.
+pub(crate) struct Streams<'a> {
+    /// The ordered body a prepared command declared, when it declared one.
+    pub(crate) input: &'a mut dyn Read,
+    /// Where a long command reports its progress.
+    pub(crate) output: &'a mut dyn Write,
+}
 
 /// Runs one mutating history command.
 pub(crate) fn command(
@@ -23,10 +34,11 @@ pub(crate) fn command(
     store: &Store,
     import_root: Option<&Path>,
     command: &HistoryCommand,
+    streams: Streams<'_>,
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
-    output: &mut dyn Write,
 ) -> Result<Response, Failure> {
+    let Streams { input, output } = streams;
     let result = match command {
         HistoryCommand::ImportNativeDirectory {
             stack,
@@ -94,11 +106,11 @@ pub(crate) fn command(
             HistoryResult::BranchSnapshot(snapshot_wire(&snapshot))
         }
         HistoryCommand::StageChanges(changes) => {
-            let stage = stage(catalog, store, changes, deadline, timer)?;
+            let stage = stage(catalog, store, changes, input, deadline, timer)?;
             HistoryResult::Stage(stage_wire(&stage))
         }
         HistoryCommand::Commit(changes) => {
-            let stage = stage(catalog, store, changes, deadline, timer)?;
+            let stage = stage(catalog, store, changes, input, deadline, timer)?;
             let outcome = catalog
                 .commit_staged(&CommitStagedRequest {
                     workspace: stage.workspace,
@@ -183,6 +195,7 @@ fn stage(
     catalog: &dyn HistoryCatalog,
     store: &Store,
     changes: &PreparedChanges,
+    input: &mut dyn Read,
     deadline: Instant,
     timer: &TimingScope<'_, Active>,
 ) -> Result<StageRecord, Failure> {
@@ -214,36 +227,25 @@ fn stage(
         return Err(Code::InvalidInput.into());
     }
     let provider = StoreProvider::new(store);
-    for inode in &changes.inodes {
-        let kind = InodeKind::from_code(changes_kind(inode.kind)?).map_err(content)?;
-        validate_inode_role(
-            &provider,
-            kind,
-            id(&inode.content),
-            id(&inode.metadata),
-            timer,
-        )?;
-    }
+    // Every supplied root is checked against the base tree as its row arrives:
+    // the rows of this update are a stream, so there is no earlier moment at
+    // which the service holds them all to check them here.
     if Instant::now() >= deadline {
         return Err(Code::Deadline.into());
     }
     let mut save = store
         .begin_save(timer.child("history.begin_save"))
         .map_err(storage)?;
-    let prepared = PreparedUpdate {
+    let mut prepared = PreparedUpdate {
         base: changes.base,
         scope: changes.scope,
         root_serial: changes.root_serial,
-        directories: &changes.directories,
-        inodes: &changes.inodes,
-        new_directories: &changes.new_directories,
-        directory_metadata: &changes.directory_metadata,
-        new_file_serials: &changes.new_file_serials,
-        new_symlink_serials: &changes.new_symlink_serials,
+        changes,
+        body: input,
     };
     let built = {
         let mut handoff = SaveHandoff::new(&mut save);
-        let result = filesystem::update(&provider, &prepared, &mut handoff, deadline, timer);
+        let result = filesystem::update(&provider, &mut prepared, &mut handoff, deadline, timer);
         let retained = handoff.take_failure();
         drop(handoff);
         match retained {

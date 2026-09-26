@@ -3,13 +3,6 @@ use crate::service::error::catalog as failure;
 use layerfs_bridge::contract::{HistoryResult, *};
 use layerfs_history::*;
 
-pub(crate) fn changes_kind(kind: u8) -> Result<u8, Failure> {
-    match kind {
-        1..=3 => Ok(kind),
-        _ => Err(Code::InvalidInput.into()),
-    }
-}
-
 pub(crate) fn commit_outcome(outcome: CommitStagedOutcome) -> HistoryResult {
     HistoryResult::Committed(match outcome {
         CommitStagedOutcome::Committed(record) => {

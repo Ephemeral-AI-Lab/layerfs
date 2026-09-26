@@ -1,10 +1,12 @@
 //! Ordinary Commit through the real composite service command, never local UpToDate.
+#[path = "support/prepared.rs"]
+mod prepared_stream;
 #[cfg(target_os = "linux")]
 #[path = "support/native_workspace.rs"]
 mod support;
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::support::*;
+    use super::{prepared_stream, support::*};
     use layerfs_bridge::contract::*;
     use layerfs_workspace::*;
     use std::{
@@ -131,8 +133,8 @@ mod linux {
             }
         );
         assert_eq!(first.generation, 1);
-        assert!(prepared(&f)[0].inodes.is_empty());
-        assert!(prepared(&f)[0].directories.is_empty());
+        assert_eq!(prepared(&f)[0].totals.rooted_identities().unwrap(), 0);
+        assert_eq!(prepared(&f)[0].totals.directories, 0);
         assert!(f.native.observations.lock().unwrap().saved_files.is_empty());
         let (data, handle) = open(&f, b"data.bin");
         f.edit(b"data.bin", 10, 14, b"EDIT");
@@ -151,7 +153,10 @@ mod linux {
         let requests = prepared(&f);
         assert_eq!(requests.len(), 3);
         assert_eq!(
-            requests.iter().map(|p| p.inodes.len()).collect::<Vec<_>>(),
+            requests
+                .iter()
+                .map(|p| p.totals.rooted_identities().unwrap())
+                .collect::<Vec<_>>(),
             [0, 1, 0]
         );
         assert_eq!(requests[2].base, root(&changed));
@@ -197,8 +202,8 @@ mod linux {
         assert!(matches!(next.outcome, CommitOutcomeWire::Committed(_)));
         let requests = prepared(&f);
         assert_eq!(requests.len(), 2);
-        assert!(requests[0].inodes.is_empty());
-        assert_eq!(requests[1].inodes.len(), 1);
+        assert!(requests[0].totals.rooted_identities().unwrap() == 0);
+        assert_eq!(requests[1].totals.rooted_identities().unwrap(), 1);
         assert_eq!(requests[1].base, before.effective_root);
         let saved = attr(f.native.attributes(root(&next), b"data.bin"));
         assert_eq!(f.native.bytes(saved.1, 10, 4), b"LIVE");
@@ -247,7 +252,7 @@ mod linux {
         assert_eq!(requests.len(), 3);
         assert!(requests
             .iter()
-            .all(|p| p.inodes.len() == 1 && p.directories.is_empty()));
+            .all(|p| p.totals.rooted_identities().unwrap() == 1 && p.totals.directories == 0));
         assert_eq!(requests[1].base, roots[0]);
         assert_eq!(requests[2].base, roots[1]);
         drop(old);
@@ -515,30 +520,27 @@ mod linux {
         let ws = f.workspace.clone();
         let saving = std::thread::spawn(move || ws.commit(deadline()));
         f.native.wait_commit();
+        // The update this request declares: one directory row that drops the old
+        // alias and binds the new one, and no typed identity of its own.
+        let directories = [DirectoryChange {
+            parent: before.root_serial.unwrap(),
+            changes: vec![
+                (b"alias".to_vec(), None),
+                (b"other-alias".to_vec(), Some(data.serial)),
+            ],
+        }];
+        let identities: [PreparedIdentity; 0] = [];
+        let body = prepared_stream::body(&directories, &identities).unwrap();
         f.native
-            .request(
-                Operation::HistoryCommand(HistoryCommand::Commit(PreparedChanges {
-                    directory_metadata: Vec::new(),
-                    new_directories: Vec::new(),
-                    new_file_serials: Vec::new(),
-                    new_symlink_serials: Vec::new(),
-                    workspace: [44; 32],
-                    branch: before.branch.branch,
-                    expected_head: before.branch.head_commit,
-                    expected_base: before.branch.base_layer,
-                    generation: 1,
-                    base: before.effective_root,
-                    scope: before.scope,
-                    root_serial: before.root_serial.unwrap(),
-                    directories: vec![DirectoryChange {
-                        parent: before.root_serial.unwrap(),
-                        changes: vec![
-                            (b"alias".to_vec(), None),
-                            (b"other-alias".to_vec(), Some(data.serial)),
-                        ],
-                    }],
-                    inodes: vec![],
-                })),
+            .request_with_body(
+                Operation::HistoryCommand(HistoryCommand::Commit(prepared_stream::header(
+                    &before,
+                    [44; 32],
+                    1,
+                    &directories,
+                    &identities,
+                ))),
+                &body,
                 16384,
                 &mut std::io::sink(),
             )
@@ -558,7 +560,7 @@ mod linux {
         assert!(failure.known_outcome.is_none());
         assert!(failure.stage.is_none());
         assert_eq!(prepared(&f).len(), 1);
-        assert!(prepared(&f)[0].inodes.is_empty());
+        assert!(prepared(&f)[0].totals.rooted_identities().unwrap() == 0);
         retained(&f);
         println!("COMMIT_FAILURE {failure:?}");
         check("clean-composite-stale-head-is-not-local-UpToDate");
@@ -628,7 +630,7 @@ mod linux {
             (changed.mtime_seconds, changed.mtime_nanoseconds)
         );
         assert!(f.native.observations.lock().unwrap().saved_files.is_empty());
-        assert_eq!(prepared(&f)[0].inodes.len(), 1);
+        assert_eq!(prepared(&f)[0].totals.rooted_identities().unwrap(), 1);
         check("composite-metadata-only-save-preserves-content-root");
     }
 
@@ -656,8 +658,8 @@ mod linux {
         let second = commit(&f);
         let requests = prepared(&f);
         assert_eq!(requests.len(), 2);
-        assert_eq!(requests[0].inodes.len(), 104);
-        assert_eq!(requests[1].inodes.len(), 1);
+        assert_eq!(requests[0].totals.rooted_identities().unwrap(), 104);
+        assert_eq!(requests[1].totals.rooted_identities().unwrap(), 1);
         assert_eq!(requests[1].base, root(&first));
         assert_eq!(f.native.observations.lock().unwrap().saved_files.len(), 105);
         for (index, name) in names.iter().enumerate() {

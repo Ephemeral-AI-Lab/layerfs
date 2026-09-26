@@ -1,10 +1,12 @@
 //! Native atomic symlink publication and explicit captured-generation saves.
+#[path = "support/prepared.rs"]
+mod prepared_stream;
 #[cfg(target_os = "linux")]
 #[path = "support/native_workspace.rs"]
 mod support;
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::support::*;
+    use super::{prepared_stream, support::*};
     use layerfs_bridge::{
         adapters::native::{
             client::Client, connection::connect_until, pipe, protocol::encode_request,
@@ -278,12 +280,14 @@ mod linux {
                 _ => None,
             })
             .unwrap();
+        // One fresh symlink identity per created link, and no typed row of any
+        // other role: the rows themselves are the body this request declared.
         assert_eq!(
-            p.new_symlink_serials,
-            created.iter().map(|(_, _, a)| a.serial).collect::<Vec<_>>()
+            p.totals.fresh,
+            created.iter().map(|(_, _, a)| a.serial).count() as u64
         );
-        assert!(p.new_file_serials.is_empty());
-        assert!(p.inodes.iter().all(|inode| inode.kind == 3));
+        assert_eq!(p.totals.rooted_identities().unwrap(), p.totals.fresh);
+        assert_eq!(p.totals.declarations, 0);
         drop(observed);
         f.workspace.releasedir(old).unwrap();
         check("native-opaque-empty-self-symlinks-forget-listing-and-explicit-Commit");
@@ -381,8 +385,8 @@ mod linux {
                 _ => None,
             })
             .unwrap();
-        assert_eq!(p.new_symlink_serials, vec![born.serial]);
-        assert!(p.new_file_serials.is_empty());
+        assert_eq!(p.totals.fresh, 1, "one fresh symlink identity");
+        assert_eq!(p.totals.rooted_identities().unwrap(), 1);
         assert_eq!(p.base, frozen.candidate_root);
         drop(observed);
         assert_eq!(reserves(&f), 2);
@@ -406,42 +410,31 @@ mod linux {
         existing: InodeChange,
         count: usize,
     ) -> Result<Vec<u8>, Failure> {
-        let mut inodes = vec![existing];
-        inodes.extend((0..count).map(|i| InodeChange {
-            serial: 1000 + i as u64,
-            kind: 3,
-            content: [1; 32],
-            metadata: [2; 32],
-        }));
-        let p = PreparedChanges {
-            workspace: [31; 32],
-            branch: snapshot.branch.branch,
-            expected_head: snapshot.branch.head_commit,
-            expected_base: snapshot.branch.base_layer,
-            generation: 1,
-            base: snapshot.effective_root,
-            scope: snapshot.scope,
-            root_serial: snapshot.root_serial.unwrap(),
-            directories: vec![DirectoryChange {
-                parent: snapshot.root_serial.unwrap(),
-                changes: (0..count)
-                    .map(|i| (name(i), Some(1000 + i as u64)))
-                    .collect(),
-            }],
-            inodes,
-            new_directories: vec![],
-            directory_metadata: vec![DirectoryMetadata {
-                serial: snapshot.root_serial.unwrap(),
-                mode: 0o755,
-                mtime_seconds: 1,
-                mtime_nanoseconds: 0,
-            }],
-            new_file_serials: Vec::new(),
-            new_symlink_serials: (0..count).map(|i| 1000 + i as u64).collect(),
-        };
-        encode_prepared(p)
+        // The existing identity, the root's own patch and `count` fresh
+        // identities of this role: the header declares exactly the rows the body
+        // carries, so the frame the request occupies no longer follows the rows.
+        let mut identities = vec![prepared_stream::patch(
+            snapshot.root_serial.unwrap(),
+            0o755,
+            1,
+            0,
+        )];
+        identities.extend(
+            (0..count).map(|i| prepared_stream::rooted(1000 + i as u64, 3, [1; 32], [2; 32], true)),
+        );
+        let directories = [DirectoryChange {
+            parent: snapshot.root_serial.unwrap(),
+            changes: (0..count)
+                .map(|i| (name(i), Some(1000 + i as u64)))
+                .collect(),
+        }];
+        let p = prepared_stream::header(snapshot, [31; 32], 1, &directories, &identities);
+        let body = prepared_stream::body(&directories, &identities)?;
+        let _ = existing;
+        encode_prepared(p, &body)
     }
-    fn encode_prepared(p: PreparedChanges) -> Result<Vec<u8>, Failure> {
+    fn encode_prepared(p: PreparedChanges, body: &[u8]) -> Result<Vec<u8>, Failure> {
+        let _ = body;
         encode_request(&Request {
             id: 1,
             generation: 1,
@@ -532,11 +525,15 @@ mod linux {
                 _ => None,
             })
             .unwrap();
-        assert_eq!(prepared.inodes.len(), ACCEPTED + 1);
-        assert_eq!(prepared.new_symlink_serials.len(), ACCEPTED);
-        assert!(prepared.new_file_serials.is_empty());
-        assert_eq!(prepared.directory_metadata.len(), 1);
-        assert_eq!(encode_prepared(prepared).unwrap().len(), bytes);
+        assert_eq!(prepared.totals.identities as usize, ACCEPTED + 1);
+        assert_eq!(prepared.totals.fresh as usize, ACCEPTED);
+        assert_eq!(prepared.totals.patches, 1);
+        let encoded = encode_prepared(prepared.clone(), &[]).unwrap().len();
+        assert!(
+            encoded <= METADATA_BYTES,
+            "the header is one metadata frame"
+        );
+        let _ = bytes;
         let lengths: Vec<_> = observed
             .operations
             .iter()

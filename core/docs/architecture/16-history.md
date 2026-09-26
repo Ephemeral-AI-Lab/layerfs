@@ -453,11 +453,13 @@ Recorded plainly, because each is a limit rather than a plan:
   a second import algorithm does not exist.
 - **No new-inode or new-symlink operation on a live Workspace.** `stage_changes`
   accepts the prepared-update surface the Workspace lowers from its own captured
-  generation; `reserve_inodes` does not silently enable remote create/mkdir. The
-  update is admitted by the exact bytes it encodes to against the 32 KiB
-  metadata frame rather than by a changed-name or changed-inode count
-  (`PreparedChanges::frame_bytes`), so the widest generation one frame carries is
-  carried and a wider one is refused as `Capacity` before any command is sent.
+  generation; `reserve_inodes` does not silently enable remote create/mkdir. A
+  prepared command now carries a declaration - the update's identity and the exact
+  totals of the ordered body that follows it - instead of the rows themselves, so
+  it is no longer a 32 KiB frame that bounds a generation: the rows travel in the
+  declared body, the declaration is recomputed from the counts at admission, the
+  transport streams exactly the declared bytes, and the service receives them into
+  a charged spool C1 reads. `PreparedChanges::stream_bytes` is that figure.
 - **No automatic rebase, merge, retry or conflict resolution.** C5 detects a
   stale publication, not file overlap; disjoint and overlapping same-Branch
   changes take the same expected-head check.

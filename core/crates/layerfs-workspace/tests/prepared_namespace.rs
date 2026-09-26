@@ -19,6 +19,8 @@
 #![cfg(target_os = "linux")]
 use layerfs_bridge::{adapters::native::protocol::encode_request_with_budget, contract::*};
 use layerfs_workspace::*;
+#[path = "support/prepared.rs"]
+mod prepared_stream;
 use std::{
     collections::BTreeMap,
     fs,
@@ -80,8 +82,9 @@ fn long_name(index: usize) -> Vec<u8> {
 /// What the delivery was asked to carry.
 #[derive(Default)]
 struct Observed {
-    /// The prepared update of every `StageChanges`/`Commit` command, in order.
-    prepared: Mutex<Vec<PreparedChanges>>,
+    /// The prepared update of every `StageChanges`/`Commit` command, in order,
+    /// with the rows its body carried.
+    prepared: Mutex<Vec<prepared_stream::Recorded>>,
     saves: AtomicU64,
     metadata: AtomicU64,
 }
@@ -128,14 +131,15 @@ fn published(observed: &Observed, after: &[u8], limit: usize, byte_budget: usize
         page.push((name.clone(), *serial));
     }
     let more = start + page.len() < entries.len();
-    let continuation = more.then(|| page.last().map(|(name, _)| name.clone())).flatten();
+    let continuation = more
+        .then(|| page.last().map(|(name, _)| name.clone()))
+        .flatten();
     (page, continuation)
 }
 
 fn delivery(observed: Arc<Observed>, serials: Arc<Serials>) -> OperationDelivery {
-    Arc::new(
-        move |request, input, _output, deadline| {
-            match &request.operation {
+    Arc::new(move |request, input, _output, deadline| {
+        match &request.operation {
             Operation::HistoryQuery(HistoryQuery::GetBranch { branch }) => Ok(Response::History(
                 Box::new(HistoryResult::BranchSnapshot(BranchSnapshotWire {
                     branch: BranchWire {
@@ -266,7 +270,12 @@ fn delivery(observed: Arc<Observed>, serials: Arc<Serials>) -> OperationDelivery
                 })
             }
             Operation::HistoryCommand(HistoryCommand::Commit(changes)) => {
-                observed.prepared.lock().unwrap().push(changes.clone());
+                // The rows are the body this request declared: the delivery reads
+                // them before it answers, so the oracle below is what actually
+                // reached the wire.
+                let recorded = prepared_stream::Recorded::read(changes, input, deadline)
+                    .map_err(|_| Code::InvalidInput)?;
+                observed.prepared.lock().unwrap().push(recorded);
                 Ok(Response::History(Box::new(HistoryResult::Committed(
                     CommitOutcomeWire::Committed(CommitWire {
                         commit: COMMIT_ID,
@@ -281,26 +290,30 @@ fn delivery(observed: Arc<Observed>, serials: Arc<Serials>) -> OperationDelivery
             // workspace validates every field against its own capture, so this
             // replies with the same identities the attach did.
             Operation::HistoryCommand(HistoryCommand::StageChanges(changes)) => {
-                observed.prepared.lock().unwrap().push(changes.clone());
-                Ok(Response::History(Box::new(HistoryResult::Stage(StageWire {
-                    workspace: changes.workspace,
-                    token: 1,
-                    stack: STACK,
-                    branch: BRANCH,
-                    expected_head: changes.expected_head,
-                    expected_base: LAYER,
-                    // The stage is built from the root the caller states, which
-                    // is the capture's own effective root: the first generation
-                    // captured the attached base, every later one the root the
-                    // preceding Commit published.
-                    expected_root: changes.base,
-                    construction_base_root: changes.base,
-                    intended_commit_base: LAYER,
-                    candidate_root: CANDIDATE,
-                    profile: PROFILE,
-                    scope: SCOPE,
-                    generation: changes.generation,
-                }))))
+                let recorded = prepared_stream::Recorded::read(changes, input, deadline)
+                    .map_err(|_| Code::InvalidInput)?;
+                observed.prepared.lock().unwrap().push(recorded);
+                Ok(Response::History(Box::new(HistoryResult::Stage(
+                    StageWire {
+                        workspace: changes.workspace,
+                        token: 1,
+                        stack: STACK,
+                        branch: BRANCH,
+                        expected_head: changes.expected_head,
+                        expected_base: LAYER,
+                        // The stage is built from the root the caller states, which
+                        // is the capture's own effective root: the first generation
+                        // captured the attached base, every later one the root the
+                        // preceding Commit published.
+                        expected_root: changes.base,
+                        construction_base_root: changes.base,
+                        intended_commit_base: LAYER,
+                        candidate_root: CANDIDATE,
+                        profile: PROFILE,
+                        scope: SCOPE,
+                        generation: changes.generation,
+                    },
+                ))))
             }
             // A maintained identity is patched against the metadata root the
             // caller states; the reply echoes that root and the selected fields,
@@ -325,14 +338,16 @@ fn delivery(observed: Arc<Observed>, serials: Arc<Serials>) -> OperationDelivery
                 })
             }
             _ => Err(Code::Unsupported.into()),
-            }
-        },
-    )
+        }
+    })
 }
 
 /// One mounted local-edit Workspace over a fresh private directory.
-fn mounted(id: &str, incarnation: u8, observed: Arc<Observed>) -> (PathBuf, WorkspaceHost, Workspace)
-{
+fn mounted(
+    id: &str,
+    incarnation: u8,
+    observed: Arc<Observed>,
+) -> (PathBuf, WorkspaceHost, Workspace) {
     let path = temporary();
     let metadata = fs::metadata(&path).unwrap();
     use std::os::unix::fs::MetadataExt;
@@ -389,26 +404,6 @@ fn listed(workspace: &Workspace, serial: u64) -> BTreeMap<Vec<u8>, u64> {
     names
 }
 
-/// The exact frame arithmetic of one prepared update whose only directory row
-/// is the root: `names` fresh files, and the root's own portable patch.
-///
-/// This is written out independently of the workspace so the boundary cases
-/// below are decided by the frame rather than by one implementation's opinion
-/// of it.
-fn fresh_frame_bytes(names: usize, name_bytes: usize) -> usize {
-    // Envelope, command tag, identity/root fields and the absent expected head.
-    let fixed = 28 + (32 + 17 + 33 + 8 + 32 + 32 + 8) + 1;
-    // One counted directory row per parent, one counted blob and one serial per
-    // name.
-    let directories = 2 + 10 + names * (10 + name_bytes);
-    // One typed inode value per file: serial, kind, content root, metadata root.
-    let inodes = 2 + names * 73;
-    // Version-2 additions trailer: the version tag, an empty fresh-directory
-    // list, the root's own patch, and the fresh file serials.
-    let trailer = 1 + 2 + (2 + 24) + (2 + names * 8);
-    fixed + directories + inodes + trailer
-}
-
 #[test]
 fn a_wide_directory_lowers_to_its_exact_rows_and_one_head() {
     let observed = Arc::new(Observed::default());
@@ -460,9 +455,7 @@ fn a_wide_directory_lowers_to_its_exact_rows_and_one_head() {
     // its source name and binds its destination, and an unlink that was not
     // followed by a recreate leaves the name absent for good.
     let mut gone: Vec<Vec<u8>> = (0..RENAMED).map(|index| name("f", index)).collect();
-    gone.extend(
-        ((RENAMED + RECREATED)..(RENAMED + REMOVED)).map(|index| name("f", index)),
-    );
+    gone.extend(((RENAMED + RECREATED)..(RENAMED + REMOVED)).map(|index| name("f", index)));
     let before = workspace.backing_status().unwrap().metadata_reads;
     let report = workspace.commit(deadline()).unwrap();
     let reads = workspace.backing_status().unwrap().metadata_reads - before;
@@ -475,11 +468,11 @@ fn a_wide_directory_lowers_to_its_exact_rows_and_one_head() {
     let prepared = recorded[0].clone();
     drop(recorded);
     let prepared = &prepared;
-    assert_eq!(prepared.expected_head, None);
-    assert_eq!(prepared.expected_base, LAYER);
-    assert_eq!(prepared.base, BASE);
-    assert_eq!(prepared.scope, SCOPE);
-    assert_eq!(prepared.root_serial, ROOT_SERIAL);
+    assert_eq!(prepared.header.expected_head, None);
+    assert_eq!(prepared.header.expected_base, LAYER);
+    assert_eq!(prepared.header.base, BASE);
+    assert_eq!(prepared.header.scope, SCOPE);
+    assert_eq!(prepared.header.root_serial, ROOT_SERIAL);
     // Exactly one directory row, and it is the root: every name of this
     // generation belongs to the directory it was created in.
     assert_eq!(prepared.directories.len(), 1);
@@ -509,55 +502,66 @@ fn a_wide_directory_lowers_to_its_exact_rows_and_one_head() {
     assert_eq!(bound.len() + removed.len(), CREATED + RENAMED);
     assert_eq!(row.changes.len(), CREATED + RENAMED);
     println!(
-        "PREPARED_ROWS names={} bound={} removed={} inodes={} fresh={}",
+        "PREPARED_ROWS names={} bound={} removed={} identities={} fresh={}",
         row.changes.len(),
         bound.len(),
         removed.len(),
-        prepared.inodes.len(),
-        prepared.new_file_serials.len()
+        prepared.identities.len(),
+        prepared.header.totals.fresh
     );
-    // Typed inode values are strictly ordered fresh regular files, and the
-    // fresh declarations are exactly the ones they name.
+    // One typed row per dirty identity, in serial order: every name this
+    // generation created or rebound is one row, and the ones created here are
+    // the ones the delivery's allocator handed out.
+    let rooted: Vec<_> = prepared.rooted().collect();
     assert!(
-        prepared.inodes.windows(2).all(|pair| pair[0].serial < pair[1].serial),
-        "one ordered inode row per dirty identity"
+        rooted.windows(2).all(|pair| pair[0].0 < pair[1].0),
+        "one ordered identity row per dirty identity"
     );
-    assert!(prepared.inodes.iter().all(|inode| inode.kind == 1));
-    assert!(
-        prepared
-            .new_file_serials
-            .windows(2)
-            .all(|pair| pair[0] < pair[1]),
-        "fresh file serials are ordered and unique"
-    );
+    assert!(rooted.iter().all(|(_, kind, _, _, _)| *kind == 1));
     for serial in bound.values() {
         assert!(
-            prepared.new_file_serials.binary_search(serial).is_ok(),
+            rooted
+                .iter()
+                .any(|(named, _, _, _, fresh)| named == serial && *fresh),
             "a name's identity is declared fresh once"
         );
     }
-    assert!(prepared.new_symlink_serials.is_empty());
-    assert!(prepared.new_directories.is_empty());
-    assert_eq!(prepared.directory_metadata.len(), 1);
-    assert_eq!(prepared.directory_metadata[0].serial, ROOT_SERIAL);
-    // The admission is the encoder's own figure: the recorded command encodes
-    // to exactly the bytes the request declares.
-    let frame = prepared.frame_bytes().unwrap();
-    let encoded = encode_request_with_budget(
+    // The one maintained directory is the root, and its row is the selected
+    // portable fields rather than a typed value.
+    assert!(prepared.identities.iter().any(|row| matches!(
+        row,
+        PreparedIdentity::DirectoryPatch {
+            serial: ROOT_SERIAL,
+            ..
+        }
+    )));
+
+    // The declaration is the stream's own figure: the request the delivery was
+    // handed declares exactly the rows its body carried, and the body is
+    // exactly the bytes that declaration implies. The metadata frame carries
+    // the request itself, which is now the header alone.
+    let stream = prepared.header.stream_bytes().unwrap();
+    let body = prepared_stream::body(&prepared.directories, &prepared.identities).unwrap();
+    assert_eq!(
+        stream,
+        body.len() as u64,
+        "the body is exactly its declaration"
+    );
+    let frame = encode_request_with_budget(
         &Request {
             id: 1,
-            generation: prepared.generation,
+            generation: prepared.header.generation,
             store: 1,
             profile: HISTORY_PROFILE,
             deadline_ms: 5_000,
             response_bytes: HISTORY_RESULT_BYTES as u64,
-            operation: Operation::HistoryCommand(HistoryCommand::Commit(prepared.clone())),
+            operation: Operation::HistoryCommand(HistoryCommand::Commit(prepared.header.clone())),
         },
         5_000,
     )
-    .unwrap();
-    assert_eq!(frame, encoded.len());
-    assert!(frame <= METADATA_BYTES, "the frame carries this update");
+    .unwrap()
+    .len();
+    assert!(frame <= METADATA_BYTES, "the header is one metadata frame");
     // One head, published from the captured one.
     let CommitOutcomeWire::Committed(commit) = &report.outcome else {
         panic!("one Commit publishes one head: {:?}", report.outcome);
@@ -569,11 +573,10 @@ fn a_wide_directory_lowers_to_its_exact_rows_and_one_head() {
     // on the published root without dropping or reordering a binding.
     assert_eq!(listed(&workspace, ROOT_SERIAL), serials);
     println!(
-        "PREPARED_NAMESPACE names={} rows={} inodes={} frame_bytes={} metadata_reads={reads} saves={} metadata={}",
+        "PREPARED_NAMESPACE names={} rows={} identities={} stream_bytes={stream} frame_bytes={frame} metadata_reads={reads} saves={} metadata={}",
         bound.len(),
         row.changes.len(),
-        prepared.inodes.len(),
-        frame,
+        prepared.identities.len(),
         observed.saves.load(Ordering::Acquire),
         observed.metadata.load(Ordering::Acquire),
     );
@@ -620,8 +623,11 @@ fn a_wide_name_pass_over_one_identity_reads_each_path_once() {
             .all(|(_, serial)| *serial == Some(target.serial)),
         "one identity owns every name"
     );
-    assert_eq!(staged.inodes.len(), 1);
-    assert!(staged.new_file_serials.is_empty());
+    assert_eq!(staged.rooted().count(), 1);
+    assert!(
+        !staged.declared(target.serial),
+        "an existing identity is patched"
+    );
     println!("PREPARED_NAME_PASS names={LINKS} inodes=1 metadata_reads={reads}");
     // One ordered pass per record kind: the frontier, the two record kinds and
     // the 200-name run of two leaves. A successor lookup per name - the walk
@@ -638,58 +644,79 @@ fn a_wide_name_pass_over_one_identity_reads_each_path_once() {
 }
 
 #[test]
-fn a_prepared_update_past_the_metadata_frame_is_refused_before_the_command() {
-    // The admission is exact, so this case is decided by the encoder's own
-    // arithmetic rather than by a fixed name count: 94 names of 255 bytes fit
-    // one metadata frame and 95 do not.
-    let refused = Arc::new(Observed::default());
-    let (path, host, workspace) = mounted("prepared-frame-over", 32, refused.clone());
-    for index in 0..=FRAME_FIT {
+fn a_prepared_update_past_the_metadata_frame_travels_as_a_stream() {
+    // The admission used to be one metadata frame: a generation of 255-byte names
+    // this wide was refused as `Capacity` before any command was sent. The rows
+    // now travel in the ordered body the request declares, so the same generation
+    // is carried whole - while the *request* stays inside the frame it is still
+    // bounded by, because all it carries is the declaration.
+    //
+    // One such name costs its binding row and its identity row, so three names
+    // past the old 94-name boundary put the body itself above the frame.
+    let observed = Arc::new(Observed::default());
+    let (path, host, workspace) = mounted("prepared-stream-over", 32, observed.clone());
+    let names = FRAME_FIT + 3;
+    for index in 0..names {
         workspace
             .mknod(ROOT_SERIAL, &long_name(index), 0o644, 0, deadline())
             .unwrap_or_else(|error| panic!("create {index}: {error:?}"));
     }
-    let names = FRAME_FIT + 1;
-    let declared = fresh_frame_bytes(names, LONG_NAME_BYTES);
-    assert!(declared > METADATA_BYTES, "the case must exceed the frame");
-    let error = workspace.commit(deadline()).unwrap_err();
-    let WorkspaceError::Commit(failure) = &error else {
-        panic!("one Commit attempt, one failure: {error:?}");
-    };
-    let WorkspaceError::Stage(stage) = &failure.cause else {
-        panic!("the refusal is a stage failure: {:?}", failure.cause);
-    };
-    assert_eq!(stage.cause, WorkspaceError::Capacity);
-    assert!(refused.prepared.lock().unwrap().is_empty());
-    // Nothing was published: the whole generation is still the local listing,
-    // and the workspace can be asked again.
-    assert_eq!(listed(&workspace, ROOT_SERIAL).len(), names);
-    println!(
-        "PREPARED_FRAME_REFUSAL names={names} declared={declared} limit={METADATA_BYTES} error={:?}",
-        stage.cause
+    let report = workspace.commit(deadline()).unwrap();
+    let recorded = observed.prepared.lock().unwrap();
+    assert_eq!(recorded.len(), 1, "one Commit carries one prepared update");
+    let prepared = &recorded[0];
+    let row = prepared
+        .directories
+        .iter()
+        .find(|row| row.parent == ROOT_SERIAL)
+        .expect("the root's own row");
+    assert_eq!(
+        row.changes.len(),
+        names,
+        "every created name reached its own binding row"
     );
-
-    // One name fewer is carried by the same frame, with the exact total below.
-    let admitted = Arc::new(Observed::default());
-    let (fit_path, fit_host, fit) = mounted("prepared-frame-fit", 33, admitted.clone());
-    for index in 0..FRAME_FIT {
-        fit.mknod(ROOT_SERIAL, &long_name(index), 0o644, 0, deadline())
-            .unwrap_or_else(|error| panic!("create {index}: {error:?}"));
-    }
-    let declared = fresh_frame_bytes(FRAME_FIT, LONG_NAME_BYTES);
-    assert!(declared <= METADATA_BYTES, "the fit case must fit");
-    fit.commit(deadline()).unwrap();
-    let recorded = admitted.prepared.lock().unwrap();
-    assert_eq!(recorded.len(), 1);
-    assert_eq!(recorded[0].directories[0].changes.len(), FRAME_FIT);
-    assert_eq!(recorded[0].frame_bytes().unwrap(), declared);
+    // The stream is exactly what the request declared, and it is larger than the
+    // frame that used to refuse it.
+    let declared = prepared.header.stream_bytes().unwrap();
+    let body = prepared_stream::body(&prepared.directories, &prepared.identities).unwrap();
+    assert_eq!(declared, body.len() as u64, "the body is its declaration");
+    assert!(
+        declared > METADATA_BYTES as u64,
+        "the case must exceed the frame: {declared}"
+    );
+    // The request itself is still one metadata frame, and it no longer grows
+    // with the rows it declares.
+    let frame = encode_request_with_budget(
+        &Request {
+            id: 1,
+            generation: prepared.header.generation,
+            store: 1,
+            profile: HISTORY_PROFILE,
+            deadline_ms: 5_000,
+            response_bytes: HISTORY_RESULT_BYTES as u64,
+            operation: Operation::HistoryCommand(HistoryCommand::Commit(prepared.header.clone())),
+        },
+        5_000,
+    )
+    .unwrap()
+    .len();
+    assert!(frame <= METADATA_BYTES, "the header is one metadata frame");
+    // Exactly the identity rows the generation created, one per name.
+    assert_eq!(
+        prepared
+            .rooted()
+            .filter(|(_, _, _, _, fresh)| *fresh)
+            .count(),
+        names
+    );
+    let CommitOutcomeWire::Committed(commit) = &report.outcome else {
+        panic!("one Commit publishes one head: {:?}", report.outcome);
+    };
+    assert_eq!(commit.root, CANDIDATE);
+    println!(
+        "PREPARED_STREAM names={names} stream_bytes={declared} frame_bytes={frame} limit={METADATA_BYTES}"
+    );
     drop(recorded);
-    println!(
-        "PREPARED_FRAME_FIT names={FRAME_FIT} declared={declared} limit={METADATA_BYTES}"
-    );
-    drop(fit);
-    drop(fit_host);
-    fs::remove_dir_all(&fit_path).unwrap();
     drop(workspace);
     drop(host);
     fs::remove_dir_all(&path).unwrap();

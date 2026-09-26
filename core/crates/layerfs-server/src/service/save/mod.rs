@@ -4,4 +4,5 @@ pub(crate) mod file_stream;
 pub(crate) mod filesystem;
 pub(crate) mod import;
 pub(crate) mod metadata;
+pub(crate) mod prepared;
 pub(crate) mod validation;

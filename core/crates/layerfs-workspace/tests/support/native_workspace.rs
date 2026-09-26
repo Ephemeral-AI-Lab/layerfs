@@ -424,6 +424,17 @@ impl Native {
         response_bytes: u64,
         output: &mut dyn Write,
     ) -> Result<Response, Failure> {
+        self.request_with_body(operation, &[], response_bytes, output)
+    }
+
+    /// One request that carries the ordered body its operation declares.
+    pub fn request_with_body(
+        &self,
+        operation: Operation,
+        body: &[u8],
+        response_bytes: u64,
+        output: &mut dyn Write,
+    ) -> Result<Response, Failure> {
         let profile = if matches!(
             operation,
             Operation::HistoryQuery(_) | Operation::HistoryCommand(_)
@@ -442,7 +453,7 @@ impl Native {
                 response_bytes,
                 operation,
             },
-            &mut &[][..],
+            &mut &body[..],
             output,
             deadline(),
         )
@@ -648,12 +659,13 @@ impl Fixture {
         assert_eq!(observed.saved_files.len(), files);
         for operation in &observed.operations {
             if let Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)) = operation {
-                assert!(prepared.directories.is_empty());
-                assert_eq!(prepared.inodes.len(), files);
-                let mut serials: Vec<_> = prepared.inodes.iter().map(|i| i.serial).collect();
-                serials.sort();
-                serials.dedup();
-                assert_eq!(serials.len(), files);
+                // The rows are the body this request declared, so what a proxied
+                // request states is its exact declaration: no directory row, one
+                // typed identity per saved file, all of them fresh.
+                assert_eq!(prepared.totals.directories, 0);
+                assert_eq!(prepared.totals.identities, files as u64);
+                assert_eq!(prepared.totals.fresh, files as u64);
+                assert_eq!(prepared.totals.rooted_identities().unwrap(), files as u64);
             }
         }
     }

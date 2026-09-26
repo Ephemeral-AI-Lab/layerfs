@@ -9,7 +9,7 @@
 //! suboperation is refused before any mutation, and a reply is matched against
 //! the request that produced it rather than being interpreted on its own.
 
-use super::{Code, Failure, Root};
+use super::{Code, Failure, PreparedTotals, Root};
 
 /// Operation profile of every history request and reply.
 pub const HISTORY_PROFILE: u16 = 2;
@@ -151,6 +151,13 @@ pub enum HistoryForkSource {
 }
 
 /// One prepared filesystem update plus the Branch context it was captured in.
+///
+/// The request carries the identity of the update and the *exact totals* of the
+/// ordered stream that follows it in the body; the rows themselves are not here.
+/// A generation wider than the one metadata frame this used to occupy is
+/// therefore not refused by a frame: it is refused by the charged stream bound
+/// the totals are measured against, and the rows travel one after another in the
+/// body this request declares.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreparedChanges {
     /// Producer incarnation that will own the stage.
@@ -169,102 +176,39 @@ pub struct PreparedChanges {
     pub scope: Root,
     /// Root directory serial of the prepared update.
     pub root_serial: u64,
-    /// Final directory bindings.
-    pub directories: Vec<super::DirectoryChange>,
-    /// Typed final inode values.
-    pub inodes: Vec<super::InodeChange>,
-    /// New directory declarations; their serials obey the scope allocator contract.
-    pub new_directories: Vec<super::DirectoryMetadata>,
-    /// Portable patches to existing directories, preserving their other attributes.
-    pub directory_metadata: Vec<super::DirectoryMetadata>,
-    /// Fresh regular-file identities, a sorted subset of kind-1 `inodes` rows.
-    /// The caller's scope allocator must never reuse an exposed serial.
-    pub new_file_serials: Vec<u64>,
-    /// Fresh symlink identities, a sorted subset of kind-3 `inodes` rows.
-    /// The caller's scope allocator must never reuse an exposed serial.
-    pub new_symlink_serials: Vec<u64>,
+    /// Exact rows the body carries, measured over the lowered frontier.
+    pub totals: PreparedTotals,
 }
 
 impl PreparedChanges {
-    /// Exact bytes this prepared update occupies in one metadata frame.
-    ///
-    /// The figure is the whole `StageChanges`/`Commit` request body - the fixed
-    /// envelope, the command tag, the identity and root fields, the directory
-    /// bindings, the typed inode values and the additions trailer - computed
-    /// from the rows themselves rather than estimated from the caller's counts.
-    /// An admission that compared an estimate against [`super::METADATA_BYTES`]
-    /// would refuse a request the frame can carry, or (worse) accept one it
-    /// cannot and fail later inside the encoder; the codec test in
-    /// `tests/history_protocol.rs` holds this arithmetic against the encoder's
-    /// own output for every trailer version.
-    pub fn frame_bytes(&self) -> Result<usize, Failure> {
-        // Envelope (generation, store, profile, remaining deadline, response
-        // budget, opcode), then the `Commit` command tag.
-        let mut total = 28usize;
-        // Workspace incarnation, Branch, optional expected head, expected base,
-        // generation, construction base and allocation scope, root serial.
-        total = total
-            .checked_add(WORKSPACE_BYTES + BRANCH_BYTES + LAYER_BYTES + 8 + 32 + 32 + 8)
-            .ok_or(Code::Capacity)?;
-        total = total
-            .checked_add(match self.expected_head {
-                Some(_) => 1 + COMMIT_BYTES,
-                None => 1,
-            })
-            .ok_or(Code::Capacity)?;
-        // Directory bindings: one counted row per parent plus one counted blob
-        // and one serial per name.
-        total = total.checked_add(2).ok_or(Code::Capacity)?;
-        for directory in &self.directories {
-            total = total.checked_add(10).ok_or(Code::Capacity)?;
-            for (name, _) in &directory.changes {
-                total = total
-                    .checked_add(10)
-                    .and_then(|n| n.checked_add(name.len()))
-                    .ok_or(Code::Capacity)?;
-            }
-        }
-        // Typed inode values: serial, kind, content root and metadata root.
-        total = total
-            .checked_add(2)
-            .and_then(|n| n.checked_add(73usize.checked_mul(self.inodes.len())?))
-            .ok_or(Code::Capacity)?;
-        // The additions trailer is absent only when it would carry nothing.
-        if !self.new_directories.is_empty()
-            || !self.directory_metadata.is_empty()
-            || !self.new_file_serials.is_empty()
-            || !self.new_symlink_serials.is_empty()
-        {
-            // One version tag, then the counted lists this version carries:
-            // the two directory record lists, the fresh-file serials whenever a
-            // trailer exists, and the fresh-symlink serials in version 3.
-            let mut trailer = 1usize;
-            for records in [&self.new_directories, &self.directory_metadata] {
-                trailer = trailer
-                    .checked_add(2)
-                    .and_then(|n| n.checked_add(24usize.checked_mul(records.len())?))
-                    .ok_or(Code::Capacity)?;
-            }
-            if !self.new_file_serials.is_empty() || !self.new_symlink_serials.is_empty() {
-                trailer = trailer
-                    .checked_add(2)
-                    .and_then(|n| {
-                        n.checked_add(8usize.checked_mul(self.new_file_serials.len())?)
-                    })
-                    .ok_or(Code::Capacity)?;
-            }
-            if !self.new_symlink_serials.is_empty() {
-                trailer = trailer
-                    .checked_add(2)
-                    .and_then(|n| {
-                        n.checked_add(8usize.checked_mul(self.new_symlink_serials.len())?)
-                    })
-                    .ok_or(Code::Capacity)?;
-            }
-            total = total.checked_add(trailer).ok_or(Code::Capacity)?;
-        }
-        Ok(total)
+    /// Exact bytes the prepared stream body carries.
+    pub fn stream_bytes(&self) -> Result<u64, Failure> {
+        self.totals.stream_bytes()
     }
+
+    /// Checks the declared totals and the fixed fields they are addressed with.
+    pub fn check(&self) -> Result<(), Failure> {
+        if self.workspace.iter().all(|byte| *byte == 0) {
+            return Err(Code::InvalidInput.into());
+        }
+        check_tagged(&self.branch, 0x11)?;
+        if let Some(head) = &self.expected_head {
+            check_tagged(head, 0x12)?;
+        }
+        check_tagged(&self.expected_base, 0x32)?;
+        if self.root_serial == 0 || self.root_serial > i64::MAX as u64 {
+            return Err(Code::InvalidInput.into());
+        }
+        self.totals.check()
+    }
+}
+
+/// Checks one tagged identity field of a prepared request.
+fn check_tagged(bytes: &[u8], tag: u8) -> Result<(), Failure> {
+    if bytes.is_empty() || bytes[0] != tag {
+        return Err(Code::InvalidInput.into());
+    }
+    Ok(())
 }
 
 /// Every mutating history command.

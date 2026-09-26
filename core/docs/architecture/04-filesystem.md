@@ -373,9 +373,9 @@ cursor returns one decoded row, so the resident cost of a pass is one row — th
 size of one directory, which is the unit the mounted route itself produces —
 rather than the row count.
 
-`RowSpool` is the file-backed source: one fixed 32-byte slot per row (key,
-payload offset, payload length, binding count, kind) followed by the payload
-region. The slot table is sized from the declared totals when the spool is
+`RowSpool` is the file-backed source, and it is what the service receives a
+prepared stream into before C1 runs: one fixed 32-byte slot per row (key, payload
+offset, payload length, binding count, kind) followed by the payload region. The slot table is sized from the declared totals when the spool is
 created, so the payload offset of the first row is known before it is written and
 no index ever has to be built or rewritten. Lookups are a binary search over a
 kind's slot run read straight from the file; a pass is one sequential walk of that

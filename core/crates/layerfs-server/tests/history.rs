@@ -329,17 +329,42 @@ fn initialize(fixture: &mut Fixture, seed: [u8; 32], file: &[u8], next: u64) -> 
     }
 }
 
-fn changes(
+/// One prepared update and the ordered body its request declares.
+///
+/// The root directory is stated with no binding changes so the operation
+/// retains its content root; only the file's inode value changes. The root's own
+/// identity row is a portable patch, and the file is one typed value.
+fn changes(init: &Initialized, workspace: [u8; 32], content: Root, generation: u64) -> Prepared {
+    changes_with(
+        init,
+        workspace,
+        content,
+        init.metadata_root,
+        2,
+        1,
+        generation,
+    )
+}
+
+/// One prepared update that patches the root and states one typed value.
+#[allow(clippy::too_many_arguments)]
+fn changes_with(
     init: &Initialized,
     workspace: [u8; 32],
     content: Root,
+    metadata: Root,
+    serial: u64,
+    kind: u8,
     generation: u64,
-) -> PreparedChanges {
-    PreparedChanges {
-        directory_metadata: Vec::new(),
-        new_directories: Vec::new(),
-        new_file_serials: Vec::new(),
-        new_symlink_serials: Vec::new(),
+) -> Prepared {
+    let directories = vec![DirectoryChange {
+        parent: 1,
+        changes: Vec::new(),
+    }];
+    // One typed value and no directory patch: the root keeps its bindings and
+    // its portable fields, exactly as the resident form stated them.
+    let identities = vec![rooted(serial, kind, content, metadata, false)];
+    let header = PreparedChanges {
         workspace,
         branch: init.branch,
         expected_head: None,
@@ -348,19 +373,177 @@ fn changes(
         base: init.root,
         scope: init.scope,
         root_serial: 1,
-        // The root directory is stated with no binding changes so the operation
-        // retains its content root; only the file's inode value changes.
-        directories: vec![DirectoryChange {
-            parent: 1,
-            changes: Vec::new(),
-        }],
-        inodes: vec![InodeChange {
-            serial: 2,
-            kind: 1,
-            content,
-            metadata: init.metadata_root,
-        }],
+        totals: stream_totals(&directories, &identities),
+    };
+    let body = stream_body(&directories, &identities).expect("prepared body");
+    Prepared { header, body }
+}
+
+/// One prepared update as a request and the ordered body it declares.
+struct Prepared {
+    header: PreparedChanges,
+    body: Vec<u8>,
+}
+
+impl Prepared {
+    /// The `StageChanges` command for this update.
+    fn stage(&self) -> Operation {
+        Operation::HistoryCommand(HistoryCommand::StageChanges(self.header.clone()))
     }
+
+    /// The `Commit` command for this update.
+    fn commit(&self) -> Operation {
+        Operation::HistoryCommand(HistoryCommand::Commit(self.header.clone()))
+    }
+
+    /// The body this update declared.
+    fn body(&self) -> &[u8] {
+        &self.body
+    }
+
+    /// The same rows with a different first typed row, for the refusal cases.
+    fn with_identity(&mut self, kind: u8, content: Root, metadata: Root) -> &mut Self {
+        let identities = vec![rooted(
+            self.header.root_serial + 1,
+            kind,
+            content,
+            metadata,
+            false,
+        )];
+        self.header.totals = stream_totals(
+            &[DirectoryChange {
+                parent: 1,
+                changes: Vec::new(),
+            }],
+            &identities,
+        );
+        self.body = stream_body(
+            &[DirectoryChange {
+                parent: 1,
+                changes: Vec::new(),
+            }],
+            &identities,
+        )
+        .expect("prepared body");
+        self
+    }
+}
+
+/// One typed row of a prepared stream.
+fn rooted(serial: u64, kind: u8, content: Root, metadata: Root, fresh: bool) -> PreparedIdentity {
+    PreparedIdentity::Rooted {
+        serial,
+        kind,
+        content,
+        metadata,
+        fresh,
+    }
+}
+
+
+/// The exact totals of these rows.
+fn stream_totals(
+    directories: &[DirectoryChange],
+    identities: &[PreparedIdentity],
+) -> PreparedTotals {
+    let mut totals = PreparedTotals {
+        directories: directories.len() as u64,
+        identities: identities.len() as u64,
+        ..PreparedTotals::default()
+    };
+    for row in directories {
+        totals.names += row.changes.len() as u64;
+        totals.name_bytes += row
+            .changes
+            .iter()
+            .map(|(name, _)| 10 + name.len() as u64)
+            .sum::<u64>();
+    }
+    for row in identities {
+        match row {
+            PreparedIdentity::Rooted { fresh, .. } => {
+                if *fresh {
+                    totals.fresh += 1;
+                }
+            }
+            PreparedIdentity::DirectoryPatch { .. } => totals.patches += 1,
+            PreparedIdentity::DirectoryDeclaration { .. } => {
+                totals.declarations += 1;
+                totals.fresh += 1;
+            }
+        }
+    }
+    totals
+}
+
+/// Encodes one prepared stream body from these rows.
+fn stream_body(
+    directories: &[DirectoryChange],
+    identities: &[PreparedIdentity],
+) -> Result<Vec<u8>, Failure> {
+    let mut out = Vec::new();
+    put_stream_tag(&mut out)?;
+    for row in directories {
+        put_directory_row(&mut out, row.parent, &row.changes)?;
+    }
+    for row in identities {
+        match row {
+            PreparedIdentity::Rooted {
+                serial,
+                kind,
+                content,
+                metadata,
+                fresh,
+            } => {
+                let role = match (*fresh, *kind) {
+                    (false, 1) => ROLE_EXISTING_FILE,
+                    (false, _) => ROLE_EXISTING_SYMLINK,
+                    (true, 1) => ROLE_FRESH_FILE,
+                    (true, _) => ROLE_FRESH_SYMLINK,
+                };
+                put_rooted_identity(&mut out, role, *serial, content, metadata)?;
+            }
+            PreparedIdentity::DirectoryPatch {
+                serial,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } => put_directory_identity(
+                &mut out,
+                ROLE_DIRECTORY_PATCH,
+                *serial,
+                *mode,
+                *mtime_seconds,
+                *mtime_nanoseconds,
+            )?,
+            PreparedIdentity::DirectoryDeclaration {
+                serial,
+                mode,
+                mtime_seconds,
+                mtime_nanoseconds,
+            } => put_directory_identity(
+                &mut out,
+                ROLE_DIRECTORY_DECLARATION,
+                *serial,
+                *mode,
+                *mtime_seconds,
+                *mtime_nanoseconds,
+            )?,
+        }
+    }
+    Ok(out)
+}
+
+/// Sends one prepared command with the body its request declares.
+fn call_prepared(
+    service: &Service,
+    peer: &VerifiedPeer,
+    id: u64,
+    operation: Operation,
+    body: &[u8],
+) -> Result<Response, Failure> {
+    let profile = profile(&operation);
+    call_at(service, peer, id, profile, operation, body)
 }
 
 fn file_identity(path: &Path) -> (u64, u64) {
@@ -587,35 +770,32 @@ fn native_import_gives_each_file_its_own_content_root() {
         base.effective_root,
         b"a",
     ));
+    // The root's patch and the edited file's typed value, in the body the
+    // request declares.
+    let directories = vec![DirectoryChange {
+        parent: 1,
+        changes: Vec::new(),
+    }];
+    let identities = vec![rooted(a_serial, a_kind, replacement, a_metadata, false)];
+    let header = PreparedChanges {
+        workspace: [0x63; 32],
+        branch: base.branch.branch,
+        expected_head: None,
+        expected_base: base.branch.base_layer,
+        generation: 1,
+        base: base.effective_root,
+        scope: base.scope,
+        root_serial: 1,
+        totals: stream_totals(&directories, &identities),
+    };
+    let body = stream_body(&directories, &identities).unwrap();
     let staged = stage(
-        call(
+        call_prepared(
             &fixture.service,
             &fixture.peer,
             8,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(PreparedChanges {
-                directory_metadata: Vec::new(),
-                new_directories: Vec::new(),
-                new_file_serials: Vec::new(),
-                new_symlink_serials: Vec::new(),
-                workspace: [0x63; 32],
-                branch: base.branch.branch,
-                expected_head: None,
-                expected_base: base.branch.base_layer,
-                generation: 1,
-                base: base.effective_root,
-                scope: base.scope,
-                root_serial: 1,
-                directories: vec![DirectoryChange {
-                    parent: 1,
-                    changes: vec![],
-                }],
-                inodes: vec![InodeChange {
-                    serial: a_serial,
-                    kind: a_kind,
-                    content: replacement,
-                    metadata: a_metadata,
-                }],
-            })),
+            Operation::HistoryCommand(HistoryCommand::StageChanges(header)),
+            &body,
         )
         .unwrap(),
     );
@@ -899,14 +1079,16 @@ fn stage_commit_add_layer_and_read_back() {
 
     let workspace = [0x71; 32];
     let staged = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            10,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, workspace, second, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, workspace, second, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                10,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     assert_eq!(staged.workspace, workspace);
@@ -1043,26 +1225,30 @@ fn stale_loser_retains_its_exact_stage() {
     let winner = [0x81; 32];
     let loser = [0x82; 32];
     let winner_stage = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            10,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, winner, second, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, winner, second, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                10,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     // The loser is captured against the same context before the winner commits.
     let loser_stage = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            11,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, loser, second, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, loser, second, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                11,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     let committed = call(
@@ -1137,13 +1323,14 @@ fn multiple_no_change_stages_are_up_to_date() {
         stat_roots(stat(&fixture.service, &fixture.peer, 9, init.root, b"a"));
     for (index, workspace) in [[0x91; 32], [0x92; 32]].into_iter().enumerate() {
         let mut prepared = changes(&init, workspace, content, 1);
-        prepared.inodes[0].metadata = metadata;
+        prepared.with_identity(1, content, metadata);
         let staged = stage(
-            call(
+            call_prepared(
                 &fixture.service,
                 &fixture.peer,
                 10 + index as u64 * 2,
-                Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)),
+                prepared.stage(),
+                prepared.body(),
             )
             .unwrap(),
         );
@@ -1187,14 +1374,16 @@ fn delayed_discard_token_cannot_consume_a_replacement_stage() {
     let init = initialize(&mut fixture, [23; 32], b"first", 3);
     let workspace = [0xa1; 32];
     let original = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            10,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, workspace, first, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, workspace, first, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                10,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     let removed = call(
@@ -1220,14 +1409,16 @@ fn delayed_discard_token_cannot_consume_a_replacement_stage() {
     .unwrap();
     assert_eq!(result(absent), HistoryResult::Discarded { removed: false });
     let replacement = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            13,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, workspace, second, 2,
-            ))),
-        )
+        {
+            let prepared = changes(&init, workspace, second, 2);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                13,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     assert_ne!(replacement.token, original.token);
@@ -1284,14 +1475,16 @@ fn already_published_source_is_up_to_date_before_stale_head_refusal() {
     let init = initialize(&mut fixture, [29; 32], b"first", 3);
     let workspace = [0xb1; 32];
     let staged = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            10,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, workspace, second, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, workspace, second, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                10,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     let commit = match result(
@@ -1373,24 +1566,26 @@ fn wrong_role_root_is_refused() {
     let workspace = [0xc1; 32];
     let mut prepared = changes(&init, workspace, second, 1);
     // A regular file's content root may not be claimed as a symlink target.
-    prepared.inodes[0].kind = 3;
-    let failure = call(
+    prepared.with_identity(3, second, init.metadata_root);
+    let failure = call_prepared(
         &fixture.service,
         &fixture.peer,
         10,
-        Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)),
+        prepared.stage(),
+        prepared.body(),
     )
     .unwrap_err();
     assert_eq!(failure.code, Code::InvalidInput);
 
     // A metadata root may not be claimed as a regular file's content root.
     let mut prepared = changes(&init, workspace, init.metadata_root, 1);
-    prepared.inodes[0].metadata = init.metadata_root;
-    let failure = call(
+    prepared.with_identity(1, init.metadata_root, init.metadata_root);
+    let failure = call_prepared(
         &fixture.service,
         &fixture.peer,
         11,
-        Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)),
+        prepared.stage(),
+        prepared.body(),
     )
     .unwrap_err();
     assert!(matches!(
@@ -1407,23 +1602,25 @@ fn rebasing_by_editing_a_token_is_refused() {
     let init = initialize(&mut fixture, [37; 32], b"first", 3);
     let workspace = [0xd1; 32];
     let mut prepared = changes(&init, workspace, second, 1);
-    prepared.base = [0xAB; 32];
-    let failure = call(
+    prepared.header.base = [0xAB; 32];
+    let failure = call_prepared(
         &fixture.service,
         &fixture.peer,
         10,
-        Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)),
+        prepared.stage(),
+        prepared.body(),
     )
     .unwrap_err();
     assert_eq!(failure.code, Code::InvalidInput);
 
     let mut prepared = changes(&init, workspace, second, 1);
-    prepared.scope = [0xCD; 32];
-    let failure = call(
+    prepared.header.scope = [0xCD; 32];
+    let failure = call_prepared(
         &fixture.service,
         &fixture.peer,
         11,
-        Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)),
+        prepared.stage(),
+        prepared.body(),
     )
     .unwrap_err();
     assert_eq!(failure.code, Code::InvalidInput);
@@ -1484,14 +1681,16 @@ fn metadata_only_commands_never_touch_the_content_store() {
 
     let workspace = [0xe1; 32];
     let staged = stage(
-        call(
-            &fixture.service,
-            &fixture.peer,
-            10,
-            Operation::HistoryCommand(HistoryCommand::StageChanges(changes(
-                &init, workspace, second, 1,
-            ))),
-        )
+        {
+            let prepared = changes(&init, workspace, second, 1);
+            call_prepared(
+                &fixture.service,
+                &fixture.peer,
+                10,
+                prepared.stage(),
+                prepared.body(),
+            )
+        }
         .unwrap(),
     );
     // Staging is a content operation and did write the store. Everything after
@@ -2014,6 +2213,15 @@ fn branch_root_descriptor_validates_content_scope_profile_and_actual_serial() {
 }
 
 fn native_call(f: &Fixture, operation: Operation) -> Result<Response, Failure> {
+    native_call_with_body(f, operation, &[])
+}
+
+/// One prepared command over the real native route, with the body it declares.
+fn native_call_with_body(
+    f: &Fixture,
+    operation: Operation,
+    body: &[u8],
+) -> Result<Response, Failure> {
     use layerfs_bridge::adapters::native::{
         client::Client,
         connection::{accept, connect, Peer},
@@ -2051,7 +2259,7 @@ fn native_call(f: &Fixture, operation: Operation) -> Result<Response, Failure> {
             response_bytes: 16384,
             operation,
         };
-        let mut input: &[u8] = &[];
+        let mut input: &[u8] = body;
         let mut output = Vec::new();
         let result = client.call(&request, &mut input, &mut output);
         drop(client);
@@ -2114,16 +2322,13 @@ fn composite_failure_keeps_acknowledged_stage_distinct_from_absence() {
         let init = initialize(&mut f, [9; 32], b"first", 3);
         for native in [false, true] {
             let workspace = if native { [2; 32] } else { [1; 32] };
-            let operation = Operation::HistoryCommand(HistoryCommand::Commit(changes(
-                &init,
-                workspace,
-                replacement,
-                4,
-            )));
+            let prepared = changes(&init, workspace, replacement, 4);
+            let operation = prepared.commit();
+            let body = prepared.body().to_vec();
             let error = if native {
-                native_call(&f, operation)
+                native_call_with_body(&f, operation, &body)
             } else {
-                call(&f.service, &f.peer, 10, operation)
+                call_prepared(&f.service, &f.peer, 10, operation, &body)
             }
             .unwrap_err();
             assert_eq!(error.code, if unknown { Code::Unknown } else { Code::Busy });
@@ -2174,12 +2379,10 @@ fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
     let file = construct(&f.service, &f.peer, 1, b"one");
     let second = construct(&f.service, &f.peer, 2, b"two");
     let init = initialize(&mut f, [11; 32], b"one", 3);
-    let committed = call(
-        &f.service,
-        &f.peer,
-        8,
-        Operation::HistoryCommand(HistoryCommand::Commit(changes(&init, [1; 32], second, 1))),
-    )
+    let committed = {
+        let prepared = changes(&init, [1; 32], second, 1);
+        call_prepared(&f.service, &f.peer, 8, prepared.commit(), prepared.body())
+    }
     .unwrap();
     let first = match result(committed) {
         HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
@@ -2202,16 +2405,11 @@ fn refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes() {
         HistoryResult::Published(LayerOutcomeWire::Added(record)) => record,
         _ => panic!(),
     };
-    let mut change = changes(&init, [2; 32], file, 2);
-    change.expected_head = Some(first.commit);
-    change.base = first.root;
-    let second = call(
-        &f.service,
-        &f.peer,
-        10,
-        Operation::HistoryCommand(HistoryCommand::Commit(change)),
-    )
-    .unwrap();
+    let mut prepared = changes(&init, [2; 32], file, 2);
+    prepared.header.expected_head = Some(first.commit);
+    prepared.header.base = first.root;
+    let second =
+        call_prepared(&f.service, &f.peer, 10, prepared.commit(), prepared.body()).unwrap();
     let second = match result(second) {
         HistoryResult::Committed(CommitOutcomeWire::Committed(record)) => record,
         _ => panic!(),
@@ -2302,11 +2500,12 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
     for (index, path) in [b"a", b"b"].into_iter().enumerate() {
         let (serial, kind, _, metadata) =
             stat_roots(stat(&f.service, &f.peer, 6, base.effective_root, path));
+        let directories = vec![DirectoryChange {
+            parent: 1,
+            changes: Vec::new(),
+        }];
+        let identities = vec![rooted(serial, kind, replacement, metadata, false)];
         let change = PreparedChanges {
-            directory_metadata: Vec::new(),
-            new_directories: Vec::new(),
-            new_file_serials: Vec::new(),
-            new_symlink_serials: Vec::new(),
             workspace: [index as u8 + 1; 32],
             branch: base.branch.branch,
             expected_head: None,
@@ -2315,23 +2514,16 @@ fn disjoint_file_edits_still_refuse_stale_publication_without_merging() {
             base: base.effective_root,
             scope: base.scope,
             root_serial: 1,
-            directories: vec![DirectoryChange {
-                parent: 1,
-                changes: vec![],
-            }],
-            inodes: vec![InodeChange {
-                serial,
-                kind,
-                content: replacement,
-                metadata,
-            }],
+            totals: stream_totals(&directories, &identities),
         };
+        let body = stream_body(&directories, &identities).unwrap();
         stages.push(stage(
-            call(
+            call_prepared(
                 &f.service,
                 &f.peer,
                 7,
                 Operation::HistoryCommand(HistoryCommand::StageChanges(change)),
+                &body,
             )
             .unwrap(),
         ));

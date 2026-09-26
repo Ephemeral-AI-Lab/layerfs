@@ -247,15 +247,22 @@ pub(crate) fn dispatch(
             read::catalog::query(catalog.ok_or(Code::Unsupported)?, query, store)
         }
         Operation::HistoryCommand(command) => {
-            end_input(input)?;
+            // A prepared update carries its rows in the body its own request
+            // declared; every other command owns no body at all.
+            if !matches!(
+                command,
+                HistoryCommand::Commit(_) | HistoryCommand::StageChanges(_)
+            ) {
+                end_input(input)?;
+            }
             save::catalog::command(
                 catalog.ok_or(Code::Unsupported)?,
                 store,
                 import_root,
                 command,
+                save::catalog::Streams { input, output },
                 deadline,
                 scope,
-                output,
             )
         }
         // A known successful C2 finish is never changed into a claimed abort.

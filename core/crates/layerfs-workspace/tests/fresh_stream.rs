@@ -262,7 +262,7 @@ mod linux {
             op,
             Operation::SaveFile { base: None, .. } | Operation::ConstructPortableMetadata { .. }
         )));
-        assert!(prepared(ops).new_file_serials.is_empty());
+        assert_eq!(prepared(ops).totals.fresh, 0);
     }
 
     #[test]
@@ -316,7 +316,7 @@ mod linux {
         let first = committed(&f, f.workspace.commit(deadline()).unwrap());
         let ops = &operations(&f)[start..];
         one_construct(ops, INPUT_LENGTH);
-        assert_eq!(prepared(ops).new_file_serials, vec![a.serial]);
+        assert_eq!(prepared(ops).totals.fresh, 1);
         assert_eq!(publications(&f), 1);
         let (content, metadata) = saved(&f, first, b"dsh-largest", a);
         canonical_digest(&f, content, INPUT_LENGTH, INPUT_SHA256);

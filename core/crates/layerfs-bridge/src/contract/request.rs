@@ -2,10 +2,10 @@
 use super::{
     Code, Failure, HistoryCommand, HistoryForkSource, HistoryQuery, PreparedChanges, BRANCH_BYTES,
     COMMAND_OPCODE, COMMIT_BYTES, CONSTRUCT_PORTABLE_METADATA_OPCODE, CURSOR_BYTES,
-    HISTORY_PROFILE, LAYER_BYTES, NAME_MAX_BYTES, PAGE_RECORDS, QUERY_OPCODE, SANDBOX_HELLO_OPCODE,
-    STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE, WORKSPACE_ATTACH_OPCODE,
-    WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE, WORKSPACE_EXEC_OPCODE,
-    WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
+    HISTORY_PROFILE, LAYER_BYTES, MAX_PREPARED_STREAM_BYTES, NAME_MAX_BYTES, PAGE_RECORDS,
+    QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
+    WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
+    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
     WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
@@ -346,6 +346,8 @@ impl Operation {
                     .checked_add(*replacement)
                     .ok_or_else(|| Code::Capacity.into())
             }
+            Self::HistoryCommand(HistoryCommand::Commit(changes))
+            | Self::HistoryCommand(HistoryCommand::StageChanges(changes)) => changes.stream_bytes(),
             _ => Ok(0),
         }
     }
@@ -375,10 +377,13 @@ impl Request {
         if self.response_bytes > MAX_FILE {
             return Err(Code::Capacity.into());
         }
-        let stream_limit = if matches!(self.operation, Operation::SaveFile { .. }) {
-            MAX_SAVE_STREAM_BYTES
-        } else {
-            MAX_FILE
+        let stream_limit = match &self.operation {
+            Operation::SaveFile { .. } => MAX_SAVE_STREAM_BYTES,
+            Operation::HistoryCommand(HistoryCommand::Commit(_))
+            | Operation::HistoryCommand(HistoryCommand::StageChanges(_)) => {
+                MAX_PREPARED_STREAM_BYTES
+            }
+            _ => MAX_FILE,
         };
         if self.operation.input_length()? > stream_limit {
             return Err(Code::Capacity.into());
@@ -554,151 +559,7 @@ fn check_history_query(query: &HistoryQuery) -> Result<(), Failure> {
 }
 
 fn check_prepared(changes: &PreparedChanges) -> Result<(), Failure> {
-    if changes.workspace.iter().all(|byte| *byte == 0) {
-        return Err(Code::InvalidInput.into());
-    }
-    check_identity(&changes.branch, BRANCH_BYTES, 0x11)?;
-    if let Some(head) = &changes.expected_head {
-        check_identity(head, COMMIT_BYTES, 0x12)?;
-    }
-    check_identity(&changes.expected_base, LAYER_BYTES, 0x32)?;
-    if changes.root_serial == 0 || changes.root_serial > i64::MAX as u64 {
-        return Err(Code::InvalidInput.into());
-    }
-    check_prepared_lists(&changes.directories, &changes.inodes)?;
-    check_prepared_additions(
-        changes.root_serial,
-        &changes.directories,
-        &changes.inodes,
-        &changes.new_directories,
-        &changes.directory_metadata,
-        &changes.new_file_serials,
-        &changes.new_symlink_serials,
-    )?;
-    // The whole prepared update travels in one metadata frame, so the exact
-    // bytes those rows occupy is what admission compares - a measured figure,
-    // not a fixed row count. Nothing here names a directory, name or inode
-    // count: a wider generation is refused by the frame it would need, and the
-    // rows a frame can carry are carried.
-    if changes.frame_bytes()? > METADATA_BYTES {
-        return Err(Code::Capacity.into());
-    }
-    Ok(())
-}
-
-fn check_prepared_lists(
-    directories: &[DirectoryChange],
-    inodes: &[InodeChange],
-) -> Result<(), Failure> {
-    for directory in directories {
-        for (name, _) in &directory.changes {
-            if name.is_empty() || name.len() > 255 {
-                return Err(Code::InvalidInput.into());
-            }
-        }
-    }
-    if directories
-        .windows(2)
-        .any(|pair| pair[0].parent >= pair[1].parent)
-    {
-        return Err(Code::InvalidInput.into());
-    }
-    if inodes
-        .windows(2)
-        .any(|pair| pair[0].serial >= pair[1].serial)
-    {
-        return Err(Code::InvalidInput.into());
-    }
-    Ok(())
-}
-
-fn check_prepared_additions(
-    root_serial: u64,
-    directories: &[DirectoryChange],
-    inodes: &[InodeChange],
-    new_directories: &[DirectoryMetadata],
-    directory_metadata: &[DirectoryMetadata],
-    new_file_serials: &[u64],
-    new_symlink_serials: &[u64],
-) -> Result<(), Failure> {
-    // The three lists are one generation's rows, so their total is bounded by
-    // the frame the update travels in rather than by a fixed count; only the
-    // arithmetic has to describe itself.
-    inodes
-        .len()
-        .checked_add(new_directories.len())
-        .and_then(|n| n.checked_add(directory_metadata.len()))
-        .ok_or(Code::Capacity)?;
-    if new_file_serials
-        .len()
-        .checked_add(new_symlink_serials.len())
-        .ok_or(Code::Capacity)?
-        > inodes.len()
-    {
-        return Err(Code::Capacity.into());
-    }
-    for records in [new_directories, directory_metadata] {
-        if records
-            .windows(2)
-            .any(|pair| pair[0].serial >= pair[1].serial)
-        {
-            return Err(Code::InvalidInput.into());
-        }
-        for directory in records {
-            if directory.serial == 0
-                || directory.serial > i64::MAX as u64
-                || inodes.iter().any(|inode| inode.serial == directory.serial)
-            {
-                return Err(Code::InvalidInput.into());
-            }
-            super::metadata::check_portable_metadata(
-                2,
-                directory.mode,
-                directory.mtime_nanoseconds,
-            )?;
-        }
-    }
-    if (!new_directories.is_empty()
-        || !directory_metadata.is_empty()
-        || !new_file_serials.is_empty()
-        || !new_symlink_serials.is_empty())
-        && inodes
-            .windows(2)
-            .any(|pair| pair[0].serial >= pair[1].serial)
-    {
-        return Err(Code::InvalidInput.into());
-    }
-    for (serials, kind) in [(new_file_serials, 1), (new_symlink_serials, 3)] {
-        if serials.windows(2).any(|pair| pair[0] >= pair[1]) {
-            return Err(Code::InvalidInput.into());
-        }
-        for serial in serials {
-            if *serial == 0 || *serial > i64::MAX as u64 || *serial == root_serial {
-                return Err(Code::InvalidInput.into());
-            }
-            let index = inodes
-                .binary_search_by_key(serial, |inode| inode.serial)
-                .map_err(|_| Code::InvalidInput)?;
-            if inodes[index].kind != kind {
-                return Err(Code::InvalidInput.into());
-            }
-        }
-        // Different required kinds keep the two subsets disjoint. Directory
-        // declarations and patches above are disjoint from every I row.
-    }
-    for directory in new_directories {
-        if directory.serial == root_serial
-            || directory_metadata
-                .binary_search_by_key(&directory.serial, |d| d.serial)
-                .is_ok()
-            || !directories
-                .iter()
-                .any(|changes| changes.parent == directory.serial)
-        {
-            return Err(Code::InvalidInput.into());
-        }
-    }
-    Ok(())
+    changes.check()
 }
 
 fn check_history_command(command: &HistoryCommand) -> Result<(), Failure> {

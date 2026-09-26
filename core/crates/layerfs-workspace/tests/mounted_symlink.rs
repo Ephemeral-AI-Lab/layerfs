@@ -329,8 +329,8 @@ print('KERNEL_SYMLINK created=4 targets=relative,absolute,opaque,4095 mode=0777 
                 _ => None,
             })
             .unwrap();
-        assert_eq!(p.new_symlink_serials, vec![born.serial]);
-        assert!(p.new_file_serials.is_empty());
+        assert_eq!(p.totals.fresh, 1, "one fresh symlink identity");
+        assert!(p.totals.fresh == 0);
         drop(observed);
         old.seek(SeekFrom::Start(cookie)).unwrap();
         assert_eq!(directory_tail(&old), tail);

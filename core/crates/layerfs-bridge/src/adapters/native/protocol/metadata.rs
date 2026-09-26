@@ -57,9 +57,6 @@ impl<'a> Decoder<'a> {
         }
         Ok(n)
     }
-    pub(super) fn is_empty(&self) -> bool {
-        self.bytes.is_empty()
-    }
     pub fn finish(self) -> Result<(), Failure> {
         if self.bytes.is_empty() {
             Ok(())

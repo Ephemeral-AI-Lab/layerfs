@@ -1,10 +1,12 @@
 //! Exact C5 commit and live successor reconciliation through production APIs.
+#[path = "support/prepared.rs"]
+mod prepared_stream;
 #[cfg(target_os = "linux")]
 #[path = "support/native_workspace.rs"]
 mod support;
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::support::*;
+    use super::{prepared_stream, support::*};
     use layerfs_bridge::contract::*;
     use layerfs_workspace::*;
     use std::{
@@ -827,30 +829,27 @@ mod linux {
         let before = snapshot(&f);
         f.edit(b"data.bin", 10, 14, b"GGGG");
         let stage = f.workspace.stage(deadline()).unwrap();
+        // The update this request declares: one directory row that drops the old
+        // alias and binds the new one, and no typed identity of its own.
+        let directories = [DirectoryChange {
+            parent: before.root_serial.unwrap(),
+            changes: vec![
+                (b"alias".to_vec(), None),
+                (b"other-alias".to_vec(), Some(data.serial)),
+            ],
+        }];
+        let identities: [PreparedIdentity; 0] = [];
+        let body = prepared_stream::body(&directories, &identities).unwrap();
         f.native
-            .request(
-                Operation::HistoryCommand(HistoryCommand::Commit(PreparedChanges {
-                    directory_metadata: Vec::new(),
-                    new_directories: Vec::new(),
-                    new_file_serials: Vec::new(),
-                    new_symlink_serials: Vec::new(),
-                    workspace: [44; 32],
-                    branch: before.branch.branch,
-                    expected_head: before.branch.head_commit,
-                    expected_base: before.branch.base_layer,
-                    generation: 1,
-                    base: before.effective_root,
-                    scope: before.scope,
-                    root_serial: before.root_serial.unwrap(),
-                    directories: vec![DirectoryChange {
-                        parent: before.root_serial.unwrap(),
-                        changes: vec![
-                            (b"alias".to_vec(), None),
-                            (b"other-alias".to_vec(), Some(data.serial)),
-                        ],
-                    }],
-                    inodes: vec![],
-                })),
+            .request_with_body(
+                Operation::HistoryCommand(HistoryCommand::Commit(prepared_stream::header(
+                    &before,
+                    [44; 32],
+                    1,
+                    &directories,
+                    &identities,
+                ))),
+                &body,
                 16384,
                 &mut std::io::sink(),
             )

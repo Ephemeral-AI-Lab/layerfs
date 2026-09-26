@@ -1,18 +1,25 @@
-//! Lower only the captured directory frontier; canonical objects remain service-owned.
+//! Lower only the captured directory frontier, one directory row at a time.
 //!
-//! One dirty directory owns at most one row here: its final bindings, its
-//! declaration, its metadata patch, or both the second and third. The bindings
-//! are read with the keyed tree's own cursors - one ordered pass over the entry
-//! leaves and one over the removal leaves - and merged in name order, so a
-//! directory that binds `K` names costs one pass over its reached leaves rather
-//! than one successor lookup per name. A name cannot be both bound and removed,
-//! so the merge is also the duplicate check the sort this replaces performed.
+//! One dirty directory owns at most one row here: a fresh directory's
+//! declaration row - which carries its final bindings, when it has any - or a
+//! maintained directory's row. A directory this generation touched without
+//! changing a name carries no row at all: its selected fields travel as its
+//! identity row instead.
+//!
+//! The bindings are read with the keyed tree's own cursors - one ordered pass
+//! over the entry leaves and one over the removal leaves - and merged in name
+//! order, so a directory that binds `K` names costs one pass over its reached
+//! leaves rather than one successor lookup per name. A name cannot be both bound
+//! and removed, so the merge is also the duplicate check the sort this replaces
+//! performed.
 //!
 //! No name count, row count or directory count is admitted here. The frontier
-//! charge this capture already reserved describes exactly these rows, so the
-//! only refusals are a record that cannot describe itself and the transport's
-//! own metadata frame, which `save.rs` checks against the exact encoded total.
-use super::lower::Dirty;
+//! charge this capture already reserved describes exactly these rows, and the
+//! stream's own declared totals are measured from the rows this pass produces, so
+//! the only refusals are a record that cannot describe itself and a stream the
+//! charged bound refuses.
+use super::lower::{Dirty, DirtyWalk};
+use super::stream::PreparedRow;
 use crate::{
     backing::{
         binary_plus_tree::keyed::KeyCursor,
@@ -23,54 +30,72 @@ use crate::{
     },
     overlay::{
         directories::{self, Origin},
-        snapshot::Submission,
+        snapshot::Captured,
     },
     *,
 };
-use layerfs_bridge::contract::{DirectoryChange, DirectoryMetadata};
 use std::{cmp::Ordering, time::Instant};
-type PreparedDirectories = (
-    Vec<DirectoryChange>,
-    Vec<DirectoryMetadata>,
-    Vec<DirectoryMetadata>,
-);
 /// One directory's final binding rows, in name order: a name's serial, or
 /// `None` when this generation made the name absent.
 type BindingRows = Vec<(Vec<u8>, Option<u64>)>;
-impl Workspace {
-    pub(super) fn prepared_directories(
-        &self,
-        submission: &Submission,
+/// The first section of a prepared stream: one row per changed directory.
+pub(crate) struct DirectorySection<'a> {
+    captured: &'a Captured,
+    walk: DirtyWalk,
+    /// True while this pass may record the declarations it emits.
+    record: bool,
+    count: usize,
+    directories: usize,
+    names: usize,
+    bytes: usize,
+    declarations: usize,
+}
+impl<'a> DirectorySection<'a> {
+    /// Opens the section over one captured frontier.
+    pub(crate) fn new(captured: &'a Captured, walk: DirtyWalk, record: bool) -> Self {
+        Self {
+            captured,
+            walk,
+            record,
+            count: 0,
+            directories: 0,
+            names: 0,
+            bytes: 0,
+            declarations: 0,
+        }
+    }
+    /// True while this pass records what it declares.
+    pub(crate) fn record(&self) -> bool {
+        self.record
+    }
+    /// The next directory row, in parent order, or `None` at the end.
+    pub(crate) fn next(
+        &mut self,
+        workspace: &Workspace,
         deadline: Instant,
-    ) -> Result<PreparedDirectories, WorkspaceError> {
-        let captured = submission.capture()?;
-        // One row per dirty directory at most: a maintained directory that binds
-        // and removes nothing is represented by its metadata patch alone.
-        let mut changes = vector(captured.directories)?;
-        let mut new = vector(captured.directories)?;
-        let mut patches = vector(captured.directories)?;
-        let mut count = 0;
-        let mut names = 0;
-        let mut bytes = 0;
-        let mut directories = 0;
-        // Declarations this delta emitted; each owns one name record too.
-        let mut declarations = 0;
-        let mut walk = self.dirty_walk(submission, deadline)?;
-        while let Some((serial, dirty)) = walk.next()? {
-            count += 1;
+    ) -> Result<Option<PreparedRow>, WorkspaceError> {
+        loop {
+            let Some((serial, dirty)) = self.walk.next()? else {
+                // The walk visits every dirty serial exactly once and stops at
+                // the end of this generation's dirty frontier, so these counters
+                // are its own self-check against the capture that charged them.
+                if self.count != self.captured.count
+                    || self.directories != self.captured.directories
+                    || self.names > self.captured.names
+                    || self.bytes != self.captured.name_bytes
+                {
+                    return Err(WorkspaceError::Io);
+                }
+                return Ok(None);
+            };
+            self.count += 1;
             let Dirty::Directory(directory) = dirty else {
                 continue;
             };
-            directories += 1;
-            if directories > captured.directories {
+            self.directories += 1;
+            if self.directories > self.captured.directories {
                 return Err(WorkspaceError::Io);
             }
-            let metadata = DirectoryMetadata {
-                serial,
-                mode: directory.mode,
-                mtime_seconds: directory.seconds,
-                mtime_nanoseconds: directory.nanos,
-            };
             // A directory the canonical state has not accepted yet is declared as
             // its own final binding record: the prepared profile requires every
             // declared serial to own a parent link, and a name is read solely from
@@ -78,16 +103,9 @@ impl Workspace {
             // first Commit that names the serial, because the service refuses a
             // serial its base already holds.
             let fresh =
-                matches!(directory.origin, Origin::Empty) && self.state()?.undeclared(serial);
-            let mut declared = false;
+                matches!(directory.origin, Origin::Empty) && workspace.state()?.undeclared(serial);
             if fresh {
-                new.push(metadata);
-                changes.push(DirectoryChange {
-                    parent: serial,
-                    changes: vector(0)?,
-                });
-                declared = true;
-                declarations += 1;
+                self.declarations += 1;
             }
             match directory.origin {
                 Origin::Empty => {}
@@ -99,84 +117,61 @@ impl Workspace {
                     // operation that wrote it may have published a further root
                     // in the same generation. Both roots are immutable and pinned
                     // for this submission, so the read needs no writer gate.
-                    if reference.inode != serial || reference.generation != captured.generation {
+                    if reference.inode != serial || reference.generation != self.captured.generation
+                    {
                         return Err(WorkspaceError::Io);
                     }
-                    let host = self
+                    let host = workspace
                         .host
                         .metadata
                         .as_ref()
                         .ok_or(WorkspaceError::Unsupported)?;
                     let mut lease = host.payloads.window(1, 3)?;
                     directories::captured(
-                        &captured.root,
+                        &self.captured.root,
                         reference,
                         lease.window.as_mut().ok_or(WorkspaceError::Io)?,
                         deadline,
                     )?;
                 }
-                Origin::Canonical(root) if root == captured.context.effective_root => {}
+                Origin::Canonical(root) if root == self.captured.context.effective_root => {}
                 // A canonical delta that is not the effective root cannot be
                 // declared by this capture.
                 Origin::Canonical(_) => return Err(WorkspaceError::Io),
             }
             let bare = directory.entries == PageRef::NULL && directory.tombstones == PageRef::NULL;
-            if !declared {
-                // A maintained delta always carries its own inode row, so its
-                // selected mode and mtime reach the result that way.
-                patches.push(metadata);
-            }
             if bare {
-                // A fresh directory is already fully represented by its
-                // declaration; a maintained one by the patch above.
+                // A fresh directory is already fully represented by its own (empty)
+                // declaration row; a maintained one by its identity row.
+                if fresh {
+                    return Ok(Some(PreparedRow::Directory {
+                        parent: serial,
+                        changes: Vec::new(),
+                    }));
+                }
                 continue;
             }
-            let host = self
+            let host = workspace
                 .host
                 .metadata
                 .as_ref()
                 .ok_or(WorkspaceError::Unsupported)?;
             let mut lease = host.payloads.window(1, 3)?;
             let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-            let rows = Self::directory_rows(&captured.root, directory, window, deadline)?;
-            names += rows.len();
-            bytes += rows.iter().map(|(name, _)| 10 + name.len()).sum::<usize>();
-            if declared {
-                // The declaration this delta already emitted carries the names.
-                match changes.last_mut() {
-                    Some(record) if record.parent == serial => record.changes = rows,
-                    _ => return Err(WorkspaceError::Io),
-                }
-            } else {
-                changes.push(DirectoryChange {
-                    parent: serial,
-                    changes: rows,
-                });
-            }
+            let rows = Self::directory_rows(&self.captured.root, directory, window, deadline)?;
+            self.names += rows.len();
+            self.bytes += rows.iter().map(|(name, _)| 10 + name.len()).sum::<usize>();
+            return Ok(Some(PreparedRow::Directory {
+                parent: serial,
+                changes: rows,
+            }));
         }
-        // The walk visits every dirty serial exactly once and stops at the end of
-        // this generation's dirty frontier, so these counters are its own
-        // self-check. A fresh directory owns a declaration plus its name record, a
-        // maintained one owns a name record, its metadata patch, or both.
-        if count != captured.count
-            || directories != captured.directories
-            || names > captured.names
-            || bytes != captured.name_bytes
-            || changes.len() < declarations
-        {
-            return Err(WorkspaceError::Io);
-        }
-        {
-            // The submission owns the exact declarations this Commit sends, so a
-            // completed Commit forgets those and only those. A directory a later
-            // generation created is not one of them and stays undeclared.
-            let mut state = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
-            state.declared.clear();
-            for metadata in &new {
-                state.declared.push(metadata.serial);
-            }
-        }
-        Ok((changes, new, patches))
+    }
+    /// Opens a declaration bookkeeping pass: the rows are produced, nothing is
+    /// recorded. Used only by the measuring pass.
+    #[allow(dead_code)]
+    pub(crate) fn declarations(&self) -> usize {
+        self.declarations
     }
     /// The final binding rows of one maintained directory, in name order.
     ///
@@ -205,12 +200,11 @@ impl Workspace {
         let mut removals: Option<KeyCursor> = if directory.tombstones == PageRef::NULL {
             None
         } else {
-            Some(owner.arena.key_cursor(
-                directory.tombstones,
-                b"T",
-                window,
-                deadline,
-            )?)
+            Some(
+                owner
+                    .arena
+                    .key_cursor(directory.tombstones, b"T", window, deadline)?,
+            )
         };
         let mut entry = entries.next(window)?;
         let mut removal = match removals.as_mut() {
@@ -237,7 +231,10 @@ impl Workspace {
                 let cell = entry.as_ref().ok_or(WorkspaceError::Io)?;
                 let name = &cell.key()[1..];
                 crate::filesystem::namespace::child_path(&[], name)?;
-                rows.push((name.to_vec(), Some(directories::entry_serial(cell.value())?)));
+                rows.push((
+                    name.to_vec(),
+                    Some(directories::entry_serial(cell.value())?),
+                ));
                 bound += 1;
                 entry = entries.next(window)?;
             } else {
