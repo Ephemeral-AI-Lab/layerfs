@@ -37,13 +37,13 @@ SRP supports independent data-structure modules. The proposed destination is **a
     backing/
       page_store/    Arena, RootOwner, PageRef, ledger, quota and reclamation
       payload/       aligned payload segments, charged ID index and cleanup
-      bplus/         independent private B+ data-structure component
+      binary_plus_tree/         independent private B+ data-structure component
         mod.rs        thin dispatch/reexports; shared invariants only
         extent/       length-indexed format, splice/balance and byte cursor
         keyed/        keyed format, update/delete and ordered key cursor
     commit/          SaveFile and prepared namespace orchestration stay here
 
-The B+ tree lives explicitly in bplus/: extent/ and keyed/ are two specializations over the same page_store/. Its mod.rs may host a checked level/path helper if both implementations use it, but there is no universal node layout or generic mutation engine to extract from current code. Keep old reexports while moving one responsibility at a time. Each mod.rs remains a thin declaration/delegation file below 200 physical lines; each implementation file remains below 1,000. The following **destination physical-line envelopes include relocated code** and are not net additions or a mandate to create every listed file:
+The B+ tree lives explicitly in binary_plus_tree/: extent/ and keyed/ are two specializations over the same page_store/. Its mod.rs may host a checked level/path helper if both implementations use it, but there is no universal node layout or generic mutation engine to extract from current code. Keep old reexports while moving one responsibility at a time. Each mod.rs remains a thin declaration/delegation file below 200 physical lines; each implementation file remains below 1,000. The following **destination physical-line envelopes include relocated code** and are not net additions or a mandate to create every listed file:
 
 | Proposed destination file | Estimated physical lines | Responsibility |
 | --- | ---: | --- |
@@ -61,17 +61,17 @@ The B+ tree lives explicitly in bplus/: extent/ and keyed/ are two specializatio
 | payload/index.rs | 220–300 | Charged ID lookup and reclaim eligibility. |
 | payload/reclaim.rs | 280–350 | Routine and pressure cleanup. |
 | payload/directory.rs | 100–200 | Incarnation-scoped directory ownership. |
-| bplus/mod.rs | <100 | Thin tree-family reexports and any actually shared level check. |
-| bplus/extent/mod.rs | <100 | Thin length-indexed tree surface. |
-| bplus/extent/format.rs | 180–280 | PieceRecord/ChildRef codec and checks. |
-| bplus/extent/splice.rs | 450–650 | Level-aware path copy and balancing. |
-| bplus/extent/cursor.rs | 370–520 | Byte-position traversal. |
-| bplus/keyed/mod.rs | <100 | Thin key-indexed tree surface. |
-| bplus/keyed/format.rs | 150–260 | Cell/fence codec and checks. |
-| bplus/keyed/update.rs | 350–520 | Find, insert and split. |
-| bplus/keyed/delete.rs | 200–350 | Delete and sibling rebalance. |
-| bplus/keyed/cursor.rs | 150–240 | Ordered key traversal. |
-| bplus/keyed/build.rs | 180–330 | Multilevel ordered builder. |
+| binary_plus_tree/mod.rs | <100 | Thin tree-family reexports and any actually shared level check. |
+| binary_plus_tree/extent/mod.rs | <100 | Thin length-indexed tree surface. |
+| binary_plus_tree/extent/format.rs | 180–280 | PieceRecord/ChildRef codec and checks. |
+| binary_plus_tree/extent/splice.rs | 450–650 | Level-aware path copy and balancing. |
+| binary_plus_tree/extent/cursor.rs | 370–520 | Byte-position traversal. |
+| binary_plus_tree/keyed/mod.rs | <100 | Thin key-indexed tree surface. |
+| binary_plus_tree/keyed/format.rs | 150–260 | Cell/fence codec and checks. |
+| binary_plus_tree/keyed/update.rs | 350–520 | Find, insert and split. |
+| binary_plus_tree/keyed/delete.rs | 200–350 | Delete and sibling rebalance. |
+| binary_plus_tree/keyed/cursor.rs | 150–240 | Ordered key traversal. |
+| binary_plus_tree/keyed/build.rs | 180–330 | Multilevel ordered builder. |
 
 The source files for page ownership alone already contain more than 2,300 physical lines; these destination ranges allow that existing code plus new batching work. The separate §6 forecast estimates *net new production behavior*. Relocation itself is reported as migration, not an algorithmic LOC reduction.
 
