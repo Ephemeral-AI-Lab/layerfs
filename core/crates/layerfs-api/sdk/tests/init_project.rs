@@ -10,10 +10,7 @@ use std::{
     io::Cursor,
     path::{Path, PathBuf},
     process::Command,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 const BINDING: &[u8] = b"issue236-sdk-proof";
