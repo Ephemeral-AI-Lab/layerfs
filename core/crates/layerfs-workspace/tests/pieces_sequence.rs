@@ -1108,6 +1108,91 @@ fn an_insertion_at_a_leaf_boundary_lands_in_the_preceding_leaf() {
     assert_eq!(f.render(root, 248), ones(248));
 }
 
+/// The root's declared level for a sequence of `leaves` leaf pages, from the
+/// declared fanout: packing splits a level into its fewest chunks, every branch
+/// holds at most 248 children, and a root that collapses to one page loses a
+/// level.
+fn root_level(leaves: usize) -> u8 {
+    let mut pages = leaves.max(1);
+    let mut level = 0u8;
+    while pages > 1 {
+        pages = pages.div_ceil(248);
+        level += 1;
+    }
+    level
+}
+
+/// Every extent count at a leaf or branch boundary, built, spliced, appended and
+/// read back: the structural invariant is a property of the count, not of the
+/// particular shape one case happens to use.
+#[test]
+fn every_extent_count_at_a_page_boundary_stays_height_uniform() {
+    let f = Fixture::new();
+    for count in [
+        1u64, 123, 124, 125, 247, 248, 249, 250, 496, 497, 498, 30_875, 30_876, 30_877,
+    ] {
+        let root = f.build(&separated(count), count).unwrap();
+        let (leaves, level, spines) = structure(&f, root);
+        assert_eq!(leaves as u64, count.div_ceil(124), "count {count}");
+        assert_eq!(level, root_level(leaves), "count {count}");
+        assert_eq!(spines, 0, "count {count}");
+        let walked = f.walk(root, count);
+        let mut next = 0u64;
+        for (start, piece) in &walked {
+            assert_eq!(*start, next, "count {count}");
+            next += piece.length;
+        }
+        assert_eq!(next, count, "count {count}");
+        // One narrow replacement in the middle, then one append at the end: the
+        // first may split the leaf it lands in, the second is the boundary
+        // insertion the walk has to place inside the last leaf.
+        let at = count / 2;
+        let spliced = f
+            .splice(
+                root,
+                at,
+                at + 1,
+                count,
+                count,
+                count,
+                &[local(0, 1, 4095, 4095)],
+            )
+            .unwrap();
+        let (_, level, _) = structure(&f, spliced.root);
+        assert_eq!(
+            level,
+            root_level(count.div_ceil(124) as usize),
+            "count {count}"
+        );
+        let appended = f
+            .splice(
+                spliced.root,
+                count,
+                count,
+                0,
+                count,
+                count + 1,
+                &[local(0, 1, 4094, 4094)],
+            )
+            .unwrap();
+        assert_eq!(appended.length, count + 1, "count {count}");
+        structure(&f, appended.root);
+        let mut next = 0u64;
+        for (start, piece) in &f.walk(appended.root, count + 1) {
+            assert_eq!(*start, next, "count {count}");
+            next += piece.length;
+        }
+        assert_eq!(next, count + 1, "count {count}");
+        // The generation each step replaced still reads exactly its own bytes.
+        let mut next = 0u64;
+        for (start, piece) in &f.walk(root, count) {
+            assert_eq!(*start, next, "count {count}");
+            next += piece.length;
+        }
+        assert_eq!(next, count, "count {count}");
+    }
+}
+
 #[test]
 fn a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary() {
     let f = Fixture::new();
