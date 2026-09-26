@@ -120,6 +120,45 @@ fn delivery(serials: Arc<Serials>) -> OperationDelivery {
     )
 }
 
+/// One mounted local-edit Workspace over a fresh directory, with the fixture's
+/// delivery. The memory budget is what the generation frontier is charged
+/// against, so a case can select it.
+fn mounted(
+    id: &str,
+    incarnation: u8,
+    memory_budget_bytes: usize,
+) -> (PathBuf, WorkspaceHost, Workspace) {
+    let path = temporary();
+    let metadata = fs::metadata(&path).unwrap();
+    use std::os::unix::fs::MetadataExt;
+    let serials = Arc::new(Serials(AtomicU64::new(1_000)));
+    let host = WorkspaceHost::new(
+        WorkspaceConfig {
+            root: path.clone(),
+            max_count: 1,
+            memory_budget_bytes,
+            disk_budget_bytes: Some(256 * 1024 * 1024),
+        },
+        delivery(serials),
+    )
+    .unwrap();
+    let workspace = host
+        .attach(
+            AttachOptions {
+                id: id.into(),
+                incarnation: [incarnation; 32],
+                store: 1,
+                base: Base::Branch(BRANCH),
+                access: WorkspaceAccess::LocalEdit,
+                owner_uid: metadata.uid(),
+                owner_gid: metadata.gid(),
+            },
+            deadline(),
+        )
+        .unwrap();
+    (path, host, workspace)
+}
+
 fn listed(workspace: &Workspace, serial: u64) -> Vec<Vec<u8>> {
     let handle = workspace.opendir(serial, ReferenceScope::Local).unwrap();
     let mut names = Vec::new();
@@ -327,6 +366,128 @@ fn one_unlink_of_a_wide_directory_rewrites_one_path() {
     let listed = listed(&workspace, ROOT_SERIAL);
     assert_eq!(listed.len(), WIDE - 1);
     assert!(!listed.contains(&name("f", 0)));
+    drop(workspace);
+    drop(host);
+    fs::remove_dir_all(&path).unwrap();
+}
+
+/// A generation admits far more identities than the two aggregate admissions
+/// it replaced, and the next fixed count is named.
+///
+/// #256's own count for this property is 1,025 changed files and names. This
+/// case is `#[ignore]`d because that shape costs 44.7 s through the mounted
+/// route on the phase-3 machine - each create copies a page path and writes a
+/// name, and the run is one test command, over the 30 s rule - not because the
+/// property is unproven: run it on demand,
+///
+/// `TMPDIR=/src/tmp cargo test --release --locked --manifest-path core/Cargo.toml
+/// -p layerfs-workspace --test wide_namespace -- --ignored --nocapture`
+///
+/// All 1,025 creations are admitted. The complete listing that follows is what
+/// refuses, and the refusal is the fixed 1,024-entry cookie table
+/// (`runtime::state::COOKIE_LIMIT`), not the generation frontier: making a
+/// wide readdir walk bounded by charged resources is the same #256 list as the
+/// `NODES`/`COOKIES` constants, and this case pins where it stands.
+#[test]
+#[ignore = "#256: the 1,025-identity shape costs 44.7 s through the mounted route, over the 30 s command rule"]
+fn a_generation_admits_many_identities_while_its_budget_has_room() {
+    const MANY: usize = 1_025;
+    let (path, host, workspace) = mounted("many", 25, 64 * 1024 * 1024);
+    for index in 0..MANY {
+        workspace
+            .mknod(ROOT_SERIAL, &name("f", index), 0o644, 0, deadline())
+            .unwrap_or_else(|error| {
+                panic!(
+                    "create {index}: {error:?} status={:?}",
+                    workspace.status().unwrap()
+                )
+            });
+    }
+    let status = workspace.status().unwrap();
+    println!(
+        "FRONTIER_ADMITTED names={MANY} dirty_inodes={} revision={}",
+        status.dirty_inodes, status.revision
+    );
+    assert_eq!(status.dirty_inodes, MANY);
+    assert_eq!(status.revision, MANY as u64);
+    // Every creation above was admitted; the walk below is what refuses, and
+    // what it refuses with is named rather than reported as an unnamed miss.
+    let handle = workspace
+        .opendir(ROOT_SERIAL, ReferenceScope::Local)
+        .unwrap();
+    let mut cookie = 0;
+    let mut listed = 0;
+    let refusal = loop {
+        match workspace.readdir(handle, cookie, MAX_DIRECTORY_ENTRIES, deadline()) {
+            Ok(page) if page.entries().is_empty() => break None,
+            Ok(page) => {
+                for entry in page.entries() {
+                    if entry.name != b"." && entry.name != b".." {
+                        listed += 1;
+                    }
+                    cookie = entry.cookie;
+                }
+            }
+            Err(error) => break Some(error),
+        }
+    };
+    println!("FRONTIER_LISTING listed={listed} refusal={refusal:?}");
+    assert_eq!(listed, 1_022, "the walk stops at the cookie table");
+    assert!(
+        matches!(refusal, Some(WorkspaceError::Capacity)),
+        "a complete listing of {MANY} names refuses at the cookie table"
+    );
+    drop(workspace);
+    drop(host);
+    fs::remove_dir_all(&path).unwrap();
+}
+
+/// A spent budget refuses precisely and publishes nothing.
+///
+/// The same mutation path, on a budget that runs out: the refusal is
+/// `Capacity`, the generation's revision and listing do not move, and the name
+/// the refused creation would have bound is absent afterwards. The count it
+/// stops at is charged work, not a constant: the live-node table grows by
+/// charged chunks against this same budget, and the frontier is charged from
+/// the generation's own counts, so 4 MiB admits 511 identities where the two
+/// former aggregate admissions stopped the same route at 127.
+#[test]
+fn a_spent_budget_refuses_precisely_and_publishes_nothing() {
+    const ATTEMPT: usize = 4_096;
+    let (path, host, workspace) = mounted("spent", 26, 4 * 1024 * 1024);
+    let mut refused = None;
+    for index in 0..ATTEMPT {
+        if let Err(error) = workspace.mknod(ROOT_SERIAL, &name("f", index), 0o644, 0, deadline()) {
+            refused = Some((index, error));
+            break;
+        }
+    }
+    let (index, error) = refused.expect("a 4 MiB budget cannot admit every name of this attempt");
+    assert!(
+        index > 256,
+        "the live-node table is charged, so it admits more than one chunk"
+    );
+    assert!(
+        matches!(error, WorkspaceError::Capacity),
+        "the refusal is the budget's, got {error:?}"
+    );
+    let status = workspace.status().unwrap();
+    let listed = listed(&workspace, ROOT_SERIAL);
+    println!(
+        "FRONTIER_REFUSED index={index} revision={} listed={}",
+        status.revision,
+        listed.len()
+    );
+    assert_eq!(status.revision, index as u64);
+    assert_eq!(listed.len(), index);
+    assert!(!listed.contains(&name("f", index)));
+    // The generation is still usable: the same name is refused, and the
+    // workspace still answers its own state rather than a torn one.
+    let again = workspace
+        .mknod(ROOT_SERIAL, &name("f", index), 0o644, 0, deadline())
+        .unwrap_err();
+    assert!(matches!(again, WorkspaceError::Capacity));
+    assert_eq!(workspace.status().unwrap().revision, index as u64);
     drop(workspace);
     drop(host);
     fs::remove_dir_all(&path).unwrap();

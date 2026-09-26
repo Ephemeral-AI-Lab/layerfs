@@ -231,9 +231,9 @@ impl Workspace {
             + usize::from(replaced);
         let name_bytes = 10 + source.len() + 10 + destination.len();
         {
-            let state = self.state()?;
+            let mut state = self.state()?;
             self.check_child_stamp(
-                &state,
+                &mut state,
                 baseline,
                 revision,
                 generation,
@@ -259,9 +259,9 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         let _writer = host.writer()?;
         let needs_completion = {
-            let state = self.state()?;
+            let mut state = self.state()?;
             self.check_child_stamp(
-                &state,
+                &mut state,
                 baseline,
                 revision,
                 generation,
@@ -531,7 +531,7 @@ impl Workspace {
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
         self.check_child_stamp(
-            &state,
+            &mut state,
             baseline,
             revision,
             generation,

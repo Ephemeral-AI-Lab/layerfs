@@ -14,7 +14,7 @@ use crate::{
     },
     runtime::{
         coherence::MutationOrigin,
-        state::{Handle, Node, NODE_LIMIT},
+        state::{Handle, Node},
     },
     *,
 };
@@ -274,8 +274,8 @@ impl Workspace {
         let new_dirty = usize::from(!already_dirty) + usize::from(!child_dirty);
         let new_directories = usize::from(!already_dirty) + usize::from(directory && !child_dirty);
         {
-            let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
+            let mut state = self.state()?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 &self.host,
@@ -347,8 +347,8 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         let _writer = host.writer()?;
         let needs_completion = {
-            let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
+            let mut state = self.state()?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             if link_serial.is_none() && state.nodes.iter().any(|node| node.attr.serial == serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
@@ -589,7 +589,7 @@ impl Workspace {
         node.names = 1;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
+        self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
@@ -735,7 +735,7 @@ impl Workspace {
     }
     pub(super) fn check_child_stamp(
         &self,
-        state: &crate::runtime::state::State,
+        state: &mut crate::runtime::state::State,
         baseline: u64,
         revision: u64,
         generation: u64,
@@ -746,9 +746,7 @@ impl Workspace {
         if kind == NodeKind::File {
             super::open::handle_slot(state)?;
         }
-        if state.nodes.len() == NODE_LIMIT || state.nodes.len() == state.nodes.capacity() {
-            return Err(WorkspaceError::Capacity);
-        }
+        state.reserve_nodes()?;
         let same = match (&state.overlay, &view.root) {
             (None, None) => true,
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),

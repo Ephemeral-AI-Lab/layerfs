@@ -382,11 +382,13 @@ impl WorkspaceHost {
                 return Err(WorkspaceError::InvalidInput);
             }
             let charge = self.inner.budget.reserve(WORKSPACE_STATE_BYTES)?;
-            let tables = self.inner.budget.reserve(
-                NODE_LIMIT * size_of::<Node>()
-                    + HANDLE_LIMIT * size_of::<Handle>()
-                    + COOKIE_LIMIT * size_of::<Cookie>(),
-            )?;
+            let tables = self
+                .inner
+                .budget
+                .reserve(HANDLE_LIMIT * size_of::<Handle>() + COOKIE_LIMIT * size_of::<Cookie>())?;
+            // The node table's first chunk is charged exactly as the admission
+            // floor above counts it; every later chunk is charged as it grows.
+            let node_charge = self.inner.budget.reserve(NODE_LIMIT * size_of::<Node>())?;
             let mut nodes = Vec::new();
             let mut handles = Vec::new();
             let mut cookies = Vec::new();
@@ -471,6 +473,7 @@ impl WorkspaceHost {
                     active: 0,
                     counters: Default::default(),
                     tables: Some(tables),
+                    node_charge,
                     frontier: RefCell::new(None),
                 }),
             });

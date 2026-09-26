@@ -1,5 +1,5 @@
 use crate::{
-    runtime::state::{Node, NODE_LIMIT, PATH_BYTES},
+    runtime::state::{Node, PATH_BYTES},
     *,
 };
 use layerfs_bridge::contract::{Response, Root};
@@ -228,9 +228,7 @@ impl Workspace {
             let references = node.references(scope);
             *references = references.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         } else {
-            if state.nodes.len() == NODE_LIMIT {
-                return Err(WorkspaceError::Capacity);
-            }
+            state.reserve_nodes()?;
             let mut node = Node::new(original, content, metadata, path, parent);
             node.attr = attr;
             node.baseline = if canonical { baseline } else { 0 };

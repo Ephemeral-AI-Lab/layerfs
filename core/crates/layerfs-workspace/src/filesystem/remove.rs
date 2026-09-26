@@ -170,8 +170,10 @@ impl Workspace {
         let new_directories = usize::from(!already_dirty);
         let name_bytes = 10 + name.len();
         {
-            let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, child.kind)?;
+            let mut state = self.state()?;
+            self.check_child_stamp(
+                &mut state, baseline, revision, generation, &view, child.kind,
+            )?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 &self.host,
@@ -191,8 +193,10 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         let _writer = host.writer()?;
         let needs_completion = {
-            let state = self.state()?;
-            self.check_child_stamp(&state, baseline, revision, generation, &view, child.kind)?;
+            let mut state = self.state()?;
+            self.check_child_stamp(
+                &mut state, baseline, revision, generation, &view, child.kind,
+            )?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.completion.is_none()
         };
@@ -328,7 +332,9 @@ impl Workspace {
         candidate.seal(root, window, deadline)?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(&state, baseline, revision, generation, &view, child.kind)?;
+        self.check_child_stamp(
+            &mut state, baseline, revision, generation, &view, child.kind,
+        )?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);

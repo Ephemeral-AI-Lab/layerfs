@@ -87,6 +87,8 @@ pub(crate) struct State {
     /// Bounded per-operation projection and upstream counts for this Workspace.
     pub counters: crate::filesystem::projection_counters::ProjectionCounters,
     pub tables: Option<Charge>,
+    /// The live-node table's own charge. It follows the table as it grows.
+    pub node_charge: Charge,
     /// This generation's exact prepared-namespace frontier charge. One charge
     /// is held at a time and follows the frontier; a capture releases it with
     /// the counters it was computed from. It sits behind a shared borrow
@@ -212,6 +214,32 @@ impl State {
     /// identity, name or prepared-size constant. The counts themselves have no
     /// aggregate admission: a generation may hold as many dirty identities and
     /// names as the budget can prepare.
+    /// One more live node's worth of table.
+    ///
+    /// The table holds one node per identity this generation has resolved, so
+    /// its size follows the work a mounted command actually did rather than a
+    /// fixed count. It grows by charged chunks against the host's own declared
+    /// budget: a generation that resolves more identities than one chunk holds
+    /// pays for the next chunk, and a spent budget is what refuses.
+    pub fn reserve_nodes(&mut self) -> Result<(), WorkspaceError> {
+        if self.nodes.len() < self.nodes.capacity() {
+            return Ok(());
+        }
+        let target = self
+            .nodes
+            .capacity()
+            .checked_add(NODE_LIMIT)
+            .ok_or(WorkspaceError::Capacity)?;
+        self.node_charge
+            .resize(target.saturating_mul(std::mem::size_of::<Node>()))?;
+        self.nodes
+            .try_reserve_exact(NODE_LIMIT)
+            .map_err(|_| WorkspaceError::Capacity)?;
+        if self.nodes.capacity() < target {
+            return Err(WorkspaceError::Capacity);
+        }
+        Ok(())
+    }
     pub fn frontier_bytes(
         &self,
         host: &Arc<Host>,
