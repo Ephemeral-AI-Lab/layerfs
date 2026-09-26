@@ -43,7 +43,7 @@ SRP supports independent data-structure modules. The proposed destination is **a
         keyed/        keyed format, update/delete and ordered key cursor
     commit/          SaveFile and prepared namespace orchestration stay here
 
-The B+ tree lives explicitly in binary_plus_tree/: extent/ and keyed/ are two specializations over the same page_store/. Its mod.rs may host a checked level/path helper if both implementations use it, but there is no universal node layout or generic mutation engine to extract from current code. Keep old reexports while moving one responsibility at a time. Each mod.rs remains a thin declaration/delegation file below 200 physical lines; each implementation file remains below 1,000. The following **destination physical-line envelopes include relocated code** and are not net additions or a mandate to create every listed file:
+The B+ tree is to live explicitly in binary_plus_tree/: extent/ and keyed/ are two specializations over the same page_store/. Nothing of that layout exists in the source at this document's pin - the two algorithms are `metadata_pieces.rs`/`metadata_cursor.rs` and `metadata_index.rs`/`metadata_build.rs` today, and [Status](#status-of-this-plan) below says when the relocation happens. Its mod.rs may host a checked level/path helper if both implementations use it, but there is no universal node layout or generic mutation engine to extract from current code. Keep old reexports while moving one responsibility at a time. Each mod.rs remains a thin declaration/delegation file below 200 physical lines; each implementation file remains below 1,000. The following **destination physical-line envelopes include relocated code** and are not net additions or a mandate to create every listed file:
 
 | Proposed destination file | Estimated physical lines | Responsibility |
 | --- | ---: | --- |
@@ -74,6 +74,51 @@ The B+ tree lives explicitly in binary_plus_tree/: extent/ and keyed/ are two sp
 | binary_plus_tree/keyed/build.rs | 180–330 | Multilevel ordered builder. |
 
 The source files for page ownership alone already contain more than 2,300 physical lines; these destination ranges allow that existing code plus new batching work. The separate §6 forecast estimates *net new production behavior*. Relocation itself is reported as migration, not an algorithmic LOC reduction.
+
+### Status of this plan
+
+The relocation is scheduled, not started. The
+[handoff](HANDOFF_POST_PHASE1_ITERATIVE_IMPLEMENTATION.md#phase-3-remaining--ordered-slices)
+makes it slice 3.0 of phase 3, ahead of `#256`'s new keyed behaviour, and fixes
+three things this section left open:
+
+- **What moves.** `extent/{mod,format,splice,cursor}.rs` from
+  `metadata_pieces.rs`, `metadata_cursor.rs` and the piece half of
+  `metadata_pages.rs`; `keyed/{mod,format,update,build}.rs` from
+  `metadata_index.rs`, `metadata_build.rs` and the cell half of
+  `metadata_pages.rs`. Six files, one responsibility each, with the old module
+  paths kept as reexports until nothing imports them.
+- **What stays.** The shared 4 KiB header, `PageRef` and `PageKind` remain in
+  `metadata_pages.rs` for that slice, which the specializations import; the
+  `page_store/` and `payload/` extractions above are stage two, taken when
+  `ownership.rs` or `metadata.rs` is the file a change actually needs.
+- **How it is judged.** The existing suite runs unedited - a case that needs
+  editing means the move changed behaviour - and the commit reports migration LOC
+  near zero, never an algorithmic improvement. Headroom, not behaviour, is what
+  forces the extent half; authorship is what forces the keyed half.
+
+The pressure is measured, at two identities, in physical lines:
+
+| File | This document's pin `f74dbe77d` | Lane head `c30fe68a0` | 999-line ceiling |
+| --- | ---: | ---: | ---: |
+| `metadata_pieces.rs` (extent splice) | 808 | **964** | 35 lines left |
+| `metadata_cursor.rs` (extent cursor) | 309 | 377 | - |
+| `metadata_pages.rs` (shared header + both codecs) | 535 | 539 | - |
+| `metadata_index.rs` (keyed update) | 412 | 428 | - |
+| `metadata_build.rs` (ordered builder) | 79 | 79 | - |
+| `ownership.rs` (ledger) | 940 | 943 | 56 lines left |
+| `metadata.rs` (host/arena/root) | 882 | 897 | 102 lines left |
+
+Only the lane head decides the schedule: the extent half is relocated because its
+file is nearly full, the keyed half because phase 3 writes new behaviour into it,
+and the `page_store/`/`payload/` half waits for `ownership.rs` or `metadata.rs` to
+be the file a change needs.
+
+Phases 1 and 2 did not wait for it: both landed their work in the current files.
+One §6 destination therefore needs restating - that section names
+`backing/metadata_pieces/splice.rs` as the splice's new home, which predates §1's
+component and is superseded by `binary_plus_tree/extent/splice.rs`. §6's numbers
+remain planning estimates for the work; its file names belong to the older map.
 
 ## 2. Physical format and capacity model
 
@@ -305,6 +350,12 @@ Estimated shared growth: **~700–850 physical lines, ~500–700 net production 
 | commit/upload.rs / source.rs | ~35–120 / ~40–135 | Retain descriptor/replacement cursor across pulls. |
 | filesystem/write.rs | ~15–75 | Integrate revised splice and preserve atomic publication. |
 | C1 file/edit/apply.rs plus focused new builder | **Conditional**, ~250–500 touched if counters require it | Bounded canonical frontier with exact-root proof. |
+
+The `metadata_pieces/splice.rs` destination above predates §1's component: the
+relocation [scheduled](HANDOFF_POST_PHASE1_ITERATIVE_IMPLEMENTATION.md#phase-3-remaining--ordered-slices)
+for phase 3 puts the splice in `binary_plus_tree/extent/splice.rs` instead. Treat
+this table's file names as the pre-component map and its ranges as planning
+estimates for the work.
 
 The file work moves substantial existing splice code, so gross reviewed lines across source and destination double-count some relocation. A provisional mandatory **net** range is roughly **−100 to +700 production LOC**, plus conditional **+150–350** if a new C1 builder is required. The final exact first-parent count must wait for the implementation. The work is substantial despite that small possible net number.
 

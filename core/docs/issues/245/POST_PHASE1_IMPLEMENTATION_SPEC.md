@@ -131,10 +131,25 @@ core/crates/layerfs-sandbox/src/ selected max_workspaces_per_sandbox policy
 | --- | ---: | --- |
 | Shared page/payload ownership, counted once | +500–700 | `backing/metadata.rs`, `ownership.rs`, `payload.rs`; extracted `page_store/`, `payload/index.rs`. |
 | #248 file paths | −100 to +700, plus conditional +150–350 C1 | Existing `metadata_pieces.rs`, `metadata_cursor.rs`, `commit/{lower,upload,source}.rs`; `binary_plus_tree/extent/`. |
-| #256 namespace and streaming | No reliable range yet; the detailed line-item sketch sums to about +2,990 | Existing `metadata_index.rs`, `overlay/directories.rs`, `runtime/state.rs`, Commit/Bridge/server/C1; add keyed or stream modules only where current code cannot be reused. |
+| #256 namespace and streaming | No reliable range yet; the detailed line-item sketch sums to about +2,990 (a relocation is migration, not net behaviour) | Existing `metadata_index.rs`, `overlay/directories.rs`, `runtime/state.rs`, Commit/Bridge/server/C1; `binary_plus_tree/keyed/{delete,cursor}.rs` are new behaviour, written after the slice-3.0 relocation, and stream modules are added only where current code cannot be reused. |
 | #258 inherited move | +250–600 | Existing `filesystem/{rename,namespace_view}.rs`; focused move/origin module as needed. |
 | #249 daemon/Exec | +600–1,500 | Existing daemon control/execution/lifecycle and SDK/Bridge route; shared supervisor module. |
 | #219 operator setting | +100–250 | Sandbox config/launcher and daemon admission. |
+
+Those `page_store/`, `payload/` and `binary_plus_tree/` entries are the
+**destination** of a staged relocation, not the current layout. At this
+document's pin `f74dbe77d` and at the implementation lane's head `c30fe68a0`
+alike, the source keeps `metadata.rs`, `ownership.rs`, `payload.rs`,
+`metadata_pages.rs`, `metadata_pieces.rs`, `metadata_cursor.rs`,
+`metadata_index.rs` and `metadata_build.rs` where they are, and phases 1 and 2
+landed their work in place there. The
+[handoff](HANDOFF_POST_PHASE1_ITERATIVE_IMPLEMENTATION.md#phase-3-remaining--ordered-slices)
+schedules the tree component as its slice 3.0 - a relocation with the existing
+suite running unedited and migration LOC near zero - so that `#256`'s new keyed
+delete and ordered cursor are authored in `binary_plus_tree/keyed/`; the shared
+4 KiB header, `PageRef` and `PageKind` stay in `metadata_pages.rs` for that slice,
+and the `page_store/` and `payload/` extractions are stage two, taken when
+`ownership.rs` or `metadata.rs` is the file a change actually needs.
 
 These are planning ranges, **not** commit LOC counts; file moves are counted
 once, tests/docs/benchmark code excluded. The #248/#256 detailed file-by-file
@@ -149,7 +164,7 @@ production LOC, including migration subtotals.
 | ---: | --- | --- |
 | 1 | Implement **one shared** page/payload ownership substrate for #248 and #256: charged page/ledger capacity, payload-ID lookup, work-triggered reclaim, progressive reserves, grouped ledger I/O only where custody stays exact. | Narrow writes and many tiny writes preserve atomic local roots and pinned G1/G2; count traces show no scan of earlier acquisitions per write. Quota/unknown failures retain their owners. |
 | 2 | Complete #248's file path: balanced extent splice at height transitions, persistent frozen cursor across lower/upload pulls, short writer-gate holds and bounded C1 replay. Measure C1 node visits before replacing its current exact-root split/join algorithm. | Public 4,097 separated writes and Commit preserve exact bytes/root/head; no historical-write scan or count refusal; G2 can mutate during every declared Commit phase. A new C1 builder requires an explicit canonical-identity proof or ruling. |
-| 3 | Complete #256's keyed namespace path and prepared stream: point delete/rebind, ordered cursors, charged live pins, wide counts, validated replay spool and C1 bounded ordering. | Public 129, 257 and 1,025 changed-name/file Commit cases pass full-tree and old-head oracles. A single generation publishes one head; read, readdir and cleanup remain bounded by resources. |
+| 3 | Complete #256's keyed namespace path and prepared stream: point delete/rebind, ordered cursors, charged live pins, wide counts, validated replay spool and C1 bounded ordering. Begin with the `binary_plus_tree/keyed/` relocation (handoff slice 3.0) so the new behaviour is authored in its own component. | Public 129, 257 and 1,025 changed-name/file Commit cases pass full-tree and old-head oracles. A single generation publishes one head; read, readdir and cleanup remain bounded by resources. |
 | 4 | Complete #258's inherited-directory move on the same keyed namespace substrate. | A base-resident directory with descendants moves without a full subtree copy; old paths disappear, new inherited paths resolve, open handles survive and invalid deep paths fail before publication. |
 | 5 | Complete #249's per-sandbox Workspace registry and shared event-driven Exec leases; add #219's selected positive Workspace-count policy over that registry. | Multiple mounts and overlapping Exec on one or several Workspaces work with no fixed Exec count or whole-command timer; one Commit per Workspace, independent Store admission across Workspaces, exact lease cleanup and count=1/2/3 policy. |
 | 6 | Integrate the implemented product paths under #245, including combined file-plus-namespace generations and immediate-predecessor reconciliation. | Focused correctness gates preserve G2 writes, old-head readability and exact custody; public load-bearing qualification is in the separate verification lane below. |
