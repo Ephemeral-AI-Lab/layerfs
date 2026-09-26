@@ -10,6 +10,7 @@ use layerfs_bridge::contract::{
     HistoryQuery, HistoryResult, Inspect, Operation, Request, Response, Source,
 };
 use std::{
+    cell::RefCell,
     fs,
     io::Write,
     mem::size_of,
@@ -470,6 +471,7 @@ impl WorkspaceHost {
                     active: 0,
                     counters: Default::default(),
                     tables: Some(tables),
+                    frontier: RefCell::new(None),
                 }),
             });
             let mut registry = self.inner.registry.try_lock().map_err(lock_error)?;

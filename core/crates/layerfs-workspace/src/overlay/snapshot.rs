@@ -318,6 +318,7 @@ impl Workspace {
             let names = state.directory_names;
             let name_bytes = state.directory_bytes;
             state.frontier_bytes(
+                &self.host,
                 count,
                 directories,
                 fresh_files,
@@ -367,6 +368,7 @@ impl Workspace {
             state.fresh_symlinks = 0;
             state.directory_names = 0;
             state.directory_bytes = 0;
+            *state.frontier.borrow_mut() = None;
             state.fresh.clear();
             state.submission = Some(submission.clone());
             Ok(())

@@ -117,7 +117,7 @@ pub(crate) fn stored_key_limit(key: &[u8]) -> Result<u8, WorkspaceError> {
     }
     Ok(limit)
 }
-fn check_index(cells: &[Cell], level: u8, limit: u8) -> Result<(), WorkspaceError> {
+pub(super) fn check_index(cells: &[Cell], level: u8, limit: u8) -> Result<(), WorkspaceError> {
     if level > limit {
         return Err(WorkspaceError::Io);
     }

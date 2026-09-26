@@ -545,6 +545,7 @@ impl Workspace {
                 return Err(WorkspaceError::Busy);
             }
             state.frontier_bytes(
+                &self.host,
                 dirty + usize::from(!already_dirty),
                 state.dirty_directories,
                 state.fresh_files,

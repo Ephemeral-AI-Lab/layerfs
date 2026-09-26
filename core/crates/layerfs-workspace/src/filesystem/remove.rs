@@ -174,6 +174,7 @@ impl Workspace {
             self.check_child_stamp(&state, baseline, revision, generation, &view, child.kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
+                &self.host,
                 state.dirty_inodes + new_dirty,
                 state.dirty_directories + new_directories,
                 state.fresh_files,

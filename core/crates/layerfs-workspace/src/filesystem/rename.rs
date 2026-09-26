@@ -242,6 +242,7 @@ impl Workspace {
             )?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
+                &self.host,
                 state.dirty_inodes + new_dirty,
                 state.dirty_directories + parent_dirty,
                 state.fresh_files,
@@ -390,9 +391,6 @@ impl Workspace {
                         .ok_or(WorkspaceError::Capacity)?;
                     rows += 1;
                     row_bytes += added as isize;
-                }
-                if parent.directory.count > 128 {
-                    return Err(WorkspaceError::Capacity);
                 }
                 parent.directory.tombstones =
                     directories::keep_name(&candidate, parent.directory, name, window, deadline)?;

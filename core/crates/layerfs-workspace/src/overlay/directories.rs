@@ -101,7 +101,6 @@ impl Directory {
         };
         if directory.generation == 0
             || directory.revision == 0
-            || directory.count > 128
             || (directory.count == 0) != (directory.entries == PageRef::NULL)
             || directory.bytes > u32::from(directory.count) * 265
             || directory.bytes < u32::from(directory.count) * 11
@@ -253,9 +252,14 @@ pub fn has_entry(
         .find(entries, &metadata_pages::entry_key(name)?, window, deadline)?
         .is_some())
 }
-/// Rebuilds one directory's removal page without `name`, so a name this delta
-/// binds again carries no removal record. One name owns a binding or a removal,
-/// never both.
+/// Drops one removal record from this delta's tombstone page. One name owns a
+/// binding or a removal, never both, so a name this delta binds again must stop
+/// carrying a removal record.
+///
+/// The removal is one point mutation on the page tree the record lives in: the
+/// page that holds the name is copied along its own path, and nothing else is
+/// read or rewritten. A name with no removal record leaves the page unchanged
+/// and no page is written.
 pub fn keep_name(
     candidate: &RootOwner,
     directory: Directory,
@@ -266,44 +270,25 @@ pub fn keep_name(
     if directory.tombstones == PageRef::NULL {
         return Ok(PageRef::NULL);
     }
-    let mut names: Vec<Vec<u8>> = crate::backing::metadata_index::vector(128)?;
-    let mut lower = vec![b'T'];
-    let mut removed = false;
-    // The cursor advances by the cell this walk last visited, which is not the
-    // same as the last cell it kept: the cleared name is visited exactly once
-    // even when it is the first removal record the page holds.
-    let mut first = true;
-    while let Some(cell) =
-        candidate
-            .arena
-            .next(directory.tombstones, &lower, !first, window, deadline)?
+    let key = tombstone_key(name)?;
+    if candidate
+        .arena
+        .find(directory.tombstones, &key, window, deadline)?
+        .is_none()
     {
-        if names.len() == 128 || cell.key() <= lower.as_slice() {
-            return Err(WorkspaceError::Capacity);
-        }
-        first = false;
-        let existing = tombstone(cell.key())?;
-        if existing == name {
-            removed = true;
-        } else {
-            names.push(existing.to_vec());
-        }
-        lower = cell.key().to_vec();
-    }
-    if !removed {
-        // The name carries no removal record, so the page is already the one
-        // this binding needs and no page is written.
         return Ok(directory.tombstones);
     }
-    if names.len() == 128 {
-        return Err(WorkspaceError::Capacity);
-    }
-    candidate.build_ordered(name_page(&mut names, 0), window, deadline)
+    candidate.delete(directory.tombstones, &key, window, deadline)
 }
-/// Rebuilds one directory's entry page without `name`, and reports whether the
-/// name was bound locally. A removed name becomes a tombstone instead, because
-/// one name must never own both a binding and its removal: lowering would emit
-/// two records for the same name and refuse the delta.
+/// Drops one local binding from this delta's entry page, and reports whether
+/// that page bound the name at all. A removed name becomes a removal record
+/// instead, because one name must never own both a binding and its removal:
+/// lowering would emit two records for the same name and refuse the delta.
+///
+/// The removal is one point mutation: the leaf that holds the name is copied
+/// along its own path, and a page the removal leaves under the declared minimum
+/// body is rewritten with a neighbour. No page count and no name count bounds
+/// it, so a directory that holds many names is updated one name at a time.
 pub fn drop_entry(
     candidate: &RootOwner,
     directory: Directory,
@@ -314,46 +299,16 @@ pub fn drop_entry(
     if !has_entry(candidate, directory.entries, name, window, deadline)? {
         return Ok((directory.entries, false));
     }
-    let mut kept: Vec<(Vec<u8>, Vec<u8>)> = crate::backing::metadata_index::vector(128)?;
-    let mut lower = metadata_pages::entry_key(&[])?;
-    // The cursor advances by the cell this walk last visited, which is not the
-    // same as the last cell it kept: the dropped name is visited exactly once.
-    let mut first = true;
-    while let Some(cell) =
-        candidate
-            .arena
-            .next(directory.entries, &lower, !first, window, deadline)?
-    {
-        if kept.len() == 128 || cell.key() <= lower.as_slice() {
-            return Err(WorkspaceError::Capacity);
-        }
-        first = false;
-        if &cell.key()[1..] != name {
-            kept.push((cell.key().to_vec(), cell.value().to_vec()));
-        }
-        lower = cell.key().to_vec();
-    }
-    if kept.is_empty() {
-        return Ok((PageRef::NULL, true));
-    }
-    let mut at = 0;
-    let page = candidate.build_ordered(
-        |_| {
-            let Some((key, value)) = kept.get(at) else {
-                return Ok(None);
-            };
-            at += 1;
-            Ok(Some(Cell::new(key, value)?))
-        },
-        window,
-        deadline,
-    )?;
-    Ok((page, true))
+    let key = metadata_pages::entry_key(name)?;
+    let entries = candidate.delete(directory.entries, &key, window, deadline)?;
+    Ok((entries, true))
 }
-/// Rebuilds one directory's tombstone page with `name` added. Existing names
-/// stay in key order; the exact added name is the caller's single new removal.
-/// The candidate owner holds this operation's page allowance, so the rebuilt
-/// page is written through it exactly like every other page of the publication.
+/// Adds one removal record for `name` to this delta's tombstone page. A name
+/// that already carries one leaves the page unchanged.
+///
+/// The addition is one point mutation on the page tree the record belongs in:
+/// the target leaf is copied along its own path and split only when the record
+/// does not fit the page it belongs to.
 pub fn remove_name(
     candidate: &RootOwner,
     directory: Directory,
@@ -361,47 +316,16 @@ pub fn remove_name(
     window: &mut Window,
     deadline: Instant,
 ) -> Result<PageRef, WorkspaceError> {
-    if directory.tombstones == PageRef::NULL {
-        let mut only = crate::backing::metadata_index::vector(1)?;
-        only.push(name.to_vec());
-        return candidate.build_ordered(name_page(&mut only, 0), window, deadline);
+    let key = tombstone_key(name)?;
+    if directory.tombstones != PageRef::NULL
+        && candidate
+            .arena
+            .find(directory.tombstones, &key, window, deadline)?
+            .is_some()
+    {
+        return Ok(directory.tombstones);
     }
-    let mut names: Vec<Vec<u8>> = crate::backing::metadata_index::vector(128)?;
-    let mut lower = vec![b'T'];
-    while let Some(cell) = candidate.arena.next(
-        directory.tombstones,
-        &lower,
-        !names.is_empty(),
-        window,
-        deadline,
-    )? {
-        if names.len() == 128 || cell.key() <= lower.as_slice() {
-            return Err(WorkspaceError::Capacity);
-        }
-        let existing = tombstone(cell.key())?;
-        if existing == name {
-            return Ok(directory.tombstones);
-        }
-        names.push(existing.to_vec());
-        lower = cell.key().to_vec();
-    }
-    let at = names
-        .binary_search_by(|existing| existing.as_slice().cmp(name))
-        .unwrap_or_else(|at| at);
-    names.insert(at, name.to_vec());
-    candidate.build_ordered(name_page(&mut names, 0), window, deadline)
-}
-/// Yields the remaining tombstone entries in key order, one per call.
-fn name_page(
-    names: &mut [Vec<u8>],
-    mut at: usize,
-) -> impl FnMut(&mut Window) -> Result<Option<Cell>, WorkspaceError> + '_ {
-    move |_| {
-        if at == names.len() {
-            return Ok(None);
-        }
-        let name = &names[at];
-        at += 1;
-        Ok(Some(Cell::new(&tombstone_key(name)?, &[1])?))
-    }
+    let mut update = crate::backing::metadata_index::vector(1)?;
+    update.push(Cell::new(&key, &[1])?);
+    candidate.update(directory.tombstones, update, window, deadline)
 }

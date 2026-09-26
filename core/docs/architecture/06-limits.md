@@ -19,6 +19,8 @@ The base-less build-count correction in this page describes product commit
 own source pin.
 The Service/Bridge file-save limits below describe the #252 source in the same
 commit as this note; older flow diagrams retain their historical source pins.
+The keyed namespace-tree subsection of §9 describes the #256 source of phase
+3's slices 3.1 and 3.2 (`bd907b5ba` + 1); older sections retain their own pins.
 
 Chapter numbers are global to the set. This paper holds chapters 7 and 9;
 **chapter 8** (module map) and **chapter 10** (what the set does not claim) are in
@@ -192,6 +194,33 @@ where, because a limit that is stated but not enforced is not a limit.
 | attribute value | 32 KiB | `MAXIMUM_ATTRIBUTE_VALUE_BYTES` |
 | attribute key listing | 4,096 keys | `MAXIMUM_ATTRIBUTE_KEYS` |
 | inode serial | 1 ..= `i64::MAX` | `InodeIdentity::new` |
+
+### Workspace private backing — keyed namespace tree (#256)
+
+The keyed tree holds one Workspace generation's dirty identities, inodes and
+directory bindings. Its bounds are page-format bounds; the *number* of names or
+dirty identities a generation may hold is not bounded by a constant, it is
+charged.
+
+| Limit | Value | Enforced by |
+| --- | ---: | --- |
+| private page / header | 4 KiB / 128 B | `metadata_pages::PAGE`, `HEADER` |
+| cells per keyed page | 128 | `metadata_pages::MAX_CELLS` |
+| declared body of a non-root page | ≥ 1 KiB | `metadata_pages::MIN_BODY`, checked on every descent |
+| keyed tree level | ≤ 3 name kinds, ≤ 2 identity kinds | `key_limit` |
+| distance from a page's fill to a sibling rewrite | one neighbour, same level | `keyed::delete::repair` |
+| generation frontier | no count admission; the exact prepared-namespace bytes are reserved from the host budget | `State::frontier_bytes`, `Host::budget` |
+
+A removal keeps the same invariants as an insertion. The leaf that holds the key
+is copied along its own path; a page the removal leaves under 1 KiB is rewritten
+with one neighbour at its own level, merged into a single page when the pair fits
+one and split between two legal pages when it does not. A branch that keeps one
+child is repaired one level up; a root that keeps one child is lifted out, so the
+published height follows the key count and never the deletion history. One shape
+is refused rather than published: a pair of pages whose cells total more than one
+page's 128 cells while their bytes are fewer than two pages' minimum, which no
+legal pair of pages can hold. `keyed::cursor` walks the same tree in key order
+and reads each reached leaf once, `O(H + L)` page reads rather than `O(H × L)`.
 
 ### C2 — storage
 

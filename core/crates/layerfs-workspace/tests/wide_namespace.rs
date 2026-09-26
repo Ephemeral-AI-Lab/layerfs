@@ -89,7 +89,16 @@ fn delivery(serials: Arc<Serials>) -> OperationDelivery {
                 nanoseconds: 123,
                 size: 0,
             }),
-            // Every canonical name this fixture could resolve is absent.
+            // The attached canonical root lists no name, so every canonical
+            // name this fixture could resolve is absent and the effective
+            // namespace is exactly what the mounted operations bound.
+            Operation::Inspect {
+                query: Inspect::List { path, .. },
+                ..
+            } if path.is_empty() => Ok(Response::List {
+                entries: Vec::new(),
+                continuation: None,
+            }),
             Operation::Inspect {
                 query: Inspect::Attributes { .. },
                 ..
@@ -114,6 +123,11 @@ fn delivery(serials: Arc<Serials>) -> OperationDelivery {
 fn listed(workspace: &Workspace, serial: u64) -> Vec<Vec<u8>> {
     let handle = workspace.opendir(serial, ReferenceScope::Local).unwrap();
     let mut names = Vec::new();
+    // A readdir page names, for every entry it returns, the cookie that
+    // resumes the walk after that entry. The cookie is that entry's own, not
+    // the entry's position: a name this delta already listed keeps the cookie
+    // it was given, so a walk that counted entries would resume in the wrong
+    // place.
     let mut cookie = 0;
     loop {
         let page = workspace
@@ -123,8 +137,10 @@ fn listed(workspace: &Workspace, serial: u64) -> Vec<Vec<u8>> {
             break;
         }
         for entry in page.entries() {
-            names.push(entry.name.clone());
-            cookie += 1;
+            if entry.name != b"." && entry.name != b".." {
+                names.push(entry.name.clone());
+            }
+            cookie = entry.cookie;
         }
         if page.entries().len() < MAX_DIRECTORY_ENTRIES {
             break;
@@ -135,23 +151,19 @@ fn listed(workspace: &Workspace, serial: u64) -> Vec<Vec<u8>> {
     names
 }
 
-/// Pins the first admission a wide directory meets, so #256's work starts from a
-/// measured refusal rather than a guess.
+/// One directory wide enough to bind more names than one metadata page holds.
 ///
-/// Run it on demand:
-/// `TMPDIR=/src/tmp cargo test --release --locked --manifest-path core/Cargo.toml
-/// -p layerfs-workspace --test wide_namespace -- --ignored --nocapture`
-///
-/// The refusal is the 128th name of one generation: `create 127: Capacity` with
-/// `dirty_inodes: 128`, `revision: 127` and 1.9 MiB accounted. It comes from
-/// `State::frontier_bytes`, which refuses `dirty > 128 || names > 128` and then
-/// bounds the prepared-namespace size it computes by
-/// `layerfs_bridge::contract::METADATA_BYTES` (32 KiB). Both are aggregate
-/// admissions rather than charged resources, and #256 replaces them with a
-/// charged frontier plus a streamed prepared namespace; this case must pass
-/// unchanged when that lands.
+/// Pinned at `c30fe68a0` as `create 127: Capacity` with `dirty_inodes: 128`,
+/// `revision: 127` and 1.9 MiB accounted. That refusal was
+/// `State::frontier_bytes` refusing `dirty > 128 || names > 128` and then
+/// bounding the prepared-namespace size it computed by
+/// `layerfs_bridge::contract::METADATA_BYTES` (32 KiB) - two aggregate
+/// admissions rather than charged resources. #256's slices 3.1 and 3.2 replaced
+/// them with path-local binding and tombstone mutation over a keyed page tree
+/// plus a frontier charged from the actual counts, so this case passes
+/// unchanged: it was written before the change and has not been edited since
+/// except to drop the `#[ignore]` that pinned the refusal.
 #[test]
-#[ignore = "#256: a generation refuses its 128th dirty identity until the frontier is charged"]
 fn one_directory_accepts_many_names_and_survives_rename_and_removal() {
     let path = temporary();
     let metadata = fs::metadata(&path).unwrap();
@@ -230,8 +242,13 @@ fn one_directory_accepts_many_names_and_survives_rename_and_removal() {
                 )
             });
     }
-    let mut expected: Vec<Vec<u8>> = (0..CREATED)
-        .filter(|index| !(RENAMED..(RENAMED + REMOVED)).contains(index))
+    // The names this generation still binds. The first `RENAMED` names are the
+    // rename sources, so they are gone and their destinations `g` are here
+    // instead. Of the removal range, the names the recreate loop bound again
+    // are back. Every one of those three facts is part of the workload above,
+    // so all three belong in the oracle.
+    let mut expected: Vec<Vec<u8>> = (RENAMED..CREATED)
+        .filter(|index| !((RENAMED + RECREATED)..(RENAMED + REMOVED)).contains(index))
         .map(|index| name("f", index))
         .collect();
     expected.extend((0..RENAMED).map(|index| name("g", index)));
@@ -244,6 +261,72 @@ fn one_directory_accepts_many_names_and_survives_rename_and_removal() {
         status.revision
     );
     assert_eq!(listed(&workspace, ROOT_SERIAL), expected);
+    drop(workspace);
+    drop(host);
+    fs::remove_dir_all(&path).unwrap();
+}
+
+/// One unlink of a wide directory rewrites one path.
+///
+/// #256 replaced the whole-directory rebuild with a point mutation: the leaf
+/// that holds the name is copied along its own path, and it is rewritten with a
+/// neighbour only when the removal leaves it under the declared minimum body.
+/// The rebuild this replaces walked every name the page still held - one
+/// successor lookup per name, each of them a read of the path above it - and
+/// then built the page again. The name count here is past one page's 128-cell
+/// budget, so the directory owns two leaves and one unlink touches one of them.
+#[test]
+fn one_unlink_of_a_wide_directory_rewrites_one_path() {
+    const WIDE: usize = 130;
+    let path = temporary();
+    let metadata = fs::metadata(&path).unwrap();
+    use std::os::unix::fs::MetadataExt;
+    let serials = Arc::new(Serials(AtomicU64::new(1_000)));
+    let host = WorkspaceHost::new(
+        WorkspaceConfig {
+            root: path.clone(),
+            max_count: 1,
+            memory_budget_bytes: 64 * 1024 * 1024,
+            disk_budget_bytes: Some(256 * 1024 * 1024),
+        },
+        delivery(serials),
+    )
+    .unwrap();
+    let workspace = host
+        .attach(
+            AttachOptions {
+                id: "wide-unlink".into(),
+                incarnation: [24; 32],
+                store: 1,
+                base: Base::Branch(BRANCH),
+                access: WorkspaceAccess::LocalEdit,
+                owner_uid: metadata.uid(),
+                owner_gid: metadata.gid(),
+            },
+            deadline(),
+        )
+        .unwrap();
+    for index in 0..WIDE {
+        workspace
+            .mknod(ROOT_SERIAL, &name("f", index), 0o644, 0, deadline())
+            .unwrap_or_else(|error| panic!("create {index}: {error:?}"));
+    }
+    let before = workspace.backing_status().unwrap().metadata_reads;
+    workspace
+        .unlink(ROOT_SERIAL, &name("f", 0), deadline())
+        .unwrap();
+    let reads = workspace.backing_status().unwrap().metadata_reads - before;
+    println!("UNLINK_PATH names={WIDE} metadata_reads={reads}");
+    // The whole-page rebuild this replaces made at least one successor lookup
+    // per remaining name of the page, so its own count for one unlink of a
+    // directory this wide is above a hundred.
+    assert!(
+        reads <= 48,
+        "one unlink of {WIDE} names read {reads} metadata pages"
+    );
+    let listed = listed(&workspace, ROOT_SERIAL);
+    assert_eq!(listed.len(), WIDE - 1);
+    assert!(!listed.contains(&name("f", 0)));
     drop(workspace);
     drop(host);
     fs::remove_dir_all(&path).unwrap();

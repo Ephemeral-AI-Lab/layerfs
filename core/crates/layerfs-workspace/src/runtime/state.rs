@@ -2,6 +2,7 @@ use super::host::Host;
 use crate::{backing::budget::Charge, *};
 use layerfs_bridge::contract::{Operation, Response, Root, Source};
 use std::{
+    cell::RefCell,
     io::Write,
     path::{Path, PathBuf},
     sync::{
@@ -86,6 +87,13 @@ pub(crate) struct State {
     /// Bounded per-operation projection and upstream counts for this Workspace.
     pub counters: crate::filesystem::projection_counters::ProjectionCounters,
     pub tables: Option<Charge>,
+    /// This generation's exact prepared-namespace frontier charge. One charge
+    /// is held at a time and follows the frontier; a capture releases it with
+    /// the counters it was computed from. It sits behind a shared borrow
+    /// because every mutation path charges the frontier it is about to publish
+    /// while it still holds this state, and the reservation is this state's own
+    /// resource rather than part of the counts it describes.
+    pub frontier: RefCell<Option<Charge>>,
 }
 pub(crate) struct Node {
     pub attr: NodeAttributes,
@@ -193,8 +201,20 @@ impl State {
             .cloned()
             .ok_or(WorkspaceError::BadHandle)
     }
+    /// Charges one generation's prepared-namespace frontier, exactly, from the
+    /// counts the mutation would leave behind.
+    ///
+    /// The frontier is a prepared input, not a resident structure: its charge
+    /// is the record bytes this generation would hand to a Commit, computed
+    /// from the actual dirty, directory, name and byte counts. The charge is
+    /// reserved from the host's own declared memory budget and follows the
+    /// frontier, so a refusal here is the budget refusing rather than a fixed
+    /// identity, name or prepared-size constant. The counts themselves have no
+    /// aggregate admission: a generation may hold as many dirty identities and
+    /// names as the budget can prepare.
     pub fn frontier_bytes(
         &self,
+        host: &Arc<Host>,
         dirty: usize,
         directories: usize,
         fresh_files: usize,
@@ -202,13 +222,17 @@ impl State {
         names: usize,
         bytes: usize,
     ) -> Result<usize, WorkspaceError> {
-        if dirty > 128
-            || directories > dirty
+        // The four counts describe one frontier, so a frontier that cannot
+        // describe itself is a corrupted state rather than a refused request.
+        // Every name is one prepared row, and the row's own framing is ten
+        // bytes, so the byte total this frontier reports can never be smaller
+        // than the names it counts.
+        if directories > dirty
             || fresh_files > dirty - directories
             || fresh_symlinks > dirty - directories - fresh_files
-            || names > 128
+            || bytes < names.saturating_mul(11)
         {
-            return Err(WorkspaceError::Capacity);
+            return Err(WorkspaceError::Io);
         }
         let header = if self.submission.is_some()
             || self
@@ -231,9 +255,12 @@ impl State {
             } else {
                 usize::from(directories > 0) * 5
             };
-        if total > layerfs_bridge::contract::METADATA_BYTES {
-            return Err(WorkspaceError::Capacity);
+        let mut held = self.frontier.borrow_mut();
+        match held.as_mut() {
+            Some(charge) => charge.resize(total)?,
+            None => *held = Some(host.budget.reserve(total)?),
         }
+        drop(held);
         Ok(total)
     }
     /// Registers one regular identity this generation created. An identity that

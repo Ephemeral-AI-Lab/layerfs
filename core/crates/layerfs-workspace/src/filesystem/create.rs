@@ -278,6 +278,7 @@ impl Workspace {
             self.check_child_stamp(&state, baseline, revision, generation, &view, kind)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
+                &self.host,
                 state.dirty_inodes + new_dirty,
                 state.dirty_directories + new_directories,
                 state.fresh_files + usize::from(file),
@@ -603,6 +604,7 @@ impl Workspace {
             .ok_or(WorkspaceError::Busy)?;
         check_access(state.nodes[parent_node].attr, self.inner.root.uid, 3)?;
         state.frontier_bytes(
+            &self.host,
             state.dirty_inodes + new_dirty,
             state.dirty_directories + new_directories,
             state.fresh_files + usize::from(file),
