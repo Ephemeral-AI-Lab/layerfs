@@ -8,7 +8,7 @@
 //! existing file; the shared-subtree cases pin multi-leaf trees, which a
 //! single-leaf fixture can never reach.
 #![cfg(target_os = "linux")]
-use layerfs_bridge::contract::{MAX_EDITS_PER_OPERATION, MAX_FILE};
+use layerfs_bridge::contract::MAX_FILE;
 use layerfs_workspace::{
     sequence::{
         metadata_pages::{self, PageRef, MAX_EXTENT},
@@ -619,15 +619,12 @@ fn an_insertion_shifts_the_base_tail_and_the_next_edit_still_splices() {
 }
 
 #[test]
-fn the_edit_budget_accepts_its_full_count_and_refuses_one_more() {
+fn final_runs_at_1024_are_admitted() {
     let f = Fixture::new();
-    // The per-operation edit budget is explicit and shared by the splice, the
-    // lowering and the transport: one splice may fold a replacement whose
-    // result carries exactly that many base-delimited replacement runs, and
-    // one run more is refused with Capacity before a root is published. Each
+    // One splice folds a replacement with base-delimited final runs. Each
     // run is one local byte delimited by one base byte, so nothing merges and
     // the count is exact.
-    let budget = MAX_EDITS_PER_OPERATION as usize;
+    let budget = 1_024usize;
     let old: Vec<Piece> = (0..budget as u64)
         .flat_map(|at| [base(at, 1), local(0, 1, at + 1, at as u32 + 1)])
         .collect();
@@ -665,22 +662,12 @@ fn the_edit_budget_accepts_its_full_count_and_refuses_one_more() {
         )
         .unwrap();
     assert_eq!(full.length, 2 * at_budget - 1);
-    assert_eq!(full.edits, MAX_EDITS_PER_OPERATION as u16);
+    assert_eq!(full.edits, budget as u16);
     assert_eq!(full.replacement, at_budget);
     let walked = f.walk(full.root, 2 * at_budget - 1);
     assert_eq!(walked.len(), 2 * budget - 1);
     assert_eq!(walked[0].1.kind, PieceKind::Local);
     assert_eq!(walked[1].1.kind, PieceKind::Base);
-    let over = f.splice(
-        root,
-        0,
-        2 * at_budget,
-        2 * at_budget,
-        at_budget,
-        2 * at_budget + 1,
-        &runs(budget + 1),
-    );
-    assert!(matches!(over, Err(WorkspaceError::Capacity)));
 }
 
 #[test]

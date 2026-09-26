@@ -273,8 +273,6 @@ fn workspace_status(selected: &Selected, workspace: &Workspace) -> Result<Respon
         consumer_accounted_bytes: local.accounted_bytes as u64,
         projection: projection_counts(&local)?,
         upstream_calls: local.upstream_calls,
-        range_accepted_payload_bytes: local.range_accepted_payload_bytes,
-        range_shifted_suffix_bytes: local.range_shifted_suffix_bytes,
     };
     result.validate()?;
     if workspace.access_mode() == WorkspaceAccess::LocalEdit {

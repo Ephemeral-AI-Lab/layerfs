@@ -2,7 +2,7 @@ use crate::{
     backing::metadata_pages::{PageRef, PieceRecord, MAX_EXTENT},
     NodeAttributes, NodeKind, WorkspaceError,
 };
-use layerfs_bridge::contract::{Root, MAX_EDITS_PER_OPERATION, MAX_FILE};
+use layerfs_bridge::contract::{Root, MAX_FILE};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PieceKind {
     Base,
@@ -166,7 +166,6 @@ impl Inode {
             || i.length > MAX_FILE
             || i.base_length > MAX_FILE
             || i.nanos >= 1_000_000_000
-            || u32::from(i.edits) > MAX_EDITS_PER_OPERATION && i.edits != u16::MAX
             || i.replacement > MAX_FILE
             || (i.fresh && i.metadata != [0; 32])
         {

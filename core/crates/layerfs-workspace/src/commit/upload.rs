@@ -1,51 +1,125 @@
-//! The Commit's EditFile body stream: packed descriptors, then replacement bytes.
+//! Fixed-window upload of the captured final file sequence and its local bytes.
 use super::source::ReplacementSource;
-use crate::{backing::metadata_index::vector, WorkspaceError};
-use layerfs_bridge::contract::{Edit, Source};
+use crate::{
+    backing::metadata::RootOwner,
+    overlay::pieces::{Inode, PieceKind},
+    *,
+};
+use layerfs_bridge::contract::Source;
 use std::{
     io,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Instant,
 };
 
-/// Packs one lowering's edit list into the wire descriptor block: 24 bytes per
-/// edit — `start`, `end`, `replacement`, each big-endian u64 — in declared edit
-/// order. The block is bounded by the per-operation edit budget (96 KiB at the
-/// cap), so packing it never allocates against the file's size.
-pub(crate) fn descriptor_block(edits: &[Edit]) -> Result<Vec<u8>, WorkspaceError> {
-    let mut block = vector(edits.len() * 24)?;
-    for edit in edits {
-        block.extend_from_slice(&edit.start.to_be_bytes());
-        block.extend_from_slice(&edit.end.to_be_bytes());
-        block.extend_from_slice(&edit.replacement.to_be_bytes());
-    }
-    Ok(block)
-}
-
-/// Serves the EditFile body stream: the packed descriptor block first, then the
-/// replacement bytes of the frozen sequence through the existing bounded
-/// [`ReplacementSource`]. The adapter owns no file-sized buffer — the block is
-/// the bounded descriptor list and everything after it streams.
-pub(crate) struct EditUpload<'a> {
-    descriptors: Vec<u8>,
-    at: usize,
+pub(crate) struct FileUpload<'a> {
+    workspace: Workspace,
+    root: Arc<RootOwner>,
+    inode: Inode,
     source: &'a mut ReplacementSource,
+    remaining: u64,
+    position: u64,
+    record: [u8; 24],
+    record_at: usize,
+    pub(crate) failure: Option<WorkspaceError>,
 }
 
-impl<'a> EditUpload<'a> {
+impl<'a> FileUpload<'a> {
     pub(crate) fn new(
-        edits: &[Edit],
+        workspace: Workspace,
+        root: Arc<RootOwner>,
+        inode: Inode,
+        extents: u64,
         source: &'a mut ReplacementSource,
-    ) -> Result<Self, WorkspaceError> {
-        Ok(Self {
-            descriptors: descriptor_block(edits)?,
-            at: 0,
+    ) -> Self {
+        Self {
+            workspace,
+            root,
+            inode,
             source,
-        })
+            remaining: extents,
+            position: 0,
+            record: [0; 24],
+            record_at: 24,
+            failure: None,
+        }
+    }
+
+    pub(crate) fn complete(&self) -> bool {
+        self.remaining == 0
+            && self.record_at == 24
+            && self.position == self.inode.length
+            && self.source.complete()
+    }
+
+    pub(crate) fn source_failure(&mut self) -> Option<WorkspaceError> {
+        self.failure.take().or_else(|| self.source.failure.take())
+    }
+
+    fn descriptor_bytes(
+        &mut self,
+        out: &mut [u8],
+        deadline: Instant,
+    ) -> Result<usize, WorkspaceError> {
+        let mut filled = 0;
+        if self.record_at < 24 {
+            let take = (24 - self.record_at).min(out.len());
+            out[..take].copy_from_slice(&self.record[self.record_at..self.record_at + take]);
+            self.record_at += take;
+            filled += take;
+        }
+        if filled == out.len() || self.remaining == 0 {
+            return Ok(filled);
+        }
+        let host = self
+            .workspace
+            .host
+            .metadata
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let _view = host.writer()?;
+        let mut lease = host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        let mut cursor = self.root.arena.cursor(
+            self.inode.pieces,
+            self.position,
+            self.inode.length,
+            window,
+            deadline,
+        )?;
+        while filled < out.len() && self.remaining > 0 {
+            let (start, piece) = cursor.next(window)?.ok_or(WorkspaceError::Io)?;
+            if start != self.position {
+                return Err(WorkspaceError::Io);
+            }
+            self.position = self
+                .position
+                .checked_add(piece.length)
+                .filter(|end| *end <= self.inode.length)
+                .ok_or(WorkspaceError::Io)?;
+            let kind = match piece.kind {
+                PieceKind::Base => 0u64,
+                PieceKind::Local => 1,
+                PieceKind::Zero => 2,
+            };
+            self.record[..8].copy_from_slice(&kind.to_be_bytes());
+            self.record[8..16]
+                .copy_from_slice(&if kind == 0 { piece.offset } else { 0 }.to_be_bytes());
+            self.record[16..].copy_from_slice(&piece.length.to_be_bytes());
+            self.remaining -= 1;
+            let take = (out.len() - filled).min(24);
+            out[filled..filled + take].copy_from_slice(&self.record[..take]);
+            self.record_at = take;
+            filled += take;
+        }
+        Ok(filled)
     }
 }
 
-impl Source for EditUpload<'_> {
+impl Source for FileUpload<'_> {
     fn read(
         &mut self,
         out: &mut [u8],
@@ -55,12 +129,19 @@ impl Source for EditUpload<'_> {
         if cancel.load(Ordering::Acquire) {
             return Err(io::ErrorKind::Interrupted.into());
         }
-        if self.at < self.descriptors.len() {
-            let count = (self.descriptors.len() - self.at).min(out.len());
-            out[..count].copy_from_slice(&self.descriptors[self.at..self.at + count]);
-            self.at += count;
-            return Ok(count);
+        if out.is_empty() {
+            return Ok(0);
         }
-        Source::read(self.source, out, deadline, cancel)
+        if self.remaining > 0 || self.record_at < 24 {
+            return self.descriptor_bytes(out, deadline).map_err(|error| {
+                self.failure = Some(error.clone());
+                io::Error::other(error)
+            });
+        }
+        if self.position != self.inode.length {
+            self.failure = Some(WorkspaceError::Io);
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        self.source.read(out, deadline, cancel)
     }
 }

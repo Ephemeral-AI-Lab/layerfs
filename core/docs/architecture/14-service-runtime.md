@@ -30,6 +30,32 @@ Workspace piece operations.
 The #232 Exec progress rule below describes the bridge and daemon source in
 the same commit as that rule; earlier sections retain their stated bases.
 
+The #252 generic file-save cutover describes the product source in the same
+commit as this note. The public mutation route is `WorkspaceApi::exec(command)`
+through ordinary FUSE writes, resize and rename, followed by explicit Commit.
+The captured Workspace file is lowered as one ordered `Base`/`Local`/`Zero`
+sequence. Bridge opcode 20 (`SaveFile`) carries an optional authenticated base
+root, base and final lengths, a `u64` record count, 24-byte final-extent records
+and the non-base bytes. Each non-base byte, including zero ranges, is charged to
+the body; the Service checks zero-range bytes before opening its C2 save. The
+logical file limit is 4 GiB, the descriptor-plus-byte wire budget is 8 GiB,
+and the Service's derived-record and byte spools have a separate 8 GiB disk
+budget. Record count has no fixed admission ceiling; Service input uses a
+64 KiB transfer window and at most 64 KiB of retained replacement bytes,
+plus bounded C1/C2 state. The existing C1 edit algorithm remains
+an internal canonical builder, including its mapping partition and root identity.
+One file save precedes one metadata save and C5 Branch-head publication; a
+failed or interrupted stream cannot publish a partial head. Old file-save
+opcodes 3 (`ConstructFile`), 4 (`EditFile`) and 5
+(`UpdatePreparedFilesystem`) and their dedicated codecs/handlers are absent.
+The direct Workspace range entrypoints and projected range wire fields are
+absent. Status response envelopes are now 219 bytes and writable-status
+response envelopes 405 bytes; FUSE ioctl still refuses mutation.
+`InitLayerStack`, `AddLayer` and
+`DiscardStage` remain in the history grammar because the active Linux history
+route in `core/crates/layerfs-daemon/tests/history_route.py` uses them. The
+older sections below describe their stated source periods, not this cutover.
+
 The agent-facing project Init route is based on `main` at
 `7df25f9790996cf83232782c7b35f7c26fcc3252` plus the #236 source change.
 The host Service accepts a checked, request-scoped directory binding for its

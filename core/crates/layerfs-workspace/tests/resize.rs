@@ -49,16 +49,16 @@ mod linux {
             f.workspace.metadata_status().unwrap()
         );
     }
-    fn edits_since(f: &Fixture, from: usize) -> Vec<(Root, u64, u32, u64)> {
+    fn edits_since(f: &Fixture, from: usize) -> Vec<(Root, u64, u64)> {
         f.native.observations.lock().unwrap().operations[from..]
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile {
-                    root,
+                Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
                     replacement,
-                } => Some((*root, *base_length, *edits, *replacement)),
+                    ..
+                } => Some((*root, *base_length, *replacement)),
                 _ => None,
             })
             .collect()
@@ -81,7 +81,7 @@ mod linux {
             .iter()
             .all(|op| !matches!(
                 op,
-                Operation::EditFile { .. } | Operation::HistoryCommand(_)
+                Operation::SaveFile { base: Some(_), .. } | Operation::HistoryCommand(_)
             )));
         assert!(matches!(
             f.workspace.read(handle, 120, 40, deadline()),
@@ -144,8 +144,7 @@ mod linux {
         assert_eq!(content.2, 9 * 1024 * 1024);
         let edits = edits_since(&f, before);
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].2, 1);
-        assert_eq!(edits[0].3, 9 * 1024 * 1024);
+        assert_eq!(edits[0].2, 9 * 1024 * 1024);
         for start in (0..content.2).step_by(MAX_READ_BYTES) {
             assert!(f
                 .native
@@ -203,7 +202,7 @@ mod linux {
         let before = position(&f);
         let next = commit(&f);
         let edits = edits_since(&f, before);
-        assert_eq!(edits, vec![(g.1, 128, 1, 52)]);
+        assert_eq!(edits, vec![(g.1, 128, 52)]);
         let content = saved(&f, &next, b"data.bin");
         assert_eq!(content.2, 100);
         assert_eq!(
@@ -233,7 +232,7 @@ mod linux {
         let before = position(&f);
         let second = commit(&f);
         let edits = edits_since(&f, before);
-        assert_eq!(edits, vec![(g.1, 128, 1, 4)]);
+        assert_eq!(edits, vec![(g.1, 128, 4)]);
         let content = saved(&f, &second, b"data.bin");
         assert_eq!(
             f.native.bytes(content.1, 78, 8),
@@ -417,7 +416,11 @@ mod linux {
             .operations
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile { replacement, .. } => Some(replacement),
+                Operation::SaveFile {
+                    base: Some(_),
+                    replacement,
+                    ..
+                } => Some(replacement),
                 _ => None,
             })
             .all(|replacement| *replacement == 0));

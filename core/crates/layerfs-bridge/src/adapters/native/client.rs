@@ -509,21 +509,11 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }
-        (Operation::ConstructFile { length }, Response::Saved { length: actual, .. }) => {
+        (Operation::SaveFile { length, .. }, Response::Saved { length: actual, .. }) => {
             length == actual && bytes == 0
         }
         (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
             target.len() as u64 == *length && bytes == 0
-        }
-        (Operation::EditFile { base_length, .. }, Response::Saved { length, .. }) => {
-            // The descriptor list rides the body stream, so the client cannot
-            // recompute the final length from the request alone; the server
-            // validated the accumulated stream arithmetic and the workspace
-            // cross-checks the saved length against its own recorded figure.
-            *base_length <= MAX_FILE && *length <= MAX_FILE && bytes == 0
-        }
-        (Operation::UpdatePreparedFilesystem { .. }, Response::FilesystemSaved { .. }) => {
-            bytes == 0
         }
         (
             Operation::Inspect {

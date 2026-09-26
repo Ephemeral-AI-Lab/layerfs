@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One registered R3b functional selection via public Workspace and native service.
+"""Native attachment fixture runner shared by attachment_route.py.
 
 The service and Store/catalog stay on the host. Linux owns its private local
 backing. Each selection uses an independent byte copy of the closed R1 fixture;
@@ -26,59 +26,6 @@ import payload_route as payload
 sys.path.insert(0, str(ROOT / "core/benchmark/fs-bench-pro-storage-content/shared"))
 import isolation
 
-CASES = {
-    'inode_frontier': ['all-104-existing-inodes-survive-global-index-splits',
-                       'disk-dirty-frontier-matches-all-104-public-edits'],
-    'native_shape': ['native-truncation-and-growth-invalidate-allocation-observation',
-                     'healthy-cleanup-preserves-other-arena-incompleteness'],
-    'ledger_write_failure': ['native-ledger-write-failure-retains-prospective-payload-custody'],
-    'large_base': ['large-base-edit-keeps-inherited-bytes-as-references',
-                   'large-base-edited-and-distant-window-oracles'],
-    'ledger_collider': ['valid-ledger-header-does-not-confer-ownership',
-                        'explicit-reclaim-after-known-collider-removal'],
-    'corruption': ['corrupt-live-page-refuses-without-dropping-owned-state'],
-    'metadata_failure': ['native-metadata-failure-preserves-visible-base-and-quarantine',
-                         'explicit-metadata-cleanup-releases-known-partial-allocation'],
-    'aggregate': ['shared-consumer-quota-and-memory-account', 'independent-local-roots-share-budget'],
-    'semantics': ['explicit-local-access-and-unbound-projection-refusal', 'atomic-bytes-attributes-and-hardlinks',
-                  'current-coordinate-overlap-insert-delete',
-                  'node-forget-retains-dirty-index-and-branch', 'dirty-close-preserves-owned-state'],
-    'refusals': ['range-deadline-kind-failure-atomicity', 'read-only-and-foreign-payload-refusal',
-                 'shared-replay-input-cap'],
-    'frontier': ['exact-256-normalized-edits-refuses-257', 'repeated-overwrite-reuses-frontier-capacity'],
-    'metadata_quota': ['payload-fits-metadata-reserve-refuses-atomically',
-                       'clean-refusal-releases-confirmed-resources'],
-}
-
-
-REQUIREMENTS = {
-    'inode_frontier': ['B-16', 'B-21'],
-    'native_shape': ['B-20', 'B-25'],
-    'ledger_write_failure': ['B-20', 'B-22'],
-    'large_base': ['B-09', 'B-14'],
-    'semantics': ['W-01', 'W-07', 'S-15', 'B-09', 'B-10'],
-    'refusals': ['W-12', 'B-04', 'B-05', 'B-15'],
-    'frontier': ['B-05', 'B-14', 'B-16'],
-    'metadata_quota': ['B-01', 'B-15'],
-    'metadata_failure': ['B-15', 'B-20'],
-    'aggregate': ['B-02', 'B-14'],
-    'corruption': ['B-15', 'B-20'],
-    'ledger_collider': ['B-15', 'B-20'],
-}
-
-TEST_SOURCE = Path(__file__).with_name('local_edit.rs')
-ENTRY_SOURCE = Path(__file__)
-TEST_PREFIX = 'local_range_edit_'
-TEST_MARKER = 'LOCAL_EDIT_CHECK'
-MODE = 'functional-local-range-edit'
-REQUIREMENT_SCOPE = 'local operation subset only; no full mounted/S/B row completion'
-NOT_RUN = ['mounted writes/coherence', 'snapshot G/live successor', 'Commit', 'npm', 'R6',
-           'full 64MiB Workspace readback (large_base declares edited and distant window checks)',
-           '128 dirty inode boundary: current fixture has fewer inodes and shared creation is bounded']
-OBSERVATION_MARKERS = ('LOCAL_EDIT_RESOURCE ', 'LOCAL_EDIT_NATIVE_FAILURE ', 'LOCAL_EDIT_CORRUPTION ',
-                       'LOCAL_EDIT_LARGE_BASE ', 'LOCAL_EDIT_NATIVE_SHAPE ')
-
-
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -93,10 +40,7 @@ def run(args, report, start):
         return subprocess.run(argv, check=True, text=True, capture_output=True, timeout=remaining())
     fixture = json.loads(args.fixture.read_text())
     assert fixture['status'] == 'PASS'
-    if args.case == 'large_base':
-        assert fixture['mode'] == 'prepared-local-edit-large-fixture' and fixture['logical_bytes'] == 64 * 1024 * 1024
-    else:
-        assert fixture['mode'] == 'functional-mounted-proof'
+    assert fixture['mode'] == 'functional-mounted-proof'
     directory = args.output / 'service'; directory.mkdir()
     seals = {}
     for name in ('store.sqlite', 'history.sqlite'):
@@ -116,7 +60,7 @@ def run(args, report, start):
                LAYERFS_HISTORY_CURSOR_KEY=os.urandom(32).hex(), LAYERFS_CONSTRUCTION_WORKERS='1')
     service = subprocess.Popen([route.BIN / 'layerfs-server'], env=env, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    name = 'layerfs-edit-' + uuid.uuid4().hex[:16]; volume = name + '-data'
+    name = 'layerfs-attach-' + uuid.uuid4().hex[:16]; volume = name + '-data'
     created = made_volume = False; readiness = ''
     try:
         readiness = mounted.line_until(service, timeout=min(10, remaining()))
@@ -141,9 +85,6 @@ def run(args, report, start):
                       '-e', 'LAYERFS_EDIT_TEST_ROOT=/local-edit', '-e', 'LAYERFS_CONSTRUCTION_WORKERS=1', name,
                       '/work/' + str(args.test_binary.relative_to(ROOT)), '--ignored', '--nocapture',
                       '--test-threads=1', f'linux::{TEST_PREFIX}{args.case}', '--exact']
-        if args.case in ('metadata_failure', 'ledger_write_failure'):
-            binary_at = invocation.index(name) + 1
-            invocation[binary_at:binary_at] = ['sh', '-c', 'trap "" XFSZ; exec "$@"', 'sh']
         # Credentials are intentionally absent from the recorded invocation.
         report['test_selection'] = f'linux::{TEST_PREFIX}{args.case}'
         child_env = os.environ.copy()
@@ -226,7 +167,3 @@ def main():
     finally:
         report.setdefault('command_wall_seconds', time.monotonic() - started)
         (args.output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
-
-
-if __name__ == '__main__':
-    main()

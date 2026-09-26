@@ -13,7 +13,7 @@ use layerfs_telemetry::timer::TimingScope;
 use layerfs_telemetry::timer::Active;
 
 use crate::error::{ContentError, ContentResult};
-use crate::file::edit::input::{EditSource, EditStream, Plan, Segment};
+use crate::file::edit::input::{EditSequence, EditSource, Plan, Segment};
 use crate::file::mapping::{PageCache, RangeCursor};
 use crate::file::view::FileView;
 use crate::object::AuthenticatedObjects;
@@ -39,7 +39,7 @@ pub enum NoOpVerdict {
 pub fn compare_replacements(
     view: &FileView,
     reader: &dyn AuthenticatedObjects,
-    stream: &EditStream,
+    stream: &dyn EditSequence,
     source: &dyn EditSource,
     pages: &mut PageCache,
     scope: TimingScope<'_>,
@@ -67,7 +67,7 @@ fn compare_windows(
     reader: &dyn AuthenticatedObjects,
     mut cursor: Option<&mut RangeCursor<'_, '_, '_>>,
     pages: &mut PageCache,
-    stream: &EditStream,
+    stream: &dyn EditSequence,
     source: &dyn EditSource,
     compare: &TimingScope<'_, Active>,
 ) -> ContentResult<NoOpVerdict> {

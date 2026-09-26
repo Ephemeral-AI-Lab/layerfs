@@ -217,7 +217,9 @@ mod linux {
         assert_eq!(
             ops.iter()
                 .filter_map(|op| match op {
-                    Operation::ConstructFile { length } => Some(*length),
+                    Operation::SaveFile {
+                        base: None, length, ..
+                    } => Some(*length),
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
@@ -231,14 +233,14 @@ mod linux {
         );
         assert!(!ops
             .iter()
-            .any(|op| matches!(op, Operation::EditFile { .. })));
+            .any(|op| matches!(op, Operation::SaveFile { base: Some(_), .. })));
     }
     fn one_edit(ops: &[Operation], content: Root, metadata: Root, length: u64, replacement: u64) {
         let rows: Vec<_> = ops
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile {
-                    root,
+                Operation::SaveFile {
+                    base: Some(root),
                     base_length,
                     replacement,
                     ..
@@ -258,7 +260,7 @@ mod linux {
         );
         assert!(!ops.iter().any(|op| matches!(
             op,
-            Operation::ConstructFile { .. } | Operation::ConstructPortableMetadata { .. }
+            Operation::SaveFile { base: None, .. } | Operation::ConstructPortableMetadata { .. }
         )));
         assert!(prepared(ops).new_file_serials.is_empty());
     }

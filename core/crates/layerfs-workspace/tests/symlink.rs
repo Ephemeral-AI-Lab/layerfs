@@ -373,7 +373,7 @@ mod linux {
         assert_eq!(targets, vec![b"born".as_slice()]);
         assert!(observed.operations[start..]
             .iter()
-            .any(|op| matches!(op,Operation::EditFile{root,..}if *root==old.1)));
+            .any(|op| matches!(op,Operation::SaveFile{base:Some(root),..}if *root==old.1)));
         let p = observed.operations[start..]
             .iter()
             .find_map(|op| match op {
@@ -690,17 +690,6 @@ mod linux {
             f.workspace.set_len(a.serial, 0, deadline()),
             Err(WorkspaceError::WrongKind)
         );
-        let edit = RangeEdit {
-            start: 0,
-            end: 0,
-            replacement: f.own(b"x"),
-        };
-        assert_eq!(
-            f.workspace
-                .edit_file_range(&WorkspacePath::new(b"link").unwrap(), &edit, deadline()),
-            Err(WorkspaceError::WrongKind)
-        );
-        drop(edit);
         assert_eq!(status(&f), before);
         assert_eq!(reserves(&f), 1);
         assert_eq!(readlink(&f, a.serial), b"data.bin");

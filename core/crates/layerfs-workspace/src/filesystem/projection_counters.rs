@@ -22,12 +22,10 @@ pub enum ProjectionOp {
     Setattr,
     Rename,
     Other,
-    RangeState,
-    RangeEdit,
 }
 
 impl ProjectionOp {
-    pub const ALL: [ProjectionOp; 11] = [
+    pub const ALL: [ProjectionOp; 9] = [
         ProjectionOp::Lookup,
         ProjectionOp::Getattr,
         ProjectionOp::Read,
@@ -37,8 +35,6 @@ impl ProjectionOp {
         ProjectionOp::Setattr,
         ProjectionOp::Rename,
         ProjectionOp::Other,
-        ProjectionOp::RangeState,
-        ProjectionOp::RangeEdit,
     ];
 
     fn index(self) -> usize {
@@ -52,8 +48,6 @@ impl ProjectionOp {
             ProjectionOp::Setattr => 6,
             ProjectionOp::Rename => 7,
             ProjectionOp::Other => 8,
-            ProjectionOp::RangeState => 9,
-            ProjectionOp::RangeEdit => 10,
         }
     }
 
@@ -69,8 +63,6 @@ impl ProjectionOp {
             ProjectionOp::Setattr => "setattr",
             ProjectionOp::Rename => "rename",
             ProjectionOp::Other => "other",
-            ProjectionOp::RangeState => "range_state",
-            ProjectionOp::RangeEdit => "range_edit",
         }
     }
 }
@@ -84,8 +76,6 @@ impl ProjectionOp {
 pub struct ProjectionCounters {
     callbacks: [u64; ProjectionOp::ALL.len()],
     upstream: u64,
-    range_accepted_payload_bytes: u64,
-    range_shifted_suffix_bytes: u64,
 }
 
 impl ProjectionCounters {
@@ -104,24 +94,5 @@ impl ProjectionCounters {
 
     pub fn upstream(&self) -> u64 {
         self.upstream
-    }
-
-    /// Count bytes only after one range edit publishes. A later notifier
-    /// failure leaves these accepted physical-work totals intact.
-    pub fn record_range_publication(&mut self, accepted_bytes: u64, shifted_bytes: u64) {
-        self.range_accepted_payload_bytes = self
-            .range_accepted_payload_bytes
-            .saturating_add(accepted_bytes);
-        self.range_shifted_suffix_bytes = self
-            .range_shifted_suffix_bytes
-            .saturating_add(shifted_bytes);
-    }
-
-    pub fn range_accepted_payload_bytes(&self) -> u64 {
-        self.range_accepted_payload_bytes
-    }
-
-    pub fn range_shifted_suffix_bytes(&self) -> u64 {
-        self.range_shifted_suffix_bytes
     }
 }

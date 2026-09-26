@@ -71,11 +71,6 @@ pub enum Response {
         inserted: u64,
         reused: u64,
     },
-    FilesystemSaved {
-        root: Root,
-        inserted: u64,
-        reused: u64,
-    },
     File {
         length: u64,
         representation: u8,

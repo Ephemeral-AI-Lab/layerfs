@@ -25,15 +25,9 @@ pub const CONSTRUCT_SYMLINK_REQUEST_BYTES: usize = 29 + SYMLINK_TARGET_BYTES;
 /// Store's own configured budget (`max_concurrent_writes`, #216), so a busy
 /// writer set no longer refuses reads.
 pub const MAX_READ_OPERATIONS: usize = 2;
-/// Largest number of edit descriptors one `EditFile` operation may declare.
-///
-/// The descriptors ride the body stream as a packed 24-byte-per-edit prefix, so
-/// this bound prices the descriptor list both sides materialize for validation
-/// (24 B/edit, 96 KiB at the cap) — it is the same per-operation budget the
-/// content builder's `EditStream` enforces, declared once here so a request is
-/// refused before a byte flows. It is an explicit resource budget, not a
-/// transport frame limit.
-pub const MAX_EDITS_PER_OPERATION: u32 = 4_096;
+/// Charged file-save body budget, independent of logical file length.
+pub const MAX_SAVE_STREAM_BYTES: u64 = MAX_FILE * 2;
+pub const SAVE_FILE_OPCODE: u8 = 20;
 
 /// Persistent/handshaking/closing sessions a transport admits for one Store.
 ///
@@ -77,34 +71,19 @@ pub enum Operation {
         root: Root,
         query: Inspect,
     },
-    ConstructFile {
+    /// Frozen final Base/Local/Zero sequence. The body is `extents` 24-byte
+    /// records (kind, origin offset, length), then all Local/Zero bytes.
+    SaveFile {
+        base: Option<Root>,
+        base_length: u64,
         length: u64,
+        extents: u64,
+        replacement: u64,
     },
     /// Saves an opaque symlink target; does not allocate or attach an inode.
     ConstructSymlink {
         /// Zero through 4,096 opaque bytes without NUL; no path normalization.
         target: Vec<u8>,
-    },
-    EditFile {
-        root: Root,
-        base_length: u64,
-        /// Declared count of edit descriptors. The packed descriptors — 24
-        /// bytes each, in the declared edit order — are the **prefix of this
-        /// operation's body stream**; they are not carried in the Begin frame.
-        edits: u32,
-        /// Declared total replacement bytes that follow the descriptor block.
-        replacement: u64,
-    },
-    UpdatePreparedFilesystem {
-        base: Root,
-        scope: Root,
-        root_serial: u64,
-        directories: Vec<DirectoryChange>,
-        inodes: Vec<InodeChange>,
-        new_directories: Vec<DirectoryMetadata>,
-        directory_metadata: Vec<DirectoryMetadata>,
-        new_file_serials: Vec<u64>,
-        new_symlink_serials: Vec<u64>,
     },
     HistoryQuery(HistoryQuery),
     HistoryCommand(HistoryCommand),
@@ -191,12 +170,6 @@ pub enum Inspect {
         path: Vec<u8>,
     },
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Edit {
-    pub start: u64,
-    pub end: u64,
-    pub replacement: u64,
-}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectoryChange {
     pub parent: u64,
@@ -224,10 +197,8 @@ impl Operation {
         match self {
             Self::ReadFile { .. } => 1,
             Self::Inspect { .. } => 2,
-            Self::ConstructFile { .. } => 3,
+            Self::SaveFile { .. } => SAVE_FILE_OPCODE,
             Self::ConstructSymlink { .. } => CONSTRUCT_SYMLINK_OPCODE,
-            Self::EditFile { .. } => 4,
-            Self::UpdatePreparedFilesystem { .. } => 5,
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
             Self::WorkspaceStatus { .. } => WORKSPACE_STATUS_OPCODE,
@@ -247,10 +218,8 @@ impl Operation {
         match self {
             Self::ReadFile { .. } => "ReadFile",
             Self::Inspect { .. } => "Inspect",
-            Self::ConstructFile { .. } => "ConstructFile",
+            Self::SaveFile { .. } => "SaveFile",
             Self::ConstructSymlink { .. } => "ConstructSymlink",
-            Self::EditFile { .. } => "EditFile",
-            Self::UpdatePreparedFilesystem { .. } => "UpdatePreparedFilesystem",
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
             Self::WorkspaceStatus { .. } => "WorkspaceStatus",
@@ -274,10 +243,8 @@ impl Operation {
             | Self::HistoryQuery(_)
             | Self::WorkspaceStatus { .. }
             | Self::SandboxHello => true,
-            Self::ConstructFile { .. }
+            Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::WorkspaceUnmount { .. }
@@ -294,10 +261,8 @@ impl Operation {
     /// True for an operation that writes canonical content or a filesystem root.
     pub const fn content_mutation(&self) -> bool {
         match self {
-            Self::ConstructFile { .. }
+            Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryCommand(
@@ -352,10 +317,8 @@ impl Operation {
             | Self::WorkspaceOpen { .. }
             | Self::WorkspaceExec { .. }
             | Self::SandboxHello
-            | Self::ConstructFile { .. }
+            | Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
-            | Self::EditFile { .. }
-            | Self::UpdatePreparedFilesystem { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
             | Self::HistoryQuery(_)
@@ -375,11 +338,12 @@ impl Operation {
     }
     pub fn input_length(&self) -> Result<u64, Failure> {
         match self {
-            Self::ConstructFile { length } => Ok(*length),
-            Self::EditFile {
-                edits, replacement, ..
+            Self::SaveFile {
+                extents,
+                replacement,
+                ..
             } => {
-                let descriptors = u64::from(*edits).checked_mul(24).ok_or(Code::Capacity)?;
+                let descriptors = extents.checked_mul(24).ok_or(Code::Capacity)?;
                 descriptors
                     .checked_add(*replacement)
                     .ok_or_else(|| Code::Capacity.into())
@@ -410,7 +374,15 @@ impl Request {
         if self.id == 0 || self.deadline_ms == 0 || self.deadline_ms > MAX_OPERATION_MS {
             return Err(invalid());
         }
-        if self.response_bytes > MAX_FILE || self.operation.input_length()? > MAX_FILE {
+        if self.response_bytes > MAX_FILE {
+            return Err(Code::Capacity.into());
+        }
+        let stream_limit = if matches!(self.operation, Operation::SaveFile { .. }) {
+            MAX_SAVE_STREAM_BYTES
+        } else {
+            MAX_FILE
+        };
+        if self.operation.input_length()? > stream_limit {
             return Err(Code::Capacity.into());
         }
         match &self.operation {
@@ -458,25 +430,22 @@ impl Request {
                     return Err(invalid());
                 }
             }
-            Operation::EditFile {
+            Operation::SaveFile {
+                base,
                 base_length,
-                edits,
+                length,
+                extents,
                 replacement,
-                ..
             } => {
-                // The descriptor list rides the body stream, so this validates
-                // only what the Begin frame itself declares: the base ceiling,
-                // the explicit per-operation descriptor budget, and the two
-                // stream totals whose sum bounds the input. Ordering, overlap
-                // and the accumulated final length are validated by the
-                // server when it parses the descriptor block from the stream.
                 if *base_length > MAX_FILE
-                    || *edits > MAX_EDITS_PER_OPERATION
-                    || *replacement > MAX_FILE
-                    || (*edits == 0 && *replacement > 0)
-                    || self.operation.input_length()? > MAX_FILE
+                    || *length > MAX_FILE
+                    || *replacement > *length
+                    || (*extents == 0 && *length != 0)
+                    || (base.is_none() && *base_length != 0)
+                    || base.as_ref().is_some_and(|root| *root == [0; 32])
+                    || self.response_bytes != 0
                 {
-                    return Err(Code::Capacity.into());
+                    return Err(invalid());
                 }
             }
             Operation::Inspect { query, .. } => match query {
@@ -501,46 +470,6 @@ impl Request {
                     }
                 }
             },
-            Operation::UpdatePreparedFilesystem {
-                root_serial,
-                directories,
-                inodes,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-                ..
-            } => {
-                if *root_serial == 0 || *root_serial > i64::MAX as u64 {
-                    return Err(invalid());
-                }
-                if directories.len() > 128 || inodes.len() > 128 {
-                    return Err(Code::Capacity.into());
-                }
-                check_prepared_additions(
-                    *root_serial,
-                    directories,
-                    inodes,
-                    new_directories,
-                    directory_metadata,
-                    new_file_serials,
-                    new_symlink_serials,
-                )?;
-                let mut count = 0usize;
-                for directory in directories {
-                    count = count
-                        .checked_add(directory.changes.len())
-                        .ok_or(Code::Capacity)?;
-                    if count > 128 {
-                        return Err(Code::Capacity.into());
-                    }
-                    for (name, _) in &directory.changes {
-                        if name.is_empty() || name.len() > 255 {
-                            return Err(invalid());
-                        }
-                    }
-                }
-            }
             _ => {}
         }
         match &self.operation {

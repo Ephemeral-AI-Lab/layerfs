@@ -59,6 +59,7 @@ static ALLOCATOR: Count = Count;
 struct Generated {
     position: u64,
     length: u64,
+    descriptor_at: usize,
 }
 impl Source for Generated {
     fn read(
@@ -69,6 +70,15 @@ impl Source for Generated {
     ) -> io::Result<usize> {
         if cancel.load(Ordering::Acquire) || Instant::now() >= deadline {
             return Err(io::ErrorKind::Interrupted.into());
+        }
+        if self.descriptor_at < 24 {
+            let mut descriptor = [0u8; 24];
+            descriptor[..8].copy_from_slice(&1u64.to_be_bytes());
+            descriptor[16..].copy_from_slice(&self.length.to_be_bytes());
+            let n = buffer.len().min(24 - self.descriptor_at);
+            buffer[..n].copy_from_slice(&descriptor[self.descriptor_at..self.descriptor_at + n]);
+            self.descriptor_at += n;
+            return Ok(n);
         }
         let n = buffer.len().min((self.length - self.position) as usize);
         for (offset, byte) in buffer[..n].iter_mut().enumerate() {
@@ -121,7 +131,11 @@ fn request(id: u64, operation: Operation) -> Request {
         store: 1,
         profile: 1,
         deadline_ms: 30000,
-        response_bytes: MAX_FILE,
+        response_bytes: if matches!(operation, Operation::SaveFile { .. }) {
+            0
+        } else {
+            MAX_FILE
+        },
         operation,
     }
 }
@@ -235,10 +249,20 @@ fn two_native_writers_keep_streaming_heap_bounded_as_input_grows() {
                 jobs.push(threads.spawn(move || {
                     let saved = client
                         .call(
-                            &request(1, Operation::ConstructFile { length }),
+                            &request(
+                                1,
+                                Operation::SaveFile {
+                                    base: None,
+                                    base_length: 0,
+                                    length,
+                                    extents: 1,
+                                    replacement: length,
+                                },
+                            ),
                             &mut Generated {
                                 position: 0,
                                 length,
+                                descriptor_at: 0,
                             },
                             &mut io::sink(),
                         )
@@ -252,7 +276,16 @@ fn two_native_writers_keep_streaming_heap_bounded_as_input_grows() {
             assert_eq!(
                 clients[0]
                     .call(
-                        &request(1, Operation::ConstructFile { length: 0 }),
+                        &request(
+                            1,
+                            Operation::SaveFile {
+                                base: None,
+                                base_length: 0,
+                                length: 0,
+                                extents: 0,
+                                replacement: 0
+                            }
+                        ),
                         &mut &[][..],
                         &mut io::sink()
                     )

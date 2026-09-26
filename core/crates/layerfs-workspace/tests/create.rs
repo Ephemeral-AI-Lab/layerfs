@@ -322,7 +322,8 @@ mod linux {
         assert_eq!(
             count(&f, |op| matches!(
                 op,
-                Operation::ConstructFile { .. } | Operation::ConstructPortableMetadata { .. }
+                Operation::SaveFile { base: None, .. }
+                    | Operation::ConstructPortableMetadata { .. }
             )),
             0
         );
@@ -348,7 +349,9 @@ mod linux {
         let lengths: Vec<_> = observed.operations[..start]
             .iter()
             .filter_map(|op| match op {
-                Operation::ConstructFile { length } => Some(*length),
+                Operation::SaveFile {
+                    base: None, length, ..
+                } => Some(*length),
                 _ => None,
             })
             .collect();
@@ -362,12 +365,12 @@ mod linux {
         );
         assert!(!observed.operations[start..].iter().any(|op| matches!(
             op,
-            Operation::ConstructFile { .. } | Operation::ConstructPortableMetadata { .. }
+            Operation::SaveFile { base: None, .. } | Operation::ConstructPortableMetadata { .. }
         )));
         assert_eq!(
             observed.operations[start..]
                 .iter()
-                .filter(|op| matches!(op, Operation::EditFile { .. }))
+                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
                 .count(),
             1
         );
@@ -424,19 +427,6 @@ mod linux {
                 f.workspace.set_len(a.serial, 0, deadline()),
                 Err(WorkspaceError::Denied)
             );
-            let payload = f.own(b"x");
-            assert!(matches!(
-                f.workspace.edit_file_range(
-                    &WorkspacePath::new(name).unwrap(),
-                    &RangeEdit {
-                        start: 0,
-                        end: 0,
-                        replacement: payload
-                    },
-                    deadline()
-                ),
-                Err(WorkspaceError::Denied)
-            ));
             expected.push((
                 name,
                 if append {
@@ -559,16 +549,23 @@ mod linux {
         saved(&f, root(&two), b"captured", b"D1tail", a_live);
         saved(&f, root(&two), b"born", b"born-data", born_live);
         let observed = f.native.observations.lock().unwrap();
-        assert!(observed.operations[start..]
-            .iter()
-            .any(|op| matches!(op, Operation::EditFile { root, .. } if *root == g_content)));
+        assert!(observed.operations[start..].iter().any(
+            |op| matches!(op, Operation::SaveFile { base: Some(root), .. } if *root == g_content)
+        ));
         assert!(observed.operations[start..].iter().any(
             |op| matches!(op, Operation::UpdatePortableMetadata { base, .. } if *base == g_metadata)
         ));
         assert_eq!(
             observed.operations[start..]
                 .iter()
-                .filter(|op| matches!(op, Operation::ConstructFile { length: 9 }))
+                .filter(|op| matches!(
+                    op,
+                    Operation::SaveFile {
+                        base: None,
+                        length: 9,
+                        ..
+                    }
+                ))
                 .count(),
             1
         );
@@ -741,7 +738,9 @@ mod linux {
             .operations
             .iter()
             .filter_map(|op| match op {
-                Operation::ConstructFile { length } => Some(*length),
+                Operation::SaveFile {
+                    base: None, length, ..
+                } => Some(*length),
                 _ => None,
             })
             .collect();

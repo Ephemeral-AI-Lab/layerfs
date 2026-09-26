@@ -1,7 +1,6 @@
 //! One C2 save per mutation. Root delivery follows validated EOF and finish.
-use super::edit_stream;
-use super::{filesystem, metadata, validation::validate_inode_role};
-use crate::service::input::Exact;
+use super::file_stream;
+use super::metadata;
 use crate::service::{
     error::{content, storage},
     handler::end_input,
@@ -10,8 +9,7 @@ use crate::service::{
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::symlink::{emit_symlink, SymlinkTarget};
 use layerfs_content::filesystem::FilesystemObjects;
-use layerfs_content::object::inode_leaf::InodeKind;
-use layerfs_content::{apply_edits, construct_stream, EditRequest, EditStream};
+use layerfs_content::{apply_edits, construct_stream, EditRequest};
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, TimingScope};
 use std::{io::Read, time::Instant};
@@ -22,22 +20,22 @@ pub fn mutate(
     deadline: Instant,
     scope: &TimingScope<'_, Active>,
 ) -> Result<Response, Failure> {
-    // Descriptor parsing and replacement acquisition are part of this operation
-    // and precede mutation ownership. The descriptors ride the body stream as
-    // its prefix and the replacement bytes follow them; the spool the builder
-    // replays from is bounded resident, or a service-side file for large totals.
-    let mut edit_input = None;
-    if let Operation::EditFile {
+    // Validate and spool the frozen final state before acquiring save ownership.
+    let mut file_input = None;
+    if let Operation::SaveFile {
+        base,
         base_length,
-        edits,
+        length,
+        extents,
         replacement,
-        ..
     } = &r.operation
     {
-        edit_input = Some(edit_stream::read(
+        file_input = Some(file_stream::read(
             input,
+            base.is_some(),
             *base_length,
-            *edits,
+            *length,
+            *extents,
             *replacement,
             deadline,
         )?);
@@ -45,8 +43,7 @@ pub fn mutate(
     }
     if matches!(
         r.operation,
-        Operation::UpdatePreparedFilesystem { .. }
-            | Operation::ConstructSymlink { .. }
+        Operation::ConstructSymlink { .. }
             | Operation::UpdatePortableMetadata { .. }
             | Operation::ConstructPortableMetadata { .. }
     ) {
@@ -77,119 +74,49 @@ pub fn mutate(
                 .child("service.metadata")
                 .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
         }
-        Operation::ConstructFile { length } => {
-            let mut source = Exact::new(input, *length, deadline);
-            construct_stream(
-                policy,
-                &capacities,
-                &mut source,
-                &mut handoff,
-                scope.child("service.construct"),
-            )
-            .map_err(content)
-            .and_then(|file| {
-                end_input(&mut source)?;
-                if file.logical_len != *length {
-                    return Err(Code::InvalidInput.into());
-                }
-                Ok((*file.root.as_bytes(), file.logical_len))
-            })
-        }
-        Operation::EditFile {
-            root, base_length, ..
-        } => {
-            let edit_input = edit_input.as_ref().ok_or(Code::InvalidInput)?;
-            let cdc_input_bytes: u64 = edit_input.edits().iter().map(|edit| edit.replacement).sum();
-            let stream = EditStream::new(
-                *base_length,
-                edit_input
-                    .edits()
-                    .iter()
-                    .map(|e| layerfs_content::Edit::new(e.start, e.end, e.replacement))
-                    .collect(),
-            )
-            .map_err(content);
-            stream.and_then(|stream| {
+        Operation::SaveFile { base, length, .. } => {
+            let file_input = file_input.as_ref().ok_or(Code::InvalidInput)?;
+            let built = if let Some(root) = base {
                 apply_edits(
                     policy,
                     &capacities,
                     &provider,
                     EditRequest {
                         root: id(root),
-                        edits: &stream,
-                        source: edit_input,
+                        edits: file_input,
+                        source: file_input,
                     },
                     &mut handoff,
-                    scope.child("service.edit"),
+                    scope.child("service.save_file"),
                 )
-                .map(|f| {
-                    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
-                        eprintln!(
-                            "LFS_C1_EDIT_COUNT v=1 cdc_input_bytes={cdc_input_bytes} spool_bytes={} spool_resident={} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
-                            edit_input.bytes,
-                            edit_input.resident(),
-                            f.counters.nodes_read,
-                            f.counters.nodes_created,
-                            f.counters.payloads_created,
-                            f.counters.payload_bytes,
-                            f.counters.peak_deferred_bytes
-                        );
-                    }
-                    (*f.root.as_bytes(), f.logical_len)
-                })
-                .map_err(content)
+            } else {
+                construct_stream(
+                    policy,
+                    &capacities,
+                    &mut file_input.reader(),
+                    &mut handoff,
+                    scope.child("service.save_file"),
+                )
+            };
+            built.map_err(content).and_then(|f| {
+                if f.logical_len != *length {
+                    return Err(Code::InvalidInput.into());
+                }
+                if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                    eprintln!(
+                        "LFS_C1_SAVE_COUNT v=1 replacement_bytes={} spool_resident={} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
+                        file_input.replacement_bytes(),
+                        file_input.resident(),
+                        f.counters.nodes_read,
+                        f.counters.nodes_created,
+                        f.counters.payloads_created,
+                        f.counters.payload_bytes,
+                        f.counters.peak_deferred_bytes
+                    );
+                }
+                Ok((*f.root.as_bytes(), f.logical_len))
             })
         }
-        Operation::UpdatePreparedFilesystem {
-            base,
-            scope: allocation,
-            root_serial,
-            directories,
-            inodes,
-            new_directories,
-            directory_metadata,
-            new_file_serials,
-            new_symlink_serials,
-        } => (|| {
-            for (serials, kind) in [
-                (new_file_serials, InodeKind::RegularFile),
-                (new_symlink_serials, InodeKind::Symlink),
-            ] {
-                for serial in serials {
-                    if Instant::now() >= deadline {
-                        return Err(Code::Deadline.into());
-                    }
-                    let index = inodes
-                        .binary_search_by_key(serial, |inode| inode.serial)
-                        .map_err(|_| Code::InvalidInput)?;
-                    let inode = &inodes[index];
-                    validate_inode_role(
-                        &provider,
-                        kind,
-                        id(&inode.content),
-                        id(&inode.metadata),
-                        scope,
-                    )?;
-                }
-            }
-            filesystem::update(
-                &provider,
-                &filesystem::PreparedUpdate {
-                    base: *base,
-                    scope: *allocation,
-                    root_serial: *root_serial,
-                    directories,
-                    inodes,
-                    new_directories,
-                    directory_metadata,
-                    new_file_serials,
-                    new_symlink_serials,
-                },
-                &mut handoff,
-                deadline,
-                scope,
-            )
-        })(),
         _ => Err(Code::Unsupported.into()),
     };
     let retained = handoff.take_failure();
@@ -199,6 +126,9 @@ pub fn mutate(
         None => built,
     };
     let result = result.and_then(|v| {
+        if let Some(input) = file_input.as_mut() {
+            input.cleanup()?;
+        }
         if Instant::now() >= deadline {
             Err(Code::Deadline.into())
         } else {
@@ -236,7 +166,7 @@ pub fn mutate(
                     outcome.chain.pooled.pack_fetches,
                     outcome.chain.pooled.pack_bytes,
                 );
-                if matches!(&r.operation, Operation::EditFile { .. }) {
+                if matches!(&r.operation, Operation::SaveFile { .. }) {
                     eprintln!(
                         "LFS_FINISH_SUBSTEP v=1 request={} scope=save-wide flush_batch_ns={} wave_ns={} offer_total_ns={} seal_total_ns={} write_pack_total_ns={} validate_ns={} collision_query_ns={} rows_ns={} members_ns={} insert_objects_ns={} sql_ns={} finish_drain_ns={} finish_batch_objects={} inserted={} reused={}",
                         r.id,
@@ -290,13 +220,6 @@ pub fn mutate(
                     mtime_seconds,
                     mtime_nanoseconds,
                     metadata: root,
-                    inserted: outcome.inserted,
-                    reused: outcome.reused,
-                });
-            }
-            if matches!(r.operation, Operation::UpdatePreparedFilesystem { .. }) {
-                return Ok(Response::FilesystemSaved {
-                    root,
                     inserted: outcome.inserted,
                     reused: outcome.reused,
                 });

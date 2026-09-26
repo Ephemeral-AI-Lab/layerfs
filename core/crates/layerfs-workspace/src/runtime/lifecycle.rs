@@ -62,8 +62,6 @@ impl Workspace {
                 .map(|op| (op.label(), state.counters.count(*op)))
                 .collect(),
             upstream_calls: state.counters.upstream(),
-            range_accepted_payload_bytes: state.counters.range_accepted_payload_bytes(),
-            range_shifted_suffix_bytes: state.counters.range_shifted_suffix_bytes(),
             coherence: state.projection.as_ref().map(|p| p.status),
             cookies: state.cookies.len(),
             accounted_bytes: self.host.budget.used(),

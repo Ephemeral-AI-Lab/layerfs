@@ -1,8 +1,8 @@
 //! Per-Store write admission on the real service route (#216).
 //!
-//! The writers here are real operations held open inside their input read, not
-//! sleeps or timing probes: each blocked writer has already passed admission and
-//! taken a Store slot, which is what makes the bounded refusals below meaningful.
+//! Blocked input holds a Service permit. A separate Store owner holds the
+//! persisted slots in the cross-service case, because file input is spooled
+//! before the Service opens its C2 save.
 use layerfs_bridge::{adapters::native::connection::VerifiedPeer, contract::*};
 use layerfs_server::{Grant, Service, StoreAccess};
 use layerfs_storage::Store;
@@ -16,6 +16,9 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+#[allow(dead_code)]
+#[path = "support/file_save.rs"]
+mod file_save;
 struct Temp(PathBuf);
 impl Drop for Temp {
     fn drop(&mut self) {
@@ -88,7 +91,11 @@ fn request(store: u32, id: u64, operation: Operation) -> Request {
         store,
         profile: 1,
         deadline_ms: 30000,
-        response_bytes: MAX_FILE,
+        response_bytes: if matches!(operation, Operation::SaveFile { .. }) {
+            0
+        } else {
+            MAX_FILE
+        },
         operation,
     }
 }
@@ -108,7 +115,7 @@ impl Gate {
             opened,
             release,
             waiting: true,
-            payload: Cursor::new(vec![7u8; 64]),
+            payload: Cursor::new(file_save::fresh_body(&[7u8; 64])),
         }
     }
 }
@@ -117,7 +124,7 @@ impl Read for Gate {
         if self.waiting {
             self.waiting = false;
             let _ = self.opened.send(());
-            // The writer holds its permit and its Store slot across this wait.
+            // The writer holds its Service permit across this wait.
             let _ = self.release.recv();
         }
         self.payload.read(buffer)
@@ -139,11 +146,7 @@ fn block_writers(service: &Arc<Service>, store: u32, count: usize) -> (Receiver<
             let opened = opened.clone();
             let (release, held) = mpsc::channel();
             let worker = std::thread::spawn(move || {
-                let request = request(
-                    store,
-                    index as u64 + 1,
-                    Operation::ConstructFile { length: 64 },
-                );
+                let request = request(store, index as u64 + 1, file_save::fresh(64));
                 service
                     .handle(
                         &peer,
@@ -167,12 +170,12 @@ fn await_admitted(first_read: &Receiver<()>, count: usize) {
     }
 }
 fn write_once(service: &Service, store: u32, id: u64) -> Result<Response, Failure> {
-    let request = request(store, id, Operation::ConstructFile { length: 64 });
+    let request = request(store, id, file_save::fresh(64));
     service
         .handle(
             &peer(),
             &request,
-            &mut Cursor::new(vec![7u8; 64]),
+            &mut Cursor::new(file_save::fresh_body(&[7u8; 64])),
             &mut io::sink(),
         )
         .0
@@ -263,17 +266,30 @@ fn two_sandboxes_over_one_store_share_its_budget() {
         .0
         .unwrap();
     assert_eq!(second.max_concurrent_writes().unwrap(), 2);
+    let held = (0..2)
+        .map(|_| {
+            Timing::disabled("hold", |s| first.begin_save(s.child("begin")))
+                .0
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
     let first_service = service(vec![(1, first)]);
     let second_service = service(vec![(1, second)]);
-    let (first_read, first_blocked) = block_writers(&first_service, 1, 2);
-    await_admitted(&first_read, 2);
-    // The other sandbox admits nothing: the Store's slots are held, and the
-    // refusal is the Store's own bounded ownership refusal, not a silent write.
+    // Two real C2 owners occupy the persisted Store slots, so another sandbox
+    // must receive the Store's bounded ownership refusal.
     match write_once(&second_service, 1, 5) {
         Err(failure) => assert_eq!(failure.code, Code::Ownership, "{failure}"),
         Ok(response) => panic!("the second sandbox must not exceed the Store budget: {response:?}"),
     }
-    release(first_blocked);
+    for owner in held {
+        Timing::disabled("release", |s| owner.abort(s.child("abort")))
+            .0
+            .unwrap();
+    }
+    assert!(matches!(
+        write_once(&first_service, 1, 7),
+        Ok(Response::Saved { .. })
+    ));
     let saved = write_once(&second_service, 1, 6).expect("the released budget is shared");
     assert!(matches!(saved, Response::Saved { .. }));
 }

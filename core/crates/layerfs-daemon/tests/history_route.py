@@ -8,8 +8,9 @@ This is a functional deployment proof, not a benchmark. It starts the production
 re-implements a service body, a codec or a history transition: the frames are the
 production protocol and the replies are the production replies.
 
-Profile 2, opcodes 6 (HistoryQuery) and 7 (HistoryCommand) are the only history
-surface; opcodes 1-5 keep profile 1. A grant mask of 31 must grant neither.
+Profile 2, opcodes 6 (HistoryQuery) and 7 (HistoryCommand) are the history
+surface; profile 1 uses generic SaveFile opcode 20. A grant mask of 31 must
+grant neither history opcode.
 """
 import argparse, hashlib, json, os, select, shutil, struct, subprocess, sys, tempfile, time
 from pathlib import Path
@@ -32,7 +33,8 @@ def frame(kind, identity, data=b""):
 
 
 def begin(identity, opcode, payload, store=1, profile=1, deadline_ms=60000):
-    return frame(2, identity, struct.pack(">QIHIQB", 1, store, profile, deadline_ms, 64 * 1024 * 1024, opcode) + payload)
+    response_bytes = 0 if opcode == 20 else 64 * 1024 * 1024
+    return frame(2, identity, struct.pack(">QIHIQB", 1, store, profile, deadline_ms, response_bytes, opcode) + payload)
 
 
 def read_exact(fd, count, end):
@@ -76,6 +78,14 @@ def blob(value):
 
 def optional(value):
     return b"\0" if value is None else b"\1" + value
+
+
+def save_file_metadata(length):
+    return b"\0" + struct.pack(">QQQQ", 0, length, int(length != 0), length)
+
+
+def save_file_body(data):
+    return (struct.pack(">QQQ", 1, 0, len(data)) + data) if data else b""
 
 
 def manifest_entry(parent, name, kind, mode, seconds, nanos, content=None, target=b""):
@@ -250,14 +260,14 @@ def run_cases(daemon, evidence):
     stack_body, branch_body, workspace = b"\x51" * 16, b"\x61" * 16, b"\x71" * 32
     seed = bytes(range(32))
     payload = b"history route payload"
-    kind, body = exchange(daemon, 1, 3, struct.pack(">Q", len(payload)), body=payload)
+    kind, body = exchange(daemon, 1, 20, save_file_metadata(len(payload)), body=save_file_body(payload))
     assert kind == 6 and body[0] == 2, body
     file_root = body[1:33]
     second = b"history route payload, second version"
-    kind, body = exchange(daemon, 2, 3, struct.pack(">Q", len(second)), body=second)
+    kind, body = exchange(daemon, 2, 20, save_file_metadata(len(second)), body=save_file_body(second))
     assert kind == 6 and body[0] == 2, body
     second_root = body[1:33]
-    evidence.append({"id": "R01", "case": "legacy construct through profile 1", "status": "PASS"})
+    evidence.append({"id": "R01", "case": "generic file save through profile 1", "status": "PASS"})
 
     entries = (manifest_entry(0, b"", 2, 0o755, 1700000000, 0, None)
                + manifest_entry(0, b"a", 1, 0o644, 1700000001, 0, file_root))

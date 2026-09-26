@@ -42,16 +42,6 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
             e.u64(*inserted)?;
             e.u64(*reused)?;
         }
-        Response::FilesystemSaved {
-            root,
-            inserted,
-            reused,
-        } => {
-            e.u8(7)?;
-            e.put(root)?;
-            e.u64(*inserted)?;
-            e.u64(*reused)?;
-        }
         Response::File {
             length,
             representation,
@@ -628,11 +618,6 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             }
         }
         6 => Response::Link(d.blob(4096)?),
-        7 => Response::FilesystemSaved {
-            root: d.root()?,
-            inserted: d.u64()?,
-            reused: d.u64()?,
-        },
         8 => Response::History(Box::new(take_history(&mut d)?)),
         9 => Response::Attributes {
             serial: d.u64()?,

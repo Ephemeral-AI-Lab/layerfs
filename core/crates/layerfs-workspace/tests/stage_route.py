@@ -255,7 +255,7 @@ def execute(args, report, started):
                         assert confirmed == service.pid, f'save boundary ended before stop: {confirmed}'
                         pause_start = time.monotonic()
                         report['native_save_observation'] = {
-                            'boundary': 'EditFile call active; service owns SQLite RESERVED byte before and after SIGSTOP',
+                            'boundary': 'SaveFile call active; service owns SQLite RESERVED byte before and after SIGSTOP',
                             'observer': 'read-only F_GETLK at (1<<30)+1 length 1; no lock acquired',
                             'service_pid': service.pid, 'observed_pid': owner, 'stopped_pid': confirmed,
                             'lock_observer_sha256': sha(args.lock_observer), 'wait_seconds': pause_start-observe_start,

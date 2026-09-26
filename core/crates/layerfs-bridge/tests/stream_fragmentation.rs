@@ -42,8 +42,12 @@ fn exercise(upload: bool) {
         deadline_ms: 5000,
         response_bytes: if upload { 0 } else { expected.len() as u64 },
         operation: if upload {
-            Operation::ConstructFile {
+            Operation::SaveFile {
+                base: None,
+                base_length: 0,
                 length: expected.len() as u64,
+                extents: 1,
+                replacement: expected.len() as u64,
             }
         } else {
             Operation::ReadFile {
@@ -88,7 +92,14 @@ fn exercise(upload: bool) {
             });
         });
         let mut client = Client::new(connect(address, 1, &[7; 32], &public).unwrap()).unwrap();
-        let mut source = Tiny(if upload { &expected[..] } else { &[][..] });
+        let mut body = Vec::new();
+        if upload {
+            for word in [1u64, 0, expected.len() as u64] {
+                body.extend_from_slice(&word.to_be_bytes());
+            }
+            body.extend_from_slice(&expected);
+        }
+        let mut source = Tiny(if upload { &body[..] } else { &[][..] });
         let mut result = Vec::new();
         let response = client.call(&request, &mut source, &mut result);
         drop(client);
@@ -98,7 +109,7 @@ fn exercise(upload: bool) {
             "fragmented logical stream failed: {response:?}"
         );
         if upload {
-            assert_eq!(*input.lock().unwrap(), expected);
+            assert_eq!(*input.lock().unwrap(), body);
             assert!(result.is_empty());
         } else {
             assert_eq!(result, expected);

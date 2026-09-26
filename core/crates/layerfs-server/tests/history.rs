@@ -16,6 +16,9 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+#[allow(dead_code)]
+#[path = "support/file_save.rs"]
+mod file_save;
 
 struct Temp(PathBuf);
 impl Drop for Temp {
@@ -129,7 +132,11 @@ fn call_at(
         store: 1,
         profile,
         deadline_ms: 60_000,
-        response_bytes: MAX_FILE,
+        response_bytes: if matches!(operation, Operation::SaveFile { .. }) {
+            0
+        } else {
+            MAX_FILE
+        },
         operation,
     };
     let mut input = Cursor::new(body.to_vec());
@@ -210,10 +217,8 @@ fn construct(service: &Service, peer: &VerifiedPeer, id: u64, bytes: &[u8]) -> R
         peer,
         id,
         1,
-        Operation::ConstructFile {
-            length: bytes.len() as u64,
-        },
-        bytes,
+        file_save::fresh(bytes.len() as u64),
+        &file_save::fresh_body(bytes),
     )
     .unwrap()
     {

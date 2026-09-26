@@ -6,17 +6,6 @@ before changing this tree or sampling. The older #231 `daemon-host` receipts
 and the #236 debug SDK receipts remain historical evidence; do not rewrite
 or relabel them.
 
-For the prospective #232 Workspace Exec/FUSE edit route, also read
-[`exec2edit.md`](../../docs/benchmark/fs-bench-pro/exec2edit.md). Every
-benchmark performance driver must use the public `layerfs-sdk` package for
-product operations. `runner.py` checks registered `benchmark_*` driver source
-before building or reusing a binary. The check complements runtime route
-counters and independent verification; it does not register an edit case.
-The SDK-only Exec/FUSE edit family is registered under scenario version 2
-(`registry/workspace-exec-edit-v2.json`), and `runner.py run --case` selects one
-Exec/FUSE case per fresh output path; the Init selection stays separate. See
-[the #232 baseline report](../../docs/issues/232/exec-fuse-edit-v2-baseline.md).
-
 `runner.py` is the sole `init_namespace` runner. `families/init_namespace.py`
 owns the case registry, sealed source preparation, and invocation of the
 compiled SDK driver. The driver makes one public

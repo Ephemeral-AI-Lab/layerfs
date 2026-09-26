@@ -3,7 +3,7 @@
 //! One connection and its authenticated handshake serve a bounded run of
 //! consecutive upstream calls. The native server admits many successful
 //! requests per connection, so a Mount that issues HistoryQuery, Inspect and
-//! a Commit that issues EditFile, UpdatePortableMetadata and HistoryCommand
+//! a Commit that issues SaveFile, UpdatePortableMetadata and HistoryCommand
 //! no longer pay a fresh TCP connect and Noise handshake each.
 //!
 //! Reuse is deliberately narrow:

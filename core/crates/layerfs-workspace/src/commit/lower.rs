@@ -11,7 +11,7 @@ use crate::{
     },
     *,
 };
-use layerfs_bridge::contract::{Edit, InodeChange, MAX_EDITS_PER_OPERATION, MAX_FILE};
+use layerfs_bridge::contract::{InodeChange, MAX_FILE};
 use std::time::Instant;
 type PreparedInodes = (Vec<InodeChange>, Vec<u64>, Vec<u64>);
 pub(crate) enum Dirty {
@@ -20,7 +20,8 @@ pub(crate) enum Dirty {
 }
 pub struct FilePlan {
     pub inode: Inode,
-    pub edits: Vec<Edit>,
+    pub extents: u64,
+    pub changes: u64,
 }
 impl Workspace {
     pub(crate) fn next_dirty(
@@ -135,19 +136,17 @@ impl Workspace {
         let _view = host.writer()?;
         let mut lease = host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
-        // One ordered walk over the frozen sequence. `edits` holds the ordered
-        // replacement intervals only, so the walk's memory is bounded by the
-        // edit count and never by the file's extent count.
+        // One ordered walk checks the immutable final sequence and counts its
+        // fixed wire records without retaining them in memory.
         let mut cursor =
             captured
                 .root
                 .arena
                 .cursor(inode.pieces, 0, inode.length, window, deadline)?;
-        let mut edits = vector(MAX_EDITS_PER_OPERATION as usize)?;
         let mut base = 0u64;
-        let mut replacement = 0u64;
+        let mut pending = 0u64;
         let mut total = 0u64;
-        let mut delta = 0i128;
+        let mut changes = 0u64;
         let mut extents = 0u64;
         let mut position = 0u64;
         while let Some((start, piece)) = cursor.next(window)? {
@@ -160,7 +159,7 @@ impl Workspace {
                 .ok_or(WorkspaceError::Io)?;
             extents = extents.checked_add(1).ok_or(WorkspaceError::Io)?;
             if piece.kind != PieceKind::Base {
-                replacement = replacement
+                pending = pending
                     .checked_add(piece.length)
                     .ok_or(WorkspaceError::Capacity)?;
                 total = total
@@ -169,35 +168,46 @@ impl Workspace {
             } else {
                 if complete
                     || piece.offset < base
-                    || piece.offset + piece.length > inode.base_length
+                    || piece
+                        .offset
+                        .checked_add(piece.length)
+                        .is_none_or(|end| end > inode.base_length)
                 {
                     return Err(WorkspaceError::Io);
                 }
-                push_edit(&mut edits, base, piece.offset, replacement, &mut delta)?;
+                if piece.offset != base || pending != 0 {
+                    changes = changes.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+                }
                 base = piece.offset + piece.length;
-                replacement = 0;
+                pending = 0;
             }
         }
         if position != inode.length {
             return Err(WorkspaceError::Io);
         }
-        push_edit(&mut edits, base, inode.base_length, replacement, &mut delta)?;
+        if base != inode.base_length || pending != 0 {
+            changes = changes.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        }
         // A recorded edit count is exact unless a splice shared a subtree it
         // did not fold; `u16::MAX` records exactly that.
-        if inode.edits != u16::MAX && edits.len() != usize::from(inode.edits) {
+        if inode.edits != u16::MAX && changes != u64::from(inode.edits) {
             return Err(WorkspaceError::Io);
         }
         if total != inode.replacement
             || (complete && total != inode.length)
             || total > MAX_FILE
-            || i128::from(inode.base_length) + delta != i128::from(inode.length)
+            || position != inode.length
         {
             return Err(WorkspaceError::Io);
         }
         if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
-            eprintln!("LFS_PIECE_LOWER v=1 pieces={extents} edits={}", edits.len());
+            eprintln!("LFS_PIECE_LOWER v=2 pieces={extents} changes={changes}");
         }
-        Ok(FilePlan { inode, edits })
+        Ok(FilePlan {
+            inode,
+            extents,
+            changes,
+        })
     }
     pub(crate) fn persist_saved(
         &self,
@@ -336,30 +346,4 @@ impl Workspace {
         }
         Ok((inodes, fresh, symlinks))
     }
-}
-fn push_edit(
-    edits: &mut Vec<Edit>,
-    base: u64,
-    end: u64,
-    replacement: u64,
-    delta: &mut i128,
-) -> Result<(), WorkspaceError> {
-    if end < base {
-        return Err(WorkspaceError::Io);
-    }
-    if end == base && replacement == 0 {
-        return Ok(());
-    }
-    if edits.len() == MAX_EDITS_PER_OPERATION as usize {
-        return Err(WorkspaceError::Capacity);
-    }
-    let start = u64::try_from(i128::from(base) + *delta).map_err(|_| WorkspaceError::Io)?;
-    let stop = u64::try_from(i128::from(end) + *delta).map_err(|_| WorkspaceError::Io)?;
-    edits.push(Edit {
-        start,
-        end: stop,
-        replacement,
-    });
-    *delta += i128::from(replacement) - i128::from(end - base);
-    Ok(())
 }

@@ -126,8 +126,6 @@ fn status() -> WorkspaceWritableStatusWire {
             consumer_accounted_bytes: 4096,
             projection: [3; PROJECTION_CLASSES],
             upstream_calls: 2,
-            range_accepted_payload_bytes: 4096,
-            range_shifted_suffix_bytes: 0,
         },
         generation: 2,
         revision: 5,
@@ -352,8 +350,8 @@ fn writable_status_preserves_submission_and_reachable_partial_commit_state() {
     assert_eq!(bytes[0], 18);
     assert_eq!(bytes.len(), WORKSPACE_WRITABLE_STATUS_RESULT_BYTES);
     // Offsets inside the status payload are the same; everything after the
-    // status shifts by the bounded classes, upstream count and two byte totals.
-    let status_delta = (PROJECTION_CLASSES + 3) * 8;
+    // status shifts by the bounded classes and upstream count.
+    let status_delta = (PROJECTION_CLASSES + 1) * 8;
     let shifted = |offset: usize| {
         if offset < 139 {
             offset

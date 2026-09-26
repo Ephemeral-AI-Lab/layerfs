@@ -671,7 +671,8 @@ fn failure_codes_round_trip_and_stay_typed() {
 #[test]
 fn permission_bits_are_total_and_legacy_mask_grants_nothing() {
     assert_eq!(permission_bit(1), Some(1 << 0));
-    assert_eq!(permission_bit(5), Some(1 << 4));
+    assert_eq!(permission_bit(SAVE_FILE_OPCODE), Some(1 << 3));
+    assert_eq!(permission_bit(5), None);
     assert_eq!(permission_bit(QUERY_OPCODE), Some(1 << 5));
     assert_eq!(permission_bit(COMMAND_OPCODE), Some(1 << 6));
     assert_eq!(permission_bit(0), None);
@@ -706,29 +707,15 @@ fn classification_is_exhaustive_and_semantic() {
         assert!(operation.mutation());
         assert_eq!(operation.opcode(), COMMAND_OPCODE);
     }
-    for operation in [
-        Operation::ConstructFile { length: 1 },
-        Operation::EditFile {
-            root: [0; 32],
-            base_length: 1,
-            edits: 0,
-            replacement: 0,
-        },
-        Operation::UpdatePreparedFilesystem {
-            directory_metadata: Vec::new(),
-            new_directories: Vec::new(),
-            new_file_serials: Vec::new(),
-            new_symlink_serials: Vec::new(),
-            base: [0; 32],
-            scope: [0; 32],
-            root_serial: 1,
-            directories: Vec::new(),
-            inodes: Vec::new(),
-        },
-    ] {
-        assert!(operation.content_mutation());
-        assert!(!operation.metadata_mutation());
-    }
+    let operation = Operation::SaveFile {
+        base: Some([1; 32]),
+        base_length: 1,
+        length: 1,
+        extents: 1,
+        replacement: 0,
+    };
+    assert!(operation.content_mutation());
+    assert!(!operation.metadata_mutation());
     for operation in [
         Operation::ReadFile {
             root: [0; 32],
@@ -963,7 +950,13 @@ fn history_failure_context_round_trips_without_changing_legacy_frames() {
     }
     let mut legacy = request;
     legacy.profile = 1;
-    legacy.operation = Operation::ConstructFile { length: 0 };
+    legacy.operation = Operation::SaveFile {
+        base: None,
+        base_length: 0,
+        length: 0,
+        extents: 0,
+        replacement: 0,
+    };
     for code in [Code::InvalidInput, Code::Integrity, Code::Unknown] {
         let failure = Failure::from(code);
         let bytes = encode_request_failure(&legacy, &failure).unwrap();

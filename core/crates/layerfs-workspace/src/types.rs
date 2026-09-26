@@ -282,10 +282,6 @@ pub struct WorkspaceStatus {
     pub projection_replies: usize,
     /// Bounded per-operation projection callback counts for this Workspace.
     pub projection_calls: Vec<(&'static str, u64)>,
-    /// Replacement bytes in accepted projected range publications.
-    pub range_accepted_payload_bytes: u64,
-    /// Suffix payload bytes physically copied by accepted projected ranges.
-    pub range_shifted_suffix_bytes: u64,
     /// Upstream host Service calls this Workspace has issued.
     pub upstream_calls: u64,
     pub coherence: Option<CoherenceStatus>,
@@ -356,35 +352,6 @@ impl AsRef<[u8]> for WorkspacePath {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
-}
-pub struct RangeEdit {
-    pub start: u64,
-    pub end: u64,
-    pub replacement: crate::OwnedPayload,
-}
-/// Ordered logical replacement elements; Bytes consume the next literal bytes
-/// from one owned payload, while Zero occupies length without payload storage.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RangePart {
-    Bytes(u64),
-    Zero(u64),
-}
-/// Exact mounted-file identity checked before and during projected publication.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RangeStamp {
-    pub inode: u64,
-    pub incarnation: [u8; 32],
-    pub generation: u64,
-    pub revision: u64,
-}
-/// One read-only observation of a projected file descriptor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RangeState {
-    pub stamp: RangeStamp,
-    pub length: u64,
-    pub mtime_seconds: i64,
-    pub mtime_nanoseconds: u32,
-    pub writable: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MutationReceipt {

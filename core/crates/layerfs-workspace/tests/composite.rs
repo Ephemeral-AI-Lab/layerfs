@@ -230,8 +230,10 @@ mod linux {
         let inputs: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile {
-                    root, replacement, ..
+                Operation::SaveFile {
+                    base: Some(root),
+                    replacement,
+                    ..
                 } => Some((*root, *replacement)),
                 _ => None,
             })
@@ -283,19 +285,21 @@ mod linux {
         let edits: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| match op {
-                Operation::EditFile {
-                    root,
+                Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
+                    extents,
                     replacement,
-                } => Some((*root, *base_length, *edits, *replacement)),
+                    ..
+                } => Some((*root, *base_length, *extents, *replacement)),
                 _ => None,
             })
             .collect();
         assert_eq!(edits.len(), 1);
         assert_eq!(edits[0].0, saved.1);
         assert_eq!(edits[0].1, data.size);
-        assert_eq!((edits[0].2, edits[0].3), (1, 1));
+        assert!(edits[0].2 > 0);
+        assert_eq!(edits[0].3, 1);
         drop(observed);
         assert_eq!(f.read(handle, 8, 6), [8, 9, b'Z', 14, 15, 16]);
         assert_eq!(old.as_ref(), b"GLIVEING");

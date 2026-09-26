@@ -60,17 +60,11 @@ mod linux {
             )
             .unwrap();
         let payload = second.own_payload(1, &mut &b"B"[..], deadline()).unwrap();
+        let second_handle = second.open(data.serial, ReferenceScope::Local).unwrap();
         second
-            .edit_file_range(
-                &WorkspacePath::new(b"data.bin").unwrap(),
-                &RangeEdit {
-                    start: 0,
-                    end: 1,
-                    replacement: payload,
-                },
-                deadline(),
-            )
+            .write_file(second_handle, 0, &payload, deadline())
             .unwrap();
+        second.release(second_handle).unwrap();
         let workspace = f.workspace.clone();
         let saving = std::thread::spawn(move || workspace.stage(deadline()));
         f.native.wait_entered();
@@ -289,7 +283,12 @@ mod linux {
             .operations
             .iter()
             .find_map(|op| {
-                if let Operation::EditFile { replacement, .. } = op {
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    replacement,
+                    ..
+                } = op
+                {
                     Some(*replacement)
                 } else {
                     None
@@ -531,7 +530,7 @@ mod linux {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::EditFile { .. }))
+                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
                 .count(),
             0
         );

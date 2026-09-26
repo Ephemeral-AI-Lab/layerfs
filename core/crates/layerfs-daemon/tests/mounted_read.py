@@ -59,7 +59,7 @@ def line_until(process, timeout=15):
 def seed_namespace(daemon, executable):
     roots = []
     for identity, payload in enumerate((DATA, executable), 1):
-        kind, body = route.exchange(daemon, identity, 3, struct.pack(">Q", len(payload)), body=payload)
+        kind, body = route.exchange(daemon, identity, 20, route.save_file_metadata(len(payload)), body=route.save_file_body(payload))
         assert kind == 6 and body[0] == 2, body
         roots.append(body[1:33])
     # Consume serial 1 through ordinary initialization before the tested root.

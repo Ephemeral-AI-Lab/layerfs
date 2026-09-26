@@ -18,7 +18,6 @@ use std::{
     time::Instant,
 };
 
-const MAX_PAYLOADS: usize = 4096;
 pub struct PayloadHost {
     pub budget: Arc<Budget>,
     pub quota: u64,
@@ -296,9 +295,6 @@ impl PayloadHost {
         if state.stopped {
             return Err(WorkspaceError::Busy);
         }
-        if state.records.len() == MAX_PAYLOADS {
-            return Err(WorkspaceError::Capacity);
-        }
         if state
             .allocated
             .checked_add(state.reserved)
@@ -314,9 +310,13 @@ impl PayloadHost {
             let capacity = state
                 .records
                 .capacity()
-                .saturating_mul(2)
-                .clamp(1, MAX_PAYLOADS);
-            let mut capacity_charge = self.budget.reserve(capacity * size_of::<Arc<Record>>())?;
+                .max(1)
+                .checked_mul(2)
+                .ok_or(WorkspaceError::Capacity)?;
+            let bytes = capacity
+                .checked_mul(size_of::<Arc<Record>>())
+                .ok_or(WorkspaceError::Capacity)?;
+            let mut capacity_charge = self.budget.reserve(bytes)?;
             let mut records = Vec::new();
             records
                 .try_reserve_exact(capacity)

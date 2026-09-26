@@ -550,17 +550,12 @@ fn a_bounded_sink_that_fills_during_emission_fails_the_edit_once() {
     }
 }
 
-/// The edit-stream ceiling at, just below and just above, and a real run at it.
-///
-/// The stream is validated before any work: an over-ceiling stream never becomes
-/// an `EditStream`, so no request can exist that would emit anything. At the
-/// ceiling the operation really runs, on a chunked base, with the frontier bound
-/// intact.
+/// A 1,024-run canonical construction with bounded retained state.
 #[test]
-fn the_edit_stream_ceiling_is_enforced_before_any_work() {
-    use layerfs_content::MAXIMUM_EDITS_PER_OPERATION;
+fn a_thousand_separated_edits_keep_bounded_state() {
+    const RUNS: usize = 1_024;
 
-    // Well separated, non-overlapping four-byte overwrites: 4 097 of them span
+    // Well separated, non-overlapping four-byte overwrites: 1,024 of them span
     // fewer than 33 000 bytes of a 400 000-byte base.
     let declared = |count: usize| {
         (0..count)
@@ -570,29 +565,16 @@ fn the_edit_stream_ceiling_is_enforced_before_any_work() {
             })
             .collect::<Vec<_>>()
     };
-    for count in [MAXIMUM_EDITS_PER_OPERATION - 1, MAXIMUM_EDITS_PER_OPERATION] {
+    for count in [RUNS - 1, RUNS] {
         let stream = EditStream::new(400_000, declared(count))
             .unwrap_or_else(|error| panic!("{count} edits are accepted: {error}"));
         assert_eq!(stream.edits().len(), count);
     }
-    let error = EditStream::new(400_000, declared(MAXIMUM_EDITS_PER_OPERATION + 1))
-        .expect_err("one edit over the ceiling is refused");
-    assert!(
-        matches!(
-            error,
-            ContentError::BoundedCapacityExceeded {
-                what: "edit.stream",
-                ..
-            }
-        ),
-        "got {error}"
-    );
-
-    // A real run at the ceiling: every one of the 4 096 edits is applied, the
+    // Every edit is applied, the
     // frontier stays bounded and the result is exactly the expected bytes.
     let base = noise(400_000);
     let (store, root) = build(&base);
-    let edits = declared(MAXIMUM_EDITS_PER_OPERATION);
+    let edits = declared(RUNS);
     let mut replacements = Replacements::new();
     let mut expected = base.clone();
     for (index, edit) in edits.iter().enumerate() {
@@ -629,7 +611,7 @@ fn the_edit_stream_ceiling_is_enforced_before_any_work() {
     // stream, and the retained frontier stayed page-scale rather than growing with
     // the edit count.
     assert_eq!(
-        constructed.counters.payloads_created, MAXIMUM_EDITS_PER_OPERATION as u64,
+        constructed.counters.payloads_created, RUNS as u64,
         "one payload per edit: {:?}",
         constructed.counters
     );
@@ -750,20 +732,20 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
     use layerfs_content::file::cdc::MINIMUM_CHUNK_BYTES;
     use layerfs_content::file::mapping::{MAX_NODE_OBJECT_BYTES, MIN_ENTRIES};
     use layerfs_content::file::EDIT_DEFERRED_LIMIT;
-    use layerfs_content::MAXIMUM_EDITS_PER_OPERATION;
+    const RUNS: usize = 4_096;
 
     // Eight MiB of base with the full edit budget spread evenly across it: the
     // largest shape a bounded fixture can offer.
     let base = noise(8 * 1024 * 1024);
     let (store, root) = build(&base);
-    let edits = (0..MAXIMUM_EDITS_PER_OPERATION)
+    let edits = (0..RUNS)
         .map(|index| {
             let start = 1_000 + index as u64 * 2_048;
             Edit::overwrite(start, start + 4)
         })
         .collect::<Vec<_>>();
     let mut replacements = Replacements::new();
-    for index in 0..MAXIMUM_EDITS_PER_OPERATION {
+    for index in 0..RUNS {
         let mut replacement = noise(4);
         replacement[0] = (index & 0xff) as u8;
         replacements.push(replacement);
@@ -787,10 +769,7 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
     .expect("bounded-frontier edit");
     let counters = constructed.counters;
     println!("MEASURED deferred shape: {counters:?}");
-    assert_eq!(
-        counters.payloads_created, MAXIMUM_EDITS_PER_OPERATION as u64,
-        "every edit landed"
-    );
+    assert_eq!(counters.payloads_created, RUNS as u64, "every edit landed");
     assert!(
         counters.peak_deferred_bytes < EDIT_DEFERRED_LIMIT,
         "the ceiling held without refusing: {counters:?}"
@@ -808,7 +787,7 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
     // once the whole edit budget has been spent on boundary pieces.
     let drafts_needed = EDIT_DEFERRED_LIMIT.div_ceil(MAX_NODE_OBJECT_BYTES + 128);
     let extents_needed = MIN_ENTRIES * (drafts_needed - 1);
-    let boundary_extents = 3 * MAXIMUM_EDITS_PER_OPERATION;
+    let boundary_extents = 3 * RUNS;
     let base_floor = extents_needed.saturating_sub(boundary_extents) * MINIMUM_CHUNK_BYTES;
     println!(
         "DERIVED ceiling floor: {per_draft} B/draft measured (bound {}), \

@@ -247,11 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .join(",")
         })
         .unwrap_or_default();
-    let range_bytes = post_status
-        .as_ref()
-        .map(|value| value.range_accepted_payload_bytes)
-        .map_or("null".to_string(), |value| value.to_string());
-    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"range_accepted_payload_bytes\":{range_bytes},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
+    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
         format!("{:?}", capture.error));

@@ -260,8 +260,10 @@ mod linux {
         let changes: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root, replacement, ..
+                if let Operation::SaveFile {
+                    base: Some(root),
+                    replacement,
+                    ..
                 } = op
                 {
                     Some((*root, *replacement))
@@ -332,14 +334,15 @@ mod linux {
         let changes: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root,
+                if let Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
+                    extents,
                     replacement,
+                    ..
                 } = op
                 {
-                    Some((*root, *base_length, *edits, *replacement))
+                    Some((*root, *base_length, *extents, *replacement))
                 } else {
                     None
                 }
@@ -348,7 +351,8 @@ mod linux {
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].0, saved_root);
         assert_eq!(changes[0].1, data.size);
-        assert_eq!((changes[0].2, changes[0].3), (1, 1));
+        assert!(changes[0].2 > 0);
+        assert_eq!(changes[0].3, 1);
         drop(observed);
         let saved = attr(
             f.native

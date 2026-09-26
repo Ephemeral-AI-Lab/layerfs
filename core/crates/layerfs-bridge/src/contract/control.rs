@@ -6,21 +6,11 @@ pub const WORKSPACE_STATUS_OPCODE: u8 = 8;
 pub const WORKSPACE_STATUS_MAX_MS: u32 = 5_000;
 pub const WORKSPACE_ID_BYTES: usize = 63;
 pub const WORKSPACE_STATUS_REQUEST_BYTES: usize = 124;
-pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 251;
+pub const WORKSPACE_STATUS_RESULT_BYTES: usize = 219;
 /// Fixed, bounded projection callback classes reported by status.
-pub const PROJECTION_CLASSES: usize = 11;
+pub const PROJECTION_CLASSES: usize = 9;
 pub const PROJECTION_CLASS_LABELS: [&str; PROJECTION_CLASSES] = [
-    "lookup",
-    "getattr",
-    "read",
-    "write",
-    "readdir",
-    "open",
-    "setattr",
-    "rename",
-    "other",
-    "range_state",
-    "range_edit",
+    "lookup", "getattr", "read", "write", "readdir", "open", "setattr", "rename", "other",
 ];
 pub const WORKSPACE_UNMOUNT_OPCODE: u8 = 10;
 pub const WORKSPACE_UNMOUNT_MAX_MS: u32 = 5_000;
@@ -156,10 +146,6 @@ pub struct WorkspaceStatusWire {
     pub projection: [u64; PROJECTION_CLASSES],
     /// Upstream host Service calls this Workspace has issued.
     pub upstream_calls: u64,
-    /// Replacement payload bytes accepted by published range edits.
-    pub range_accepted_payload_bytes: u64,
-    /// Physical suffix payload bytes copied by published range edits.
-    pub range_shifted_suffix_bytes: u64,
 }
 
 impl WorkspaceStatusWire {

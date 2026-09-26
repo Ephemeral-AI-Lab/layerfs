@@ -160,7 +160,22 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.u64(*start)?;
             e.u64(*end)?;
         }
-        Operation::ConstructFile { length } => e.u64(*length)?,
+        Operation::SaveFile {
+            base,
+            base_length,
+            length,
+            extents,
+            replacement,
+        } => {
+            e.u8(u8::from(base.is_some()))?;
+            if let Some(root) = base {
+                e.put(root)?;
+            }
+            e.u64(*base_length)?;
+            e.u64(*length)?;
+            e.u64(*extents)?;
+            e.u64(*replacement)?;
+        }
         Operation::ConstructSymlink { target } => e.blob(target)?,
         Operation::Inspect { root, query } => {
             e.put(root)?;
@@ -191,41 +206,6 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                     e.blob(path)?;
                 }
             }
-        }
-        Operation::EditFile {
-            root,
-            base_length,
-            edits,
-            replacement,
-        } => {
-            e.put(root)?;
-            e.u64(*base_length)?;
-            e.u32(*edits)?;
-            e.u64(*replacement)?;
-        }
-        Operation::UpdatePreparedFilesystem {
-            base,
-            scope,
-            root_serial,
-            directories,
-            inodes,
-            new_directories,
-            directory_metadata,
-            new_file_serials,
-            new_symlink_serials,
-        } => {
-            e.put(base)?;
-            e.put(scope)?;
-            e.u64(*root_serial)?;
-            put_directories(&mut e, directories)?;
-            put_inodes(&mut e, inodes)?;
-            put_additions(
-                &mut e,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-            )?;
         }
         Operation::HistoryQuery(query) => put_query(&mut e, query)?,
         Operation::HistoryCommand(command) => put_command(&mut e, command)?,
@@ -737,42 +717,23 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             };
             Operation::Inspect { root, query }
         }
-        3 => Operation::ConstructFile { length: d.u64()? },
+        SAVE_FILE_OPCODE => {
+            let base = match d.u8()? {
+                0 => None,
+                1 => Some(d.root()?),
+                _ => return Err(Code::InvalidInput.into()),
+            };
+            Operation::SaveFile {
+                base,
+                base_length: d.u64()?,
+                length: d.u64()?,
+                extents: d.u64()?,
+                replacement: d.u64()?,
+            }
+        }
         CONSTRUCT_SYMLINK_OPCODE => Operation::ConstructSymlink {
             target: d.blob(SYMLINK_TARGET_BYTES)?,
         },
-        4 => {
-            let root = d.root()?;
-            let base_length = d.u64()?;
-            let edits = d.u32()?;
-            let replacement = d.u64()?;
-            Operation::EditFile {
-                root,
-                base_length,
-                edits,
-                replacement,
-            }
-        }
-        5 => {
-            let base = d.root()?;
-            let scope = d.root()?;
-            let root_serial = d.u64()?;
-            let directories = take_directories(&mut d)?;
-            let inodes = take_inodes(&mut d)?;
-            let (new_directories, directory_metadata, new_file_serials, new_symlink_serials) =
-                take_additions(&mut d, inodes.len())?;
-            Operation::UpdatePreparedFilesystem {
-                base,
-                scope,
-                root_serial,
-                directories,
-                inodes,
-                new_directories,
-                directory_metadata,
-                new_file_serials,
-                new_symlink_serials,
-            }
-        }
         6 => Operation::HistoryQuery(take_query(&mut d)?),
         7 => Operation::HistoryCommand(take_command(&mut d)?),
         WORKSPACE_STATUS_OPCODE => Operation::WorkspaceStatus {

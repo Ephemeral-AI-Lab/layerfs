@@ -320,9 +320,7 @@ def run_case(row, prepared, output):
     try: driver = one_receipt(stdout)
     except (ValueError, json.JSONDecodeError): driver = None
     counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(",") if "=" in item) if driver else {}
-    route = bool(driver and counts.get("range_state") == "0" and counts.get("range_edit") == "0"
-                 and driver.get("range_accepted_payload_bytes") == 0
-                 and int(counts.get("write", -1)) >= row["expected_write_min"]
+    route = bool(driver and int(counts.get("write", -1)) >= row["expected_write_min"]
                  and driver.get("commit_called") == row["commit"])
     verify = {"status": "NOT_RUN"}
     if driver and driver.get("branch_id") == master["branch_id"]:

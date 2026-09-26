@@ -148,21 +148,16 @@ impl Native {
         let first_save = {
             let mut observations = self.observations.lock().unwrap();
             assert!(
-                !matches!(
-                    request.operation,
-                    Operation::UpdatePreparedFilesystem { .. }
-                ) && (self.allow_fresh_files
+                self.allow_fresh_files
                     || !matches!(
                         request.operation,
-                        Operation::ConstructFile { .. } | Operation::ConstructSymlink { .. }
-                    )),
+                        Operation::SaveFile { base: None, .. } | Operation::ConstructSymlink { .. }
+                    ),
                 "unexpected construction route"
             );
             let first = matches!(
                 request.operation,
-                Operation::EditFile { .. }
-                    | Operation::ConstructFile { .. }
-                    | Operation::ConstructSymlink { .. }
+                Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
             ) && !observations.entered;
             observations.operations.push(request.operation.clone());
             if first {
@@ -266,9 +261,7 @@ impl Native {
         };
         if matches!(
             request.operation,
-            Operation::EditFile { .. }
-                | Operation::ConstructFile { .. }
-                | Operation::ConstructSymlink { .. }
+            Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
         ) {
             if let Ok(Response::Saved { root, .. }) = &response {
                 self.observations.lock().unwrap().saved_files.push(*root);
@@ -327,9 +320,8 @@ impl Native {
     ) -> Result<(Client, Result<Response, Failure>), Failure> {
         let (endpoint, principal, private) = authority;
         let operation = match &request.operation {
-            Operation::ConstructFile { .. } => "ConstructFile",
+            Operation::SaveFile { .. } => "SaveFile",
             Operation::ConstructSymlink { .. } => "ConstructSymlink",
-            Operation::EditFile { .. } => "EditFile",
             Operation::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
             Operation::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
             Operation::HistoryCommand(HistoryCommand::ReserveInodes { .. }) => "ReserveInodes",
@@ -552,17 +544,65 @@ impl Fixture {
             .unwrap()
     }
     pub fn edit(&self, name: &[u8], start: u64, end: u64, bytes: &[u8]) -> MutationReceipt {
-        self.workspace
-            .edit_file_range(
-                &WorkspacePath::new(name).unwrap(),
-                &RangeEdit {
-                    start,
-                    end,
-                    replacement: self.own(bytes),
-                },
-                deadline(),
-            )
-            .unwrap()
+        let file = self.lookup(name);
+        assert!(start <= end && end <= file.size);
+        let handle = self
+            .workspace
+            .open(file.serial, ReferenceScope::Local)
+            .unwrap();
+        let removed = end - start;
+        let inserted = bytes.len() as u64;
+        let next = file.size - removed + inserted;
+        const CHUNK: u64 = 64 * 1024;
+        if inserted > removed {
+            let shift = inserted - removed;
+            self.workspace
+                .set_len(file.serial, next, deadline())
+                .unwrap();
+            let mut right = file.size;
+            while right > end {
+                let left = end.max(right.saturating_sub(CHUNK));
+                let chunk = self.read(handle, left, (right - left) as usize);
+                self.workspace
+                    .write_file(handle, left + shift, &self.own(&chunk), deadline())
+                    .unwrap();
+                right = left;
+            }
+        } else if inserted < removed {
+            let shift = removed - inserted;
+            let mut left = end;
+            while left < file.size {
+                let right = file.size.min(left + CHUNK);
+                let chunk = self.read(handle, left, (right - left) as usize);
+                self.workspace
+                    .write_file(handle, left - shift, &self.own(&chunk), deadline())
+                    .unwrap();
+                left = right;
+            }
+            self.workspace
+                .set_len(file.serial, next, deadline())
+                .unwrap();
+        }
+        let mut receipt = None;
+        for (index, chunk) in bytes.chunks(CHUNK as usize).enumerate() {
+            receipt = Some(
+                self.workspace
+                    .write_file(
+                        handle,
+                        start + index as u64 * CHUNK,
+                        &self.own(chunk),
+                        deadline(),
+                    )
+                    .unwrap(),
+            );
+        }
+        let receipt = receipt.unwrap_or_else(|| {
+            self.workspace
+                .write_file(handle, start, &self.own(b""), deadline())
+                .unwrap()
+        });
+        self.workspace.release(handle).unwrap();
+        receipt
     }
     pub fn read(&self, handle: HandleId, start: u64, length: usize) -> Vec<u8> {
         self.workspace
@@ -582,7 +622,7 @@ impl Fixture {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::EditFile { .. }))
+                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
                 .count(),
             files
         );

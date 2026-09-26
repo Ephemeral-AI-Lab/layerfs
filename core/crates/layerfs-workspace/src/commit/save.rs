@@ -89,78 +89,55 @@ impl Workspace {
                 // An exact zero is a version whose selected content is its
                 // own base; a splice that shared an untouched subtree records
                 // `u16::MAX` instead and is always lowered.
-                if plan.edits.is_empty() && inode.edits == 0 && !inode.fresh {
+                if plan.changes == 0 && inode.edits == 0 && !inode.fresh {
                     inode.base
                 } else {
                     submission.phase(StagePhase::FileSave, Some(serial))?;
                     let mut source =
                         ReplacementSource::new(self.clone(), captured.root.clone(), plan.inode);
+                    let mut upload = upload::FileUpload::new(
+                        self.clone(),
+                        captured.root.clone(),
+                        plan.inode,
+                        plan.extents,
+                        &mut source,
+                    );
                     let remote = first_remote
                         .take()
                         .map_or_else(|| self.begin(true, deadline), Ok)?;
-                    let saved_root = if inode.fresh {
-                        let response = self.remote_call(
-                            (self.inner.store, captured.generation),
-                            Operation::ConstructFile {
-                                length: inode.length,
-                            },
-                            &mut source,
-                            0,
-                            &mut std::io::sink(),
-                            deadline,
-                        );
-                        drop(remote);
-                        if let Some(failure) = source.failure.take() {
-                            submission
-                                .state
-                                .lock()
-                                .map_err(|_| WorkspaceError::Io)?
-                                .source_failure = Some(failure);
-                        }
-                        let Response::Saved { root, length, .. } = response? else {
-                            return Err(WorkspaceError::InvalidInput);
-                        };
-                        if length != inode.length || !source.complete() {
-                            return Err(WorkspaceError::InvalidInput);
-                        }
-                        root
-                    } else {
-                        // The descriptor list is the prefix of the body stream
-                        // and the replacement bytes follow it, so an existing
-                        // file's edit pays no whole-request buffer: the request
-                        // declares the two stream totals and the bounded
-                        // lowering list packs the descriptors ahead of the
-                        // frozen sequence's replacement bytes.
-                        let mut upload = upload::EditUpload::new(&plan.edits, &mut source)?;
-                        let response = self.remote_call(
-                            (self.inner.store, captured.generation),
-                            Operation::EditFile {
-                                root: inode.base,
-                                base_length: inode.base_length,
-                                edits: plan.edits.len() as u32,
-                                replacement: plan.inode.replacement,
-                            },
-                            &mut upload,
-                            0,
-                            &mut std::io::sink(),
-                            deadline,
-                        );
-                        drop(remote);
-                        if let Some(failure) = source.failure.take() {
-                            submission
-                                .state
-                                .lock()
-                                .map_err(|_| WorkspaceError::Io)?
-                                .source_failure = Some(failure);
-                        }
-                        let Response::Saved { root, length, .. } = response? else {
-                            return Err(WorkspaceError::InvalidInput);
-                        };
-                        if length != inode.length || !source.complete() {
-                            return Err(WorkspaceError::InvalidInput);
-                        }
-                        root
+                    let response = self.remote_call(
+                        (self.inner.store, captured.generation),
+                        Operation::SaveFile {
+                            base: (!inode.fresh).then_some(inode.base),
+                            base_length: inode.base_length,
+                            length: inode.length,
+                            extents: plan.extents,
+                            replacement: inode.replacement,
+                        },
+                        &mut upload,
+                        0,
+                        &mut std::io::sink(),
+                        deadline,
+                    );
+                    drop(remote);
+                    if let Some(failure) = upload.source_failure() {
+                        submission
+                            .state
+                            .lock()
+                            .map_err(|_| WorkspaceError::Io)?
+                            .source_failure = Some(failure);
+                    }
+                    let Response::Saved {
+                        root: saved_root,
+                        length,
+                        ..
+                    } = response?
+                    else {
+                        return Err(WorkspaceError::InvalidInput);
                     };
+                    if length != inode.length || !upload.complete() {
+                        return Err(WorkspaceError::InvalidInput);
+                    }
                     submission
                         .state
                         .lock()

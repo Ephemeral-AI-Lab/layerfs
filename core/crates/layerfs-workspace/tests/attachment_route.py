@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Failed native Attach ownership using the closed read-only Branch/source fixture."""
 from pathlib import Path
-import local_edit_route as driver
+import attachment_driver as driver
 
 driver.CASES = {
     'retained': ['retained-failure-exact-identity-expiry-and-no-replay',

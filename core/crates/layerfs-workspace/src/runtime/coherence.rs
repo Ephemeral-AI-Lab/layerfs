@@ -9,7 +9,6 @@ const PROJECTION_REPLIES: usize = 2;
 pub(crate) enum MutationOrigin {
     Local,
     ProjectionWrite { append: bool },
-    ProjectionRange,
     ProjectionSize,
     ProjectionAttributes,
     ProjectionMkdir,
@@ -29,8 +28,7 @@ impl MutationOrigin {
         match self {
             Self::Local => stored,
             Self::ProjectionWrite { append } => append,
-            Self::ProjectionRange
-            | Self::ProjectionSize
+            Self::ProjectionSize
             | Self::ProjectionAttributes
             | Self::ProjectionMkdir
             | Self::ProjectionCreate
@@ -99,42 +97,6 @@ pub struct ProjectionMutationPermit {
     used: bool,
 }
 impl ProjectionMutationPermit {
-    /// Applies one stamped byte-range edit through a projected writable handle.
-    pub fn edit_file_range(
-        &mut self,
-        handle: HandleId,
-        expected: RangeStamp,
-        edit: &RangeEdit,
-        deadline: Instant,
-    ) -> Result<MutationReceipt, WorkspaceError> {
-        if self.used {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        self.used = true;
-        self.workspace
-            .edit_file_range_from(handle, expected, edit, deadline.min(self.deadline))
-    }
-    /// Applies one checked Bytes/Zero stream through the same stamped splice.
-    pub fn edit_file_range_stream(
-        &mut self,
-        handle: HandleId,
-        expected: RangeStamp,
-        edit: &RangeEdit,
-        parts: &[RangePart],
-        deadline: Instant,
-    ) -> Result<MutationReceipt, WorkspaceError> {
-        if self.used {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        self.used = true;
-        self.workspace.edit_file_range_stream_from(
-            handle,
-            expected,
-            edit,
-            parts,
-            deadline.min(self.deadline),
-        )
-    }
     /// Makes one attempt, using the earlier of this deadline and admission's
     /// deadline. Current kernel append flags are supplied per write; append
     /// requires the supplied offset to equal live EOF.

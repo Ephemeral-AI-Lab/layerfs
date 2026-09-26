@@ -116,20 +116,20 @@ mod linux {
         let edits: Vec<_> = observed.operations[begin..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root,
+                if let Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
                     replacement,
+                    ..
                 } = op
                 {
-                    Some((*root, *base_length, *edits, *replacement))
+                    Some((*root, *base_length, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(edits, vec![(g.1, 28, 1, 1)]);
+        assert_eq!(edits, vec![(g.1, 28, 1)]);
         assert!(!observed.operations.iter().any(|op| matches!(
             op,
             Operation::HistoryCommand(HistoryCommand::StageChanges(_))
@@ -314,21 +314,23 @@ mod linux {
         assert_eq!(content.2, end);
         assert_eq!(f.native.bytes(content.1, end - 3, 3), [0, b'y', b'x']);
         let observed = f.native.observations.lock().unwrap();
-        let totals: Vec<(u32, u64)> = observed
+        let totals: Vec<u64> = observed
             .operations
             .iter()
             .filter_map(|o| {
-                if let Operation::EditFile {
-                    edits, replacement, ..
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    replacement,
+                    ..
                 } = o
                 {
-                    Some((*edits, *replacement))
+                    Some(*replacement)
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(totals, vec![(1, end)]);
+        assert_eq!(totals, vec![end]);
         drop(observed);
         observe(&f);
         close(&f, data, &[h]);
@@ -340,19 +342,14 @@ mod linux {
     fn write_frontier() {
         let f = Fixture::new(Gate::None);
         let (data, h) = open(&f, FileAccess::ReadWrite, false);
-        // The retired 256-edit ceiling is gone: a Commit whose version carries
-        // twice that many disjoint runs lowers, packs every descriptor into
-        // the body-stream prefix and streams the replacement bytes with exact
-        // final bytes. The exact per-operation budget boundary is pinned by
-        // the focused sequence suite; this route case proves the streaming
-        // commit past the retired bound on the live native service.
-        let runs = 512u64;
+        let runs = 1_024u64;
         for i in 0..runs {
             write(&f, h, i * 2, b"x");
         }
         for i in 0..64u64 {
             write(&f, h, i * 2, b"y");
         }
+        assert!(f.workspace.backing_status().unwrap().payloads >= runs as usize);
         let report = f
             .workspace
             .commit(Instant::now() + Duration::from_secs(25))
@@ -375,25 +372,30 @@ mod linux {
             );
         }
         let observed = f.native.observations.lock().unwrap();
-        let declared: Vec<(u32, u64)> = observed
+        let declared: Vec<(u64, u64)> = observed
             .operations
             .iter()
             .filter_map(|o| {
-                if let Operation::EditFile {
-                    edits, replacement, ..
+                if let Operation::SaveFile {
+                    base: Some(_),
+                    extents,
+                    replacement,
+                    ..
                 } = o
                 {
-                    Some((*edits, *replacement))
+                    Some((*extents, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(declared, vec![(runs as u32, runs)]);
+        assert_eq!(declared.len(), 1);
+        assert!(declared[0].0 >= runs);
+        assert_eq!(declared[0].1, runs);
         drop(observed);
         observe(&f);
         close(&f, data, &[h]);
-        check("multi-edit-frontier-streams-past-the-retired-256-edit-ceiling");
+        check("final-file-save-streams-1024-separated-runs");
     }
     #[test]
     #[ignore = "requires native candidate-quota refusal"]
@@ -571,20 +573,20 @@ mod linux {
         let edits: Vec<_> = observed.operations[begin..]
             .iter()
             .filter_map(|op| {
-                if let Operation::EditFile {
-                    root,
+                if let Operation::SaveFile {
+                    base: Some(root),
                     base_length,
-                    edits,
                     replacement,
+                    ..
                 } = op
                 {
-                    Some((*root, *base_length, *edits, *replacement))
+                    Some((*root, *base_length, *replacement))
                 } else {
                     None
                 }
             })
             .collect();
-        assert_eq!(edits, vec![(g.1, 32, 1, 12)]);
+        assert_eq!(edits, vec![(g.1, 32, 12)]);
         drop(observed);
         observe(&f);
         close(&f, data, &[h]);

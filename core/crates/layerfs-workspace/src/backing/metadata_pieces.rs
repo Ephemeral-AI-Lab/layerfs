@@ -18,7 +18,7 @@ use crate::{
     overlay::pieces::{Piece, PieceKind},
     WorkspaceError,
 };
-use layerfs_bridge::contract::{MAX_EDITS_PER_OPERATION, MAX_FILE};
+use layerfs_bridge::contract::MAX_FILE;
 use std::time::{Duration, Instant};
 
 /// Leaf capacity in extent records: the whole payload area of one page.
@@ -197,7 +197,7 @@ impl Fold {
                     return Err(WorkspaceError::Io);
                 }
                 if piece.offset != self.base || self.pending != 0 {
-                    self.edits = self.edits.checked_add(1).ok_or(WorkspaceError::Io)?;
+                    self.edits = self.edits.saturating_add(1);
                 }
                 self.base = piece.offset + piece.length;
                 self.pending = 0;
@@ -247,7 +247,7 @@ impl Fold {
     /// truncation lowering later derives as one deletion edit.
     pub fn close(&mut self, base_bound: u64) -> Result<(), WorkspaceError> {
         if self.pending != 0 || self.base < base_bound {
-            self.edits = self.edits.checked_add(1).ok_or(WorkspaceError::Io)?;
+            self.edits = self.edits.saturating_add(1);
         }
         Ok(())
     }
@@ -423,7 +423,7 @@ pub fn replace<S: PieceStore + ?Sized>(
         );
         return Err(WorkspaceError::Io);
     }
-    if usize::from(fold.edits()) > MAX_EDITS_PER_OPERATION as usize || total > MAX_FILE {
+    if total > MAX_FILE {
         return Err(WorkspaceError::Capacity);
     }
     level.extend(std::mem::take(&mut walk.leaves));

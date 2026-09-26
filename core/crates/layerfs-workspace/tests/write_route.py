@@ -8,7 +8,7 @@ driver.CASES = {
     'append': ['append-selects-live-EOF-and-concurrent-successes-never-overwrite'],
     'zero_rights': ['zero-write-validates-rights-identity-offset-deadline-without-publication'],
     'envelope': ['Zero-gap-and-local-input-stream-past-the-retired-8MiB-replay-ceiling'],
-    'frontier': ['multi-edit-frontier-streams-past-the-retired-256-edit-ceiling'],
+    'frontier': ['final-file-save-streams-1024-separated-runs'],
     'quota': ['candidate-quota-refusal-keeps-visible-file-and-borrowed-payload'],
     'metadata_failure': ['native-write-metadata-failure-retains-version-input-and-quarantine'],
     'released': ['release-before-write-publication-refuses-without-consuming-borrowed-input'],
