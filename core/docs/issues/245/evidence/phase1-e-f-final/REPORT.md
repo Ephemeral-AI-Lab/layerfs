@@ -4,9 +4,10 @@
 > Source of the initial proof below: `ff3dbcfe0eb0269e39981372b23bd84c0f9a1ccc`.
 > The dated continuation at the end records product source `f9de81520`.
 
-The frozen F comparison passes at both recorded product sources. E's stable
-routes pass; a deterministic observation of B accepted *inside* the successor
-build remains open, as the continuation records.
+The frozen F comparison passes at the final product source `b2cd0df23`.
+The strict E timing gate also passes there: B was accepted while a real
+successor-builder page read was held by an external Linux syscall barrier.
+The earlier open checkpoint and failed diagnostics remain below.
 The #232 structural-shift and 56-shape gates, the load-bearing selection, and
 the separate namespace ceilings remain open. The numbers below are one attempt
 per registered case at each named source, not a latency or release claim.
@@ -247,7 +248,7 @@ selected by taking the best of them.
 | `repeated-one-byte-v1` | 1.130367 / 2.176802 | PASS / PASS / PASS, verifier 0.098476 s | PASS | INELIGIBLE |
 | `failed-command-no-commit-v1` | 5.968702 / 11.764124 | PASS / PASS / PASS, verifier 0.052225 s | PASS | INELIGIBLE |
 
-**E/F lane disposition:** F's frozen comparative target is met at the latest
+**E/F lane disposition at `f9de81520`:** F's frozen comparative target is met at that
 product seal. E's code, known-outcome retry and stable mounted observations
 pass, and the diagnosed metadata-window `Busy` is repaired. The stricter
 requirement to prove an accepted B write specifically *inside* the ungated
@@ -256,3 +257,93 @@ landed after install, and no test-only product hook or time/budget relaxation
 was introduced to force a pass. The five-second historical Exec `Unknown`,
 #232's 56 shapes, load-bearing selection and namespace ceilings remain open
 as stated above.
+
+## 2026-09-26 final continuation: builder I/O overlap and F at `b2cd0df23`
+
+The strict route uses Linux seccomp user notification on the committing test
+thread, outside product source. It blocks an actual `pread64` on a
+`/stage/private-backing/stage/m-page-*` file after `CommitPhase::Reconcile` is
+observable. That read is in the ungated successor builder, after its input
+root/revision was frozen and before any builder page allocation or first install.
+The notification remains unanswered while mounted `/bin/sh` appends B. No sleep
+or workload size is used to force the overlap, and the test changes no product
+deadline, worker count, cache policy or I/O-window count.
+
+The earlier write-syscall barrier exposed two separate facts. At a held builder
+`pwrite64`, B initially failed with no revision advance. Routine payload and
+metadata maintenance requested the builder's occupied window 3; product commit
+`b2cd0df23` now defers that *routine* cleanup, leaving its owners charged for
+a later pass. Explicit metadata reclaim retains its deadline-bounded wait and
+explicit payload reclaim retains its contention result. A `pwrite64` barrier
+still holds an unfinished metadata slot allocation, so the existing cross-root
+pending-slot guard correctly refuses B. The final gate therefore holds a page
+**read**, before that allocation; the guard was not weakened.
+
+Every new diagnostic is retained with its own raw stdout/stderr and `result.json`
+under `benchmark-results/fs-bench-pro/issue245-route-harness/`:
+
+| Suffix | Result |
+| --- | --- |
+| `e-builder-syscall-diagnostic-01` | FAIL: real builder `pwrite64` held; mounted B returned I/O error with no revision advance; the initial observer also mishandled listener hangup |
+| `e-builder-syscall-diagnostic-02` | FAIL: B still refused at held `pwrite64` after routine-cleanup deferral; the pending-slot guard remained active |
+| `e-builder-syscall-diagnostic-03` | FAIL: same held-write schedule; existing FUSE diagnostic identified `WorkspaceError::Busy` |
+| `e-builder-syscall-diagnostic-04` | PASS at a dirty test/product source: held `pread64`, B accepted, revision 3 → 4; retained as diagnostic, not promoted to final proof |
+| `e-builder-syscall-final-01` | **PASS** at clean committed source `b2cd0df23`: held `pread64` on `m-page-00000007-00000001`, B accepted before release, revision 3 → 4, route cleanup PASS, complete functional command 1.108 s |
+
+The final test checks that the first Commit's installed revision is B's accepted
+revision plus one, proving reconciliation rebuilt after B moved the frontier.
+The first canonical head contains exactly A; the live successor contains AXB;
+the sequential second Commit's head contains exactly AXB; the next live
+generation still reads AXB; and the original head's length and tail byte remain
+unchanged. The committed source, product-input seal, test binary, image and
+fixture identity are in the final route receipt. At the same source, the stable
+mounted-successor and known-outcome reconcile-retry routes also PASS in
+`e-builder-mounted-regression-final-01/` and
+`e-builder-reconcile-retry-regression-final-01/`.
+
+Final-source verification: full Core locked release tests **PASS**
+(`core-test-builder-final.log`); locked release Clippy with `-D warnings`
+**PASS** (`core-clippy-builder-final.log`); Core formatting **PASS**; product
+boundary scan **PASS** (296 files); tool unit tests **PASS** (9 tests); all
+24 release-profile `aarch64-unknown-linux-musl` Workspace suites **PASS**
+(`musl-workspace-builder-final-01/result.json`). The Linux suites ran with one
+test thread per binary in `alpine:3.22`. No root preflight or CI claim applies.
+
+The changed product seal required one fresh F preparation and one new candidate
+arm. `issue245-shell-package-f-candidate-prepared-04/prepared.json` records source
+`b2cd0df23`, product seal
+`411bcd7f8790580dd782f2cf4921a70d176dc19b4c7b0937217e1e27dad2f96c`,
+unchanged harness seal
+`aae7081d526d85c2b225aa6eacefbae5e964c6453d3216afcd228dde779e4d1f`,
+unchanged registry SHA-256
+`1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c`,
+and image `sha256:28f93c60c8200e827382ac12e4c67537a0319a48af5e5f18d38f0d570fadde9c`.
+It used closed validated masters, one construction worker and independent
+`shutil.copyfile` byte clones. The frozen control was not rerun. The one
+candidate attempt per registered case is in
+`benchmark-results/fs-bench-pro/issue245-shell-package-f-candidate-04/`;
+each row retains its receipt, raw output and hashes.
+
+| Case | Complete wall s / frozen maximum s | Functional / cleanup / verifier | F comparative cell | Latency cell |
+| --- | ---: | --- | --- | --- |
+| `mixed-refresh-v1` | 2.213429 / 4.391426 | PASS / PASS / PASS, verifier 0.092017 s | PASS | INELIGIBLE |
+| `overwrite-4k-v1` | 0.916313 / 1.632815 | PASS / PASS / PASS, verifier 0.162632 s | PASS | INELIGIBLE |
+| `repeated-one-byte-v1` | 1.110671 / 2.176802 | PASS / PASS / PASS, verifier 0.096573 s | PASS | INELIGIBLE |
+| `failed-command-no-commit-v1` | 5.975844 / 11.764124 | PASS / PASS / PASS, verifier 0.050645 s; zero Commit calls and old head retained | PASS | INELIGIBLE |
+
+These walls meet both the frozen 2× envelopes and registered complete-command
+limits; every sealed verifier is below 9 s. The latency cells remain
+`INELIGIBLE` because container FUSE backing and Edit-written cache state were
+uncontrolled. This is a frozen comparative F PASS, not a cold-cache latency or
+release-admission claim. Earlier candidate and failed diagnostic receipts retain
+their original identities and results.
+
+Commit `b2cd0df23` used the same first-parent/staged-tree
+`core/tools/production_loc.py --json` method recorded above: Core production
+LOC 56,650 → 56,670 (**+20**), legacy reference 68,728 → 68,728 (0), combined
+125,378 → 125,398 (**+20**). Test and documentation changes contribute zero.
+
+**Final E/F lane disposition:** strict E timing proof **PASS** and frozen F
+comparison **PASS** at `b2cd0df23`. The historical five-second Exec `Unknown`,
+#232's 56 shapes, load-bearing selection and namespace ceilings remain open as
+separate work, with their earlier evidence unchanged.
