@@ -368,6 +368,7 @@ impl Workspace {
             s.installed_revision = None;
         }
         attempt.phase(submission, CommitPhase::Reconcile)?;
+        attempt.root.repair_pending_for_retry(deadline)?;
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
         self.installed(submission, attempt, outcome, revision)
     }

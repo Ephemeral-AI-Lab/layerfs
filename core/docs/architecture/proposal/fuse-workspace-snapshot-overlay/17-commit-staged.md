@@ -34,6 +34,10 @@ attempt. After a real attempt begins, failures retain G, D1 and its exact outcom
 A retained reconcile-phase `KnownCommitLocalFailure` with a validated known C5
 outcome can resume local reconciliation through `commit_staged` with the same
 selector. It does not resend the consumed C5 token or finish the fund twice.
+When a failed local page allocation has complete accounting, retry first
+unlinks its identity-checked pending file, restores the candidate's slot credit
+and refreshes arena admission. An incomplete or uncertain allocation remains
+blocked; retry never guesses at ownership.
 Unknown outcomes, denied commits and consumed stages retain their custody wedge;
 there is no automatic retry, token substitution, implicit DiscardStage or restart
 recovery. The active remote permit is released

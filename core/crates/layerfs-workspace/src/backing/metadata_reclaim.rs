@@ -178,12 +178,27 @@ impl RootOwner {
         }
         result
     }
-    fn reclaim_owned(
-        &self,
-        window: &mut Window,
-        deadline: Instant,
-        report: &mut MetadataCleanupReport,
-    ) -> Result<(), WorkspaceError> {
+    /// Reclaims only this attempt's known unfinished page before a caller
+    /// retries local reconciliation. Its completed temporary pages and quota
+    /// reservation remain owned by the attempt for the eventual seal.
+    pub(crate) fn repair_pending_for_retry(&self, deadline: Instant) -> Result<(), WorkspaceError> {
+        let host = self.arena.host()?;
+        let _writer = host.writer_until(deadline)?;
+        if !self
+            .arena
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .complete
+        {
+            return Err(WorkspaceError::Busy);
+        }
+        self.cleanup_pending(deadline, true)?;
+        host.refresh()
+    }
+    /// Cleans a known pending page without releasing the candidate root.
+    /// A retry keeps its reserved slot; full reclaim gives the slot back.
+    fn cleanup_pending(&self, deadline: Instant, resume: bool) -> Result<(), WorkspaceError> {
         if self
             .arena
             .state
@@ -289,13 +304,23 @@ impl RootOwner {
                     .custodies
                     .pop();
             }
+            let mut owner = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let mut a = self.arena.state.lock().map_err(|_| WorkspaceError::Io)?;
             if r.epoch == 1 {
                 if a.next != r.slot + 1 {
                     return Err(WorkspaceError::Io);
                 }
                 a.next -= 1;
-                self.arena.host()?.slots.fetch_sub(1, Ordering::AcqRel);
+                if resume {
+                    // The slot claim stays reserved for the same attempt.
+                    a.reserved_slots = a.reserved_slots.checked_add(1).ok_or(WorkspaceError::Io)?;
+                    owner.slot_credits = owner
+                        .slot_credits
+                        .checked_add(1)
+                        .ok_or(WorkspaceError::Io)?;
+                } else {
+                    self.arena.host()?.slots.fetch_sub(1, Ordering::AcqRel);
+                }
             } else {
                 a.free = PageRef {
                     slot: r.slot,
@@ -303,12 +328,17 @@ impl RootOwner {
                 };
                 a.reusable += 1;
             }
-            drop(a);
-            self.state
-                .lock()
-                .map_err(|_| WorkspaceError::Io)?
-                .slot_pending = None;
+            owner.slot_pending = None;
         }
+        Ok(())
+    }
+    fn reclaim_owned(
+        &self,
+        window: &mut Window,
+        deadline: Instant,
+        report: &mut MetadataCleanupReport,
+    ) -> Result<(), WorkspaceError> {
+        self.cleanup_pending(deadline, false)?;
         loop {
             let frame = {
                 self.state
