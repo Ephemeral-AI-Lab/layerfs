@@ -9,11 +9,12 @@
 mod support;
 
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, EditStream,
-    ObjectId, Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, ObjectId,
 };
 use layerfs_telemetry::timer::{Timing, TimingNode, TimingReport};
-use support::{noise, patterned, read_back, Counted, CountingProvider, MemoryStore};
+use support::{
+    edits::Edits, edits::Parts, noise, patterned, read_back, Counted, CountingProvider, MemoryStore,
+};
 
 fn policy() -> ConstructionPolicy {
     ConstructionPolicy::frozen_default()
@@ -45,8 +46,8 @@ fn child_names(node: &TimingNode) -> Vec<String> {
 fn run_edit(
     store: &MemoryStore,
     root: ObjectId,
-    stream: &EditStream,
-    replacements: &Replacements,
+    stream: &Edits,
+    replacements: &Parts,
     counts: &CountingProvider,
 ) -> (Result<ObjectId, ContentError>, TimingReport) {
     let provider = Counted { store, counts };
@@ -73,10 +74,9 @@ fn run_edit(
 fn a_real_edit_reports_its_scopes_without_a_database() {
     let base = noise(400_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(30_000));
-    let stream =
-        EditStream::new(base.len() as u64, vec![Edit::insert(120_000, 30_000)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::insert(120_000, 30_000)]).expect("valid");
     let counts = CountingProvider::new();
     let (result, report) = run_edit(&store, root, &stream, &replacements, &counts);
     let edited = result.expect("edit succeeds");
@@ -109,10 +109,9 @@ fn a_real_edit_reports_its_scopes_without_a_database() {
 fn an_equal_replacement_reports_the_comparison_scope() {
     let base = patterned(5_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(base[1_000..2_000].to_vec());
-    let stream =
-        EditStream::new(base.len() as u64, vec![Edit::overwrite(1_000, 2_000)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::overwrite(1_000, 2_000)]).expect("valid");
     let counts = CountingProvider::new();
     let (result, report) = run_edit(&store, root, &stream, &replacements, &counts);
     assert_eq!(result.expect("edit"), root);
@@ -135,10 +134,10 @@ fn tree_of(report: &TimingReport) -> TimingNode {
 fn recording_enabled_and_disabled_produce_the_same_result() {
     let base = noise(300_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(500));
     let stream =
-        EditStream::new(base.len() as u64, vec![Edit::overwrite(50_000, 50_500)]).expect("valid");
+        Edits::new(base.len() as u64, vec![Edit::overwrite(50_000, 50_500)]).expect("valid");
 
     let counts = CountingProvider::new();
     let (recorded, _) = run_edit(&store, root, &stream, &replacements, &counts);
@@ -188,8 +187,8 @@ fn recording_enabled_and_disabled_produce_the_same_result() {
 fn a_failing_edit_returns_its_original_error_and_an_error_outcome() {
     let base = noise(200_000);
     let (store, root) = build(&base);
-    let replacements = Replacements::new();
-    let stream = EditStream::new(base.len() as u64, vec![Edit::insert(1_000, 10)]).expect("valid");
+    let replacements = Parts::new();
+    let stream = Edits::new(base.len() as u64, vec![Edit::insert(1_000, 10)]).expect("valid");
     let counts = CountingProvider::new();
     let (result, report) = run_edit(&store, root, &stream, &replacements, &counts);
     let error = result.unwrap_err();

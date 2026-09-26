@@ -25,10 +25,9 @@ use std::path::PathBuf;
 
 use layerfs_content::file::mapping::{decode_file_state, decode_node_with_context, ExtentNode};
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditStream, ObjectId,
-    Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, ObjectId,
 };
-use support::{disabled_scope, MemoryStore};
+use support::{disabled_scope, edits::Edits, edits::Parts, MemoryStore};
 
 /// Frozen oracle fixtures, produced by the sealed reference.
 ///
@@ -169,7 +168,7 @@ fn seam_region(bytes: &[u8], seam: u64) -> (u64, u64) {
 }
 
 /// Fixture inputs and the edit stream in current-result coordinates.
-fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
+fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Parts) {
     let (base, raw_edits): (Vec<u8>, Vec<RawEdit>) = match case {
         "join-80-100" => {
             let left = file_with_extents(80);
@@ -274,7 +273,7 @@ fn fixture_inputs(case: &str) -> (Vec<u8>, Vec<Edit>, Replacements) {
     // coordinates and are passed through unchanged: no accumulated insertion
     // offset is added.
     let mut edits = Vec::new();
-    let mut source = Replacements::new();
+    let mut source = Parts::new();
     for (start, delete, replacement) in raw_edits {
         let index = source.push(replacement.clone());
         assert_eq!(index, edits.len(), "one replacement per edit");
@@ -456,7 +455,7 @@ fn compare(case: &str) -> BTreeMap<String, String> {
         recorded, oracle.edits,
         "{case}: the candidate edit tuples differ from the reference's"
     );
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     let mut result_store = base_store.merged_clone();
     let edited = disabled_scope(|scope| {
         apply_edits(
@@ -642,7 +641,7 @@ fn edited_nodes(case: &str) -> (u64, String) {
         )
     })
     .expect("base construction");
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     let mut result_store = base_store.merged_clone();
     let edited = disabled_scope(|scope| {
         apply_edits(

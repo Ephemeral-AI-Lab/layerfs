@@ -87,8 +87,7 @@ def execute(args, report):
         ready = shared.mount.line_until(service); assert 'ready' in ready
         port = int(ready.strip().rsplit(':', 1)[1])
         report['bootstrap'] = shared.stage_route.bootstrap(directory, port, keys[1], public[0],
-                                                           bytes.fromhex(fixture['file_root']), False, manifest_extras=(
-            shared.route.manifest_entry(0, b'link', 3, 0o777, 1700000030, 1, target=b'round45-existing'),))
+                                                           False, symlinks=(('link', 'round45-existing'),))
         for i in range(5):
             clients.append(Principal(directory / f'principal-{i + 1}', port, keys[i + 1], public[0], i + 1))
         full, construct_only, legacy31, metadata_only, history_only = clients

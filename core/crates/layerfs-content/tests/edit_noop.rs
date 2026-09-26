@@ -9,11 +9,11 @@
 mod support;
 
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, EditStream,
-    ObjectId, Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, ContentError, Edit, EditRequest, ObjectId,
 };
 use support::{
-    disabled_scope, noise, patterned, read_back, Counted, CountingProvider, MemoryStore,
+    disabled_scope, edits::Edits, edits::Parts, noise, patterned, read_back, Counted,
+    CountingProvider, MemoryStore,
 };
 
 fn policy() -> ConstructionPolicy {
@@ -39,10 +39,10 @@ fn apply_counted(
     store: &MemoryStore,
     root: ObjectId,
     edits: Vec<Edit>,
-    replacements: &Replacements,
+    replacements: &Parts,
     base_len: u64,
 ) -> (MemoryStore, ObjectId, u64, CountingProvider) {
-    let stream = EditStream::new(base_len, edits).expect("valid stream");
+    let stream = Edits::new(base_len, edits).expect("valid stream");
     let mut result = store.merged_clone();
     let counts = CountingProvider::new();
     let provider = Counted {
@@ -71,7 +71,7 @@ fn apply_counted(
 fn an_empty_stream_returns_the_base_root_untouched() {
     let base = patterned(4_000);
     let (store, root) = build(&base);
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let (result, edited_root, len, counts) =
         apply_counted(&store, root, Vec::new(), &replacements, base.len() as u64);
     assert_eq!(edited_root, root);
@@ -88,7 +88,7 @@ fn an_empty_stream_returns_the_base_root_untouched() {
 fn an_equal_replacement_preserves_the_base_root() {
     let base = patterned(6_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(base[2_000..2_500].to_vec());
     let (result, edited_root, len, _) = apply_counted(
         &store,
@@ -106,7 +106,7 @@ fn an_equal_replacement_preserves_the_base_root() {
 fn several_equal_replacements_are_all_recognised() {
     let base = noise(20_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(base[100..600].to_vec());
     replacements.push(base[5_000..5_400].to_vec());
     replacements.push(base[15_000..15_700].to_vec());
@@ -131,7 +131,7 @@ fn a_shifted_equal_replacement_is_compared_in_current_coordinates() {
     // The insertion changes the file, so the stream is not a no-op; the second
     // edit is an equal replacement whose base range is shifted by the insertion.
     let insertion = noise(64);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(insertion.clone());
     replacements.push(base[1_936..2_000].to_vec());
     let (result, edited_root, len, _) = apply_counted(
@@ -156,7 +156,7 @@ fn a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early() {
     let (store, root) = build(&base);
     let mut changed = base[1_048_576..1_048_676].to_vec();
     changed[0] ^= 0xff;
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(base[..1_048_576].to_vec());
     replacements.push(changed);
     let (result, edited_root, _, counts) = apply_counted(
@@ -184,10 +184,10 @@ fn a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early() {
 fn a_length_changing_edit_is_never_treated_as_a_no_op() {
     let base = patterned(1_000);
     let (store, root) = build(&base);
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     // The range is a deletion of 100 bytes, so the length changes and
     // construction must run even though a source holds those bytes.
-    let stream = EditStream::new(base.len() as u64, vec![Edit::delete(100, 200)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::delete(100, 200)]).expect("valid");
     let mut result = MemoryStore::new();
     let constructed = disabled_scope(|scope| {
         apply_edits(
@@ -212,10 +212,9 @@ fn a_length_changing_edit_is_never_treated_as_a_no_op() {
 fn an_out_of_range_replacement_length_is_an_error() {
     let base = patterned(1_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(vec![1_u8; 10]);
-    let stream =
-        EditStream::new(base.len() as u64, vec![Edit::overwrite(100, 200)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::overwrite(100, 200)]).expect("valid");
     let error = disabled_scope(|scope| {
         let mut result = MemoryStore::new();
         apply_edits(

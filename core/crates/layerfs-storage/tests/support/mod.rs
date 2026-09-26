@@ -401,6 +401,7 @@ pub fn corrupt_value_group_digest(path: &Path) {
     assert_eq!(affected, 1);
 }
 
+pub mod edits;
 pub mod filesystem;
 
 /// Rewrites the direct base identity one stored record carries.

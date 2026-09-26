@@ -29,10 +29,14 @@ use std::time::Instant;
 
 use layerfs_telemetry::timer::Timing;
 
+mod support;
+
+use support::{Edits, Parts};
+
 use layerfs_content::file::mapping::{decode_file_state, decode_node_with_context, ExtentNode};
 use layerfs_content::{
     apply_edits, construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentResult, Edit,
-    EditRequest, EditStream, FinalizedConsumer, FinalizedObject, ObjectId, Replacements,
+    EditRequest, FinalizedConsumer, FinalizedObject, ObjectId,
 };
 
 /// Prepared base objects, served to the edit with demand accounting.
@@ -238,11 +242,11 @@ fn main() {
     let mapping_pages = pages(&provider, base_id);
     let objects_before = provider.objects.len();
 
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     if !replacement.is_empty() {
         replacements.push(replacement);
     }
-    let stream = EditStream::new(length, edits).expect("valid stream");
+    let stream = Edits::new(length, edits).expect("valid stream");
     let mut collector = Collector::default();
     let started = Instant::now();
     let edited = Timing::disabled("edit", |scope| {

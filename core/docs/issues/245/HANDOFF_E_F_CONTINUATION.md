@@ -221,6 +221,11 @@ the rest:
   hard budget is ample (≈2 s). `product_inputs()` comes from
   `tests/payload_route.py`. The content root is deterministic
   (`22923acceef8a0f5…`); the store master is incidental.
+  This driver was written against the retired pathless initialization and is
+  kept at
+  [`a72d07ef81794f1a7224eb721c8673e503cfcb33`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/a72d07ef81794f1a7224eb721c8673e503cfcb33/core/crates/layerfs-workspace/tests/prepare_large_edit.py);
+  the current tree initializes its namespace over `ImportNativeDirectory`
+  instead.
 - **Docker**: `rust:1.85.1-bookworm` vanished once mid-session (re-pull it);
   remove stray containers and volumes when a job dies; `alpine:3.22` is enough
   for musl test binaries.

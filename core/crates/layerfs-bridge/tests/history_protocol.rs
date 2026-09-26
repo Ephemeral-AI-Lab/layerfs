@@ -73,61 +73,6 @@ fn prepared(workspace: [u8; 32], branch: [u8; 17]) -> PreparedChanges {
     }
 }
 
-fn manifest() -> Vec<ManifestEntry> {
-    vec![
-        ManifestEntry {
-            parent: 0,
-            name: Vec::new(),
-            kind: 2,
-            mode: 0o755,
-            mtime_seconds: 1,
-            mtime_nanoseconds: 0,
-            content: None,
-            target: Vec::new(),
-        },
-        ManifestEntry {
-            parent: 0,
-            name: b"dir".to_vec(),
-            kind: 2,
-            mode: 0o700,
-            mtime_seconds: 2,
-            mtime_nanoseconds: 1,
-            content: None,
-            target: Vec::new(),
-        },
-        ManifestEntry {
-            parent: 0,
-            name: b"file".to_vec(),
-            kind: 1,
-            mode: 0o644,
-            mtime_seconds: 3,
-            mtime_nanoseconds: 2,
-            content: Some([0x88; 32]),
-            target: Vec::new(),
-        },
-        ManifestEntry {
-            parent: 1,
-            name: b"nested".to_vec(),
-            kind: 1,
-            mode: 0o600,
-            mtime_seconds: 4,
-            mtime_nanoseconds: 3,
-            content: Some([0x99; 32]),
-            target: Vec::new(),
-        },
-        ManifestEntry {
-            parent: 0,
-            name: b"link".to_vec(),
-            kind: 3,
-            mode: 0o777,
-            mtime_seconds: 5,
-            mtime_nanoseconds: 4,
-            content: None,
-            target: b"file".to_vec(),
-        },
-    ]
-}
-
 fn every_query() -> Vec<HistoryQuery> {
     vec![
         HistoryQuery::GetStack { stack: [0x31; 17] },
@@ -172,11 +117,10 @@ fn every_query() -> Vec<HistoryQuery> {
 
 fn every_command() -> Vec<HistoryCommand> {
     vec![
-        HistoryCommand::InitLayerStack {
+        HistoryCommand::ImportNativeDirectory {
             stack: [0x51; 16],
             name: b"main".to_vec(),
             scope_seed: [0x02; 32],
-            manifest: manifest(),
         },
         HistoryCommand::Fork {
             stack: [0x31; 17],
@@ -393,101 +337,105 @@ fn page_and_count_bounds_are_checked() {
         .code,
         Code::Capacity
     );
-    let mut too_many = manifest();
-    let root = too_many[0].clone();
-    too_many = vec![root];
-    for index in 0..1_500 {
-        too_many.push(ManifestEntry {
-            parent: 0,
-            name: format!("n{index}").into_bytes(),
-            kind: 2,
-            mode: 0o755,
-            mtime_seconds: 0,
-            mtime_nanoseconds: 0,
-            content: None,
-            target: Vec::new(),
-        });
-    }
-    assert_eq!(too_many.len(), 1_501);
-    round_trip(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
-        stack: [0x51; 16],
-        name: b"main".to_vec(),
-        scope_seed: [0x02; 32],
-        manifest: too_many[..130].to_vec(),
-    }));
+    // A request that is legal for its own declared limits but whose encoded
+    // metadata exceeds the 32 KiB envelope is refused at the encoder. The
+    // binding count makes that reachable now: 128 directory bindings of a
+    // maximal name are valid input and still encode past the envelope.
+    let widest = vec![b'x'; 255];
+    let mut changes = prepared([0x71; 32], [0x11; 17]);
+    changes.directories = [1_u64, 2]
+        .into_iter()
+        .map(|parent| DirectoryChange {
+            parent,
+            changes: (0..64)
+                .map(|_| (widest.clone(), Some(2)))
+                .collect::<Vec<_>>(),
+        })
+        .collect();
     assert_eq!(
-        encode_request_with_budget(
-            &request(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
-                stack: [0x51; 16],
-                name: b"main".to_vec(),
-                scope_seed: [0x02; 32],
-                manifest: too_many,
-            })),
-            5_000
-        )
-        .unwrap_err()
-        .code,
+        changes
+            .directories
+            .iter()
+            .map(|directory| directory.changes.len())
+            .sum::<usize>(),
+        128
+    );
+    let request = request(Operation::HistoryCommand(HistoryCommand::StageChanges(
+        changes,
+    )));
+    assert!(request.validate().is_ok());
+    assert_eq!(
+        encode_request_with_budget(&request, 5_000)
+            .unwrap_err()
+            .code,
         Code::Capacity
     );
 }
 
 #[test]
-fn a_manifest_is_a_tree_by_construction() {
-    let build = |entries: Vec<ManifestEntry>| {
-        encode_request_with_budget(
-            &request(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
-                stack: [0x51; 16],
-                name: b"main".to_vec(),
-                scope_seed: [0x02; 32],
-                manifest: entries,
-            })),
-            5_000,
-        )
-        .unwrap_err()
-        .code
-    };
-    // A root that is not a directory, or that carries content, is refused.
-    let mut wrong_root = manifest();
-    wrong_root[0].kind = 1;
-    assert_eq!(build(wrong_root), Code::InvalidInput);
-    let mut content_root = manifest();
-    content_root[0].content = Some([0x01; 32]);
-    assert_eq!(build(content_root), Code::InvalidInput);
-    // A forward or self parent would make the manifest cyclic.
-    let mut forward = manifest();
-    forward[1].parent = 3;
-    assert_eq!(build(forward), Code::InvalidInput);
-    // Two entries may not claim the same name under one parent.
-    let mut duplicate = manifest();
-    duplicate[1].name = b"file".to_vec();
-    assert_eq!(build(duplicate), Code::InvalidInput);
-    // A regular file needs a published root and a symlink needs a target.
-    let mut file_without_root = manifest();
-    file_without_root[2].content = None;
-    assert_eq!(build(file_without_root), Code::InvalidInput);
-    let mut link_without_target = manifest();
-    link_without_target[4].target = Vec::new();
-    assert_eq!(build(link_without_target), Code::InvalidInput);
-    let mut link_with_content = manifest();
-    link_with_content[4].content = Some([0x01; 32]);
-    assert_eq!(build(link_with_content), Code::InvalidInput);
-    // Portable modes are checked against the kind they belong to.
-    let mut bad_mode = manifest();
-    bad_mode[1].mode = 0o10000;
-    assert_eq!(build(bad_mode), Code::InvalidInput);
-    let mut bad_link_mode = manifest();
-    bad_link_mode[4].mode = 0o755;
-    assert_eq!(build(bad_link_mode), Code::InvalidInput);
-    let mut bad_nanos = manifest();
-    bad_nanos[1].mtime_nanoseconds = 1_000_000_000;
-    assert_eq!(build(bad_nanos), Code::InvalidInput);
-    // A manifest that is legal still round-trips through the decoder.
-    round_trip(Operation::HistoryCommand(HistoryCommand::InitLayerStack {
+fn the_retired_pathless_init_tag_is_refused_and_unassigned() {
+    // The retired route declared a stack body, a bounded name, a scope seed, a
+    // 16-bit entry count and bounded entries. This fixture keeps that shape.
+    let name = b"main";
+    let mut body = vec![0x51; 16];
+    body.extend_from_slice(&(name.len() as u16).to_be_bytes());
+    body.extend_from_slice(name);
+    body.extend_from_slice(&[0x02; 32]);
+    body.extend_from_slice(&2_u16.to_be_bytes());
+    body.extend_from_slice(&[0_u8; 48]);
+    let encoded = encode_request(&request(Operation::HistoryCommand(
+        HistoryCommand::ImportNativeDirectory {
+            stack: [0x51; 16],
+            name: name.to_vec(),
+            scope_seed: [0x02; 32],
+        },
+    )))
+    .expect("encode");
+    // Patch the suboperation tag to the retired value, keeping the production
+    // envelope so the refusal comes from the tag and not from a malformed body.
+    // The current route's payload opens with its stack body.
+    let payload = &body[..52];
+    let tag = encoded
+        .windows(payload.len())
+        .position(|window| window == payload)
+        .expect("the declared payload must appear in the encoded request")
+        - 1;
+    assert_eq!(encoded[tag], 9, "the tag precedes the payload");
+    let mut retired = encoded[..tag + 1].to_vec();
+    retired[tag] = 1;
+    retired.extend_from_slice(body.get(52..).unwrap_or_default());
+    let failure = decode_request(1, &retired).unwrap_err();
+    assert_eq!(failure.code, Code::Unsupported);
+    // The current route still round-trips at the widest legal name, so the only
+    // thing refused above is the retired tag itself.
+    let widest = HistoryCommand::ImportNativeDirectory {
         stack: [0x51; 16],
-        name: b"main".to_vec(),
+        name: vec![b'n'; NAME_MAX_BYTES],
         scope_seed: [0x02; 32],
-        manifest: manifest(),
-    }));
+    };
+    round_trip(Operation::HistoryCommand(widest));
+    // Every assigned history-command tag is above the retired one. The tag is
+    // the byte between the envelope and the payload, and the native-import
+    // command's payload opens with its stack body.
+    for command in every_command() {
+        let body = match &command {
+            HistoryCommand::ImportNativeDirectory { stack, .. } => stack.to_vec(),
+            _ => continue,
+        };
+        let encoded =
+            encode_request_with_budget(&request(Operation::HistoryCommand(command)), 5_000)
+                .unwrap();
+        let tag = encoded
+            .windows(body.len())
+            .position(|window| window == body)
+            .expect("declared stack body")
+            - 1;
+        assert!(
+            encoded[tag] > 1,
+            "tag {} is not above the retired one",
+            encoded[tag]
+        );
+    }
 }
 
 fn stack_wire() -> StackWire {
@@ -696,7 +644,7 @@ fn classification_is_exhaustive_and_semantic() {
     for command in every_command() {
         let content = matches!(
             command,
-            HistoryCommand::InitLayerStack { .. }
+            HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_)
         );
@@ -1062,20 +1010,50 @@ fn history_wire_fixtures() -> Vec<Vec<u8>> {
     cases
 }
 
+/// The retired pathless initialization owns tag 1, so its frozen encoding is the
+/// only recorded case with no live counterpart. Its own bytes prove which case
+/// that is: a `01` tag directly after the command envelope.
+const HISTORY_ENVELOPE_HEX: &str = "000000000000000100000001000200001388000000000000100007";
+
 #[test]
-fn history_wire_bytes_match_pre_simplification_head() {
+fn the_retired_pathless_init_encoding_is_the_only_recorded_case_without_a_live_match() {
     use std::fmt::Write;
-    let expected: Vec<_> = include_str!("fixtures/history-wire-a4a144af.hex")
+    let recorded: Vec<&str> = include_str!("fixtures/history-wire-a4a144af.hex")
         .lines()
         .filter(|line| !line.starts_with('#'))
         .collect();
-    let actual = history_wire_fixtures();
-    assert_eq!(actual.len(), expected.len());
-    for (index, (bytes, expected)) in actual.iter().zip(expected).enumerate() {
-        let mut hex = String::new();
-        for byte in bytes {
-            write!(&mut hex, "{byte:02x}").unwrap();
+    let live: Vec<String> = history_wire_fixtures()
+        .iter()
+        .map(|bytes| {
+            let mut hex = String::new();
+            for byte in bytes {
+                write!(&mut hex, "{byte:02x}").unwrap();
+            }
+            hex
+        })
+        .collect();
+    // The frozen bytes are evidence and stay exactly as recorded. Every one of
+    // them must still be reproduced by the production encoder except the case
+    // whose operation this change deleted.
+    let mut missing = Vec::new();
+    for (index, line) in recorded.iter().enumerate() {
+        if !live.iter().any(|hex| hex == line) {
+            missing.push(index);
         }
-        assert_eq!(hex, expected, "wire case {index}");
     }
+    assert_eq!(
+        missing.len(),
+        1,
+        "unexpected drifted encodings: {missing:?}"
+    );
+    let retired = recorded[missing[0]];
+    let tag = retired
+        .find(HISTORY_ENVELOPE_HEX)
+        .expect("history-command envelope")
+        + HISTORY_ENVELOPE_HEX.len();
+    assert_eq!(
+        &retired[tag..tag + 2],
+        "01",
+        "the only drifted encoding must be the retired pathless initialization"
+    );
 }

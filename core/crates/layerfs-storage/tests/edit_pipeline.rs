@@ -8,25 +8,19 @@
 mod support;
 
 use layerfs_content::{
-    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, EditStream, ObjectId,
-    Replacements,
+    apply_edits, construct_bytes, ConstructionPolicy, Edit, EditRequest, ObjectId,
 };
 use layerfs_storage::Store;
 use support::{
-    create_store, disabled, noise, open_store, patterned, read_logical, read_objects,
-    save_via_handoff, Collected, Provider, TempDir,
+    create_store, disabled, edits::Edits, edits::Parts, noise, open_store, patterned, read_logical,
+    read_objects, save_via_handoff, Collected, Provider, TempDir,
 };
 
 const CUTOFF: u64 = 131_072;
 
-fn edit(
-    base: &[u8],
-    edits: Vec<Edit>,
-    source: &Replacements,
-    into: &mut Collected,
-) -> (ObjectId, u64) {
+fn edit(base: &[u8], edits: Vec<Edit>, source: &Parts, into: &mut Collected) -> (ObjectId, u64) {
     let policy = ConstructionPolicy::frozen_default();
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     let mut provider_objects = Collected::new();
     let constructed = disabled(|scope| {
         construct_bytes(
@@ -64,7 +58,7 @@ fn a_small_edit_round_trips_through_a_reopened_store() {
     let base = patterned(90_000);
     let mut final_bytes = base.clone();
     final_bytes[40_000..40_500].copy_from_slice(&noise(500));
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(final_bytes[40_000..40_500].to_vec());
     let mut collected = Collected::new();
     let (root, len) = edit(
@@ -113,7 +107,7 @@ fn a_chunked_edit_round_trips_and_reuses_retained_payloads() {
 
     let mut final_bytes = base.clone();
     final_bytes[100_000..100_300].copy_from_slice(&noise(300));
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(final_bytes[100_000..100_300].to_vec());
     let mut collected = Collected::new();
     let (root, len) = edit(
@@ -167,7 +161,7 @@ fn a_single_edit_transition_round_trips_through_the_store() {
         let path = dir.store_path("pipeline");
         let store = create_store(&path);
         let base = patterned(base_len);
-        let mut replacements = Replacements::new();
+        let mut replacements = Parts::new();
         for edit in &edits {
             replacements.push(noise(edit.replacement_len() as usize));
         }
@@ -194,7 +188,7 @@ fn a_standalone_route_and_an_integrated_route_agree_on_the_root() {
     let path = dir.store_path("pipeline");
     let store = create_store(&path);
     let base = patterned(80_000);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(1_000));
     let mut expected = base.clone();
     expected[20_000..21_000].copy_from_slice(&noise(1_000));
@@ -256,7 +250,7 @@ fn a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates() {
 
     let inserted = noise(40_000);
     let overwritten = noise(5_000);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(inserted.clone());
     replacements.push(overwritten.clone());
     replacements.push(Vec::new());
@@ -511,12 +505,12 @@ fn a_transition_charges_only_the_retained_base_at_the_store() {
     let keep = cutoff / 4;
     let mut expected = base[..keep as usize].to_vec();
     expected.extend_from_slice(&base[base.len() - keep as usize..]);
-    let stream = EditStream::new(
+    let stream = Edits::new(
         base.len() as u64,
         vec![Edit::delete(keep, base.len() as u64 - keep)],
     )
     .expect("valid stream");
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let census = StoreCensus::new(&store);
     let mut edited = Collected::new();
     let constructed = disabled(|scope| {

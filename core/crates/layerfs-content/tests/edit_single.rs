@@ -7,10 +7,11 @@
 
 mod support;
 
-use layerfs_content::{
-    apply_edits, construct_bytes, Edit, EditRequest, EditStream, ObjectId, Replacements,
+use layerfs_content::{apply_edits, construct_bytes, Edit, EditRequest, ObjectId};
+use support::{
+    build_file, disabled_scope, edits::Edits, edits::Parts, noise, patterned, read_back, repeat,
+    MemoryStore,
 };
-use support::{build_file, disabled_scope, noise, patterned, read_back, repeat, MemoryStore};
 
 const CUTOFF: usize = 131_072;
 
@@ -19,9 +20,9 @@ fn apply(
     root: ObjectId,
     base_len: u64,
     edits: Vec<Edit>,
-    replacements: &Replacements,
+    replacements: &Parts,
 ) -> (MemoryStore, ObjectId, u64) {
-    let stream = EditStream::new(base_len, edits).expect("edits are valid");
+    let stream = Edits::new(base_len, edits).expect("edits are valid");
     let policy = layerfs_content::ConstructionPolicy::frozen_default();
     let mut result = store.merged_clone();
     let constructed = disabled_scope(|scope| {
@@ -61,7 +62,7 @@ fn fresh(bytes: &[u8]) -> (MemoryStore, ObjectId) {
 fn expect_final(name: &str, base: &[u8], edits: Vec<Edit>, final_bytes: &[u8]) {
     let (base_store, constructed) = build_file(base);
     let base_root = constructed.root;
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     for edit in &edits {
         let start = edit.start() as usize;
         let take = edit.replacement_len() as usize;
@@ -160,7 +161,7 @@ fn complete_deletion_returns_the_empty_representation() {
     let base = patterned(1_500);
     let (base_store, constructed) = build_file(&base);
     let base_root = constructed.root;
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let (result_store, root, len) = apply(
         &base_store,
         base_root,
@@ -185,7 +186,7 @@ fn the_base_objects_are_never_rewritten() {
         .iter()
         .map(|(id, _)| (*id, base_store.canonical(*id).expect("held").to_vec()))
         .collect();
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(400));
     let (result_store, root, _) = apply(
         &base_store,
@@ -210,9 +211,9 @@ fn a_declared_length_that_does_not_match_its_bytes_fails() {
     let base = patterned(1_000);
     let (base_store, constructed) = build_file(&base);
     let base_root = constructed.root;
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(vec![7_u8; 10]);
-    let stream = EditStream::new(base.len() as u64, vec![Edit::insert(10, 50)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::insert(10, 50)]).expect("valid");
     let policy = layerfs_content::ConstructionPolicy::frozen_default();
     let mut result = MemoryStore::new();
     let error = disabled_scope(|scope| {
@@ -238,25 +239,25 @@ fn a_declared_length_that_does_not_match_its_bytes_fails() {
 
 #[test]
 fn an_inapplicable_range_is_rejected_before_any_work() {
-    let error = EditStream::new(100, vec![Edit::overwrite(50, 200)]).unwrap_err();
+    let error = Edits::new(100, vec![Edit::overwrite(50, 200)]).unwrap_err();
     assert!(matches!(
         error,
         layerfs_content::ContentError::InvalidEdit { .. }
     ));
-    let error = EditStream::new(100, vec![Edit::new(60, 40, 0)]).unwrap_err();
+    let error = Edits::new(100, vec![Edit::new(60, 40, 0)]).unwrap_err();
     assert!(matches!(
         error,
         layerfs_content::ContentError::InvalidEdit { .. }
     ));
     // A later edit that starts before the previous edit's result position is an
     // overlap, whichever of the two ranges it would have addressed.
-    let error = EditStream::new(100, vec![Edit::delete(40, 60), Edit::delete(20, 30)]).unwrap_err();
+    let error = Edits::new(100, vec![Edit::delete(40, 60), Edit::delete(20, 30)]).unwrap_err();
     assert!(matches!(
         error,
         layerfs_content::ContentError::InvalidEdit { .. }
     ));
     // Edits after a deletion are addressable in the shifted result.
-    assert!(EditStream::new(100, vec![Edit::delete(10, 40), Edit::delete(10, 30)]).is_ok());
+    assert!(Edits::new(100, vec![Edit::delete(10, 40), Edit::delete(10, 30)]).is_ok());
 }
 
 #[test]
@@ -266,7 +267,7 @@ fn a_chunked_base_reads_and_edits_without_a_full_pass() {
     let base_root = constructed.root;
     let mut final_bytes = base.clone();
     final_bytes[100_000..100_500].copy_from_slice(&noise(500));
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(final_bytes[100_000..100_500].to_vec());
     let (result_store, root, len) = apply(
         &base_store,
@@ -294,9 +295,7 @@ fn an_edit_reads_and_decodes_the_base_root_once() {
     use std::cell::RefCell;
     use std::collections::BTreeMap;
 
-    use layerfs_content::{
-        AuthenticatedObjects, ContentResult, Edit, EditStream, ObjectId, Replacements,
-    };
+    use layerfs_content::{AuthenticatedObjects, ContentResult, Edit, ObjectId};
 
     /// Counts every demand this provider is asked for.
     struct Counting<'a> {
@@ -315,9 +314,8 @@ fn an_edit_reads_and_decodes_the_base_root_once() {
 
     let base = repeat(9_000, 0x51);
     let (store, constructed) = support::build_file(&base);
-    let edits =
-        EditStream::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
-    let mut replacements = Replacements::new();
+    let edits = Edits::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
+    let mut replacements = Parts::new();
     replacements.push(vec![0x77_u8; 32]);
     let counter = Counting {
         inner: &store,
@@ -370,9 +368,7 @@ fn an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once() {
     // to pass it - so this case is the one that discriminates here.
     use std::cell::RefCell;
 
-    use layerfs_content::{
-        AuthenticatedObjects, ContentResult, Edit, EditStream, ObjectId, Replacements,
-    };
+    use layerfs_content::{AuthenticatedObjects, ContentResult, Edit, ObjectId};
 
     struct Counting<'a> {
         inner: &'a MemoryStore,
@@ -392,9 +388,8 @@ fn an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once() {
         constructed.root != layerfs_content::ObjectId::for_bytes(&[]),
         "a chunked base is really chunked"
     );
-    let edits =
-        EditStream::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
-    let mut replacements = Replacements::new();
+    let edits = Edits::new(base.len() as u64, vec![Edit::new(4_000, 4_032, 32)]).expect("stream");
+    let mut replacements = Parts::new();
     replacements.push(vec![0x77_u8; 32]);
     let counter = Counting {
         inner: &store,

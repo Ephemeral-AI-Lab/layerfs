@@ -10,9 +10,11 @@ mod support;
 use layerfs_content::file::classify;
 use layerfs_content::{
     apply_edits, construct_bytes, construct_stream, ConstructionPolicy, ContentError, Edit,
-    EditRequest, EditStream, FileContent, ObjectId, Replacements,
+    EditRequest, FileContent, ObjectId,
 };
-use support::{disabled_scope, noise, patterned, read_back, MemoryStore};
+use support::{
+    disabled_scope, edits::Edits, edits::Parts, noise, patterned, read_back, MemoryStore,
+};
 
 /// Cutoffs this slice accepts and the tests exercise.
 const CUTOFFS: [u64; 3] = [131_072, 262_144, 1_048_576];
@@ -48,10 +50,10 @@ fn apply(
     store: &MemoryStore,
     root: ObjectId,
     edits: Vec<Edit>,
-    replacements: &Replacements,
+    replacements: &Parts,
     final_len: u64,
 ) -> (MemoryStore, ObjectId, u64) {
-    let stream = EditStream::new(store.logical_len_probe(root), edits).expect("valid stream");
+    let stream = Edits::new(store.logical_len_probe(root), edits).expect("valid stream");
     assert_eq!(stream.final_len(), final_len);
     let mut result = store.merged_clone();
     let constructed = disabled_scope(|scope| {
@@ -110,7 +112,7 @@ fn every_conversion_direction_reaches_the_fresh_construction_root() {
         // Small -> small: an overwrite below the cutoff.
         {
             let (store, root) = build(policy, &base_small);
-            let mut replacements = Replacements::new();
+            let mut replacements = Parts::new();
             replacements.push(noise(512));
             let mut expected = base_small.clone();
             expected[100..612].copy_from_slice(&noise(512));
@@ -134,7 +136,7 @@ fn every_conversion_direction_reaches_the_fresh_construction_root() {
             let addition = noise(cutoff as usize);
             let mut expected = base_small.clone();
             expected.splice(1_000..1_000, addition.iter().copied());
-            let mut replacements = Replacements::new();
+            let mut replacements = Parts::new();
             let index = replacements.push(addition.clone());
             assert_eq!(index, 0);
             let (result, edited_root, len) = apply(
@@ -162,7 +164,7 @@ fn every_conversion_direction_reaches_the_fresh_construction_root() {
             let keep = cutoff / 4;
             let mut expected = base_large[..keep as usize].to_vec();
             expected.extend_from_slice(&base_large[base_large.len() - keep as usize..]);
-            let replacements = Replacements::new();
+            let replacements = Parts::new();
             let (result, edited_root, len) = apply(
                 policy,
                 &store,
@@ -184,7 +186,7 @@ fn every_conversion_direction_reaches_the_fresh_construction_root() {
         // Any -> empty.
         {
             let (store, root) = build(policy, &base_large);
-            let replacements = Replacements::new();
+            let replacements = Parts::new();
             let (result, edited_root, len) = apply(
                 policy,
                 &store,
@@ -210,7 +212,7 @@ fn compressible_and_incompressible_inputs_agree_with_their_source() {
         for replacement in [support::repeat(4_000, 0x41), noise(4_000)] {
             let mut expected = base.clone();
             expected[50_000..54_000].copy_from_slice(&replacement);
-            let mut replacements = Replacements::new();
+            let mut replacements = Parts::new();
             replacements.push(replacement.clone());
             let (result, edited_root, _) = apply(
                 policy,
@@ -448,7 +450,7 @@ fn measure(
     store: &MemoryStore,
     root: ObjectId,
     edits: Vec<Edit>,
-    replacements: &Replacements,
+    replacements: &Parts,
     final_len: u64,
     discarded: Option<Range<u64>>,
 ) -> (MemoryStore, ObjectId, Measured) {
@@ -471,7 +473,7 @@ fn measure(
     };
 
     let census = Census::new(store);
-    let stream = EditStream::new(store.logical_len_probe(root), edits).expect("valid stream");
+    let stream = Edits::new(store.logical_len_probe(root), edits).expect("valid stream");
     assert_eq!(stream.final_len(), final_len);
     let mut result = store.merged_clone();
     let emitted_before = result.order().len();
@@ -607,7 +609,7 @@ fn whole_file_edit_emits_the_reference_bytes() {
     let replacement = noise(512);
     let mut expected = base.clone();
     expected[start..start + replacement.len()].copy_from_slice(&replacement);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(replacement);
     let (result, edited_root, _) = measure(
         policy,
@@ -701,7 +703,7 @@ fn retained_segments_share_one_descent() {
     let policy = ConstructionPolicy::frozen_default();
     let (base, edits, expected) = retained_segment_fixture(policy);
     let (store, root) = build(policy, &base);
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let (result, edited_root, measured) = measure(
         policy,
         &store,
@@ -756,7 +758,7 @@ fn straddling_payload_demanded_once_across_segments() {
     let policy = ConstructionPolicy::frozen_default();
     let (base, edits, expected) = retained_segment_fixture(policy);
     let (store, root) = build(policy, &base);
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let (result, edited_root, measured) = measure(
         policy,
         &store,
@@ -803,7 +805,7 @@ fn the_transition_reads_only_what_it_keeps_and_charges_it() {
             let addition = noise(cutoff as usize);
             let mut expected = base.clone();
             expected.splice(1_000..1_000, addition.iter().copied());
-            let mut replacements = Replacements::new();
+            let mut replacements = Parts::new();
             replacements.push(addition.clone());
             let (result, edited_root, measured) = measure(
                 policy,
@@ -844,7 +846,7 @@ fn the_transition_reads_only_what_it_keeps_and_charges_it() {
             let keep = cutoff / 4;
             let mut expected = base[..keep as usize].to_vec();
             expected.extend_from_slice(&base[base.len() - keep as usize..]);
-            let replacements = Replacements::new();
+            let replacements = Parts::new();
             let (result, edited_root, measured) = measure(
                 policy,
                 &store,
@@ -881,7 +883,7 @@ fn the_transition_reads_only_what_it_keeps_and_charges_it() {
         {
             let base = noise(large_len);
             let (store, root) = build(policy, &base);
-            let replacements = Replacements::new();
+            let replacements = Parts::new();
             let (result, edited_root, measured) = measure(
                 policy,
                 &store,
@@ -921,7 +923,7 @@ fn the_transition_reads_only_what_it_keeps_and_charges_it() {
             let replacement = noise(512);
             let mut expected = base.clone();
             expected[at..at + 512].copy_from_slice(&replacement);
-            let mut replacements = Replacements::new();
+            let mut replacements = Parts::new();
             replacements.push(replacement.clone());
             let (result, edited_root, measured) = measure(
                 policy,
@@ -977,7 +979,7 @@ fn a_whole_file_result_reports_no_counters_and_that_is_recorded() {
     let base = noise(4 * cutoff as usize);
     let (store, root) = build(policy, &base);
     let keep = cutoff / 4;
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     let (_, _, measured) = measure(
         policy,
         &store,

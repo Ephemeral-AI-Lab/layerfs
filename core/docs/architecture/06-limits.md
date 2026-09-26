@@ -104,7 +104,7 @@ and the [source index](README.md#references).
 ### 7.3 A localized edit against storage
 
 ```text
-   caller holds base root + an EditStream
+   caller holds base root + a validated EditSequence
      │
      │  C1: apply_edits(policy, capacities, provider, EditRequest{..}, &mut save, scope)
      │

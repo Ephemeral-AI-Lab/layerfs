@@ -21,9 +21,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use layerfs_telemetry::timer::Timing;
 
+mod support;
+
+use support::{Edits, Parts};
+
 use layerfs_content::{
     apply_edits, construct_bytes, AuthenticatedObjects, ConstructionPolicy, ContentResult, Edit,
-    EditRequest, EditStream, FinalizedConsumer, FinalizedObject, ObjectId, Replacements,
+    EditRequest, FinalizedConsumer, FinalizedObject, ObjectId,
 };
 
 /// Live requested bytes, and the high-water mark since the last reset.
@@ -152,9 +156,9 @@ fn main() {
     .expect("fixture construction");
     let base_id = constructed.root;
 
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(replacement);
-    let stream = EditStream::new(base.len() as u64, vec![Edit::overwrite(start, start + 512)])
+    let stream = Edits::new(base.len() as u64, vec![Edit::overwrite(start, start + 512)])
         .expect("valid stream");
     let mut collector = Collector::default();
 

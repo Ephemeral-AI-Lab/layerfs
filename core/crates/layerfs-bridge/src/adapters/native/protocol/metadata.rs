@@ -333,47 +333,6 @@ fn take_page(d: &mut Decoder<'_>) -> Result<(Vec<u8>, u16), Failure> {
     Ok((cursor, d.u16()?))
 }
 
-/// Writes one pathless manifest.
-fn put_manifest(e: &mut Encoder, entries: &[ManifestEntry]) -> Result<(), Failure> {
-    e.count(entries.len())?;
-    for entry in entries {
-        e.u16(entry.parent)?;
-        e.blob(&entry.name)?;
-        e.u8(entry.kind)?;
-        e.u32(entry.mode)?;
-        e.u64(entry.mtime_seconds as u64)?;
-        e.u32(entry.mtime_nanoseconds)?;
-        put_optional(e, entry.content.as_ref())?;
-        e.blob(&entry.target)?;
-    }
-    Ok(())
-}
-
-/// Smallest encoded width of one manifest entry.
-///
-/// Parent, empty name, kind, mode, seconds, nanoseconds, an absent content flag
-/// and an empty target. The pre-check uses this and not a typical width: a
-/// manifest of small entries is legal and must not be refused before it is read.
-const MANIFEST_ENTRY_MINIMUM: usize = 24;
-
-fn take_manifest(d: &mut Decoder<'_>) -> Result<Vec<ManifestEntry>, Failure> {
-    let count = d.count(MANIFEST_ENTRIES, MANIFEST_ENTRY_MINIMUM)?;
-    let mut entries = Vec::with_capacity(count);
-    for _ in 0..count {
-        entries.push(ManifestEntry {
-            parent: d.u16()?,
-            name: d.blob(255)?,
-            kind: d.u8()?,
-            mode: d.u32()?,
-            mtime_seconds: d.u64()? as i64,
-            mtime_nanoseconds: d.u32()?,
-            content: take_optional::<32>(d)?,
-            target: d.blob(MANIFEST_TARGET_BYTES)?,
-        });
-    }
-    Ok(entries)
-}
-
 /// Writes one read-only history query.
 fn put_query(e: &mut Encoder, query: &HistoryQuery) -> Result<(), Failure> {
     match query {
@@ -513,18 +472,6 @@ fn take_query(d: &mut Decoder<'_>) -> Result<HistoryQuery, Failure> {
 /// Writes one mutating history command.
 fn put_command(e: &mut Encoder, command: &HistoryCommand) -> Result<(), Failure> {
     match command {
-        HistoryCommand::InitLayerStack {
-            stack,
-            name,
-            scope_seed,
-            manifest,
-        } => {
-            e.u8(1)?;
-            e.put(stack)?;
-            e.blob(name)?;
-            e.put(scope_seed)?;
-            put_manifest(e, manifest)?;
-        }
         HistoryCommand::ImportNativeDirectory {
             stack,
             name,
@@ -600,12 +547,12 @@ fn put_command(e: &mut Encoder, command: &HistoryCommand) -> Result<(), Failure>
 
 fn take_command(d: &mut Decoder<'_>) -> Result<HistoryCommand, Failure> {
     Ok(match d.u8()? {
-        1 => HistoryCommand::InitLayerStack {
-            stack: take_array::<16>(d)?,
-            name: d.blob(NAME_MAX_BYTES)?,
-            scope_seed: d.root()?,
-            manifest: take_manifest(d)?,
-        },
+        // Tag 1 is retired from the history-command space and stays unassigned:
+        // its payload declared a pathless namespace manifest, which no current
+        // route accepts. No later suboperation may take over a tag a released
+        // client could still send, so an explicit refusal replaces it rather
+        // than a fall-through that a future tag could silently claim.
+        1 => return Err(Code::Unsupported.into()),
         9 => HistoryCommand::ImportNativeDirectory {
             stack: take_array::<16>(d)?,
             name: d.blob(NAME_MAX_BYTES)?,

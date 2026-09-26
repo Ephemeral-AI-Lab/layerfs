@@ -10,7 +10,7 @@ use std::path::Path;
 
 use layerfs_content::{
     apply_edits, construct_bytes, construct_stream, ConstructionPolicy, DiscardingConsumer,
-    Edit, EditRequest, EditStream, FileContent, FileView, ObjectId, Replacements,
+    Edit, EditRequest, FileContent, FileView, ObjectId,
 };
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 
@@ -22,6 +22,7 @@ use crate::support::instruments;
 use crate::support::trace::Kind;
 use crate::workload::oracle::{self, Expectation};
 use crate::workload::artifact::{Artifact, Member};
+use crate::workload::edits::{Edits, Parts};
 use crate::workload::providers::{PairProvider, TreeStore};
 
 /// The 4 KiB replacement every edit family uses.
@@ -513,11 +514,11 @@ fn chunk_count_perf(
     };
     let initial = extent_count_of(store, base_member.root)?;
 
-    let stream = match EditStream::new(base_len, vec![Edit::new(start, end, len)]) {
+    let stream = match Edits::new(base_len, vec![Edit::new(start, end, len)]) {
         Ok(stream) => stream,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
-    let mut source = Replacements::new();
+    let mut source = Parts::new();
     source.push(replacement);
 
     instruments::heap_begin();
@@ -695,15 +696,11 @@ fn edit_prepare(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<
     let replacement = edit_replacement(op, seed);
     let mut store = TreeStore::new();
     let base_file = build_base(policy, &capacities, &base, &mut store)?;
-    let expected_len = match EditStream::new(
+    let expected_len = match Edits::new(
         base.len() as u64,
         vec![Edit::new(start, end, replacement_len)],
     ) {
-        Ok(stream) => match stream.edits().first().map(|edit| edit.apply_len(base.len() as u64)) {
-            Some(Ok(len)) => len,
-            Some(Err(error)) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
-            None => base.len() as u64,
-        },
+        Ok(stream) => stream.final_len(),
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), Vec::new())),
     };
     let expectation = Expectation::spliced(&base, start, end, &replacement);
@@ -781,11 +778,11 @@ fn edit_perf(case: &Case, op: EditOp, context: &mut OpContext<'_>) -> Result<OpO
         .ok_or_else(|| OpError::Io("the artifact declares no result expectation".to_string()))?;
     let store = &artifact.objects;
     let replacement = edit_replacement(op, seed);
-    let stream = match EditStream::new(base_len, vec![Edit::new(start, end, replacement_len)]) {
+    let stream = match Edits::new(base_len, vec![Edit::new(start, end, replacement_len)]) {
         Ok(stream) => stream,
         Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
     };
-    let mut source = Replacements::new();
+    let mut source = Parts::new();
     if replacement_len > 0 {
         source.push(replacement);
     }
@@ -946,11 +943,11 @@ pub fn transition(
         Transition::Roundtrip | Transition::AliasRoundtrip => {
             let start = cutoff - 1;
             let end = bytes.len() as u64;
-            let stream = match EditStream::new(bytes.len() as u64, vec![Edit::delete(start, end)]) {
+            let stream = match Edits::new(bytes.len() as u64, vec![Edit::delete(start, end)]) {
                 Ok(stream) => stream,
                 Err(error) => return Ok(unmeasured(&OpError::Product(format!("{error:?}")), gates)),
             };
-            let source = Replacements::new();
+            let source = Parts::new();
             let (replayed, _) = Timing::disabled("oracle.replay", |scope: &TimingScope<'_, Active>| {
                 let request = EditRequest { root: base_file.root, edits: &stream, source: &source };
                 apply_edits(policy, &capacities, &store, request, &mut result_store, scope.child("edit"))

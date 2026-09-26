@@ -27,8 +27,7 @@ use layerfs_content::filesystem::{
     FilesystemResources, FilesystemRootId,
 };
 use layerfs_content::{
-    apply_edits, construct_bytes, construct_stream, ConstructionPolicy, Edit, EditRequest, EditStream,
-    ObjectId, Replacements,
+    apply_edits, construct_bytes, construct_stream, ConstructionPolicy, Edit, EditRequest, ObjectId,
 };
 use layerfs_storage::{SaveHandoff, Store, StoreProvider};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
@@ -37,6 +36,7 @@ use super::c1;
 use super::c2;
 use super::fs;
 use super::fs_fixture::{PreparedTree, Recipe, ROOT_SERIAL};
+use crate::workload::edits::{Edits, Parts};
 use super::{seed_of, OpContext, OpError, OpOutcome};
 use crate::fixture::{self, structured};
 use crate::gates::{self, Gate, GateClass};
@@ -295,8 +295,8 @@ pub fn run(
 struct EditSetup {
     base_store: TreeStore,
     base_root: ObjectId,
-    stream: EditStream,
-    source: Replacements,
+    stream: Edits,
+    source: Parts,
     expectation: Expectation,
     base_bytes: u64,
 }
@@ -308,7 +308,7 @@ fn edit_setup(case: &Case, config: &Configuration) -> Result<EditSetup, OpError>
     let bytes = structured(config.base_bytes, seed, true);
     let mut base_store = TreeStore::new();
     let base_file = c1::build_base(policy, &capacities, &bytes, &mut base_store)?;
-    let stream = EditStream::new(
+    let stream = Edits::new(
         bytes.len() as u64,
         vec![Edit::new(config.start, config.end, config.replacement)],
     )
@@ -318,7 +318,7 @@ fn edit_setup(case: &Case, config: &Configuration) -> Result<EditSetup, OpError>
     } else {
         Vec::new()
     };
-    let mut source = Replacements::new();
+    let mut source = Parts::new();
     if config.replacement > 0 {
         source.push(replacement.clone());
     }

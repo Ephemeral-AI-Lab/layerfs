@@ -9,12 +9,13 @@ mod support;
 use layerfs_content::file::mapping::encode_chunk_object;
 use layerfs_content::{
     apply_edits, construct_bytes, AdvisoryPredecessors, ConstructionPolicy, Edit, EditRequest,
-    EditStream, FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance, Replacements,
+    FinalizedObject, ObjectId, ObjectRole, PredecessorProvenance,
 };
 use layerfs_storage::Store;
 use support::{
-    assembled_small_object, construct_file, create_store, disabled, noise, open_store, patterned,
-    read_objects, save_one, save_via_handoff, Collected, Provider, TempDir,
+    assembled_small_object, construct_file, create_store, disabled, edits::Edits, edits::Parts,
+    noise, open_store, patterned, read_objects, save_one, save_via_handoff, Collected, Provider,
+    TempDir,
 };
 
 fn with_predecessor(object: FinalizedObject, base: ObjectId) -> FinalizedObject {
@@ -382,10 +383,10 @@ fn a_same_save_unsealed_chunk_predecessor_selects_full() {
     // reuse inside the same wave and never reaches selection at all.
     let first_bytes = patterned(8_192);
     let second_bytes = noise(8_192);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(first_bytes.clone());
     replacements.push(second_bytes.clone());
-    let stream = EditStream::new(
+    let stream = Edits::new(
         base.len() as u64,
         vec![
             Edit::overwrite(first_at, first_at + length),

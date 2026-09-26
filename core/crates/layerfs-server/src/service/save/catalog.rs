@@ -28,56 +28,6 @@ pub(crate) fn command(
     output: &mut dyn Write,
 ) -> Result<Response, Failure> {
     let result = match command {
-        HistoryCommand::InitLayerStack {
-            stack,
-            name,
-            scope_seed,
-            manifest,
-        } => {
-            let stack = LayerStackId::from_authority(*stack);
-            let name = name_of(name)?;
-            let scope = scope_for_seed(*scope_seed);
-            let manifest = manifest_of(manifest)?;
-            manifest.check().map_err(|_| Code::InvalidInput)?;
-            let entries: Vec<_> = manifest
-                .entries
-                .iter()
-                .map(namespace::PreparedEntry::from)
-                .collect();
-            let reservation = catalog
-                .reserve_inodes(&ReserveRequest {
-                    scope: scope.object(),
-                    count: u64::try_from(entries.len()).map_err(|_| Code::Capacity)?,
-                })
-                .map_err(failure)?;
-            let profile = layerfs_content::filesystem::profile_id();
-            let provider = StoreProvider::new(store);
-            let mut progress = namespace::ImportProgress::disabled(deadline);
-            let root = namespace::build_namespace(
-                store,
-                &provider,
-                scope,
-                reservation.start,
-                &entries,
-                false,
-                &mut progress,
-                timer,
-            )?;
-            let record = catalog
-                .initialize_layerstack(&StackInitialization {
-                    stack,
-                    name,
-                    scope: scope.object(),
-                    profile,
-                    genesis_root: root,
-                })
-                .map_err(failure)?;
-            HistoryResult::StackCreated(StackCreatedWire {
-                stack: stack_wire(&record),
-                root: *root.as_bytes(),
-                root_serial: reservation.start,
-            })
-        }
         HistoryCommand::ImportNativeDirectory {
             stack,
             name,

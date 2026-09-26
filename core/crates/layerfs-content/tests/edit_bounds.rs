@@ -12,9 +12,12 @@ mod support;
 use layerfs_content::FinalizedConsumer;
 use layerfs_content::{
     apply_edits, construct_bytes, ConstructionPolicy, ContentError, ContentResult, Edit,
-    EditRequest, EditSource, EditStream, ObjectId, ObjectRole, Replacements,
+    EditRequest, EditSource, ObjectId, ObjectRole,
 };
-use support::{disabled_scope, extent_count, mapping_page_sizes, noise, read_back, MemoryStore};
+use support::{
+    disabled_scope, edits::Edits, edits::Parts, extent_count, mapping_page_sizes, noise, read_back,
+    MemoryStore,
+};
 
 fn policy() -> ConstructionPolicy {
     ConstructionPolicy::frozen_default()
@@ -83,11 +86,11 @@ fn assert_canonical(store: &MemoryStore, root: ObjectId, label: &str) {
 fn edit_and_check(
     base: (&MemoryStore, ObjectId, u64),
     edits: Vec<Edit>,
-    replacements: &Replacements,
+    replacements: &Parts,
     label: &str,
 ) {
     let (store, root, length) = base;
-    let stream = EditStream::new(length, edits).expect("valid stream");
+    let stream = Edits::new(length, edits).expect("valid stream");
     let mut result = store.merged_clone();
     let constructed = disabled_scope(|scope| {
         apply_edits(
@@ -122,14 +125,14 @@ fn join_occupancy_at_every_boundary() {
         assert_canonical(&store, root, &format!("base {wanted}"));
         // A deletion inside the first chunk must not force a rebuild of the whole
         // mapping, and an insertion at the front must grow it by one extent.
-        let replacements = Replacements::new();
+        let replacements = Parts::new();
         edit_and_check(
             (&store, root, base.len() as u64),
             vec![Edit::delete(10, 100)],
             &replacements,
             &format!("{wanted} delete"),
         );
-        let mut insert = Replacements::new();
+        let mut insert = Parts::new();
         insert.push(noise(9_000));
         edit_and_check(
             (&store, root, base.len() as u64),
@@ -146,7 +149,7 @@ fn streaming_flush_boundaries_and_height_growth() {
         let (base, store, root) = file_with_extents(wanted);
         assert_eq!(extent_count(&store, root), wanted);
         assert_canonical(&store, root, &format!("base {wanted}"));
-        let mut insert = Replacements::new();
+        let mut insert = Parts::new();
         insert.push(noise(40_000));
         edit_and_check(
             (&store, root, base.len() as u64),
@@ -154,7 +157,7 @@ fn streaming_flush_boundaries_and_height_growth() {
             &insert,
             &format!("{wanted} insert"),
         );
-        let replacements = Replacements::new();
+        let replacements = Parts::new();
         edit_and_check(
             (&store, root, base.len() as u64),
             vec![Edit::delete(0, base.len() as u64 - 1)],
@@ -175,7 +178,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
     joined.extend_from_slice(&right);
     let (store, root) = build(&joined);
     assert_canonical(&store, root, "join 80+100");
-    let mut insert = Replacements::new();
+    let mut insert = Parts::new();
     insert.push(noise(200_000));
     edit_and_check(
         (&store, root, joined.len() as u64),
@@ -184,7 +187,7 @@ fn a_join_of_two_full_pages_stays_canonical() {
         "80+100 insert",
     );
     // Deleting the seam must also leave a canonical partition.
-    let replacements = Replacements::new();
+    let replacements = Parts::new();
     edit_and_check(
         (&store, root, joined.len() as u64),
         vec![Edit::delete(
@@ -202,7 +205,7 @@ fn many_files_and_many_edits_stay_bounded() {
         let base = noise(150_000 + round as usize * 1_000);
         let (store, root) = build(&base);
         let mut edits = Vec::new();
-        let mut replacements = Replacements::new();
+        let mut replacements = Parts::new();
         let mut position = 100_u64;
         for index in 0..64_u64 {
             if index % 4 == 3 {
@@ -239,7 +242,7 @@ fn the_retained_frontier_does_not_grow_with_the_edit_count() {
     let base_extents = extent_count(&base_store, root);
     let mut peaks = Vec::new();
     for edits in [1_u64, 2, 4, 8, 16] {
-        let mut replacements = Replacements::new();
+        let mut replacements = Parts::new();
         let mut declared = Vec::new();
         let mut position = 1_000_u64;
         for index in 0..edits {
@@ -248,7 +251,7 @@ fn the_retained_frontier_does_not_grow_with_the_edit_count() {
             replacements.push(noise(length as usize));
             position += 2_048;
         }
-        let stream = EditStream::new(base_len, declared).expect("valid stream");
+        let stream = Edits::new(base_len, declared).expect("valid stream");
         let mut tracking = support::TrackingConsumer::new();
         let constructed = disabled_scope(|scope| {
             apply_edits(
@@ -338,7 +341,7 @@ fn a_source_that_ends_early_fails_without_emitting_a_root() {
     let base = noise(600_000);
     let (store, root) = build(&base);
     let source = ShortSource { bytes: noise(10) };
-    let stream = EditStream::new(base.len() as u64, vec![Edit::insert(1_000, 10)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::insert(1_000, 10)]).expect("valid");
     let error = disabled_scope(|scope| {
         let mut result = MemoryStore::new();
         apply_edits(
@@ -378,10 +381,9 @@ fn a_consumer_that_rejects_stops_the_edit_once() {
     }
     let base = noise(400_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     replacements.push(noise(50_000));
-    let stream =
-        EditStream::new(base.len() as u64, vec![Edit::insert(10_000, 50_000)]).expect("valid");
+    let stream = Edits::new(base.len() as u64, vec![Edit::insert(10_000, 50_000)]).expect("valid");
     let mut consumer = Rejecting {
         accepted: 0,
         limit: 1,
@@ -421,8 +423,8 @@ fn a_missing_base_root_is_reported_as_missing() {
         .expect("canonical");
         stripped.accept(object).expect("copy");
     }
-    let replacements = Replacements::new();
-    let stream = EditStream::new(base.len() as u64, vec![Edit::delete(0, 10)]).expect("valid");
+    let replacements = Parts::new();
+    let stream = Edits::new(base.len() as u64, vec![Edit::delete(0, 10)]).expect("valid");
     let error = disabled_scope(|scope| {
         let mut result = MemoryStore::new();
         apply_edits(
@@ -471,7 +473,7 @@ fn a_bounded_sink_that_fills_during_emission_fails_the_edit_once() {
 
     let base = noise(400_000);
     let (store, root) = build(&base);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     let mut edits = Vec::new();
     let mut position = 1_000_u64;
     for index in 0..8_u64 {
@@ -480,7 +482,7 @@ fn a_bounded_sink_that_fills_during_emission_fails_the_edit_once() {
         replacements.push(noise(length as usize));
         position += 4_096;
     }
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
 
     // The same edit against an unbounded store, for the totals to compare with.
     let mut complete = MemoryStore::new();
@@ -566,7 +568,7 @@ fn a_thousand_separated_edits_keep_bounded_state() {
             .collect::<Vec<_>>()
     };
     for count in [RUNS - 1, RUNS] {
-        let stream = EditStream::new(400_000, declared(count))
+        let stream = Edits::new(400_000, declared(count))
             .unwrap_or_else(|error| panic!("{count} edits are accepted: {error}"));
         assert_eq!(stream.edits().len(), count);
     }
@@ -575,7 +577,7 @@ fn a_thousand_separated_edits_keep_bounded_state() {
     let base = noise(400_000);
     let (store, root) = build(&base);
     let edits = declared(RUNS);
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     let mut expected = base.clone();
     for (index, edit) in edits.iter().enumerate() {
         let mut replacement = noise(4);
@@ -586,7 +588,7 @@ fn a_thousand_separated_edits_keep_bounded_state() {
             replacement.iter().copied(),
         );
     }
-    let stream = EditStream::new(base.len() as u64, edits).expect("accepted stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("accepted stream");
     // The consumer already holds the base objects, so payloads the delta lane reuses
     // and payloads it writes are both readable from it.
     let mut consumer = store.merged_clone();
@@ -650,7 +652,7 @@ fn the_frontier_does_not_grow_with_repeated_in_place_edits() {
     let mut extents = Vec::new();
     for count in [128_usize, 256, 512, 1_024] {
         let first = peaks.len() * 1_024;
-        let mut replacements = Replacements::new();
+        let mut replacements = Parts::new();
         let edits = (0..count)
             .map(|index| {
                 let start = 1_000 + ((first + index) as u64) * 8;
@@ -664,7 +666,7 @@ fn the_frontier_does_not_grow_with_repeated_in_place_edits() {
             let start = 1_000 + ((first + index) as u64) * 8;
             expected.splice(start as usize..start as usize + 4, replacement);
         }
-        let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+        let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
         let mut consumer = MemoryStore::new();
         let constructed = disabled_scope(|scope| {
             apply_edits(
@@ -744,13 +746,13 @@ fn the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound() {
             Edit::overwrite(start, start + 4)
         })
         .collect::<Vec<_>>();
-    let mut replacements = Replacements::new();
+    let mut replacements = Parts::new();
     for index in 0..RUNS {
         let mut replacement = noise(4);
         replacement[0] = (index & 0xff) as u8;
         replacements.push(replacement);
     }
-    let stream = EditStream::new(base.len() as u64, edits).expect("valid stream");
+    let stream = Edits::new(base.len() as u64, edits).expect("valid stream");
     let mut consumer = store.merged_clone();
     let constructed = disabled_scope(|scope| {
         apply_edits(

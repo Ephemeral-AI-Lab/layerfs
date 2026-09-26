@@ -27,7 +27,7 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
 use layerfs_content::{AuthenticatedObjects, FileView, ObjectId};
-use layerfs_history::{ManifestEntry, RecordKind};
+use layerfs_history::RecordKind;
 use layerfs_storage::{SaveHandoff, Store};
 use layerfs_telemetry::timer::{Active, Timing, TimingScope};
 use std::{
@@ -47,13 +47,6 @@ pub(crate) struct ImportProgress<'a> {
     output: Option<&'a mut dyn Write>,
 }
 impl<'a> ImportProgress<'a> {
-    pub fn disabled(deadline: Instant) -> Self {
-        Self {
-            deadline,
-            last: Instant::now(),
-            output: None,
-        }
-    }
     pub fn with_output(deadline: Instant, output: &'a mut dyn Write) -> Self {
         Self {
             deadline,
@@ -90,21 +83,6 @@ pub(crate) struct PreparedEntry {
     pub mtime_nanoseconds: u32,
     pub content: Option<ObjectId>,
     pub target: Option<Vec<u8>>,
-}
-
-impl From<&ManifestEntry> for PreparedEntry {
-    fn from(entry: &ManifestEntry) -> Self {
-        Self {
-            parent: usize::from(entry.parent),
-            name: entry.name.clone(),
-            kind: entry.kind,
-            mode: entry.mode,
-            mtime_seconds: entry.mtime_seconds,
-            mtime_nanoseconds: entry.mtime_nanoseconds,
-            content: entry.content,
-            target: entry.target.clone(),
-        }
-    }
 }
 
 /// Builds and saves one bounded logical namespace, returning its published root.

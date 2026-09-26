@@ -37,7 +37,7 @@ pub use identity::{
 pub use records::{
     AddLayerOutcome, AddLayerRequest, BranchRecord, BranchSnapshot, CommitHistoryRequest,
     CommitRecord, CommitStagedOutcome, CommitStagedRequest, DiscardOutcome, DiscardRequest,
-    ForkRequest, ForkSource, LayerHistoryRequest, LayerRecord, LayerStackRecord, ManifestEntry,
-    NamespaceManifest, Page, PageResult, RecordKind, Reservation, ReserveRequest,
-    StackInitialization, StageRecord, StageRequest, MAXIMUM_PAGE_RECORDS,
+    ForkRequest, ForkSource, LayerHistoryRequest, LayerRecord, LayerStackRecord, Page, PageResult,
+    RecordKind, Reservation, ReserveRequest, StackInitialization, StageRecord, StageRequest,
+    MAXIMUM_PAGE_RECORDS,
 };

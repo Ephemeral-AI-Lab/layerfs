@@ -187,8 +187,9 @@ binaries (`zigbuild` musl: `layerfs-server`, `layerfs-daemon`, the
 `layerfs-bridge` `public_key` example into one binaries dir), produce a store
 master (the one unverified link — most likely the `layerfs-server`
 `prepare_store` example; if it is awkward, the handoff explicitly allows
-writing the fixture deliberately), run `tests/prepare_large_edit.py` to build
-the closed 64 MiB fixture, then drive one `*_route.py` case (e.g.
+writing the fixture deliberately), run the fixture driver kept at
+[`a72d07ef81794f1a7224eb721c8673e503cfcb33`](https://github.com/Ephemeral-AI-Lab/layerfs/blob/a72d07ef81794f1a7224eb721c8673e503cfcb33/core/crates/layerfs-workspace/tests/prepare_large_edit.py)
+to build the closed 64 MiB fixture, then drive one `*_route.py` case (e.g.
 `stage_route.py --case semantics`) in its privileged `rust:1.85.1-bookworm`
 container. This unlocks the Linux-gated suites — `stage.rs`, `commit_staged.rs`
 (including `commit_successor`, the existing G1/G2 overlap test), `composite.rs`

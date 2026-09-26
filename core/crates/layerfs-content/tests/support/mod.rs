@@ -5,6 +5,7 @@
 
 #![allow(dead_code)]
 
+pub mod edits;
 pub mod filesystem;
 
 use std::collections::BTreeMap;
