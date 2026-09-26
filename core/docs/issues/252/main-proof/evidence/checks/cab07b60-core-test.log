@@ -1,0 +1,1840 @@
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.4
+   Compiling autocfg v1.5.1
+   Compiling cfg_aliases v0.2.2
+   Compiling bitflags v2.13.1
+   Compiling glob v0.3.4
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling minimal-lexical v0.2.1
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11
+   Compiling nix v0.31.3
+   Compiling libloading v0.8.9
+   Compiling either v1.18.0
+   Compiling bindgen v0.72.1
+   Compiling shlex v1.3.0
+   Compiling itertools v0.13.0
+   Compiling rustc-hash v2.1.3
+   Compiling clang-sys v1.9.1
+   Compiling nom v7.1.3
+   Compiling shlex v2.0.1
+   Compiling memoffset v0.9.1
+   Compiling find-msvc-tools v0.1.12
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.8
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling zeroize v1.9.0
+   Compiling generic-array v0.14.7
+   Compiling semver v1.0.28
+   Compiling opaque-debug v0.3.1
+   Compiling pkg-config v0.3.34
+   Compiling regex-automata v0.4.18
+   Compiling rustc_version v0.4.1
+   Compiling vcpkg v0.2.15
+   Compiling foldhash v0.2.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling snow v0.9.6
+   Compiling cexpr v0.6.0
+   Compiling hashbrown v0.17.1
+   Compiling libsqlite3-sys v0.38.2
+   Compiling regex v1.13.1
+   Compiling hashlink v0.12.2
+   Compiling fallible-iterator v0.3.0
+   Compiling smallvec v1.16.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling syn v2.0.119
+   Compiling errno v0.3.14
+   Compiling getrandom v0.2.17
+   Compiling cpufeatures v0.2.17
+   Compiling rand_core v0.6.4
+   Compiling jobserver v0.1.35
+   Compiling cc v1.4.5
+   Compiling blake3 v1.8.5
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling block-buffer v0.10.4
+   Compiling universal-hash v0.5.1
+   Compiling cipher v0.4.4
+   Compiling aead v0.5.2
+   Compiling digest v0.10.7
+   Compiling polyval v0.6.2
+   Compiling poly1305 v0.8.0
+   Compiling ghash v0.5.1
+   Compiling chacha20 v0.9.1
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling sha2 v0.10.9
+   Compiling chacha20poly1305 v0.10.1
+   Compiling blake2 v0.10.6
+   Compiling aes-gcm v0.10.3
+   Compiling layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-bridge)
+   Compiling rusqlite v0.40.2
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-workspace)
+   Compiling layerfs-api-core v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-api/core)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-fuse)
+   Compiling libproc v0.14.11
+   Compiling layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-telemetry)
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-content)
+   Compiling layerfs-sandbox v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-sandbox)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-daemon)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-storage)
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-history)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-server)
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 50.06s
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_api_core-5284ee300d308748)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_bridge-dd79847e03569c04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/aead_profile.rs (core/target/release/deps/aead_profile-3bf99b5cd6b45618)
+
+running 1 test
+test negotiated_suite_matches_the_compiled_backend ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_control.rs (core/target/release/deps/agent_control-bf991ae6936ec8af)
+
+running 1 test
+test selected_mount_exec_and_identity_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attributes.rs (core/target/release/deps/attributes-d6eefdae0278f20b)
+
+running 1 test
+test complete_attributes_roundtrip_and_reject_invalid_fields ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/construct_metadata.rs (core/target/release/deps/construct_metadata-d482cea8870762ef)
+
+running 3 tests
+test constructor_refuses_invalid_portable_fields_profiles_and_response_bodies ... ok
+test constructor_has_exact_wire_shapes_body_limits_and_shared_metadata_grant ... ok
+test native_constructor_correlates_every_echo_and_preserves_unknown_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/construct_symlink.rs (core/target/release/deps/construct_symlink-727c71ae1900ce03)
+
+running 3 tests
+test constructor_has_exact_bounds_opaque_target_and_shared_content_grant ... ok
+test constructor_rejects_malformed_metadata_and_nonzero_result_body_budget ... ok
+test native_constructor_correlates_saved_length_and_keeps_terminal_loss_unknown_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/early_refusal.rs (core/target/release/deps/early_refusal-3fc45cf1ea1fe565)
+
+running 1 test
+test early_failure_is_delivered_while_the_bounded_upload_closes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/history_delivery.rs (core/target/release/deps/history_delivery-5043b8bcaf25dca7)
+
+running 1 test
+test mutation_result_data_is_rejected_before_any_output ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/history_protocol.rs (core/target/release/deps/history_protocol-c6396346799bb763)
+
+running 17 tests
+test failure_codes_round_trip_and_stay_typed ... ok
+test classification_is_exhaustive_and_semantic ... ok
+test native_import_declares_progress_response_budget ... ok
+test a_reply_tag_outside_the_closed_union_is_refused ... ok
+test invalid_terminal_reservation_and_descriptor_serial_are_refused ... ok
+test identity_widths_and_tags_are_checked ... ok
+test permission_bits_are_total_and_legacy_mask_grants_nothing ... ok
+test profile_and_opcode_must_agree ... ok
+test history_page_budget_includes_tags_counts_and_continuation ... ok
+test unknown_suboperations_are_refused_before_mutation ... ok
+test history_failure_context_round_trips_without_changing_legacy_frames ... ok
+test every_reply_round_trips ... ok
+test a_manifest_is_a_tree_by_construction ... ok
+test minimum_and_maximum_record_encodings_match_the_frozen_widths ... ok
+test every_query_and_command_round_trips ... ok
+test history_wire_bytes_match_pre_simplification_head ... ok
+test page_and_count_bounds_are_checked ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_connections.rs (core/target/release/deps/native_connections-e74101ef20c46f1e)
+
+running 5 tests
+test exec_progress_is_authenticated_and_has_no_result_bytes ... ok
+test definite_missing_inspect_keeps_one_authenticated_session ... ok
+test repeated_native_connections_authenticate_with_ordinary_tcp ... ok
+test caller_deadline_covers_connect_and_hello ... ok
+test productive_upload_keeps_the_response_wait_alive ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.03s
+
+     Running tests/pipe_cancel.rs (core/target/release/deps/pipe_cancel-24bd5ea16a848215)
+
+running 2 tests
+test cancelled_read_exact_terminates ... ok
+test cancelled_write_all_terminates ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/pipe_deadline.rs (core/target/release/deps/pipe_deadline-cb8a36f8a788ac98)
+
+running 1 test
+test a_full_pipe_fails_at_the_deadline_instead_of_blocking ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/portable_metadata.rs (core/target/release/deps/portable_metadata-46da7cd68c03ca1a)
+
+running 3 tests
+test invalid_portable_fields_and_profiles_are_refused_before_delivery ... ok
+test metadata_operation_has_exact_shapes_and_an_independent_store_grant ... ok
+test native_metadata_reply_must_echo_the_exact_input_and_preserve_unknown_delivery ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/protocol.rs (core/target/release/deps/protocol-77ef3e9bf879e313)
+
+running 6 tests
+test declared_large_input_has_a_size_consistent_frame_and_time_budget ... ok
+test final_file_stream_charges_extent_records_separately_from_file_length ... ok
+test remote_budget_only_shortens_the_declared_duration ... ok
+test terminal_types_and_explicit_continuation_roundtrip ... ok
+test all_operation_metadata_roundtrips_and_caps_are_checked ... ok
+test fixed_framing_rejects_lengths_states_and_truncations ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/relay_write.rs (core/target/release/deps/relay_write-5d7b7a6a57d56292)
+
+running 1 test
+test result_frames_reach_the_consumer_one_write_each ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/source.rs (core/target/release/deps/source-f3f2694c99d478db)
+
+running 1 test
+test portable_source_handles_dynamic_input_deadline_and_cancellation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stream_fragmentation.rs (core/target/release/deps/stream_fragmentation-27d4eee04f40a281)
+
+running 4 tests
+test short_logical_writes_form_bounded_result_frames ... ok
+test short_source_reads_form_bounded_body_frames ... ok
+test handler_failure_discards_pending_tail_without_drop_flush ... ok
+test buffered_output_checks_deadline_before_accepting_another_fragment ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/upload_batch.rs (core/target/release/deps/upload_batch-8d258999f3f148f4)
+
+running 1 test
+test bulk_upload_batches_records_without_changing_frames ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/workspace_attach.rs (core/target/release/deps/workspace_attach-350511fb60f04f21)
+
+running 3 tests
+test attach_is_identity_only_bounded_profile_three_mutation ... ok
+test attach_and_failed_status_preserve_codes_without_widening_lifecycle ... ok
+test authenticated_attach_and_status_correlate_without_replay ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/workspace_close_clean.rs (core/target/release/deps/workspace_close_clean-9abc293bc7667289)
+
+running 2 tests
+test lifecycle_bounds_and_shared_outcomes_preserve_distinct_wire_bytes ... ok
+test authenticated_lifecycle_correlates_each_variant_and_identity_without_replay ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/workspace_commit.rs (core/target/release/deps/workspace_commit-36ae8a62ce77974a)
+
+running 4 tests
+test commit_request_has_its_own_budget_and_never_store_authority ... ok
+test commit_terminal_preserves_full_known_and_observed_records_with_bounded_bytes ... ok
+test writable_status_preserves_submission_and_reachable_partial_commit_state ... ok
+test authenticated_commit_and_writable_status_correlate_and_never_replay ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/workspace_status.rs (core/target/release/deps/workspace_status-935de5e0193067b1)
+
+running 3 tests
+test status_reply_preserves_exact_identity_and_refuses_bad_flags_or_closed_counts ... ok
+test status_profile_is_bounded_and_has_no_store_permission ... ok
+test authenticated_status_rejects_mismatched_identity_and_result_data_without_unknown_mutation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/workspace_unmount.rs (core/target/release/deps/workspace_unmount-2daafd3c465f5b33)
+
+running 4 tests
+test unmount_is_an_exact_bounded_lifecycle_mutation_without_store_grants ... ok
+test entered_outcomes_have_exact_identity_bounds_and_a_closed_retained_code_set ... ok
+test authenticated_entered_attempts_and_pre_admission_failures_remain_distinct ... ok
+test delivered_bad_or_lost_unmount_results_are_unknown_and_never_replayed ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_content-5d6c97ca0c22fd67)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/chunk_predecessor.rs (core/target/release/deps/chunk_predecessor-f528f89605873b6d)
+
+running 7 tests
+test a_whole_file_base_offers_nothing ... ok
+test an_identical_version_is_offered_its_own_chunks ... ok
+test a_base_the_provider_cannot_serve_is_a_refusal ... ok
+test a_base_less_build_is_unchanged ... ok
+test the_correspondence_reads_mapping_pages_and_no_payload ... ok
+test every_chunk_is_offered_the_base_extent_covering_its_own_range ... ok
+test a_branched_base_mapping_is_walked_and_a_grown_result_stops_at_its_end ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_batch.rs (core/target/release/deps/edit_batch-5fccb9edcb5d72cc)
+
+running 7 tests
+test an_overlapping_stream_is_rejected_before_any_work ... ok
+test repeated_length_changes_accumulate ... ok
+test adjacent_edits_stay_separate_segments ... ok
+test delete_only_streams_are_monotonic_in_result_coordinates ... ok
+test several_separated_edits_apply_in_order ... ok
+test many_small_edits_are_applied_in_one_pass ... ok
+test every_object_the_edit_emits_is_reachable_from_its_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_bounds.rs (core/target/release/deps/edit_bounds-687b688253ca61c7)
+
+running 12 tests
+test a_missing_base_root_is_reported_as_missing ... ok
+test a_bounded_sink_that_fills_during_emission_fails_the_edit_once ... ok
+test a_consumer_that_rejects_stops_the_edit_once ... ok
+test a_source_that_ends_early_fails_without_emitting_a_root ... ok
+test the_retained_frontier_does_not_grow_with_the_edit_count ... ok
+test many_files_and_many_edits_stay_bounded ... ok
+test a_thousand_separated_edits_keep_bounded_state ... ok
+test a_join_of_two_full_pages_stays_canonical ... ok
+test the_frontier_does_not_grow_with_repeated_in_place_edits ... ok
+test streaming_flush_boundaries_and_height_growth ... ok
+test join_occupancy_at_every_boundary ... ok
+test the_deferred_ceiling_charge_per_draft_stays_inside_its_derived_bound ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/edit_localized.rs (core/target/release/deps/edit_localized-fd4819d7e8ab8129)
+
+running 8 tests
+test a_page_two_passes_reach_is_demanded_once_for_the_operation ... ok
+test a_pure_deletion_never_walks_the_rightmost_path ... ok
+test an_overwrite_still_demands_the_predecessor_path ... ok
+test a_mid_extent_overwrite_reads_only_the_straddling_extents ... ok
+test an_append_at_end_of_file_touches_only_the_right_boundary ... ok
+test many_localized_edits_keep_each_edit_on_its_own_path ... ok
+test localized_work_is_independent_of_file_size ... ok
+test an_extent_aligned_overwrite_reads_only_its_path_and_the_replaced_extents ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/edit_model.rs (core/target/release/deps/edit_model-8a0c62675627a73b)
+
+running 6 tests
+test the_model_and_the_candidate_agree_on_degenerate_streams ... ok
+test a_small_file_matches_the_model_and_a_fresh_construction ... ok
+test a_deletion_that_merges_two_slices_stays_canonical ... ok
+test an_append_at_end_of_file_matches_the_model ... ok
+test conversions_match_the_model_and_their_fresh_construction ... ok
+test a_chunked_update_matches_the_model ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_noop.rs (core/target/release/deps/edit_noop-309f5c6c10fa1117)
+
+running 7 tests
+test a_length_changing_edit_is_never_treated_as_a_no_op ... ok
+test an_out_of_range_replacement_length_is_an_error ... ok
+test an_empty_stream_returns_the_base_root_untouched ... ok
+test a_shifted_equal_replacement_is_compared_in_current_coordinates ... ok
+test an_equal_replacement_preserves_the_base_root ... ok
+test several_equal_replacements_are_all_recognised ... ok
+test a_long_equal_prefix_then_a_mismatch_stops_the_comparison_early ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/edit_reference.rs (core/target/release/deps/edit_reference-77ca04de0745e761)
+
+running 3 tests
+test the_oracle_fixtures_are_the_sealed_reference_revision ... ok
+test an_interior_join_reads_its_boundary_child_once ... ok
+test the_candidate_reproduces_the_reference_root_and_partition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/edit_single.rs (core/target/release/deps/edit_single-0e28514e08b35a16)
+
+running 11 tests
+test an_inapplicable_range_is_rejected_before_any_work ... ok
+test a_declared_length_that_does_not_match_its_bytes_fails ... ok
+test append_at_end_of_file ... ok
+test an_edit_reads_and_decodes_the_base_root_once ... ok
+test insert_and_delete_change_the_length_exactly ... ok
+test complete_deletion_returns_the_empty_representation ... ok
+test overwrite_at_the_head_and_the_tail ... ok
+test overwrite_in_the_middle ... ok
+test the_base_objects_are_never_rewritten ... ok
+test an_edit_over_a_chunked_base_reads_and_decodes_the_base_root_once ... ok
+test a_chunked_base_reads_and_edits_without_a_full_pass ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_timing.rs (core/target/release/deps/edit_timing-57fd514c3f7dfd4a)
+
+running 4 tests
+test an_equal_replacement_reports_the_comparison_scope ... ok
+test a_failing_edit_returns_its_original_error_and_an_error_outcome ... ok
+test a_real_edit_reports_its_scopes_without_a_database ... ok
+test recording_enabled_and_disabled_produce_the_same_result ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_transitions.rs (core/target/release/deps/edit_transitions-e1e06669146a4da4)
+
+running 10 tests
+test unsupported_cutoffs_are_rejected_and_the_accepted_ones_are_not ... ok
+test whole_file_edit_emits_the_reference_bytes ... ok
+test known_and_streamed_complete_lengths_agree ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test a_whole_file_result_reports_no_counters_and_that_is_recorded ... ok
+test exact_boundaries_at_every_accepted_cutoff ... ok
+test retained_segments_share_one_descent ... ok
+test straddling_payload_demanded_once_across_segments ... ok
+test every_conversion_direction_reaches_the_fresh_construction_root ... ok
+test the_transition_reads_only_what_it_keeps_and_charges_it ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/file_complete.rs (core/target/release/deps/file_complete-67d59220f136721b)
+
+running 14 tests
+test empty_file_uses_the_defined_file_state_form ... ok
+test construction_is_deterministic_for_the_same_input ... ok
+test below_cutoff_uses_one_whole_file_object_and_reads_back_exactly ... ok
+test one_byte_file_is_a_whole_file_object ... ok
+test representation_boundaries_are_exact_and_exclusive ... ok
+test compressible_and_incompressible_inputs_agree_with_their_source ... ok
+test late_input_failure_after_early_output_is_returned_once ... ok
+test unsupported_policy_values_are_rejected_before_work ... ok
+test whole_file_payload_is_classified_without_a_db ... ok
+test chunks_respect_the_frozen_size_window ... ok
+test streamed_source_requests_stay_bounded ... ok
+test chunk_partition_is_frozen_for_the_reference_input ... ok
+test known_length_and_streaming_inputs_agree_exactly ... ok
+test at_and_above_cutoff_uses_a_chunked_tree ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/file_read.rs (core/target/release/deps/file_read-1e7785b67846c8fd)
+
+running 16 tests
+test a_short_page_is_accepted_as_a_root_and_refused_as_a_non_root ... ok
+test empty_range_at_end_of_file_is_empty_and_at_eof_bound_is_allowed ... ok
+test a_provider_failure_is_returned_once_and_stops_the_read ... ok
+test full_read_returns_exact_bytes_for_every_representation ... ok
+test out_of_bounds_and_inverted_ranges_fail ... ok
+test whole_file_root_rejects_a_range_beyond_its_payload ... ok
+test a_leaf_slice_outside_the_chunk_grammar_is_refused_at_decode ... ok
+test repeated_demands_of_one_payload_read_it_once_and_emit_it_every_time ... ok
+test a_state_that_contradicts_its_root_page_is_refused_before_the_walk ... ok
+test the_payload_wave_enforces_both_its_object_and_its_byte_ceiling ... ok
+test ranges_cross_extents_and_page_boundaries ... ok
+test a_wave_is_released_before_the_next_one_is_read ... ok
+test a_range_read_serves_a_tree_with_more_than_one_branch_level ... ok
+test a_state_that_overstates_its_mapping_is_refused_not_partly_served ... ok
+test navigation_acquires_a_whole_level_per_provider_call ... ok
+test a_large_read_acquires_payloads_in_bounded_batches ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/filesystem_attributes.rs (core/target/release/deps/filesystem_attributes-a09a430760e7d64a)
+
+running 12 tests
+test a_reader_boundary_is_not_a_store_and_writes_are_rejected_once ... ok
+test generic_domains_are_accepted_without_platform_dispatch ... ok
+test attribute_pages_reject_malformed_rows_and_reserved_fields ... ok
+test a_missing_or_foreign_attribute_tree_fails_explicitly ... ok
+test portable_fields_round_trip_and_are_checked ... ok
+test values_are_extent_only_at_every_size ... ok
+test the_patch_route_and_a_from_scratch_build_agree_on_the_same_final_set ... ok
+test exact_sizing_partitions_match_the_encoder_and_the_tail_rebalances ... ok
+test opaque_values_survive_patches_without_being_decoded ... ok
+test reference_attribute_trees_are_reproduced_exactly ... ok
+test every_attribute_descent_rejects_same_or_skipped_child_levels ... ok
+test an_inode_attribute_tree_is_read_through_a_path ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/filesystem_bounds.rs (core/target/release/deps/filesystem_bounds-a5009aa5d2a8fed2)
+
+running 17 tests
+test one_batched_demand_is_exactly_one_read_wave ... ok
+test one_grouped_demand_is_one_charged_wave ... ok
+test a_backing_too_small_for_the_declared_ceiling_is_refused_up_front ... ok
+test an_empty_tree_and_a_deep_tree_both_stay_inside_their_declared_ceilings ... ok
+test validation_reads_are_charged_to_the_operation ... ok
+test the_release_frontier_reads_one_wave_per_batch_not_one_record_per_demand ... ok
+test released_subtrees_are_traversed_in_bounded_pages_and_aliases_survive ... ok
+test a_grouped_demand_is_one_wave_and_every_page_it_decoded ... ok
+test a_wide_branch_page_reads_its_children_in_one_wave ... ok
+test a_small_change_reads_its_own_path_and_never_an_unrelated_subtree ... ok
+test binding_lookups_are_batched_per_phase ... ok
+test a_build_has_no_independent_cycle_walk_limit ... ok
+test narrowing_keeps_a_small_scratch_working ... ok
+test merge_inputs_and_output_are_covered_by_the_declared_ceiling ... ok
+test every_reported_owner_is_nonzero_where_work_happened_and_zero_where_it_did_not ... ok
+test a_directory_whose_subtree_exceeds_the_entry_ceiling_cannot_be_rebound ... ok
+test a_branch_materialization_reads_children_in_one_wave ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests/filesystem_codec.rs (core/target/release/deps/filesystem_codec-3269c2e10b9afd83)
+
+running 9 tests
+test roots_and_symlinks_match_the_reference_bytes ... ok
+test every_tree_role_checks_its_role_byte_and_its_flags ... ok
+test directory_pages_match_the_reference_bytes ... ok
+test malformed_and_reserved_input_is_rejected_once ... ok
+test roles_and_identity_are_not_interchangeable ... ok
+test attribute_pages_match_the_reference_bytes ... ok
+test inode_pages_match_the_reference_bytes ... ok
+test both_inode_leaf_routes_are_one_grammar ... ok
+test a_directory_leaf_never_exceeds_the_page_ceiling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_failure.rs (core/target/release/deps/filesystem_failure-b8f261f990f869c5)
+
+running 8 tests
+test a_binding_serial_outside_the_stored_range_is_refused ... ok
+test the_attribute_value_bound_is_the_chunk_maximum_at_its_boundary ... ok
+test invalid_input_is_refused_before_anything_is_emitted ... ok
+test a_malformed_or_unauthenticated_demanded_page_is_rejected_without_a_root ... ok
+test a_read_failure_at_each_boundary_publishes_no_root_and_keeps_the_old_one ... ok
+test a_branch_that_misstates_its_summary_is_refused_by_the_tree_engine ... ok
+test a_refusing_consumer_ends_the_operation_once_without_a_root ... ok
+test cancellation_leaves_no_owned_ordering_resources_and_repeatable_state ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_hardlinks.rs (core/target/release/deps/filesystem_hardlinks-8514a873d69ffa15)
+
+running 6 tests
+test a_declared_new_inode_cannot_lose_a_binding ... ok
+test a_regular_file_keeps_at_least_one_binding ... ok
+test a_child_moved_out_of_a_removed_subtree_survives ... ok
+test a_move_across_directories_keeps_the_count_and_the_inode ... ok
+test removing_one_alias_leaves_the_other_and_removing_the_last_removes_it ... ok
+test two_aliases_reach_one_derived_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_limits.rs (core/target/release/deps/filesystem_limits-64d7aaeaed0602b5)
+
+running 7 tests
+test a_component_name_is_accepted_at_255_bytes_and_refused_at_256 ... ok
+test a_symlink_target_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test the_limits_this_suite_cannot_bound_are_named_with_their_reason ... ok
+test an_attribute_domain_and_key_are_accepted_at_their_bounds_and_refused_over ... ok
+test a_path_is_accepted_at_256_components_and_refused_at_257 ... ok
+test a_path_is_accepted_at_4096_bytes_and_refused_at_4097 ... ok
+test a_read_wave_is_accepted_at_4096_demands_and_refused_at_4097 ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_ordering.rs (core/target/release/deps/filesystem_ordering-e607e1925e0ebf22)
+
+running 17 tests
+test records_are_fixed_width_and_every_malformed_field_is_rejected ... ok
+test a_fresh_build_counts_bindings_without_ordering_runs ... ok
+test the_operation_ceiling_is_enforced_before_the_rows_are_written ... ok
+test growth_is_reserved_before_it_happens_and_cleanup_returns_the_bytes ... ok
+test a_failed_run_removal_keeps_the_file_and_its_bytes_in_the_account ... ok
+test a_removal_that_fails_is_visible_instead_of_being_hidden_in_drop ... ok
+test a_fresh_build_charges_its_count_array_to_the_ordering_ceiling ... ok
+test a_stale_run_file_does_not_block_a_later_backing ... ok
+test tier_carries_keep_the_newest_row_and_accumulate_counts ... ok
+test a_high_pending_ceiling_runs_spill_free_to_the_byte_bound ... ok
+test append_read_flush_and_release_failures_fail_the_operation_without_a_root ... ok
+test run_lookup_answers_every_serial_in_every_order ... ok
+test a_successful_operation_releases_its_ordering_resources_once ... ok
+test carried_state_removes_the_zero_count_re_pass ... ok
+test a_spilled_lookup_agrees_with_a_full_scan_of_every_tier ... ok
+test a_spill_keeps_the_scans_of_tiers_above_its_level ... ok
+test the_pending_threshold_changes_only_where_the_rows_live ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/filesystem_ordering_consolidate.rs (core/target/release/deps/filesystem_ordering_consolidate-416fcaec68fa022e)
+
+running 1 test
+test consolidation_never_writes_into_a_run_it_merges ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/filesystem_ordering_scan.rs (core/target/release/deps/filesystem_ordering_scan-c4f44ef2a951ce64)
+
+running 3 tests
+test a_restarted_scan_returns_the_same_rows_as_a_fresh_one ... ok
+test a_sparse_newer_tier_skips_its_gap_and_finds_older_rows ... ok
+test lookups_allocate_nothing_after_the_tiers_are_built ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/filesystem_parent_lookup.rs (core/target/release/deps/filesystem_parent_lookup-ccd6377736b20efb)
+
+running 4 tests
+test unchanged_parents_share_reads_and_reuse_their_authenticated_values ... ok
+test partial_parent_batches_preserve_values_new_directories_and_removals ... ok
+test parent_values_remain_correct_when_the_reference_reducer_spills ... ok
+test parent_value_ordering_quota_matrix_is_explicit_and_canonical ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/filesystem_profile.rs (core/target/release/deps/filesystem_profile-166a871a8edcd8fb)
+
+running 2 tests
+test a_foreign_profile_is_refused_before_a_root_exists ... ok
+test the_profile_text_names_the_bounds_it_is_hashed_with ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_read.rs (core/target/release/deps/filesystem_read-bf236e6a0f4e08b5)
+
+running 6 tests
+test a_serial_the_table_lacks_is_not_provider_absence ... ok
+test a_symlink_reads_back_its_exact_stored_target ... ok
+test an_unbound_name_is_not_provider_absence ... ok
+test resolve_stat_and_list_agree_on_the_same_tree ... ok
+test repeated_and_shared_demands_keep_order_and_cardinality ... ok
+test listing_is_bounded_by_bytes_as_well_as_count ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_reference.rs (core/target/release/deps/filesystem_reference-32ec6b8f9058feec)
+
+running 2 tests
+test construction_matches_the_sealed_reference_roots_and_pages ... ok
+test updates_match_the_sealed_reference_operation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/filesystem_sorted.rs (core/target/release/deps/filesystem_sorted-08fe4c3f9f4b9ccf)
+
+running 7 tests
+test a_genuinely_empty_directory_is_emitted_once ... ok
+test an_unsorted_duplicate_or_repeating_change_is_refused_once ... ok
+test a_late_source_error_propagates_and_publishes_nothing ... ok
+test a_tiny_supported_budget_works_or_refuses_before_allocating ... ok
+test initial_construction_needs_no_provisional_seed ... ok
+test page_widths_running_total_matches_the_recorded_partition ... ok
+test leaf_and_branch_boundaries_are_partitioned_canonically ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_timing.rs (core/target/release/deps/filesystem_timing-0f3a93e0b805764f)
+
+running 2 tests
+test a_recorded_construction_reports_its_phases ... ok
+test a_recorded_update_reports_coarse_phases_and_changes_nothing ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_topology.rs (core/target/release/deps/filesystem_topology-cb66f11e59221caa)
+
+running 17 tests
+test a_build_whose_root_is_not_declared_new_is_refused_up_front ... ok
+test a_build_cycle_that_the_root_holds_is_refused ... ok
+test a_build_with_a_disconnected_directory_cycle_is_refused ... ok
+test a_cycle_formed_inside_a_build_is_refused ... ok
+test a_disconnected_new_record_is_refused ... ok
+test a_foreign_scope_or_profile_is_refused ... ok
+test a_reused_identity_is_refused ... ok
+test a_caller_asserted_count_is_never_trusted ... ok
+test a_dropped_directory_emits_no_page_of_its_own ... ok
+test a_cycle_formed_by_moving_a_directory_below_itself_is_refused ... ok
+test a_base_resident_symlink_cannot_gain_a_second_parent ... ok
+test a_base_resident_directory_cannot_gain_a_second_parent ... ok
+test a_directory_or_symlink_cannot_have_two_parents ... ok
+test a_self_binding_is_refused ... ok
+test a_base_resident_directory_can_be_renamed_by_unbinding_first ... ok
+test an_update_cycling_two_declared_new_directories_is_refused ... ok
+test the_root_stays_a_zero_count_directory ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/filesystem_updates.rs (core/target/release/deps/filesystem_updates-99be38af44f2bd08)
+
+running 6 tests
+test a_content_only_change_leaves_every_directory_page_untouched ... ok
+test an_unsorted_or_duplicate_change_list_is_refused_before_any_write ... ok
+test removing_the_last_binding_removes_the_inode_and_keeps_the_root_readable ... ok
+test a_same_name_no_op_keeps_the_root_identity ... ok
+test a_type_replacement_replaces_the_binding_and_the_record ... ok
+test a_tiny_tree_is_created_and_read_back_exactly ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fixture_seal.rs (core/target/release/deps/fixture_seal-32025e48dcba998a)
+
+running 2 tests
+test the_generator_cannot_reseal_during_an_ordinary_test_run ... ok
+test the_sealed_fixtures_are_exactly_the_frozen_ones ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/inode_leaf.rs (core/target/release/deps/inode_leaf-a5fbea10d6e6ac44)
+
+running 6 tests
+test an_inode_value_round_trips_and_rejects_a_foreign_kind ... ok
+test a_pooled_body_rejects_a_zero_ordinal_and_a_wrong_width ... ok
+test a_pooled_value_object_is_exactly_ninety_four_canonical_bytes ... ok
+test a_pooled_body_keeps_the_prefix_and_the_serials ... ok
+test malformed_leaves_are_rejected ... ok
+test a_leaf_round_trips_with_its_exact_layout ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/object_identity.rs (core/target/release/deps/object_identity-f36f5df57b227384)
+
+running 11 tests
+test small_fixture_bytes_and_identity_are_frozen ... ok
+test identity_of_a_damaged_canonical_object_changes ... ok
+test identity_has_no_variable_width_or_text_shortcuts ... ok
+test identity_is_domain_separated_and_not_a_raw_digest ... ok
+test mapping_profile_and_empty_form_identities_are_frozen ... ok
+test malformed_envelopes_are_rejected_exactly ... ok
+test moving_an_objects_pieces_keeps_its_advisory_predecessors ... ok
+test writing_to_a_sink_matches_the_single_allocation_encoder ... ok
+test chunk_fixture_bytes_and_identity_are_frozen ... ok
+test the_field_ceiling_is_the_frozen_eight_mib_not_the_envelope ... ok
+test the_envelope_ceiling_is_enforced_at_plus_or_minus_one ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/streaming.rs (core/target/release/deps/streaming-60a53088b09ab744)
+
+running 9 tests
+test a_short_source_is_a_definitive_whole_file_result ... ok
+test a_discarding_consumer_never_allocates_a_payload_copy ... ok
+test a_late_input_failure_is_returned_once_after_early_output ... ok
+test root_identity_is_stable_across_repeated_streaming_runs ... ok
+test input_requests_stay_bounded_by_the_declared_windows ... ok
+test children_are_emitted_before_their_parents ... ok
+test unknown_length_and_known_length_agree_object_by_object ... ok
+test many_files_do_not_retain_the_whole_workload ... ok
+test the_builder_retains_a_bounded_number_of_entries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/timing.rs (core/target/release/deps/timing-b8730e9023bfca91)
+
+running 7 tests
+test small_construction_reports_its_real_scopes ... ok
+test a_discarding_consumer_still_runs_the_real_constructor ... ok
+test a_construction_failure_keeps_its_completed_timing ... ok
+test chunked_construction_reports_the_chunk_scope ... ok
+test repeated_labels_stay_distinct_and_ordered ... ok
+test a_read_reports_its_own_scopes_without_storage ... ok
+test recording_and_disabled_execution_produce_identical_results ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_daemon-ef6c0498b1e3408e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (core/target/release/deps/layerfs_daemon-77db3f614aad146b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/configuration.rs (core/target/release/deps/configuration-fc149bb737f40ce0)
+
+running 3 tests
+test control_configuration_is_explicit_separate_and_bounded ... ok
+test writable_profile_requires_branch_disk_budget_and_commit_control_endpoint ... ok
+test mount_startup_rejects_invalid_inputs_before_connecting ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_fuse-fde329f703cd5411)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/kernel_resize.rs (core/target/release/deps/kernel_resize-b4481d720c3bd058)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/kernel_write.rs (core/target/release/deps/kernel_write-46a90ab2b8bc5f2d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mount_failure.rs (core/target/release/deps/mount_failure-6c27f715bc4ae73e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_history-64b6c5c1c0d5ebad)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/allocation.rs (core/target/release/deps/allocation-0d49564efe57b80c)
+
+running 3 tests
+test a_consumed_reservation_survives_a_later_failure ... ok
+test reservations_are_monotone_half_open_and_per_scope ... ok
+test counts_are_checked_and_the_terminal_endpoint_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/conditional_updates.rs (core/target/release/deps/conditional_updates-532870f42881bcb5)
+
+running 6 tests
+test stage_insertion_enforces_the_frozen_context ... ok
+test a_stale_loser_keeps_its_exact_stage ... ok
+test an_exact_token_is_the_only_stage_a_discard_removes ... ok
+test an_exact_earlier_publication_is_up_to_date_before_a_stale_head ... ok
+test two_branches_commit_independently_and_one_wins_the_stack_head ... ok
+test a_commit_whose_root_equals_its_base_is_no_changes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/history_pages.rs (core/target/release/deps/history_pages-2f1048961b382aad)
+
+running 3 tests
+test a_cursor_is_bound_to_its_range_subject_and_content ... ok
+test an_immutable_anchor_keeps_a_cursor_valid_as_the_branch_advances ... ok
+test every_bounded_list_paginates_without_gaps_or_repeats ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/lifecycle.rs (core/target/release/deps/lifecycle-76c32dfeba944b84)
+
+running 3 tests
+test fork_shares_content_and_uses_the_selected_commit_base ... ok
+test genesis_is_atomic_and_unique ... ok
+test history_reads_return_the_recorded_ancestry_and_chain ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/remediation.rs (core/target/release/deps/remediation-66ff1dbe35b4dcf2)
+
+running 12 tests
+test empty_history_checks_page_and_cursor_before_returning_empty ... ok
+test all_legal_name_widths_paginate_by_identity ... ok
+test unknown_statement_outcome_quarantines_without_implicit_rollback ... ok
+test concurrent_reservations_never_overlap_and_discard_does_not_refund ... ok
+test exact_source_publication_revalidates_immutable_provenance ... ok
+test last_representable_reservation_is_consumed_and_terminal_refusal_is_atomic ... ok
+test forged_sibling_position_and_obsolete_checksum_are_refused ... ok
+test read_only_cursor_capability_survives_reopen_and_rejects_wrong_keys ... ok
+test advancing_the_actual_subject_preserves_both_anchor_forms ... ok
+test stale_base_precedes_no_changes_and_derived_provenance_collision ... ok
+test reopen_refuses_each_independent_schema_or_binding_corruption ... ok
+test explicit_membership_ceiling_is_capacity_but_old_authenticated_anchor_stays_valid ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.89s
+
+     Running tests/reopen.rs (core/target/release/deps/reopen-efe232ad4ad8cc0e)
+
+running 3 tests
+test a_read_only_reopen_reads_every_record_and_mutates_nothing ... ok
+test a_stage_written_by_one_handle_is_visible_to_a_read_only_handle ... ok
+test an_incompatible_or_foreign_catalog_is_refused ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_sandbox-650dd6e0f4e6c23c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/docker_port_pending.rs (core/target/release/deps/docker_port_pending-820dbca97b078161)
+
+running 1 test
+test docker_allocates_port_and_pending_record_cannot_route ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_sdk-c5292d51a0f5fd13)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_route.rs (core/target/release/deps/agent_route-aea23c88b6af0963)
+
+running 1 test
+test sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/exec_liveness_control.rs (core/target/release/deps/exec_liveness_control-e74d04bce662337a)
+
+running 1 test
+test silent_exec_exposes_native_progress_boundary ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/init_project.rs (core/target/release/deps/init_project-2f5abf3823433f6f)
+
+running 3 tests
+test host_setup_exposes_the_same_sdk_init ... ok
+test source_refusals_duplicates_and_concurrent_bindings ... ok
+test public_sdk_imports_fresh_100_and_1000_file_fixtures ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.96s
+
+     Running tests/sandbox_log_capture.rs (core/target/release/deps/sandbox_log_capture-e0239fe094d6e20b)
+
+running 1 test
+test diagnostic_logs_are_bounded_and_capture_failure_does_not_skip_cleanup ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_server-bb97c87992a5510e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/layerfs-server.rs (core/target/release/deps/layerfs_server-38ed6b95ad6ecf44)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/acceptor_idle.rs (core/target/release/deps/acceptor_idle-da0442199e6351d7)
+
+running 2 tests
+layerfs-server acceptor drop at_ms=1005 live=4 capacity=4 dropped=1
+test flag_acceptor_ignores_closed_stdin ... ok
+layerfs-server acceptor summary accepted=5 admitted=4 live_at_stop=4 peak_live=4 reaped=4 capacity_dropped=1 capacity=4 elapsed_ms=1119 error=None
+test default_session_limit_includes_two_readers ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+     Running tests/admission.rs (core/target/release/deps/admission-665da88abb8eb338)
+
+running 5 tests
+test a_busy_reader_bound_neither_blocks_writers_nor_exceeds_itself ... ok
+test another_store_keeps_its_own_budget ... ok
+test four_writers_are_admitted_then_refused_and_reads_never_queue_behind_them ... ok
+test two_sandboxes_over_one_store_share_its_budget ... ok
+test every_supported_budget_admits_its_writers_and_refuses_the_next ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/construct_metadata.rs (core/target/release/deps/construct_metadata-fc901e080603e74b)
+
+running 3 tests
+test validation_authorization_empty_input_and_deadline_fail_before_save ... ok
+test real_store_admission_failure_is_definite_and_explicit_abort_releases_the_slot ... ok
+test constructor_without_history_saves_portable_trees_and_reuses_exact_roots ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/construct_symlink.rs (core/target/release/deps/construct_symlink-8df7f1f342fa49a1)
+
+running 3 tests
+test target_authority_body_and_deadline_refusals_do_not_begin_a_save ... ok
+test occupied_save_refuses_definitely_and_explicit_owner_abort_restores_admission ... ok
+test constructor_without_history_preserves_exact_targets_and_canonical_reuse ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/direct.rs (core/target/release/deps/direct-686e1455de5ff2ad)
+
+running 8 tests
+test inherited_deadline_expires_before_direct_input_or_mutation ... ok
+test denial_partial_and_invalid_inputs_never_succeed ... ok
+test authenticated_network_after_nonblocking_accept ... ok
+test two_writers_overlap_and_capacity_is_reclaimed_after_reverse_completion ... ok
+test final_file_stream_handles_zero_delete_noop_and_malformed_input ... ok
+test final_extents_match_the_sealed_reference_root_and_partition ... ok
+test construct_read_edit_inspect_and_reopen ... ok
+test ten_mib_final_replacement_saves_and_keeps_the_previous_root ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.13s
+
+     Running tests/history.rs (core/target/release/deps/history-1956df9862e87184)
+
+running 26 tests
+test encoded_record_widths_match_the_catalog_bounds ... ok
+test history_profile_and_opcode_must_agree ... ok
+test inode_reservations_are_scope_wide_and_never_recycled ... ok
+test legacy_mask_grants_no_history ... ok
+test daemon_control_is_refused_by_service_even_with_every_store_grant ... ok
+test empty_namespace_initializes_and_reads_back ... ok
+test manifest_initialization_builds_a_real_namespace ... ok
+test history_pages_are_bounded_and_cursors_are_bound_to_their_range ... ok
+test branch_root_descriptor_validates_content_scope_profile_and_actual_serial ... ok
+test already_published_source_is_up_to_date_before_stale_head_refusal ... ok
+test metadata_only_commands_never_touch_the_content_store ... ok
+test delayed_discard_token_cannot_consume_a_replacement_stage ... ok
+test metadata_refusals_preserve_admission_and_never_use_legacy_grants ... ok
+test empty_and_interleaved_directories_have_real_canonical_pages ... ok
+test multiple_no_change_stages_are_up_to_date ... ok
+test disjoint_file_edits_still_refuse_stale_publication_without_merging ... ok
+test rebasing_by_editing_a_token_is_refused ... ok
+test read_only_reopen_supports_reads_and_refuses_every_mutation ... ok
+test portable_metadata_update_saves_one_tree_and_preserves_all_generic_roots ... ok
+test complete_read_attributes_match_over_authenticated_transport ... ok
+test wrong_role_root_is_refused ... ok
+test refreshed_stack_head_reports_typed_stale_base_on_direct_and_native_routes ... ok
+test stage_commit_add_layer_and_read_back ... ok
+test stale_loser_retains_its_exact_stage ... ok
+test composite_failure_keeps_acknowledged_stage_distinct_from_absence ... ok
+test native_directory_import_exceeds_bootstrap_and_reads_bytes ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.58s
+
+     Running tests/owned_load.rs (core/target/release/deps/owned_load-0358f4411d180429)
+
+running 1 test
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":172250,"incarnation":2809344252647,"user_ns":1891000,"source":"getrusage+libproc","probe_ns":136166,"selected":3,"system_ns":2801000,"rss":2457600}
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{"name": "SaveFile", "elapsed_ns": 750, "outcome": "error", "children": []},"success":false,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":172250,"opened_ns":11918166,"closed_ns":11919750,"last_ns":172250,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":136166,"selected":3,"sampled_max_rss":2457600}
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{  "name": "SaveFile",  "elapsed_ns": 19863958,  "children": [    {"name": "service.begin_save", "elapsed_ns": 5905500, "children": []},    {      "name": "service.save_file",      "elapsed_ns": 2132375,      "children": [        {"name": "content.probe", "elapsed_ns": 45333, "children": []},        {"name": "content.chunk", "elapsed_ns": 2033875, "children": []},        {"name": "content.emit", "elapsed_ns": 44625, "children": []}      ]    },    {      "name": "service.finish",      "elapsed_ns": 7698917,      "children": [        {"name": "storage.finish.drain", "elapsed_ns": 2574709, "children": []},        {          "name": "storage.finish.owner",          "elapsed_ns": 5118583,          "children": [            {"name": "storage.finish.pack_seal", "elapsed_ns": 4965417, "children": []},            {"name": "storage.finish.transaction_begin", "elapsed_ns": 11917, "children": []},            {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},            {"name": "storage.finish.ownership_publish", "elapsed_ns": 36333, "children": []},            {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 42, "children": []},            {"name": "storage.finish.sqlite_commit", "elapsed_ns": 17833, "children": []},            {"name": "storage.finish.pool_clone", "elapsed_ns": 791, "children": []},            {"name": "storage.finish.candidates_clone", "elapsed_ns": 78083, "children": []}          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":172250,"opened_ns":10075583,"closed_ns":29966875,"last_ns":172250,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":136166,"selected":3,"sampled_max_rss":2457600}
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{  "name": "SaveFile",  "elapsed_ns": 20586000,  "children": [    {"name": "service.begin_save", "elapsed_ns": 7297042, "children": []},    {      "name": "service.save_file",      "elapsed_ns": 2338542,      "children": [        {"name": "content.probe", "elapsed_ns": 51083, "children": []},        {"name": "content.chunk", "elapsed_ns": 2275833, "children": []},        {"name": "content.emit", "elapsed_ns": 4334, "children": []}      ]    },    {      "name": "service.finish",      "elapsed_ns": 6928000,      "children": [        {"name": "storage.finish.drain", "elapsed_ns": 5525541, "children": []},        {          "name": "storage.finish.owner",          "elapsed_ns": 1396500,          "children": [            {"name": "storage.finish.pack_seal", "elapsed_ns": 1204708, "children": []},            {"name": "storage.finish.transaction_begin", "elapsed_ns": 14291, "children": []},            {"name": "storage.finish.candidate_flush", "elapsed_ns": 83, "children": []},            {"name": "storage.finish.ownership_publish", "elapsed_ns": 35000, "children": []},            {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 167, "children": []},            {"name": "storage.finish.sqlite_commit", "elapsed_ns": 51375, "children": []},            {"name": "storage.finish.pool_clone", "elapsed_ns": 666, "children": []},            {"name": "storage.finish.candidates_clone", "elapsed_ns": 85416, "children": []}          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":172250,"opened_ns":10098500,"closed_ns":30688583,"last_ns":172250,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":136166,"selected":3,"sampled_max_rss":2457600}
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":2,"timing":{  "name": "ReadFile",  "elapsed_ns": 5666542,  "children": [    {      "name": "service.read",      "elapsed_ns": 5261584,      "children": [        {"name": "content.acquire", "elapsed_ns": 1285000, "children": []},        {          "name": "content.traverse",          "elapsed_ns": 3948500,          "children": [            {              "name": "mapping.navigate",              "elapsed_ns": 107625,              "children": [                {"name": "storage.read", "elapsed_ns": 107166, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1464625,              "children": [                {"name": "storage.read", "elapsed_ns": 1464375, "children": []}              ]            }          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":172250,"opened_ns":30938041,"closed_ns":36608458,"last_ns":172250,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":136166,"selected":3,"sampled_max_rss":2457600}
+LFT1 {"v":1,"namespace":1048576,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":2,"timing":{  "name": "ReadFile",  "elapsed_ns": 4077250,  "children": [    {      "name": "service.read",      "elapsed_ns": 3909292,      "children": [        {"name": "content.acquire", "elapsed_ns": 971042, "children": []},        {          "name": "content.traverse",          "elapsed_ns": 2931917,          "children": [            {              "name": "mapping.navigate",              "elapsed_ns": 61417,              "children": [                {"name": "storage.read", "elapsed_ns": 61083, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1385250,              "children": [                {"name": "storage.read", "elapsed_ns": 1385000, "children": []}              ]            }          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":172250,"opened_ns":37110791,"closed_ns":41190375,"last_ns":172250,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":136166,"selected":3,"sampled_max_rss":2457600}
+LFT1 {"v":1,"kind":"run-summary","run":"000000000000000000000000000000c0","pid":95520,"role":1,"namespace":1048576,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"resource","scope":"process-shared","clock":"local-monitor","at_ns":73667,"incarnation":2809344252647,"user_ns":34427000,"source":"getrusage+libproc","probe_ns":10667,"selected":3,"system_ns":23953000,"rss":48791552}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{"name": "SaveFile", "elapsed_ns": 500, "outcome": "error", "children": []},"success":false,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":73667,"opened_ns":7429375,"closed_ns":7430667,"last_ns":73667,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":10667,"selected":3,"sampled_max_rss":48791552}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{  "name": "SaveFile",  "elapsed_ns": 207122834,  "children": [    {"name": "service.begin_save", "elapsed_ns": 721875, "children": []},    {      "name": "service.save_file",      "elapsed_ns": 133649917,      "children": [        {"name": "content.probe", "elapsed_ns": 23875, "children": []},        {"name": "content.chunk", "elapsed_ns": 133621416, "children": []},        {"name": "content.emit", "elapsed_ns": 1667, "children": []}      ]    },    {      "name": "service.finish",      "elapsed_ns": 10284208,      "children": [        {"name": "storage.finish.drain", "elapsed_ns": 8676209, "children": []},        {          "name": "storage.finish.owner",          "elapsed_ns": 1604792,          "children": [            {"name": "storage.finish.pack_seal", "elapsed_ns": 1459166, "children": []},            {"name": "storage.finish.transaction_begin", "elapsed_ns": 12083, "children": []},            {"name": "storage.finish.candidate_flush", "elapsed_ns": 458, "children": []},            {"name": "storage.finish.ownership_publish", "elapsed_ns": 36458, "children": []},            {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 292, "children": []},            {"name": "storage.finish.sqlite_commit", "elapsed_ns": 55166, "children": []},            {"name": "storage.finish.pool_clone", "elapsed_ns": 750, "children": []},            {"name": "storage.finish.candidates_clone", "elapsed_ns": 29458, "children": []}          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":3,"gaps":0,"concurrency":2,"cpu_shared_ns":[386164000,78359000],"scope":"process-shared","clock":"local-monitor","first_ns":73667,"opened_ns":5728750,"closed_ns":212858375,"last_ns":203270125,"incarnation":2809344252647,"largest_gap_ns":104957208,"source":"getrusage+libproc","last_probe_ns":13750,"selected":3,"sampled_max_rss":71712768}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":1,"timing":{  "name": "SaveFile",  "elapsed_ns": 208743042,  "children": [    {"name": "service.begin_save", "elapsed_ns": 700542, "children": []},    {      "name": "service.save_file",      "elapsed_ns": 137453958,      "children": [        {"name": "content.probe", "elapsed_ns": 30542, "children": []},        {"name": "content.chunk", "elapsed_ns": 137419875, "children": []},        {"name": "content.emit", "elapsed_ns": 1125, "children": []}      ]    },    {      "name": "service.finish",      "elapsed_ns": 3607709,      "children": [        {"name": "storage.finish.drain", "elapsed_ns": 1582042, "children": []},        {          "name": "storage.finish.owner",          "elapsed_ns": 2023416,          "children": [            {"name": "storage.finish.pack_seal", "elapsed_ns": 1915917, "children": []},            {"name": "storage.finish.transaction_begin", "elapsed_ns": 10666, "children": []},            {"name": "storage.finish.candidate_flush", "elapsed_ns": 166, "children": []},            {"name": "storage.finish.ownership_publish", "elapsed_ns": 32042, "children": []},            {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 83, "children": []},            {"name": "storage.finish.sqlite_commit", "elapsed_ns": 36000, "children": []},            {"name": "storage.finish.pool_clone", "elapsed_ns": 459, "children": []},            {"name": "storage.finish.candidates_clone", "elapsed_ns": 25833, "children": []}          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":3,"gaps":0,"concurrency":2,"cpu_shared_ns":[386164000,78359000],"scope":"process-shared","clock":"local-monitor","first_ns":73667,"opened_ns":5736708,"closed_ns":214482625,"last_ns":203270125,"incarnation":2809344252647,"largest_gap_ns":104957208,"source":"getrusage+libproc","last_probe_ns":13750,"selected":3,"sampled_max_rss":71712768}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":2,"timing":{  "name": "ReadFile",  "elapsed_ns": 79823000,  "children": [    {      "name": "service.read",      "elapsed_ns": 79662375,      "children": [        {"name": "content.acquire", "elapsed_ns": 985459, "children": []},        {          "name": "content.traverse",          "elapsed_ns": 78674167,          "children": [            {              "name": "mapping.navigate",              "elapsed_ns": 103958,              "children": [                {"name": "storage.read", "elapsed_ns": 103416, "children": []}              ]            },            {              "name": "mapping.navigate",              "elapsed_ns": 211917,              "children": [                {"name": "storage.read", "elapsed_ns": 211667, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1244875,              "children": [                {"name": "storage.read", "elapsed_ns": 1244625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1161083,              "children": [                {"name": "storage.read", "elapsed_ns": 1160417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1100583,              "children": [                {"name": "storage.read", "elapsed_ns": 1100417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1146958,              "children": [                {"name": "storage.read", "elapsed_ns": 1146625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1197666,              "children": [                {"name": "storage.read", "elapsed_ns": 1197208, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1131834,              "children": [                {"name": "storage.read", "elapsed_ns": 1131458, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1101750,              "children": [                {"name": "storage.read", "elapsed_ns": 1101583, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1138792,              "children": [                {"name": "storage.read", "elapsed_ns": 1138625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1119334,              "children": [                {"name": "storage.read", "elapsed_ns": 1119167, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1080000,              "children": [                {"name": "storage.read", "elapsed_ns": 1079833, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1125083,              "children": [                {"name": "storage.read", "elapsed_ns": 1124917, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1098084,              "children": [                {"name": "storage.read", "elapsed_ns": 1097917, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1080250,              "children": [                {"name": "storage.read", "elapsed_ns": 1080083, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1640084,              "children": [                {"name": "storage.read", "elapsed_ns": 1638792, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1140833,              "children": [                {"name": "storage.read", "elapsed_ns": 1140417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1095500,              "children": [                {"name": "storage.read", "elapsed_ns": 1095083, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1121000,              "children": [                {"name": "storage.read", "elapsed_ns": 1120792, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1400292,              "children": [                {"name": "storage.read", "elapsed_ns": 1398959, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1206792,              "children": [                {"name": "storage.read", "elapsed_ns": 1206417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1123417,              "children": [                {"name": "storage.read", "elapsed_ns": 1123167, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1086667,              "children": [                {"name": "storage.read", "elapsed_ns": 1086459, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1088833,              "children": [                {"name": "storage.read", "elapsed_ns": 1088709, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1083292,              "children": [                {"name": "storage.read", "elapsed_ns": 1082917, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1114833,              "children": [                {"name": "storage.read", "elapsed_ns": 1114709, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1088250,              "children": [                {"name": "storage.read", "elapsed_ns": 1088125, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1436333,              "children": [                {"name": "storage.read", "elapsed_ns": 1435417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1136625,              "children": [                {"name": "storage.read", "elapsed_ns": 1136083, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1089375,              "children": [                {"name": "storage.read", "elapsed_ns": 1089208, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1097875,              "children": [                {"name": "storage.read", "elapsed_ns": 1097750, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1130167,              "children": [                {"name": "storage.read", "elapsed_ns": 1129792, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1245208,              "children": [                {"name": "storage.read", "elapsed_ns": 1244625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1156125,              "children": [                {"name": "storage.read", "elapsed_ns": 1155542, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 286833,              "children": [                {"name": "storage.read", "elapsed_ns": 285917, "children": []}              ]            }          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":1,"gaps":0,"concurrency":1,"cpu_shared_ns":null,"scope":"process-shared","clock":"local-monitor","first_ns":203270125,"opened_ns":213179042,"closed_ns":293006292,"last_ns":203270125,"incarnation":2809344252647,"largest_gap_ns":0,"source":"getrusage+libproc","last_probe_ns":13750,"selected":3,"sampled_max_rss":71712768}
+LFT1 {"v":1,"namespace":33554432,"run":"000000000000000000000000000000c0","pid":95520,"role":1,"kind":"operation","key":2,"timing":{  "name": "ReadFile",  "elapsed_ns": 80351291,  "children": [    {      "name": "service.read",      "elapsed_ns": 80175958,      "children": [        {"name": "content.acquire", "elapsed_ns": 596209, "children": []},        {          "name": "content.traverse",          "elapsed_ns": 79577875,          "children": [            {              "name": "mapping.navigate",              "elapsed_ns": 58708,              "children": [                {"name": "storage.read", "elapsed_ns": 58542, "children": []}              ]            },            {              "name": "mapping.navigate",              "elapsed_ns": 187375,              "children": [                {"name": "storage.read", "elapsed_ns": 187209, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1146125,              "children": [                {"name": "storage.read", "elapsed_ns": 1145542, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1161000,              "children": [                {"name": "storage.read", "elapsed_ns": 1160375, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1235125,              "children": [                {"name": "storage.read", "elapsed_ns": 1234625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1254208,              "children": [                {"name": "storage.read", "elapsed_ns": 1253375, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1215709,              "children": [                {"name": "storage.read", "elapsed_ns": 1215125, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1247750,              "children": [                {"name": "storage.read", "elapsed_ns": 1247000, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1165542,              "children": [                {"name": "storage.read", "elapsed_ns": 1165166, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1130625,              "children": [                {"name": "storage.read", "elapsed_ns": 1130375, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1377125,              "children": [                {"name": "storage.read", "elapsed_ns": 1376208, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1218583,              "children": [                {"name": "storage.read", "elapsed_ns": 1218000, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1154834,              "children": [                {"name": "storage.read", "elapsed_ns": 1154541, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1107042,              "children": [                {"name": "storage.read", "elapsed_ns": 1106791, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1093959,              "children": [                {"name": "storage.read", "elapsed_ns": 1093791, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1120042,              "children": [                {"name": "storage.read", "elapsed_ns": 1119833, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1091042,              "children": [                {"name": "storage.read", "elapsed_ns": 1090833, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1089250,              "children": [                {"name": "storage.read", "elapsed_ns": 1089041, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1182666,              "children": [                {"name": "storage.read", "elapsed_ns": 1182250, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1185333,              "children": [                {"name": "storage.read", "elapsed_ns": 1184333, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1154000,              "children": [                {"name": "storage.read", "elapsed_ns": 1153291, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1212750,              "children": [                {"name": "storage.read", "elapsed_ns": 1212292, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1295917,              "children": [                {"name": "storage.read", "elapsed_ns": 1295417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1225208,              "children": [                {"name": "storage.read", "elapsed_ns": 1224167, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1180500,              "children": [                {"name": "storage.read", "elapsed_ns": 1179875, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1163041,              "children": [                {"name": "storage.read", "elapsed_ns": 1162667, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1185708,              "children": [                {"name": "storage.read", "elapsed_ns": 1185458, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1111708,              "children": [                {"name": "storage.read", "elapsed_ns": 1111542, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1127917,              "children": [                {"name": "storage.read", "elapsed_ns": 1127667, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1096667,              "children": [                {"name": "storage.read", "elapsed_ns": 1096417, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1145291,              "children": [                {"name": "storage.read", "elapsed_ns": 1144750, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1433625,              "children": [                {"name": "storage.read", "elapsed_ns": 1432666, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1220541,              "children": [                {"name": "storage.read", "elapsed_ns": 1219959, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 1223416,              "children": [                {"name": "storage.read", "elapsed_ns": 1222625, "children": []}              ]            },            {              "name": "mapping.payload",              "elapsed_ns": 341834,              "children": [                {"name": "storage.read", "elapsed_ns": 341083, "children": []}              ]            }          ]        }      ]    }  ]},"success":true,"resource_status":"sampled","samples":2,"gaps":0,"concurrency":1,"cpu_shared_ns":[149641000,25354000],"scope":"process-shared","clock":"local-monitor","first_ns":203270125,"opened_ns":294315333,"closed_ns":374672000,"last_ns":301801167,"incarnation":2809344252647,"largest_gap_ns":98531042,"source":"getrusage+libproc","last_probe_ns":11042,"selected":3,"sampled_max_rss":71712768}
+LFT1 {"v":1,"kind":"run-summary","run":"000000000000000000000000000000c0","pid":95520,"role":1,"namespace":33554432,"dropped":0,"failed":0,"overflow":false,"delivery":"best-effort"}
+test two_native_writers_keep_streaming_heap_bounded_as_input_grows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_storage-9b286cc9f213f586)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/c2_bulk_admission.rs (core/target/release/deps/c2_bulk_admission-b13cbe9467eb58d7)
+
+running 4 tests
+test queued_predecessor_is_placed_before_same_save_delta_selection ... ok
+test queued_duplicate_and_lane_switch_keep_exact_rows ... ok
+test several_groups_share_a_bounded_pack_write_and_reopen ... ok
+test queued_wave_commits_before_same_save_read_and_abort_removes_private_rows ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/cas_reuse.rs (core/target/release/deps/cas_reuse-22300456cadde533)
+
+running 13 tests
+test the_read_wave_does_not_hash_what_the_resolver_authenticated ... ok
+test a_directory_is_never_treated_as_a_store ... ok
+test a_group_sealed_mid_wave_answers_its_other_members_from_that_wave ... ok
+test one_operation_can_save_two_files_into_shared_packs ... ok
+test repeated_identities_inside_one_batch_insert_once_and_reuse_the_rest ... ok
+test resaving_the_same_object_reuses_its_row_without_a_new_pack ... ok
+test a_stored_row_with_a_short_length_is_rejected_without_reading_it ... ok
+test a_presence_query_is_charged_for_a_reference_outside_the_wave ... ok
+test a_corrupted_stored_record_is_refused_before_its_identity_is_trusted ... ok
+test a_locator_whose_identity_does_not_match_its_bytes_is_refused ... ok
+test a_repetitive_file_spanning_waves_inserts_once_per_distinct_identity ... ok
+test repeated_identity_across_batches_reuses_without_rewriting ... ok
+test a_batch_lookup_is_bounded_by_the_declared_read_ceiling ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/cas_roundtrip.rs (core/target/release/deps/cas_roundtrip-b566b993e01f4c6f)
+
+running 13 tests
+test malformed_store_identity_is_rejected ... ok
+test fresh_store_writes_the_declared_schema_identity ... ok
+test missing_object_is_a_definite_failure ... ok
+test a_read_wave_is_bounded_by_the_declared_ceiling ... ok
+test an_old_same_version_store_is_refused_at_open ... ok
+test an_oversized_provider_demand_is_refused_before_the_session_opens ... ok
+test a_pooled_session_sees_a_save_that_completed_between_its_waves ... ok
+test a_pooled_session_opens_one_connection_for_every_wave ... ok
+test whole_file_object_survives_close_and_reopen ... ok
+test a_read_wave_reports_the_connection_it_opened ... ok
+test every_initial_role_round_trips ... ok
+test a_disagreeing_role_declaration_is_refused_by_its_own_decoder ... ok
+test compressible_and_incompressible_payloads_round_trip ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/catalogue_statement_reuse.rs (core/target/release/deps/catalogue_statement_reuse-8d60c6b202ba1720)
+
+running 1 test
+test catalogue_preparation_preserves_current_rows_parameters_and_errors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/codec_frames.rs (core/target/release/deps/codec_frames-7a4d547131cbbb33)
+
+running 7 tests
+test a_forged_declared_length_inside_the_header_is_refused_by_the_call_itself ... ok
+test a_frame_whose_checksum_no_longer_matches_is_refused ... ok
+test the_decode_arena_is_charged_only_when_a_frame_needs_it ... ok
+test every_truncation_of_a_valid_frame_is_refused_without_panicking ... ok
+test a_declared_length_that_contradicts_the_frame_is_refused ... ok
+test a_valid_frame_round_trips_through_both_decode_entry_points ... ok
+test a_frame_beyond_the_profiles_window_is_refused ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/connection_profile.rs (core/target/release/deps/connection_profile-02f30c843fbbacfc)
+
+running 6 tests
+test a_configured_connection_passes_profile_verification ... ok
+test a_degraded_connection_is_refused_by_profile_verification ... ok
+test an_unconfigured_connection_is_refused_by_profile_verification ... ok
+test a_connection_with_a_busy_timeout_is_refused_by_profile_verification ... ok
+test the_profile_reading_agrees_with_the_store_itself ... ok
+test a_save_reports_the_cache_profile_of_its_own_connection ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/content_index.rs (core/target/release/deps/content_index-e6a6e35dfc2ef0d4)
+
+running 5 tests
+test an_admitted_full_enters_the_index_and_is_written_in_the_saving_transaction ... ok
+test an_abandoned_save_leaves_no_entry_behind ... ok
+test the_index_is_cross_save_within_one_handle_as_well ... ok
+test the_index_outlives_the_handle_that_filled_it ... ok
+test a_stored_candidate_still_reads_back_through_the_reopened_index ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/core_pipeline.rs (core/target/release/deps/core_pipeline-4240afc49442293a)
+
+running 6 tests
+test a_pipeline_input_failure_keeps_the_original_error_and_cleans_up ... ok
+test integrated_and_independent_runs_produce_the_same_roots ... ok
+test a_streamed_file_survives_construction_storage_and_readback ... ok
+test many_files_stream_through_one_save_with_bounded_batches ... ok
+test many_distinct_compressible_records_share_groups_and_read_back_identically ... ok
+test a_file_larger_than_five_mebibytes_survives_a_real_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/delta_chains.rs (core/target/release/deps/delta_chains-7dccd8db5ff5d3a2)
+
+running 9 tests
+test an_unsupported_depth_is_rejected_before_any_store_exists ... ok
+test the_default_depths_are_the_documented_ones ... ok
+test a_cyclic_dependency_is_refused_by_chronology ... ok
+test the_save_reports_every_chain_it_acquired_not_only_the_last ... ok
+test a_wrong_role_dependency_is_rejected ... ok
+test a_reduced_depth_stops_at_its_own_boundary ... ok
+test a_corrupt_intermediate_is_rejected_during_reconstruction ... ok
+test an_increased_depth_is_honoured_up_to_its_boundary ... ok
+test a_chain_that_would_exceed_its_work_budget_is_never_stored ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/delta_payload.rs (core/target/release/deps/delta_payload-cb917286b015e765)
+
+running 15 tests
+test the_c1_handoff_reports_the_same_selection_as_a_direct_save ... ok
+test an_absent_chunk_candidate_selects_full ... ok
+test the_admitted_full_cache_supplies_a_candidate_within_one_save ... ok
+test an_absent_or_ineligible_candidate_selects_full ... ok
+test an_unrelated_candidate_loses_the_cost_comparison ... ok
+test an_ineligible_chunk_candidate_selects_full ... ok
+test exact_reuse_is_decided_before_any_trial ... ok
+test depth_zero_disables_prospective_delta_entirely ... ok
+test a_corrupt_base_fails_the_save_instead_of_selecting_full ... ok
+test native_delta_uses_the_first_supplied_eligible_candidate_only ... ok
+test an_explicit_predecessor_produces_a_readable_prefix_record ... ok
+test a_same_save_unsealed_chunk_predecessor_selects_full ... ok
+test a_delta_chain_is_resolved_iteratively_and_reaches_every_step ... ok
+test the_chunk_lane_honours_its_own_depth_cap ... ok
+test a_fifty_link_chunk_chain_is_admitted_and_read ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/edit_pipeline.rs (core/target/release/deps/edit_pipeline-a650a9f257babcfd)
+
+running 6 tests
+test a_standalone_route_and_an_integrated_route_agree_on_the_root ... ok
+test a_small_edit_round_trips_through_a_reopened_store ... ok
+test a_chunked_edit_round_trips_and_reuses_retained_payloads ... ok
+test a_multi_edit_chunked_stream_round_trips_in_current_result_coordinates ... ok
+test a_single_edit_transition_round_trips_through_the_store ... ok
+test a_transition_charges_only_the_retained_base_at_the_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_failure.rs (core/target/release/deps/filesystem_failure-256bc87c1ba06052)
+
+running 4 tests
+test a_corrupted_pack_fails_the_read_without_touching_retained_state ... ok
+test a_tree_failure_inside_a_save_aborts_this_attempt_only ... ok
+test a_private_attempt_is_invisible_until_acknowledgement_and_absent_after_failure ... ok
+test a_late_external_constraint_fails_once_without_moving_the_watermark ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/filesystem_pipeline.rs (core/target/release/deps/filesystem_pipeline-8bf3e972320ee636)
+
+running 6 tests
+test a_caller_authorized_value_root_is_not_an_object_dependency ... ok
+test a_reopened_store_serves_an_update_of_the_saved_tree ... ok
+test a_real_tree_saves_reopens_and_reads_back_exactly ... ok
+test a_patch_saved_to_the_store_keeps_untouched_attribute_roots ... ok
+test the_integrated_body_agrees_with_itself_when_recording_is_disabled ... ok
+test the_saved_tree_reports_its_physical_footprint_and_reuses_it_unchanged ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/group_decodes.rs (core/target/release/deps/group_decodes-c6358ab24dacadd6)
+
+running 2 tests
+test the_decode_charge_is_per_read_and_not_per_store ... ok
+test a_decode_is_charged_once_per_distinct_group ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/memory_bounds.rs (core/target/release/deps/memory_bounds-c6606218739c3670)
+
+running 10 tests
+test a_store_created_with_an_unsupported_policy_is_rejected_before_work ... ok
+test an_oversized_chunk_record_is_rejected_against_its_declared_limit ... ok
+test an_oversized_whole_file_record_is_rejected_against_its_declared_limit ... ok
+test the_supported_incompressible_singletons_are_stored_and_read_back ... ok
+test repeated_read_demands_pay_their_full_returned_byte_cost_before_copying ... ok
+test a_complete_file_singleton_never_creates_a_payload_file ... ok
+test a_large_input_is_reachable_only_through_its_own_singleton_path ... ok
+test the_retained_footprint_reports_pack_bodies_and_database_bytes ... ok
+test pending_ownership_stays_inside_the_declared_batch_bounds ... ok
+test an_oversized_persisted_pack_is_refused_before_blob_materialization ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/metadata_chain.rs (core/target/release/deps/metadata_chain-e51e4f226e17692e)
+
+running 2 tests
+test small_records_reach_the_depth_cap_and_the_next_edge_is_stored_in_full ... ok
+test maximal_records_hit_the_canonical_budget_before_the_depth_cap ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/metadata_fingerprint_collision.rs (core/target/release/deps/metadata_fingerprint_collision-8d9e66d1159cfcf9)
+
+running 2 tests
+test the_searched_pair_is_a_real_collision_of_valid_values ... ok
+test colliding_values_are_never_confused_through_the_store ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/metadata_pool.rs (core/target/release/deps/metadata_pool-f7567db1c8feafc3)
+
+running 19 tests
+test an_unfinished_private_value_group_is_not_visible_to_a_reader ... ok
+test a_supplied_leaf_round_trips_through_sqlite_and_reopen ... ok
+test a_pooled_depth_of_zero_stores_every_leaf_in_full ... ok
+test one_save_reuses_a_value_group_it_created_itself ... ok
+test a_compressible_group_is_stored_as_a_zstandard_frame ... ok
+test a_missing_catalogue_row_is_rejected ... ok
+test a_corrupt_value_group_is_rejected_once ... ok
+test a_losing_delta_trial_stores_the_leaf_in_full ... ok
+test a_compressed_full_pooled_leaf_reports_its_physical_decode_work ... ok
+test pooled_groups_in_separate_flushes_reuse_the_open_pack ... ok
+test a_damaged_pooled_delta_leaf_is_refused ... ok
+test a_group_holds_one_leaf_and_never_reaches_the_group_capacity ... ok
+test repeated_values_reuse_the_same_ordinals_across_leaves_and_saves ... ok
+test a_pooled_leaf_survives_a_store_reopen_with_its_chain ... ok
+test a_pooled_delta_chain_reports_its_physical_decode_work ... ok
+test a_pooled_chain_past_the_canonical_budget_is_refused_on_both_sides ... ok
+test pooled_physical_groups_evict_at_the_existing_decoded_byte_bound ... ok
+test a_deep_metadata_depth_admits_and_reads_a_fifty_link_chain ... ok
+test the_pooled_value_cache_releases_at_its_declared_bound ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests/metadata_pool_index.rs (core/target/release/deps/metadata_pool_index-bfc573cd6bef599f)
+
+running 9 tests
+test the_ordinal_ceiling_refuses_a_full_space_with_its_own_reason ... ok
+test the_ordinal_ceiling_reports_itself_instead_of_wrapping_to_zero ... ok
+test one_leaf_may_hold_every_row_the_pooled_value_memo_is_bounded_by ... ok
+test a_failed_save_removes_its_private_value_groups ... ok
+test the_last_ordinal_can_be_published_and_the_next_reservation_is_refused ... ok
+test a_cold_store_synchronizes_from_the_catalogue_without_reassigning ... ok
+test a_failed_save_cannot_change_the_published_candidate_set ... ok
+test a_shared_value_keeps_the_smallest_ordinal_across_leaves_and_reopen ... ok
+test the_retained_set_is_bounded_by_entries_not_by_file_size ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/metadata_window.rs (core/target/release/deps/metadata_window-d536da561d9d3848)
+
+running 2 tests
+test the_window_retains_exactly_the_cap_and_resets_whole_groups ... ok
+test crossing_the_window_evicts_early_ordinals_and_the_reopen_replays_the_window ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/multi_writer.rs (core/target/release/deps/multi_writer-f411936130dab224)
+
+running 5 tests
+test an_older_schema_is_refused_without_promotion ... ok
+test abort_removes_only_its_save_and_never_lends_a_foreign_dependency ... ok
+test unpublished_foreign_content_cannot_satisfy_a_dependency ... ok
+test separate_threads_prepare_and_finish_the_same_content_successfully ... ok
+test private_saves_overlap_and_publish_in_reverse_order_with_identical_bytes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/pack_locator.rs (core/target/release/deps/pack_locator-77d5a6b79f59a430)
+
+running 10 tests
+test a_pack_never_assembles_past_its_lane_limit ... ok
+test the_placement_fit_probe_agrees_with_the_canonical_assembled_length ... ok
+test same_save_reads_see_accepted_objects_before_the_finish_barrier ... ok
+test a_locator_outside_the_group_directory_is_rejected ... ok
+test whole_file_records_share_a_group_and_keep_their_own_locators ... ok
+test a_corrupt_pack_body_is_rejected_on_read ... ok
+test each_placement_flush_closes_an_exact_length_pack ... ok
+test a_whole_file_record_is_stored_in_its_own_compact_pack ... ok
+test a_full_lane_starts_a_new_pack_and_keeps_existing_locators ... ok
+test same_save_reads_resolve_objects_waiting_in_an_unfinished_group ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/pack_watermark.rs (core/target/release/deps/pack_watermark-8881c26eef1f6cfb)
+
+running 2 tests
+test two_writers_interleaved_between_steps_never_share_a_pack_identifier ... ok
+test a_step_never_leaves_the_watermark_behind_a_pack_it_wrote ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/persistence_failure.rs (core/target/release/deps/persistence_failure-23537d7fa2cb55b8)
+
+running 8 tests
+test an_unknown_write_acknowledgement_cannot_be_induced_without_a_fault_hook ... ok
+test reading_a_store_that_was_removed_underneath_fails_cleanly ... ok
+test a_missing_direct_dependency_fails_without_writing_a_parent ... ok
+test two_private_saves_are_admitted_and_the_third_is_refused ... ok
+test a_real_constraint_failure_is_reported_once_and_preserves_retained_objects ... ok
+test a_terminal_operation_refuses_further_work ... ok
+test cleanup_pages_the_pack_rows_instead_of_deleting_them_in_one_statement ... ok
+test a_late_input_failure_after_an_early_commit_cleans_up_once_and_keeps_earlier_objects ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/physical_formats.rs (core/target/release/deps/physical_formats-6c5a43be07f4e11d)
+
+running 8 tests
+test the_lane_table_names_one_limit_per_lane ... ok
+test unimplemented_and_unknown_framings_are_rejected_without_a_trial_decode ... ok
+test every_implemented_framing_is_recognized_by_its_own_version ... ok
+test declared_pack_and_group_bounds_are_enforced_on_the_bytes ... ok
+test closing_a_pack_and_retaining_its_tail_assemble_the_same_bytes ... ok
+test a_recipe_frame_larger_than_its_profile_is_refused ... ok
+test an_ordinary_group_seals_on_the_framed_length_it_writes ... ok
+test the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/policy_capacity.rs (core/target/release/deps/policy_capacity-2aa84c008a287310)
+
+running 9 tests
+test the_minimum_supported_cutoff_is_the_published_minimum ... ok
+test a_deeper_configured_depth_never_widens_a_work_or_live_budget ... ok
+test a_larger_cutoff_keeps_the_chain_and_live_budgets_unchanged ... ok
+test the_connection_profile_is_declared_and_the_engine_maxima_are_the_hosts ... ok
+test the_pooled_metadata_depth_is_persisted_and_checked_separately ... ok
+test an_unsupported_or_conflicting_policy_is_rejected_before_mutation ... ok
+test every_supported_cutoff_is_persisted_and_reopened_unchanged ... ok
+test a_larger_incompressible_whole_file_record_uses_the_singleton_lane ... ok
+test boundaries_follow_the_configured_cutoff_not_a_frozen_one ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/provider_errors.rs (core/target/release/deps/provider_errors-1063dafa652e9675)
+
+running 3 tests
+test an_object_the_store_does_not_hold_is_absence ... ok
+test a_corrupt_pack_is_not_reported_as_absence ... ok
+test a_record_above_the_publication_watermark_is_not_reported_as_absence ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/statement_batching.rs (core/target/release/deps/statement_batching-f4e65806055952f4)
+
+running 3 tests
+test the_insert_chunk_is_derived_from_the_engine_limits ... ok
+test the_statement_count_tracks_the_rows_and_not_a_constant ... ok
+test a_save_inserts_its_rows_in_bounded_statements ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/storage_limits.rs (core/target/release/deps/storage_limits-773f78611b1fbaea)
+
+running 5 tests
+test a_group_record_directory_is_accepted_at_its_bound_and_refused_over_it ... ok
+test the_declared_group_and_record_ceilings_are_the_ones_this_suite_pins ... ok
+test the_group_count_ceiling_is_named_with_its_derivation ... ok
+test a_group_body_is_accepted_at_its_bound_and_refused_over_it ... ok
+test a_group_record_count_is_accepted_at_its_bound_and_refused_over_it ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stored_payloads.rs (core/target/release/deps/stored_payloads-ae30d2d5be610172)
+
+running 8 tests
+test the_stored_tag_carries_no_base_and_the_other_tags_are_untouched ... ok
+test a_payload_below_the_probe_width_is_decided_by_its_own_frame ... ok
+test a_payload_the_codec_cannot_shrink_is_stored_verbatim_and_reads_back ... ok
+test a_payload_the_codec_can_shrink_keeps_its_frame_and_its_own_tag ... ok
+test a_store_of_compressible_content_still_writes_only_the_versions_it_writes ... ok
+test a_damaged_stored_payload_is_refused_and_never_served ... ok
+test every_chunk_of_a_chunked_file_is_stored_when_it_cannot_be_shrunk ... ok
+test a_payload_larger_than_a_compact_pack_is_stored_in_the_singleton_lane ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/timing.rs (core/target/release/deps/timing-950a0dbd0db73b1f)
+
+running 6 tests
+test a_failed_save_returns_the_original_error_with_a_recorded_tree ... ok
+test an_independent_save_reports_its_real_scopes ... ok
+test a_save_of_many_objects_records_regions_not_objects ... ok
+test recording_and_disabled_storage_execution_agree_exactly ... ok
+test a_bounded_report_stays_inside_the_recorder_limits ... ok
+test a_content_read_attributes_its_mapping_waves_inside_the_callers_span ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/visibility.rs (core/target/release/deps/visibility-bdabfd9d0aa426e9)
+
+running 9 tests
+test the_pooled_lane_supplies_the_owners_ceiling_at_every_read_site ... ok
+test an_ordinary_group_above_the_ceiling_is_refused_before_the_decoded_cache ... ok
+test persisted_private_owners_consume_slots_without_guessing_cleanup ... ok
+test a_watermark_ahead_of_storage_is_rejected_at_open ... ok
+test an_interrupted_save_keeps_its_slot_and_published_roots_remain_readable ... ok
+test a_definite_failure_never_publishes_and_never_moves_the_watermark ... ok
+test a_pooled_read_refuses_a_value_group_above_the_captured_ceiling ... ok
+test an_unrelated_reader_cannot_see_an_open_save_but_sees_it_after_acknowledgement ... ok
+test the_watermark_survives_reopen_and_still_hides_a_later_open_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/write_admission.rs (core/target/release/deps/write_admission-6f98ccfd98f62006)
+
+running 11 tests
+test the_shipped_schema_constrains_the_persisted_budget ... ok
+test a_schema_seven_store_is_refused_without_promotion ... ok
+test a_fresh_store_admits_its_default_budget_and_refuses_the_next_writer ... ok
+test a_retained_owner_above_the_budget_is_never_bypassed ... ok
+test a_lowered_budget_keeps_retained_ownership_and_counts_it ... ok
+test a_definite_failure_at_a_higher_budget_releases_only_its_own_slot ... ok
+test content_written_under_a_higher_budget_is_readable_after_it_is_lowered ... ok
+test a_raised_budget_admits_that_many_writers_and_refuses_the_next ... ok
+test an_unsupported_budget_is_refused_without_changing_the_store ... ok
+test eight_concurrent_writers_publish_duplicate_ownership_and_read_back ... ok
+test every_supported_setting_admits_its_budget_and_publishes_correctly ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_telemetry-2ea82259d01749e4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/full_disk.rs (core/target/release/deps/full_disk-ca7fb86cc857209b)
+
+running 1 test
+test actual_enospc_preserves_the_original_result ... ignored, requires a dedicated disposable filesystem no larger than 64 MiB
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native.rs (core/target/release/deps/native-fac0b53406a4d128)
+
+running 8 tests
+test disabled_runtime_ignores_invalid_native_configuration ... ok
+test native_cpu_units_match_posix_process_counters ... ok
+test independent_measurement_selection_and_aggregate_configuration ... ok
+test concurrent_final_handles_release_the_owned_writer ... ok
+test owned_retention_queue_and_producer_churn ... ok
+test retention_expiry_open_reader_and_deletion_failure ... ok
+test native_monitor_retains_active_window_across_ring_wrap ... ok
+test output_failure_is_independent_and_encoding_is_valid ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/observations.rs (core/target/release/deps/observations-a469251aeaa7d126)
+
+running 2 tests
+test long_shared_windows_preserve_first_and_sampled_max ... ok
+test optional_windows_release_on_return_error_and_unwind ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/off_allocations.rs (core/target/release/deps/off_allocations-d27dcec47a6f41fa)
+
+running 1 test
+test master_off_allocates_nothing_after_configuration_is_supplied ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owned_allocations.rs (core/target/release/deps/owned_allocations-89db818b7eac0fa0)
+
+running 2 tests
+test maximum_envelope_child ... ignored, subprocess helper, invoked by maximum_owned_envelope_and_closing_producers
+test maximum_owned_envelope_and_closing_producers ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running tests/stalled_output.rs (core/target/release/deps/stalled_output-5d80361fd4b3a9bb)
+
+running 2 tests
+test stalled_writer_child ... ignored, subprocess helper; invoked by blocked_native_stderr_preserves_result_and_process_exit
+test blocked_native_stderr_preserves_result_and_process_exit ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+     Running tests/timer.rs (core/target/release/deps/timer-db57e8412fa7ca8d)
+
+running 21 tests
+test a_parent_can_recover_from_a_child_error ... ok
+test an_imported_incomplete_node_marks_the_attachment_point ... ok
+test attached_reports_become_owned_children ... ok
+test attachment_cannot_exceed_the_depth_budget ... ok
+test a_panic_caught_inside_the_operation_leaves_the_recording_usable ... ok
+test disabled_and_clipped_reports_are_distinguishable ... ok
+test disabled_recording_runs_the_operation_and_records_nothing ... ok
+test durations_are_inclusive_monotonic_elapsed_time ... ok
+test errors_are_recorded_before_early_returns_keep_completed_nodes ... ok
+test imported_labels_are_clipped_on_a_utf8_boundary ... ok
+test depth_budget_clips_detail_and_keeps_running_the_operation ... ok
+test independent_recordings_compose_without_shared_state ... ok
+test missing_or_disabled_detail_marks_the_node_and_its_ancestors ... ok
+test long_labels_are_clipped_on_a_utf8_boundary ... ok
+test nested_children_are_recorded_in_start_order ... ok
+test repeated_labels_are_distinct_invocations_in_start_order ... ok
+test panic_unwinds_without_a_fabricated_report ... ok
+test uncalled_operations_have_no_node ... ok
+test attachment_consumes_the_assembled_tree_remaining_budget ... ok
+test synthetic_nodes_are_bounded_by_the_aggregate_limits ... ok
+test node_budget_clips_detail_and_keeps_running_the_operation ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_bounds.rs (core/target/release/deps/timer_bounds-4c68256913d97891)
+
+running 3 tests
+test public_labels_are_normalized_before_attachment ... ok
+test owned_capacity_is_not_retained ... ok
+test recording_budget_pool_unwind_and_encoding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_compile_fail.rs (core/target/release/deps/timer_compile_fail-3caa620d1cbd0e23)
+
+running 1 test
+test external_compile_fail_checks ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests/timer_format.rs (core/target/release/deps/timer_format-19f9214e1120202f)
+
+running 6 tests
+test disabled_report_is_explicit ... ok
+test labels_are_escaped_for_display ... ok
+test a_real_recording_renders_its_structure ... ok
+test markers_show_error_and_missing_detail ... ok
+test writer_failures_propagate ... ok
+test text_renders_a_readable_tree ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/timer_json.rs (core/target/release/deps/timer_json-8f4af9f01012d2de)
+
+running 10 tests
+test outcome_and_incomplete_fields_are_opt_in ... ok
+test writer_failures_propagate ... ok
+test a_flush_failure_is_surfaced ... ok
+test durations_beyond_the_schema_are_reported_not_saturated ... ok
+test saving_uses_no_clobber_creation_and_stays_separate_from_the_product_result ... ok
+test json_matches_the_documented_shape ... ok
+test a_real_recording_round_trips_through_json ... ok
+test a_disabled_report_serializes_to_null ... ok
+test escaping_round_trips_through_an_independent_parser ... ok
+test a_failed_write_leaves_a_partial_file_and_surfaces_the_error ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running unittests src/lib.rs (core/target/release/deps/layerfs_workspace-f6396056fbfe42bc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attachment.rs (core/target/release/deps/attachment-66bb92a531f13b1f)
+
+running 3 tests
+test unacquired_failure_and_expired_admission_leave_no_attachment ... ok
+test exact_attachment_observation_preserves_the_existing_owner ... ok
+test active_attachment_is_observable_and_refuses_cleanup_without_holding_registry ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coherence.rs (core/target/release/deps/coherence-e08f9c7902067922)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_staged.rs (core/target/release/deps/commit_staged-401e18863088c12e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/composite.rs (core/target/release/deps/composite-50f7027d1ad96180)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/create.rs (core/target/release/deps/create-903ae02650e66a5f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fresh_stream.rs (core/target/release/deps/fresh_stream-0f64993f6c9b88bd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/maintenance.rs (core/target/release/deps/maintenance-b9a77a887023ac25)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mkdir.rs (core/target/release/deps/mkdir-309eb289bd35f12c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_create.rs (core/target/release/deps/mounted_create-5c26a1aea4422d5a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_mkdir.rs (core/target/release/deps/mounted_mkdir-66ccd582b715f4d6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_namespace.rs (core/target/release/deps/mounted_namespace-76ca24b8b93ec4b4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_symlink.rs (core/target/release/deps/mounted_symlink-f322b119497308e9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/namespace.rs (core/target/release/deps/namespace-a6a714fd692b6188)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/open.rs (core/target/release/deps/open-f2a0c013313c5b50)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/payload.rs (core/target/release/deps/payload-05384a9fc1be72ac)
+
+running 1 test
+test private_payload_profile_explicitly_requires_linux ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pieces_sequence.rs (core/target/release/deps/pieces_sequence-4371bd39b73d068a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/readable.rs (core/target/release/deps/readable-4f760bf866aafdd7)
+
+running 9 tests
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test failed_close_keeps_its_registry_count_until_cleanup_succeeds ... ok
+test registry_grows_on_demand_and_keeps_retained_capacity_charged ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/resize.rs (core/target/release/deps/resize-609aac8c52ab5f3b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stage.rs (core/target/release/deps/stage-8657b7e7ef02f333)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/symlink.rs (core/target/release/deps/symlink-b435e186cc02a7b9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/write.rs (core/target/release/deps/write-4aa5d3c0fa6d3ec3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_api_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_content
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_fuse
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_history
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_sandbox
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_sdk
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_telemetry
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

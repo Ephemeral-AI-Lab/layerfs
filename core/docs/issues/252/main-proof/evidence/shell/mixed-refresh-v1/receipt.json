@@ -1,0 +1,152 @@
+{
+  "binary_sha256": "c13cc7cb80ecf059e05e8b0b594aba4f4d1be3990a8629726ca31dfc17a41879",
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "callback_counts": {
+    "getattr": "198",
+    "lookup": "159",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "2",
+    "setattr": "0",
+    "write": "36"
+  },
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/history.sqlite",
+    "store": "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/store.sqlite"
+  },
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "command": [
+    "benchmark-results/issue252-main-verify/shell-prepared-01/base/binary-archive/c13cc7cb80ecf059e05e8b0b594aba4f4d1be3990a8629726ca31dfc17a41879/benchmark_shell",
+    "run",
+    "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/case.before",
+    "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/store.sqlite",
+    "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/history.sqlite",
+    "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4"
+  ],
+  "complete_command_limit_s": 25,
+  "complete_command_wall_ns": 2322865708,
+  "count_scope": "Status write aggregates namespace mutations; not exact FUSE WRITE count",
+  "driver": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "cleanup_ns": 531473709,
+    "commit_called": true,
+    "commit_ns": 190488125,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 131753,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 1178419042,
+    "head_commit": "1260a81a1dca0367ab54b37d89d54e030ee4de6b8af80be9cdf38bec035468a619",
+    "mode": "run",
+    "operation_ns": 1368914625,
+    "projection_counts": "lookup=159,getattr=198,read=0,write=36,readdir=0,open=1,setattr=0,rename=2,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "mixed-refresh-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "family_id": "workspace_shell_package",
+  "functional_status": "PASS",
+  "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+  "image_id": "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4",
+  "lft1": {
+    "event_count": 409,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 1671127375,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        216025000,
+        185757000
+      ],
+      "first_ns": 302079208,
+      "gaps": 0,
+      "incarnation": 2813935180178,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 13302875,
+      "last_ns": 1671035000,
+      "last_probe_ns": 11333,
+      "namespace": 7,
+      "opened_ns": 302214292,
+      "pid": 97132,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "add0354a24459a91672afe159efc7d14",
+      "sampled_max_rss": 38879232,
+      "samples": 138,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 1178419292,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 190488583,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 1368910583,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+    "genesis_layer": "32d274b98d5d1543c7d1dc32d7739b87b38d399ab24772b8597e7437285e27fb14",
+    "genesis_root": "7a3eb49e604484d89456068d15982df41b2b0d5c744108b69a55af9c9ae3bfe3",
+    "genesis_root_serial": 1,
+    "history_sha256": "90bf4d6e49954708f7acb854ed3e4d25bfc4fb52171151dddbb059d77d9ba9d2",
+    "init_wall_ns": 625907667,
+    "old_commit": "1272e0710b783f822e6721e3e5c9d1f061c5440cb71582c2ee7bcf19ee66beb07e",
+    "old_manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/masters/package",
+    "project_id": "312f3c74f9d0126f15fd5b5a3b9e1b1a18",
+    "seed_wall_ns": 1564330666,
+    "store_sha256": "eb371a08533bb461d374e80b048ab0893f1e95d6e500d2eff596de840ec47f3f",
+    "verify_wall_ns": 654456125
+  },
+  "performance_status": "INELIGIBLE",
+  "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "resource_scope": "LFT1 process-shared sampled driver process only; no phase-isolated or container RSS",
+  "route_ok": true,
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "mixed-refresh-v1",
+  "scenario_version": 1,
+  "schema": "issue243-shell-attempt-v1",
+  "shell_command": "set -eu\numask 022\nbase=node_modules/@fixture\n\nprintf '2' | dd of=\"$base/core/BUILD_ID\" bs=1 seek=0 conv=notrunc 2>/dev/null\ncp /fixtures/v2/core/package.json \"$base/core/package.json\"\n\ncp /fixtures/v2/parser/package.json \"$base/parser/package.json\"\ncp /fixtures/v2/parser/lib/parse.js \"$base/parser/lib/parse.js\"\nmkdir \"$base/parser/generated\"\ncp /fixtures/v2/parser/generated/tokenize.js \"$base/parser/generated/tokenize.js\"\nrm \"$base/parser/lib/legacy.js\"\n\ncp /fixtures/v2/ui/package.json \"$base/ui/package.json\"\ncp /fixtures/v2/ui/dist/ui.js \"$base/ui/dist/ui.js.next\"\nmv -f \"$base/ui/dist/ui.js.next\" \"$base/ui/dist/ui.js\"\n\ncp /fixtures/v2/package-lock.json package-lock.json.next\nmv -f package-lock.json.next package-lock.json\n",
+  "source_commit": "cab07b60ef69bc70323fb01ba23938b00daa1623",
+  "source_tree": "90965958d12b6ce1f8e1f372a236989e69eec92d",
+  "verifier": {
+    "command": [
+      "benchmark-results/issue252-main-verify/shell-prepared-01/base/binary-archive/ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b/verify_shell",
+      "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/case.verify",
+      "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/store.sqlite",
+      "benchmark-results/issue252-main-verify/shell-run-01/mixed-refresh-v1/history.sqlite",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/fixture/package.tsv",
+      "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/fixture/mixed-refresh-v1.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 67745250
+  },
+  "verifier_sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+}

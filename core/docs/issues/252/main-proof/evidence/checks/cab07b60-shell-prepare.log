@@ -1,0 +1,2 @@
+{"prepared": "benchmark-results/issue252-main-verify/shell-prepared-01/base/prepared.json", "image_id": "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4", "master_shapes": ["package", "large", "repeated"]}
+{"cases": ["mixed-refresh-v1", "overwrite-4k-v1", "repeated-one-byte-v1", "failed-command-no-commit-v1", "append-10mib-v1", "resize-10mib-v1", "temp-replace-v1", "prepend-4k-10mib-v2"], "prepared": "benchmark-results/issue252-main-verify/shell-prepared-01/functional-prepared.json"}

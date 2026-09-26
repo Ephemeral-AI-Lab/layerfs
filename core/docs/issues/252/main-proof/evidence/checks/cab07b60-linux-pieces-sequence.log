@@ -1,0 +1,28 @@
+
+running 23 tests
+test a_cursor_seeks_and_reads_only_the_path_it_needs ... ok
+test a_first_edit_inside_an_implicit_base_retains_both_sides ... ok
+test a_first_edit_folds_into_one_implicit_base_read ... ok
+test a_refused_splice_leaves_the_published_sequence_unchanged ... ok
+test an_empty_sequence_after_a_full_shrink_takes_a_whole_rewrite ... ok
+test an_implicit_base_append_past_eof_fills_the_gap ... ok
+test a_cursor_seeks_into_the_middle_child_of_a_multi_leaf_branch ... ok
+test a_shared_subtree_is_not_rewritten ... ok
+test an_implicit_base_longer_than_one_extent_folds_into_split_parts ... ok
+test an_implicit_base_replacement_beyond_the_base_is_refused ... ok
+test an_unchanged_old_generation_stays_readable_after_a_splice ... ok
+test an_insertion_shifts_the_base_tail_and_the_next_edit_still_splices ... ok
+test a_shared_subtree_records_the_unknown_count_and_the_exact_total ... ok
+test an_implicit_base_truncate_and_extension_are_exact ... ok
+test appends_at_the_end_and_extends_with_zeros ... ok
+test covers_a_hole_and_a_position_past_the_end ... ok
+test reads_a_sequence_in_order_with_derived_starts ... ok
+test one_cursor_walk_never_holds_the_whole_sequence ... ok
+test overwrites_inside_one_extent_without_touching_its_neighbours ... ok
+test refuses_a_page_that_does_not_declare_the_length_indexed_format ... ok
+test refuses_a_replacement_beyond_the_base_or_past_max_file ... ok
+test splits_an_extent_larger_than_a_leaf_into_page_sized_parts ... ok
+test final_runs_at_1024_are_admitted ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

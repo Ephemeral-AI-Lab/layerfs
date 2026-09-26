@@ -1,0 +1,141 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "benchmark-results/issue252-main-verify/shell-prepared-01/base/binary-archive/517f703584289b71cb6d2cbeaf04fb5104cbf0f789f1f94c3f41ff8da493d402/benchmark_init",
+      "sha256": "517f703584289b71cb6d2cbeaf04fb5104cbf0f789f1f94c3f41ff8da493d402"
+    },
+    "benchmark_shell": {
+      "path": "benchmark-results/issue252-main-verify/shell-prepared-01/base/binary-archive/c13cc7cb80ecf059e05e8b0b594aba4f4d1be3990a8629726ca31dfc17a41879/benchmark_shell",
+      "sha256": "c13cc7cb80ecf059e05e8b0b594aba4f4d1be3990a8629726ca31dfc17a41879"
+    },
+    "verify_shell": {
+      "path": "benchmark-results/issue252-main-verify/shell-prepared-01/base/binary-archive/ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b/verify_shell",
+      "sha256": "ae36428245369460f1f2d411957f0a14ada46e288650d502344cc7bc496f284b"
+    }
+  },
+  "cache_contract": "host Store copy state observed; container FUSE backing and Edit-written bytes uncontrolled, cold latency INELIGIBLE",
+  "clone_method": "independent writable byte copy of a closed validated master",
+  "cursor_key": "1b79d2deab09b25e643201a329737b741a89abf765801405522947ca6cc1ed12",
+  "daemon_sha256": "216cbc44468005989f44d93a9bc059bb8163ee8c2c8698cc6e39aa60f3188b64",
+  "dockerfile_sha256": "4d3a3a99c8c86367666bec28d41df0f19f4623df43f71be2dfdcb46f93dd8e7f",
+  "functional_contract": "issue252-ordinary-shell-functional-v1",
+  "functional_manifests": {
+    "append-10mib-v1.tsv": "4d8365be450b8694fbf5b2a3da893737a46cf293e11c6accc49004d121881c03",
+    "failed-command-no-commit-v1.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "large.tsv": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+    "mixed-refresh-v1.tsv": "4c3ab6f0c9e5e1a001eab18b9ff1ef726a13e8cbbb27b654e0a31eebf6e3d8a9",
+    "overwrite-4k-v1.tsv": "5491c0e2ed73a4f368fdfaf30b2bf1fd368d36d1fdabb3e7fd362dc7a2b93156",
+    "package.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "prepend-4k-10mib-v2.tsv": "61faa0202fdbe22b2a8ee350d9d5bc50958dc677e11d1a1aebca06e7006fdb00",
+    "repeated-one-byte-v1.tsv": "2cd281ac0eef71c75570d08c1a336adde29ac15b166cbd2bb7e318ec4ab7c42e",
+    "repeated.tsv": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+    "resize-10mib-v1.tsv": "05c6f47c854f78b83799666f2557e24dc27948a1c53c85531b346b86c6f676a4",
+    "temp-replace-v1.tsv": "6a7c61e8b187ef292d8440d4c7db31ff041a646c9a3553aed7489618e69a0b23"
+  },
+  "functional_script_sha256": "95261a8ac9aaa7a2001df59ac8bdede248ea35a5815cd9028eb22e4794fc904e",
+  "image_id": "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4",
+  "image_tag": "layerfs-shell-package-v1:issue243",
+  "manifests": {
+    "failed-command-no-commit-v1.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "large.tsv": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+    "mixed-refresh-v1.tsv": "4c3ab6f0c9e5e1a001eab18b9ff1ef726a13e8cbbb27b654e0a31eebf6e3d8a9",
+    "overwrite-4k-v1.tsv": "5491c0e2ed73a4f368fdfaf30b2bf1fd368d36d1fdabb3e7fd362dc7a2b93156",
+    "package.tsv": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+    "repeated-one-byte-v1.tsv": "2cd281ac0eef71c75570d08c1a336adde29ac15b166cbd2bb7e318ec4ab7c42e",
+    "repeated.tsv": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540"
+  },
+  "masters": {
+    "large": {
+      "branch_id": "11d35c416a85b807e9b5384915d6ebb4a9",
+      "genesis_layer": "322ffa55dbd2e41ca7a7a6dac4d0801afdc2e3ab87e9ee059a8a89cfded0b9bf07",
+      "genesis_root": "646b4eabbccfe1ce9d0a58dd78d85dab94d70ac94857108469fd64166a2c0430",
+      "genesis_root_serial": 1,
+      "history_sha256": "77e991da96b8e928f6a1214976c8f65e6ae0991a7315ff6b39f379e9c63507db",
+      "init_wall_ns": 39948416,
+      "old_commit": "124f1579a3b06ecc41350428fd74492f62d3c3f8aaf0f1973ceda3804a982ed5a7",
+      "old_manifest_sha256": "fddfc81d5cddd220fb0f5df07ad594ec098e73bde13baf939d5282b98f98e183",
+      "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/masters/large",
+      "project_id": "312ebcf4bf2f5c5bc728b85ec48df0a6c9",
+      "seed_wall_ns": 912190708,
+      "store_sha256": "e9b9c14432a95b905b3a71d8dd6ff9e7e5da86659cf414b376c9809227916f85",
+      "verify_wall_ns": 72321875
+    },
+    "package": {
+      "branch_id": "11bc4a71180870f7945155fbb02f4b0a2e",
+      "genesis_layer": "32d274b98d5d1543c7d1dc32d7739b87b38d399ab24772b8597e7437285e27fb14",
+      "genesis_root": "7a3eb49e604484d89456068d15982df41b2b0d5c744108b69a55af9c9ae3bfe3",
+      "genesis_root_serial": 1,
+      "history_sha256": "90bf4d6e49954708f7acb854ed3e4d25bfc4fb52171151dddbb059d77d9ba9d2",
+      "init_wall_ns": 625907667,
+      "old_commit": "1272e0710b783f822e6721e3e5c9d1f061c5440cb71582c2ee7bcf19ee66beb07e",
+      "old_manifest_sha256": "14980ce47e46458c1101db36105893f5f8a7a90a5c592701c717787ca424398e",
+      "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/masters/package",
+      "project_id": "312f3c74f9d0126f15fd5b5a3b9e1b1a18",
+      "seed_wall_ns": 1564330666,
+      "store_sha256": "eb371a08533bb461d374e80b048ab0893f1e95d6e500d2eff596de840ec47f3f",
+      "verify_wall_ns": 654456125
+    },
+    "repeated": {
+      "branch_id": "11dd13795d0e0b52c84e793c55a3754654",
+      "genesis_layer": "328f888231a25769d8ad8e5fa2c5319334266ebd360578c458043e6a3138564edf",
+      "genesis_root": "c1964425fddb381a8896cd72207d2d1ace0f392f7dd87979effba112e0959ae9",
+      "genesis_root_serial": 1,
+      "history_sha256": "f9f37166b0ac2d4d25f192cb9efc4c4ad8d45385f9eaedc5abd8076458553d79",
+      "init_wall_ns": 25940792,
+      "old_commit": "12525f6436d7316c22ff08414e57cc1076844ab719f9397f8fb4bc8ac6548cce3f",
+      "old_manifest_sha256": "311d9b550234bc7aec8e2e55f67d02490122b2ec076e22a4902c276d562b1540",
+      "path": "/Users/yifanxu/.codex/worktrees/97b3/layerfs-main-verify-cab07b60/benchmark-results/issue252-main-verify/shell-prepared-01/functional/masters/repeated",
+      "project_id": "31be4ec0c3226f1e1246c1b7861ff03a4b",
+      "seed_wall_ns": 906535000,
+      "store_sha256": "2a2ef7cb5a59ca87523e35d11ea829284c4989d87fe9fad275054e1ab15a6726",
+      "verify_wall_ns": 39587333
+    }
+  },
+  "registry_sha256": "1a7e1a3f7ea40ea14ed9f97865260c936df53601cfd5d0082c0db4041849cd3c",
+  "schema": "issue243-shell-prepared-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+    "product_seal": "68ae80f383e3d8ac8aae19f557cd2403e4ae7a986ec2534e63c69b48f74f5b0c",
+    "source_commit": "cab07b60ef69bc70323fb01ba23938b00daa1623",
+    "source_dirty": false,
+    "source_tree": "90965958d12b6ce1f8e1f372a236989e69eec92d"
+  },
+  "v2_files": {
+    "core/package.json": {
+      "sha256": "a80af2b9778ab0d3d70a8cb1741d20918cef1cdc542b27cd955bd826e8ada79f",
+      "size": 43
+    },
+    "package-lock.json": {
+      "sha256": "6bce3148321ae7af2e066e6b17a580343dcfa19d703b78ad02bfadb9af864cc7",
+      "size": 203
+    },
+    "parser/generated/tokenize.js": {
+      "sha256": "98e633e62acced41620b996613dbb44bfab655d0cc5da79bf297f1bd00b88763",
+      "size": 43
+    },
+    "parser/lib/parse.js": {
+      "sha256": "c795572611319db15a0295234595f10e094ac27d7b95a60618a4aa202c4b1874",
+      "size": 65536
+    },
+    "parser/package.json": {
+      "sha256": "8e8bcde33a21c47de9bd78e3e8d43b5d410d85b16b2a3da4eb9be42ecd36d42b",
+      "size": 45
+    },
+    "patch-4k.bin": {
+      "sha256": "26b7e40be0bcf3e6667020b3acf6e07faa17585b21b2936305dd6c9ad3860b15",
+      "size": 4096
+    },
+    "ui/dist/ui.js": {
+      "sha256": "e51f1269253dd16031ab59c9a386c7f4d84b124bf174ca0283a74042ae1ea408",
+      "size": 1048576
+    },
+    "ui/package.json": {
+      "sha256": "5e72ba14dc582da9fc6bed008b4a2dcedfb226553c264812e31f2cc4b918948b",
+      "size": 41
+    }
+  }
+}
