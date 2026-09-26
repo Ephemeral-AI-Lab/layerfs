@@ -12,7 +12,9 @@
 The only **logical serialization rule** is one active Commit/Stage submission
 per Workspace. One sandbox daemon admits multiple mounted Workspaces. Independent
 `WorkspaceApi::exec` commands may overlap within a Workspace and across
-Workspaces. A Commit freezes that Workspace's `G1` root while later accepted
+Workspaces. No fixed per-daemon, per-Workspace or lifetime Exec count is part of
+admission; only the resources each active command actually owns can bind.
+A Commit freezes that Workspace's `G1` root while later accepted
 filesystem calls update `G2`; a command is not an atomic transaction and its
 syscalls can straddle the capture boundary. Different Workspaces may Commit
 concurrently if the Store's charged writer budget admits them. Two Workspaces
@@ -51,12 +53,12 @@ listed below instead of being called resource limits.
 | 8 GiB `SaveFile` body | Descriptor bytes plus final Local/Zero bytes for one save; it can bind before available spool space. | #248 makes stream admission depend on charged actual bytes and a declared storage budget, with checked totals and no hidden run cap. |
 | 256 observed nodes, 128 simultaneous handles, 1,024 directory cookies | Cached/pinned runtime observations and readdir positions, not total changed files. | #256 indexes and evicts only unpinned observations; live handles/cursors grow with charged RAM/FD/backing and release on close. |
 | 32 private roots and 11 arenas | Simultaneously owned COW/capture states and backing contexts across Workspaces. | Shared backing work and #249 use charged registries, prompt safe reclamation and a concurrency proof. A pinned root cannot be evicted to make room. |
-| One daemon-selected mount and one live control session | Multiple SDK calls and Workspaces cannot overlap even when resources exist. | #249 keys daemon ownership by Workspace ID and incarnation, gives each admitted command a process lease, and removes the global dispatch hold. |
+| One daemon-selected mount and one live control session | Multiple SDK calls and Workspaces cannot overlap even when resources exist. | #249 keys daemon ownership by Workspace ID and incarnation, gives each admitted command a process lease, and removes the global dispatch hold. No numeric Exec count replaces this singleton. |
 | 30-second whole-Exec deadline | The daemon kills a long shell process group. | #249 removes the total command timer across SDK, Bridge, native transport and daemon; explicit cancellation, disconnect and teardown retain process custody. |
 | 4,096-byte Exec command text | The UTF-8 string passed to `/bin/sh -c`, not bytes written by the command. | For a command-text-unbounded public API, #249 must stream/charge the command and define execution from a script FD or equivalent when it exceeds OS argument limits. Preserve or version the small-command `/bin/sh -c` behavior. |
 | 8 MiB per direct `Workspace::write_file` payload | One internal write call, not a file or shell command. The mounted FUSE route negotiates at most 128 KiB per WRITE callback. | A huge mounted file already uses many callbacks. If direct single-call writes must scale too, #248 must stream/split the payload and construct one atomic mutation with bounded memory. A 128 KiB FUSE callback remains a batch size. |
 
-The source anchors for the non-namespace rows are [request/stream limits](../../../crates/layerfs-bridge/src/contract/request.rs), [Exec validation](../../../crates/layerfs-bridge/src/contract/workspace_request.rs), [SDK Exec](../../../crates/layerfs-api/sdk/src/workspace.rs), [daemon execution](../../../crates/layerfs-daemon/src/execution.rs), [Workspace writes](../../../crates/layerfs-workspace/src/filesystem/write.rs), [FUSE write negotiation](../../../crates/layerfs-fuse/src/adapter.rs), [page references](../../../crates/layerfs-workspace/src/backing/metadata_pages.rs), [root/arena ownership](../../../crates/layerfs-workspace/src/backing/metadata.rs), [live state](../../../crates/layerfs-workspace/src/runtime/state.rs), and [directory cookies](../../../crates/layerfs-workspace/src/filesystem/directory.rs). The [joint tree study](JOINT_248_256_TREE_RESEARCH.md) gives page, payload and namespace capacity estimates rather than admission measurements.
+The source anchors for the non-namespace rows are [request/stream limits](../../../crates/layerfs-bridge/src/contract/request.rs), [Exec validation](../../../crates/layerfs-bridge/src/contract/workspace_request.rs), [SDK Exec](../../../crates/layerfs-api/sdk/src/workspace.rs), [daemon execution](../../../crates/layerfs-daemon/src/execution.rs), [daemon creation lifecycle](../../../crates/layerfs-daemon/src/lifecycle.rs), [Workspace host admission](../../../crates/layerfs-workspace/src/runtime/host.rs), [Workspace writes](../../../crates/layerfs-workspace/src/filesystem/write.rs), [FUSE write negotiation](../../../crates/layerfs-fuse/src/adapter.rs), [page references](../../../crates/layerfs-workspace/src/backing/metadata_pages.rs), [root/arena ownership](../../../crates/layerfs-workspace/src/backing/metadata.rs), [live state](../../../crates/layerfs-workspace/src/runtime/state.rs), and [directory cookies](../../../crates/layerfs-workspace/src/filesystem/directory.rs). The [joint tree study](JOINT_248_256_TREE_RESEARCH.md) gives page, payload and namespace capacity estimates rather than admission measurements.
 
 ## Large files and one WRITE
 
@@ -103,6 +105,37 @@ single-argument limit. Executing from a script FD may change `$0` and stdin
 semantics relative to `/bin/sh -c`; specify and test that contract rather than
 silently switching behavior.
 
+## Lightweight, count-free Exec supervision
+
+Let `Q` be active Exec commands, `N` completed Exec commands and `W` live
+Workspaces. The current daemon has one control `Session` and a thread for that
+session; its Exec path polls one child and its pipes every five milliseconds.
+Replacing that one session with one worker thread and stack per command would
+make concurrency expensive even though it removes the refusal. The #249 target
+uses an event-driven supervisor shared by admitted commands:
+
+```text
+SDK calls -> authenticated control connections -> small keyed Exec leases
+                                                 |   (Workspace ID, request ID)
+                      shared readiness/exit loop -+-- socket, stdout/stderr pipes
+                                                 +-- child exit and cancellation
+                                                 +-- bounded-rate heartbeat
+               one lease = process group + required FDs + bounded output
+               completed lease -> response + reap + release, no history scan
+```
+
+Use nonblocking pipe/socket readiness and child-exit notification on the
+daemon's Linux platform, with one supervisor or a small fixed set shared by
+all commands. There is no dedicated OS thread, 2 MiB stack, fixed semaphore
+count or timer poll loop per Exec. Each admitted command owns `O(1)` small
+daemon metadata plus its actual process, FDs and bounded output; total daemon
+owner state is `O(W + Q)`, not `O(N)` or a fixed-size array. Admission and
+retirement must not scan previous commands; work follows ready I/O and exited
+children. A shell may create its own child processes, charged by the sandbox's
+PID/memory limits. When process or FD creation fails, report the resource
+failure precisely, with no hidden Exec-count refusal or unbounded wait queue.
+The Workspace-count policy does not count Exec leases.
+
 ## Tree references and live ownership
 
 Private [`PageRef`](../../../crates/layerfs-workspace/src/backing/metadata_pages.rs)
@@ -131,9 +164,16 @@ Directory pagination needs a resumable cursor or charged cookie backing so
 one large directory does not require all prior names resident. Root and arena
 registries reclaim entries only after the last owner releases them. The
 current sandbox launcher sets `LAYERFS_WORKSPACE_MAX_COUNT=2`; [#219](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219)
-tracks an operator admission setting. That selected policy must support
-multiple Workspaces and must not hide a lower singleton daemon limit. It is
-separate from the one-Commit-per-Workspace ordering rule.
+is now the sibling of #249 under #245. It owns the operator
+`max_workspaces_per_sandbox` admission policy for Workspaces created
+*internally by the daemon* through `WorkspaceHost::attach`. Its one selected
+positive value is chosen when a sandbox is created, with the current internal
+`2` proposed as the default; it is immutable for that sandbox's lifetime.
+The daemon reserves before a Workspace becomes visible and releases only after
+exact cleanup. Attaching and retained failures count, but completed past
+Workspaces do not. The selected setting may admit multiple Workspaces without
+a lower singleton daemon cap. It never counts Exec commands or generations
+and is separate from the one-Commit-per-Workspace ordering rule.
 
 ## Proof before a resource-only claim
 
@@ -149,7 +189,12 @@ separate from the one-Commit-per-Workspace ordering rule.
 3. For #249, mount at least two Workspaces in one sandbox, overlap two Exec
    calls on one Workspace, and overlap Commits on distinct Workspaces with
    Store writer capacity for two. The second Commit on one Workspace must not
-   publish. Test a moved shared Branch head separately.
+   publish. Test a moved shared Branch head separately. With enough PID/FD/RAM
+   headroom, increase simultaneous Exec count on one and several Workspaces;
+   then complete many sequential calls and verify that command leases return
+   to baseline, no completed-command scan appears and no per-Exec supervisor
+   thread is created. #219's configured Workspace count remains unchanged by
+   Exec admission.
 4. Run an Exec beyond the old 30-second boundary with no file or output
    progress; it must remain live. Cancel/disconnect/teardown must reap its
    process group. Keep transport heartbeat and output state bounded. Test a

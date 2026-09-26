@@ -25,7 +25,9 @@ see the [phase-by-phase audit](ARCHITECTURE_COMPLEXITY_RESEARCH.md#what-writes-c
 The #252 SaveFile cutover removed the explicit 4,096 final-run admission check.
 [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) still owns its public 4,097-run and scaling proof;
 [#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns the separate many-file namespace limits;
-[#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon-control concurrency.
+[#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns daemon-control concurrency;
+its sibling [#219](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219)
+owns `max_workspaces_per_sandbox` admission for daemon-created Workspaces.
 The [resource-constraint lift plan](RESOURCE_CONSTRAINT_LIFT_PLAN.md) records
 the later owner direction: one Commit/Stage submission per Workspace is the
 only logical serialization rule; multiple Workspaces and commands may overlap
@@ -90,7 +92,7 @@ timer. These are target behaviors, not current product claims.
 | Three latent extent-sequence defects | ✅ fixed this round | `0d4834f81` (over-ceiling implicit base), `036847824` (O(pages) descend, post-insertion `Io`) |
 | 4,097-run public scaling | ⬜ open after #252 | #252 retired the explicit 4,096 admission check; [#248](https://github.com/Ephemeral-AI-Lab/layerfs/issues/248) owns the full SDK/FUSE speed, structural and Commit proof |
 | Many-file namespace scaling | ⬜ open | [#256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/256) owns 128 dirty identities/names, prepared streaming and adjacent count limits |
-| Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns multi-Workspace daemon/session concurrency, one Commit per Workspace and removal of the whole-Exec timer |
+| Multiple simultaneous SDK Exec calls and mounts | ⬜ open after #248 | [#249](https://github.com/Ephemeral-AI-Lab/layerfs/issues/249) owns lightweight, count-free Exec delivery, multi-Workspace daemon concurrency, one Commit per Workspace and removal of the whole-Exec timer; sibling [#219](https://github.com/Ephemeral-AI-Lab/layerfs/issues/219) owns Workspace creation capacity |
 
 The four decisions for D/E/F and their original handoff remain in
 [HANDOFF_D_E_F.md §8](HANDOFF_D_E_F.md). D, E and the frozen F comparative
