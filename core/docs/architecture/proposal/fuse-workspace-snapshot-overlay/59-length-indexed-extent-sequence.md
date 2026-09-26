@@ -304,3 +304,47 @@ descent, that the same bound holds for a walk resumed at the midpoint, and that
 both return the sequence exactly, in order, with every byte accounted for. These
 are page-visit counts from the same traversal the mounted path uses, not a
 latency or throughput claim.
+
+## 10. The insertion point at a boundary (2026-09-26, #248 phase 2)
+
+Written against the source this section is committed with. No page format,
+public API or canonical Store representation changes.
+
+**The refusal.** The walk treated a subtree as untouched when the replaced
+interval started at or after its end (`upper < splice.start || lower >=
+splice.end`, and the same test per child and per record). A replacement that is
+*inserted* at a boundary — an append at the end of the file, an insertion at the
+end of a leaf page, or an insertion at the start of the sequence — therefore
+never landed in a leaf inside the walk. The caller merged it afterwards, in
+`replace`, and appended the leaf page it produced to the already rebuilt root.
+That page is a leaf while the rebuilt root declares a level above it, so the
+splice refused the whole mutation with `Capacity` whenever the sequence had more
+than one leaf page. Appending to any file of about 125 or more extents failed:
+the mounted 4,097-separated-write shape could not be written at all.
+
+**The rule.** A subtree, a child and a record are touched when the replaced
+interval strictly overlaps them **or** when the pending replacement still has to
+be inserted inside their range:
+
+| Condition | Meaning |
+| --- | --- |
+| `upper > start && lower < end` | the interval strictly overlaps the range |
+| `lower <= start <= upper`, replacement still pending | this range carries the insertion point |
+
+The second condition is evaluated in sequence order and the first range that
+satisfies it takes the replacement, which drains it: exactly one leaf receives
+it. A range that ends exactly at the insertion offset is preferred over the one
+that starts there, so an append merges into the last leaf and an insertion at a
+leaf boundary merges into the preceding leaf. A range the interval does not
+overlap and that does not carry the insertion point is still shared by
+reference, exactly as before.
+
+**Counted evidence.** Through the page-format-identical in-memory store: 125
+one-byte extents (two leaf pages, root at level 1) accept an append at their end
+and read back as 126 extents in order, a second append continues from the merged
+leaf, and the generation the append replaced still reads its own 125 extents; an
+insertion at offset 124 of a 248-extent two-leaf sequence — the boundary between
+both leaves — and an insertion at offset 0 both read back as 249 extents in
+order, with every leaf still exactly one level below the root. The same shape
+driven through the mounted Workspace API in `tests/commit_progress.rs` accepts
+384 consecutive appended writes (four leaf pages) and transfers all of them.

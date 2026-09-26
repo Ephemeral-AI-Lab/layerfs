@@ -1034,6 +1034,80 @@ fn one_walk_advances_without_rereading_the_path_above_each_leaf() {
     assert!(resumed <= 2 * pages + 4);
 }
 
+/// The rendering of `count` one-byte private extents in sequence order.
+fn ones(count: u64) -> String {
+    (0..count)
+        .map(|at| format!("{at}:L:0:1"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[test]
+fn an_append_to_a_multi_leaf_sequence_merges_into_its_last_leaf() {
+    let f = Fixture::new();
+    // 125 one-byte extents are two leaf pages: the root is a branch, so the
+    // sequence's end is the end of a child rather than of the root's own leaf.
+    let root = f.build(&separated(125), 125).unwrap();
+    assert_eq!(structure(&f, root), (2, 1, 0));
+    let appended = f
+        .splice(root, 125, 125, 0, 125, 126, &[local(0, 1, 900, 901)])
+        .unwrap();
+    assert_eq!(appended.length, 126);
+    assert_eq!(appended.replacement, 126);
+    // The unfolded prefix is shared by reference, so this splice cannot count
+    // the whole sequence's edit runs exactly and records the shared marker;
+    // lowering derives the exact count from the sequence.
+    assert_eq!(appended.edits, u16::MAX);
+    let (leaves, level, spines) = structure(&f, appended.root);
+    assert_eq!((leaves, level, spines), (2, 1, 0));
+    assert_eq!(f.render(appended.root, 126), ones(126));
+    // The generation the append replaced still reads exactly its own bytes.
+    assert_eq!(f.render(root, 125), ones(125));
+    // A second append continues from the merged leaf rather than from a
+    // boundary the rebuilt tree no longer has.
+    let again = f
+        .splice(
+            appended.root,
+            126,
+            126,
+            0,
+            appended.replacement,
+            127,
+            &[local(0, 1, 902, 903)],
+        )
+        .unwrap();
+    assert_eq!(f.render(again.root, 127), ones(127));
+}
+
+#[test]
+fn an_insertion_at_a_leaf_boundary_lands_in_the_preceding_leaf() {
+    let f = Fixture::new();
+    // Two full leaf pages: offset 124 is both the end of the first leaf and the
+    // start of the second, and the replacement must land in exactly one of them.
+    let root = f.build(&separated(248), 248).unwrap();
+    assert_eq!(structure(&f, root), (2, 1, 0));
+    let inserted = f
+        .splice(root, 124, 124, 0, 248, 249, &[local(0, 1, 904, 905)])
+        .unwrap();
+    assert_eq!(inserted.length, 249);
+    assert_eq!(inserted.replacement, 249);
+    // The leaf that took the insertion grew past one page, so the sequence
+    // holds three leaf pages, all still one level below the root.
+    let (leaves, level, spines) = structure(&f, inserted.root);
+    assert_eq!((leaves, level, spines), (3, 1, 0));
+    assert_eq!(f.render(inserted.root, 249), ones(249));
+    // The very start of a multi-leaf sequence is the same boundary from the
+    // other side: the first leaf takes the replacement.
+    let prepended = f
+        .splice(root, 0, 0, 0, 248, 249, &[local(0, 1, 906, 907)])
+        .unwrap();
+    assert_eq!(prepended.length, 249);
+    assert_eq!(f.render(prepended.root, 249), ones(249));
+    let (leaves, level, spines) = structure(&f, prepended.root);
+    assert_eq!((leaves, level, spines), (3, 1, 0));
+    assert_eq!(f.render(root, 248), ones(248));
+}
+
 #[test]
 fn a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary() {
     let f = Fixture::new();

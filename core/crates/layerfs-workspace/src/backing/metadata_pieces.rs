@@ -441,8 +441,9 @@ pub fn replace<S: PieceStore + ?Sized>(
     }
     let mut level = level;
     if !walk.leaves.is_empty() {
-        // Only a fold into the root's own children leaves pages here, and those
-        // pages are leaves: the level above them is rebuilt below.
+        // Every leaf a fold opens is placed inside `descend`, so only the
+        // implicit-base and empty-sequence paths of a NULL root leave pages
+        // here: those pages are the whole result and their level is 0.
         if level.level != 0 && !level.pages.is_empty() {
             return Err(WorkspaceError::Capacity);
         }
@@ -512,6 +513,22 @@ struct Walk<'a, 'w, S: PieceStore + ?Sized> {
     base_length: u64,
 }
 impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
+    /// Whether the replaced interval touches the subtree covering
+    /// `lower ..= upper`: either it strictly overlaps the replaced range, or it
+    /// is the subtree the pending replacement still has to be inserted into.
+    ///
+    /// The second half is what an insertion at a boundary needs. A replacement
+    /// is inserted at its own start offset, which can be exactly the end of the
+    /// sequence, the end of a leaf, or the end of a whole subtree — an append is
+    /// the common case. The first subtree whose range still contains that offset
+    /// takes the replacement, and taking it drains it, so exactly one does.
+    /// Without it the boundary replacement would be merged after the tree above
+    /// had already been rebuilt, and the leaf that carries it could not be
+    /// placed: its level no longer matches the rebuilt nodes beside it.
+    fn touches(&self, lower: u64, upper: u64, splice: Splice) -> bool {
+        (upper > splice.start && lower < splice.end)
+            || (!self.replacement.is_empty() && lower <= splice.start && splice.start <= upper)
+    }
     fn new(
         store: &'a S,
         window: &'w mut Window,
@@ -550,7 +567,7 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
         let bytes = self.store.read(page, self.window)?;
         let length = metadata_pages::piece_body_length(&bytes)?;
         let upper = lower.checked_add(length).ok_or(WorkspaceError::Io)?;
-        if upper < splice.start || lower >= splice.end {
+        if !self.touches(lower, upper, splice) {
             // The replaced interval does not touch this subtree. It is shared
             // exactly as it stands and placed by the lengths on its own path.
             // A subtree ending exactly where the interval begins is carried the
@@ -610,7 +627,7 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                 let stop = covered
                     .checked_add(child.length)
                     .ok_or(WorkspaceError::Io)?;
-                if stop <= splice.start || covered >= splice.end {
+                if !self.touches(covered, stop, splice) {
                     // The replaced interval does not touch this child. The
                     // branch page already names the child and its subtree
                     // length, so sharing it by reference reads no page of it:
@@ -688,8 +705,11 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
                     .filter(|end| *end <= MAX_FILE);
             }
             let stop = at.checked_add(piece.length).ok_or(WorkspaceError::Io)?;
-            if stop <= splice.start || at >= splice.end {
-                // Outside the replaced interval: retained exactly, and keeping
+            let overlaps = stop > splice.start && at < splice.end;
+            let takes = !self.replacement.is_empty() && at <= splice.start && splice.start <= stop;
+            if !overlaps && !takes {
+                // Outside the replaced interval and not the extent the
+                // replacement is inserted into: retained exactly, and keeping
                 // its own origin offset.
                 self.emit(piece)?;
             } else {
