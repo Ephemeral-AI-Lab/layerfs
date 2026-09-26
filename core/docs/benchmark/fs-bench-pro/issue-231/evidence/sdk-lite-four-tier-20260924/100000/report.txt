@@ -1,0 +1,5 @@
+case	samples	operation_ns	command_ns	verification_ns	functional	performance	cache	verification_scope
+namespace-100-compact-v3	0	None	None	None	NOT_RUN	NOT_RUN	source-cache-uncontrolled-v1	complete paths/kinds; sampled file metadata/content
+namespace-1000-compact-v3	0	None	None	None	NOT_RUN	NOT_RUN	source-cache-uncontrolled-v1	complete paths/kinds; sampled file metadata/content
+namespace-10000	0	None	None	None	NOT_RUN	NOT_RUN	source-cache-uncontrolled-v1	complete paths/kinds; sampled file metadata/content
+namespace-100000	1	5588053292	5607812208	2849658958	PASS	INELIGIBLE	source-cache-uncontrolled-v1	complete paths/kinds; sampled file metadata/content

@@ -1,0 +1,32 @@
+{
+  "cache_contract": "zero-resident-source-payload; metadata and scratch-run cache unqualified; no speed claim",
+  "candidate_identity": {
+    "cargo_lock_sha256": "72919f072f26a55ed8e2d3284536fe11dd0e5149fd2f9058ed96a36df2ad1a06",
+    "contract_commit": "05fb205d391d551a17bde86a00c969310b6e7406",
+    "dirty_paths": [
+      " M core/benchmark/fs-bench-pro/runner.py",
+      " M core/crates/layerfs-content/src/filesystem/mod.rs",
+      " M core/crates/layerfs-service/src/save/catalog.rs",
+      " M core/crates/layerfs-service/src/save/import/namespace.rs",
+      " M core/crates/layerfs-service/src/save/import/scan.rs",
+      " M core/crates/layerfs-storage/src/cas/store.rs",
+      "?? core/crates/layerfs-api/sdk/examples/benchmark_init_memory.rs",
+      "?? core/crates/layerfs-content/src/filesystem/native_fresh.rs",
+      "?? core/crates/layerfs-content/tests/native_fresh.rs"
+    ],
+    "harness_seal": "96e74ab69821c13c33649c5873003151c72d0502a7657980860686047c1614a6",
+    "product_seal": "926fe91b07868cc1abf4908a431b7daeb3162a810db18f2234c03478cddbd8f5",
+    "source_commit": "2373c7014fbd9d6d217246c5eee11240e1093cbf",
+    "source_dirty": true,
+    "source_tree": "7ff8b5257370076449f4d7aaa0bbe9a2ee798c89"
+  },
+  "candidate_output": "benchmark-results/fs-bench-pro/issue237-native-record-20260924-01",
+  "candidate_peak_rss_plus_scratch_target_bytes": 119242752,
+  "control_peak_rss_bytes": 127631360,
+  "control_receipt": "core/docs/issues/237/evidence/c3-inode-fusion-20260924/candidate/receipt.json",
+  "driver_sha256": "2e38208be8ce2cece723f63e664093f78c47ef9c91da03760840aa7743e6d70e",
+  "measurement": "one real public Client::init_project call, independent source copy, fresh Store/History, reopened full 101001-path oracle; no resampling",
+  "question": "Does native compact record replay cut conservative whole-call peak (RSS plus peak scratch bytes) by at least 8 MiB against retained direct-inode control?",
+  "runner_sha256": "5cd8fc98a6219a1532db5d8bde4e6b948a6e1de481ea9be74457d3eaefc1c48f",
+  "status": "FROZEN_BEFORE_BUILD"
+}

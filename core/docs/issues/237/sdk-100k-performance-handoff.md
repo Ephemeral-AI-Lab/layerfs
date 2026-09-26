@@ -1,5 +1,14 @@
 # Handoff: measure 100,000-file SDK Init
 
+> **Superseded on 2026-09-24. Do not execute the debug-profile procedure
+> below.** New Core SDK Init measurements use locked release binaries only;
+> the [four-tier release result](../../benchmark/fs-bench-pro/issue-231/SDK-RELEASE-FOUR-TIER-RESULTS-20260924.md)
+> records a completed 100k public call and a five-second verifier timeout.
+> The later [lite verifier result](../../benchmark/fs-bench-pro/issue-231/SDK-VERIFIER-LITE-RESULTS-20260924.md)
+> passes a deterministic content sample under 9.5 s; it does not claim full
+> content readback or performance admission.
+> The original handoff is retained below as historical planning context.
+
 > **Status:** Next-agent task; **no SDK 100k call has been run**. This is a
 > prospective, one-shot **debug-profile diagnostic**, outside the frozen #236
 > SDK v2 selection. Keep its `namespace-100000` row `NOT_RUN` in that selection.

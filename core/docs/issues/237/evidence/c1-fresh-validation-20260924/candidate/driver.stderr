@@ -1,0 +1,14 @@
+issue237-memory-phase-v1 label=import_begin peak_rss=22708224 current_rss=22708224 footprint=21152128
+issue237-memory-vectors-v1 phase=scan entries=101001 entries_reserved=14680064 jobs=100000 jobs_reserved=9437184 name_lengths=705000 path_lengths=16000000
+issue237-memory-phase-v1 label=scan_end peak_rss=75841536 current_rss=75841536 footprint=74203568
+issue237-memory-phase-v1 label=file_loop_end peak_rss=106364928 current_rss=106119168 footprint=70287912
+issue237-memory-phase-v1 label=file_save_end peak_rss=106364928 current_rss=97320960 footprint=70255120
+issue237-memory-phase-v1 label=namespace_entry peak_rss=106364928 current_rss=97337344 footprint=70255120
+issue237-memory-vectors-v1 phase=prereq serials_reserved=808008 metadata_reserved=0 content_roots_reserved=0 inodes_reserved=8888088
+issue237-memory-phase-v1 label=prereq_end peak_rss=106364928 current_rss=99090432 footprint=72008232
+issue237-memory-vectors-v1 phase=tree_input inodes_reserved=8888088 directories_reserved=32032 entries=101001
+issue237-memory-phase-v1 label=tree_input peak_rss=106364928 current_rss=106004480 footprint=78922280
+issue237-memory-phase-v1 label=tree_build_end peak_rss=121618432 current_rss=121618432 footprint=85623384
+issue237-memory-phase-v1 label=namespace_save_end peak_rss=125091840 current_rss=116293632 footprint=89080408
+issue237-memory-phase-v1 label=history_published peak_rss=125091840 current_rss=116310016 footprint=89080408
+issue237-memory-v1 t0_peak_rss=4980736 t1_peak_rss=125091840 t0_rss=4931584 t1_rss=116310016 t0_footprint=3572072 t1_footprint=89080408 user_cpu_ns=3912166000 system_cpu_ns=5943103000 t0_swaps=0 t1_swaps=0 highwater_status=exact-new-lifetime-high-water

@@ -11,7 +11,8 @@
 This research began in `codex/issue237-init-research` from `main` at
 `7df25f979`. Its accepted direct C1 build, bounded C2 group admission,
 Service layout and ImportBatch source are integrated with the #236 SDK API
-on `main`. Later experimental product candidates remain isolated. Integration
+on `main`. The C3 pack-placement rule was later promoted by #239; other
+experimental product candidates remain isolated. Integration
 does not close #237 or the four-tier #231 gate, and the older daemon-host
 measurements are not SDK benchmark results or release qualification. The only
 fixed database page size used here is 4 KiB. The
@@ -31,6 +32,28 @@ remain separate from the older daemon-host timings.
 The [next-agent SDK 100k handoff](sdk-100k-performance-handoff.md) freezes the
 case and the work required before its first debug SDK diagnostic. The current
 #236 two-case runner still records 100k as `NOT_RUN`.
+The [exact-source v0.1.6 and promoted C3 side-by-side](c3-v016-exact-source-side-by-side-20260924.md)
+compares their release routes by stage and closed Store geometry, with a
+separate count-driven merged-C3 diagnostic. It does not qualify a speed
+claim or close the sparse-history gate.
+The [matched t1 memory follow-up](c3-v016-exact-source-memory-result-20260924.md)
+compares the two routes with the same process peak-RSS instrument and
+records SQLite cache and source-inventory reservation evidence.
+The [C3 peak-memory phase diagnostic](c3-memory-phase-cause-result-20260924.md)
+locates new high-waters in scan, file Save and namespace construction;
+its separate receipt is not another performance sample.
+The [compact-Job memory treatment](c3-job-metadata-memory-result-20260924.md)
+narrows each file job's scanned metadata while retaining source
+identity checks; its one-shot release memory diagnostic and full
+oracle are separate from the earlier C3 rows.
+The [entry-lifetime memory treatment](c3-entry-lifetime-memory-result-20260924.md)
+failed its frozen whole-call peak gate and was reverted. The later
+[direct-inode allocation treatment](c3-prerequisite-inode-fusion-result-20260924.md)
+avoided two namespace root vectors and cut one diagnostic whole-call
+peak by 17.22 MiB, while remaining ineligible for a speed claim.
+The subsequent [fresh C1 validation state treatment](c1-fresh-validation-memory-result-20260924.md)
+passed full readback but cut peak by only 2.42 MiB against its frozen
+8-MiB gate; it was reverted without a speed claim.
 
 The methods and prospective differences are in the
 [preregistration](../../../../docs/roadmap/0.1/0.1.7/evidence/issue237-native-init-research/preregistration.md).

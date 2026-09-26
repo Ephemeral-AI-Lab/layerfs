@@ -1125,23 +1125,9 @@ fn the_pooled_value_cache_releases_at_its_declared_bound() {
     );
 }
 
-/// A pooled reader's pack cache is released when the save writes, and it must be.
-///
-/// A pack body is not immutable while a save runs: adding a group rewrites the
-/// pack's blob, because the directory grows and every body moves with it. A
-/// reader shared across a save's trials - the owner's own reader, which `P2-5`
-/// reuses instead of building one per trial - would otherwise decode a pack as it
-/// was before the write. Three groups in one pack make the sequence visible:
-/// the first read retains the pack, the second group's extent is then replaced,
-/// that group is still served from the retained body, and a third group - whose
-/// values were never cached - is refused once `release_packs` forces the pack to
-/// be read again. A fresh reader refuses the replaced extent from the start, which
-/// is what makes the middle step a stale read rather than an undamaged pack.
+/// Pooled flushes reuse one open pack, including across same-Save reads.
 #[test]
-fn a_pooled_reader_releases_pack_bodies_when_the_store_writes() {
-    use layerfs_storage::encoding::codec::DecompressionWorkspace;
-    use layerfs_storage::encoding::pool::PoolReader;
-
+fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
     let dir = TempDir::new("pool-pack-release");
     let path = dir.store_path("pool");
     let store = create_store(&path);
@@ -1152,10 +1138,13 @@ fn a_pooled_reader_releases_pack_bodies_when_the_store_writes() {
         leaf(1, &values)
     };
     let objects: Vec<FinalizedObject> = vec![build(0), build(100), build(200)];
+    let ids: Vec<_> = objects.iter().map(FinalizedObject::id).collect();
     disabled(|scope| {
         let mut operation = store.begin_save(scope.child("begin"))?;
-        for object in objects {
+        for (object, id) in objects.into_iter().zip(ids.iter()) {
             operation.accept(object)?;
+            let values = operation.read_batch(&[*id], scope.child("same-save-read"))?;
+            assert_eq!(ObjectId::for_bytes(&values[0]), *id);
         }
         operation.finish(scope.child("finish"))
     })
@@ -1163,79 +1152,49 @@ fn a_pooled_reader_releases_pack_bodies_when_the_store_writes() {
     drop(store);
 
     let reopened = open_store(&path);
-    let capacities = reopened.capacities();
     let connection =
         layerfs_storage::sqlite::connection::open(&path, false).expect("scoped connection");
-    let ceiling: i64 = connection
-        .query_row(
-            "SELECT retained_pack_ceiling FROM store_policy WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )
-        .expect("watermark");
-    let ordinals: Vec<u32> = {
+    let locations: Vec<(i64, i64)> = {
         let mut statement = connection
-            .prepare("SELECT first_ordinal FROM metadata_value_groups ORDER BY first_ordinal")
+            .prepare(
+                "SELECT pack_id, group_number FROM metadata_value_groups ORDER BY first_ordinal",
+            )
             .expect("catalogue query");
         let rows = statement
-            .query_map([], |row| row.get::<_, i64>(0))
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
             .expect("catalogue rows");
-        rows.map(|row| row.expect("ordinal") as u32).collect()
+        rows.map(|row| row.expect("pack location")).collect()
     };
-    assert!(ordinals.len() >= 3, "three groups were written");
-    let group = |ordinal: u32| {
-        layerfs_storage::sqlite::pool::group_for(&connection, ordinal)
-            .expect("catalogue")
-            .expect("a value group")
-    };
-    let (warmer, stale, released) = (group(ordinals[0]), group(ordinals[1]), group(ordinals[2]));
-    assert_eq!(warmer.pack_id, stale.pack_id);
-    assert_eq!(warmer.pack_id, released.pack_id, "one pack holds all three");
-
-    let mut workspace = DecompressionWorkspace::new().expect("workspace");
-    let mut reader = PoolReader::new();
-    // Warm the reader's pack cache FIRST: this is the state a later write
-    // invalidates, and the damage below stands in for that write.
-    reader
-        .group_values(&connection, &capacities, ceiling, &mut workspace, &warmer)
-        .expect("the warming group is served");
-
-    // Damage the extents of the two groups the reader has not read yet.
-    let mut bytes = support::read_pack_row(&connection, warmer.pack_id);
-    let header = layerfs_storage::pack::parse_header(&bytes).expect("pack header");
-    for row in [&stale, &released] {
-        let view = layerfs_storage::pack::group_view(&bytes, header, row.group_number)
-            .expect("group extent");
-        bytes[view.start + (view.end - view.start) / 2] ^= 0x01;
-    }
-    connection
-        .execute(
-            "UPDATE object_packs SET data = ?2 WHERE pack_id = ?1",
-            rusqlite::params![warmer.pack_id, bytes],
+    assert_eq!(locations.len(), 3, "three groups were written");
+    assert_eq!(
+        locations
+            .iter()
+            .map(|location| location.0)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        1,
+        "separate pooled flushes share a pack"
+    );
+    assert_eq!(
+        locations
+            .iter()
+            .map(|location| location.1)
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
+    let capacity: i64 = connection
+        .query_row(
+            "SELECT length(data) FROM object_packs WHERE pack_id = ?1",
+            [locations[0].0],
+            |row| row.get(0),
         )
-        .expect("external replace");
-
-    // Control: a reader with no retained body reads the replaced pack and refuses.
-    let mut fresh = PoolReader::new();
-    assert!(
-        fresh
-            .group_values(&connection, &capacities, ceiling, &mut workspace, &released)
-            .is_err(),
-        "the replaced extent is damaged: a reader without a cache must refuse it"
+        .expect("open pack capacity");
+    assert_eq!(
+        usize::try_from(capacity).unwrap(),
+        layerfs_storage::policy::PACK_LIMIT
     );
-
-    // The stale read: the retained pack still describes the group as it was.
-    reader
-        .group_values(&connection, &capacities, ceiling, &mut workspace, &stale)
-        .expect("the retained body still answers with the group as it was");
-
-    // Released: the next group, whose values the cache never held, is read from the
-    // pack as it now is - and refused.
-    reader.release_packs();
-    assert!(
-        reader
-            .group_values(&connection, &capacities, ceiling, &mut workspace, &released)
-            .is_err(),
-        "a released pack cache must re-read the replaced pack"
-    );
+    let (read, _) = read_objects(&reopened, &ids).expect("reopened pooled leaves");
+    for (id, bytes) in ids.into_iter().zip(read) {
+        assert_eq!(ObjectId::for_bytes(&bytes), id);
+    }
 }
