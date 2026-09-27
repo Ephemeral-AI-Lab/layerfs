@@ -9,9 +9,9 @@ use crate::{
     WorkspaceError,
 };
 
-// The codec accepts 248 children. A smaller copied branch bounds the child
-// ownership updates paid by each narrow splice.
-const BRANCH_CHILDREN: usize = 8;
+// The codec accepts 248 children. This smaller target bounds repeated
+// child-ownership I/O while keeping the existing full leaf packing.
+const BRANCH_CHILDREN: usize = 32;
 const MAX_HEIGHT: u8 = metadata_pages::LEVEL_LIMIT;
 
 /// Answers one rebuilt node at its own declared level.
