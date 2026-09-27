@@ -211,6 +211,13 @@ scanned or copied up by mounted rename. Direct C1 `LogicalPath`, path Inspect,
 source import and the caller's one-syscall pathname still have their separate
 path bounds; component traversal can reach deeper descendants.
 
+The post-review #264 correction in the same commit as this paragraph removes
+rename/remove's eager extra-Node reservation and changes the resident
+replacement/held-owner lookups to the existing serial index. This prevents an
+unrelated `O(P)` Node-table growth or scan from entering directory rename;
+the attached-chain and constant-count keyed-page work are its remaining
+namespace terms. Backing maintenance remains separately accounted work.
+
 The #264 telemetry follow-up in the same commit as this paragraph exposes
 `BackingStatus.metadata_writes`: successful immutable private page-file writes
 across the host's arenas. It counts candidate pages even when a later cleanup

@@ -3,8 +3,9 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
 Source basis: `46bac18e6` on `codex/issue264-phase45`, first parent
-`6115dfcd2`, itself based exactly on `ef3a31048` from PR #263. The private
-page-write telemetry and this checkpoint are in the same follow-up commit.
+`6115dfcd2`, itself based exactly on `ef3a31048` from PR #263. Private
+page-write telemetry is in `0e1a332b8`; the post-review resident-lookup
+correction and this revision of the checkpoint are in the same later commit.
 PR #263 remains stacked on unmerged PR #260; neither is merged here. The
 [Phase 4.5 design](PHASE4_5_IDENTITY_RELATIVE_NAMESPACE.md) is the planning
 baseline, and [Phase 4](PHASE4_INHERITED_RENAME.md) preserves its own prior
@@ -43,6 +44,13 @@ latency. Forget/collection work is separate and may walk each pinned directory's
 ancestors; its worst local bound is `O(P·d·log P)`. The retained names and
 ancestors stay charged to the host budget.
 
+The original `46bac18e6`/`0e1a332b8` source still had an `O(P)` resident
+replacement scan and eagerly reserved a Node slot during rename. The
+post-review correction uses `node_index` for replacement and held-owner
+lookups and reserves a new Node only for creation. Thus the bound above applies
+to this corrected source, including a successful empty-directory replacement;
+it did not apply to every successful directory rename in the earlier commits.
+
 ## Focused release-binary proof
 
 | Selection | Observed result |
@@ -50,8 +58,8 @@ ancestors stay charged to the host budget.
 | Linux `inherited_workspace` initial full selection | 9 passed, 0 failed, 0.59 s test time. Covered inherited and fresh moves, stale/held reads, frozen G1/G2, nested move/back, invalid replacement, cycle refusal, ancestor forget, detached held parent, canonical symlink and cached/uncached deep traversal. |
 | Changed focused budget and count selections | Both passed at the final test source, 0.05 s and 0.08 s respectively. No unaffected passing selection was rerun merely for a fresh number. |
 | Native Bridge `attributes` | 2 passed, 0 failed; subtag 8 roundtrip and invalid serial refusal included. |
-| Public `WorkspaceApi::exec` deep move | 1 passed, 1.14 s test time. One shell Exec made 13 component-relative destination directories, moved a base directory with an inherited leaf to a 4,123-byte logical descendant, read that leaf through relative `/proc/self/fd` traversal, and replaced a shallow temp file. One explicit Commit followed zero exit. An independent serial-based Service oracle checked moved identities/modes, both heads' deep bytes and content root, old-path absence, replacement bytes and absence of `.next`. |
-| Existing public inherited move Exec | 1 passed, 1.01 s test time, including its separate old/new full-tree oracle and explicit Commit. |
+| Public `WorkspaceApi::exec` deep move | 1 passed, 1.13 s test time on the corrected source. One shell Exec made 13 component-relative destination directories, moved a base directory with an inherited leaf to a 4,123-byte logical descendant, read that leaf through relative `/proc/self/fd` traversal, and replaced a shallow temp file. One explicit Commit followed zero exit. An independent serial-based Service oracle checked moved identities/modes, both heads' deep bytes and content root, old-path absence, replacement bytes and absence of `.next`. |
+| Existing public inherited move Exec | 1 passed, 0.99 s test time on the corrected source, including its separate old/new full-tree oracle and explicit Commit. |
 
 The deep fixture stays within macOS source pathname limits. Its mounted read
 uses ordinary Linux directory file descriptors and component-sized `cd` paths;
@@ -61,9 +69,9 @@ Exec wire bound, and ordinary shell `cd` reached Linux pathname refusal. Those
 were test setup/command failures before the final component traversal; none
 was retained as a passing product result. Existing release daemon image layers
 were reused with the new locked-release musl daemon binary. Final deep-Exec
-image ID: `sha256:9d51a960b3ac8dd8b5879ba94205574a0e64fe48b6988e7f751875911c0bcf8b`;
+image ID: `sha256:6e67cceb36d2a1a79f5b09165dd8f6b8ea00341eddb2010fe2fdb1ca87ea21d7`;
 daemon SHA-256:
-`fc7e5d2c3673fb47cac08d51e7814b9f390114c0d9b4f2812fb886e8c87ee84f`.
+`29c918d44b0cffa76f4a4495b7d85978ef473ae54525945cbb91c1e1a104d99f`.
 The host release `agent_route` binary SHA-256 was
 `41a41863abfe96d9f0e27713d108c8bc9433291c3fd8f3614be5fbcb9988e0d0`.
 
@@ -81,7 +89,7 @@ are operation counters, not cache-qualified speed samples:
 | Net newly allocated private pages | 3 | 3 |
 | Added metadata backing bytes | 16,384 | 16,384 |
 | Added total backing bytes | 16,384 | 16,384 |
-| Added charged host memory bytes | 2,199 | 2,199 |
+| Added charged host memory bytes | 2,103 | 2,103 |
 | Resident Nodes before rename | 4 | 4 |
 | Explicit Commit and clean close | PASS | PASS |
 
@@ -124,8 +132,9 @@ tests. The reference implementation remained **65,417** production lines:
 | --- | ---: | ---: | ---: |
 | `6115dfcd2` ancestor closure | 58,779 → 58,841 | 124,196 → 124,258 | +62 |
 | `46bac18e6` identity-relative route | 58,841 → 58,704 | 124,258 → 124,121 | −137 |
+| `0e1a332b8` private write telemetry | 58,704 → 58,722 | 124,121 → 124,139 | +18 |
 
-The follow-up telemetry/report commit records its own exact comparison in its
-commit message. Core and reference coexist: the combined decrease is mounted
+The post-review correction records its own exact comparison in its commit
+message. Core and reference coexist: the combined decrease is mounted
 path-state removal and responsibility relocation, not a claim about C1 Commit
 complexity or retirement of reference source.

@@ -271,7 +271,14 @@ impl Workspace {
         let new_directories = usize::from(!already_dirty) + usize::from(directory && !child_dirty);
         {
             let mut state = self.state()?;
-            self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
+            self.check_child_stamp(
+                &mut state,
+                baseline,
+                revision,
+                generation,
+                &view,
+                Some(kind),
+            )?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 &self.host,
@@ -344,7 +351,14 @@ impl Workspace {
         let _writer = host.writer()?;
         let needs_completion = {
             let mut state = self.state()?;
-            self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
+            self.check_child_stamp(
+                &mut state,
+                baseline,
+                revision,
+                generation,
+                &view,
+                Some(kind),
+            )?;
             self.check_mutation_coherence(&state, origin, false)?;
             if link_serial.is_none() && state.node_index.contains_key(&serial) {
                 return Err(WorkspaceError::Service(Code::Unknown.into()));
@@ -585,7 +599,14 @@ impl Workspace {
         node.names = 1;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(&mut state, baseline, revision, generation, &view, kind)?;
+        self.check_child_stamp(
+            &mut state,
+            baseline,
+            revision,
+            generation,
+            &view,
+            Some(kind),
+        )?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
@@ -728,13 +749,15 @@ impl Workspace {
         revision: u64,
         generation: u64,
         view: &View,
-        kind: NodeKind,
+        create_kind: Option<NodeKind>,
     ) -> Result<(), WorkspaceError> {
         self.available(state)?;
-        if kind == NodeKind::File {
-            super::open::handle_slot(state)?;
+        if let Some(kind) = create_kind {
+            if kind == NodeKind::File {
+                super::open::handle_slot(state)?;
+            }
+            state.reserve_nodes()?;
         }
-        state.reserve_nodes()?;
         let same = match (&state.overlay, &view.root) {
             (None, None) => true,
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),

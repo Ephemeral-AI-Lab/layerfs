@@ -172,9 +172,7 @@ impl Workspace {
         let name_bytes = 10 + name.len();
         {
             let mut state = self.state()?;
-            self.check_child_stamp(
-                &mut state, baseline, revision, generation, &view, child.kind,
-            )?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 &self.host,
@@ -195,9 +193,7 @@ impl Workspace {
         let _writer = host.writer()?;
         let needs_completion = {
             let mut state = self.state()?;
-            self.check_child_stamp(
-                &mut state, baseline, revision, generation, &view, child.kind,
-            )?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.completion.is_none()
         };
@@ -333,28 +329,18 @@ impl Workspace {
         candidate.seal(root, window, deadline)?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(
-            &mut state, baseline, revision, generation, &view, child.kind,
-        )?;
+        self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
-        let parent_node = state
-            .nodes
-            .iter()
-            .position(|node| node.attr.serial == parent)
-            .ok_or(WorkspaceError::Busy)?;
+        let parent_node = *state.node_index.get(&parent).ok_or(WorkspaceError::Busy)?;
         state.live_chain(parent, None, self.inner.root.serial)?;
         state.nodes[parent_node].attr = parent_directory.attributes(state.nodes[parent_node].attr);
         // One name of the child is gone, and the local lookup reference that name
         // owned is gone with it. A regular inode this generation created that no
         // name binds any more has no canonical identity to save.
-        if let Some(index) = state
-            .nodes
-            .iter()
-            .position(|node| node.attr.serial == child.serial)
-        {
+        if let Some(&index) = state.node_index.get(&child.serial) {
             if child.kind == NodeKind::Directory {
                 state.nodes[index].attached = false;
             }

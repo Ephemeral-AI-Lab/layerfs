@@ -217,14 +217,7 @@ impl Workspace {
         let name_bytes = 10 + source.len() + 10 + destination.len();
         {
             let mut state = self.state()?;
-            self.check_child_stamp(
-                &mut state,
-                baseline,
-                revision,
-                generation,
-                &view,
-                source_attr.attr.kind,
-            )?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.frontier_bytes(
                 &self.host,
@@ -245,14 +238,7 @@ impl Workspace {
         let _writer = host.writer()?;
         let needs_completion = {
             let mut state = self.state()?;
-            self.check_child_stamp(
-                &mut state,
-                baseline,
-                revision,
-                generation,
-                &view,
-                source_attr.attr.kind,
-            )?;
+            self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
             self.check_mutation_coherence(&state, origin, false)?;
             state.completion.is_none()
         };
@@ -532,14 +518,7 @@ impl Workspace {
         candidate.seal(root, window, deadline)?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
-        self.check_child_stamp(
-            &mut state,
-            baseline,
-            revision,
-            generation,
-            &view,
-            source_attr.attr.kind,
-        )?;
+        self.check_child_stamp(&mut state, baseline, revision, generation, &view, None)?;
         self.check_mutation_coherence(&state, origin, true)?;
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
@@ -586,11 +565,7 @@ impl Workspace {
             // created that no name binds any more has no canonical identity to
             // declare. Its record still moves to the successor root, so its open
             // handle keeps reading its own version.
-            if let Some(index) = state
-                .nodes
-                .iter()
-                .position(|node| node.attr.serial == replaced.attr.serial)
-            {
+            if let Some(&index) = state.node_index.get(&replaced.attr.serial) {
                 if replaced.attr.kind == NodeKind::Directory {
                     state.nodes[index].attached = false;
                 }
@@ -705,9 +680,9 @@ impl Workspace {
     /// while such an owner exists, and the carry reads the identity's record.
     pub(super) fn carried_owner(&self, serial: u64) -> Result<bool, WorkspaceError> {
         let state = self.state()?;
-        Ok(state.nodes.iter().any(|node| {
-            node.attr.serial == serial
-                && (node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0)
+        Ok(state.node_index.get(&serial).is_some_and(|index| {
+            let node = &state.nodes[*index];
+            node.lookups > 0 || node.projection_lookups > 0 || node.handles > 0
         }))
     }
     /// The moved identity's own record, when the live root holds none of it.
