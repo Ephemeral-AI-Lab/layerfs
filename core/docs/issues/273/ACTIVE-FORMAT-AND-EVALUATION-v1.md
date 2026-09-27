@@ -1,0 +1,231 @@
+# #273 active Workspace format and public evaluation, version 1
+
+> Prospective checkpoint 0 contract. This document freezes the intended format
+> and cases before product source or candidate samples. It records design bounds,
+> not implementation or measured results. The parent is #271; its original #248
+> 4,097-WRITE gate remains a distinct, unchanged selection. The source baseline
+> is `48b51e874a41b3e1e6c6661e145316df8b408f07`.
+
+## Boundary and identity
+
+One attached Workspace incarnation owns one active tuple: `(incarnation,
+generation, revision, namespace root, inode root, dirty root, extent roots,
+pack watermark)`. It persists across Exec calls. Publication changes the tuple
+once under the existing Workspace writer gate, then performs the existing
+checked projection notification. A capture pins the entire tuple and closes
+its pack tail; successor edits use new page versions. G1/G2 readers use their
+captured tuple until their pins end. Commit lowers only the final indexed view
+of dirty inodes through the current SaveFile descriptor/replacement stream;
+C1 `apply_edits` and `construct_stream` retain their current roles.
+
+The existing verified `<WorkspaceConfig.root>/private-backing/<workspace-id>/`
+directory owns all new files. The names are `a-pack-v1-<page-id>-<epoch>` and
+`a-index-v1-<page-id>-<epoch>`, with fixed-width lowercase hexadecimal IDs.
+They are disjoint from `p-*`, `m-page-*`, and `m-ledger-*`. Each name identifies
+one **allocated 4,096-byte file**, created exclusively relative to the verified
+directory handle with no symlink following. There is no preallocated segment,
+file directory, or index root per tiny file. The existing large-payload format
+remains readable for legacy roots, old captures, and writes larger than the
+tiny-slot limit. No old file is rewritten into v1 on attach. A partial prior
+incarnation is quarantined, never silently adopted or migrated. This temporary
+backing adds no crash-durability or `fsync` contract.
+
+## Page and record bytes
+
+All integers are big endian. Every page is exactly 4,096 bytes; bytes 0..128
+are its header and bytes 128..4096 its body. Header offsets are: magic `0..8`
+(`LFSAPAK1` or `LFSAIDX1`), version `8..10` (1), page kind `10..12`,
+Workspace incarnation `12..44`, page ID `44..52`, reuse epoch `52..60`,
+birth generation `60..68`, last revision `68..76`, used body bytes `76..78`,
+record count `78..80`, SHA-256 `80..112`, and zero `112..128`. The digest is
+SHA-256 of the entire page with bytes `80..112` zeroed. Read validates the
+header, digest, file identity, expected kind and zero tail before exposing a
+record. Page ID never aliases another live page; epoch increases before reuse.
+
+A tiny packed record has a 40-byte header followed by 1..128 data bytes:
+inode serial `0..8`, generation `8..16`, revision `16..24`, logical offset
+`24..32`, length `32..34`, ordinal `34..36`, flags `36..38` (zero in v1), and
+zero `38..40`. The page digest authenticates the complete record. An extent
+names a direct `(page ID, epoch, ordinal, inode, generation, revision,
+logical range)`; every read checks those fields against the slot. A
+split/overlap can leave several extent references to one slot. No locator
+indirection is used in v1. A disk-backed inverse-reference index names those
+references for compaction. Records are contiguous from byte 128, with no
+separate directory: 96 one-byte records or 23 maximum-size (128-byte data)
+records fit in 3,968 body bytes. The 4,096 one-byte checkpoint therefore
+needs 43 occupied pack pages before pinned copies and the inactive tail.
+
+Index pages use the same header and hash, with kinds for branch, leaf, and
+pooled small-inode records. A leaf body holds contiguous sorted records:
+`key_length:u16, value_length:u16, key, value`; a branch body holds sorted
+`key_length:u16, key, child_page_id:u64, child_epoch:u64` records plus its
+rightmost child. Key prefixes are `N|parent:u64|name_length:u8|name` for a
+namespace binding/tombstone, `I|serial:u64` for current inode attributes,
+`D|generation:u64|serial:u64` for the dirty frontier,
+`E|serial:u64|start:u64` for one extent, and
+`R|pack_page:u64|epoch:u64|ordinal:u16|serial:u64|start:u64` for one inverse
+slot reference. Duplicate keys and unsorted, overlapping extents are invalid.
+The inode value contains the existing 160-byte logical inode fields plus up
+to four inline extents; longer sequences use ordered `E` leaves. A short
+file therefore shares an inode page with other files. An extent value is
+`end:u64, kind:u8, source_offset:u64, page_id:u64, epoch:u64,
+ordinal:u16, source_generation:u64, source_revision:u64`; unused source fields
+are zero. Namespace values carry `serial:u64, kind:u8, tombstone:u8` and
+bounded portable attributes where required. A leaf holds ordered,
+nonoverlapping `(start, end, Base | Zero | Packed)` intervals.
+The current root and at most one right-edge leaf/spine per hot file may be
+cached; every cache page, staged candidate and handle is charged to the
+Workspace's Host memory budget. The page cache is capped at 64 index and 8
+pack pages, with eviction before admission; there is no resident map of all
+files or extents. The mutable active tuple uses page versions without creating
+an immutable `RootOwner` or traversing ownership edges per WRITE. A cached
+right edge is a fast path, not a different format or acknowledgement rule.
+
+## Safe publication and physical accounting
+
+The active pack tail has an acknowledged page and an inactive candidate page.
+Each tiny WRITE constructs a complete candidate from the acknowledged page,
+adds or replaces its slot, writes and re-reads the inactive page, then stages
+the affected index pages. A failed or short write never selects the candidate;
+it cannot damage an earlier acknowledged slot. Candidate index pages are also
+new versions. Once all pages validate, the Workspace gate publishes bytes,
+length, attributes, dirty membership and revision as one tuple update. Old
+pages can be reused only when no active, captured, handle or uncertain owner
+pins them. A postpublication notifier failure retains the typed coherence
+failure and the published receipt. An uncertain reply never triggers replay.
+
+Before creating a candidate, reserve its worst-case whole 4 KiB page count in
+the shared Host disk budget. Transfer the exact `st_blocks * 512` observed
+for each created file to that Workspace's charged allocation; charge any
+excess or failed partial allocation and stop admission if the reservation was
+insufficient. Keep a candidate's identity, completed bytes, actual blocks and
+failure phase until successful cleanup. A failed unlink, identity check or
+uncertain outcome leaves the page owned, charged and quarantined. Refund
+exactly the blocks observed before a successful physical unlink, after all
+handles close; a logical tombstone alone refunds nothing. One page file makes
+release and its block refund exact without hole punching. Clean close drains
+pins and candidates, accounts every page, removes `a-*` files, and only then
+allows `Directory::close` to remove the empty private directory.
+
+Every physical page records its birth capture sequence. On replacement, it
+is pinned exactly by captures made while it was current. Uncaptured old
+versions can be released in the publishing operation; captured ones enter an
+indexed retired-page queue and release after their last pin. A mixed pack page
+may be compacted only after all surviving slots and their inverse references
+are copied and the new indexed view is published. Compaction counts slots
+moved, references changed, 4 KiB reads/writes, and actual released blocks.
+Trigger when dead bytes exceed half a sealed page or quota admission needs
+reclaimable space; cap each mutation's relocation at one page and continue
+charged work at capture/Commit/close as applicable. No unbounded debt may be
+left after a complete measured command. A frozen generation never changes.
+
+The first implementation supports at most 128 successor dirty inodes (the
+existing reconcile refusal), 256 resident nodes, 128 handles, and 32 retained
+roots. It must refuse at a bound before mutating; it cannot claim unlimited
+files or generations. A name's deletion is a versioned tombstone. Open-unlinked
+handles and captured roots keep their data and physical charges until release;
+directory handles retain their selected namespace view.
+
+## Prospective cost and space gates
+
+Let `F` be indexed files, `D` dirty identities, `E_f` extents of file `f`,
+`K` extents overlapped by a write, `L` live tiny slots, `J` allocated pack
+pages, `I` allocated index pages, `P_pin` pages retained only by captures,
+`G` captured generations, and `Q_fetch` actual pack-page fetches. The target
+one-byte monotone right-edge path is amortized `O(1)` index/slot operations
+conditional on a cached right edge and no frozen-page copy. General WRITE is
+`O(log_B F + log_B D + log_B E_f + K + input bytes + copied pages)`; capture
+is a bounded tuple pin and tail seal. Commit targets
+`O(D + changed names + dirty extents + final changed runs + replacement bytes
++ Q_fetch)` plus actual freeze, construction and cleanup. Logical unlink is
+indexed; physical reclamation pays for pages and references moved or released.
+Report operation counts as well as durations; a failed count bound is a
+failure even when a timer happens to pass.
+
+Physical active charge is the actual `st_blocks * 512` sum of every pack and
+index page, including inactive tail, candidates, dead-slot slack and pins,
+plus legacy payload/metadata and ownership charges. The target after bounded
+compaction is `J = O(ceil(L / slots_per_page) + P_pin + G + 1)`; the `+1` is
+the inactive candidate. For the one-file, one-generation 4,096 separated
+one-byte WRITE checkpoint, **all** charged private backing has a prospective
+design budget of at most 3 MiB. This is a target against the observed 17.88
+MiB old-format checkpoint, not a measurement. Separate evidence must state
+physical allocated bytes for 128 one-byte files, 4,097 repeated overwrites,
+and up to 32 retained one-edit generations. Those cases have no inherited
+3 MiB pass threshold; report their live, pinned, dead and relocated pages.
+
+## Registered public evaluation
+
+The old head is one closed, independently verified 10 MiB `data.bin` of `A`.
+Every row gets an independent writable `shutil.copyfile` Store/history clone.
+One SDK Mount, one generic Exec, one explicit Commit, full independent
+old/new-head byte oracle, and clean close are mandatory. The C writer opens
+one fd and makes one ordinary mounted `write` or `pwrite` per byte. Byte `i`
+is `B + (i % 24)`. Case IDs are `issue273-{append,dispersed,repeated}-
+{100,512,4097}-10m-v1`, run in that table's row-major order, with the frozen
+control arm before the candidate arm for each case. Take one sample per case
+per source arm. Append uses `O_APPEND`; dispersed
+uses offset `(104729 + i*2654435761) % 10485760`; repeated uses offset
+`5242880`. Expected lengths and every expected byte derive independently
+from this schedule. Keep the old 8,194-byte #248 separated-offset 4,097 gate
+as its own row and unchanged 25 s limit and FAIL history.
+
+Add `issue273-clean-commit-v1` (no mutations after a retained old generation)
+and `issue273-one-edit-commit-v1` (one new byte after a retained generation
+containing 4,097 unrelated journal records). Their preparation and cleanup
+remain visible, and neither may scan the unrelated journal. The retained
+state's preparation has its own recorded command wall and is included in the
+complete lifecycle wall; only the separate Commit timer isolates the quick
+Commit question. The mandatory case registry is:
+
+| Selection | Work | Complete command limit |
+| --- | --- | ---: |
+| `issue273-append-{100,512}-10m-v1` | 100 or 512 appended bytes | 15 s each |
+| `issue273-append-4097-10m-v1` | 4,097 appended bytes | 25 s |
+| `issue273-dispersed-{100,512}-10m-v1` | 100 or 512 separated `pwrite`s | 15 s each |
+| `issue273-dispersed-4097-10m-v1` | 4,097 separated `pwrite`s | 25 s |
+| `issue273-repeated-{100,512}-10m-v1` | 100 or 512 same-offset `pwrite`s | 15 s each |
+| `issue273-repeated-4097-10m-v1` | 4,097 same-offset `pwrite`s | 25 s |
+| `issue273-clean-commit-v1` | Capture and Commit with zero new edits | 15 s |
+| `issue273-one-edit-commit-v1` | One edit after an unrelated retained 4,097-record generation | 15 s |
+| Original #248 `gate` | 4,097 writes to the separate 8,194-byte file | 25 s, unchanged |
+
+The external correctness/space registry also includes
+`issue273-many-file-128-v1` (128 one-byte files in one Workspace),
+`issue273-multi-exec-v1` (three 100-write Execs before one Commit),
+`issue273-g1-g2-v1` (three consecutive edited generations with an old reader
+held across successors), `issue273-retained-32-v1` (one edit and pin in each of
+32 generations), and `issue273-mutations-v1` (truncate/hole, rename/unlink,
+alias and open-unlinked handle, quota refusal, failed/uncertain backing and
+clean-close cases). Each test execution is capped at 60 s and reports the
+full byte oracle, physical allocated blocks and cleanup; a missing capability
+is a failed or unrun cell, never a silently omitted one.
+
+Record actual FUSE callbacks, Service
+calls, Exec/Commit/freezing/cleanup walls, pack/index reads and writes,
+`Q_fetch`, live/dead/pinned pages, physical `st_blocks`, Host quota charge,
+memory/cgroup domains, and any interference. A complete performance command
+has a 15 s limit. The three 4,097 matrix cases and the separate #248 gate
+are prospectively named 25 s exceptions; every other case remains 15 s.
+The separate verifier has a 9 s limit. An explicitly causal diagnostic
+may use 60 s but cannot replace a gate row. Every test execution is capped at
+60 s. One construction worker remains the default except namespace Init.
+
+Before each timed arm, invalidate and check whole Store/history clone source
+residency on macOS with the existing Darwin mmap/mincore cold mechanism,
+recording file identities, page counts and the launch gap; apply the same
+procedure to control and candidate. Do not prime mounted data, use recent
+write pages, or pool warm and cold rows. If either arm cannot prove the
+declared state, both numeric speed rows are `INELIGIBLE`, even if their
+functional oracle passes. Image/runtime cache and competing-work evidence
+must also match before a general 2x claim. The one-file 3 MiB target and Big O
+counts are separate from latency eligibility. Retain every FAIL,
+INCOMPLETE, INELIGIBLE and NOT_RUN receipt in a fresh path, with exact source,
+product, compilation, dependency, image, harness and workload identities.
+Never repeat an unchanged arm to replace a number.
+`NOT_RUN` names the registered case, source arm, measured preparation or
+attempt wall when one exists, exact failed prerequisite or time bound, and
+the missing verifier scope. A row that starts and misses its bound is `FAIL`,
+not `NOT_RUN`; a cache mismatch is `INELIGIBLE`. The candidate cannot close
+#273 until the mandatory cells and all correctness, custody, and resource
+gates have accountable results.

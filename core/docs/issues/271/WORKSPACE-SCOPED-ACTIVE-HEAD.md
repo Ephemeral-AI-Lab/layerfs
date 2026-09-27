@@ -10,6 +10,9 @@ nor speedup is implemented. Source-derived counts and the raw durations below
 are not cache-qualified comparative latency evidence.
 Implementation and proof are tracked in [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273),
 a true sub-issue of [#271](https://github.com/Ephemeral-AI-Lab/layerfs/issues/271).
+The prospective v1 [physical format and public evaluation contract](../273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
+records checkpoint 0 decisions against source `48b51e874a41b3e1e6c6661e145316df8b408f07`;
+it is still unimplemented and has no candidate measurements.
 
 ## 1. The actual replacement boundary
 

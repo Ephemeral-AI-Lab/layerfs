@@ -70,27 +70,30 @@ dirty membership and file extents; one pack shared across files; repeated
 Exec and Commit behavior; and the current single-selected-Workspace daemon
 limit. Its implementation and proof are tracked in [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273),
 a sub-issue of #271. These boundaries are required to remove keyed-root publication as
-well as extent path copying. Its 64/128-byte records, 3 MiB one-file budget,
+well as extent path copying. Its illustrative 64/128-byte records, 3 MiB one-file budget,
 amortized constant hot-right-edge updates and timing examples are design
 targets or sensitivity calculations, not measured after results.
 
 The detailed proposal's [implementation rollout](WORKSPACE-SCOPED-ACTIVE-HEAD.md)
 freezes the format and public workload contract first, switches one complete
 Workspace incarnation, then proves capture, cleanup and performance before
-default selection. The existing Service `SaveFile` and C1 `apply_edits`
+default selection. The prospective v1
+[format and evaluation contract](../273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
+records checkpoint 0 choices before implementation; it has no measured candidate.
+The existing Service `SaveFile` and C1 `apply_edits`
 localized construction stay in place: Commit lowers the **final indexed
 view**, not the historical journal records. The C writer exercises ordinary
 mounted `write`/`pwrite` calls through FUSE; it is an application-level
 workload, while its uncontrolled-cache diagnostics remain speed-ineligible.
 The [physical layout, source-file map and Big O model](WORKSPACE-SCOPED-ACTIVE-HEAD.md)
-place illustrative `a-pack-*` and `a-index-*` files under each existing
+placed illustrative `a-pack-*` and `a-index-*` files under each existing
 `<WorkspaceConfig.root>/private-backing/<workspace-id>/` directory. Their
 full allocated pages count against the shared Host quota; unlink removes a
 name first, while pinned or mixed pack pages remain charged until physical
 release. The first implementation is provisionally **+3,000–6,000 Core
 production LOC**, because old-root and large-payload readers cannot be
-deleted at the initial switch. Neither those filenames nor that LOC range
-is a committed format or a measured outcome.
+deleted at the initial switch. The v1 contract fixes actual filenames; the
+LOC range is still a planning estimate, not a measured outcome.
 
 Use a **versioned, disk-indexed active head** for Workspace edits. Each
 accepted WRITE appends a charged edit record and updates a mutable ordered
