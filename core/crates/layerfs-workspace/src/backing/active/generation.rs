@@ -5,14 +5,16 @@ use super::{
     page::PageRef,
     pages::{PageStore, StoreStatus},
     reclaim::{self, RetiredPack},
+    records::{dirty_key, inode_key, HotInode},
 };
 use crate::{
     backing::{budget::Charge, directory::Directory, metadata::MetadataHost},
-    WorkspaceError,
+    NodeKind, WorkspaceError,
 };
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 struct State {
@@ -110,6 +112,11 @@ impl ActiveBacking {
         })
     }
 
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
+        let _state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        self.index.get(key)
+    }
+
     /// Reads one slot from the selected generation's locator root.
     pub fn read(
         &self,
@@ -139,6 +146,65 @@ impl ActiveBacking {
         data: &[u8],
         extra: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<ActiveWrite, WorkspaceError> {
+        self.write_with(
+            inode,
+            old_length,
+            offset,
+            data,
+            |_, _, _| Ok(extra.to_vec()),
+        )
+    }
+
+    /// Publishes a tiny file WRITE with its inode attributes and dirty key in
+    /// the same index revision as the extent and pack locator.
+    pub fn write_tiny_file(
+        &self,
+        inode: u64,
+        original: HotInode,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<ActiveWrite, WorkspaceError> {
+        self.write_with(
+            inode,
+            original.length,
+            offset,
+            data,
+            |generation, revision, length| {
+                let key = inode_key(inode);
+                let mut selected = match self.index.get(&key)? {
+                    Some(value) => HotInode::parse(&value)?,
+                    None => original,
+                };
+                if selected.kind != NodeKind::File || selected.length != original.length {
+                    return Err(WorkspaceError::InvalidInput);
+                }
+                let time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| WorkspaceError::Io)?;
+                selected.length = length;
+                selected.generation = generation;
+                selected.revision = revision;
+                selected.storage = 2;
+                selected.inline = [None; 4];
+                selected.seconds =
+                    i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
+                selected.nanos = time.subsec_nanos();
+                Ok(vec![
+                    (key.to_vec(), Some(selected.value()?.to_vec())),
+                    (dirty_key(generation, inode).to_vec(), Some(vec![1])),
+                ])
+            },
+        )
+    }
+
+    fn write_with(
+        &self,
+        inode: u64,
+        old_length: u64,
+        offset: u64,
+        data: &[u8],
+        extra: impl FnOnce(u64, u64, u64) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>, WorkspaceError>,
+    ) -> Result<ActiveWrite, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
@@ -158,11 +224,15 @@ impl ActiveBacking {
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
         };
         let length = planned.length;
+        let extra = match extra(generation, revision, length) {
+            Ok(extra) => extra,
+            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+        };
         let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
         let (logical, physical) = prepared.locator();
         updates.insert(locator_key(logical), Some(locator_value(physical)));
         for (key, value) in extra {
-            if updates.insert(key.clone(), value.clone()).is_some() {
+            if updates.insert(key, value).is_some() {
                 return Err(prepared
                     .abort()
                     .err()

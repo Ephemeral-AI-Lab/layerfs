@@ -19,10 +19,10 @@ tiny file gets its own root page. `backing/active/index.rs` stages copy-on-write
 and publishes one current root. A capture pins a root/generation in constant
 index-state work, while old page versions created before that capture stay
 charged until its explicit release. The currently implemented generic index
-does **not** yet supply the specialized hot-right-edge update or an unbounded
-streaming extent cursor. Its bounded 128-row scan and predecessor lookup
-support the current tiny-write splice; a wider overlapping edit still has
-an explicit capacity ceiling to replace before default selection.
+does **not** yet supply the specialized hot-right-edge update or a streaming
+extent cursor for writes larger than a tiny slot. Its bounded 128-row scan and
+predecessor lookup cover all extent starts within one 128-byte tiny write,
+including replacement of 128 one-byte extents.
 
 `backing/active/pack.rs` writes tiny records into a Workspace-shared logical
 tail. A slot uses a stable logical page ID and ordinal. A candidate physical
@@ -33,8 +33,10 @@ a new page file for each candidate. `backing/active/extents.rs` stores final
 nonoverlapping Base/Zero/Packed intervals and inverse `R` references. A tiny
 splice updates the overlapping extents and their inverse references together.
 The current active wrapper in `backing/active/generation.rs` publishes pack,
-extent, locator and caller-supplied inode/dirty records through one index root
-change. `backing/active/reclaim.rs` removes a sealed logical page only when
+extent, locator, inode attributes and dirty membership through one index root
+change for `write_tiny_file`. Its lower-level `write_tiny` still accepts
+caller-supplied records for backing tests. Neither method is selected by the
+public Workspace yet. `backing/active/reclaim.rs` removes a sealed logical page only when
 its inverse references are all gone; captured index generations defer that
 physical release until their readers finish. Mixed live/dead-page compaction
 remains open. No reader may infer that an unselected candidate is current.
@@ -60,7 +62,9 @@ the provisional 3 MiB bound without using FUSE or a timed gate; the repeated
 4,097-write storage check exercises dead sealed-page release. A 128-file case
 checks two shared pack pages and a 32-generation case checks physical pins and
 refunds. A typed record case places 128 inode, namespace and dirty identities
-in the shared index. These are backing tests. Public FUSE WRITE, namespace
+in the shared index. A backing test checks same-revision inode, extent and
+dirty publication, a retained inode version after capture, and a complete
+128-byte replacement of 128 one-byte extents. These are backing tests. Public FUSE WRITE, namespace
 operations, final-view SaveFile lowering, mixed-page compaction and the #273
 benchmark registry are still unproven and
 remain on the old production route.

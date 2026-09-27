@@ -267,7 +267,10 @@ impl State {
         }
         Ok(())
     }
-    #[expect(clippy::too_many_arguments, reason = "frontier counters mirror the published metadata fields")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "frontier counters mirror the published metadata fields"
+    )]
     pub fn frontier_bytes(
         &self,
         host: &Arc<Host>,

@@ -442,6 +442,81 @@ mod linux {
     }
 
     #[test]
+    fn file_write_publishes_inode_extent_and_dirty_together() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let initial = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 0,
+            kind: NodeKind::File,
+            fresh: true,
+            storage: 0,
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            base: [0; 32],
+            metadata: [0; 32],
+            inline: [None; 4],
+        };
+        let first = active.write_tiny_file(1, initial, 0, b"A").unwrap();
+        assert!(first.cleanup_error.is_none());
+        let inode = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!((inode.length, inode.revision, inode.storage), (1, 1, 2));
+        assert_eq!(active.get(&dirty_key(1, 1)).unwrap(), Some(vec![1]));
+        assert!(active.get(&Extent::key(1, 0)).unwrap().is_some());
+        let second = active.write_tiny_file(1, inode, 3, b"Z").unwrap();
+        assert!(second.cleanup_error.is_none());
+        let frozen = active.capture().unwrap();
+        let old = HotInode::parse(&frozen.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!((old.length, old.generation, old.revision), (4, 1, 2));
+        let third = active.write_tiny_file(1, old, 4, b"Q").unwrap();
+        assert!(third.cleanup_error.is_none());
+        assert_eq!(
+            HotInode::parse(&frozen.get(&inode_key(1)).unwrap().unwrap())
+                .unwrap()
+                .length,
+            4
+        );
+        assert_eq!(
+            HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap())
+                .unwrap()
+                .length,
+            5
+        );
+        assert_eq!(active.read(second.slot, Some(&frozen)).unwrap(), b"Z");
+        assert_eq!(active.read(third.slot, None).unwrap(), b"Q");
+        frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn one_tiny_write_may_replace_128_one_byte_extents() {
+        let f = Fixture::new(64 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        for offset in 0..128 {
+            let result = active.write_tiny(1, offset, offset, b"x", &[]).unwrap();
+            assert!(result.cleanup_error.is_none());
+        }
+        let result = active.write_tiny(1, 128, 0, &[b'Z'; 128], &[]).unwrap();
+        assert!(result.cleanup_error.is_none());
+        assert_eq!(active.read(result.slot, None).unwrap(), vec![b'Z'; 128]);
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
     fn repeated_4097_reclaims_dead_sealed_pages() {
         let f = Fixture::new(3 << 20);
         let active = ActiveBacking::new(

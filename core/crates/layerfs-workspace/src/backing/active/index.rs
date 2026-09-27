@@ -468,7 +468,7 @@ impl Index {
         updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<IndexCandidate, WorkspaceError> {
         if updates.is_empty()
-            || updates.len() > 256
+            || updates.len() > 512
             || updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
             || updates.iter().any(|(key, value)| {
                 key.is_empty()

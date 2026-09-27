@@ -267,11 +267,9 @@ impl ExtentPlan {
             }
         }
         let page = index.scan(&lower, &upper, MAX_AFFECTED)?;
-        // ponytail: one update batch holds at most 128 overlapping extents;
-        // stream a range splice through IndexCandidate before wider overwrites.
-        if page.entries().len() == MAX_AFFECTED {
-            return Err(WorkspaceError::Capacity);
-        }
+        // A tiny slot spans at most 128 bytes, so no more than 128 distinct
+        // extent starts can lie in this half-open range. The floor lookup
+        // covers the one extent that may begin before it.
         for (key, value) in page.entries() {
             let extent = Extent::parse(key, value, inode)?;
             if affected.last().is_none_or(|last| *last != extent) {
@@ -317,7 +315,7 @@ impl ExtentPlan {
             Self::insert(&mut updates, inode, gap)?;
         }
         Self::insert(&mut updates, inode, replacement)?;
-        if updates.len() > 256 {
+        if updates.len() > 512 {
             return Err(WorkspaceError::Capacity);
         }
         Ok(Self {
