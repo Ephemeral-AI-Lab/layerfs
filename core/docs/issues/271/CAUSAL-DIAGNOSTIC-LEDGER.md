@@ -80,3 +80,85 @@ Warning-denying Core Clippy, Core examples, product boundary scan and its nine
 self-tests, harness self-check and changed-file rustfmt passed. Workspace fmt
 still reports the untouched `runtime/state.rs:267` layout. No other performance
 arm was sampled for this source.
+
+## C2 — atomic Commit cause diagnostic, 2026-09-27
+
+**Status: causal `PASS`, functional `PASS`, latency/row `INELIGIBLE`, admission
+false.** This is the single attempt at the separately preregistered
+[`issue271-separated-4097-cause-v2`](../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-v2-spec.md)
+scenario. It does not replace C1's `INCOMPLETE` record. The [raw
+receipt](evidence/causal-v2/run/receipt.json), [stderr](evidence/causal-v2/run/driver.stderr),
+[verifier](evidence/causal-v2/run/verifier.stdout), [run hashes](evidence/causal-v2/run/SHA256SUMS),
+[public preparation identity](evidence/causal-v2/prepared-public.json) and
+[evidence manifest](evidence/causal-v2/EVIDENCE.json) are retained.
+
+| Identity and contract | Value |
+| --- | --- |
+| Source commit/tree | `70863270093d0726e0c4e1912ae2f7c405268483` / `01c3b26ab7e01337f839d4b05f8706fc630ece18` |
+| Product/harness seal | `c5b8ca57a93e6716db80e1702c4b0b648b32144a428277be9fa00314f25154c7` / `af720b3b48125eb352acee79246cd049cf25a25713e144e590303b0fb1779060` |
+| Image | `sha256:755bd5a2650c2f6442c1fce88eb3c6ea3af0a4a81ee0f3cea55ebeaa62674090` |
+| Build/reuse | Locked release SDK, verifier and daemon rebuilt; the closed master was validated with the new verifier and given an independent writable byte-copy clone. One construction worker; binary, workload, manifest, compilation and spec hashes are in the prepared identity and receipt. |
+| Reproduction | `python3 core/benchmark/fs-bench-pro/separated_writes.py run --prepared benchmark-results/fs-bench-pro/issue271/fourhop-cause-v2-prepared-v1/prepared.json --selection diagnostic4097causev2 --output benchmark-results/fs-bench-pro/issue271/fourhop-cause-v2-run-v1` (used once; do not rerun this identity). |
+| Limits | 60 s complete cause command, 30 s product Exec deadline, 9 s separate verifier; the unchanged public gate is 25 s. |
+
+The one public Mount → Exec → Commit route produced exactly **4,097 FUSE
+WRITE callbacks**, **four upstream Service calls**, 8,194 final extents,
+4,097 separated replacements and a committed new head. The independent full
+old/new-head and byte verifier passed in **0.015106 s**; cleanup and daemon
+close passed. Raw SDK Exec was **26.496683 s**, Commit **0.449202 s**,
+complete command **31.390640 s** and cleanup **3.355971 s**. Those raw
+durations describe this attempt only: its ordinary host/container cache was
+uncontrolled, so they establish neither a speedup over C1 nor a release
+latency PASS. The 25 s gate remains the earlier FAIL.
+
+At accepted WRITE 4,096, acquisition metadata maintenance took **10.912227
+s** of the **11.463375 s** `own_payload` parent, while actual payload
+acquisition took **0.545151 s**. Publication core took **14.853132 s** of
+the **14.870282 s** `write_file` parent; checked notifier delivery took
+**0.009056 s**. The two large, non-overlapping child buckets total **25.765359
+s**, or **97.2%** of Exec through that checkpoint. They are source-owned
+diagnostic durations, not cache-qualified latency comparisons.
+
+| Accepted WRITE block | Metadata maintenance s | Publication core s | Ledger reads | Ledger writes | Ledger-file calls | Page creates |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1–512 | 1.003 | 1.360 | 19,426 | 9,807 | 24,589 | 1,489 |
+| 513–1,024 | 1.193 | 1.560 | 22,356 | 12,071 | 27,951 | 1,552 |
+| 1,025–1,536 | 1.422 | 1.845 | 28,173 | 15,190 | 34,975 | 2,051 |
+| 1,537–2,048 | 1.404 | 1.940 | 29,575 | 16,653 | 36,263 | 2,066 |
+| 2,049–2,560 | 1.422 | 1.973 | 29,518 | 15,870 | 36,879 | 2,065 |
+| 2,561–3,072 | 1.451 | 2.011 | 30,285 | 16,500 | 37,746 | 2,065 |
+| 3,073–3,584 | 1.468 | 2.066 | 30,513 | 16,740 | 37,962 | 2,065 |
+| 3,585–4,096 | 1.550 | 2.098 | 30,531 | 16,661 | 38,053 | 2,066 |
+
+The 4,096-WRITE totals are **220,377 ledger reads, 119,492 writes, 274,418
+ledger-file calls and 15,419 new metadata pages**. Ledger-file open/validation
+time was **0.520671 s** and page creation time **1.955163 s**, both nested
+within the large phase buckets and too small alone to explain a 2× Exec
+target. There were 10,174 sponsor attempts, 8,143 accepted and 2,031
+depth-four fallbacks. This row's block counters rise around the height-two
+transition, then approach a stable per-block range; there is no observed
+sustained quadratic multiplier over 512–4,096.
+
+**Commit attribution.** Host SaveFile pre-input was **0.372094 s**. Its
+parser processed exactly 8,194 descriptors and 4,097 edits and issued
+16,388 eight-byte spool writes (131,104 bytes) in **0.028451 s**. The daemon
+made 13 descriptor-source calls for 196,656 bytes in **0.033197 s**, then
+two replacement-source calls for 4,097 bytes in **0.307810 s**. The latter
+includes 8,195 ordered cursor-next calls (**0.030493 s**), 4,097 Local
+reader creations (**0.000317 s**), 4,097 one-byte Local reads (**0.272190
+s**), 4,097 payload opens (**0.009589 s**) and 4,097 authenticated aligned
+4 KiB reads, **16,781,312 physical bytes in 0.254309 s**. These are
+overlapping parent/child durations in daemon and host clock domains; the
+counts are actual source calls, not extra Service RPCs or observed Bridge
+frames. Bridge frame count remains unavailable. The host pre-input span
+contains transport wait and parsing as well as its 0.028451 s spool writes;
+it cannot be assigned to spool alone.
+
+**Non-passing lines and checks:** cache/performance/row `INELIGIBLE`; no
+release admission, and the prior 25 s gate FAIL remains. Full Core workspace
+tests again stopped at two untouched `layerfs-content/tests/filesystem_ordering.rs`
+ceiling assertions; tests for the four changed packages, Core examples,
+warning-denying Clippy, boundary guard and nine guard self-tests, harness
+self-check and changed-file formatting passed. Workspace fmt still reports
+the untouched `runtime/state.rs:267` layout. No other performance arm was
+sampled at this source.

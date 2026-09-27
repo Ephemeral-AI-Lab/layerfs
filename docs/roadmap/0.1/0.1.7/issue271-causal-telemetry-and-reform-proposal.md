@@ -130,3 +130,24 @@ old-root/G1/G2/abandoned-candidate custody proof, quota refunds, bounded
 residency, clean close and the unchanged 25 s one-shot gate at its new source
 identity. A general 2× latency claim additionally needs separately declared,
 cache-qualified matched workloads beyond this extreme one-byte case.
+
+## Decision after the count diagnostic, 2026-09-27
+
+The [append-only causal ledger](../../../../core/docs/issues/271/CAUSAL-DIAGNOSTIC-LEDGER.md)
+retains the first `INCOMPLETE` Commit log row and the separate corrected row
+whose cause fields and full oracle passed. The corrected row remains
+cache/latency `INELIGIBLE`. At WRITE 4,096, acquisition metadata maintenance
+and publication core total 25.765 s, about 97% of the one Exec call; actual
+payload acquire is 0.545 s and checked notifier 0.009 s. Commit is 0.449 s,
+with 0.254 s of authenticated aligned payload reads nested in its source
+path. The per-512 ledger counts rise at the tree-height transition and then
+roughly plateau, with no observed sustained quadratic factor.
+
+The [indexed active-head proposal](../../../../core/docs/issues/271/PROPOSAL-ACTIVE-HEAD.md)
+is the recommended architecture experiment. It targets the linked
+per-WRITE immutable root publication and next-WRITE reclamation cycle,
+keeps public acknowledgements and indexed reads, and requires a charged
+bounded journal plus immutable frozen generations. Candidate-scoped ledger
+coalescing remains a smaller experiment after exact PageRef cancellation and
+distinct-page revisit counts are known. Neither design has a measured
+speedup yet; the original 25 s gate FAIL remains unchanged.
