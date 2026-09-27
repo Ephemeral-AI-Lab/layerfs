@@ -1,0 +1,20 @@
+{
+  "copied_sha256": {
+    "SHA256SUMS": "6881d54899b39a9551eb18fb4dea3cd4a7a6c3a3b7af3e1f32455e7621209055",
+    "case.before": "e56a4e2fa3da7ca9d1282d92a5fd9c4db62fbd50d218f4d3bc641974f1737e6b",
+    "case.verify": "fffbbf7c90b698872cf9299ce862d052fbc761235ddcab04253ea430eb6dcef3",
+    "driver.stderr": "14df5a9679173b1cf7d2de04265ae640928c84641b33deb1acd7b420272eb85d",
+    "driver.stdout": "7547dc46f38b5f4b7a0a8cae9ff236fc9318f2916edcfdf67b9fb41bd7557116",
+    "prepared-public.json": "40ca683459473d3e01d3bab6e591faa52ae4c5c3efce4155dd0e7bbc2ea290ab",
+    "receipt.json": "e62ab03903d0aa456dba7596445d4c7e95560edaf88681d5df0309bfd5db6409",
+    "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verifier.stdout": "4b2deb4a149a890048f50714b1fba6db3ee091aace6ee5d2d8959c5e72bbbb75"
+  },
+  "label": "scaling-1024",
+  "original_attempt_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/scaling1024-v1",
+  "original_history_sha256": "304b7bb8f28c3267742241b80f54d7ab83be27b7da6731163a50247e87c15696",
+  "original_prepared_sha256": "ba855dad5d6068a390d956515f87124d1c7bbae02581b413e6ba9ad35605f04a",
+  "original_store_sha256": "6ce6ab46f2a029a8089c012ee19d1ef52b7b0bf3e6a4703f4686a4af4ce91d06",
+  "redacted_prepared_field": "cursor_key",
+  "schema": "issue266-evidence-v1"
+}

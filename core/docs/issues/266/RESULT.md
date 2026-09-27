@@ -194,3 +194,26 @@ is a move within Core FUSE. Core and combined totals are:
 
 This report and its copied evidence also change no production source. Their
 commit records the same first-parent total and delta zero.
+
+## Follow-up count analysis
+
+After this report, a separate [prospective 1,024 count diagnostic](../../../../docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-spec.md)
+used the same public route and product seal. Its one retained
+[receipt](evidence/scaling-1024/receipt.json) has 1,024 actual FUSE WRITE
+callbacks, independent old/new-head oracle PASS and positive daemon close;
+Exec was 6.497280 s and Commit 0.154572 s, with latency still
+`INELIGIBLE`. The [algorithm, space and time analysis](SCALING-ANALYSIS.md),
+prepared with three independent read-only subagent audits, shows that the
+ownership-ledger read/write counters follow an exact quadratic fit at the
+observed 128-to-1,024 checkpoints, while live payload/metadata allocation
+grows approximately linearly. This is a finite-range count finding, not a
+qualified time exponent or a measured 4,097 count. The original 4,097 FAIL
+remains unchanged and was not rerun.
+
+The follow-up spec commit `e2bbd908c`, runner commit `a8f3514c4` and this
+analysis/evidence commit each change only documentation or benchmark tooling:
+Core **58,640 → 58,640 (+0)**, reference **65,417 → 65,417 (+0)**,
+adapter **0 → 0**, combined **124,057 → 124,057 (+0)** for each first-parent
+comparison. The same `tools/production_loc.py --root .` product scope and
+exclusions used in the table above apply; the staged product snapshots are
+identical to their respective first parents.
