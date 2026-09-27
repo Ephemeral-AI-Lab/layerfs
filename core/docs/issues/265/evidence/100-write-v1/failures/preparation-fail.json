@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "phase": "prepare-reuse/source-validation",
+  "source_commit": "b83215105",
+  "reason": "reviewed allowlist omitted core/crates/layerfs-content/tests/edit_localized.rs",
+  "sample_count": 0,
+  "build_count": 0,
+  "master_copy_count": 0
+}
