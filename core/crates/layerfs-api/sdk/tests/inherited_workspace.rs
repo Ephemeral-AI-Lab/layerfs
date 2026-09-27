@@ -91,6 +91,9 @@ impl Fixture {
         Self::with_extra_children(0)
     }
     fn with_extra_children(extra: usize) -> Self {
+        Self::with_layout(extra, false)
+    }
+    fn with_layout(extra: usize, deep: bool) -> Self {
         let root = std::env::var_os("LAYERFS_TEST_BACKING_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
@@ -120,6 +123,14 @@ impl Fixture {
                 b"x",
             )
             .unwrap();
+        }
+        if deep {
+            let mut path = source.join("src");
+            for _ in 0..15 {
+                path.push("d".repeat(250));
+            }
+            fs::create_dir_all(&path).unwrap();
+            fs::write(path.join("leaf"), b"deep-base").unwrap();
         }
         let server = Arc::new(
             Server::create(ServerConfig {
@@ -594,6 +605,60 @@ fn growing_move_checks_near_and_overlong_cached_descendant_before_publication() 
     assert!(
         matches!(f.attributes(after, b"src"), Response::Attributes { serial, .. } if serial == source.serial)
     );
+}
+
+#[test]
+fn growing_inherited_move_checks_uncached_descendant_before_publication() {
+    let f = Fixture::with_layout(0, true);
+    let top = f.workspace.root().serial;
+    let source = f.lookup(top, b"src");
+    let first = f
+        .workspace
+        .mkdir(top, &vec![b'a'; 255], 0o755, 0, deadline())
+        .unwrap();
+    let target = f
+        .workspace
+        .mkdir(first.serial, &vec![b'b'; 63], 0o755, 0, deadline())
+        .unwrap();
+    let revision = f.workspace.status().unwrap().revision;
+    assert_eq!(
+        f.workspace.rename(
+            top,
+            b"src",
+            target.serial,
+            b"mmmmmmm",
+            RenameFlags::default(),
+            deadline(),
+        ),
+        Err(WorkspaceError::Capacity)
+    );
+    assert_eq!(f.workspace.status().unwrap().revision, revision);
+    assert_eq!(f.lookup(top, b"src").serial, source.serial);
+    f.workspace
+        .rename(
+            top,
+            b"src",
+            target.serial,
+            b"mmmmmm",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    let head = f.commit();
+    let mut path = b"a".repeat(255);
+    path.extend_from_slice(b"/");
+    path.extend_from_slice(&b"b".repeat(63));
+    path.extend_from_slice(b"/mmmmmm");
+    for _ in 0..15 {
+        path.extend_from_slice(b"/");
+        path.extend_from_slice(&b"d".repeat(250));
+    }
+    path.extend_from_slice(b"/leaf");
+    assert_eq!(path.len(), 4096);
+    assert_eq!(f.content_bytes(head, &path), b"deep-base");
+    let mut old_path = b"src".to_vec();
+    old_path.extend_from_slice(&path[255 + 1 + 63 + 1 + 6..]);
+    assert_eq!(f.content_bytes(f.genesis, &old_path), b"deep-base");
 }
 
 #[test]
