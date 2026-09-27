@@ -13,6 +13,9 @@
 > the pooled index has one physical locator for the active tail. No v1
 > product page or candidate measurement existed before this correction;
 > the original commit and issue note retain their historical wording.
+> The later storage slice also fixes the previously omitted packed-slot length
+> in the 56-byte extent value below. No public v1 page exists yet; the earlier
+> commits remain unchanged.
 
 ## Boundary and identity
 
@@ -80,9 +83,13 @@ slot reference. Duplicate keys and unsorted, overlapping extents are invalid.
 The inode value contains the existing 160-byte logical inode fields plus up
 to four inline extents; longer sequences use ordered `E` leaves. A short
 file therefore shares an inode page with other files. An extent value is
-`end:u64, kind:u8, source_offset:u64, logical_pack_page:u64,
-ordinal:u16, source_generation:u64, source_revision:u64`; unused source fields
-are zero. Namespace values carry `serial:u64, kind:u8, tombstone:u8` and
+exactly 56 bytes: end `0..8`, kind `8` (`0` Base, `1` Zero, `2` Packed),
+zero `9..16`, source offset `16..24`, logical pack page `24..32`, ordinal
+`32..34`, full packed-slot length `34..36`, source generation `36..44`, source
+revision `44..52`, and zero `52..56`. Unused source fields are zero. The
+`P` locator value is the physical page ID and epoch (16 bytes); an `R`
+inverse-reference value is exactly `[1]`. Namespace values carry
+`serial:u64, kind:u8, tombstone:u8` and
 bounded portable attributes where required. A leaf holds ordered,
 nonoverlapping `(start, end, Base | Zero | Packed)` intervals.
 The current root and at most one right-edge leaf/spine per hot file may be
