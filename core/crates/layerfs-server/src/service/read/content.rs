@@ -138,6 +138,12 @@ pub fn read(
                         fs.readlink(&path).map_err(content)?.as_bytes().to_vec(),
                     ))
                 }
+                Inspect::InodeReadlink { serial } => Ok(Response::Link(
+                    fs.readlink_inode(*serial)
+                        .map_err(content)?
+                        .as_bytes()
+                        .to_vec(),
+                )),
                 Inspect::File => Err(Code::InvalidInput.into()),
             }
         }

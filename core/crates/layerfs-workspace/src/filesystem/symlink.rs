@@ -41,18 +41,13 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (path, size, base, root) = {
+        let (size, base, root) = {
             let state = self.state()?;
             let node = state.node(serial)?;
             if node.attr.kind != NodeKind::Symlink {
                 return Err(WorkspaceError::WrongKind);
             }
-            (
-                node.path().to_vec(),
-                node.attr.size,
-                state.base,
-                state.overlay.clone(),
-            )
+            (node.attr.size, state.base, state.overlay.clone())
         };
         if size > SYMLINK_TARGET_BYTES as u64 {
             return Err(WorkspaceError::Io);
@@ -65,7 +60,7 @@ impl Workspace {
             let response = self.call(
                 Operation::Inspect {
                     root: base,
-                    query: Inspect::Readlink { path },
+                    query: Inspect::InodeReadlink { serial },
                 },
                 0,
                 &mut std::io::sink(),

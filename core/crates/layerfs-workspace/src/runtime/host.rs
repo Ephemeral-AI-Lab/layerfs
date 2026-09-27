@@ -401,7 +401,13 @@ impl WorkspaceHost {
             if handles.capacity() != HANDLE_LIMIT {
                 return Err(WorkspaceError::Capacity);
             }
-            nodes.push(Node::new(attr, content, metadata, &[], attr.serial));
+            nodes.push(Node::new(
+                attr,
+                content,
+                metadata,
+                super::state::NodeName::new(&[], &self.inner.budget)?,
+                attr.serial,
+            ));
             let node_index = std::collections::BTreeMap::from([(attr.serial, 0)]);
             let node_index_charge = self.inner.budget.reserve(96)?;
             let branch = branch_snapshot

@@ -94,6 +94,9 @@ impl Fixture {
         Self::with_layout(extra, false)
     }
     fn with_layout(extra: usize, deep: bool) -> Self {
+        Self::with_layout_quota(extra, deep, 64 * 1024 * 1024)
+    }
+    fn with_layout_quota(extra: usize, deep: bool, quota: u64) -> Self {
         let root = std::env::var_os("LAYERFS_TEST_BACKING_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
@@ -188,7 +191,7 @@ impl Fixture {
                 root: backing,
                 max_count: 2,
                 memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
-                disk_budget_bytes: Some(64 * 1024 * 1024),
+                disk_budget_bytes: Some(quota),
             },
             delivery,
         )
@@ -387,6 +390,14 @@ fn base_directory_move_keeps_inherited_children_handles_and_commits() {
     assert_eq!(f.lookup(subtree.serial, b"child").serial, child.serial);
     assert_eq!(f.lookup(child.serial, b"grand.txt").serial, grand.serial);
     let page = f.workspace.readdir(directory, 0, 8, deadline()).unwrap();
+    assert_eq!(
+        page.entries()
+            .iter()
+            .find(|entry| entry.name == b"..")
+            .unwrap()
+            .serial,
+        new.serial
+    );
     assert!(page
         .entries()
         .iter()
@@ -495,6 +506,52 @@ fn base_directory_move_keeps_inherited_children_handles_and_commits() {
 }
 
 #[test]
+fn moved_canonical_symlink_reads_target_by_serial() {
+    let f = Fixture::new();
+    let root = f.workspace.root().serial;
+    let packages = f.lookup(root, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let new = f.lookup(packages.serial, b"new");
+    let subtree = f.lookup(old.serial, b"subtree");
+    let child = f.lookup(subtree.serial, b"child");
+    let link = f
+        .workspace
+        .symlink(child.serial, b"ref", b"grand.txt", deadline())
+        .unwrap();
+    let old_head = f.commit();
+    f.workspace
+        .rename(
+            old.serial,
+            b"subtree",
+            new.serial,
+            b"subtree",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    assert_eq!(
+        f.workspace
+            .readlink(link.serial, deadline())
+            .unwrap()
+            .as_ref(),
+        b"grand.txt"
+    );
+    let new_head = f.commit();
+    for head in [old_head, new_head] {
+        assert_eq!(
+            f.inspect(
+                head,
+                Inspect::InodeReadlink {
+                    serial: link.serial
+                }
+            )
+            .unwrap(),
+            Response::Link(b"grand.txt".to_vec())
+        );
+    }
+}
+
+#[test]
 fn moved_directory_keeps_frozen_g1_and_later_g2_write() {
     let f = Fixture::new();
     let top = f.workspace.root().serial;
@@ -561,7 +618,7 @@ fn moved_directory_keeps_frozen_g1_and_later_g2_write() {
 }
 
 #[test]
-fn growing_move_checks_near_and_overlong_cached_descendant_before_publication() {
+fn growing_move_keeps_cached_descendant_reachable_beyond_4096_bytes() {
     let f = Fixture::new();
     let top = f.workspace.root().serial;
     let source = f
@@ -617,24 +674,31 @@ fn growing_move_checks_near_and_overlong_cached_descendant_before_publication() 
             deadline(),
         )
         .unwrap();
-    let revision = f.workspace.status().unwrap().revision;
-    assert_eq!(
-        f.workspace.rename(
+    f.workspace
+        .rename(
             top,
             b"src",
             target.serial,
             b"mmmmmmm",
             RenameFlags::default(),
             deadline(),
-        ),
-        Err(WorkspaceError::Capacity)
-    );
-    assert_eq!(f.workspace.status().unwrap().revision, revision);
-    assert_eq!(f.lookup(top, b"src").serial, source.serial);
-    assert!(f
-        .workspace
-        .lookup(target.serial, b"mmmmmmm", ReferenceScope::Local, deadline())
-        .is_err());
+        )
+        .unwrap();
+    let mut current = f.lookup(target.serial, b"mmmmmmm").serial;
+    for _ in 0..15 {
+        current = f.lookup(current, &long).serial;
+    }
+    assert_eq!(f.lookup(current, b"leaf").serial, leaf.serial);
+    f.workspace
+        .rename(
+            target.serial,
+            b"mmmmmmm",
+            top,
+            b"src",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
     let after = f.commit();
     assert!(
         matches!(f.attributes(before, b"src"), Response::Attributes { serial, .. } if serial == source.serial)
@@ -645,10 +709,10 @@ fn growing_move_checks_near_and_overlong_cached_descendant_before_publication() 
 }
 
 #[test]
-fn growing_inherited_move_checks_uncached_descendant_before_publication() {
+fn growing_inherited_move_reaches_uncached_descendant_beyond_4096_bytes() {
     let f = Fixture::with_layout(0, true);
     let top = f.workspace.root().serial;
-    let source = f.lookup(top, b"src");
+    f.lookup(top, b"src");
     let first = f
         .workspace
         .mkdir(top, &vec![b'a'; 255], 0o755, 0, deadline())
@@ -657,24 +721,31 @@ fn growing_inherited_move_checks_uncached_descendant_before_publication() {
         .workspace
         .mkdir(first.serial, &[b'b'; 63], 0o755, 0, deadline())
         .unwrap();
-    let revision = f.workspace.status().unwrap().revision;
-    assert_eq!(
-        f.workspace.rename(
+    f.workspace
+        .rename(
             top,
             b"src",
             target.serial,
             b"mmmmmmm",
             RenameFlags::default(),
             deadline(),
-        ),
-        Err(WorkspaceError::Capacity)
+        )
+        .unwrap();
+    let mut current = f.lookup(target.serial, b"mmmmmmm").serial;
+    for _ in 0..15 {
+        current = f.lookup(current, &b"d".repeat(250)).serial;
+    }
+    let leaf = f.lookup(current, b"leaf");
+    let held = f.open(leaf.serial);
+    assert_eq!(
+        f.workspace.read(held, 0, 9, deadline()).unwrap().as_ref(),
+        b"deep-base"
     );
-    assert_eq!(f.workspace.status().unwrap().revision, revision);
-    assert_eq!(f.lookup(top, b"src").serial, source.serial);
+    f.workspace.release(held).unwrap();
     f.workspace
         .rename(
-            top,
-            b"src",
+            target.serial,
+            b"mmmmmmm",
             target.serial,
             b"mmmmmm",
             RenameFlags::default(),
@@ -699,7 +770,55 @@ fn growing_inherited_move_checks_uncached_descendant_before_publication() {
 }
 
 #[test]
-fn equal_length_move_uses_changed_paths_and_resident_pins() {
+fn growing_rename_refuses_private_budget_before_publication() {
+    let baseline = Fixture::new();
+    let root = baseline.workspace.root().serial;
+    let packages = baseline.lookup(root, b"packages");
+    baseline.lookup(packages.serial, b"old");
+    baseline.lookup(packages.serial, b"new");
+    let quota = baseline.workspace.backing_status().unwrap().allocated_bytes + 8192;
+    drop(baseline);
+    let f = Fixture::with_layout_quota(0, false, quota);
+    let root = f.workspace.root().serial;
+    let packages = f.lookup(root, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let new = f.lookup(packages.serial, b"new");
+    let revision = f.workspace.status().unwrap().revision;
+    let error = f
+        .workspace
+        .rename(
+            old.serial,
+            b"subtree",
+            new.serial,
+            b"subtree-expanded",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, WorkspaceError::Capacity | WorkspaceError::Backing(_)),
+        "{error:?}"
+    );
+    assert_eq!(f.workspace.status().unwrap().revision, revision);
+    assert!(f
+        .workspace
+        .lookup(
+            new.serial,
+            b"subtree-expanded",
+            ReferenceScope::Local,
+            deadline()
+        )
+        .is_err());
+    let subtree = f.lookup(old.serial, b"subtree");
+    assert_eq!(subtree.kind, NodeKind::Directory);
+    for serial in [subtree.serial, old.serial, new.serial, packages.serial] {
+        f.workspace.forget(serial, 1, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+}
+
+#[test]
+fn growing_prefix_move_has_descendant_independent_private_counts() {
     let measure = |extra| {
         let f = Fixture::with_extra_children(extra);
         let top = f.workspace.root().serial;
@@ -715,7 +834,7 @@ fn equal_length_move_uses_changed_paths_and_resident_pins() {
                 old.serial,
                 b"subtree",
                 new.serial,
-                b"subtree",
+                b"subtree-expanded",
                 RenameFlags::default(),
                 deadline(),
             )
@@ -723,16 +842,37 @@ fn equal_length_move_uses_changed_paths_and_resident_pins() {
         let after = f.workspace.status().unwrap();
         let after_backing = f.workspace.backing_status().unwrap();
         let after_metadata = f.workspace.metadata_status().unwrap();
-        assert_eq!(f.lookup(new.serial, b"subtree").serial, subtree.serial);
+        assert_eq!(
+            f.lookup(new.serial, b"subtree-expanded").serial,
+            subtree.serial
+        );
         let counters = (
             after.upstream_calls - before.upstream_calls,
             after_backing.metadata_reads - before_backing.metadata_reads,
+            after_metadata.allocated_pages - before_metadata.allocated_pages,
             after_metadata.allocated_bytes - before_metadata.allocated_bytes,
             after_backing.allocated_bytes - before_backing.allocated_bytes,
             after.accounted_bytes - before.accounted_bytes,
             before.nodes,
         );
-        f.commit();
+        let head = f.commit();
+        let Response::Attributes {
+            serial: old_serial,
+            content: old_content,
+            ..
+        } = f.attributes(f.genesis, b"packages/old/subtree/sibling.txt")
+        else {
+            panic!("old file")
+        };
+        let Response::Attributes {
+            serial: new_serial,
+            content: new_content,
+            ..
+        } = f.attributes(head, b"packages/new/subtree-expanded/sibling.txt")
+        else {
+            panic!("moved file")
+        };
+        assert_eq!((new_serial, new_content), (old_serial, old_content));
         for (serial, count) in [
             (packages.serial, 1),
             (old.serial, 1),
@@ -748,8 +888,8 @@ fn equal_length_move_uses_changed_paths_and_resident_pins() {
     let large = measure(64);
     assert_eq!(small, large);
     println!(
-        "INHERITED_MOVE_COST descendants=3,67 store_calls={} metadata_page_reads={} metadata_bytes={} payload_bytes={} accounted_memory_delta={} resident_nodes={} cleanup=PASS",
-        small.0, small.1, small.2, small.3, small.4, small.5
+        "INHERITED_MOVE_COST growing_prefix descendants=3,67 store_calls={} private_page_reads={} new_private_pages={} metadata_bytes={} payload_bytes={} accounted_memory_delta={} resident_nodes={} cleanup=PASS",
+        small.0, small.1, small.2, small.3, small.4, small.5, small.6
     );
 }
 

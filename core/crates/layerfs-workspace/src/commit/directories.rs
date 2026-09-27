@@ -230,7 +230,7 @@ impl<'a> DirectorySection<'a> {
             if take_entry {
                 let cell = entry.as_ref().ok_or(WorkspaceError::Io)?;
                 let name = &cell.key()[1..];
-                crate::filesystem::namespace::child_path(&[], name)?;
+                crate::filesystem::namespace::check_name(name)?;
                 rows.push((
                     name.to_vec(),
                     Some(directories::entry_serial(cell.value())?),
@@ -240,7 +240,7 @@ impl<'a> DirectorySection<'a> {
             } else {
                 let cell = removal.as_ref().ok_or(WorkspaceError::Io)?;
                 let name = directories::tombstone(cell.key())?;
-                crate::filesystem::namespace::child_path(&[], name)?;
+                crate::filesystem::namespace::check_name(name)?;
                 rows.try_reserve(1).map_err(|_| WorkspaceError::Capacity)?;
                 rows.push((name.to_vec(), None));
                 removal = match removals.as_mut() {

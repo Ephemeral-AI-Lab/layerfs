@@ -93,6 +93,7 @@ fn identity_inspect_queries_roundtrip_and_check_bounds() {
             name: b"child".to_vec(),
         },
         Inspect::InodeAttributes { serial: 8 },
+        Inspect::InodeReadlink { serial: 8 },
         Inspect::InodeList {
             serial: 7,
             after: b"child".to_vec(),
@@ -127,6 +128,7 @@ fn identity_inspect_queries_roundtrip_and_check_bounds() {
             name: b"../child".to_vec(),
         },
         Inspect::InodeAttributes { serial: 0 },
+        Inspect::InodeReadlink { serial: 0 },
         Inspect::InodeList {
             serial: 7,
             after: Vec::new(),

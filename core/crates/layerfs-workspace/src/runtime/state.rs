@@ -110,8 +110,7 @@ pub(crate) struct Node {
     pub baseline: u64,
     pub metadata: Root,
     pub content: Root,
-    pub path: [u8; PATH_BYTES],
-    pub path_len: usize,
+    pub name: NodeName,
     pub parent: u64,
     /// False once this directory loses its only live name. Held handles may
     /// still read their selected view but cannot navigate or mutate through it.
@@ -123,6 +122,27 @@ pub(crate) struct Node {
     /// Names this delta generation knows bind this inode. Exact for an inode
     /// created in the generation, a lower bound for one inherited from a base.
     pub names: u32,
+}
+pub(crate) struct NodeName {
+    pub bytes: Box<[u8]>,
+    _charge: Charge,
+}
+impl NodeName {
+    pub fn new(
+        name: &[u8],
+        budget: &Arc<crate::backing::budget::Budget>,
+    ) -> Result<Self, WorkspaceError> {
+        let charge = budget.reserve(name.len())?;
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(name.len())
+            .map_err(|_| WorkspaceError::Capacity)?;
+        bytes.extend_from_slice(name);
+        Ok(Self {
+            bytes: bytes.into_boxed_slice(),
+            _charge: charge,
+        })
+    }
 }
 #[derive(Clone)]
 pub(crate) struct Handle {
@@ -160,19 +180,16 @@ impl Node {
         attr: NodeAttributes,
         content: Root,
         metadata: Root,
-        path: &[u8],
+        name: NodeName,
         parent: u64,
     ) -> Self {
-        let mut stored = [0; PATH_BYTES];
-        stored[..path.len()].copy_from_slice(path);
         Self {
             attr,
             original: attr,
             baseline: 1,
             metadata,
             content,
-            path: stored,
-            path_len: path.len(),
+            name,
             parent,
             attached: true,
             retained: false,
@@ -181,9 +198,6 @@ impl Node {
             handles: 0,
             names: 1,
         }
-    }
-    pub fn path(&self) -> &[u8] {
-        &self.path[..self.path_len]
     }
     pub fn references(&mut self, scope: ReferenceScope) -> &mut u64 {
         match scope {

@@ -13,11 +13,7 @@ impl Workspace {
         deadline: Instant,
         operation: &mut OperationGuard,
     ) -> Result<Original, WorkspaceError> {
-        let _path = self
-            .host
-            .budget
-            .reserve(crate::runtime::state::PATH_BYTES)?;
-        let (view, baseline, path, path_len, selected) = {
+        let (view, baseline, selected) = {
             let state = self.state()?;
             self.available(&state)?;
             let node = state.node(serial)?;
@@ -36,8 +32,6 @@ impl Workspace {
                     root: state.overlay.clone(),
                 },
                 state.baseline,
-                node.path,
-                node.path_len,
                 node.attr,
             )
         };
@@ -49,20 +43,16 @@ impl Workspace {
                 return Ok((inode.attributes(selected), [0; 32], [0; 32], baseline));
             }
         }
-        let mut bytes = crate::backing::metadata_index::vector(path_len)?;
-        bytes.extend_from_slice(&path[..path_len]);
         let response = self.inspect_view(
             operation,
             view.base,
-            Inspect::Attributes { path: bytes },
+            Inspect::InodeAttributes { serial },
             deadline,
         )?;
         let (attr, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
-        // This query runs only when the node's baseline is stale, so the cached
-        // path must still name the same identity. Its link count is not part of
-        // that stability: the Commit that moved the baseline may have republished
-        // the identity with a changed count, and this resolution is the refresh.
+        // A stale baseline refreshes the inode by identity. Its link count may
+        // have changed in the Commit that moved the baseline.
         if attr.serial != serial || attr.kind != selected.kind {
             return Err(WorkspaceError::InvalidInput);
         }

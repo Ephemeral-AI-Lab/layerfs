@@ -4,10 +4,7 @@
 //! binding of the same inode in the same publication, so no observer sees an
 //! intermediate unlink or link. A replaced destination keeps its inode for its
 //! existing handles and readers; only its name is gone.
-use super::{
-    namespace::{check_access, child_path},
-    namespace_view::View,
-};
+use super::namespace_view::View;
 use crate::{
     backing::{
         metadata_index::vector,
@@ -17,7 +14,7 @@ use crate::{
         directories::{self, Directory, Origin},
         pieces::{CapturedBase, Inode, Piece, PieceKind},
     },
-    runtime::coherence::MutationOrigin,
+    runtime::{coherence::MutationOrigin, state::NodeName},
     *,
 };
 use layerfs_bridge::contract::{Code, Root};
@@ -41,19 +38,6 @@ struct Moved {
     payload: Option<OwnedPayload>,
     /// The identity becomes a counted dirty identity this generation.
     dirty: bool,
-}
-/// One parent whose entry set this operation edits.
-struct Parent {
-    serial: u64,
-    path: Vec<u8>,
-    directory: Directory,
-    /// This generation's ledger already carries the parent's dirty key.
-    dirty: bool,
-    /// The maintained delta must be re-anchored on the current root.
-    reanchor: bool,
-    remove: Option<Vec<u8>>,
-    bind: Option<(Vec<u8>, u64, NodeKind)>,
-    mtime: (i64, u32),
 }
 impl Workspace {
     /// Moves or renames one name. Ordinary rename replaces an existing
@@ -114,20 +98,13 @@ impl Workspace {
             )
         };
         let mut parents = self.rename_parents(
-            &mut operation,
             &view,
             (source_parent, source),
             (destination_parent, destination),
             deadline,
         )?;
-        let source_attr = self.resolve_child(
-            &mut operation,
-            &view,
-            source_parent,
-            &parents[0].path.clone(),
-            source,
-            deadline,
-        )?;
+        let source_attr =
+            self.resolve_child(&mut operation, &view, source_parent, source, deadline)?;
         if source_attr.attr.serial == self.inner.root.serial {
             return Err(WorkspaceError::Unsupported);
         }
@@ -136,7 +113,6 @@ impl Workspace {
             &mut operation,
             &view,
             destination_parent,
-            &parents[if same_parent { 0 } else { 1 }].path.clone(),
             destination,
             deadline,
         );
@@ -165,11 +141,10 @@ impl Workspace {
                 if source_attr.attr.kind != NodeKind::Directory {
                     return Err(WorkspaceError::IsDirectory);
                 }
-                let path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
                 let entries = self.list_view(
                     &mut operation,
                     &view,
-                    (replaced.attr.serial, &path),
+                    replaced.attr.serial,
                     &[],
                     1,
                     deadline,
@@ -181,29 +156,17 @@ impl Workspace {
                 return Err(WorkspaceError::NotDirectory);
             }
         }
-        let old_path = child_path(&parents[0].path, source)?;
-        let new_path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
         if source_attr.attr.kind == NodeKind::Directory
-            && (self.descends_from(destination_parent, source_attr.attr.serial)?
-                || parents[if same_parent { 0 } else { 1 }].path == old_path
-                || parents[if same_parent { 0 } else { 1 }]
-                    .path
-                    .strip_prefix(old_path.as_slice())
-                    .is_some_and(|suffix| suffix.first() == Some(&b'/')))
+            && self.state()?.live_chain(
+                destination_parent,
+                Some(source_attr.attr.serial),
+                self.inner.root.serial,
+            )?
         {
             // Moving a directory beneath its own descendant would create a cycle.
             return Err(WorkspaceError::InvalidInput);
         }
-        if source_attr.attr.kind == NodeKind::Directory {
-            self.preflight_rename_paths(
-                &mut operation,
-                &view,
-                source_attr.attr.serial,
-                &old_path,
-                &new_path,
-                deadline,
-            )?;
-        }
+        let moved_name = NodeName::new(destination, &self.host.budget)?;
         let moved_directory = if source_attr.attr.kind == NodeKind::Directory
             && self.record_absent(&view, source_attr.attr.serial, true, deadline)?
         {
@@ -214,7 +177,7 @@ impl Workspace {
         let moved = if source_attr.attr.kind == NodeKind::Directory {
             None
         } else {
-            self.moved_identity(&mut operation, &view, &source_attr, &old_path, deadline)?
+            self.moved_identity(&mut operation, &view, &source_attr, deadline)?
         };
         let replaced = if let Some(replaced) = destination_attr
             .as_ref()
@@ -581,40 +544,40 @@ impl Workspace {
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
-        if source_attr.attr.kind == NodeKind::Directory {
-            super::rename_paths::check_cached(&state, &old_path, &new_path)?;
-            if state.live_chain(
+        if source_attr.attr.kind == NodeKind::Directory
+            && state.live_chain(
                 destination_parent,
                 Some(source_attr.attr.serial),
                 self.inner.root.serial,
-            )? {
-                return Err(WorkspaceError::InvalidInput);
-            }
+            )?
+        {
+            return Err(WorkspaceError::InvalidInput);
         }
         state.live_chain(source_parent, None, self.inner.root.serial)?;
         state.live_chain(destination_parent, None, self.inner.root.serial)?;
+        let moved_index = state.node_index.get(&source_attr.attr.serial).copied();
+        if let Some(index) = moved_index.filter(|_| source_attr.attr.kind == NodeKind::Directory) {
+            let node = &state.nodes[index];
+            if !node.attached || node.parent != source_parent || node.name.bytes.as_ref() != source
+            {
+                return Err(WorkspaceError::Busy);
+            }
+            state.live_chain(source_attr.attr.serial, None, self.inner.root.serial)?;
+        }
         for parent in &parents {
-            let index = state
-                .nodes
-                .iter()
-                .position(|node| node.attr.serial == parent.serial)
+            let index = *state
+                .node_index
+                .get(&parent.serial)
                 .ok_or(WorkspaceError::Busy)?;
             state.nodes[index].attr = parent.directory.attributes(state.nodes[index].attr);
         }
-        // The moved name is the destination name from here on, for the moved
-        // identity and every resident descendant. Identity-keyed inherited
-        // reads do not use these paths, but later local mutation and handle
-        // operations do, so the prechecked rewrite must be exact.
-        if source_attr.attr.kind == NodeKind::Directory {
-            super::rename_paths::publish(&mut state, &old_path, &new_path, destination_parent);
-        } else {
-            for node in &mut state.nodes {
-                if node.path() == old_path.as_slice() {
-                    let len = new_path.len();
-                    node.path[..len].copy_from_slice(&new_path);
-                    node.path_len = len;
-                    node.parent = destination_parent;
-                }
+        if let Some(index) = moved_index {
+            let node = &mut state.nodes[index];
+            if node.attr.kind == NodeKind::Directory
+                || (node.parent == source_parent && node.name.bytes.as_ref() == source)
+            {
+                node.name = moved_name;
+                node.parent = destination_parent;
             }
         }
         if let Some(replaced) = &destination_attr {
@@ -762,7 +725,6 @@ impl Workspace {
         operation: &mut crate::runtime::state::OperationGuard,
         view: &View,
         resolved: &super::namespace_view::Resolved,
-        path: &[u8],
         deadline: Instant,
     ) -> Result<Option<Moved>, WorkspaceError> {
         let directory = resolved.attr.kind == NodeKind::Directory;
@@ -787,8 +749,8 @@ impl Workspace {
                 let response = self.inspect_view(
                     operation,
                     resolved.base,
-                    layerfs_bridge::contract::Inspect::Readlink {
-                        path: path.to_vec(),
+                    layerfs_bridge::contract::Inspect::InodeReadlink {
+                        serial: resolved.attr.serial,
                     },
                     deadline,
                 )?;
@@ -837,90 +799,6 @@ impl Workspace {
                 }))
             }
         }
-    }
-    /// Loads both edited parents and resolves the destination's prior binding.
-    fn rename_parents(
-        &self,
-        operation: &mut crate::runtime::state::OperationGuard,
-        view: &View,
-        source: (u64, &[u8]),
-        destination: (u64, &[u8]),
-        deadline: Instant,
-    ) -> Result<Vec<Parent>, WorkspaceError> {
-        let (source_parent, source_name) = source;
-        let (destination_parent, destination_name) = destination;
-        if source_parent == self.inner.root.serial && source_name.is_empty() {
-            return Err(WorkspaceError::Unsupported);
-        }
-        let generation = self.state()?.generation;
-        let mut parents = Vec::new();
-        parents
-            .try_reserve_exact(if source_parent == destination_parent {
-                1
-            } else {
-                2
-            })
-            .map_err(|_| WorkspaceError::Capacity)?;
-        for (serial, name) in [
-            (source_parent, source_name),
-            (destination_parent, destination_name),
-        ] {
-            if parents
-                .iter()
-                .any(|parent: &Parent| parent.serial == serial)
-            {
-                continue;
-            }
-            let (path, attr) = {
-                let state = self.state()?;
-                let node = state.node(serial)?;
-                if node.attr.kind != NodeKind::Directory {
-                    return Err(WorkspaceError::NotDirectory);
-                }
-                if !node.attached {
-                    return Err(WorkspaceError::NotFound);
-                }
-                check_access(node.attr, self.inner.root.uid, 3)?;
-                (node.path().to_vec(), node.attr)
-            };
-            child_path(&path, name)?;
-            let loaded = self.directory_record(view, serial, deadline)?;
-            let directory = loaded.unwrap_or_else(|| Directory::initial(attr, view.base));
-            let (reanchor, dirty) = {
-                let host = self
-                    .host
-                    .metadata
-                    .as_ref()
-                    .ok_or(WorkspaceError::Unsupported)?;
-                let _view = host.writer()?;
-                let mut lease = host.payloads.window(1, 3)?;
-                self.directory_delta(
-                    view.root.as_ref(),
-                    generation,
-                    serial,
-                    loaded.as_ref(),
-                    lease.window.as_mut().ok_or(WorkspaceError::Io)?,
-                    deadline,
-                )?
-            };
-            parents.push(Parent {
-                serial,
-                path,
-                directory,
-                dirty,
-                reanchor,
-                remove: None,
-                bind: None,
-                mtime: (attr.mtime_seconds, attr.mtime_nanoseconds),
-            });
-        }
-        let _ = operation;
-        Ok(parents)
-    }
-    /// True when `serial` is `ancestor` or one of its cached descendants.
-    fn descends_from(&self, serial: u64, ancestor: u64) -> Result<bool, WorkspaceError> {
-        let state = self.state()?;
-        state.live_chain(serial, Some(ancestor), self.inner.root.serial)
     }
 }
 /// The captured record one parent delta was loaded from, if it had one.

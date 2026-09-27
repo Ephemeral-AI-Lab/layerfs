@@ -25,7 +25,7 @@ impl Workspace {
             .host
             .budget
             .reserve(limit * (size_of::<DirectoryEntry>() + 255))?;
-        let (path, serial, parent, dots, after, view) = {
+        let (serial, parent, dots, after, view) = {
             let state = self.state()?;
             let found = state.handle(handle, true)?;
             let node = state.node(found.serial)?;
@@ -40,7 +40,6 @@ impl Workspace {
                 (position.dots, position.after[..position.len].to_vec())
             };
             (
-                node.path().to_vec(),
                 node.attr.serial,
                 node.parent,
                 dots,
@@ -72,14 +71,14 @@ impl Workspace {
             let names = self.list_view(
                 &mut operation,
                 &view,
-                (serial, &path),
+                serial,
                 &after,
                 limit - entries.len(),
                 deadline,
             )?;
             for (name, expected_serial) in names {
                 let resolved =
-                    self.resolve_child(&mut operation, &view, serial, &path, &name, deadline)?;
+                    self.resolve_child(&mut operation, &view, serial, &name, deadline)?;
                 if resolved.attr.serial != expected_serial {
                     return Err(WorkspaceError::InvalidInput);
                 }

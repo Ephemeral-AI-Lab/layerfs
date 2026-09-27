@@ -11,7 +11,7 @@ pub mod projection_counters;
 mod read;
 mod remove;
 pub(crate) mod rename;
-mod rename_paths;
+mod rename_preflight;
 mod resize;
 mod symlink;
 mod write;

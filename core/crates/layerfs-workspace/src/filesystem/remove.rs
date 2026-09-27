@@ -4,7 +4,7 @@
 //! read and frozen generation keeps its own reference to the same inode, and a
 //! last-name removal frees no bytes while one of them is still live.
 use super::{
-    namespace::{check_access, child_path},
+    namespace::{check_access, check_name},
     namespace_view::View,
 };
 use crate::{
@@ -75,7 +75,7 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (view, path, parent_attr, baseline, revision, generation, frozen) = {
+        let (view, parent_attr, baseline, revision, generation, frozen) = {
             let state = self.state()?;
             self.available(&state)?;
             self.check_mutation_coherence(&state, origin, false)?;
@@ -95,7 +95,6 @@ impl Workspace {
                     base: state.base,
                     root: state.overlay.clone(),
                 },
-                node.path().to_vec(),
                 node.attr,
                 state.baseline,
                 state.revision,
@@ -103,22 +102,21 @@ impl Workspace {
                 state.submission.clone(),
             )
         };
-        child_path(&path, name)?;
+        check_name(name)?;
         if directory && name.is_empty() {
             return Err(WorkspaceError::InvalidInput);
         }
-        let resolved =
-            match self.resolve_child(&mut operation, &view, parent, &path, name, deadline) {
-                Ok(resolved) => resolved,
-                Err(WorkspaceError::NotFound) => return Err(WorkspaceError::NotFound),
-                Err(WorkspaceError::Service(failure))
-                    if !failure.unknown
-                        && matches!(failure.code, Code::PathNotFound | Code::NotFound) =>
-                {
-                    return Err(WorkspaceError::NotFound)
-                }
-                Err(error) => return Err(error),
-            };
+        let resolved = match self.resolve_child(&mut operation, &view, parent, name, deadline) {
+            Ok(resolved) => resolved,
+            Err(WorkspaceError::NotFound) => return Err(WorkspaceError::NotFound),
+            Err(WorkspaceError::Service(failure))
+                if !failure.unknown
+                    && matches!(failure.code, Code::PathNotFound | Code::NotFound) =>
+            {
+                return Err(WorkspaceError::NotFound)
+            }
+            Err(error) => return Err(error),
+        };
         let child = resolved.attr;
         // An identity the live root holds no record of lives only in the
         // canonical tree. Removing one of its names while a live local owner
@@ -139,7 +137,7 @@ impl Workspace {
             if child.serial == self.inner.root.serial {
                 return Err(WorkspaceError::Unsupported);
             }
-            if !self.directory_empty(&mut operation, &view, child, &path, name, deadline)? {
+            if !self.directory_empty(&mut operation, &view, child, deadline)? {
                 return Err(WorkspaceError::NotEmpty);
             }
         } else if child.kind == NodeKind::Directory {
@@ -434,12 +432,9 @@ impl Workspace {
         operation: &mut crate::runtime::state::OperationGuard,
         view: &View,
         directory: NodeAttributes,
-        parent_path: &[u8],
-        name: &[u8],
         deadline: Instant,
     ) -> Result<bool, WorkspaceError> {
-        let path = child_path(parent_path, name)?;
-        let names = self.list_view(operation, view, (directory.serial, &path), &[], 1, deadline)?;
+        let names = self.list_view(operation, view, directory.serial, &[], 1, deadline)?;
         Ok(names.is_empty())
     }
 }

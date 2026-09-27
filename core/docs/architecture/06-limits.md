@@ -202,23 +202,20 @@ where, because a limit that is stated but not enforced is not a limit.
 
 ### Workspace private backing — keyed namespace tree (#256)
 
-The #258 directory-rename source in the same commit as this paragraph checks
-the destination prefix and every resident descendant path before publication,
-then checks resident paths again under the final state lock. A destination that
-makes an inherited prefix longer or deeper is checked against the effective
-subtree by bounded pages before publication; a path over 4,096 bytes or 256
-components refuses the whole rename. This adds no fixed descendant-count cap,
-but a growing-prefix move can pay for every inherited descendant. The scan has
-one charged frame per path component, shares no copied-up subtree, and stops at
-the existing deadline or resource budget. A canonical maximum-relative-path
-summary would be needed to make all growing-prefix moves independent of subtree
-size.
+The #264 Phase 4.5 mounted route, based on `6115dfcd2` plus the source in this
+commit, validates each component but does not assemble an aggregate path.
+Resident directories retain charged ancestor Nodes by serial; rename checks
+that live chain under the final state lock. It edits one or two private parent
+deltas and the moved resident parent/name edge. Inherited descendants are not
+scanned or copied up by mounted rename. Direct C1 `LogicalPath`, path Inspect,
+source import and the caller's one-syscall pathname still have their separate
+path bounds; component traversal can reach deeper descendants.
 
 C1's current `validate::check_parent_aliases` reads the full base tree when a
 stored directory gains a changed binding, and `check_effective_cycles` reads the
 effective moved subtree. Those are Commit-time costs on the frozen generation;
-the local rename publication is atomic, but neither the current Commit nor all
-growing-prefix renames have a proved path-local complexity bound.
+the local rename publication is atomic, but the current Commit does not have a
+proved path-local complexity bound.
 
 The keyed tree holds one Workspace generation's dirty identities, inodes and
 directory bindings. Its bounds are page-format bounds; the *number* of names or

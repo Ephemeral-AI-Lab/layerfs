@@ -1,5 +1,5 @@
 use crate::{
-    runtime::state::{Node, PATH_BYTES},
+    runtime::state::{Node, NodeName},
     *,
 };
 use layerfs_bridge::contract::{Response, Root};
@@ -49,7 +49,7 @@ pub(crate) fn attributes(
         metadata,
     ))
 }
-pub(crate) fn child_path(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, WorkspaceError> {
+pub(crate) fn check_name(name: &[u8]) -> Result<(), WorkspaceError> {
     if name.is_empty()
         || name.len() > 255
         || name == b"."
@@ -59,23 +59,7 @@ pub(crate) fn child_path(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, Workspac
     {
         return Err(WorkspaceError::InvalidInput);
     }
-    let total = parent.len() + usize::from(!parent.is_empty()) + name.len();
-    if total > PATH_BYTES
-        || parent.iter().filter(|byte| **byte == b'/').count() + usize::from(!parent.is_empty())
-            >= 256
-    {
-        return Err(WorkspaceError::Capacity);
-    }
-    let mut result = Vec::new();
-    result
-        .try_reserve_exact(total)
-        .map_err(|_| WorkspaceError::Capacity)?;
-    result.extend_from_slice(parent);
-    if !parent.is_empty() {
-        result.push(b'/');
-    }
-    result.extend_from_slice(name);
-    Ok(result)
+    Ok(())
 }
 pub(crate) fn check_access(attr: NodeAttributes, uid: u32, mask: u8) -> Result<(), WorkspaceError> {
     if mask & !7 != 0 {
@@ -153,7 +137,7 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (path, base, baseline, revision, root) = {
+        let (base, baseline, revision, root) = {
             let state = self.state()?;
             if scope == ReferenceScope::Projection && !state.mounted {
                 return Err(WorkspaceError::Busy);
@@ -167,7 +151,6 @@ impl Workspace {
             }
             check_access(parent.attr, self.inner.root.uid, 1)?;
             (
-                parent.path().to_vec(),
                 state.base,
                 state.baseline,
                 state.revision,
@@ -175,20 +158,19 @@ impl Workspace {
             )
         };
         let view = super::namespace_view::View { base, root };
-        let resolved = self.resolve_child(&mut operation, &view, parent, &path, name, deadline)?;
-        let path = child_path(&path, name)?;
+        let resolved = self.resolve_child(&mut operation, &view, parent, name, deadline)?;
         let mut state = self.state()?;
         if state.revision != revision || state.baseline != baseline {
             return Err(WorkspaceError::Busy);
         }
         state.live_chain(parent, None, self.inner.root.serial)?;
-        self.cache_lookup(&mut state, resolved, &path, parent, scope, baseline)
+        self.cache_lookup(&mut state, resolved, name, parent, scope, baseline)
     }
     pub(super) fn cache_lookup(
         &self,
         state: &mut crate::runtime::state::State,
         resolved: super::namespace_view::Resolved,
-        path: &[u8],
+        name: &[u8],
         parent: u64,
         scope: ReferenceScope,
         baseline: u64,
@@ -202,6 +184,11 @@ impl Workspace {
             ..
         } = resolved;
         if let Ok(node) = state.node_mut(attr.serial) {
+            if node.attr.kind == NodeKind::Directory
+                && (!node.attached || node.parent != parent || node.name.bytes.as_ref() != name)
+            {
+                return Err(WorkspaceError::InvalidInput);
+            }
             if canonical
                 && node.baseline == baseline
                 && (node.original != original
@@ -229,7 +216,8 @@ impl Workspace {
             *references = references.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         } else {
             state.reserve_nodes()?;
-            let mut node = Node::new(original, content, metadata, path, parent);
+            let name = NodeName::new(name, &self.host.budget)?;
+            let mut node = Node::new(original, content, metadata, name, parent);
             node.attr = attr;
             node.baseline = if canonical { baseline } else { 0 };
             // A newly resolved identity starts from the live namespace link

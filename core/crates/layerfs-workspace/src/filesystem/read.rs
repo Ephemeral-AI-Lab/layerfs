@@ -22,11 +22,7 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _path_charge = self
-            .host
-            .budget
-            .reserve(crate::runtime::state::PATH_BYTES)?;
-        let (attr, mut content, root, base, baseline, path, path_len, stale) = {
+        let (attr, mut content, root, base, baseline, stale) = {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
@@ -40,8 +36,6 @@ impl Workspace {
                 state.overlay.clone(),
                 state.base,
                 state.baseline,
-                node.path,
-                node.path_len,
                 node.baseline != state.baseline,
             )
         };
@@ -70,13 +64,11 @@ impl Workspace {
             } else {
                 operation.remote()?;
                 if stale {
-                    let mut selected_path = crate::backing::metadata_index::vector(path_len)?;
-                    selected_path.extend_from_slice(&path[..path_len]);
                     let response = self.call(
                         Operation::Inspect {
                             root: base,
-                            query: Inspect::Attributes {
-                                path: selected_path,
+                            query: Inspect::InodeAttributes {
+                                serial: attr.serial,
                             },
                         },
                         0,

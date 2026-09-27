@@ -557,7 +557,7 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         ) => actual.len() <= *entries as usize && bytes == 0,
         (
             Operation::Inspect {
-                query: Inspect::Readlink { .. },
+                query: Inspect::Readlink { .. } | Inspect::InodeReadlink { .. },
                 ..
             },
             Response::Link(link),

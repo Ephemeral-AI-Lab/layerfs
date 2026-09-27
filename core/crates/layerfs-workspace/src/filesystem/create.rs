@@ -1,6 +1,6 @@
 //! One atomic child publication; regular-file creation also installs its handle.
 use super::{
-    namespace::{check_access, child_path},
+    namespace::{check_access, check_name},
     namespace_view::View,
 };
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
     },
     runtime::{
         coherence::MutationOrigin,
-        state::{Handle, Node},
+        state::{Handle, Node, NodeName},
     },
     *,
 };
@@ -140,7 +140,7 @@ impl Workspace {
         let mut guard = self.begin(false, deadline)?;
         let operation = &mut guard;
         operation.local_io()?;
-        let (view, path, attr, baseline, revision, generation, frozen, scope) = {
+        let (view, attr, baseline, revision, generation, frozen, scope) = {
             let state = self.state()?;
             self.available(&state)?;
             self.check_mutation_coherence(&state, origin, false)?;
@@ -152,13 +152,12 @@ impl Workspace {
                 return Err(WorkspaceError::NotFound);
             }
             check_access(node.attr, self.inner.root.uid, if file { 1 } else { 3 })?;
-            child_path(node.path(), name)?;
+            check_name(name)?;
             (
                 View {
                     base: state.base,
                     root: state.overlay.clone(),
                 },
-                node.path().to_vec(),
                 node.attr,
                 state.baseline,
                 state.revision,
@@ -171,7 +170,7 @@ impl Workspace {
                     .scope,
             )
         };
-        match self.resolve_child(operation, &view, parent, &path, name, deadline) {
+        match self.resolve_child(operation, &view, parent, name, deadline) {
             Ok(resolved) => {
                 if link {
                     // The destination name is bound by this operation only.
@@ -180,7 +179,6 @@ impl Workspace {
                 if let Creation::File { options, open, .. } = creation {
                     let _ = open;
                     if !options.exclusive {
-                        let child_path = child_path(&path, name)?;
                         let serial = resolved.attr.serial;
                         {
                             let mut state = self.state()?;
@@ -190,12 +188,7 @@ impl Workspace {
                                 return Err(WorkspaceError::Busy);
                             }
                             self.cache_lookup(
-                                &mut state,
-                                resolved,
-                                &child_path,
-                                parent,
-                                reference,
-                                baseline,
+                                &mut state, resolved, name, parent, reference, baseline,
                             )?;
                         }
                         return match self.open_file_admitted(
@@ -580,8 +573,8 @@ impl Workspace {
             deadline,
         )?;
         candidate.seal(root, window, deadline)?;
-        let child_path = child_path(&path, name)?;
-        let mut node = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
+        let node_name = NodeName::new(name, &self.host.budget)?;
+        let mut node = Node::new(child_attr, [0; 32], [0; 32], node_name, parent);
         node.baseline = 0;
         *node.references(reference) = 1;
         // A creation opens a handle only when its caller asked for one: a
@@ -671,11 +664,7 @@ impl Workspace {
                     *node.references(reference) = 0;
                 }
                 None => {
-                    let mut linked = Node::new(child_attr, [0; 32], [0; 32], &child_path, parent);
-                    linked.baseline = 0;
-                    *linked.references(reference) = 1;
-                    linked.names = 1;
-                    state.push_node(linked);
+                    state.push_node(node);
                 }
             }
             state.linked(serial);

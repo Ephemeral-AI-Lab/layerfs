@@ -1,5 +1,5 @@
 //! View-bound namespace resolution; local index guards end before service reads.
-use super::namespace::{attributes, child_path};
+use super::namespace::{attributes, check_name};
 use crate::{
     backing::{metadata::RootOwner, metadata_pages},
     overlay::directories::{self, Directory, Origin},
@@ -71,11 +71,10 @@ impl Workspace {
         operation: &mut crate::runtime::state::OperationGuard,
         view: &View,
         parent: u64,
-        path: &[u8],
         name: &[u8],
         deadline: Instant,
     ) -> Result<Resolved, WorkspaceError> {
-        child_path(path, name)?;
+        check_name(name)?;
         let mut base = Some(view.base);
         let mut binding = None;
         let mut local = None;
@@ -242,12 +241,11 @@ impl Workspace {
         &self,
         operation: &mut crate::runtime::state::OperationGuard,
         view: &View,
-        directory: (u64, &[u8]),
+        serial: u64,
         after: &[u8],
         limit: usize,
         deadline: Instant,
     ) -> Result<Vec<(Vec<u8>, u64)>, WorkspaceError> {
-        let (serial, path) = directory;
         let mut names = crate::backing::metadata_index::vector(limit)?;
         let mut base = Some(view.base);
         let mut delta = None;
@@ -296,7 +294,7 @@ impl Workspace {
                     lower = cell.key().to_vec();
                     exclusive = true;
                     let name = &cell.key()[1..];
-                    child_path(path, name)?;
+                    check_name(name)?;
                     let removal = directories::tombstone_key(name)?;
                     if owner
                         .arena
@@ -354,7 +352,7 @@ impl Workspace {
                 if name.as_slice() <= previous {
                     return Err(WorkspaceError::InvalidInput);
                 }
-                child_path(path, name)?;
+                check_name(name)?;
                 previous = name;
             }
             let full = entries.len() == limit;

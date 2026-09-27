@@ -211,6 +211,10 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
                     e.u8(6)?;
                     e.u64(*serial)?;
                 }
+                Inspect::InodeReadlink { serial } => {
+                    e.u8(8)?;
+                    e.u64(*serial)?;
+                }
                 Inspect::InodeList {
                     serial,
                     after,
@@ -683,6 +687,7 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
                     name: d.blob(255)?,
                 },
                 6 => Inspect::InodeAttributes { serial: d.u64()? },
+                8 => Inspect::InodeReadlink { serial: d.u64()? },
                 7 => Inspect::InodeList {
                     serial: d.u64()?,
                     after: d.blob(255)?,
