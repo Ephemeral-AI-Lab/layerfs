@@ -47,7 +47,12 @@ same metadata writer/stamp, before candidate construction. A count-only WRITE
 reply cannot correct an accepted syscall's wrong fd position. Empty projected
 append also validates EOF, then returns a no-op without candidate/custody/mtime
 publication. A stale incoming append offset is EINVAL; bounded contention is
-EBUSY and neither authorizes an automatic retry.
+EBUSY and neither authorizes an automatic retry. The issue 266 amendment in
+the source commit containing this paragraph (first parent `387845be9`) waits
+only for a successful preceding WRITE's reply permit. It keeps the same
+callback deadline; other Busy conditions refuse immediately, and neither
+publication nor notification is retried. The origin still covers its reply
+and optional diagnostic snapshot.
 
 ## Kernel profile and completion
 

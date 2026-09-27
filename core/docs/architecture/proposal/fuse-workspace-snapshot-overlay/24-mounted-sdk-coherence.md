@@ -270,3 +270,23 @@ Committed implementation: `d770f5d10bf160b57a90b212102e7960148dba18`.
 [Exact changed product/test/manifest paths](evidence/mounted-sdk-coherence/committed-files.json)
 are obtained from its first-parent Git comparison; the historical source seal,
 raw receipts and production LOC comparison above retain their original identities.
+
+## Issue 266 amendment: a healthy WRITE reply gap
+
+This amendment describes the source in the commit containing it, based on first
+parent `387845be9`. The earlier implementation and evidence pins above remain
+historical. The [prospective treatment](../../../../../docs/roadmap/0.1/0.1.7/issue266-reply-wait-treatment-spec.md)
+and retained cause diagnostic identify a second WRITE arriving after its
+predecessor's reply attempt while the predecessor still holds the mutation
+permit. Coherence is Ready and publication complete at that point.
+
+The WRITE adapter marks the origin permit immediately before attempting its
+reply. Only a subsequent projected mutation seeing Ready, a bound notifier,
+one mutation/reply permit and that marker waits for permit release. The wait
+uses one condition signal on the existing state mutex and the callback's
+unchanged deadline. Admission rechecks status, mount state and permits after
+every wake. Failed or unbound coherence, an old observation, and an active
+mutation not yet at reply still refuse immediately. The original guard remains
+alive through the reply and optional snapshot; neither publication nor
+notification is replayed. The condition variable adds one fixed, charged Arc
+allocation per mounted Workspace and no thread, queue, FD or growing buffer.

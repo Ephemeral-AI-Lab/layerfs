@@ -674,6 +674,32 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "native projection reply admission; no kernel mount"]
+    fn kernel_write_reply_gap_wait() {
+        let f = Fixture::new(Gate::None);
+        let mut lease = f.workspace.reserve_mount().unwrap();
+        lease.bind_invalidation(Arc::new(|_, _, _| Ok(()))).unwrap();
+        let mut origin = f.workspace.begin_projection_mutation(deadline()).unwrap();
+        assert!(matches!(
+            f.workspace.begin_projection_mutation(deadline()),
+            Err(WorkspaceError::Busy)
+        ));
+        origin.mark_reply_started();
+        let started = Instant::now();
+        assert!(matches!(
+            f.workspace
+                .begin_projection_mutation(started + Duration::from_millis(100)),
+            Err(WorkspaceError::Deadline)
+        ));
+        assert!(started.elapsed() >= Duration::from_millis(50));
+        drop(origin);
+        drop(f.workspace.begin_projection_mutation(deadline()).unwrap());
+        lease.finish().unwrap();
+        f.workspace.close_clean().unwrap();
+        check("healthy-reply-waits-within-original-deadline-and-release-wakes-admission");
+    }
+
+    #[test]
     #[ignore = "native public completion API subset; actual notifier errno covered separately"]
     fn kernel_write_completion_failure() {
         let f = Fixture::new(Gate::None);
