@@ -216,12 +216,19 @@ impl Workspace {
             .handles
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
+        let view = if directory {
+            let mut view = self.selected_view(state)?;
+            view.directory_path = Some(super::namespace_view::PinnedDirectoryPath::new(
+                state.nodes[node].path(),
+                state.nodes[node].parent,
+                &self.host.budget,
+            )?);
+            Some(view)
+        } else {
+            None
+        };
         state.next_handle = next;
         state.nodes[node].handles = references;
-        let view = directory.then(|| super::namespace_view::View {
-            base: state.base,
-            root: state.overlay.clone(),
-        });
         state.handles.push(Handle {
             id,
             serial,

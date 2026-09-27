@@ -45,7 +45,8 @@ pub(crate) fn errno(error: WorkspaceError) -> Errno {
         WorkspaceError::Io
         | WorkspaceError::Stage(_)
         | WorkspaceError::Commit(_)
-        | WorkspaceError::Coherence(_) => Errno::EIO,
+        | WorkspaceError::Coherence(_)
+        | WorkspaceError::Published { .. } => Errno::EIO,
     }
 }
 

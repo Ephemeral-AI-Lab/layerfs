@@ -1,8 +1,8 @@
 # #273 active backing storage foundation
 
-> Source pin: this revision follows typed-format contract `ba6ceeb30` and
-> describes the source committed with this revision. No mounted
-> Workspace selects it yet, and it has no latency or release claim. The
+> Source pin: this revision follows the checkpoint-2 format amendment
+> `e97900efa` and describes the source committed with this revision. LocalEdit
+> Workspaces select the active owner. This document has no latency or release claim. The
 > prospective [format and evaluation contract](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
 > states the target behavior and remaining proof gates.
 
@@ -54,17 +54,19 @@ for an owned large `p-*` payload. The codec validates its declared byte range;
 the active wrapper publishes a larger payload, its inode and dirty key in one
 index revision, and retains a Host-charged payload owner for current and
 frozen reads. The range reader carries selected payload owners outside the
-active lock. Full orphan-payload reclamation, mounted selection and public
+active lock. Full orphan-payload reclamation and public
 failure proof remain open.
 When a large overwrite removes every selected slot on the current packed
 tail, its locator and physical page stay owned for the next tiny append;
 sealed fully dead pages can be released in the same publication. The external
 cross-page overwrite test checks that tail transition.
-The current active wrapper in `backing/active/generation.rs` publishes pack,
+The active wrapper in `backing/active/generation.rs` publishes pack,
 extent, locator, inode attributes and dirty membership through one index root
 change for `write_tiny_file`. Its lower-level `write_tiny` still accepts
-caller-supplied records for backing tests. Neither method is selected by the
-public Workspace yet. A separate `publish_records` call publishes namespace,
+caller-supplied records for backing tests. The public Workspace selects
+`write_tiny_file` for payloads at most 128 bytes, `write_payload_file` for
+larger owned payloads, and `set_attributes_file` for length and portable
+attributes. A separate `publish_records` call publishes namespace,
 inode and dirty changes without a pack append; range scans expose bounded
 current and frozen index pages for the later namespace and Commit readers.
 The range reader selects one current or frozen inode and extent view, copies
@@ -84,13 +86,46 @@ reservations, pins and incomplete candidates. The page registry's metadata
 and I/O scratch are charged to the Host memory budget. These files are
 temporary Workspace backing; no sync or crash recovery is added.
 
-Local-edit attachment now constructs one active owner for the Workspace
+Local-edit attachment constructs one active owner for the Workspace
 incarnation after acquiring the verified private directory. Failed attachment
 closes that owner before the arena and directory; clean close drains it before
 metadata and payload cleanup. Repeating the active owner's already-complete
 close is safe when a later cleanup phase failed and the Workspace retries.
-The mounted mutation and read methods still use the old root, so this
-lifecycle ownership alone does not select the active view.
+
+## Checkpoint 2 public selection
+
+An attached LocalEdit Workspace selects one pinned active view for lookup and
+directory listing. A directory handle keeps its index revision and a charged
+copy of its path and parent across later edits. `filesystem/active_create.rs`,
+`active_remove.rs`, `active_rename.rs`,
+`active_file.rs` and `active_attributes.rs` publish namespace bindings,
+current inode attributes and dirty membership as one index revision under the
+Workspace state gate. Regular WRITE selects one final extent view and reports
+one accepted byte count; read uses that view for Base, Packed, Payload and Zero
+intervals. Symlink targets use an owned Payload extent in the same name
+publication.
+
+The inode header's selected regular-file link count occupies bytes `44..48`
+under the checkpoint-2 amendment. Link, unlink and destination replacement
+change it with their namespace rows, so lookup remains correct after the
+resident Node is forgotten. A charged immutable origin-path map in each view
+retains canonical lookup paths for inherited directories moved locally. It is
+scoped to the Workspace incarnation and pinned with directory views; the
+active index remains the single namespace publication authority. A handle
+opened before an inherited directory move keeps the original canonical path;
+a later handle selects the moved directory's charged origin map.
+
+The former mutable `RootOwner` publication functions in create, remove,
+rename, file write and directory attribute paths have been deleted. Old
+keyed-root decoders and canonical/frozen-root readers remain for captured
+views and checkpoint-3 lowering. `stage` and `commit` explicitly refuse an
+active incarnation until checkpoint 3 can freeze and lower its complete
+tuple; neither can acknowledge an empty legacy root as active data. A dirty
+Workspace refuses clean close until that lowering path exists. If backing
+cleanup fails after index publication, the public method completes any checked
+notification and returns `Published` with the receipt, retained handle if any,
+and cleanup cause. A caller can distinguish accepted data from a
+prepublication refusal without replaying the mutation.
 
 The external `active_backing` test covers format corruption/identity,
 multi-page pooled index lookup, a captured old locator beside a successor
@@ -110,7 +145,14 @@ dirty publication, a retained inode version after capture, and a complete
 publication and its captured dirty state; an indexed read test covers
 inherited Base, packed, hole and frozen bytes. A same-generation read view
 keeps old namespace and packed bytes across successor mutations without
-capturing a generation. These are backing tests. Public
-FUSE WRITE and namespace operations, final-view SaveFile lowering, mixed-page
-compaction and the #273 benchmark registry are still unproven and remain on
-the old production route.
+capturing a generation. These are backing tests. Public Workspace tests on a
+Linux ext4 backing volume cover inherited lookup/list, create and WRITE,
+editor replacement with both old and new open handles, symlink target
+retention, forgotten hard-link lookups, append, truncate/zero extension,
+portable attributes, quota refusal, typed notifier failure and pinned
+directory handles. A privileged Docker FUSE test covers actual mounted
+create, append, hard link, cross-directory rename, truncate, symlink and
+removals with exact revision accounting. A second mounted test forces an
+entry-notifier EIO on `/dev/fuse` after active create and checks the retained
+receipt and handle. Final-view SaveFile lowering, mixed-page compaction,
+clean close after Commit and the #273 benchmark registry remain open.

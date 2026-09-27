@@ -1,5 +1,5 @@
 use super::extents::Extent;
-use crate::{NodeKind, WorkspaceError};
+use crate::{NodeAttributes, NodeKind, WorkspaceError};
 use layerfs_bridge::contract::{Root, MAX_FILE};
 
 pub const INODE_BYTES: usize = 416;
@@ -17,6 +17,7 @@ pub struct HotInode {
     pub mode: u32,
     pub seconds: i64,
     pub nanos: u32,
+    pub links: u32,
     pub base: Root,
     pub metadata: Root,
     pub inline: [Option<Extent>; 4],
@@ -74,6 +75,23 @@ pub fn namespace_key(parent: u64, name: &[u8]) -> Result<Vec<u8>, WorkspaceError
 }
 
 impl HotInode {
+    pub fn attributes(
+        self,
+        mut original: NodeAttributes,
+    ) -> Result<NodeAttributes, WorkspaceError> {
+        if self.kind != original.kind {
+            return Err(WorkspaceError::Io);
+        }
+        original.size = self.length;
+        original.mode = self.mode;
+        original.mtime_seconds = self.seconds;
+        original.mtime_nanoseconds = self.nanos;
+        if self.kind == NodeKind::File {
+            original.references = u64::from(self.links);
+        }
+        Ok(original)
+    }
+
     pub fn value(self) -> Result<[u8; INODE_BYTES], WorkspaceError> {
         self.validate()?;
         let mut bytes = [0; INODE_BYTES];
@@ -87,6 +105,7 @@ impl HotInode {
         bytes[28..32].copy_from_slice(&self.mode.to_be_bytes());
         bytes[32..40].copy_from_slice(&self.seconds.to_be_bytes());
         bytes[40..44].copy_from_slice(&self.nanos.to_be_bytes());
+        bytes[44..48].copy_from_slice(&self.links.to_be_bytes());
         bytes[48..80].copy_from_slice(&self.base);
         bytes[80..112].copy_from_slice(&self.metadata);
         for (index, extent) in self.inline.iter().enumerate() {
@@ -100,13 +119,7 @@ impl HotInode {
     }
 
     pub fn parse(bytes: &[u8]) -> Result<Self, WorkspaceError> {
-        if bytes.len() != INODE_BYTES
-            || bytes[25] > 1
-            || bytes[44..48]
-                .iter()
-                .chain(&bytes[112..160])
-                .any(|b| *b != 0)
-        {
+        if bytes.len() != INODE_BYTES || bytes[25] > 1 || bytes[112..160].iter().any(|b| *b != 0) {
             return Err(WorkspaceError::Io);
         }
         let number = |at: usize| -> Result<u64, WorkspaceError> {
@@ -141,6 +154,7 @@ impl HotInode {
             mode: u32::from_be_bytes(bytes[28..32].try_into().map_err(|_| WorkspaceError::Io)?),
             seconds: i64::from_be_bytes(bytes[32..40].try_into().map_err(|_| WorkspaceError::Io)?),
             nanos: u32::from_be_bytes(bytes[40..44].try_into().map_err(|_| WorkspaceError::Io)?),
+            links: u32::from_be_bytes(bytes[44..48].try_into().map_err(|_| WorkspaceError::Io)?),
             base: bytes[48..80].try_into().map_err(|_| WorkspaceError::Io)?,
             metadata: bytes[80..112].try_into().map_err(|_| WorkspaceError::Io)?,
             inline,

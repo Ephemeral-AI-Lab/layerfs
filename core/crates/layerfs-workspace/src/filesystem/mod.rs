@@ -1,3 +1,10 @@
+mod active_attributes;
+mod active_create;
+mod active_file;
+mod active_names;
+mod active_remove;
+mod active_rename;
+pub(crate) mod active_view;
 mod create;
 mod directory;
 mod link;

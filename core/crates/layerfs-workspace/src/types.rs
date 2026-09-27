@@ -192,6 +192,13 @@ pub enum WorkspaceError {
     Stage(Arc<StageFailure>),
     Commit(Arc<CommitFailure>),
     Coherence(CoherenceFailure),
+    /// The active index selected this mutation before backing cleanup failed.
+    /// The receipt and any returned handle prevent ambiguous replay.
+    Published {
+        receipt: MutationReceipt,
+        published_handle: Option<HandleId>,
+        cause: Box<WorkspaceError>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

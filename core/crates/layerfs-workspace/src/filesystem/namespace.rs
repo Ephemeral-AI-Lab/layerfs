@@ -95,54 +95,6 @@ pub(crate) fn check_access(attr: NodeAttributes, uid: u32, mask: u8) -> Result<(
     Ok(())
 }
 impl Workspace {
-    /// The one directory-delta decision every namespace mutation shares: whether
-    /// the maintained delta must be re-anchored on the current root, and whether
-    /// this generation's ledger already carries the exact dirty key.
-    ///
-    /// The record's own generation cannot answer the second question, because it
-    /// only advances at capture. The origin answers the first: a delta that is
-    /// already captured or empty keeps the entries it inherited.
-    pub(crate) fn directory_delta(
-        &self,
-        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
-        generation: u64,
-        serial: u64,
-        record: Option<&crate::overlay::directories::Directory>,
-        window: &mut crate::backing::segments::Window,
-        deadline: Instant,
-    ) -> Result<(bool, bool), WorkspaceError> {
-        let maintained = record.is_some_and(|directory| {
-            matches!(
-                directory.origin,
-                crate::overlay::directories::Origin::Captured(_)
-                    | crate::overlay::directories::Origin::Empty
-            )
-        });
-        let dirty = self.dirty_in_generation(root, generation, serial, window, deadline)?;
-        Ok((!maintained, dirty))
-    }
-    /// True when this generation's ledger already carries the exact dirty key
-    /// for `serial`. A directory with a maintained delta is not a new dirty
-    /// inode, and one without it is, whatever record it still holds.
-    pub(crate) fn dirty_in_generation(
-        &self,
-        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
-        generation: u64,
-        serial: u64,
-        window: &mut crate::backing::segments::Window,
-        deadline: Instant,
-    ) -> Result<bool, WorkspaceError> {
-        let Some(root) = root else { return Ok(false) };
-        Ok(root
-            .arena
-            .find(
-                root.root()?,
-                &crate::backing::metadata_pages::dirty_key(generation, serial),
-                window,
-                deadline,
-            )?
-            .is_some_and(|cell| cell.value() == [1]))
-    }
     pub fn lookup(
         &self,
         parent: u64,
@@ -153,7 +105,7 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (path, base, baseline, revision, root) = {
+        let (path, baseline, revision, view) = {
             let state = self.state()?;
             if scope == ReferenceScope::Projection && !state.mounted {
                 return Err(WorkspaceError::Busy);
@@ -165,13 +117,11 @@ impl Workspace {
             check_access(parent.attr, self.inner.root.uid, 1)?;
             (
                 parent.path().to_vec(),
-                state.base,
                 state.baseline,
                 state.revision,
-                state.overlay.clone(),
+                self.selected_view(&state)?,
             )
         };
-        let view = super::namespace_view::View { base, root };
         let resolved = self.resolve_child(&mut operation, &view, parent, &path, name, deadline)?;
         let path = child_path(&path, name)?;
         let mut state = self.state()?;
@@ -213,7 +163,11 @@ impl Workspace {
             // agree on the namespace link count. A Commit that republished the
             // identity canonically can change it (a link or a removal), and the
             // node then refreshes exactly as its original and roots do below.
-            if node.baseline == baseline && node.attr.references != original.references {
+            if canonical
+                && self.inner.active.is_none()
+                && node.baseline == baseline
+                && node.attr.references != original.references
+            {
                 return Err(WorkspaceError::InvalidInput);
             }
             node.original = original;

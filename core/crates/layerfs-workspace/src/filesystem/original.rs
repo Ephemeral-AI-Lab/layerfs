@@ -1,5 +1,5 @@
 //! Original facts for a live file; unresolved local identities never query absent B paths.
-use super::{namespace::attributes, namespace_view::View};
+use super::namespace::attributes;
 use crate::{runtime::state::OperationGuard, *};
 use layerfs_bridge::contract::{Inspect, Root};
 use std::time::Instant;
@@ -27,14 +27,27 @@ impl Workspace {
             if node.attr.kind != NodeKind::File {
                 return Err(WorkspaceError::WrongKind);
             }
+            if self.inner.active.is_some() {
+                let active = self
+                    .inner
+                    .active
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                let (content, metadata) =
+                    match active.get(&crate::backing::active::inode_key(serial))? {
+                        Some(value) => {
+                            let inode = crate::backing::active::HotInode::parse(&value)?;
+                            (inode.base, inode.metadata)
+                        }
+                        None => (node.content, node.metadata),
+                    };
+                return Ok((node.attr, content, metadata, state.baseline));
+            }
             if node.baseline == state.baseline {
                 return Ok((node.original, node.content, node.metadata, state.baseline));
             }
             (
-                View {
-                    base: state.base,
-                    root: state.overlay.clone(),
-                },
+                self.selected_view(&state)?,
                 state.baseline,
                 node.path,
                 node.path_len,

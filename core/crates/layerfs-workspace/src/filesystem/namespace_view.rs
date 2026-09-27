@@ -1,7 +1,11 @@
 //! View-bound namespace resolution; local index guards end before service reads.
 use super::namespace::{attributes, child_path};
 use crate::{
-    backing::{metadata::RootOwner, metadata_pages},
+    backing::{
+        budget::{Budget, Charge},
+        metadata::RootOwner,
+        metadata_pages,
+    },
     overlay::directories::{self, Directory, Origin},
     *,
 };
@@ -12,6 +16,37 @@ use std::{sync::Arc, time::Instant};
 pub(crate) struct View {
     pub base: Root,
     pub root: Option<Arc<RootOwner>>,
+    pub active: Option<Arc<crate::backing::active::ActiveSnapshot>>,
+    pub origins: Option<Arc<super::active_view::ActiveOrigins>>,
+    pub directory_path: Option<Arc<PinnedDirectoryPath>>,
+}
+pub(crate) struct PinnedDirectoryPath {
+    path: Vec<u8>,
+    pub parent: u64,
+    _charge: Charge,
+}
+impl PinnedDirectoryPath {
+    pub fn new(
+        path: &[u8],
+        parent: u64,
+        budget: &Arc<Budget>,
+    ) -> Result<Arc<Self>, WorkspaceError> {
+        let mut charge = budget.reserve(std::mem::size_of::<Self>() + path.len())?;
+        let mut stored = Vec::new();
+        stored
+            .try_reserve_exact(path.len())
+            .map_err(|_| WorkspaceError::Capacity)?;
+        stored.extend_from_slice(path);
+        charge.resize(std::mem::size_of::<Self>() + stored.capacity())?;
+        Ok(Arc::new(Self {
+            path: stored,
+            parent,
+            _charge: charge,
+        }))
+    }
+    pub fn path(&self) -> &[u8] {
+        &self.path
+    }
 }
 pub(crate) struct Resolved {
     pub original: NodeAttributes,
@@ -49,6 +84,9 @@ impl Workspace {
         serial: u64,
         deadline: Instant,
     ) -> Result<Option<Directory>, WorkspaceError> {
+        if view.active.is_some() {
+            return Err(WorkspaceError::Unsupported);
+        }
         let Some(owner) = &view.root else {
             return Ok(None);
         };
@@ -75,6 +113,9 @@ impl Workspace {
         name: &[u8],
         deadline: Instant,
     ) -> Result<Resolved, WorkspaceError> {
+        if view.active.is_some() {
+            return self.resolve_child_active(operation, view, parent, path, name, deadline);
+        }
         let path = child_path(path, name)?;
         let mut base = Some(view.base);
         let mut binding = None;
@@ -241,6 +282,9 @@ impl Workspace {
         limit: usize,
         deadline: Instant,
     ) -> Result<Vec<(Vec<u8>, u64)>, WorkspaceError> {
+        if view.active.is_some() {
+            return self.list_view_active(operation, view, directory, after, limit, deadline);
+        }
         let (serial, path) = directory;
         let mut names = crate::backing::metadata_index::vector(limit)?;
         let mut base = Some(view.base);

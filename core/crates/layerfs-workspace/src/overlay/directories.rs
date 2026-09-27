@@ -3,7 +3,7 @@ use super::pieces::{get, CapturedBase};
 use crate::{
     backing::{
         metadata::RootOwner,
-        metadata_pages::{self, Cell, PageRef},
+        metadata_pages::{self, PageRef},
         segments::Window,
     },
     NodeAttributes, NodeKind, WorkspaceError,
@@ -33,20 +33,6 @@ pub struct Directory {
     pub nanos: u32,
 }
 impl Directory {
-    pub fn initial(attr: NodeAttributes, base: Root) -> Self {
-        Self {
-            origin: Origin::Canonical(base),
-            generation: 0,
-            revision: 0,
-            entries: PageRef::NULL,
-            tombstones: PageRef::NULL,
-            count: 0,
-            bytes: 0,
-            mode: attr.mode,
-            seconds: attr.mtime_seconds,
-            nanos: attr.mtime_nanoseconds,
-        }
-    }
     pub fn value(self) -> [u8; 128] {
         let mut value = [0; 128];
         value[0] = match self.origin {
@@ -167,16 +153,6 @@ pub fn captured(
     }
     Ok(directory)
 }
-pub fn entry(serial: u64, kind: crate::NodeKind) -> Result<[u8; 16], WorkspaceError> {
-    let mut value = [0; 16];
-    value[..8].copy_from_slice(&serial.to_be_bytes());
-    value[8] = match kind {
-        crate::NodeKind::File => 1,
-        crate::NodeKind::Directory => 2,
-        crate::NodeKind::Symlink => 3,
-    };
-    Ok(value)
-}
 pub fn entry_serial(value: &[u8]) -> Result<u64, WorkspaceError> {
     entry_info(value).map(|(serial, _)| serial)
 }
@@ -235,97 +211,4 @@ pub fn removed(
             deadline,
         )?
         .is_some())
-}
-/// True when this directory's own entry page binds `name` locally.
-pub fn has_entry(
-    owner: &RootOwner,
-    entries: PageRef,
-    name: &[u8],
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<bool, WorkspaceError> {
-    if entries == PageRef::NULL {
-        return Ok(false);
-    }
-    Ok(owner
-        .arena
-        .find(entries, &metadata_pages::entry_key(name)?, window, deadline)?
-        .is_some())
-}
-/// Drops one removal record from this delta's tombstone page. One name owns a
-/// binding or a removal, never both, so a name this delta binds again must stop
-/// carrying a removal record.
-///
-/// The removal is one point mutation on the page tree the record lives in: the
-/// page that holds the name is copied along its own path, and nothing else is
-/// read or rewritten. A name with no removal record leaves the page unchanged
-/// and no page is written.
-pub fn keep_name(
-    candidate: &RootOwner,
-    directory: Directory,
-    name: &[u8],
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<PageRef, WorkspaceError> {
-    if directory.tombstones == PageRef::NULL {
-        return Ok(PageRef::NULL);
-    }
-    let key = tombstone_key(name)?;
-    if candidate
-        .arena
-        .find(directory.tombstones, &key, window, deadline)?
-        .is_none()
-    {
-        return Ok(directory.tombstones);
-    }
-    candidate.delete(directory.tombstones, &key, window, deadline)
-}
-/// Drops one local binding from this delta's entry page, and reports whether
-/// that page bound the name at all. A removed name becomes a removal record
-/// instead, because one name must never own both a binding and its removal:
-/// lowering would emit two records for the same name and refuse the delta.
-///
-/// The removal is one point mutation: the leaf that holds the name is copied
-/// along its own path, and a page the removal leaves under the declared minimum
-/// body is rewritten with a neighbour. No page count and no name count bounds
-/// it, so a directory that holds many names is updated one name at a time.
-pub fn drop_entry(
-    candidate: &RootOwner,
-    directory: Directory,
-    name: &[u8],
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<(PageRef, bool), WorkspaceError> {
-    if !has_entry(candidate, directory.entries, name, window, deadline)? {
-        return Ok((directory.entries, false));
-    }
-    let key = metadata_pages::entry_key(name)?;
-    let entries = candidate.delete(directory.entries, &key, window, deadline)?;
-    Ok((entries, true))
-}
-/// Adds one removal record for `name` to this delta's tombstone page. A name
-/// that already carries one leaves the page unchanged.
-///
-/// The addition is one point mutation on the page tree the record belongs in:
-/// the target leaf is copied along its own path and split only when the record
-/// does not fit the page it belongs to.
-pub fn remove_name(
-    candidate: &RootOwner,
-    directory: Directory,
-    name: &[u8],
-    window: &mut Window,
-    deadline: Instant,
-) -> Result<PageRef, WorkspaceError> {
-    let key = tombstone_key(name)?;
-    if directory.tombstones != PageRef::NULL
-        && candidate
-            .arena
-            .find(directory.tombstones, &key, window, deadline)?
-            .is_some()
-    {
-        return Ok(directory.tombstones);
-    }
-    let mut update = crate::backing::metadata_index::vector(1)?;
-    update.push(Cell::new(&key, &[1])?);
-    candidate.update(directory.tombstones, update, window, deadline)
 }

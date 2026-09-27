@@ -39,14 +39,12 @@ impl Workspace {
                     .ok_or(WorkspaceError::InvalidInput)?;
                 (position.dots, position.after[..position.len].to_vec())
             };
-            (
-                node.path().to_vec(),
-                node.attr.serial,
-                node.parent,
-                dots,
-                after,
-                found.view.ok_or(WorkspaceError::Io)?,
-            )
+            let view = found.view.ok_or(WorkspaceError::Io)?;
+            let (path, parent) = view.directory_path.as_ref().map_or_else(
+                || (node.path().to_vec(), node.parent),
+                |pinned| (pinned.path().to_vec(), pinned.parent),
+            );
+            (path, node.attr.serial, parent, dots, after, view)
         };
         let mut entries = Vec::new();
         entries

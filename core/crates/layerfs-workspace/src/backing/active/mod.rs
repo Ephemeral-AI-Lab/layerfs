@@ -10,7 +10,7 @@ mod reclaim;
 mod records;
 
 pub use extents::{Extent, ExtentKind, ExtentPlan};
-pub use generation::{ActiveBacking, ActiveSnapshot, ActiveStatus, ActiveWrite};
+pub use generation::{ActiveBacking, ActivePublication, ActiveSnapshot, ActiveStatus, ActiveWrite};
 pub use index::{Index, IndexCandidate, IndexEntry, IndexSnapshot, ScanPage};
 pub use pack::{PackedSlot, PreparedSlot, TinyPack};
 pub use page::{Kind, Page, PageRef, PAGE_BYTES};

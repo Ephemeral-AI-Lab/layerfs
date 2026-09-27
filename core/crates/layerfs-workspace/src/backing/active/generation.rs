@@ -212,7 +212,7 @@ impl ActiveBacking {
             };
             let selected =
                 HotInode::parse(&get(&inode_key(inode))?.ok_or(WorkspaceError::NotFound)?)?;
-            if selected.kind != NodeKind::File {
+            if !matches!(selected.kind, NodeKind::File | NodeKind::Symlink) {
                 return Err(WorkspaceError::WrongKind);
             }
             let length = selected
@@ -367,7 +367,9 @@ impl ActiveBacking {
             Some(value) => HotInode::parse(&value)?,
             None => original,
         };
-        if selected.kind != NodeKind::File || selected.length != original.length {
+        if !matches!(selected.kind, NodeKind::File | NodeKind::Symlink)
+            || selected.length != original.length
+        {
             return Err(WorkspaceError::InvalidInput);
         }
         selected.length = length;
@@ -395,6 +397,31 @@ impl ActiveBacking {
         original: HotInode,
         offset: u64,
         payload: &OwnedPayload,
+    ) -> Result<ActivePublication, WorkspaceError> {
+        self.write_payload_with(inode, original, offset, payload, &[])
+    }
+
+    /// Publishes a symlink target with its namespace records as one revision.
+    pub fn create_symlink(
+        &self,
+        inode: u64,
+        original: HotInode,
+        payload: &OwnedPayload,
+        extra: &[(Vec<u8>, Option<Vec<u8>>)],
+    ) -> Result<ActivePublication, WorkspaceError> {
+        if original.kind != NodeKind::Symlink || original.length != 0 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.write_payload_with(inode, original, 0, payload, extra)
+    }
+
+    fn write_payload_with(
+        &self,
+        inode: u64,
+        original: HotInode,
+        offset: u64,
+        payload: &OwnedPayload,
+        extra_updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<ActivePublication, WorkspaceError> {
         if !Arc::ptr_eq(&payload.host, &self.payloads)
             || payload.record.directory.incarnation != self.store.incarnation()
@@ -428,7 +455,9 @@ impl ActiveBacking {
             payload.record.id,
             payload.len(),
         )?;
-        let extra = self.inode_updates(inode, original, generation, revision, planned.length)?;
+        let mut extra =
+            self.inode_updates(inode, original, generation, revision, planned.length)?;
+        extra.extend_from_slice(extra_updates);
         let new_owner = (!state.large.contains_key(&payload.record.id))
             .then(|| {
                 Ok::<_, WorkspaceError>(LargeOwner {

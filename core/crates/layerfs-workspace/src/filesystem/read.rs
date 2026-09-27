@@ -26,7 +26,7 @@ impl Workspace {
             .host
             .budget
             .reserve(crate::runtime::state::PATH_BYTES)?;
-        let (attr, mut content, root, base, baseline, path, path_len, stale) = {
+        let (attr, mut content, root, base, baseline, path, path_len, stale, active) = {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
@@ -43,6 +43,16 @@ impl Workspace {
                 node.path,
                 node.path_len,
                 node.baseline != state.baseline,
+                if self.inner.active.is_some() {
+                    let backing = self
+                        .inner
+                        .active
+                        .as_ref()
+                        .ok_or(WorkspaceError::Unsupported)?;
+                    Some((backing.clone(), backing.pin_view()?))
+                } else {
+                    None
+                },
             )
         };
         let length = if offset >= attr.size {
@@ -58,7 +68,63 @@ impl Workspace {
             .map_err(|_| WorkspaceError::Capacity)?;
         bytes.resize(length, 0);
         if length > 0 {
-            if let Some(inode) = self.overlay_inode(attr.serial, root.as_ref(), deadline)? {
+            let active_inode = active
+                .as_ref()
+                .map(|(_, snapshot)| snapshot.get(&crate::backing::active::inode_key(attr.serial)))
+                .transpose()?
+                .flatten()
+                .is_some();
+            if active_inode {
+                let (backing, snapshot) = active.as_ref().ok_or(WorkspaceError::Io)?;
+                use layerfs_bridge::contract::Source;
+                let read = backing.read_file(
+                    attr.serial,
+                    offset,
+                    &mut bytes,
+                    Some(snapshot),
+                    |root, start, output| {
+                        operation.remote()?;
+                        let mut out = Cursor::new(output);
+                        let end = start + out.get_ref().len() as u64;
+                        let response = self.call(
+                            Operation::ReadFile { root, start, end },
+                            end - start,
+                            &mut out,
+                            deadline,
+                        )?;
+                        if response
+                            != (Response::Read {
+                                length: end - start,
+                            })
+                            || out.position() != end - start
+                        {
+                            return Err(WorkspaceError::InvalidInput);
+                        }
+                        Ok(())
+                    },
+                    |payload, start, output| {
+                        let mut reader = payload.reader(start..start + output.len() as u64)?;
+                        let mut done = 0;
+                        while done < output.len() {
+                            let count = Source::read(
+                                &mut reader,
+                                &mut output[done..],
+                                deadline,
+                                &self.inner.stopping,
+                            )
+                            .map_err(|_| WorkspaceError::Io)?;
+                            if count == 0 {
+                                return Err(WorkspaceError::Io);
+                            }
+                            done += count;
+                        }
+                        Ok(())
+                    },
+                )?;
+                if read != length {
+                    return Err(WorkspaceError::Io);
+                }
+            } else if let Some(inode) = self.overlay_inode(attr.serial, root.as_ref(), deadline)? {
                 self.read_overlay(
                     root.as_ref().ok_or(WorkspaceError::Io)?,
                     inode,

@@ -242,6 +242,11 @@ impl Workspace {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
+        // Active-index lowering is checkpoint 3. A legacy-root capture here
+        // would acknowledge an empty or unrelated view after active edits.
+        if self.inner.active.is_some() {
+            return Err(WorkspaceError::Unsupported);
+        }
         let initial_clean = {
             let state = self.state()?;
             self.available(&state)?;
