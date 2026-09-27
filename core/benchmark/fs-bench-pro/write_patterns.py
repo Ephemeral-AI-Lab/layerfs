@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Three append-only public mounted-write diagnostics over one 10 MiB master."""
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -472,12 +473,17 @@ def main():
         assert [len(expected(p)["data.bin"]) for p in PATTERNS] == [SIZE + COUNT, SIZE, SIZE]
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "patterns": PATTERNS, "size": SIZE, "writes": COUNT}))
-    elif args.action == "prepare":
-        prepare(args.output, args.prior_prepared)
-    elif args.action == "prepare-reuse":
-        prepare_reuse(args.output, args.prior_prepared)
     else:
-        run(args.prepared, args.output, args.selection)
+        lock_path = ROOT / "benchmark-results/fs-bench-pro/.run.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if args.action == "prepare":
+                prepare(args.output, args.prior_prepared)
+            elif args.action == "prepare-reuse":
+                prepare_reuse(args.output, args.prior_prepared)
+            else:
+                run(args.prepared, args.output, args.selection)
 
 
 if __name__ == "__main__":
