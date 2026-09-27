@@ -101,10 +101,17 @@ inline slots. Header offsets are revision `0..8`, generation `8..16`, length
 `16..24`, kind `24` (`0` file, `1` directory, `2` symlink), fresh flag `25`,
 storage `26` (`0` empty, `1` inline, `2` ordered `E` records), inline count
 `27`, portable mode `28..32`, mtime seconds `32..40`, mtime nanoseconds
-`40..44`, zero `44..48`, base content root `48..80`, metadata root `80..112`
+`40..44`, selected regular-file link count `44..48` (zero is valid for an
+open-unlinked inode), base content root `48..80`, metadata root `80..112`
 and zero `112..160`. Each occupied inline slot is an 8-byte logical start
 followed by the 56-byte extent value; unused slots are zero. Short files
 therefore share pooled inode pages; longer sequences use ordered `E` leaves.
+This checkpoint-2 amendment assigns the previously zero `44..48` field
+before any mounted active page exists. Link, unlink and replacement update it
+in the same index publication as their name records; lookup after forgotten
+resident references reads this count from the selected inode. The active
+files are temporary to one Workspace incarnation and never migrate across
+attachments, so no earlier stage-1 storage-only page is adopted or relabeled.
 An extent value is
 exactly 56 bytes: end `0..8`, kind `8` (`0` Base, `1` Zero, `2` Packed,
 `3` Payload),
