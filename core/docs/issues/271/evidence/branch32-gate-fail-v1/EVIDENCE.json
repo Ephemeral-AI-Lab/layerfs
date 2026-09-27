@@ -1,0 +1,9 @@
+{
+  "attempts_at_identity": 1,
+  "note": "25-second complete command expired before driver receipt, callback count, Commit or verifier. Orphan daemon later reported failed WorkspaceExec and retained Busy shutdown.",
+  "product_seal": "db09029ca28f2500c49fc21c791d1149565dc76212b6c19014ec45262f4205fa",
+  "schema": "issue271-branch32-gate-fail-v1",
+  "source_commit": "94d86303ca6748a33b5a8bf7ce012ef9325646d0",
+  "source_tree": "443d6d4a42b0f926868c954534e9cfe970667480",
+  "status": "FAIL"
+}

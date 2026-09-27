@@ -1,0 +1,10 @@
+{
+  "owned_container": "67c68d281f36b7bbd476a36888556bfa6fe8c37c8eb7c00e291fb0356fd33ba6",
+  "owned_volume": "layerfs-471a596b4f6fac3dcd6143431397fc93-root",
+  "stop": "docker stop --time 2; container exit 137",
+  "docker_rm": "PASS",
+  "docker_volume_rm": "PASS",
+  "remaining_new_containers": [],
+  "remaining_new_volumes": [],
+  "qualification": "forced cleanup after retained Busy; not a product cleanup PASS"
+}
