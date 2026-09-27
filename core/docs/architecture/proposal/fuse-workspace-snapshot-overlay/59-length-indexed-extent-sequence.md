@@ -448,3 +448,27 @@ final extents into the same canonical format. A source-equivalent in-memory
 records at write 100; this is structural evidence, not a public latency or
 Store-I/O claim. The public count and old/new-head results belong in the
 issue-specific evidence report rather than this architecture description.
+
+## 14. Bounded ownership-edge packing (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, on the combined
+`6bcfa464f74ae9ca3859df31c678985ec69ba098` #265/#266 branch. The codec
+still validates and reads up to 124 records in an extent leaf and 248 child
+references in a branch. New pages use **32 records per leaf** and **8 children
+per branch** as generic packing targets. Old pages with higher occupancy keep
+their authenticated identity and remain readable. A splice reads the touched
+leaf and its ancestors; converting an older wide branch or splitting a full
+level can write several new branches from the child references already read,
+without reading untouched child bodies.
+
+Every copied extent page has its child or Local custody edges acknowledged in
+the ownership ledger before its root can publish. Cleanup releases the former
+root's edges, preserving retained old roots and G1/G2 custody. The smaller
+packing targets bound that repeated work per copied page: a leaf charges at
+most 32 Local edges, and each branch at most eight child edges. A taller path
+costs more metadata pages, page reads and writes, and Commit traversal; the
+page codec, ownership record, atomic publication, quotas and canonical Commit
+format do not change. These targets supersede the 124/248 packing behavior in
+§5 and §13 for newly written pages. The [#271 baseline](../../../issues/271/BASELINE.md)
+records the prior finite-range count problem; any treatment result belongs
+with its own source-identified receipt, not in this architecture description.

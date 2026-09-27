@@ -26,6 +26,8 @@ fn deadline() -> Instant {
 
 const INCARNATION: [u8; 32] = [7; 32];
 const PAGE: usize = metadata_pages::PAGE;
+const PACK_LEAF: u64 = 32;
+const PACK_BRANCH: usize = 8;
 
 #[derive(Clone)]
 struct Page {
@@ -404,7 +406,7 @@ fn a_shared_subtree_is_not_rewritten() {
     // Only the first leaf and its ancestors are written; every other page of the
     // sequence is still the one the previous root owns.
     let rewritten = f.store.writes.borrow().clone();
-    assert!(rewritten.len() <= 3, "rewrote {} pages", rewritten.len());
+    assert!(rewritten.len() <= 4, "rewrote {} pages", rewritten.len());
     let after = f.store.page_ids();
     assert_eq!(before.len(), after.len() - rewritten.len());
     let read = f.walk(changed.root, length);
@@ -445,11 +447,19 @@ fn dispersed_100_extent_page_occupancy_diagnostic() {
             let occupancy: Vec<_> = leaves.iter().map(|(_, _, entries)| *entries).collect();
             assert_eq!(occupancy.iter().sum::<usize>(), (2 * (i + 1) + 1) as usize);
             assert_eq!(replacement, i + 1);
-            assert_eq!(
-                (leaves.len(), branches),
-                if i < 50 { (1, 0) } else { (2, 1) },
-                "the touched fold must balance its two leaves"
+            assert!(occupancy
+                .iter()
+                .all(|entries| *entries > 0 && *entries <= PACK_LEAF as usize));
+            assert!(leaves.len() >= occupancy.iter().sum::<usize>().div_ceil(PACK_LEAF as usize));
+            assert!(
+                leaves.len() <= occupancy.iter().sum::<usize>().div_ceil(16) + 1,
+                "touched leaves must not become sparse"
             );
+            assert!(pages
+                .iter()
+                .filter(|(_, level, _)| *level > 0)
+                .all(|(_, _, entries)| *entries > 0 && *entries <= PACK_BRANCH));
+            assert!(branches <= leaves.len());
             println!(
                 "ISSUE265_EXTENT_SHAPE writes={} leaves={} branches={} root_height={} min={} max={} occupancy={:?}",
                 i + 1, leaves.len(), branches, changed.root_height,
@@ -844,7 +854,7 @@ fn a_shared_subtree_records_the_unknown_count_and_the_exact_total() {
     // Only the folded leaf and its branch were written; the shared leaves are
     // still the pages the previous root owns.
     assert!(
-        f.store.written() <= 2,
+        f.store.written() <= 4,
         "rewrote {} pages",
         f.store.written()
     );
@@ -937,11 +947,11 @@ fn structure(f: &Fixture, root: PageRef) -> (usize, u8, usize) {
     (leaves, root_level, spines)
 }
 
-/// One level-indexed sequence whose root is two levels above its leaves: 249
-/// leaf pages of 124 one-byte extents, packed into two level-1 branches.
+/// One level-indexed sequence whose root is two levels above its leaves: nine
+/// 32-record leaves, packed into two level-1 branches of five and four.
 fn two_level_fixture() -> (Fixture, PageRef, u64) {
     let f = Fixture::new();
-    let records = 124 * 249;
+    let records = PACK_LEAF * 9;
     let length = records as u64;
     let root = f.build(&separated(length), length).unwrap();
     (f, root, length)
@@ -950,12 +960,12 @@ fn two_level_fixture() -> (Fixture, PageRef, u64) {
 #[test]
 fn an_insert_splits_a_full_non_root_branch_at_its_own_level() {
     let f = Fixture::new();
-    let length = 495 * 124;
+    let length = PACK_LEAF * 16;
     let root = f.build(&separated(length), length).unwrap();
-    assert_eq!(structure(&f, root), (495, 2, 0));
-    // The first level-1 child has 248 full leaves. Inserting inside its last
+    assert_eq!(structure(&f, root), (16, 2, 0));
+    // The first level-1 child has eight full leaves. Inserting inside its last
     // leaf requires two level-1 replacements beneath the unchanged root.
-    let at = 248 * 124 - 1;
+    let at = PACK_BRANCH as u64 * PACK_LEAF - 1;
     let changed = f
         .splice(
             root,
@@ -968,7 +978,7 @@ fn an_insert_splits_a_full_non_root_branch_at_its_own_level() {
         )
         .unwrap();
     assert_eq!(changed.length, length + 1);
-    assert_eq!(structure(&f, changed.root).0, 496);
+    assert_eq!(structure(&f, changed.root).0, 17);
     let walked = f.walk(changed.root, changed.length);
     assert_eq!(walked.len() as u64, length + 1);
     assert_eq!(walked[at as usize].1.payload, 900_001);
@@ -984,13 +994,53 @@ fn separated(count: u64) -> Vec<Piece> {
 }
 
 #[test]
+fn older_full_extent_pages_remain_readable_and_repack_on_edit() {
+    let f = Fixture::new();
+    let pieces = separated(9 * 124);
+    let root = f.with_window(|window| {
+        let mut children = Vec::new();
+        for chunk in pieces.chunks(124) {
+            let records: Vec<_> = chunk.iter().map(|piece| piece.record()).collect();
+            let page = f
+                .store
+                .write(0, window, |page, bytes| {
+                    metadata_pages::encode_pieces_leaf(INCARNATION, page, &records, bytes)?;
+                    Ok(page)
+                })
+                .unwrap();
+            children.push(metadata_pages::ChildRef { page, length: 124 });
+        }
+        f.store
+            .write(1, window, |page, bytes| {
+                metadata_pages::encode_pieces_branch(INCARNATION, page, 1, &children, bytes)?;
+                Ok(page)
+            })
+            .unwrap()
+    });
+    assert_eq!(structure(&f, root), (9, 1, 0));
+    assert_eq!(f.walk(root, pieces.len() as u64).len(), pieces.len());
+    let changed = f
+        .splice(
+            root,
+            0,
+            1,
+            0,
+            pieces.len() as u64,
+            pieces.len() as u64,
+            &[local(0, 1, 99_999, 1)],
+        )
+        .unwrap();
+    assert_eq!(f.walk(changed.root, changed.length)[0].1.payload, 99_999);
+    assert_eq!(f.walk(root, pieces.len() as u64)[0].1.payload, 1);
+}
+
+#[test]
 fn a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth() {
     let (f, root, length) = two_level_fixture();
     let (leaves, level, spines) = structure(&f, root);
-    assert_eq!((leaves, level, spines), (249, 2, 0));
-    // The root's first child is a level-1 branch over 125 leaf pages, so it
-    // covers exactly 125 * 124 one-byte extents.
-    let child = 125 * 124;
+    assert_eq!((leaves, level, spines), (9, 2, 0));
+    // The root's first child is a level-1 branch over five full leaves.
+    let child = 5 * PACK_LEAF;
     let spliced = f
         .splice(
             root,
@@ -1010,8 +1060,8 @@ fn a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth() {
     let (leaves, level, spines) = structure(&f, spliced.root);
     assert_eq!(spines, 1, "the collapsed child must be lifted, not dropped");
     assert_eq!(level, 2);
-    // 124 untouched leaf pages plus the collapsed child's one.
-    assert_eq!(leaves, 125);
+    // Four untouched leaf pages plus the collapsed child's one.
+    assert_eq!(leaves, 5);
     let mut expected = vec![format!("0:L:0:{child}")];
     for at in child..length {
         expected.push(format!("{at}:L:0:1"));
@@ -1032,7 +1082,7 @@ fn a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth() {
         .unwrap();
     let (leaves, level, spines) = structure(&f, again.root);
     assert_eq!(spines, 1);
-    assert_eq!(leaves, 125, "a repeated collapse must not stack a level");
+    assert_eq!(leaves, 5, "a repeated collapse must not stack a level");
     assert_eq!(level, 2);
     assert_eq!(
         f.walk(again.root, length).len(),
@@ -1045,7 +1095,7 @@ fn a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth() {
 #[test]
 fn a_fold_that_removes_a_whole_branch_drops_its_level() {
     let (f, root, length) = two_level_fixture();
-    let child = 125 * 124;
+    let child = 5 * PACK_LEAF;
     // Delete the whole first child: the folded branch answers with no page at
     // all, so the root keeps its other child and nothing is lifted for it.
     let spliced = f
@@ -1055,7 +1105,7 @@ fn a_fold_that_removes_a_whole_branch_drops_its_level() {
     let (leaves, level, spines) = structure(&f, spliced.root);
     assert_eq!(spines, 0);
     assert_eq!(level, 1, "the root loses the level it no longer needs");
-    assert_eq!(leaves as u64, (length - child) / 124);
+    assert_eq!(leaves as u64, (length - child) / PACK_LEAF);
     let walked = f.walk(spliced.root, length - child);
     assert_eq!(walked.len(), (length - child) as usize);
     assert_eq!(walked[0].0, 0);
@@ -1068,8 +1118,7 @@ fn a_fold_that_removes_a_whole_branch_drops_its_level() {
 #[test]
 fn one_walk_advances_without_rereading_the_path_above_each_leaf() {
     let f = Fixture::new();
-    // 65,536 one-byte extents: 529 leaf pages under three level-1 branches
-    // under one root. A walk of the whole sequence must visit each page of the
+    // 65,536 one-byte extents under the smaller packing target. A walk must visit each page of the
     // tree about once, not re-read the path from the root for every leaf.
     let runs = 65_536u64;
     let root = f.build(&separated(runs), runs).unwrap();
@@ -1121,78 +1170,78 @@ fn ones(count: u64) -> String {
 #[test]
 fn an_append_to_a_multi_leaf_sequence_merges_into_its_last_leaf() {
     let f = Fixture::new();
-    // 125 one-byte extents are two leaf pages: the root is a branch, so the
+    // 33 one-byte extents are two leaf pages: the root is a branch, so the
     // sequence's end is the end of a child rather than of the root's own leaf.
-    let root = f.build(&separated(125), 125).unwrap();
+    let root = f.build(&separated(33), 33).unwrap();
     assert_eq!(structure(&f, root), (2, 1, 0));
     let appended = f
-        .splice(root, 125, 125, 0, 125, 126, &[local(0, 1, 900, 901)])
+        .splice(root, 33, 33, 0, 33, 34, &[local(0, 1, 900, 901)])
         .unwrap();
-    assert_eq!(appended.length, 126);
-    assert_eq!(appended.replacement, 126);
+    assert_eq!(appended.length, 34);
+    assert_eq!(appended.replacement, 34);
     // The unfolded prefix is shared by reference, so this splice cannot count
     // the whole sequence's edit runs exactly and records the shared marker;
     // lowering derives the exact count from the sequence.
     assert_eq!(appended.edits, u16::MAX);
     let (leaves, level, spines) = structure(&f, appended.root);
     assert_eq!((leaves, level, spines), (2, 1, 0));
-    assert_eq!(f.render(appended.root, 126), ones(126));
+    assert_eq!(f.render(appended.root, 34), ones(34));
     // The generation the append replaced still reads exactly its own bytes.
-    assert_eq!(f.render(root, 125), ones(125));
+    assert_eq!(f.render(root, 33), ones(33));
     // A second append continues from the merged leaf rather than from a
     // boundary the rebuilt tree no longer has.
     let again = f
         .splice(
             appended.root,
-            126,
-            126,
+            34,
+            34,
             0,
             appended.replacement,
-            127,
+            35,
             &[local(0, 1, 902, 903)],
         )
         .unwrap();
-    assert_eq!(f.render(again.root, 127), ones(127));
+    assert_eq!(f.render(again.root, 35), ones(35));
 }
 
 #[test]
 fn an_insertion_at_a_leaf_boundary_lands_in_the_preceding_leaf() {
     let f = Fixture::new();
-    // Two full leaf pages: offset 124 is both the end of the first leaf and the
+    // Two full leaf pages: offset 32 is both the end of the first leaf and the
     // start of the second, and the replacement must land in exactly one of them.
-    let root = f.build(&separated(248), 248).unwrap();
+    let root = f.build(&separated(64), 64).unwrap();
     assert_eq!(structure(&f, root), (2, 1, 0));
     let inserted = f
-        .splice(root, 124, 124, 0, 248, 249, &[local(0, 1, 904, 905)])
+        .splice(root, 32, 32, 0, 64, 65, &[local(0, 1, 904, 905)])
         .unwrap();
-    assert_eq!(inserted.length, 249);
-    assert_eq!(inserted.replacement, 249);
+    assert_eq!(inserted.length, 65);
+    assert_eq!(inserted.replacement, 65);
     // The leaf that took the insertion grew past one page, so the sequence
     // holds three leaf pages, all still one level below the root.
     let (leaves, level, spines) = structure(&f, inserted.root);
     assert_eq!((leaves, level, spines), (3, 1, 0));
-    assert_eq!(f.render(inserted.root, 249), ones(249));
+    assert_eq!(f.render(inserted.root, 65), ones(65));
     // The very start of a multi-leaf sequence is the same boundary from the
     // other side: the first leaf takes the replacement.
     let prepended = f
-        .splice(root, 0, 0, 0, 248, 249, &[local(0, 1, 906, 907)])
+        .splice(root, 0, 0, 0, 64, 65, &[local(0, 1, 906, 907)])
         .unwrap();
-    assert_eq!(prepended.length, 249);
-    assert_eq!(f.render(prepended.root, 249), ones(249));
+    assert_eq!(prepended.length, 65);
+    assert_eq!(f.render(prepended.root, 65), ones(65));
     let (leaves, level, spines) = structure(&f, prepended.root);
     assert_eq!((leaves, level, spines), (3, 1, 0));
-    assert_eq!(f.render(root, 248), ones(248));
+    assert_eq!(f.render(root, 64), ones(64));
 }
 
 /// The root's declared level for a sequence of `leaves` leaf pages, from the
 /// declared fanout: packing splits a level into its fewest chunks, every branch
-/// holds at most 248 children, and a root that collapses to one page loses a
+/// targets eight children, and a root that collapses to one page loses a
 /// level.
 fn root_level(leaves: usize) -> u8 {
     let mut pages = leaves.max(1);
     let mut level = 0u8;
     while pages > 1 {
-        pages = pages.div_ceil(248);
+        pages = pages.div_ceil(PACK_BRANCH);
         level += 1;
     }
     level
@@ -1205,11 +1254,11 @@ fn root_level(leaves: usize) -> u8 {
 fn every_extent_count_at_a_page_boundary_stays_height_uniform() {
     let f = Fixture::new();
     for count in [
-        1u64, 123, 124, 125, 247, 248, 249, 250, 496, 497, 498, 30_875, 30_876, 30_877,
+        1u64, 31, 32, 33, 63, 64, 65, 255, 256, 257, 124, 125, 248, 249, 2_047, 2_048, 2_049,
     ] {
         let root = f.build(&separated(count), count).unwrap();
         let (leaves, level, spines) = structure(&f, root);
-        assert_eq!(leaves as u64, count.div_ceil(124), "count {count}");
+        assert_eq!(leaves as u64, count.div_ceil(PACK_LEAF), "count {count}");
         assert_eq!(level, root_level(leaves), "count {count}");
         assert_eq!(spines, 0, "count {count}");
         let walked = f.walk(root, count);
@@ -1234,12 +1283,8 @@ fn every_extent_count_at_a_page_boundary_stays_height_uniform() {
                 &[local(0, 1, 4095, 4095)],
             )
             .unwrap();
-        let (_, level, _) = structure(&f, spliced.root);
-        assert_eq!(
-            level,
-            root_level(count.div_ceil(124) as usize),
-            "count {count}"
-        );
+        let (rebuilt_leaves, level, _) = structure(&f, spliced.root);
+        assert_eq!(level, root_level(rebuilt_leaves), "count {count}");
         let appended = f
             .splice(
                 spliced.root,
@@ -1292,24 +1337,24 @@ fn a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary() {
 }
 
 #[test]
-fn the_249_leaf_transition_keeps_every_branch_non_singleton() {
+fn the_ninth_leaf_transition_keeps_every_branch_non_singleton() {
     let f = Fixture::new();
-    // 249 leaves is the first count whose last branch chunk would hold a
+    // Nine leaves is the first count whose last branch chunk would hold a
     // single child; every non-root branch must keep at least two.
-    let records = 124 * 249;
+    let records = PACK_LEAF * 9;
     let root = f.build(&separated(records), records).unwrap();
     let pages = tree(&f, root);
-    let leaves = pages.iter().filter(|(_, level, _)| *level == 0).count();
-    assert_eq!(leaves, 249);
+    let (leaves, _, _) = structure(&f, root);
+    assert_eq!(leaves, 9);
     for (page, level, entries) in &pages {
         if *level == 0 {
-            assert!(*entries > 0 && *entries <= 124);
+            assert!(*entries > 0 && *entries <= PACK_LEAF as usize);
         } else {
             assert!(
                 *entries >= 2,
                 "branch {page:?} at level {level} holds {entries} children"
             );
-            assert!(*entries <= 248);
+            assert!(*entries <= PACK_BRANCH);
         }
     }
     let walked = f.walk(root, records);
@@ -1347,9 +1392,8 @@ fn sixty_five_thousand_separated_runs_stay_bounded_and_path_local() {
     let f = Fixture::new();
     let runs = 65_536u64;
     let root = f.build(&separated(runs), runs).unwrap();
-    let pages = tree(&f, root);
-    let leaves = pages.iter().filter(|(_, level, _)| *level == 0).count();
-    assert_eq!(leaves, (runs as usize).div_ceil(124));
+    let (leaves, level, _) = structure(&f, root);
+    assert_eq!(leaves, (runs as usize).div_ceil(PACK_LEAF as usize));
     assert_eq!(f.walk(root, runs).len(), runs as usize);
     f.store.reset();
     let spliced = f
@@ -1369,7 +1413,10 @@ fn sixty_five_thousand_separated_runs_stay_bounded_and_path_local() {
         "PIECES_SCALE runs={runs} leaves={leaves} splice_reads={reads} splice_writes={writes}"
     );
     assert!(reads <= 12, "one narrow splice read {reads} pages");
-    assert!(writes <= 12, "one narrow splice wrote {writes} pages");
+    assert!(
+        writes <= 2 * (level as usize + 1) + 3,
+        "one narrow splice wrote {writes} pages at height {level}"
+    );
     let walked = f.walk(spliced.root, runs);
     assert_eq!(walked.len(), runs as usize);
     assert_eq!(walked[0].1.length, 1);

@@ -3,13 +3,15 @@ use super::splice::{Level, PieceStore};
 use crate::{
     backing::{
         metadata_index::vector,
-        metadata_pages::{self, ChildRef, PAGE},
+        metadata_pages::{self, ChildRef},
         segments::Window,
     },
     WorkspaceError,
 };
 
-const BRANCH_CHILDREN: usize = (PAGE - metadata_pages::HEADER) / ChildRef::BYTES;
+// The codec accepts 248 children. A smaller copied branch bounds the child
+// ownership updates paid by each narrow splice.
+const BRANCH_CHILDREN: usize = 8;
 const MAX_HEIGHT: u8 = metadata_pages::LEVEL_LIMIT;
 
 /// Answers one rebuilt node at its own declared level.
