@@ -45,6 +45,10 @@ tracked by #248 and #249 below.
 - [Phase 4 inherited directory rename](PHASE4_INHERITED_RENAME.md) records the
   #258 functional implementation, frozen-source checks and remaining
   growing-prefix and Commit complexity limits.
+- [Phase 4.5 identity-relative namespace](PHASE4_5_IDENTITY_RELATIVE_NAMESPACE.md)
+  researches [#264](https://github.com/Ephemeral-AI-Lab/layerfs/issues/264)'s
+  resource-charged mounted path model, private-backing costs, CAS/CDC/delta
+  boundaries, complexity and a provisional file/LOC plan.
 - [Phase 1 implementation handoff prompt](HANDOFF_PHASE1_PROMPT.md) gives a
   new agent the reading order, before/after architecture, provisional file
   ownership and LOC range, complexity model, ordinary FUSE route, and
