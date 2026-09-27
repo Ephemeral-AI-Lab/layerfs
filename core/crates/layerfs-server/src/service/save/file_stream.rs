@@ -32,8 +32,8 @@ struct ReadDiagnostic {
 impl Drop for ReadDiagnostic {
     fn drop(&mut self) {
         if self.enabled {
-            eprintln!(
-                "LFS_FILE_STREAM_CAUSE v=1 request={} scope=file_stream_read status={} declared_extents={} descriptor_read_calls={} parsed_extents={} edits={} edit_spool_write_calls={} edit_spool_write_bytes={} edit_spool_write_ns={}",
+            let record = format!(
+                "LFS_FILE_STREAM_CAUSE v=1 request={} scope=file_stream_read status={} declared_extents={} descriptor_read_calls={} parsed_extents={} edits={} edit_spool_write_calls={} edit_spool_write_bytes={} edit_spool_write_ns={}\n",
                 self.request,
                 if self.complete { "ok" } else { "error" },
                 self.declared_extents,
@@ -44,6 +44,7 @@ impl Drop for ReadDiagnostic {
                 self.edit_spool_write_bytes,
                 self.edit_spool_write_ns,
             );
+            let _ = nix::unistd::write(std::io::stderr(), record.as_bytes());
         }
     }
 }

@@ -121,3 +121,14 @@ parent/child times; no cross-host subtraction is implied. The existing
 bounded stream, spool policy, C1 edit algorithm, Service request count and
 Commit acknowledgment are unchanged. Raw observations are not a qualified
 Commit speed claim.
+
+## Atomic operator record correction (#271, 2026-09-27)
+
+The first [cause row](../../../issues/271/CAUSAL-DIAGNOSTIC-LEDGER.md)
+showed that a Commit source record assembled by `eprintln!` can interleave
+with the telemetry queue's concurrent stderr chunks. Under the
+[preregistered v2 diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-v2-spec.md),
+each host and daemon Commit cause record is assembled in memory and issued
+with one write syscall. Its fixed field set fits below Linux `PIPE_BUF`.
+Failed or short operator writes leave the diagnostic evidence incomplete;
+they do not alter SaveFile validation or acknowledgment.

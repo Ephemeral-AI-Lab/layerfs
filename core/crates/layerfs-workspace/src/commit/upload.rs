@@ -52,8 +52,8 @@ impl Drop for FileUpload<'_> {
             return;
         }
         let source = &self.source.diagnostic;
-        eprintln!(
-            "LFS_COMMIT_SOURCE_CAUSE v=1 scope=save_file source_complete={} declared_extents={} final_length={} replacement_bytes={} descriptor_source_calls={} descriptor_source_bytes={} descriptor_source_ns={} descriptor_cursor_next_calls={} descriptor_cursor_next_ns={} replacement_source_calls={} replacement_source_bytes={} replacement_source_ns={} replacement_cursor_next_calls={} replacement_cursor_next_ns={} local_reader_create_calls={} local_reader_create_ns={} local_read_calls={} local_read_bytes={} local_read_ns={} local_segment_open_calls={} local_segment_open_ns={} local_aligned_read_calls={} local_aligned_read_bytes={} local_aligned_read_ns={}",
+        let record = format!(
+            "LFS_COMMIT_SOURCE_CAUSE v=1 scope=save_file source_complete={} declared_extents={} final_length={} replacement_bytes={} descriptor_source_calls={} descriptor_source_bytes={} descriptor_source_ns={} descriptor_cursor_next_calls={} descriptor_cursor_next_ns={} replacement_source_calls={} replacement_source_bytes={} replacement_source_ns={} replacement_cursor_next_calls={} replacement_cursor_next_ns={} local_reader_create_calls={} local_reader_create_ns={} local_read_calls={} local_read_bytes={} local_read_ns={} local_segment_open_calls={} local_segment_open_ns={} local_aligned_read_calls={} local_aligned_read_bytes={} local_aligned_read_ns={}\n",
             self.complete(),
             self.declared_extents,
             self.inode.length,
@@ -79,6 +79,10 @@ impl Drop for FileUpload<'_> {
             source.aligned_read_bytes,
             source.aligned_read_ns,
         );
+        #[cfg(target_os = "linux")]
+        let _ = nix::unistd::write(io::stderr(), record.as_bytes());
+        #[cfg(not(target_os = "linux"))]
+        let _ = io::Write::write(&mut io::stderr(), record.as_bytes());
     }
 }
 
