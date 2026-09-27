@@ -80,3 +80,57 @@ preregistered 3 × 3 public matrix, clean/one-edit controls, and the unchanged
 `Q_fetch`, per-phase wall, mounted full backing allocation, and complete-command
 cleanup charge have not yet been recorded. The historical #248 `FAIL` and #271
 cache-`INELIGIBLE` receipts retain their status.
+
+## Committed checkpoint-3 source and retained proof
+
+Product and test source were committed at
+`a4c54e62b805c56545e6144c383307f6dcd57f85`, Git tree
+`fa7e145dd53ad702a8f6287b8af31857963e83e2`, first parent `3897d7cdd`.
+The commit's exact first-parent/staged `tools/production_loc.py` comparison is
+combined **127,926 → 128,964 (+1,038)**, Core **62,509 → 63,547
+(+1,038)** and reference **65,417 → 65,417 (0)**. The new Core lines are
+capture/lowering code, with no reference retirement. This docs/receipt
+successor adds zero production LOC.
+
+The clean-source `stage_route.py` outputs under
+`core/target/issue273/committed-*-01/` were copied byte-for-byte into
+[`evidence/checkpoint3`](evidence/checkpoint3/). Each used a fresh native
+Service/history producer, an independent byte copy of the closed 64 MiB
+fixture Store, an owned ext4 Docker volume, warning-denying locked release
+product binaries and `LAYERFS_CONSTRUCTION_WORKERS=1`. The arm is functional:
+`cache_claim=null`, no timer gate or speed comparison. The five complete
+command walls include setup, Service, Docker, test and cleanup:
+
+| Case | Status | Complete wall | Public observation |
+| --- | --- | ---: | --- |
+| `active_generation` | PASS, 2/2 checks | 0.994 s | G1 staged bytes, G2 live bytes, both Commits |
+| `active_close` | PASS, 2/2 | 0.948 s | fresh file/name Commit and clean close |
+| `active_namespace` | PASS, 2/2 | 1.020 s | directory/file/link/symlink, then successor rename/unlink |
+| `active_mounted` | PASS, 2/2 | 0.982 s | actual FUSE write/append, unmount, Commit, canonical bytes |
+| `semantics` | PASS, 3/3 | 1.033 s | native Save held while G2 edits, frozen/live separation |
+
+The Stage test binary SHA-256 is
+`589c42dc1cc3546a2aec77cfb7b4470fbbb6a8153d3adc6e60157929b38278ba`;
+the Service binary is
+`95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530`;
+the route's product-input hash is
+`148beb413a8c2e449ecf012f10b845c5a4f66ee6ecaced36f999b5d05cb01a18`.
+The runtime image is
+`sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4`.
+The repository AEAD profile `.cargo/config.toml` SHA-256 is
+`3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9`;
+the locked `core/Cargo.lock` SHA-256 is
+`09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6`.
+Each route receipt records its own exact binary, driver, fixture and output
+identities. The cross build used locked Cargo release, rustc 1.85.1 and
+`aarch64-unknown-linux-musl`; no debug performance binary was used.
+
+At the committed source, Linux `active_backing` passed **24/24 in 26.00 s**,
+`readable` passed **18/18** nonignored cases, and its privileged mounted
+selection passed **2/2**. The latter two test walls were 0.06 s and 0.08 s.
+They are functional, not speed samples. The full Core test command's two
+unchanged `layerfs-content` failures above remain a **FAIL**, even though
+targeted Workspace tests and the other named checks passed. The retained
+full test log and all copied receipts are append-only evidence. No public
+backing-space bound, mixed-page refund proof, measured-phase cache claim, or
+checkpoint-5 selection is promoted by this checkpoint.

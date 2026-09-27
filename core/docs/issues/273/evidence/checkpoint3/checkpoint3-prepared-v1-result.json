@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "mode": "prepared-local-edit-large-fixture",
+  "logical_bytes": 67108864,
+  "recipe": "byte at absolute offset i is i % 251",
+  "performance_claim": false,
+  "cache_claim": null,
+  "producer_source": "3897d7cdd36de2185b32657693f226e4ff3069bb",
+  "producer_product_inputs_sha256": "checkpoint3-diagnostic-dirty",
+  "driver_sha256": "822f72d99d51c9c3ee081189415dedda7f80f409320435214c90c85990f64e95",
+  "hard_budget_seconds": 60,
+  "binary_sha256": {
+    "layerfs-daemon": "7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68",
+    "layerfs-server": "95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530",
+    "examples/public_key": "6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9"
+  },
+  "store_master_sha256": "6e4198e42b0168a8fba0dda4abe4f0903474926e2f3cfa26237be0e1934ef6bd",
+  "clone_method": "independent-byte-copy of closed Store; fresh history catalog",
+  "input_sha256": "98dc891b284e4d84ac25b0c0a24fdbe39a7f0dbd643ad5e8aa06e02fc6258254",
+  "file_root": "ea17b152bec37892b51b9aa27a5acabc81304aee108d4869e6c5615804bfd133",
+  "namespace_route": "native-directory import of the same bytes under the same canonical root",
+  "root": "a573e65c4da0b48100fde6a494ae8ebf90ed20785572531ca7dbabb6345e11fa",
+  "branch": "1192929292929292929292929292929292",
+  "root_serial": 1,
+  "closed_master_sha256": {
+    "store.sqlite": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+    "history.sqlite": "71837cd640e885c11a3e3276c0847a969f651cb68b96eb85c2d982597295ac6b"
+  },
+  "cleanup": "PASS: producer processes exited; closed master retained for byte-copy reuse",
+  "command_wall_seconds": 2.5002258339955006
+}

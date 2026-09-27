@@ -1,0 +1,4 @@
+
+thread 'linux::stage_active_namespace' panicked at crates/layerfs-workspace/tests/stage.rs:91:67:
+called `Result::unwrap()` on an `Err` value: Exists
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

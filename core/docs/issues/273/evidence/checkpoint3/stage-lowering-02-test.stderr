@@ -1,0 +1,4 @@
+
+thread 'linux::stage_lowering' panicked at crates/layerfs-workspace/tests/support/native_workspace.rs:590:22:
+called `Result::unwrap()` on an `Err` value: BadHandle
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

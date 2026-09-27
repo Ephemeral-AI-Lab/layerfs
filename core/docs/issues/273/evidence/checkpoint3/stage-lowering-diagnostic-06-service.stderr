@@ -1,0 +1,3 @@
+layerfs-server ready 0.0.0.0:63485
+ISSUE273_DIAGNOSTIC read_range InvalidRange { start: 33554432, end: 33554944, length: 326098 }
+layerfs-server acceptor summary accepted=19 admitted=19 live_at_stop=1 peak_live=2 reaped=19 capacity_dropped=0 capacity=4 elapsed_ms=744 error=None
