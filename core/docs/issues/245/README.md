@@ -42,6 +42,9 @@ tracked by #248 and #249 below.
 - [Load-bearing case brainstorm](LOAD_BEARING_CASES.md) proposes later
   packages, large files, namespace operations and output/log scenarios without
   claiming they are already registered or passing.
+- [Phase 4 inherited directory rename](PHASE4_INHERITED_RENAME.md) records the
+  #258 functional implementation, frozen-source checks and remaining
+  growing-prefix and Commit complexity limits.
 - [Phase 1 implementation handoff prompt](HANDOFF_PHASE1_PROMPT.md) gives a
   new agent the reading order, before/after architecture, provisional file
   ownership and LOC range, complexity model, ordinary FUSE route, and
