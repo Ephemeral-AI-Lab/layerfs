@@ -211,6 +211,12 @@ scanned or copied up by mounted rename. Direct C1 `LogicalPath`, path Inspect,
 source import and the caller's one-syscall pathname still have their separate
 path bounds; component traversal can reach deeper descendants.
 
+The #264 telemetry follow-up in the same commit as this paragraph exposes
+`BackingStatus.metadata_writes`: successful immutable private page-file writes
+across the host's arenas. It counts candidate pages even when a later cleanup
+retires them; `MetadataStatus.allocated_pages` instead counts pages still
+allocated at observation. The two numbers need not match.
+
 C1's current `validate::check_parent_aliases` reads the full base tree when a
 stored directory gains a changed binding, and `check_effective_cycles` reads the
 effective moved subtree. Those are Commit-time costs on the frozen generation;

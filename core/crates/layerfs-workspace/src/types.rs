@@ -243,6 +243,8 @@ pub struct BackingStatus {
     /// its path, so this does not grow with the frames one frozen transfer is
     /// replayed in.
     pub metadata_reads: u64,
+    /// Immutable metadata page files created by this host.
+    pub metadata_writes: u64,
     /// Ownership-ledger 4 KiB reads and writes, including COW publication and
     /// reclamation. These are separate from metadata page reads.
     pub ledger_reads: u64,

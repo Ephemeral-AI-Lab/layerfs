@@ -853,6 +853,7 @@ impl RootOwner {
             &window.0[..PAGE],
         )?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.arena.writes.fetch_add(1, Ordering::Relaxed);
         self.arena.set_owner(
             r,
             Owner {
@@ -906,6 +907,7 @@ impl RootOwner {
         let r = self.arena.allocate_slot(self, window, deadline)?;
         data.encode(self.arena.directory.incarnation, r, &mut window.0[..PAGE])?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.arena.writes.fetch_add(1, Ordering::Relaxed);
         self.arena.set_owner(
             r,
             Owner {

@@ -335,6 +335,33 @@ fn pinned_directory_retains_forgotten_ancestors_and_detached_parent_refuses_muta
     );
     assert!(f.workspace.readdir(handle, 0, 2, deadline()).is_ok());
     f.workspace.releasedir(handle).unwrap();
+    let new = f.lookup(packages.serial, b"new");
+    let replaced = f
+        .workspace
+        .mkdir(new.serial, b"empty2", 0o755, 0, deadline())
+        .unwrap();
+    let held = f
+        .workspace
+        .opendir(replaced.serial, ReferenceScope::Local)
+        .unwrap();
+    f.workspace
+        .rename(
+            old.serial,
+            b"subtree",
+            new.serial,
+            b"empty2",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    assert_eq!(f.lookup(new.serial, b"empty2").serial, subtree.serial);
+    assert_eq!(
+        f.workspace
+            .mknod(replaced.serial, b"lost", 0o600, 0, deadline()),
+        Err(WorkspaceError::NotFound)
+    );
+    assert!(f.workspace.readdir(held, 0, 2, deadline()).is_ok());
+    f.workspace.releasedir(held).unwrap();
 }
 
 #[test]
@@ -776,7 +803,8 @@ fn growing_rename_refuses_private_budget_before_publication() {
     let packages = baseline.lookup(root, b"packages");
     baseline.lookup(packages.serial, b"old");
     baseline.lookup(packages.serial, b"new");
-    let quota = baseline.workspace.backing_status().unwrap().allocated_bytes + 8192;
+    let baseline_bytes = baseline.workspace.backing_status().unwrap().allocated_bytes;
+    let quota = baseline_bytes + 8192;
     drop(baseline);
     let f = Fixture::with_layout_quota(0, false, quota);
     let root = f.workspace.root().serial;
@@ -815,6 +843,7 @@ fn growing_rename_refuses_private_budget_before_publication() {
         f.workspace.forget(serial, 1, ReferenceScope::Local);
     }
     f.workspace.close_clean().unwrap();
+    println!("RENAME_BUDGET baseline_backing_bytes={baseline_bytes} quota_bytes={quota} extra_bytes=8192 refusal=atomic cleanup=PASS");
 }
 
 #[test]
@@ -825,7 +854,13 @@ fn growing_prefix_move_has_descendant_independent_private_counts() {
         let packages = f.lookup(top, b"packages");
         let old = f.lookup(packages.serial, b"old");
         let new = f.lookup(packages.serial, b"new");
-        let subtree = f.lookup(old.serial, b"subtree");
+        let Response::Attributes {
+            serial: subtree_serial,
+            ..
+        } = f.attributes(f.genesis, b"packages/old/subtree")
+        else {
+            panic!("source directory")
+        };
         let before = f.workspace.status().unwrap();
         let before_backing = f.workspace.backing_status().unwrap();
         let before_metadata = f.workspace.metadata_status().unwrap();
@@ -844,11 +879,12 @@ fn growing_prefix_move_has_descendant_independent_private_counts() {
         let after_metadata = f.workspace.metadata_status().unwrap();
         assert_eq!(
             f.lookup(new.serial, b"subtree-expanded").serial,
-            subtree.serial
+            subtree_serial
         );
         let counters = (
             after.upstream_calls - before.upstream_calls,
             after_backing.metadata_reads - before_backing.metadata_reads,
+            after_backing.metadata_writes - before_backing.metadata_writes,
             after_metadata.allocated_pages - before_metadata.allocated_pages,
             after_metadata.allocated_bytes - before_metadata.allocated_bytes,
             after_backing.allocated_bytes - before_backing.allocated_bytes,
@@ -877,7 +913,7 @@ fn growing_prefix_move_has_descendant_independent_private_counts() {
             (packages.serial, 1),
             (old.serial, 1),
             (new.serial, 1),
-            (subtree.serial, 2),
+            (subtree_serial, 1),
         ] {
             f.workspace.forget(serial, count, ReferenceScope::Local);
         }
@@ -888,8 +924,8 @@ fn growing_prefix_move_has_descendant_independent_private_counts() {
     let large = measure(64);
     assert_eq!(small, large);
     println!(
-        "INHERITED_MOVE_COST growing_prefix descendants=3,67 store_calls={} private_page_reads={} new_private_pages={} metadata_bytes={} payload_bytes={} accounted_memory_delta={} resident_nodes={} cleanup=PASS",
-        small.0, small.1, small.2, small.3, small.4, small.5, small.6
+        "INHERITED_MOVE_COST growing_prefix descendants=3,67 store_calls={} private_page_reads={} private_page_writes={} new_private_pages={} metadata_bytes={} payload_bytes={} accounted_memory_delta={} resident_nodes={} cleanup=PASS",
+        small.0, small.1, small.2, small.3, small.4, small.5, small.6, small.7
     );
 }
 

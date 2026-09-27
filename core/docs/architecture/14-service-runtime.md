@@ -7,6 +7,10 @@
 > serial. Directory rename changes its two parent deltas and the moved resident
 > edge, without scanning inherited descendants or rewriting resident subtree
 > paths. C1 Commit's base alias and effective cycle scans are unchanged.
+> A held directory handle lists the view selected at open. Its `..` entry uses
+> the resident Node's current parent after a live move; after detachment it
+> retains the last parent for read-only handle traversal. A detached serial is
+> refused as a live lookup or mutation parent.
 
 > **#264 Phase 4.5A, source in this commit from `ef3a31048`:** A pinned live
 > directory retains its resident ancestor chain through collection. Removed or

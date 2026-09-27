@@ -326,6 +326,7 @@ impl PayloadHost {
             routine_scans: state.routine_scans,
             lookup_scans: state.lookup_scans,
             metadata_reads: 0,
+            metadata_writes: 0,
             ledger_reads: 0,
             ledger_writes: 0,
             readers: slots[1..3].iter().filter(|slot| slot.is_none()).count(),
@@ -732,6 +733,11 @@ impl Workspace {
             .metadata
             .as_ref()
             .map_or(Ok(0), |host| host.page_reads())?;
+        status.metadata_writes = self
+            .host
+            .metadata
+            .as_ref()
+            .map_or(Ok(0), |host| host.page_writes())?;
         if let Some(host) = &self.host.metadata {
             (status.ledger_reads, status.ledger_writes) = host.ledger_io()?;
         }
