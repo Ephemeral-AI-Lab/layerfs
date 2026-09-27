@@ -265,3 +265,20 @@ Committed implementation: `4d5443c1239722c2ed57f0428ad2c32bdbb3d941`.
 [Exact changed product/test/manifest paths](evidence/mounted-write/committed-files.json)
 are obtained from its first-parent Git comparison; the historical source seal,
 raw receipts and production LOC comparison above retain their original identities.
+
+## Later operator timing of projected WRITE (#271, 2026-09-27)
+
+Source pin: the telemetry-only product change committed with this section,
+after the [prospective cause diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-spec.md).
+The configured sparse `LFS_WRITE_SAMPLE` observation uses schema v3. When
+operator complexity diagnostics are enabled at process start, it publishes
+cumulative call counts and monotonic nanoseconds. The `own_payload` timer
+contains acquisition maintenance and actual payload acquisition; maintenance
+has separate metadata-root and payload-candidate children. The `write_file`
+timer contains publication maintenance, post-maintenance core publication and
+the checked notifier. Parent/child times overlap by design, and FUSE reply
+delivery remains outside `write_file`. The source caches diagnostic enablement;
+ordinary disabled writes do not read a clock or update these counters. No
+notification, reply, worker, payload or publication behavior is changed.
+The resulting observations are operator diagnostics, not a cache-qualified
+speed or release claim.

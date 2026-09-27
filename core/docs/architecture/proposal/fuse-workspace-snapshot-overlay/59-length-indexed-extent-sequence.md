@@ -526,3 +526,20 @@ charge survive until their final sponsor or root reference reaches zero.
 The page body, authenticated identity/checksum, canonical Commit and generic
 public write route do not change. This source has its own count and custody
 evidence; the one-hop measurements in §15 retain their original identities.
+
+## 17. Causal ownership counters (#271, 2026-09-27)
+
+Source pin: the telemetry-only product change committed with this section,
+under the [prospective cause diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-spec.md).
+The authenticated ledger path records cumulative ledger-file open/identity
+validation calls and time alongside its existing 4 KiB read/write counts.
+Immutable metadata-page file creation, allocation and first write have a
+separate inclusive timer. Bounded sponsor attempts, acceptances and depth-four
+fallback counts distinguish the copied page's edge decision from the charged
+ledger work. `MetadataStatus` exposes those fixed-size operator counters at
+the ordinary sparse WRITE snapshot; disabled diagnostics do not read clocks
+or update them. These categories overlap the FUSE publication and maintenance
+timers, so their nanoseconds cannot be added to a parent as independent work.
+The page format, sponsorship bound, cleanup order and quota accounting remain
+as in §§15–16. Count evidence and any performance decision belong in the
+separate #271 receipt, not in this architecture description.

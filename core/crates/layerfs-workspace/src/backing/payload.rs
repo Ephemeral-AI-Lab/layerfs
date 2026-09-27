@@ -338,6 +338,7 @@ impl PayloadHost {
             cleaning: slots[3].is_none(),
             admission_stopped: state.stopped,
             accounting_complete: state.complete,
+            ..BackingStatus::default()
         })
     }
     pub fn stop(&self, record: &Record) {
@@ -733,7 +734,8 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         segments::planned(length)
             .map_err(|error| bare_failure(BackingPhase::Acquire, error.kind()))?;
-        self.maintain_backing(deadline)?;
+        self.maintain_backing_with(deadline, Some(&self.host.exec.acquisition))?;
+        let _timed = self.host.exec.payload_acquire.start();
         host.acquire(directory, length, source, deadline, &self.inner.stopping)
     }
     pub fn backing_status(&self) -> Result<BackingStatus, WorkspaceError> {
@@ -753,6 +755,7 @@ impl Workspace {
         if let Some(host) = &self.host.metadata {
             (status.ledger_reads, status.ledger_writes) = host.ledger_io()?;
         }
+        self.host.exec.snapshot(&mut status);
         Ok(status)
     }
 }

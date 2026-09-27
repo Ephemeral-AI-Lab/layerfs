@@ -1,6 +1,7 @@
 //! Bounded old-page sponsorship for copied extent pages.
 use super::*;
 use crate::backing::metadata_index;
+use crate::runtime::host::operator_diagnostics_enabled;
 const MAX_SPONSOR_DEPTH: u64 = 4;
 
 impl Arena {
@@ -81,6 +82,13 @@ impl RootOwner {
         let mut sponsor = PageRef::NULL;
         let mut depth = 0;
         if proposed_sponsor != PageRef::NULL && edges.len() >= 4 {
+            let diagnostics = operator_diagnostics_enabled();
+            if diagnostics {
+                self.arena
+                    .telemetry
+                    .sponsor_attempts
+                    .fetch_add(1, Ordering::Relaxed);
+            }
             let mut encoded = [0u8; PAGE];
             encoded.copy_from_slice(&window.0[..PAGE]);
             let old = self.arena.read_owner(proposed_sponsor, window, deadline)?;
@@ -89,6 +97,12 @@ impl RootOwner {
             }
             if old.next == PageRef::NULL && old.length != 0 {
                 return Err(WorkspaceError::Io);
+            }
+            if diagnostics && old.length >= MAX_SPONSOR_DEPTH {
+                self.arena
+                    .telemetry
+                    .sponsor_depth_fallbacks
+                    .fetch_add(1, Ordering::Relaxed);
             }
             if old.length < MAX_SPONSOR_DEPTH && (old.next == PageRef::NULL || old.length != 0) {
                 let reduced = self.arena.sponsored_edges(
@@ -103,12 +117,18 @@ impl RootOwner {
                     edges = reduced;
                     sponsor = proposed_sponsor;
                     depth = old.length + 1;
+                    if diagnostics {
+                        self.arena
+                            .telemetry
+                            .sponsor_accepted
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
                 }
             }
             window.0[..PAGE].copy_from_slice(&encoded);
         }
         let leaf = window.0[48] == 0;
-        let identity = self.create_file(&page_name(r), window, deadline)?;
+        let identity = self.create_page_file(&page_name(r), window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?

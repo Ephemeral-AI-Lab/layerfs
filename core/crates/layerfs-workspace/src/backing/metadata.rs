@@ -8,6 +8,7 @@ use super::{
     segments::Window,
 };
 use crate::*;
+mod telemetry;
 use std::{
     mem::size_of,
     sync::{
@@ -16,6 +17,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use telemetry::ArenaTelemetry;
 pub const CANDIDATE_BYTES: u64 = 137 * 4096;
 pub const ESCROW: u64 = 208 * 4096;
 pub const WORKING: usize = 640 * 1024;
@@ -49,6 +51,7 @@ pub struct Arena {
     pub reads: AtomicU64,
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
+    pub(crate) telemetry: ArenaTelemetry,
     pub owner_finalizations: AtomicU64,
     pub extent_child_edges_added: AtomicU64,
     pub extent_custody_edges_added: AtomicU64,
@@ -222,6 +225,7 @@ impl MetadataHost {
             reads: AtomicU64::new(0),
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
+            telemetry: ArenaTelemetry::default(),
             owner_finalizations: AtomicU64::new(0),
             extent_child_edges_added: AtomicU64::new(0),
             extent_custody_edges_added: AtomicU64::new(0),
@@ -585,7 +589,7 @@ impl MetadataHost {
                 owner_finalizations.saturating_add(a.owner_finalizations.load(Ordering::Relaxed));
         }
         let s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-        let status = MetadataStatus {
+        let mut status = MetadataStatus {
             allocated_pages: pages,
             reusable_pages: reusable,
             reserved_slots,
@@ -599,9 +603,14 @@ impl MetadataHost {
                 } else {
                     0
                 },
+            operator_diagnostics_enabled: crate::runtime::host::operator_diagnostics_enabled(),
             accounting_complete: s.metadata_complete,
             admission_stopped: s.metadata_stopped,
+            ..MetadataStatus::default()
         };
+        for arena in arenas.iter() {
+            arena.telemetry.add_to(&mut status);
+        }
         if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
             eprintln!(
                 "LFS_EXTENT_EDGE v=1 child_edges_removed={} custody_edges_removed={}",

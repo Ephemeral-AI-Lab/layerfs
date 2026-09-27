@@ -29,12 +29,34 @@ SPEC_271_SPONSOR = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatm
 SPEC_271_ONE_READ = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md"
 SPEC_271_FOUR_HOP = ROOT / "docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md"
 SPEC_271_4097 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-4097-extended-count-diagnostic-spec.md"
+SPEC_271_CAUSE = ROOT / "docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
           "diagnostic100v3": 100, "diagnostic512": 512,
           "fuse512": 512, "diagnostic1024": 1024,
-          "diagnostic2048": 2048, "diagnostic4097": 4097, "gate": 4097}
+          "diagnostic2048": 2048, "diagnostic4097": 4097,
+          "diagnostic4097cause": 4097, "gate": 4097}
+CAUSE_BACKING = (
+    "acquisition_maintenance", "acquisition_metadata_maintenance",
+    "acquisition_payload_maintenance", "payload_acquire",
+    "publication_maintenance", "publication_metadata_maintenance",
+    "publication_payload_maintenance", "publication_core", "checked_notifier")
+CAUSE_METADATA = ("ledger_file", "metadata_page_create")
+CAUSE_LOGS = ("LFS_FILE_STREAM_CAUSE", "LFS_COMMIT_SOURCE_CAUSE")
+CAUSE_STREAM_FIELDS = ("request", "scope", "status", "declared_extents",
+                       "descriptor_read_calls", "parsed_extents", "edits",
+                       "edit_spool_write_calls", "edit_spool_write_bytes", "edit_spool_write_ns")
+CAUSE_SOURCE_FIELDS = ("scope", "source_complete", "declared_extents", "final_length",
+                       "replacement_bytes", "descriptor_source_calls", "descriptor_source_bytes",
+                       "descriptor_source_ns", "descriptor_cursor_next_calls",
+                       "descriptor_cursor_next_ns", "replacement_source_calls",
+                       "replacement_source_bytes", "replacement_source_ns",
+                       "replacement_cursor_next_calls", "replacement_cursor_next_ns",
+                       "local_reader_create_calls", "local_reader_create_ns", "local_read_calls",
+                       "local_read_bytes", "local_read_ns", "local_segment_open_calls",
+                       "local_segment_open_ns", "local_aligned_read_calls",
+                       "local_aligned_read_bytes", "local_aligned_read_ns")
 
 
 def fields(master, name, command):
@@ -42,10 +64,12 @@ def fields(master, name, command):
                                            "genesis_root_serial", "branch_id", "old_commit")}
     prefix = {"gate": "issue248", "fuse512": "issue266",
               "diagnostic1024": "issue266", "diagnostic2048": "issue271",
-              "diagnostic4097": "issue271"}.get(name, "issue261")
+              "diagnostic4097": "issue271", "diagnostic4097cause": "issue271"}.get(name, "issue261")
     version = {"diagnostic100v2": 2, "diagnostic100v3": 3}.get(name, 1)
     pattern = "fuse" if name == "fuse512" else "separated"
-    value.update(scenario_id=f"{prefix}-{pattern}-{COUNTS[name]}-v{version}",
+    scenario = ("issue271-separated-4097-cause-v1" if name == "diagnostic4097cause"
+                else f"{prefix}-{pattern}-{COUNTS[name]}-v{version}")
+    value.update(scenario_id=scenario,
                  command_hex=command.encode().hex(), expected_failure="0",
                  separated_count=str(COUNTS[name]),
                  telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
@@ -119,7 +143,8 @@ def prepare(output):
         interval = {"diagnostic": 25, "diagnostic100v2": 25,
                     "diagnostic100v3": 25, "diagnostic512": 128,
                     "fuse512": 128, "diagnostic1024": 256,
-                    "diagnostic2048": 512, "diagnostic4097": 512}.get(name)
+                    "diagnostic2048": 512, "diagnostic4097": 512,
+                    "diagnostic4097cause": 512}.get(name)
         text = dockerfile.replace("ENTRYPOINT",
             f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
             "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
@@ -190,6 +215,7 @@ def prepare(output):
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
         "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
         "issue271_4097_spec_sha256": digest(SPEC_271_4097),
+        "issue271_cause_spec_sha256": digest(SPEC_271_CAUSE),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -217,7 +243,7 @@ def prepare_reuse(output, previous_file, selection):
         raise ValueError("clean source and a sealed issue261 master required")
     if previous["source"]["build_profile"] != "release":
         raise ValueError("previous binaries are not release builds")
-    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate"):
+    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "diagnostic4097cause", "gate"):
         raise ValueError("unsupported reuse selection")
     product_same = identity["product_seal"] == previous["source"]["product_seal"]
     changed_product = subprocess.check_output(["git", "diff", "--name-only",
@@ -245,8 +271,28 @@ def prepare_reuse(output, previous_file, selection):
             "metadata.rs", "metadata_reclaim.rs", "ownership.rs", "ownership/sponsored.rs")],
         "core/crates/layerfs-workspace/tests/owner_finalization.rs",
     }
+    allowed_cause = {
+        "core/crates/layerfs-workspace/src/types.rs",
+        "core/crates/layerfs-workspace/src/runtime/host.rs",
+        "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+        "core/crates/layerfs-workspace/src/backing/payload.rs",
+        "core/crates/layerfs-workspace/src/backing/reclaim.rs",
+        "core/crates/layerfs-workspace/src/backing/ownership.rs",
+        "core/crates/layerfs-workspace/src/backing/ownership/sponsored.rs",
+        "core/crates/layerfs-workspace/src/backing/metadata.rs",
+        "core/crates/layerfs-workspace/src/backing/metadata/telemetry.rs",
+        "core/crates/layerfs-workspace/src/backing/reader.rs",
+        "core/crates/layerfs-workspace/src/filesystem/write.rs",
+        "core/crates/layerfs-workspace/src/commit/source.rs",
+        "core/crates/layerfs-workspace/src/commit/upload.rs",
+        "core/crates/layerfs-fuse/src/write_sample.rs",
+        "core/crates/layerfs-server/src/service/save/content.rs",
+        "core/crates/layerfs-server/src/service/save/file_stream.rs",
+    }
     allowed = (allowed_ownership if selection == "diagnostic100v3" else
                allowed_issue266 if selection in ("fuse512", "diagnostic4097", "gate") else allowed_telemetry)
+    if selection == "diagnostic4097cause":
+        allowed = allowed_cause
     if selection in ("diagnostic100v3", "fuse512", "diagnostic4097", "gate"):
         allowed |= allowed_packing | allowed_sponsor
     if selection in ("diagnostic1024", "diagnostic2048"):
@@ -257,6 +303,7 @@ def prepare_reuse(output, previous_file, selection):
                              and selection != "diagnostic1024"
                              and selection != "diagnostic2048"
                              and selection != "diagnostic4097"
+                             and selection != "diagnostic4097cause"
                              and selection != "gate"
                              or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
@@ -288,6 +335,45 @@ def prepare_reuse(output, previous_file, selection):
             raise ValueError(f"{name} manifest seal mismatch")
         shutil.copyfile(source, output / source.name)
     (output / f"{selection}.tsv").write_text(manifest(expected(COUNTS[selection])))
+    binaries = previous["binaries"]
+    host_build_wall = {}
+    master_verify_sha = None
+    if selection == "diagnostic4097cause":
+        host_commands = [
+            ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml",
+             "--locked", "-p", "layerfs-sdk", "--example", "benchmark_init",
+             "--example", "benchmark_shell"],
+            ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml",
+             "--locked", "-p", "layerfs-server", "--example", "verify_shell"],
+        ]
+        for index, command in enumerate(host_commands):
+            built, wall = run_command(command, output / f"build-host-{index}")
+            json_file(output / f"build-host-{index}.json", {"command": command,
+                "wall_ns": wall, "budget_ns": 30_000_000_000,
+                "status": "PASS" if built.returncode == 0 and wall <= 30_000_000_000
+                          else "BUILD_SLOW" if built.returncode == 0 else "FAIL",
+                "exit_code": built.returncode})
+            if built.returncode:
+                raise RuntimeError(f"build-host-{index} failed; retained output")
+            host_build_wall[f"build_host_{index}"] = wall
+        archive = output / "binary-archive"
+        binaries = {name: archive_binary(source, archive, name) for name, source in {
+            "benchmark_init": CORE / "target/release/examples/benchmark_init",
+            "benchmark_shell": CORE / "target/release/examples/benchmark_shell",
+            "verify_shell": CORE / "target/release/examples/verify_shell",
+        }.items()}
+        env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": previous["cursor_key"],
+               "LAYERFS_CONSTRUCTION_WORKERS": "1"}
+        master_case = Path(master["path"]) / "verify.case"
+        verified, wall = run_retaining_timeout([binaries["verify_shell"]["path"], str(master_case),
+            str(Path(master["path"]) / "store.sqlite"),
+            str(Path(master["path"]) / "history.sqlite"),
+            str(output / "old.tsv"), str(output / "old.tsv")],
+            output / "master-verify-new", timeout=9, env=env)
+        if verified.returncode or json.loads(verified.stdout.splitlines()[-1])["status"] != "PASS":
+            raise RuntimeError("new release verifier rejected closed master")
+        host_build_wall["master_verify_new"] = wall
+        master_verify_sha = digest(output / "master-verify-new.stdout")
     context = output / "image-context"
     (context / "bin").mkdir(parents=True)
     old_context = previous_file.parent / "image-context"
@@ -314,7 +400,7 @@ def prepare_reuse(output, previous_file, selection):
         daemon = CORE / "target/aarch64-unknown-linux-musl/release/layerfs-daemon"
     shutil.copyfile(daemon, context / "layerfs-daemon")
     (context / "layerfs-daemon").chmod(0o755)
-    interval = (512 if selection in ("diagnostic2048", "diagnostic4097") else
+    interval = (512 if selection in ("diagnostic2048", "diagnostic4097", "diagnostic4097cause") else
                 256 if selection == "diagnostic1024" else
                 128 if selection in ("diagnostic512", "fuse512") else
                 25 if selection != "gate" else None)
@@ -342,17 +428,23 @@ def prepare_reuse(output, previous_file, selection):
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
         "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
         "issue271_4097_spec_sha256": digest(SPEC_271_4097),
+        "issue271_cause_spec_sha256": digest(SPEC_271_CAUSE),
+        "binaries": binaries,
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
         "manifest_sha256": {**previous["manifest_sha256"],
                             selection: digest(output / f"{selection}.tsv")},
-        "build_mode": "sealed SDK/verifier/writer and prepared master reused; daemon release rebuilt if product changed",
+        "build_mode": ("locked release SDK/verifier/daemon rebuilt; sealed writer and closed master reused"
+                       if selection == "diagnostic4097cause" else
+                       "sealed SDK/verifier/writer and prepared master reused; daemon release rebuilt if product changed"),
         "dependency_reuse": {"prepared": str(previous_file),
                              "master_proof_sha256": digest(master_proof),
+                             "new_master_proof_sha256": master_verify_sha,
                              "compatible_product_changes": changed_product,
-                             "binary_sha256": {name: value["sha256"] for name, value in previous["binaries"].items()}},
-        "preparation_wall_ns": {f"image_{selection}": wall}}
+                             "previous_binary_sha256": {name: value["sha256"] for name, value in previous["binaries"].items()},
+                             "binary_sha256": {name: value["sha256"] for name, value in binaries.items()}},
+        "preparation_wall_ns": {f"image_{selection}": wall, **host_build_wall}}
     json_file(output / "prepared.json", prepared)
     print(json.dumps({"prepared": str(output / "prepared.json"),
                       "reused_master": master["path"],
@@ -396,6 +488,127 @@ def backing_samples(stderr):
     return rows
 
 
+def run_retaining_timeout(command, log, **kwargs):
+    try:
+        return run_command(command, log, **kwargs)
+    except subprocess.TimeoutExpired as error:
+        Path(str(log) + ".stdout").write_bytes(error.stdout or b"")
+        Path(str(log) + ".stderr").write_bytes(error.stderr or b"")
+        raise
+
+
+def causal_diagnostics(stderr, samples):
+    """Read one source-owned cause record per phase, preserving missing evidence."""
+    lines = stderr.decode(errors="replace").splitlines()
+    causes = {}
+    errors = []
+    for marker in CAUSE_LOGS:
+        found = [line for line in lines if line.startswith(marker + " v=1 ")]
+        if len(found) != 1:
+            errors.append(f"{marker}: expected one record, got {len(found)}")
+            continue
+        try:
+            pairs = [part.split("=", 1) for part in found[0].split()[1:]]
+            if any(len(pair) != 2 or not pair[0] for pair in pairs):
+                raise ValueError("malformed key/value")
+            fields = dict(pairs)
+            if len(fields) != len(pairs):
+                raise ValueError("duplicate key")
+            causes[marker] = fields
+        except ValueError:
+            errors.append(f"{marker}: malformed or duplicate key/value record")
+    save = []
+    for line in lines:
+        if not line.startswith("LFT1 "):
+            continue
+        try:
+            event = json.loads(line[5:])
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        timing = event.get("timing")
+        if not isinstance(timing, dict):
+            continue
+        if event.get("role") == 1 and event.get("kind") == "operation" and timing.get("name") == "SaveFile":
+            children = timing.get("children")
+            if isinstance(children, list):
+                save.extend(child for child in children if isinstance(child, dict)
+                            and child.get("name") == "service.pre_save_input")
+    host_ns = save[0].get("elapsed_ns") if len(save) == 1 else None
+    if not isinstance(host_ns, int) or host_ns <= 0:
+        errors.append(f"service.pre_save_input: expected one positive host timing, got {len(save)}")
+    if len(samples) != 8 or [row["write_class"] for row in samples] != list(range(512, 4097, 512)):
+        errors.append("causal 512-WRITE checkpoints incomplete")
+    previous = {}
+    for row in samples:
+        if row["version"] != 3:
+            errors.append(f"WRITE {row['write_class']}: expected LFS_WRITE_SAMPLE v=3")
+        for scope, names in (("backing", CAUSE_BACKING), ("metadata", CAUSE_METADATA)):
+            fields = row[scope]
+            if fields.get("operator_diagnostics_enabled") != "true":
+                errors.append(f"WRITE {row['write_class']}: {scope} diagnostics disabled")
+            for name in names:
+                for suffix in ("calls", "ns"):
+                    key = f"{name}_{suffix}"
+                    value = fields.get(key)
+                    if not isinstance(value, int) or value < previous.get((scope, key), 0):
+                        errors.append(f"WRITE {row['write_class']}: missing/nonmonotone {scope}.{key}")
+                    else:
+                        previous[(scope, key)] = value
+            if scope == "metadata":
+                for key in ("sponsor_attempts", "sponsor_accepted", "sponsor_depth_fallbacks"):
+                    value = fields.get(key)
+                    if not isinstance(value, int) or value < previous.get((scope, key), 0):
+                        errors.append(f"WRITE {row['write_class']}: missing/nonmonotone metadata.{key}")
+                    else:
+                        previous[(scope, key)] = value
+        for name in ("acquisition_maintenance", "payload_acquire",
+                     "publication_maintenance", "publication_core", "checked_notifier"):
+            if row["backing"].get(f"{name}_calls") != row["write_class"]:
+                errors.append(f"WRITE {row['write_class']}: {name} call count mismatch")
+    stream = causes.get("LFS_FILE_STREAM_CAUSE", {})
+    source = causes.get("LFS_COMMIT_SOURCE_CAUSE", {})
+    for marker, fields, required in (("LFS_FILE_STREAM_CAUSE", stream, CAUSE_STREAM_FIELDS),
+                                     ("LFS_COMMIT_SOURCE_CAUSE", source, CAUSE_SOURCE_FIELDS)):
+        for key in required:
+            value = fields.get(key)
+            if value is None:
+                errors.append(f"{marker}.{key}: missing")
+            elif key not in ("scope", "status", "source_complete") and not value.isdigit():
+                errors.append(f"{marker}.{key}: expected unsigned integer")
+    for key, value in {"scope": "file_stream_read", "status": "ok",
+                       "declared_extents": "8194", "parsed_extents": "8194",
+                       "descriptor_read_calls": "8194", "edits": "4097",
+                       "edit_spool_write_calls": "16388",
+                       "edit_spool_write_bytes": "131104"}.items():
+        if stream.get(key) != value:
+            errors.append(f"LFS_FILE_STREAM_CAUSE.{key}: expected {value}, got {stream.get(key)}")
+    for key, value in {"scope": "save_file", "source_complete": "true",
+                       "declared_extents": "8194", "final_length": "8194",
+                       "replacement_bytes": "4097", "descriptor_source_bytes": "196656",
+                       "descriptor_cursor_next_calls": "8194",
+                       "replacement_source_bytes": "4097",
+                       "local_reader_create_calls": "4097", "local_read_calls": "4097",
+                       "local_read_bytes": "4097",
+                       "local_segment_open_calls": "4097",
+                       "local_aligned_read_calls": "4097",
+                       "local_aligned_read_bytes": "16781312"}.items():
+        if source.get(key) != value:
+            errors.append(f"LFS_COMMIT_SOURCE_CAUSE.{key}: expected {value}, got {source.get(key)}")
+    for marker, fields, keys in (("LFS_FILE_STREAM_CAUSE", stream,
+                                  ("edit_spool_write_ns",)),
+                                 ("LFS_COMMIT_SOURCE_CAUSE", source,
+                                  ("descriptor_source_ns", "replacement_source_ns",
+                                   "local_segment_open_ns", "local_aligned_read_ns"))):
+        for key in keys:
+            if fields.get(key, "0").isdigit() and int(fields.get(key, "0")) == 0:
+                errors.append(f"{marker}.{key}: empty time for nonempty work")
+    return {"status": "PASS" if not errors else "INCOMPLETE", "errors": errors,
+            "logs": causes, "host_pre_save_input_ns": host_ns,
+            "bridge_body_frames_observed": None}
+
+
 def run(prepared_file, output, selection):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -430,6 +643,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue271 four-hop specification changed")
     if selection == "diagnostic4097" and digest(SPEC_271_4097) != prepared.get("issue271_4097_spec_sha256"):
         raise ValueError("issue271 extended diagnostic specification changed")
+    if selection == "diagnostic4097cause" and digest(SPEC_271_CAUSE) != prepared.get("issue271_cause_spec_sha256"):
+        raise ValueError("issue271 causal diagnostic specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -463,7 +678,7 @@ def run(prepared_file, output, selection):
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
     if selection.startswith("diagnostic") or selection == "fuse512":
         env["LAYERFS_COMPLEXITY_DIAGNOSTIC"] = "1"
-    limit = 60 if selection == "diagnostic4097" else 25 if selection == "gate" else 15
+    limit = 60 if selection in ("diagnostic4097", "diagnostic4097cause") else 25 if selection == "gate" else 15
     start = time.monotonic_ns()
     try:
         process = subprocess.run(command, cwd=ROOT, capture_output=True,
@@ -485,14 +700,20 @@ def run(prepared_file, output, selection):
         checkpoints, progress_error = None, str(error)
     counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(",")
                   if "=" in item) if driver else {}
-    samples = backing_samples(stderr)
+    try:
+        samples = backing_samples(stderr)
+        sample_parse_error = None
+    except ValueError as error:
+        samples, sample_parse_error = [], str(error)
     sample_counts = [row["write_class"] for row in samples]
-    expected_samples = (list(range(512, count, 512)) if selection == "diagnostic4097" else
+    expected_samples = (list(range(512, count, 512)) if selection in ("diagnostic4097", "diagnostic4097cause") else
                         [count // 4, count // 2, count * 3 // 4, count]
                         if selection.startswith("diagnostic") or selection == "fuse512" else [])
-    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097") or all(
-        row["version"] == 2 and row["acquisition_ns"] is not None
+    sample_versions = (3,) if selection == "diagnostic4097cause" else (2, 3)
+    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "diagnostic4097cause") or all(
+        row["version"] in sample_versions and row["acquisition_ns"] is not None
         and row["publication_ns"] is not None for row in samples)
+    cause = causal_diagnostics(stderr, samples) if selection == "diagnostic4097cause" else None
     verification = {"status": "NOT_RUN"}
     if driver and driver.get("head_commit"):
         after = {**before, "expected_head_commit": driver["head_commit"]}
@@ -501,26 +722,34 @@ def run(prepared_file, output, selection):
         verify_command = [prepared["binaries"]["verify_shell"]["path"],
             str(output / "case.verify"), clone["store"], clone["history"],
             str(root / "old.tsv"), str(root / f"{selection}.tsv")]
+        verify_started = time.monotonic_ns()
         try:
-            checked, wall = run_command(verify_command, output / "verifier", timeout=9, env=env)
+            checked, wall = run_retaining_timeout(verify_command, output / "verifier", timeout=9, env=env)
             verification = {"status": "PASS" if checked.returncode == 0 else "FAIL",
                             "wall_ns": wall, "exit_code": checked.returncode,
                             "command": verify_command}
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
             verification = {"status": "FAIL", "timeout": True,
+                            "wall_ns": time.monotonic_ns() - verify_started,
+                            "limit_ns": 9_000_000_000,
+                            "stdout_bytes": len(error.stdout or b""),
+                            "stderr_bytes": len(error.stderr or b""),
                             "command": verify_command}
     daemon_log = stderr.decode(errors="replace")
     daemon_close = "sandbox closed\n" in daemon_log
     daemon_retained = any(term in daemon_log for term in
                           ("sandbox shutdown retained:", "workspace shutdown retained:"))
     cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
-                   and (selection not in ("fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate") or (daemon_close and not daemon_retained
+                   and (selection not in ("fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "diagnostic4097cause", "gate") or (daemon_close and not daemon_retained
                         and driver.get("daemon_log_attempted")
                         and not driver.get("daemon_log_truncated")
                         and driver.get("daemon_log_error") == "None")))
     functional = bool(code == 0 and not timed_out and driver and
         driver.get("status") == "COMPLETE" and driver.get("commit_called") and
         checkpoints and sample_counts == expected_samples and phase_samples_complete and
+        (selection != "diagnostic4097cause" or
+         (driver.get("upstream_calls") == 4 and counts.get("write") == "4097"
+          and counts.get("open") == "1" and counts.get("read") == "0")) and
         verification["status"] == "PASS" and cleanup)
     receipt = {"schema": "issue261-separated-attempt-v1", "selection": selection,
         "family_id": "workspace_mounted_separated_writes",
@@ -538,6 +767,7 @@ def run(prepared_file, output, selection):
         "issue271_one_read_spec_sha256": prepared.get("issue271_one_read_spec_sha256"),
         "issue271_four_hop_spec_sha256": prepared.get("issue271_four_hop_spec_sha256"),
         "issue271_4097_spec_sha256": prepared.get("issue271_4097_spec_sha256"),
+        "issue271_cause_spec_sha256": prepared.get("issue271_cause_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
@@ -552,7 +782,9 @@ def run(prepared_file, output, selection):
         "command": command, "shell_command": shell, "write_syscalls_expected": count,
         "writer_progress": checkpoints, "writer_progress_error": progress_error,
         "backing_samples": samples, "backing_sample_counts_expected": expected_samples,
+        "backing_sample_parse_error": sample_parse_error,
         "phase_samples_complete": phase_samples_complete,
+        "causal_diagnostics": cause,
         "complexity_lines": [line for line in stderr.decode(errors="replace").splitlines()
                              if "LFS_PIECE_LOWER" in line or "LFS_C1_SAVE_COUNT" in line],
         "lft1": lft1(stderr),
@@ -573,8 +805,9 @@ def run(prepared_file, output, selection):
         "functional_status": "PASS" if functional else "FAIL",
         "cache_contract": prepared["cache_contract"], "cache_status": "INELIGIBLE",
         "performance_status": "INELIGIBLE", "admission_eligible": False,
-        "extended_diagnostic_only": selection == "diagnostic4097",
-        "row_status": "INELIGIBLE" if functional else "FAIL", "sample_count": 1}
+        "extended_diagnostic_only": selection in ("diagnostic4097", "diagnostic4097cause"),
+        "row_status": ("INELIGIBLE" if cause is None or cause["status"] == "PASS"
+                       else "INCOMPLETE") if functional else "FAIL", "sample_count": 1}
     json_file(output / "receipt.json", receipt)
     (output / "SHA256SUMS").write_text("\n".join(
         f"{digest(path)}  {path.name}" for path in sorted(output.iterdir()) if path.is_file()
@@ -589,7 +822,7 @@ def main():
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
     p.add_argument("--reuse-prepared", type=Path)
-    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate"),
+    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "diagnostic4097cause", "gate"),
                    default="diagnostic512")
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
@@ -607,6 +840,38 @@ def main():
         phase_line = fixture_line.replace(b"v=1", b"v=2").strip() + b" acquisition_ns=7 publication_ns=11\n"
         assert backing_samples(phase_line)[0]["publication_ns"] == 11
         assert list(range(512, COUNTS["diagnostic4097"], 512)) == [512 * i for i in range(1, 9)]
+        assert fields({key: 0 for key in ("project_id", "genesis_layer", "genesis_root", "genesis_root_serial", "branch_id", "old_commit")}, "diagnostic4097cause", "x")["scenario_id"] == "issue271-separated-4097-cause-v1"
+        assert causal_diagnostics(b"", [])["status"] == "INCOMPLETE"
+        samples = []
+        for count in range(512, 4097, 512):
+            backing = {f"{name}_{suffix}": count for name in CAUSE_BACKING
+                       for suffix in ("calls", "ns")}
+            metadata = {f"{name}_{suffix}": count for name in CAUSE_METADATA
+                        for suffix in ("calls", "ns")}
+            metadata.update(sponsor_attempts=count, sponsor_accepted=count,
+                            sponsor_depth_fallbacks=0)
+            samples.append({"version": 3, "write_class": count,
+                            "backing": {**backing, "operator_diagnostics_enabled": "true"},
+                            "metadata": {**metadata, "operator_diagnostics_enabled": "true"}})
+        stream = dict.fromkeys(CAUSE_STREAM_FIELDS, "1")
+        stream.update(scope="file_stream_read", status="ok", declared_extents="8194",
+                      descriptor_read_calls="8194", parsed_extents="8194", edits="4097",
+                      edit_spool_write_calls="16388", edit_spool_write_bytes="131104")
+        source = dict.fromkeys(CAUSE_SOURCE_FIELDS, "1")
+        source.update(scope="save_file", source_complete="true", declared_extents="8194",
+                      final_length="8194", replacement_bytes="4097",
+                      descriptor_source_bytes="196656", descriptor_cursor_next_calls="8194",
+                      replacement_source_bytes="4097", local_reader_create_calls="4097",
+                      local_read_calls="4097", local_read_bytes="4097",
+                      local_segment_open_calls="4097", local_aligned_read_calls="4097",
+                      local_aligned_read_bytes="16781312")
+        logs = b"\n".join((f"{marker} v=1 " + " ".join(f"{key}={value}" for key, value in fields.items())).encode()
+                          for marker, fields in ((CAUSE_LOGS[0], stream), (CAUSE_LOGS[1], source)))
+        logs += b'\nLFT1 {"role":1,"kind":"operation","timing":{"name":"SaveFile","children":[{"name":"service.pre_save_input","elapsed_ns":1}]}}\n'
+        assert causal_diagnostics(logs, samples)["status"] == "PASS"
+        assert causal_diagnostics(logs.replace(b"edits=4097", b"edits=4097 edits=4097"), samples)["status"] == "INCOMPLETE"
+        assert causal_diagnostics(logs.replace(b'"elapsed_ns":1', b'"elapsed_ns":"bad"'), samples)["status"] == "INCOMPLETE"
+        assert causal_diagnostics(logs.replace(b"local_aligned_read_ns=1", b""), samples)["status"] == "INCOMPLETE"
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "counts": COUNTS}))
     elif args.action == "prepare":

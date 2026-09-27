@@ -205,6 +205,7 @@ impl Arena {
         update: bool,
         phase: BackingPhase,
     ) -> Result<std::fs::File, WorkspaceError> {
+        let _timed = self.telemetry.ledger_file.start();
         let expected = {
             *self
                 .state
@@ -859,6 +860,15 @@ impl RootOwner {
         }
         result
     }
+    fn create_page_file(
+        &self,
+        name: &str,
+        window: &Window,
+        deadline: Instant,
+    ) -> Result<(u64, u64), WorkspaceError> {
+        let _timed = self.arena.telemetry.metadata_page_create.start();
+        self.create_file(name, window, deadline)
+    }
     pub fn write_page(
         &self,
         data: PageData,
@@ -878,7 +888,7 @@ impl RootOwner {
         let r = self.arena.allocate_slot(self, window, deadline)?;
         data.encode(self.arena.directory.incarnation, r, &mut window.0[..PAGE])?;
         let edges = super::metadata_index::edges(&data)?;
-        let identity = self.create_file(&page_name(r), window, deadline)?;
+        let identity = self.create_page_file(&page_name(r), window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?

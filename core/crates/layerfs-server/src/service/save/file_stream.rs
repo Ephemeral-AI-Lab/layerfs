@@ -16,6 +16,38 @@ const EDIT_BYTES: u64 = 32;
 const WINDOW_BYTES: usize = 64 * 1024;
 const SPOOL_DISK_BYTES: u64 = MAX_FILE * 2;
 
+struct ReadDiagnostic {
+    request: u64,
+    enabled: bool,
+    complete: bool,
+    declared_extents: u64,
+    descriptor_read_calls: u64,
+    parsed_extents: u64,
+    edits: u64,
+    edit_spool_write_calls: u64,
+    edit_spool_write_bytes: u64,
+    edit_spool_write_ns: u64,
+}
+
+impl Drop for ReadDiagnostic {
+    fn drop(&mut self) {
+        if self.enabled {
+            eprintln!(
+                "LFS_FILE_STREAM_CAUSE v=1 request={} scope=file_stream_read status={} declared_extents={} descriptor_read_calls={} parsed_extents={} edits={} edit_spool_write_calls={} edit_spool_write_bytes={} edit_spool_write_ns={}",
+                self.request,
+                if self.complete { "ok" } else { "error" },
+                self.declared_extents,
+                self.descriptor_read_calls,
+                self.parsed_extents,
+                self.edits,
+                self.edit_spool_write_calls,
+                self.edit_spool_write_bytes,
+                self.edit_spool_write_ns,
+            );
+        }
+    }
+}
+
 struct SpoolFile {
     path: PathBuf,
     file: File,
@@ -208,8 +240,13 @@ impl Read for FileReader<'_> {
 }
 
 /// Parse, validate and spool the declared sequence before opening a C2 save.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "request identity accompanies this streaming parser"
+)]
 pub(crate) fn read(
     input: &mut dyn Read,
+    request: u64,
     has_base: bool,
     base_length: u64,
     final_length: u64,
@@ -217,6 +254,18 @@ pub(crate) fn read(
     replacement: u64,
     deadline: Instant,
 ) -> Result<FileInput, Failure> {
+    let mut diagnostic = ReadDiagnostic {
+        request,
+        enabled: std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some(),
+        complete: false,
+        declared_extents: extents,
+        descriptor_read_calls: 0,
+        parsed_extents: 0,
+        edits: 0,
+        edit_spool_write_calls: 0,
+        edit_spool_write_bytes: 0,
+        edit_spool_write_ns: 0,
+    };
     if extents
         .checked_add(1)
         .and_then(|count| count.checked_mul(EDIT_BYTES))
@@ -243,6 +292,9 @@ pub(crate) fn read(
     );
     for _ in 0..extents {
         let mut b = [0u8; RECORD_BYTES as usize];
+        if diagnostic.enabled {
+            diagnostic.descriptor_read_calls += 1;
+        }
         descriptors.read_exact(&mut b)?;
         let word = |at: usize| u64::from_be_bytes(b[at..at + 8].try_into().unwrap());
         let kind = word(0);
@@ -264,6 +316,7 @@ pub(crate) fn read(
             {
                 close(
                     &mut edits.file,
+                    &mut diagnostic,
                     &mut count,
                     &mut delta,
                     base,
@@ -290,6 +343,9 @@ pub(crate) fn read(
             }
             _ => return Err(Code::InvalidInput.into()),
         }
+        if diagnostic.enabled {
+            diagnostic.parsed_extents += 1;
+        }
         position += length;
     }
     if position != final_length || consumed != replacement {
@@ -297,6 +353,7 @@ pub(crate) fn read(
     }
     close(
         &mut edits.file,
+        &mut diagnostic,
         &mut count,
         &mut delta,
         base,
@@ -358,9 +415,11 @@ pub(crate) fn read(
         return Err(Code::InvalidInput.into());
     }
     zeros.remove()?;
+    let edit_count = usize::try_from(count).map_err(|_| Code::Capacity)?;
+    diagnostic.complete = true;
     Ok(FileInput {
         edits,
-        edit_count: usize::try_from(count).map_err(|_| Code::Capacity)?,
+        edit_count,
         base_length,
         final_length,
         bytes,
@@ -413,8 +472,13 @@ fn check_zeros(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic accompanies an existing edit record"
+)]
 fn close(
     file: &mut File,
+    diagnostic: &mut ReadDiagnostic,
     count: &mut u64,
     delta: &mut i128,
     base: u64,
@@ -428,9 +492,25 @@ fn close(
     let start = u64::try_from(i128::from(base) + *delta).map_err(|_| Code::InvalidInput)?;
     let stop = u64::try_from(i128::from(end) + *delta).map_err(|_| Code::InvalidInput)?;
     for word in [start, stop, replacement, byte_start] {
-        file.write_all(&word.to_be_bytes()).map_err(|_| Code::Io)?;
+        if diagnostic.enabled {
+            diagnostic.edit_spool_write_calls += 1;
+        }
+        let started = diagnostic.enabled.then(Instant::now);
+        let write = file.write_all(&word.to_be_bytes());
+        if let Some(started) = started {
+            diagnostic.edit_spool_write_ns = diagnostic
+                .edit_spool_write_ns
+                .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        }
+        write.map_err(|_| Code::Io)?;
+        if diagnostic.enabled {
+            diagnostic.edit_spool_write_bytes += 8;
+        }
     }
     *count = count.checked_add(1).ok_or(Code::Capacity)?;
+    if diagnostic.enabled {
+        diagnostic.edits = *count;
+    }
     *delta += i128::from(replacement) - i128::from(end - base);
     Ok(())
 }

@@ -71,7 +71,7 @@ impl WriteSamples {
             return;
         }
         eprintln!(
-            "LFS_WRITE_SAMPLE v=2 write_class={count:?} elapsed_ns={} backing={:?} metadata={:?} acquisition_ns={} publication_ns={}",
+            "LFS_WRITE_SAMPLE v=3 write_class={count:?} elapsed_ns={} backing={:?} metadata={:?} acquisition_ns={} publication_ns={}",
             self.start.elapsed().as_nanos(), workspace.backing_status(), workspace.metadata_status(),
             self.acquisition_ns.load(Ordering::Relaxed), self.publication_ns.load(Ordering::Relaxed)
         );

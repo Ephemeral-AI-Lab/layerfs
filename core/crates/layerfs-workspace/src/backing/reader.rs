@@ -2,7 +2,7 @@ use super::{
     payload::{clock, filename, header, OwnedPayload, WindowLease},
     segments::{self, ALIGN, DATA_BYTES, INLINE_START, WINDOW_BYTES},
 };
-use crate::{BackingPhase, WorkspaceError};
+use crate::{runtime::host::operator_diagnostics_enabled, BackingPhase, WorkspaceError};
 use layerfs_bridge::contract::Source;
 use std::{
     fs::File,
@@ -12,14 +12,68 @@ use std::{
     time::Instant,
 };
 
+#[derive(Clone, Copy, Default)]
+pub(crate) struct PayloadIoCounts {
+    pub(crate) open_calls: u64,
+    pub(crate) open_ns: u64,
+    pub(crate) aligned_read_calls: u64,
+    pub(crate) aligned_read_bytes: u64,
+    pub(crate) aligned_read_ns: u64,
+}
+
+fn open_segment(
+    directory: &File,
+    name: &str,
+    counts: &mut PayloadIoCounts,
+    enabled: bool,
+) -> io::Result<File> {
+    let started = enabled.then(Instant::now);
+    let result = segments::open(directory, name);
+    if let Some(started) = started {
+        counts.open_calls = counts.open_calls.saturating_add(1);
+        counts.open_ns = counts
+            .open_ns
+            .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+    }
+    result
+}
+
+fn read_segment(
+    file: &File,
+    window: &mut segments::Window,
+    offset: u64,
+    length: usize,
+    counts: &mut PayloadIoCounts,
+    enabled: bool,
+) -> io::Result<()> {
+    let started = enabled.then(Instant::now);
+    let result = segments::read(file, window, offset, length);
+    if let Some(started) = started {
+        counts.aligned_read_calls = counts.aligned_read_calls.saturating_add(1);
+        counts.aligned_read_ns = counts
+            .aligned_read_ns
+            .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        if result.is_ok() {
+            counts.aligned_read_bytes = counts.aligned_read_bytes.saturating_add(length as u64);
+        }
+    }
+    result
+}
+
 pub struct PayloadReader {
     file: Option<(u32, File)>,
     owner: OwnedPayload,
     lease: WindowLease,
     position: u64,
     end: u64,
+    diagnostic_enabled: bool,
+    diagnostic: PayloadIoCounts,
 }
 impl PayloadReader {
+    pub(crate) fn io_counts(&self) -> PayloadIoCounts {
+        self.diagnostic
+    }
+
     pub(crate) fn new(owner: OwnedPayload, range: Range<u64>) -> Result<Self, WorkspaceError> {
         if range.start > range.end || range.end > owner.len() {
             return Err(WorkspaceError::InvalidInput);
@@ -40,6 +94,8 @@ impl PayloadReader {
             lease,
             position: range.start,
             end: range.end,
+            diagnostic_enabled: operator_diagnostics_enabled(),
+            diagnostic: PayloadIoCounts::default(),
         })
     }
     fn read_inner(
@@ -68,8 +124,20 @@ impl PayloadReader {
         {
             drop(self.file.take());
             let directory = self.owner.record.directory.file()?;
-            let file = segments::open(&directory, &filename(self.owner.record.id, index))?;
-            segments::read(&file, window, 0, ALIGN)?;
+            let file = open_segment(
+                &directory,
+                &filename(self.owner.record.id, index),
+                &mut self.diagnostic,
+                self.diagnostic_enabled,
+            )?;
+            read_segment(
+                &file,
+                window,
+                0,
+                ALIGN,
+                &mut self.diagnostic,
+                self.diagnostic_enabled,
+            )?;
             header(&self.owner.record, index).verify(window)?;
             self.file = Some((index, file));
         }
@@ -97,7 +165,14 @@ impl PayloadReader {
             .as_ref()
             .ok_or_else(|| io::Error::other("missing payload descriptor"))?
             .1;
-        segments::read(file, window, offset - prefix as u64, physical)?;
+        read_segment(
+            file,
+            window,
+            offset - prefix as u64,
+            physical,
+            &mut self.diagnostic,
+            self.diagnostic_enabled,
+        )?;
         clock(deadline)?;
         if cancel.load(Ordering::Acquire) {
             return Err(io::ErrorKind::Interrupted.into());

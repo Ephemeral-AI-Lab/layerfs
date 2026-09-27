@@ -18,7 +18,7 @@ use std::{
     sync::atomic::AtomicUsize,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
     },
     time::Instant,
 };
@@ -53,7 +53,90 @@ pub(crate) struct Host {
     pub registry: Mutex<Registry>,
     pub payloads: Option<Arc<PayloadHost>>,
     pub metadata: Option<Arc<crate::backing::metadata::MetadataHost>>,
+    pub exec: ExecCounters,
     pub _charge: Charge,
+}
+#[derive(Default)]
+pub(crate) struct AtomicTimedCount {
+    calls: AtomicU64,
+    ns: AtomicU64,
+}
+pub(crate) struct TimedGuard<'a> {
+    counter: &'a AtomicTimedCount,
+    start: Instant,
+}
+pub(crate) fn operator_diagnostics_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some())
+}
+impl AtomicTimedCount {
+    pub(crate) fn start(&self) -> Option<TimedGuard<'_>> {
+        operator_diagnostics_enabled().then(|| TimedGuard {
+            counter: self,
+            start: Instant::now(),
+        })
+    }
+    pub(crate) fn snapshot(&self) -> (u64, u64) {
+        (
+            self.calls.load(Ordering::Relaxed),
+            self.ns.load(Ordering::Relaxed),
+        )
+    }
+}
+impl Drop for TimedGuard<'_> {
+    fn drop(&mut self) {
+        let ns = self.start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        self.counter.ns.fetch_add(ns, Ordering::Relaxed);
+        self.counter.calls.fetch_add(1, Ordering::Relaxed);
+    }
+}
+#[derive(Default)]
+pub(crate) struct MaintenanceCounters {
+    pub total: AtomicTimedCount,
+    pub metadata: AtomicTimedCount,
+    pub payload: AtomicTimedCount,
+}
+#[derive(Default)]
+pub(crate) struct ExecCounters {
+    pub acquisition: MaintenanceCounters,
+    pub payload_acquire: AtomicTimedCount,
+    pub publication: MaintenanceCounters,
+    pub publication_core: AtomicTimedCount,
+    pub checked_notifier: AtomicTimedCount,
+}
+impl ExecCounters {
+    pub(crate) fn snapshot(&self, status: &mut BackingStatus) {
+        status.operator_diagnostics_enabled = operator_diagnostics_enabled();
+        (
+            status.acquisition_maintenance_calls,
+            status.acquisition_maintenance_ns,
+        ) = self.acquisition.total.snapshot();
+        (
+            status.acquisition_metadata_maintenance_calls,
+            status.acquisition_metadata_maintenance_ns,
+        ) = self.acquisition.metadata.snapshot();
+        (
+            status.acquisition_payload_maintenance_calls,
+            status.acquisition_payload_maintenance_ns,
+        ) = self.acquisition.payload.snapshot();
+        (status.payload_acquire_calls, status.payload_acquire_ns) = self.payload_acquire.snapshot();
+        (
+            status.publication_maintenance_calls,
+            status.publication_maintenance_ns,
+        ) = self.publication.total.snapshot();
+        (
+            status.publication_metadata_maintenance_calls,
+            status.publication_metadata_maintenance_ns,
+        ) = self.publication.metadata.snapshot();
+        (
+            status.publication_payload_maintenance_calls,
+            status.publication_payload_maintenance_ns,
+        ) = self.publication.payload.snapshot();
+        (status.publication_core_calls, status.publication_core_ns) =
+            self.publication_core.snapshot();
+        (status.checked_notifier_calls, status.checked_notifier_ns) =
+            self.checked_notifier.snapshot();
+    }
 }
 pub(crate) struct Entry {
     pub id: Box<str>,
@@ -183,6 +266,7 @@ impl WorkspaceHost {
                 registry: Mutex::new(registry),
                 payloads,
                 metadata,
+                exec: ExecCounters::default(),
                 _charge: charge,
             }),
         })
