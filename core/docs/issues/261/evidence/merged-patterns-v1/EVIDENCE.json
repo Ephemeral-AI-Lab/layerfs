@@ -1,0 +1,14 @@
+{
+  "attempts_per_case": 1,
+  "note": "This product seal is the exact #266 then #265 merged product; prepared-public omits the private cursor key.",
+  "product_seal": "caa60189727a0a57d18a24f4e787d47e13949e50ed6c74d8b0bdf1b2ea5428da",
+  "schema": "issue261-merged-patterns-evidence-v1",
+  "selections": [
+    "append",
+    "dispersed",
+    "repeated"
+  ],
+  "source_commit": "95d28d0590e70d763b5ad2e8dc3a52fe7bb55eb4",
+  "source_tree": "ca8a2bd6827d7109b1938906e4da493e032704c3",
+  "status": "three functional PASS and cache-INELIGIBLE latency rows"
+}

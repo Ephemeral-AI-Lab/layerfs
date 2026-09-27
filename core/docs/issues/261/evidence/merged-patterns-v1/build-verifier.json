@@ -1,0 +1,17 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-server",
+    "--example",
+    "verify_shell"
+  ],
+  "exit_code": 0,
+  "wall_ns": 1013462125
+}
