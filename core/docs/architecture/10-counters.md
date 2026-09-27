@@ -65,6 +65,18 @@ The older `LFS_PIECE_COUNT` and `LFS_PIECE_PAGES` descriptions below belong to
 the pinned #232 Phase 1C source; they have no producer at `6af2c5c59`.
 Retained #232 receipts keep their original meaning.
 
+### #261 three-pattern counter interpretation (source `7361312e6`)
+
+The [10 MiB three-pattern diagnosis](../issues/261/THREE-PATTERN-DIAGNOSIS.md)
+uses the current `LFS_C1_SAVE_COUNT.nodes_read` value as a logical C1 node-load
+counter. `EditObjects::load_node` increments it on a page-memo miss before
+choosing an in-memory draft or a stored canonical page. It therefore cannot
+serve as a count of Store reads, SQLite statements or network round trips.
+Likewise `MetadataStatus.allocated_pages` is the live arena total across the
+held roots; it does not identify extent leaves, branches, keyed pages, or
+cumulative page writes. The three-pattern receipts retain the exact counters
+and label these unavailable attributions instead of assigning them zero.
+
 ### #232 Phase 1C count diagnostic (2026-09-25)
 
 When `LAYERFS_COMPLEXITY_DIAGNOSTIC` is set, the Linux daemon emits

@@ -1,0 +1,100 @@
+{
+  "copied_raw_sha256": {
+    "append.tsv": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc",
+    "append/case.before": "49862ea3d33b1a94eda599e4768ff60c59e3b4eb7e8c3d6084579e0e4710b4a5",
+    "append/case.verify": "0f65525553ce16348aa325707d111ab6b2c3bcf4a4dec497cf68d194e8e85356",
+    "append/driver.stderr": "3f08abecf6a3fb7914ea9a17763863eb071fbc60c662a4d4a032007c0ea7df28",
+    "append/driver.stdout": "7af7cfe3f8d792fb9cc5c2c3553e165015c32090738068e50be68f2cb54b61d6",
+    "append/receipt.json": "fdf5bc4da08e35a360b8bc8aeec1737cf675a3f8a9d06bcb0d8cf6d45820445b",
+    "append/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "append/verifier.stdout": "f1bad74ac033994a930dfe8930210545c6b0c2d7fd488763ebdfa07e396c610a",
+    "build-verifier.json": "1f29b1a00d679c7428faaa12b5f835ad330e164908a04c09f82405c845781852",
+    "build-verifier.stderr": "765f1396d07f30f3a451cd3f9d9cad4e83c92c8e0aecf955ffc09061a6cf1e02",
+    "build-verifier.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-writer.json": "f7dda212d4b41c701983109bef4084f8cb28c5980f04a32ba1ed7c27a2bd163a",
+    "build-writer.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-writer.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dispersed.tsv": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+    "dispersed/case.before": "e2220ab7a9ddc69c50a0453b0fb5353ba3a2cc08ffd3424ab1085317903b5f2d",
+    "dispersed/case.verify": "1611804a60efe27e1b9fa66f04ac062c838377ccef0a93a36fd3e4481044c8df",
+    "dispersed/driver.stderr": "23a5380a6addf0caca0d424385e4891850361e2fff992b92e80c3acc02c8a74e",
+    "dispersed/driver.stdout": "4cf9de63daf3bc1a9223c5d74055e64a1f5153531c38254f2f0acf8cf4dec7f4",
+    "dispersed/receipt.json": "005ba47a4523aaadb2dc89f76429dd25080f74a28e63ee1c370bac9501aff6ec",
+    "dispersed/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dispersed/verifier.stdout": "25ce4091b88bdc11b538093505f211caed7a058bf487fcfe77b6112da5d8f7e3",
+    "image-build.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "image-build.stdout": "079082df0fde25f0e91f6c9ccc557dac30862b406b01c5c41feb4c8a16cae872",
+    "master/init.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "master/init.stdout": "3c4be187f10867c4c3d1c54f9ad9b883f5f278f4dbd97afb56ce388b28c54f4c",
+    "master/seed.case": "afe775b08bab23996e8ac2c82f57470e244cceb9c41c4a99ebb6fbc389bcac6e",
+    "master/seed.stderr": "22b1ac6deeec6c2a622fbb55217a74b34941faac153c3307dfb0694599bc093d",
+    "master/seed.stdout": "4d66e22feb9bcf4ab86b2031c85a7e1766e0cc8b6912500f2b3e426d0908f87b",
+    "master/verify.case": "47390b665723008cf79f1bbc527090b917667b070a720e0e708817e6443cadbc",
+    "master/verify.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "master/verify.stdout": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "old.tsv": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+    "preparation-fail.json": "a23cbca7bf905e340c669966ca87d0fc4010b6dab141c82b97eb25895c031979",
+    "prepared-public.json": "74ff10579ea78b8dbf9469f1999a2432e64e8655709680b92fd8b61ec929722d",
+    "repeated.tsv": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6",
+    "repeated/case.before": "7f376612b8cb8c0c053516ec4356491f87e71255e6bacdda5347dad4dabc94e1",
+    "repeated/case.verify": "8a54d9ea65553268b696911b3d3e3291a4928913153de503650e1937983cf6f7",
+    "repeated/driver.stderr": "93ee72e8ed53a5c4b8918567d364450d3ecdf6d17cc4042601e8be23d3405d4d",
+    "repeated/driver.stdout": "10ba3fc6a23e4a6cdf734d332864b2e90d1319bb46409a43d3a854b64b2674e7",
+    "repeated/receipt.json": "fcd7018b6019c253a81f15c4a2af216838c11183c0e122f8baad436080b0f8dc",
+    "repeated/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repeated/verifier.stdout": "2aea457b4808c511e3298f3daf3430e66395b3abc86232afb30bb5d2487ba76c"
+  },
+  "ignored_binary_artifacts": {
+    "append": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-append-7361312-01/history.sqlite",
+        "sha256": "d1a4247ebfe056578394f31777e938eb2861e474dbd325fbf43f5328ce322dc4"
+      },
+      "store": {
+        "bytes": 913408,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-append-7361312-01/store.sqlite",
+        "sha256": "c0c258ff8d8da050069b599e6057e00e6b6925fad3ada1560a5787a2fead15ac"
+      }
+    },
+    "dispersed": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-dispersed-7361312-01/history.sqlite",
+        "sha256": "a65353f2456ef131934bf88bb842f5cf598a2b30f2e73eb07029d1b61fc3f2b2"
+      },
+      "store": {
+        "bytes": 917504,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-dispersed-7361312-01/store.sqlite",
+        "sha256": "7f4112fef8c1c282d6f00ee64179d59c154f2e2ee835867312c328c4cbf5e9de"
+      }
+    },
+    "master": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/master/history.sqlite",
+        "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+      },
+      "store": {
+        "bytes": 626688,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/master/store.sqlite",
+        "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+      }
+    },
+    "repeated": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/history.sqlite",
+        "sha256": "c05a7ec7c70db5bb0364eea2fa6c700d1532302eef7714964f41a0f5fec0ee27"
+      },
+      "store": {
+        "bytes": 913408,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/store.sqlite",
+        "sha256": "837b8fe13d570a7a8138ede54ca474ad068a02f5989b9447bb9ff39c204d54cb"
+      }
+    }
+  },
+  "sample_count_per_case": 1,
+  "schema": "issue261-patterns-evidence-v1",
+  "source_commit": "7361312e6936136930584b314717067bcee1d879"
+}

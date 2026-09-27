@@ -2,6 +2,10 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+A later [three-pattern 100-write diagnosis](THREE-PATTERN-DIAGNOSIS.md) compares
+true append, dispersed and repeated edits of one 10 MiB old head. Its distinct
+receipts and source identity do not replace the separated-offset result below.
+
 The change starts at repair commit `6af2c5c59a48d0b6c85d656e55aecc353e346728`
 in its own managed worktree. The primary target was an existing mounted file,
 one shell-launched [generic writer](../../../benchmark/fs-bench-pro/writers/write-separated.c)

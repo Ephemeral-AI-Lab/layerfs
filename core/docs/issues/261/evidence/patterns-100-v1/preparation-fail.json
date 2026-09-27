@@ -1,0 +1,10 @@
+{
+  "raw_output_directory": "benchmark-results/fs-bench-pro/issue261-patterns-prepared-f47f452-01",
+  "reason": "identity product seal included changed verify_shell example; no SDK or daemon production input changed",
+  "resolution_commit": "7361312e6",
+  "sample_count": 0,
+  "schema": "issue261-pattern-preparation-failure-v1",
+  "source_commit": "f47f4525b",
+  "stage": "sealed binary reuse check",
+  "status": "FAIL"
+}
