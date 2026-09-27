@@ -1,0 +1,657 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    25,
+    50,
+    75,
+    100
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 34338875,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 126976,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 572,
+        "ledger_writes": 289,
+        "lookup_scans": 0,
+        "metadata_reads": 138,
+        "payloads": 25,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 25,
+        "routine_scans": 24
+      },
+      "elapsed_ns": 111449876,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 24576,
+        "allocated_pages": 5,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4376
+      },
+      "publication_ns": 48366248,
+      "version": 2,
+      "write_class": 25
+    },
+    {
+      "acquisition_ns": 69889997,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 225280,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 1191,
+        "ledger_writes": 591,
+        "lookup_scans": 0,
+        "metadata_reads": 290,
+        "payloads": 50,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 50,
+        "routine_scans": 49
+      },
+      "elapsed_ns": 194784792,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4376
+      },
+      "publication_ns": 94884034,
+      "version": 2,
+      "write_class": 50
+    },
+    {
+      "acquisition_ns": 116134582,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 352256,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 1950,
+        "ledger_writes": 982,
+        "lookup_scans": 0,
+        "metadata_reads": 466,
+        "payloads": 75,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 75,
+        "routine_scans": 74
+      },
+      "elapsed_ns": 305579667,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 45056,
+        "allocated_pages": 9,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4392
+      },
+      "publication_ns": 158055866,
+      "version": 2,
+      "write_class": 75
+    },
+    {
+      "acquisition_ns": 168041833,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 450560,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 2858,
+        "ledger_writes": 1441,
+        "lookup_scans": 0,
+        "metadata_reads": 675,
+        "payloads": 100,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 100,
+        "routine_scans": 99
+      },
+      "elapsed_ns": 423015959,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 40960,
+        "allocated_pages": 8,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4392
+      },
+      "publication_ns": 222392453,
+      "version": 2,
+      "write_class": 100
+    }
+  ],
+  "balance_spec_sha256": "6cce6cde9a9e2d8b612a4822f368a1f66814e5a6bdaddfd1629f7fb6988a68aa",
+  "binaries": {
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/binary-archive/c001896b60e0965256151ca4ca2aafc5b75064302abc6191c00ddd559dae696d/benchmark_shell",
+      "sha256": "c001896b60e0965256151ca4ca2aafc5b75064302abc6191c00ddd559dae696d"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    }
+  },
+  "build_mode": "locked release host SDK/verifier and aarch64 daemon rebuilt; sealed static writer reused",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/binary-archive/c001896b60e0965256151ca4ca2aafc5b75064302abc6191c00ddd559dae696d/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/case.before",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/history.sqlite",
+    "sha256:445ab307469630c1f850437cf74b42ca4f42b054ff99d8236819ba85d0902382"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 1439295625,
+  "complexity_lines": [
+    "LFS_C1_EDIT_LOAD v=1 nodes_read=2028 stored_nodes_read=2 draft_nodes_read=2026",
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=100 spool_resident=true nodes_read=2028 nodes_created=7 payloads_created=100 payload_bytes=2200 peak_deferred_bytes=23152",
+    "LFS_FILE_INPUT v=1 edits=100 spool_resident=true record_lookups=303 record_reads=303 replacement_reads=101 replacement_bytes_read=101",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=0 branch_visits=0 leaf_visit_records=0 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=5 branch_write_children=0 leaf_min=5 leaf_max=5 child_edges_added=0 custody_edges_added=2",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=5 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=7 branch_write_children=0 leaf_min=7 leaf_max=7 child_edges_added=0 custody_edges_added=3",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=7 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=9 branch_write_children=0 leaf_min=9 leaf_max=9 child_edges_added=0 custody_edges_added=4",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=9 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=11 branch_write_children=0 leaf_min=11 leaf_max=11 child_edges_added=0 custody_edges_added=5",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=11 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=13 branch_write_children=0 leaf_min=13 leaf_max=13 child_edges_added=0 custody_edges_added=6",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=13 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=15 branch_write_children=0 leaf_min=15 leaf_max=15 child_edges_added=0 custody_edges_added=7",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=15 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=17 branch_write_children=0 leaf_min=17 leaf_max=17 child_edges_added=0 custody_edges_added=8",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=17 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=19 branch_write_children=0 leaf_min=19 leaf_max=19 child_edges_added=0 custody_edges_added=9",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=19 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=21 branch_write_children=0 leaf_min=21 leaf_max=21 child_edges_added=0 custody_edges_added=10",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=21 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=23 branch_write_children=0 leaf_min=23 leaf_max=23 child_edges_added=0 custody_edges_added=11",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=23 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=25 branch_write_children=0 leaf_min=25 leaf_max=25 child_edges_added=0 custody_edges_added=12",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=25 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=27 branch_write_children=0 leaf_min=27 leaf_max=27 child_edges_added=0 custody_edges_added=13",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=27 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=29 branch_write_children=0 leaf_min=29 leaf_max=29 child_edges_added=0 custody_edges_added=14",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=29 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=31 branch_write_children=0 leaf_min=31 leaf_max=31 child_edges_added=0 custody_edges_added=15",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=31 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=33 branch_write_children=0 leaf_min=33 leaf_max=33 child_edges_added=0 custody_edges_added=16",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=33 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=35 branch_write_children=0 leaf_min=35 leaf_max=35 child_edges_added=0 custody_edges_added=17",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=35 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=37 branch_write_children=0 leaf_min=37 leaf_max=37 child_edges_added=0 custody_edges_added=18",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=37 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=39 branch_write_children=0 leaf_min=39 leaf_max=39 child_edges_added=0 custody_edges_added=19",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=39 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=41 branch_write_children=0 leaf_min=41 leaf_max=41 child_edges_added=0 custody_edges_added=20",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=41 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=43 branch_write_children=0 leaf_min=43 leaf_max=43 child_edges_added=0 custody_edges_added=21",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=43 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=45 branch_write_children=0 leaf_min=45 leaf_max=45 child_edges_added=0 custody_edges_added=22",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=45 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=47 branch_write_children=0 leaf_min=47 leaf_max=47 child_edges_added=0 custody_edges_added=23",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=47 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=49 branch_write_children=0 leaf_min=49 leaf_max=49 child_edges_added=0 custody_edges_added=24",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=49 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=51 branch_write_children=0 leaf_min=51 leaf_max=51 child_edges_added=0 custody_edges_added=25",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=133",
+    "LFS_METADATA_OWNER v=1 finalizations=50",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=51 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=53 branch_write_children=0 leaf_min=53 leaf_max=53 child_edges_added=0 custody_edges_added=26",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=53 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=55 branch_write_children=0 leaf_min=55 leaf_max=55 child_edges_added=0 custody_edges_added=27",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=55 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=57 branch_write_children=0 leaf_min=57 leaf_max=57 child_edges_added=0 custody_edges_added=28",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=57 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=59 branch_write_children=0 leaf_min=59 leaf_max=59 child_edges_added=0 custody_edges_added=29",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=59 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=61 branch_write_children=0 leaf_min=61 leaf_max=61 child_edges_added=0 custody_edges_added=30",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=61 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=63 branch_write_children=0 leaf_min=63 leaf_max=63 child_edges_added=0 custody_edges_added=31",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=63 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=65 branch_write_children=0 leaf_min=65 leaf_max=65 child_edges_added=0 custody_edges_added=32",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=65 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=67 branch_write_children=0 leaf_min=67 leaf_max=67 child_edges_added=0 custody_edges_added=33",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=67 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=69 branch_write_children=0 leaf_min=69 leaf_max=69 child_edges_added=0 custody_edges_added=34",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=69 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=71 branch_write_children=0 leaf_min=71 leaf_max=71 child_edges_added=0 custody_edges_added=35",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=71 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=73 branch_write_children=0 leaf_min=73 leaf_max=73 child_edges_added=0 custody_edges_added=36",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=73 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=75 branch_write_children=0 leaf_min=75 leaf_max=75 child_edges_added=0 custody_edges_added=37",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=75 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=77 branch_write_children=0 leaf_min=77 leaf_max=77 child_edges_added=0 custody_edges_added=38",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=77 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=79 branch_write_children=0 leaf_min=79 leaf_max=79 child_edges_added=0 custody_edges_added=39",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=79 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=81 branch_write_children=0 leaf_min=81 leaf_max=81 child_edges_added=0 custody_edges_added=40",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=81 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=83 branch_write_children=0 leaf_min=83 leaf_max=83 child_edges_added=0 custody_edges_added=41",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=83 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=85 branch_write_children=0 leaf_min=85 leaf_max=85 child_edges_added=0 custody_edges_added=42",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=85 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=87 branch_write_children=0 leaf_min=87 leaf_max=87 child_edges_added=0 custody_edges_added=43",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=87 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=89 branch_write_children=0 leaf_min=89 leaf_max=89 child_edges_added=0 custody_edges_added=44",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=89 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=91 branch_write_children=0 leaf_min=91 leaf_max=91 child_edges_added=0 custody_edges_added=45",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=91 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=93 branch_write_children=0 leaf_min=93 leaf_max=93 child_edges_added=0 custody_edges_added=46",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=93 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=95 branch_write_children=0 leaf_min=95 leaf_max=95 child_edges_added=0 custody_edges_added=47",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=95 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=97 branch_write_children=0 leaf_min=97 leaf_max=97 child_edges_added=0 custody_edges_added=48",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=97 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=99 branch_write_children=0 leaf_min=99 leaf_max=99 child_edges_added=0 custody_edges_added=49",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=99 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=101 branch_write_children=0 leaf_min=101 leaf_max=101 child_edges_added=0 custody_edges_added=50",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=601",
+    "LFS_METADATA_OWNER v=1 finalizations=100",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=101 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=103 branch_write_children=0 leaf_min=103 leaf_max=103 child_edges_added=0 custody_edges_added=51",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=103 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=105 branch_write_children=0 leaf_min=105 leaf_max=105 child_edges_added=0 custody_edges_added=52",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=105 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=107 branch_write_children=0 leaf_min=107 leaf_max=107 child_edges_added=0 custody_edges_added=53",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=107 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=109 branch_write_children=0 leaf_min=109 leaf_max=109 child_edges_added=0 custody_edges_added=54",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=109 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=111 branch_write_children=0 leaf_min=111 leaf_max=111 child_edges_added=0 custody_edges_added=55",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=111 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=113 branch_write_children=0 leaf_min=113 leaf_max=113 child_edges_added=0 custody_edges_added=56",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=113 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=115 branch_write_children=0 leaf_min=115 leaf_max=115 child_edges_added=0 custody_edges_added=57",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=115 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=117 branch_write_children=0 leaf_min=117 leaf_max=117 child_edges_added=0 custody_edges_added=58",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=117 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=119 branch_write_children=0 leaf_min=119 leaf_max=119 child_edges_added=0 custody_edges_added=59",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=119 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=121 branch_write_children=0 leaf_min=121 leaf_max=121 child_edges_added=0 custody_edges_added=60",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=121 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=123 branch_write_children=0 leaf_min=123 leaf_max=123 child_edges_added=0 custody_edges_added=61",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=0 leaf_visit_records=123 branch_visit_children=0 leaf_writes=2 branch_writes=1 leaf_write_records=125 branch_write_children=2 leaf_min=62 leaf_max=63 child_edges_added=2 custody_edges_added=62",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=63 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=65 branch_write_children=2 leaf_min=65 leaf_max=65 child_edges_added=2 custody_edges_added=32",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=65 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=67 branch_write_children=2 leaf_min=67 leaf_max=67 child_edges_added=2 custody_edges_added=33",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=67 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=69 branch_write_children=2 leaf_min=69 leaf_max=69 child_edges_added=2 custody_edges_added=34",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=62 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=64 branch_write_children=2 leaf_min=64 leaf_max=64 child_edges_added=2 custody_edges_added=32",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=64 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=66 branch_write_children=2 leaf_min=66 leaf_max=66 child_edges_added=2 custody_edges_added=33",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=66 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=68 branch_write_children=2 leaf_min=68 leaf_max=68 child_edges_added=2 custody_edges_added=34",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=68 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=70 branch_write_children=2 leaf_min=70 leaf_max=70 child_edges_added=2 custody_edges_added=35",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=69 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=71 branch_write_children=2 leaf_min=71 leaf_max=71 child_edges_added=2 custody_edges_added=35",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=71 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=73 branch_write_children=2 leaf_min=73 leaf_max=73 child_edges_added=2 custody_edges_added=36",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=73 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=75 branch_write_children=2 leaf_min=75 leaf_max=75 child_edges_added=2 custody_edges_added=37",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=70 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=72 branch_write_children=2 leaf_min=72 leaf_max=72 child_edges_added=2 custody_edges_added=36",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=72 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=74 branch_write_children=2 leaf_min=74 leaf_max=74 child_edges_added=2 custody_edges_added=37",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=74 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=76 branch_write_children=2 leaf_min=76 leaf_max=76 child_edges_added=2 custody_edges_added=38",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=24 custody_edges_removed=1129",
+    "LFS_METADATA_OWNER v=1 finalizations=165",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=75 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=77 branch_write_children=2 leaf_min=77 leaf_max=77 child_edges_added=2 custody_edges_added=38",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=77 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=79 branch_write_children=2 leaf_min=79 leaf_max=79 child_edges_added=2 custody_edges_added=39",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=79 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=81 branch_write_children=2 leaf_min=81 leaf_max=81 child_edges_added=2 custody_edges_added=40",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=81 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=83 branch_write_children=2 leaf_min=83 leaf_max=83 child_edges_added=2 custody_edges_added=41",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=76 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=78 branch_write_children=2 leaf_min=78 leaf_max=78 child_edges_added=2 custody_edges_added=39",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=78 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=80 branch_write_children=2 leaf_min=80 leaf_max=80 child_edges_added=2 custody_edges_added=40",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=80 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=82 branch_write_children=2 leaf_min=82 leaf_max=82 child_edges_added=2 custody_edges_added=41",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=83 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=85 branch_write_children=2 leaf_min=85 leaf_max=85 child_edges_added=2 custody_edges_added=42",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=85 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=87 branch_write_children=2 leaf_min=87 leaf_max=87 child_edges_added=2 custody_edges_added=43",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=87 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=89 branch_write_children=2 leaf_min=89 leaf_max=89 child_edges_added=2 custody_edges_added=44",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=89 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=91 branch_write_children=2 leaf_min=91 leaf_max=91 child_edges_added=2 custody_edges_added=45",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=82 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=84 branch_write_children=2 leaf_min=84 leaf_max=84 child_edges_added=2 custody_edges_added=42",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=84 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=86 branch_write_children=2 leaf_min=86 leaf_max=86 child_edges_added=2 custody_edges_added=43",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=86 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=88 branch_write_children=2 leaf_min=88 leaf_max=88 child_edges_added=2 custody_edges_added=44",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=91 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=93 branch_write_children=2 leaf_min=93 leaf_max=93 child_edges_added=2 custody_edges_added=46",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=93 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=95 branch_write_children=2 leaf_min=95 leaf_max=95 child_edges_added=2 custody_edges_added=47",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=95 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=97 branch_write_children=2 leaf_min=97 leaf_max=97 child_edges_added=2 custody_edges_added=48",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=88 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=90 branch_write_children=2 leaf_min=90 leaf_max=90 child_edges_added=2 custody_edges_added=45",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=90 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=92 branch_write_children=2 leaf_min=92 leaf_max=92 child_edges_added=2 custody_edges_added=46",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=92 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=94 branch_write_children=2 leaf_min=94 leaf_max=94 child_edges_added=2 custody_edges_added=47",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=94 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=96 branch_write_children=2 leaf_min=96 leaf_max=96 child_edges_added=2 custody_edges_added=48",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=97 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=99 branch_write_children=2 leaf_min=99 leaf_max=99 child_edges_added=2 custody_edges_added=49",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=99 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=101 branch_write_children=2 leaf_min=101 leaf_max=101 child_edges_added=2 custody_edges_added=50",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=101 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=103 branch_write_children=2 leaf_min=103 leaf_max=103 child_edges_added=2 custody_edges_added=51",
+    "LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 leaf_visit_records=96 branch_visit_children=2 leaf_writes=1 branch_writes=1 leaf_write_records=98 branch_write_children=2 leaf_min=98 leaf_max=98 child_edges_added=2 custody_edges_added=49",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=74 custody_edges_removed=1682",
+    "LFS_METADATA_OWNER v=1 finalizations=240",
+    "LFS_PIECE_LOWER v=2 pieces=201 changes=100"
+  ],
+  "daemon_sha256": "f8de1c4f9979373d48703f5aeb3547a96c52efcf3d1d20e430545bfade69616e",
+  "dependency_reuse": {
+    "master": "closed Store/history copied into this worktree, exact byte identity and rebuilt-verifier proof",
+    "prior_prepared": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-merged-patterns-prepared-v1/prepared.json",
+    "prior_source_commit": "95d28d0590e70d763b5ad2e8dc3a52fe7bb55eb4",
+    "reviewed_core_changes": [
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/cursor.rs",
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/pack.rs",
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs",
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/telemetry.rs",
+      "core/crates/layerfs-workspace/src/backing/metadata.rs",
+      "core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs",
+      "core/crates/layerfs-workspace/src/backing/ownership.rs",
+      "core/crates/layerfs-workspace/src/backing/ownership/sponsored.rs",
+      "core/crates/layerfs-workspace/tests/owner_finalization.rs",
+      "core/crates/layerfs-workspace/tests/pieces_sequence.rs"
+    ],
+    "writer": "source and binary SHA-256 matched"
+  },
+  "dockerfile_sha256": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+  "driver": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "cleanup_ns": 573015750,
+    "commit_called": true,
+    "commit_ns": 38172083,
+    "consumer_accounted_bytes": 1748208,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 40857,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 412543167,
+    "exec_stderr_hex": "",
+    "exec_stdout_hex": "50524f47524553530932350938343035363538340a50524f4752455353093530093136373339303935390a50524f4752455353093735093237383137373739320a50524f475245535309313030093339353632333230390a",
+    "head_commit": "12d268c96b4378e7bbffae6b58f28a735a7e09edacfe72d0c25375e10d336b3904",
+    "mode": "run",
+    "mount_ns": 19345375,
+    "operation_ns": 450728250,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=100,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue265-dispersed-100-10m-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+  "extent_diagnostics": {
+    "c1_edit": [
+      {
+        "draft_nodes_read": 2026,
+        "nodes_read": 2028,
+        "stored_nodes_read": 2,
+        "v": 1
+      }
+    ],
+    "file_input": [
+      {
+        "edits": 100,
+        "record_lookups": 303,
+        "record_reads": 303,
+        "replacement_bytes_read": 101,
+        "replacement_reads": 101,
+        "spool_resident": "true",
+        "v": 1
+      }
+    ],
+    "leaf_max": 123,
+    "leaf_min": 3,
+    "root_height": 1,
+    "snapshots": [
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 133,
+          "v": 1
+        },
+        "leaf_max": 51,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 50,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 25,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 325,
+          "leaf_visit_records": 624,
+          "leaf_visits": 24,
+          "leaf_write_records": 675,
+          "leaf_writes": 25
+        },
+        "writes": 25
+      },
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 601,
+          "v": 1
+        },
+        "leaf_max": 101,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 100,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 50,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 1275,
+          "leaf_visit_records": 2499,
+          "leaf_visits": 49,
+          "leaf_write_records": 2600,
+          "leaf_writes": 50
+        },
+        "writes": 50
+      },
+      {
+        "edge": {
+          "child_edges_removed": 24,
+          "custody_edges_removed": 1129,
+          "v": 1
+        },
+        "leaf_max": 123,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 165,
+          "v": 1
+        },
+        "root_height": 1,
+        "splices": 75,
+        "totals": {
+          "branch_visit_children": 26,
+          "branch_visits": 13,
+          "branch_write_children": 28,
+          "branch_writes": 14,
+          "child_edges_added": 28,
+          "custody_edges_added": 2405,
+          "leaf_visit_records": 4727,
+          "leaf_visits": 74,
+          "leaf_write_records": 4878,
+          "leaf_writes": 76
+        },
+        "writes": 75
+      },
+      {
+        "edge": {
+          "child_edges_removed": 74,
+          "custody_edges_removed": 1682,
+          "v": 1
+        },
+        "leaf_max": 123,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 240,
+          "v": 1
+        },
+        "root_height": 1,
+        "splices": 100,
+        "totals": {
+          "branch_visit_children": 76,
+          "branch_visits": 38,
+          "branch_write_children": 78,
+          "branch_writes": 39,
+          "child_edges_added": 78,
+          "custody_edges_added": 3512,
+          "leaf_visit_records": 6905,
+          "leaf_visits": 99,
+          "leaf_write_records": 7106,
+          "leaf_writes": 101
+        },
+        "writes": 100
+      }
+    ],
+    "splices": 100,
+    "totals": {
+      "branch_visit_children": 76,
+      "branch_visits": 38,
+      "branch_write_children": 78,
+      "branch_writes": 39,
+      "child_edges_added": 78,
+      "custody_edges_added": 3512,
+      "leaf_visit_records": 6905,
+      "leaf_visits": 99,
+      "leaf_write_records": 7106,
+      "leaf_writes": 101
+    }
+  },
+  "extent_diagnostics_complete": true,
+  "extent_diagnostics_error": null,
+  "family_id": "workspace_mounted_write_patterns",
+  "fixture_sha256": "eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472",
+  "functional_status": "PASS",
+  "fuse_write_callbacks_observed": 100,
+  "fuse_write_count_provenance": "Status write class; only data writes in shell command",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:445ab307469630c1f850437cf74b42ca4f42b054ff99d8236819ba85d0902382",
+  "lft1": {
+    "event_count": 37,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 768204667,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        12113000,
+        12609000
+      ],
+      "first_ns": 314841792,
+      "gaps": 0,
+      "incarnation": 5049902569285,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 13658458,
+      "last_ns": 762209250,
+      "last_probe_ns": 11666,
+      "namespace": 7,
+      "opened_ns": 317477958,
+      "pid": 60218,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "8e8588b8b0d603aa764361228e9475a9",
+      "sampled_max_rss": 33325056,
+      "samples": 46,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 412543750,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 38172209,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 450724958,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+    "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+    "genesis_root_serial": 1,
+    "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+    "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+    "path": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/master",
+    "project_id": "31bf50228be038338dd77c4822bf4f886d",
+    "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+  },
+  "old_manifest_sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+  "one_read_spec_sha256": "3f5f0bce30d91a3df16ce066099521241fd21e7e74bef0bb2df3f5778c7d5990",
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "owner_spec_sha256": "0f9c03572a752b05f30e5eec50771e4b07552f1efcb09fcfa7508c9aa7163247",
+  "payload_write_bytes_source_prediction": 409600,
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "100"
+  },
+  "retained_payload_allocated_bytes": [
+    102400,
+    204800,
+    307200,
+    409600
+  ],
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "issue265-dispersed-100-10m-v1",
+  "schema": "issue265-patterns-attempt-v1",
+  "selection": "dispersed",
+  "shell_command": "/fixtures/bin/write-separated dispersed data.bin 100",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "23b87e525c9614bbbf9bbde5946c09584af5594a55c7b9fc8bd5873459ce0770",
+    "product_seal": "f811ee439d6f66a3738456445dc7279510884ae3a079bcd4b417c865c65cf4ba",
+    "source_commit": "fd407a0370828efac4a3e44a4edff5b1704cf77b",
+    "source_dirty": false,
+    "source_tree": "1858d0e1495ea59a9d291407ea74b6348860e8e3"
+  },
+  "spec_sha256": "f99e51430d0a16c7e246b236152aec73a54c66b83e72805794cadd33f12868e7",
+  "sponsor_spec_sha256": "13ed3ad83f04af86997a1597ab43c8fce1ef35f64656daae66ddf4f5ee0025f1",
+  "store_bytes_after": 917504,
+  "store_bytes_before": 626688,
+  "treatment_spec_sha256": "761029da660a5d41c1ccc1c6aa588875137f4af1354a0d74562083e7f9103dc2",
+  "verifier": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/case.verify",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-pattern-dispersed-v1/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/old.tsv",
+      "benchmark-results/fs-bench-pro/issue271/one-read-patterns-prepared-v1/dispersed.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 100978000
+  },
+  "write_syscalls_expected": 100,
+  "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3",
+  "writer_progress": [
+    {
+      "writer_elapsed_ns": 84056584,
+      "writes": 25
+    },
+    {
+      "writer_elapsed_ns": 167390959,
+      "writes": 50
+    },
+    {
+      "writer_elapsed_ns": 278177792,
+      "writes": 75
+    },
+    {
+      "writer_elapsed_ns": 395623209,
+      "writes": 100
+    }
+  ],
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

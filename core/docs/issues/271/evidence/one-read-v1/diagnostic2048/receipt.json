@@ -1,0 +1,285 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    512,
+    1024,
+    1536,
+    2048
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 1190294035,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 2252800,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 20573,
+        "ledger_writes": 10988,
+        "lookup_scans": 0,
+        "metadata_reads": 4761,
+        "payloads": 512,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 512,
+        "routine_scans": 511
+      },
+      "elapsed_ns": 2692283043,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 155648,
+        "allocated_pages": 29,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 1,
+        "roots": 2,
+        "working_bytes": 4616
+      },
+      "publication_ns": 1454121622,
+      "version": 2,
+      "write_class": 512
+    },
+    {
+      "acquisition_ns": 2529240375,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 4485120,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 46724,
+        "ledger_writes": 26916,
+        "lookup_scans": 0,
+        "metadata_reads": 9889,
+        "payloads": 1024,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 1024,
+        "routine_scans": 1023
+      },
+      "elapsed_ns": 5618505002,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 290816,
+        "allocated_pages": 53,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 1,
+        "roots": 2,
+        "working_bytes": 4872
+      },
+      "publication_ns": 3026160747,
+      "version": 2,
+      "write_class": 1024
+    },
+    {
+      "acquisition_ns": 4126481092,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 6729728,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 79051,
+        "ledger_writes": 46494,
+        "lookup_scans": 0,
+        "metadata_reads": 16056,
+        "payloads": 1536,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 1536,
+        "routine_scans": 1535
+      },
+      "elapsed_ns": 9203846171,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 438272,
+        "allocated_pages": 80,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 1,
+        "roots": 2,
+        "working_bytes": 4872
+      },
+      "publication_ns": 4997118217,
+      "version": 2,
+      "write_class": 1536
+    }
+  ],
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "FAIL",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-2048-v1/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-2048-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-2048-v1/case.before",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-2048-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/one-read-2048-v1/history.sqlite",
+    "sha256:0a60b6c9419e310b72aa766949ee9a074854dc5433a82b52d664ae5a903a2ebd"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 15004926875,
+  "complexity_lines": [
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=2048 spool_resident=true nodes_read=0 nodes_created=0 payloads_created=0 payload_bytes=0 peak_deferred_bytes=0"
+  ],
+  "daemon_close_observed": false,
+  "daemon_retained_observed": false,
+  "daemon_sha256": "f8de1c4f9979373d48703f5aeb3547a96c52efcf3d1d20e430545bfade69616e",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d",
+      "benchmark_shell": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be",
+      "verify_shell": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    },
+    "compatible_product_changes": [],
+    "master_proof_sha256": "890125a3225f1aebd174e149c921480a6c6d6700d06754e1f20038dfb6465764",
+    "prepared": "benchmark-results/fs-bench-pro/issue271/one-read-512-prepared-v1/prepared.json"
+  },
+  "dockerfile_sha256": "da08b0c52ba367e91aea83666e3a7f6f3747ed54876b3330d97b4c39b06bb794",
+  "driver": null,
+  "driver_binary_sha256": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be",
+  "driver_exit_code": null,
+  "driver_timeout": true,
+  "expected_manifest_sha256": "a0a8da154fe7479e43cf013e724ee211bc96d70cf01f283fd21517afa2f3b208",
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "family_id": "workspace_mounted_separated_writes",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "functional_status": "FAIL",
+  "fuse_write_callbacks_observed": null,
+  "fuse_write_count_provenance": "Status write class; this command makes only data mutations",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:0a60b6c9419e310b72aa766949ee9a074854dc5433a82b52d664ae5a903a2ebd",
+  "images": {
+    "diagnostic": "sha256:9730e7f6001d26f55432de237f14f377273cfa38718dc787474275540912a1cd",
+    "diagnostic100v2": "sha256:c4069180a000d3d7abbe0c02e496559bdf546919bbc91219efbf327c95e2d1b8",
+    "diagnostic100v3": "sha256:450d3ef5c90cd694d17e49e48cbdc33cbce72fa70d1ae22b073b2bb23219233e",
+    "diagnostic1024": "sha256:b0726ab964cde218f0892eba4a08ac3b9f8ff5874c22a55563e8769f6d236086",
+    "diagnostic2048": "sha256:0a60b6c9419e310b72aa766949ee9a074854dc5433a82b52d664ae5a903a2ebd",
+    "diagnostic512": "sha256:65191cdf60f89cfaaac334c1912f6efdfc9b69921a99d32240602541c083a2a6",
+    "fuse512": "sha256:1d5271d047b8787719037652dbb107128f9b933471e914f8cf5fc4b25205e453",
+    "gate": "sha256:f07ac132d39f20ad6ec04eff36f26ba62874f141029a9aac1045759f0f1e8643"
+  },
+  "issue266_1024_spec_sha256": "980f0a9336becb26126fd39df0e1de1dedec978fb1b36de23b0f3b1de08ce867",
+  "issue266_post_spec_sha256": "e561f8e02d2058ece02807f559b68c8919fa9d4c4641894463a9bb6f03bd2eed",
+  "issue266_spec_sha256": "8ccdd919b892bbb27267bd4afda3e724423356bbdb8e00098a99753fec9488f5",
+  "issue266_wait_spec_sha256": "5aa09a37a49416c585ee7e0304699f40eaf42d4ab48df37a69a90694baaf2866",
+  "issue271_2048_spec_sha256": "e0073421409fdfd1871746c1d3d5e183a6917769254591744ee11f8023dd11c1",
+  "issue271_one_read_spec_sha256": "3f5f0bce30d91a3df16ce066099521241fd21e7e74bef0bb2df3f5778c7d5990",
+  "issue271_sponsor_spec_sha256": "13ed3ad83f04af86997a1597ab43c8fce1ef35f64656daae66ddf4f5ee0025f1",
+  "lft1": {
+    "event_count": 48,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 13546720917,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        25354000,
+        83262000
+      ],
+      "first_ns": 272221958,
+      "gaps": 0,
+      "incarnation": 5056301438125,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 14978375,
+      "last_ns": 13542404875,
+      "last_probe_ns": 14291,
+      "namespace": 7,
+      "opened_ns": 282545208,
+      "pid": 60896,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "16285df5ca17b0ae9f377544f622098f",
+      "sampled_max_rss": 33751040,
+      "samples": 1328,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 13021102333,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 243059958,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 13264174000,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "32d0a789bac2f4b875d616012c0a003a2aca2eeaead8717cfa7332cd433321a348",
+    "genesis_root": "a1a41401f8d9d5de6e5cabd3d8f49f68d30549e1288c9dd278c91da413f56b58",
+    "genesis_root_serial": 1,
+    "history_sha256": "96275c90cb7ee51074cb456dbf1f29f164442df1b1f5e7ea200c58449d52b038",
+    "old_commit": "12ef44464e764a34399e5be721a9d14ab714813471949c06bf20413d2ca6f9a098",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/master",
+    "project_id": "3139aa4755cbda68b7890b9e8f483309f2",
+    "store_sha256": "ce49eb722338ea58f2cb397128e69fee5c4c0abf05821e2b4a959101257cc683"
+  },
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "projection_counts": {},
+  "row_status": "FAIL",
+  "sample_count": 1,
+  "scenario_id": "issue271-separated-2048-v1",
+  "schema": "issue261-separated-attempt-v1",
+  "selection": "diagnostic2048",
+  "shell_command": "/fixtures/bin/write-separated data.bin 2048",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "23b87e525c9614bbbf9bbde5946c09584af5594a55c7b9fc8bd5873459ce0770",
+    "product_seal": "f811ee439d6f66a3738456445dc7279510884ae3a079bcd4b417c865c65cf4ba",
+    "source_commit": "fd407a0370828efac4a3e44a4edff5b1704cf77b",
+    "source_dirty": false,
+    "source_tree": "1858d0e1495ea59a9d291407ea74b6348860e8e3"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "store_bytes_after": 897024,
+  "store_bytes_before": 618496,
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "verifier": {
+    "status": "NOT_RUN"
+  },
+  "verifier_binary_sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b",
+  "write_refusals": [],
+  "write_syscalls_expected": 2048,
+  "writer_binary_sha256": "0133f1f93f233540a0913fc56dac69af8f90ccac7a674f340561dc2069640083",
+  "writer_progress": null,
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}
