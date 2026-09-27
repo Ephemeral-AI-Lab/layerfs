@@ -1,7 +1,7 @@
 //! Explicit metadata reclamation with retained progress across known failures.
 use super::{
     directory::identity,
-    metadata::{Arena, MetadataHost, RootOwner},
+    metadata::{Arena, MetadataHost, RootOwner, CLEANUP_FRAMES},
     metadata_pages::{self, PageRef, PAGE},
     ownership::{page_name, CleanupFrame},
     payload::clock,
@@ -112,7 +112,7 @@ impl RootOwner {
                         frame.phase = 1;
                     }
                     if let Some(r) = released {
-                        if s.cleanup.len() == 12 {
+                        if s.cleanup.len() == CLEANUP_FRAMES {
                             return Err(WorkspaceError::Capacity);
                         }
                         s.cleanup.push(CleanupFrame {

@@ -27,6 +27,7 @@ SPEC_266_1024 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-sp
 SPEC_271_2048 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-2048-diagnostic-spec.md"
 SPEC_271_SPONSOR = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md"
 SPEC_271_ONE_READ = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md"
+SPEC_271_FOUR_HOP = ROOT / "docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
@@ -185,6 +186,7 @@ def prepare(output):
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
         "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
+        "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -334,6 +336,7 @@ def prepare_reuse(output, previous_file, selection):
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
         "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
+        "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -418,6 +421,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue271 sponsorship specification changed")
     if digest(SPEC_271_ONE_READ) != prepared.get("issue271_one_read_spec_sha256"):
         raise ValueError("issue271 sponsor one-read specification changed")
+    if digest(SPEC_271_FOUR_HOP) != prepared.get("issue271_four_hop_spec_sha256"):
+        raise ValueError("issue271 four-hop specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -523,6 +528,7 @@ def run(prepared_file, output, selection):
         "issue271_2048_spec_sha256": prepared.get("issue271_2048_spec_sha256"),
         "issue271_sponsor_spec_sha256": prepared.get("issue271_sponsor_spec_sha256"),
         "issue271_one_read_spec_sha256": prepared.get("issue271_one_read_spec_sha256"),
+        "issue271_four_hop_spec_sha256": prepared.get("issue271_four_hop_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],

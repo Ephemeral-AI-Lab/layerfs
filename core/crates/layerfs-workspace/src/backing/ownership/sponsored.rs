@@ -1,6 +1,7 @@
 //! Bounded old-page sponsorship for copied extent pages.
 use super::*;
 use crate::backing::metadata_index;
+const MAX_SPONSOR_DEPTH: u64 = 4;
 
 impl Arena {
     /// The sponsor keeps matching edges alive; this page owns only its new
@@ -78,6 +79,7 @@ impl RootOwner {
         let mut edges =
             metadata_index::edges_raw(self.arena.directory.incarnation, r, &window.0[..PAGE])?;
         let mut sponsor = PageRef::NULL;
+        let mut depth = 0;
         if proposed_sponsor != PageRef::NULL && edges.len() >= 4 {
             let mut encoded = [0u8; PAGE];
             encoded.copy_from_slice(&window.0[..PAGE]);
@@ -85,7 +87,10 @@ impl RootOwner {
             if old.role != 1 || old.refs == 0 || !old.edges {
                 return Err(WorkspaceError::Io);
             }
-            if old.next == PageRef::NULL {
+            if old.next == PageRef::NULL && old.length != 0 {
+                return Err(WorkspaceError::Io);
+            }
+            if old.length < MAX_SPONSOR_DEPTH && (old.next == PageRef::NULL || old.length != 0) {
                 let reduced = self.arena.sponsored_edges(
                     r,
                     &encoded,
@@ -97,6 +102,7 @@ impl RootOwner {
                 if reduced.len() < edges.len() {
                     edges = reduced;
                     sponsor = proposed_sponsor;
+                    depth = old.length + 1;
                 }
             }
             window.0[..PAGE].copy_from_slice(&encoded);
@@ -115,6 +121,7 @@ impl RootOwner {
                 refs: 1,
                 edges: true,
                 next: sponsor,
+                length: depth,
                 device: identity.0,
                 inode: identity.1,
                 ..Owner::default()

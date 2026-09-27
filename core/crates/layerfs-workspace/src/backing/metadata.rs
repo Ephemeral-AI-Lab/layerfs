@@ -23,6 +23,10 @@ const RETAINED: usize = 128 * 1024;
 /// Not part of the public API.
 pub type MetadataCharge = (Charge, Charge);
 pub const MAX_ROOTS: usize = 32;
+// Eight keyed levels, four sponsored pages at each of eight extent levels,
+// plus a custody/terminal frame: bounded independent of edit count.
+pub const CLEANUP_FRAMES: usize = (super::metadata_pages::LEVEL_LIMIT as usize + 1) * 5 + 2;
+const ROOT_OVERHEAD: usize = 384 + (CLEANUP_FRAMES - 12) * size_of::<CleanupFrame>();
 pub struct MetadataHost {
     pub payloads: Arc<PayloadHost>,
     pub gate: AtomicBool,
@@ -329,17 +333,18 @@ impl MetadataHost {
             return Err(WorkspaceError::Capacity);
         }
         grow(&mut roots, self, &self.root_charge, MAX_ROOTS)?;
-        let mut charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+        let mut charge =
+            self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + ROOT_OVERHEAD)?;
         let mut temporary = Vec::new();
         temporary
             .try_reserve_exact(128)
             .map_err(|_| WorkspaceError::Capacity)?;
         resize_memory(
             &mut charge,
-            size_of::<RootOwner>() + temporary.capacity() * size_of::<PageRef>() + 384,
+            size_of::<RootOwner>() + temporary.capacity() * size_of::<PageRef>() + ROOT_OVERHEAD,
         )?;
         let custodies = super::metadata_index::vector(1)?;
-        let cleanup = super::metadata_index::vector(12)?;
+        let cleanup = super::metadata_index::vector(CLEANUP_FRAMES)?;
         let a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
         if a.blocked {
             return Err(WorkspaceError::Busy);
@@ -377,7 +382,8 @@ impl MetadataHost {
         fund: Option<&Arc<ProgressFund>>,
         allowance: u64,
     ) -> Result<Arc<RootOwner>, WorkspaceError> {
-        let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+        let charge =
+            self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + ROOT_OVERHEAD)?;
         Ok(Arc::new(RootOwner {
             arena: arena.clone(),
             parent: None,
@@ -394,7 +400,7 @@ impl MetadataHost {
                 completion_generation: None,
                 pending: None,
                 custodies: super::metadata_index::vector(1)?,
-                cleanup: super::metadata_index::vector(12)?,
+                cleanup: super::metadata_index::vector(CLEANUP_FRAMES)?,
                 cleanup_failed: false,
             }),
             _charge: charge,
@@ -858,7 +864,7 @@ impl RootOwner {
                 // this way could never close clean.
                 if self.arena.change_refs(page, -1, window, deadline)? == 0 {
                     let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                    if state.cleanup.len() == 12 {
+                    if state.cleanup.len() == CLEANUP_FRAMES {
                         return Err(WorkspaceError::Capacity);
                     }
                     state.cleanup.push(CleanupFrame {
@@ -886,7 +892,7 @@ impl RootOwner {
             let Some(page) = page else { break };
             if self.arena.change_refs(page, -1, window, deadline)? == 0 {
                 let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                if state.cleanup.len() == 12 {
+                if state.cleanup.len() == CLEANUP_FRAMES {
                     return Err(WorkspaceError::Capacity);
                 }
                 state.cleanup.push(CleanupFrame {

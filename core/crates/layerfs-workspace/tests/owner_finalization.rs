@@ -198,12 +198,13 @@ fn first_owner_write_covers_keyed_extent_and_shared_custody() {
     );
 
     let copy = |owner: &std::sync::Arc<layerfs_workspace::sequence::RootOwner>,
+                previous: PageRef,
                 window: &mut layerfs_workspace::sequence::Window| {
         let mut replacement = Replacement::new();
         replacement.extend(piece);
         metadata_pieces::replace(
             owner.as_ref(),
-            g1_page,
+            previous,
             Splice {
                 start: 0,
                 end: 1,
@@ -218,7 +219,7 @@ fn first_owner_write_covers_keyed_extent_and_shared_custody() {
         .root
     };
     let abandoned = host.candidate(&arena, 5, false, None).unwrap();
-    let abandoned_page = copy(&abandoned, window);
+    let abandoned_page = copy(&abandoned, g1_page, window);
     assert_eq!(
         arena
             .read_owner(abandoned_page, window, deadline)
@@ -234,15 +235,38 @@ fn first_owner_write_covers_keyed_extent_and_shared_custody() {
     assert_eq!(arena.read_owner(g1_page, window, deadline).unwrap().refs, 1);
 
     let g2 = host.candidate(&arena, 6, false, None).unwrap();
-    let g2_page = copy(&g2, window);
+    let g2_page = copy(&g2, g1_page, window);
     g2.seal(g2_page, window, deadline).unwrap();
     assert_eq!(
         arena.read_owner(g2_page, window, deadline).unwrap().next,
         g1_page
     );
     assert_eq!(
+        arena.read_owner(g2_page, window, deadline).unwrap().length,
+        1
+    );
+    let mut chain = Vec::new();
+    let mut previous = g2_page;
+    for depth in 2..=4 {
+        let owner = host.candidate(&arena, depth + 5, false, None).unwrap();
+        let page = copy(&owner, previous, window);
+        owner.seal(page, window, deadline).unwrap();
+        let state = arena.read_owner(page, window, deadline).unwrap();
+        assert_eq!((state.next, state.length), (previous, depth));
+        chain.push(owner);
+        previous = page;
+    }
+    let fallback = host.candidate(&arena, 10, false, None).unwrap();
+    let fallback_page = copy(&fallback, previous, window);
+    fallback.seal(fallback_page, window, deadline).unwrap();
+    let fallback_state = arena.read_owner(fallback_page, window, deadline).unwrap();
+    assert_eq!(
+        (fallback_state.next, fallback_state.length),
+        (PageRef::NULL, 0)
+    );
+    assert_eq!(
         arena.read_owner(custody, window, deadline).unwrap().refs,
-        base_refs + 8
+        base_refs + 16
     );
     drop(g1);
     drop(lease);
@@ -253,6 +277,8 @@ fn first_owner_write_covers_keyed_extent_and_shared_custody() {
     assert!(arena.load_raw(g2_page, window, deadline).is_ok());
     assert_eq!(arena.read_owner(g1_page, window, deadline).unwrap().refs, 1);
     drop(g2);
+    drop(chain);
+    drop(fallback);
     drop(lease);
     host.reclaim(incarnation, deadline).unwrap();
     let mut lease = payloads.window(1, 3).unwrap();

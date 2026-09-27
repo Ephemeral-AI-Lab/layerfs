@@ -504,3 +504,25 @@ pathname and page identity without a second 4 KiB owner-ledger read. The body
 checksum, edge-difference rule, one-hop limit and cleanup order above stay the
 same. Its count result is a separate source identity under the
 [prospective one-read correction](../../../../../docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md).
+
+## 16. Four-hop custody bound (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, after the
+[prospective four-hop treatment](../../../../../docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md).
+The live role-1 owner record's previously unused `length` field now records
+the sponsor depth: zero for full ownership, 1..4 for a sponsored page. An
+older record with a null sponsor remains depth zero; a non-null sponsor with
+no depth marker uses full ownership on the next copy. Each new page still
+charges its unique child or Local edges plus one old-page reference before
+publication. A fifth copy charges all encoded edges itself and starts a new
+chain, so retained sponsor ancestry is bounded independent of edit count.
+
+Cleanup still releases unique edges first and the sponsor last. The fixed
+cleanup stack now holds 42 frames to cover the eight keyed levels, four
+sponsored pages at each of eight extent levels and terminal custody frames;
+ancestors, and every extra frame's resident bytes are reserved with its
+`RootOwner`. Old roots remain readable while held, and a page and its quota
+charge survive until their final sponsor or root reference reaches zero.
+The page body, authenticated identity/checksum, canonical Commit and generic
+public write route do not change. This source has its own count and custody
+evidence; the one-hop measurements in §15 retain their original identities.
