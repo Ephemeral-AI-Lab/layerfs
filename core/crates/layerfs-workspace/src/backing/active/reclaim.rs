@@ -22,6 +22,7 @@ pub(super) struct RetiredPack {
 pub(super) fn prune_dead(
     index: &Index,
     updates: &mut BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+    retain_logical: Option<u64>,
 ) -> Result<Vec<PageRef>, WorkspaceError> {
     let mut logicals = BTreeSet::new();
     for (key, value) in updates.iter() {
@@ -33,6 +34,9 @@ pub(super) fn prune_dead(
     }
     let mut dead = Vec::new();
     for logical in logicals {
+        if retain_logical == Some(logical) {
+            continue;
+        }
         let lower = [vec![b'R'], logical.to_be_bytes().to_vec()].concat();
         let upper = if logical == u64::MAX {
             vec![b'S']

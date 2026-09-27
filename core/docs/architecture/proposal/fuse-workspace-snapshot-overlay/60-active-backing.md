@@ -40,6 +40,17 @@ the caller proves it is unpinned and calls release. The current writer creates
 a new page file for each candidate. `backing/active/extents.rs` stores final
 nonoverlapping Base/Zero/Packed intervals and inverse `R` references. A tiny
 splice updates the overlapping extents and their inverse references together.
+The extent codec now also reserves Payload kind `3` and an `L` inverse key
+for an owned large `p-*` payload. The codec validates its declared byte range;
+the active wrapper publishes a larger payload, its inode and dirty key in one
+index revision, and retains a Host-charged payload owner for current and
+frozen reads. The range reader carries selected payload owners outside the
+active lock. Full orphan-payload reclamation, mounted selection and public
+failure proof remain open.
+When a large overwrite removes every selected slot on the current packed
+tail, its locator and physical page stay owned for the next tiny append;
+sealed fully dead pages can be released in the same publication. The external
+cross-page overwrite test checks that tail transition.
 The current active wrapper in `backing/active/generation.rs` publishes pack,
 extent, locator, inode attributes and dirty membership through one index root
 change for `write_tiny_file`. Its lower-level `write_tiny` still accepts

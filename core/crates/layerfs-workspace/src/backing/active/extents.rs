@@ -12,6 +12,7 @@ pub enum ExtentKind {
     Base = 0,
     Zero = 1,
     Packed = 2,
+    Payload = 3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,16 +43,25 @@ impl Extent {
         key
     }
 
-    pub fn inverse_key(&self, inode: u64) -> Option<[u8; 27]> {
-        if self.kind != ExtentKind::Packed {
-            return None;
-        }
-        let mut key = [0; 27];
-        key[0] = b'R';
-        key[1..9].copy_from_slice(&self.logical_page.to_be_bytes());
-        key[9..11].copy_from_slice(&self.ordinal.to_be_bytes());
-        key[11..19].copy_from_slice(&inode.to_be_bytes());
-        key[19..27].copy_from_slice(&self.start.to_be_bytes());
+    pub fn inverse_key(&self, inode: u64) -> Option<Vec<u8>> {
+        let mut key = match self.kind {
+            ExtentKind::Packed => {
+                let mut key = Vec::with_capacity(27);
+                key.push(b'R');
+                key.extend_from_slice(&self.logical_page.to_be_bytes());
+                key.extend_from_slice(&self.ordinal.to_be_bytes());
+                key
+            }
+            ExtentKind::Payload => {
+                let mut key = Vec::with_capacity(25);
+                key.push(b'L');
+                key.extend_from_slice(&self.logical_page.to_be_bytes());
+                key
+            }
+            _ => return None,
+        };
+        key.extend_from_slice(&inode.to_be_bytes());
+        key.extend_from_slice(&self.start.to_be_bytes());
         Some(key)
     }
 
@@ -104,6 +114,31 @@ impl Extent {
         })
     }
 
+    pub fn payload(
+        start: u64,
+        length: u64,
+        id: u64,
+        declared: u64,
+    ) -> Result<Self, WorkspaceError> {
+        let end = start
+            .checked_add(length)
+            .filter(|end| *end <= MAX_FILE)
+            .ok_or(WorkspaceError::Capacity)?;
+        let extent = Self {
+            start,
+            end,
+            kind: ExtentKind::Payload,
+            source_offset: 0,
+            logical_page: id,
+            ordinal: 0,
+            slot_length: 0,
+            generation: declared,
+            revision: 0,
+        };
+        extent.validate()?;
+        Ok(extent)
+    }
+
     pub fn value(&self) -> Result<[u8; VALUE_BYTES], WorkspaceError> {
         self.validate()?;
         let mut bytes = [0; VALUE_BYTES];
@@ -139,6 +174,7 @@ impl Extent {
             0 => ExtentKind::Base,
             1 => ExtentKind::Zero,
             2 => ExtentKind::Packed,
+            3 => ExtentKind::Payload,
             _ => return Err(WorkspaceError::Io),
         };
         let extent = Self {
@@ -189,6 +225,14 @@ impl Extent {
                     && self.generation != 0
                     && self.revision != 0
                     && source_end <= self.slot_length as u64
+            }
+            ExtentKind::Payload => {
+                self.logical_page != 0
+                    && self.ordinal == 0
+                    && self.slot_length == 0
+                    && self.generation != 0
+                    && self.revision == 0
+                    && source_end <= self.generation
             }
         };
         if valid {
@@ -246,13 +290,37 @@ impl ExtentPlan {
         old_length: u64,
         slot: PackedSlot,
     ) -> Result<Self, WorkspaceError> {
-        if inode == 0 || inode != slot.inode || old_length > MAX_FILE {
+        if inode != slot.inode {
             return Err(WorkspaceError::InvalidInput);
         }
         let replacement = Extent::packed(slot.offset, slot)?;
+        Self::replace(index, inode, old_length, replacement)
+    }
+
+    pub fn payload(
+        index: &Index,
+        inode: u64,
+        old_length: u64,
+        offset: u64,
+        id: u64,
+        declared: u64,
+    ) -> Result<Self, WorkspaceError> {
+        let replacement = Extent::payload(offset, declared, id, declared)?;
+        Self::replace(index, inode, old_length, replacement)
+    }
+
+    fn replace(
+        index: &Index,
+        inode: u64,
+        old_length: u64,
+        replacement: Extent,
+    ) -> Result<Self, WorkspaceError> {
+        if inode == 0 || old_length > MAX_FILE {
+            return Err(WorkspaceError::InvalidInput);
+        }
         let start = replacement.start;
         let end = replacement.end;
-        let charge = index.budget().reserve(64 * 1024)?;
+        let charge = index.budget().reserve(128 * 1024)?;
         let first = Extent::key(inode, 0);
         let lower = Extent::key(inode, start);
         let upper = Extent::key(inode, end);
@@ -266,14 +334,27 @@ impl ExtentPlan {
                 }
             }
         }
-        let page = index.scan(&lower, &upper, MAX_AFFECTED)?;
-        // A tiny slot spans at most 128 bytes, so no more than 128 distinct
-        // extent starts can lie in this half-open range. The floor lookup
-        // covers the one extent that may begin before it.
-        for (key, value) in page.entries() {
-            let extent = Extent::parse(key, value, inode)?;
-            if affected.last().is_none_or(|last| *last != extent) {
-                affected.push(extent);
+        let mut cursor = lower.to_vec();
+        loop {
+            let page = index.scan(&cursor, &upper, MAX_AFFECTED)?;
+            for (key, value) in page.entries() {
+                let extent = Extent::parse(key, value, inode)?;
+                if affected.last().is_none_or(|last| *last != extent) {
+                    affected.push(extent);
+                }
+            }
+            // ponytail: one in-memory index batch handles at most 256 overlap
+            // records; stream multi-batch candidates if wider overwrites matter.
+            if affected.len() > 256 {
+                return Err(WorkspaceError::Capacity);
+            }
+            if page.entries().len() < MAX_AFFECTED {
+                break;
+            }
+            cursor = page.entries().last().ok_or(WorkspaceError::Io)?.0.clone();
+            cursor.push(0);
+            if cursor.as_slice() >= upper.as_slice() {
+                break;
             }
         }
         let mut updates = BTreeMap::new();

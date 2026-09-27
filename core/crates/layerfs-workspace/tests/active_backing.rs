@@ -1,4 +1,4 @@
-use layerfs_workspace::backing::active::{namespace_key, Kind, Page, PageRef};
+use layerfs_workspace::backing::active::{namespace_key, Extent, ExtentKind, Kind, Page, PageRef};
 
 #[test]
 fn page_v1_checks_identity_and_all_bytes() {
@@ -27,9 +27,29 @@ fn namespace_keys_follow_canonical_name_order() {
     assert!(namespace_key(7, b"z").unwrap() < namespace_key(8, b"a").unwrap());
 }
 
+#[test]
+fn large_payload_extent_has_checked_range_and_inverse_identity() {
+    let extent = Extent::payload(10, 5, 9, 5).unwrap();
+    assert_eq!(extent.kind, ExtentKind::Payload);
+    let key = Extent::key(7, 10);
+    assert_eq!(
+        Extent::parse(&key, &extent.value().unwrap(), 7).unwrap(),
+        extent
+    );
+    let inverse = extent.inverse_key(7).unwrap();
+    assert_eq!(inverse.len(), 25);
+    assert_eq!(inverse[0], b'L');
+    assert_eq!(&inverse[1..9], &9u64.to_be_bytes());
+    assert_eq!(&inverse[9..17], &7u64.to_be_bytes());
+    assert_eq!(&inverse[17..25], &10u64.to_be_bytes());
+    assert!(Extent::payload(10, 6, 9, 5).is_err());
+    assert!(Extent::payload(10, 5, 0, 5).is_err());
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{Kind, PageRef};
+    use layerfs_bridge::contract::Source;
     use layerfs_workspace::backing::{
         active::{
             dirty_key, inode_key, namespace_key, ActiveBacking, Extent, ExtentKind, ExtentPlan,
@@ -39,15 +59,16 @@ mod linux {
         metadata::MetadataHost,
         payload::PayloadHost,
     };
-    use layerfs_workspace::NodeKind;
+    use layerfs_workspace::{NodeKind, OwnedPayload, WorkspaceError};
     use std::{
         fs,
         os::unix::fs::{DirBuilderExt, MetadataExt},
         path::PathBuf,
         sync::{
-            atomic::{AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
+        time::{Duration, Instant},
     };
 
     struct Fixture {
@@ -169,6 +190,7 @@ mod linux {
                                     + (extent.end - extent.start) as usize],
                         );
                     }
+                    ExtentKind::Payload => panic!("this fixture uses packed slots only"),
                 }
             }
             lower = page.entries().last().unwrap().0.clone();
@@ -176,6 +198,26 @@ mod linux {
         }
         assert_eq!(actual.len(), length);
         actual
+    }
+
+    fn read_owned(
+        payload: &OwnedPayload,
+        source: u64,
+        output: &mut [u8],
+    ) -> Result<(), WorkspaceError> {
+        let mut reader = payload.reader(source..source + output.len() as u64)?;
+        let cancel = AtomicBool::new(false);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut received = 0;
+        while received < output.len() {
+            let count = Source::read(&mut reader, &mut output[received..], deadline, &cancel)
+                .map_err(|_| WorkspaceError::Io)?;
+            if count == 0 {
+                return Err(WorkspaceError::Io);
+            }
+            received += count;
+        }
+        Ok(())
     }
 
     #[test]
@@ -621,17 +663,178 @@ mod linux {
         let mut old = [0; 21];
         assert_eq!(
             active
-                .read_file(1, 0, &mut old, Some(&frozen), base)
+                .read_file(
+                    1,
+                    0,
+                    &mut old,
+                    Some(&frozen),
+                    base,
+                    |_, _, _| unreachable!()
+                )
                 .unwrap(),
             16
         );
         assert_eq!(&old[..16], b"AAXAAAAAAAAAAAAA");
         let mut live = [0; 21];
-        assert_eq!(active.read_file(1, 0, &mut live, None, base).unwrap(), 21);
+        assert_eq!(
+            active
+                .read_file(1, 0, &mut live, None, base, |_, _, _| unreachable!())
+                .unwrap(),
+            21
+        );
         assert_eq!(&live, b"AAXAAAAAAAAAAAAA\0\0\0\0Z");
         frozen.release().unwrap();
         active.close_clean().unwrap();
         drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn large_payload_and_tiny_overlap_share_one_active_view() {
+        let f = Fixture::new(8 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let original = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 16,
+            kind: NodeKind::File,
+            fresh: false,
+            storage: 2,
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: [None; 4],
+        };
+        let data: Vec<u8> = (0..512).map(|index| b'B' + (index % 24) as u8).collect();
+        let mut input = data.as_slice();
+        let cancel = AtomicBool::new(false);
+        let payload = f
+            .payloads
+            .acquire(
+                f.directory.clone(),
+                data.len() as u64,
+                &mut input,
+                Instant::now() + Duration::from_secs(10),
+                &cancel,
+            )
+            .unwrap();
+        let published = active.write_payload_file(1, original, 2, &payload).unwrap();
+        assert_eq!((published.length, published.revision), (514, 1));
+        assert!(published.cleanup_error.is_none());
+        drop(payload);
+        let frozen = active.capture().unwrap();
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        let tiny = active.write_tiny_file(1, selected, 3, b"Z").unwrap();
+        assert!(tiny.cleanup_error.is_none());
+        let mut old = vec![0; 514];
+        let base = |root, source: u64, output: &mut [u8]| {
+            assert_eq!(root, [7; 32]);
+            assert!(source + output.len() as u64 <= 16);
+            output.fill(b'A');
+            Ok(())
+        };
+        assert_eq!(
+            active
+                .read_file(1, 0, &mut old, Some(&frozen), base, read_owned)
+                .unwrap(),
+            514
+        );
+        assert_eq!(&old[..2], b"AA");
+        assert_eq!(&old[2..], data);
+        let mut live = vec![0; 514];
+        assert_eq!(
+            active
+                .read_file(1, 0, &mut live, None, base, read_owned)
+                .unwrap(),
+            514
+        );
+        assert_eq!(live[3], b'Z');
+        live[3] = old[3];
+        assert_eq!(live, old);
+        frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.payloads
+            .reclaim(
+                f.directory.incarnation,
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap();
+        f.clean();
+    }
+
+    #[test]
+    fn large_overwrite_crosses_index_pages_and_keeps_pack_tail_valid() {
+        let f = Fixture::new(8 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        for offset in 0..200 {
+            active.write_tiny(1, offset, offset, b"x", &[]).unwrap();
+        }
+        let data = vec![b'Q'; 200];
+        let mut input = data.as_slice();
+        let cancel = AtomicBool::new(false);
+        let payload = f
+            .payloads
+            .acquire(
+                f.directory.clone(),
+                200,
+                &mut input,
+                Instant::now() + Duration::from_secs(10),
+                &cancel,
+            )
+            .unwrap();
+        let initial = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 200,
+            kind: NodeKind::File,
+            fresh: false,
+            storage: 2,
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: [None; 4],
+        };
+        active.write_payload_file(1, initial, 0, &payload).unwrap();
+        drop(payload);
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        active.write_tiny_file(1, selected, 200, b"Z").unwrap();
+        let mut actual = [0; 201];
+        assert_eq!(
+            active
+                .read_file(
+                    1,
+                    0,
+                    &mut actual,
+                    None,
+                    |_, _, _| unreachable!(),
+                    read_owned
+                )
+                .unwrap(),
+            201
+        );
+        assert_eq!(&actual[..200], data);
+        assert_eq!(actual[200], b'Z');
+        active.close_clean().unwrap();
+        drop(active);
+        f.payloads
+            .reclaim(
+                f.directory.incarnation,
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap();
         f.clean();
     }
 

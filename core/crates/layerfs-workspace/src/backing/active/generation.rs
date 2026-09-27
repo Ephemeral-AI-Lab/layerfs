@@ -8,7 +8,12 @@ use super::{
     records::{dirty_key, inode_key, HotInode},
 };
 use crate::{
-    backing::{budget::Charge, directory::Directory, metadata::MetadataHost},
+    backing::{
+        budget::Charge,
+        directory::Directory,
+        metadata::MetadataHost,
+        payload::{OwnedPayload, PayloadHost},
+    },
     NodeKind, WorkspaceError, MAX_READ_BYTES,
 };
 use layerfs_bridge::contract::Root;
@@ -22,14 +27,22 @@ use std::{
 struct State {
     retired: Vec<RetiredPack>,
     retired_charge: Charge,
+    large: BTreeMap<u64, LargeOwner>,
     stopped: bool,
     closed: bool,
 }
+
+struct LargeOwner {
+    payload: OwnedPayload,
+    _charge: Charge,
+}
+type KeyUpdates = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
 /// Coordinates one Workspace's pack tail and pooled index. The index root is
 /// the publication point; a prepared pack page is verified before it is named.
 pub struct ActiveBacking {
     store: Arc<PageStore>,
+    payloads: Arc<PayloadHost>,
     pack: Arc<TinyPack>,
     index: Arc<Index>,
     state: Mutex<State>,
@@ -51,6 +64,13 @@ pub struct ActiveWrite {
     pub revision: u64,
     /// Publication succeeded; cleanup failure remains owned and stops further
     /// admission until the caller handles it. It cannot change accepted bytes.
+    pub cleanup_error: Option<WorkspaceError>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ActivePublication {
+    pub length: u64,
+    pub revision: u64,
     pub cleanup_error: Option<WorkspaceError>,
 }
 
@@ -87,17 +107,20 @@ impl ActiveBacking {
         directory: Arc<Directory>,
         host: Arc<MetadataHost>,
     ) -> Result<Arc<Self>, WorkspaceError> {
+        let payloads = host.payloads.clone();
         let store = PageStore::new(directory, host)?;
         let budget = store.budget();
         let pack = TinyPack::new(store.clone())?;
         let index = Index::new(store.clone())?;
         Ok(Arc::new(Self {
             store,
+            payloads,
             pack,
             index,
             state: Mutex::new(State {
                 retired: Vec::new(),
                 retired_charge: budget.reserve(0)?,
+                large: BTreeMap::new(),
                 stopped: false,
                 closed: false,
             }),
@@ -163,7 +186,7 @@ impl ActiveBacking {
     }
 
     /// Reads one indexed file revision. Packed bytes are copied while the
-    /// current root is locked; canonical Base reads run after that lock ends.
+    /// current root is locked; Base and owned-payload reads run afterward.
     pub fn read_file(
         &self,
         inode: u64,
@@ -171,17 +194,18 @@ impl ActiveBacking {
         output: &mut [u8],
         snapshot: Option<&ActiveSnapshot>,
         mut read_base: impl FnMut(Root, u64, &mut [u8]) -> Result<(), WorkspaceError>,
+        mut read_payload: impl FnMut(&OwnedPayload, u64, &mut [u8]) -> Result<(), WorkspaceError>,
     ) -> Result<usize, WorkspaceError> {
         if output.len() > MAX_READ_BYTES
             || snapshot.is_some_and(|view| !std::ptr::eq(Arc::as_ptr(&view.active), self))
         {
             return Err(WorkspaceError::InvalidInput);
         }
-        let mut spans = Vec::<(usize, u64, usize)>::new();
+        let mut spans = Vec::<(usize, u64, usize, Option<OwnedPayload>)>::new();
         let mut spans_charge = self.store.budget().reserve(0)?;
         let _slot_charge = self.store.budget().reserve(128)?;
         let (selected, length) = {
-            let _state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let get = |key: &[u8]| match snapshot {
                 Some(view) => view.get(key),
                 None => self.index.get(key),
@@ -227,17 +251,34 @@ impl ActiveBacking {
                 let source = extent.source_offset + (position - extent.start);
                 match extent.kind {
                     ExtentKind::Zero => output[completed..completed + count].fill(0),
-                    ExtentKind::Base => {
+                    ExtentKind::Base | ExtentKind::Payload => {
+                        let owner = if extent.kind == ExtentKind::Payload {
+                            let payload = &state
+                                .large
+                                .get(&extent.logical_page)
+                                .ok_or(WorkspaceError::Io)?
+                                .payload;
+                            if payload.len() != extent.generation {
+                                return Err(WorkspaceError::Io);
+                            }
+                            Some(payload.clone())
+                        } else {
+                            None
+                        };
                         if spans.len() == spans.capacity() {
                             let next = spans.capacity().max(4).saturating_mul(2);
-                            spans_charge.resize(next * size_of::<(usize, u64, usize)>())?;
+                            spans_charge.resize(
+                                next * size_of::<(usize, u64, usize, Option<OwnedPayload>)>(),
+                            )?;
                             spans
                                 .try_reserve_exact(next - spans.capacity())
                                 .map_err(|_| WorkspaceError::Capacity)?;
-                            spans_charge
-                                .resize(spans.capacity() * size_of::<(usize, u64, usize)>())?;
+                            spans_charge.resize(
+                                spans.capacity()
+                                    * size_of::<(usize, u64, usize, Option<OwnedPayload>)>(),
+                            )?;
                         }
-                        spans.push((completed, source, count));
+                        spans.push((completed, source, count, owner));
                     }
                     ExtentKind::Packed => {
                         let slot = PackedSlot {
@@ -264,8 +305,12 @@ impl ActiveBacking {
             }
             (selected, length)
         };
-        for (start, source, count) in spans {
-            read_base(selected.base, source, &mut output[start..start + count])?;
+        for (start, source, count, owner) in spans {
+            if let Some(payload) = owner {
+                read_payload(&payload, source, &mut output[start..start + count])?;
+            } else {
+                read_base(selected.base, source, &mut output[start..start + count])?;
+            }
         }
         Ok(length)
     }
@@ -304,31 +349,135 @@ impl ActiveBacking {
             offset,
             data,
             |generation, revision, length| {
-                let key = inode_key(inode);
-                let mut selected = match self.index.get(&key)? {
-                    Some(value) => HotInode::parse(&value)?,
-                    None => original,
-                };
-                if selected.kind != NodeKind::File || selected.length != original.length {
-                    return Err(WorkspaceError::InvalidInput);
-                }
-                let time = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_err(|_| WorkspaceError::Io)?;
-                selected.length = length;
-                selected.generation = generation;
-                selected.revision = revision;
-                selected.storage = 2;
-                selected.inline = [None; 4];
-                selected.seconds =
-                    i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
-                selected.nanos = time.subsec_nanos();
-                Ok(vec![
-                    (key.to_vec(), Some(selected.value()?.to_vec())),
-                    (dirty_key(generation, inode).to_vec(), Some(vec![1])),
-                ])
+                self.inode_updates(inode, original, generation, revision, length)
             },
         )
+    }
+
+    fn inode_updates(
+        &self,
+        inode: u64,
+        original: HotInode,
+        generation: u64,
+        revision: u64,
+        length: u64,
+    ) -> Result<KeyUpdates, WorkspaceError> {
+        let key = inode_key(inode);
+        let mut selected = match self.index.get(&key)? {
+            Some(value) => HotInode::parse(&value)?,
+            None => original,
+        };
+        if selected.kind != NodeKind::File || selected.length != original.length {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WorkspaceError::Io)?;
+        selected.length = length;
+        selected.generation = generation;
+        selected.revision = revision;
+        selected.storage = 2;
+        selected.inline = [None; 4];
+        selected.seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
+        selected.nanos = time.subsec_nanos();
+        Ok(vec![
+            (key.to_vec(), Some(selected.value()?.to_vec())),
+            (dirty_key(generation, inode).to_vec(), Some(vec![1])),
+        ])
+    }
+
+    /// Publishes one large owned payload through the same active inode and
+    /// dirty index used by tiny writes. The `p-*` owner is retained with the
+    /// active view, without constructing a legacy keyed root.
+    pub fn write_payload_file(
+        &self,
+        inode: u64,
+        original: HotInode,
+        offset: u64,
+        payload: &OwnedPayload,
+    ) -> Result<ActivePublication, WorkspaceError> {
+        if !Arc::ptr_eq(&payload.host, &self.payloads)
+            || payload.record.directory.incarnation != self.store.incarnation()
+            || payload.is_empty()
+            || payload.len() > 8 * 1024 * 1024
+        {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.closed {
+            return Err(WorkspaceError::Busy);
+        }
+        if state
+            .large
+            .get(&payload.record.id)
+            .is_some_and(|owner| !Arc::ptr_eq(&owner.payload.record, &payload.record))
+        {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let _working = self.store.budget().reserve(256 * 1024)?;
+        self.index.maintain()?;
+        let (generation, prior_revision) = self.index.generation_revision()?;
+        let revision = prior_revision
+            .checked_add(1)
+            .ok_or(WorkspaceError::Capacity)?;
+        let planned = ExtentPlan::payload(
+            &self.index,
+            inode,
+            original.length,
+            offset,
+            payload.record.id,
+            payload.len(),
+        )?;
+        let extra = self.inode_updates(inode, original, generation, revision, planned.length)?;
+        let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
+        for (key, value) in extra {
+            if updates.insert(key, value).is_some() {
+                return Err(WorkspaceError::InvalidInput);
+            }
+        }
+        let retained_tail = self.pack.tail()?.map(|(logical, _)| logical);
+        let dead = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
+        let new_owner = (!state.large.contains_key(&payload.record.id))
+            .then(|| {
+                Ok::<_, WorkspaceError>(LargeOwner {
+                    payload: payload.clone(),
+                    _charge: self.store.budget().reserve(128)?,
+                })
+            })
+            .transpose()?;
+        let candidate = self
+            .index
+            .prepare(&updates.into_iter().collect::<Vec<_>>())?;
+        let published_revision = candidate.publish()?;
+        if let Some(owner) = new_owner {
+            state.large.insert(payload.record.id, owner);
+        }
+        let mut cleanup_error = None;
+        for page in dead {
+            let State {
+                retired,
+                retired_charge,
+                ..
+            } = &mut *state;
+            if let Err(error) = reclaim::retire_pack(
+                &self.store,
+                &self.index,
+                retired,
+                retired_charge,
+                page,
+                published_revision,
+            ) {
+                cleanup_error.get_or_insert(error);
+            }
+        }
+        if cleanup_error.is_some() {
+            state.stopped = true;
+        }
+        Ok(ActivePublication {
+            length: planned.length,
+            revision: published_revision,
+            cleanup_error,
+        })
     }
 
     fn write_with(
@@ -337,7 +486,7 @@ impl ActiveBacking {
         old_length: u64,
         offset: u64,
         data: &[u8],
-        extra: impl FnOnce(u64, u64, u64) -> Result<Vec<(Vec<u8>, Option<Vec<u8>>)>, WorkspaceError>,
+        extra: impl FnOnce(u64, u64, u64) -> Result<KeyUpdates, WorkspaceError>,
     ) -> Result<ActiveWrite, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
@@ -373,7 +522,7 @@ impl ActiveBacking {
                     .unwrap_or(WorkspaceError::InvalidInput));
             }
         }
-        let dead = match reclaim::prune_dead(&self.index, &mut updates) {
+        let dead = match reclaim::prune_dead(&self.index, &mut updates, None) {
             Ok(dead) => dead,
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
         };
@@ -469,6 +618,7 @@ impl ActiveBacking {
             return Err(WorkspaceError::Busy);
         }
         self.store.close()?;
+        state.large.clear();
         state.closed = true;
         Ok(())
     }
