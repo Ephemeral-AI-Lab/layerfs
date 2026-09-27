@@ -1,0 +1,12 @@
+{
+  "classification": "diagnostic, cache-INELIGIBLE; rejected on ledger count regression",
+  "note": "Both source-specific receipts and raw outputs are retained. Prepared-public omits the private cursor key.",
+  "product_seal": "a570034524368fbacb6e5715e15b761763619c3ab55c9b08570c419bb230a8d7",
+  "schema": "issue271-rejected-packing-evidence-v1",
+  "selections": {
+    "100": "diagnostic100v3",
+    "512": "fuse512"
+  },
+  "source_commit": "1f009ec2076e557491b15e4939c1a180139f57f0",
+  "source_tree": "91a4d10c822b17e740ce9415ff00908b7ef377f8"
+}
