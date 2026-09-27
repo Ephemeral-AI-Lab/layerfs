@@ -7,6 +7,8 @@ Source: `bdf03d8c552c5807670f0fa69f7f8bd83f89cb8c` on
 `6af2c5c59a48d0b6c85d656e55aecc353e346728`. Phase 3 is
 `7499d6d5632126273dd15b1a07e85ae8fba4d825`. This note records functional
 checks and a count diagnostic only. It is not a registered performance row.
+An additional external path-safety test landed in `ed1c0a75b`; it changes no
+product source.
 
 ## Implementation
 
@@ -71,6 +73,16 @@ root, a frozen G1 move with a later G2 file write and two sequential heads, and
 an exactly 4,096-byte cached descendant path followed by an atomic 4,097-byte
 refusal. The owned ext4 volume was empty after the run and removed.
 
+The added `growing_inherited_move_checks_uncached_descendant_before_publication`
+case built a deep source tree before Workspace attach, so its deepest inherited
+file had never been looked up or pinned. A move projecting that file to 4,097
+bytes returned `Capacity` without changing revision; the 4,096-byte move then
+committed, and direct Service reads verified the new path and the original
+head's bytes. In a separate owned Linux container and volume, the locked
+release command selected this one new test: **1 passed**, 0.15 s test time,
+16.9 s complete command including Cargo's rebuild. The earlier six tests were
+not rerun because the product source was unchanged.
+
 | Untimed count diagnostic | 3 inherited descendants | 67 inherited descendants |
 | --- | ---: | ---: |
 | Upstream Store calls during equal-length rename | 2 | 2 |
@@ -125,5 +137,6 @@ No historical benchmark receipt was changed or promoted.
 `adfe93ee9` recorded production LOC `123848 -> 124047` (`+199`): Core
 `58431 -> 58630`, reference `65417 -> 65417`. `bdf03d8c5` recorded
 `124047 -> 124196` (`+149`): Core `58630 -> 58779`, reference unchanged.
-Both comparisons use `tools/production_loc.py` on the exact first-parent and
-staged tree with tests, docs and tooling excluded.
+`ed1c0a75b` recorded `124196 -> 124196` (`+0`): Core `58779 -> 58779`,
+reference `65417 -> 65417`. Each comparison uses `tools/production_loc.py` on
+the exact first-parent and staged tree with tests, docs and tooling excluded.
