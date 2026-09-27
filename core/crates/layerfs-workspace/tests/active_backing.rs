@@ -68,7 +68,7 @@ mod linux {
             atomic::{AtomicBool, AtomicU64, Ordering},
             Arc,
         },
-        time::{Duration, Instant},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     struct Fixture {
@@ -85,8 +85,12 @@ mod linux {
                     .expect("set LAYERFS_ACTIVE_TEST_ROOT to an owned ext4 directory"),
             );
             static NEXT: AtomicU64 = AtomicU64::new(1);
+            let started = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             let root = parent.canonicalize().unwrap().join(format!(
-                "active-{}-{}",
+                "active-{}-{}-{started}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
@@ -777,17 +781,17 @@ mod linux {
             MetadataHost::new(f.payloads.clone()).unwrap(),
         )
         .unwrap();
-        for offset in 0..200 {
+        for offset in 0..300 {
             active.write_tiny(1, offset, offset, b"x", &[]).unwrap();
         }
-        let data = vec![b'Q'; 200];
+        let data = vec![b'Q'; 300];
         let mut input = data.as_slice();
         let cancel = AtomicBool::new(false);
         let payload = f
             .payloads
             .acquire(
                 f.directory.clone(),
-                200,
+                300,
                 &mut input,
                 Instant::now() + Duration::from_secs(10),
                 &cancel,
@@ -796,7 +800,7 @@ mod linux {
         let initial = HotInode {
             revision: 1,
             generation: 1,
-            length: 200,
+            length: 300,
             kind: NodeKind::File,
             fresh: false,
             storage: 2,
@@ -810,8 +814,8 @@ mod linux {
         active.write_payload_file(1, initial, 0, &payload).unwrap();
         drop(payload);
         let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
-        active.write_tiny_file(1, selected, 200, b"Z").unwrap();
-        let mut actual = [0; 201];
+        active.write_tiny_file(1, selected, 300, b"Z").unwrap();
+        let mut actual = [0; 301];
         assert_eq!(
             active
                 .read_file(
@@ -823,10 +827,10 @@ mod linux {
                     read_owned
                 )
                 .unwrap(),
-            201
+            301
         );
-        assert_eq!(&actual[..200], data);
-        assert_eq!(actual[200], b'Z');
+        assert_eq!(&actual[..300], data);
+        assert_eq!(actual[300], b'Z');
         active.close_clean().unwrap();
         drop(active);
         f.payloads
@@ -1025,7 +1029,10 @@ mod linux {
 
     #[test]
     fn active_quota_refusal_does_not_publish_a_partial_write() {
-        let f = Fixture::new(24 << 10);
+        // The first index update needs one unselected page while replacing
+        // another. Twelve KiB admits it; the second write needs a fourth page
+        // while its new pack candidate and old index are still owned.
+        let f = Fixture::new(12 << 10);
         let active = ActiveBacking::new(
             f.directory.clone(),
             MetadataHost::new(f.payloads.clone()).unwrap(),

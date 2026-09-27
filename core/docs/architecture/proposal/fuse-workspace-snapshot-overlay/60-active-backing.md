@@ -18,19 +18,21 @@ holds these records beside extent, inverse-reference and locator records; no
 tiny file gets its own root page. The `N|parent|name` key omits a length
 prefix so names sort in the same byte order as canonical directory listings
 and existing continuation cookies. `backing/active/index.rs` stages
-copy-on-write index pages and publishes one current root. A capture pins a
-root/revision in constant index-state work and advances the generation; a
-read view pins the same
-current root without advancing it. Retired index and pack pages are held by
+copy-on-write index pages and publishes one current root. During a large
+update it releases intermediate candidate pages as soon as a later staged
+version replaces them; only the final candidate pages and original replaced
+pages remain owned for publication. Its scratch grows under the Host memory
+budget rather than a fixed update-count ceiling. A capture pins a root/revision
+in constant index-state work and advances the generation; a read view pins
+the same current root without advancing it. Retired index and pack pages are held by
 pins whose revisions fall between each page's birth and retirement revisions.
 The 32 capture limit and 128 possible directory-handle pins are charged in
 the index owner. Captures require explicit release; a dropped read view
 releases its pin and retains a stop/error state if cleanup fails. The generic
-index
-does **not** yet supply the specialized hot-right-edge update or a streaming
-extent cursor for writes larger than a tiny slot. Its bounded 128-row scan and
-predecessor lookup cover all extent starts within one 128-byte tiny write,
-including replacement of 128 one-byte extents.
+index does **not** yet supply the specialized hot-right-edge update. A
+replacement walks affected extents in bounded 128-row index pages; its
+working overlap set grows only within the Host memory budget. A 300-extent
+overwrite tests an update exceeding the former 512-key batch ceiling.
 
 `backing/active/pack.rs` writes tiny records into a Workspace-shared logical
 tail. A slot uses a stable logical page ID and ordinal. A candidate physical

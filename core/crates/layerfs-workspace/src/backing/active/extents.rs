@@ -1,7 +1,7 @@
 use super::{index::Index, pack::PackedSlot};
 use crate::{backing::budget::Charge, WorkspaceError};
 use layerfs_bridge::contract::MAX_FILE;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, mem::size_of};
 
 const VALUE_BYTES: usize = 56;
 const MAX_AFFECTED: usize = 128;
@@ -320,7 +320,7 @@ impl ExtentPlan {
         }
         let start = replacement.start;
         let end = replacement.end;
-        let charge = index.budget().reserve(128 * 1024)?;
+        let mut charge = index.budget().reserve(128 * 1024)?;
         let first = Extent::key(inode, 0);
         let lower = Extent::key(inode, start);
         let upper = Extent::key(inode, end);
@@ -337,16 +337,24 @@ impl ExtentPlan {
         let mut cursor = lower.to_vec();
         loop {
             let page = index.scan(&cursor, &upper, MAX_AFFECTED)?;
+            let entries = affected
+                .len()
+                .checked_add(page.entries().len())
+                .ok_or(WorkspaceError::Capacity)?;
+            charge.resize(
+                entries
+                    .checked_mul(size_of::<Extent>() + 512)
+                    .and_then(|bytes| bytes.checked_add(128 * 1024))
+                    .ok_or(WorkspaceError::Capacity)?,
+            )?;
+            affected
+                .try_reserve_exact(page.entries().len())
+                .map_err(|_| WorkspaceError::Capacity)?;
             for (key, value) in page.entries() {
                 let extent = Extent::parse(key, value, inode)?;
                 if affected.last().is_none_or(|last| *last != extent) {
                     affected.push(extent);
                 }
-            }
-            // ponytail: one in-memory index batch handles at most 256 overlap
-            // records; stream multi-batch candidates if wider overwrites matter.
-            if affected.len() > 256 {
-                return Err(WorkspaceError::Capacity);
             }
             if page.entries().len() < MAX_AFFECTED {
                 break;
@@ -396,9 +404,6 @@ impl ExtentPlan {
             Self::insert(&mut updates, inode, gap)?;
         }
         Self::insert(&mut updates, inode, replacement)?;
-        if updates.len() > 512 {
-            return Err(WorkspaceError::Capacity);
-        }
         Ok(Self {
             length: old_length.max(end),
             updates: updates.into_iter().collect(),

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     mem::size_of,
     sync::{Arc, Mutex},
 };
@@ -472,7 +472,6 @@ impl Index {
         updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<IndexCandidate, WorkspaceError> {
         if updates.is_empty()
-            || updates.len() > 512
             || updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
             || updates.iter().any(|(key, value)| {
                 key.is_empty()
@@ -482,7 +481,7 @@ impl Index {
         {
             return Err(WorkspaceError::InvalidInput);
         }
-        let scratch = self.store.budget().reserve(128 * 1024)?;
+        let mut scratch = self.store.budget().reserve(128 * 1024)?;
         self.maintain()?;
         let (root, generation, revision) = {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -504,6 +503,9 @@ impl Index {
             created: Vec::new(),
             replaced: Vec::new(),
         };
+        let mut created = BTreeSet::new();
+        let mut replaced = BTreeSet::new();
+        let mut release_failed = false;
         let result = (|| {
             for (key, value) in updates {
                 let mut changed = self.change(new_root, key, value.as_deref(), 0, &mut context)?;
@@ -523,19 +525,42 @@ impl Index {
                         )
                     }
                 };
+                let entries = created
+                    .len()
+                    .checked_add(replaced.len())
+                    .and_then(|count| count.checked_add(context.created.len()))
+                    .and_then(|count| count.checked_add(context.replaced.len()))
+                    .ok_or(WorkspaceError::Capacity)?;
+                scratch.resize(
+                    entries
+                        .checked_mul(64)
+                        .and_then(|bytes| bytes.checked_add(128 * 1024))
+                        .ok_or(WorkspaceError::Capacity)?,
+                )?;
+                created.extend(context.created.drain(..));
+                for page in context.replaced.drain(..) {
+                    if created.remove(&page) {
+                        if let Err(error) = self.store.release(page) {
+                            release_failed = true;
+                            return Err(error);
+                        }
+                    } else {
+                        replaced.insert(page);
+                    }
+                }
             }
             Ok::<(), WorkspaceError>(())
         })();
         if let Err(error) = result {
             let mut cleanup = Ok(());
-            for page in context.created.into_iter().rev() {
+            for page in context.created.into_iter().chain(created.into_iter()) {
                 if let Err(failure) = self.store.release(page) {
                     cleanup = Err(failure);
                 }
             }
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             state.pending = false;
-            if cleanup.is_err() {
+            if release_failed || cleanup.is_err() {
                 state.stopped = true;
             }
             return Err(cleanup.err().unwrap_or(error));
@@ -546,8 +571,8 @@ impl Index {
             expected_revision: revision,
             generation,
             root: new_root,
-            created: context.created,
-            replaced: context.replaced,
+            created: created.into_iter().collect(),
+            replaced: replaced.into_iter().collect(),
             _scratch: scratch,
             finished: false,
         })
