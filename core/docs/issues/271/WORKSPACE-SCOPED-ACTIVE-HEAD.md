@@ -168,6 +168,13 @@ An open handle to the replaced inode and a frozen generation still read its
 old bytes. The retired SDK range-edit family is not a substitute for any of
 these public FUSE operations.
 
+| Mutation | Plausible benefit from an active Workspace head | Remaining cost/risk |
+| --- | --- | --- |
+| Append or increasing-offset WRITE | Avoid per-WRITE immutable root creation and the next WRITE's old-root reclaim; pack tiny bytes. | One FUSE callback per syscall, charged pack/index publication and checked invalidation remain. |
+| Dispersed in-place edit | Avoid the same root publication/reclaim cycle. | Cold inode/extent index seeks and `K` affected extents; no right-edge `O(1)` claim. |
+| Repeated overwrite | Avoid repeated immutable root churn even though the final file has one changed run. | Old packed slots become dead; bounded, charged compaction is decisive for space and speed. |
+| Unlink/delete | Publish a namespace tombstone in the same active generation without copying the whole current root, if the namespace delta is implemented. | Physical release of unpinned pack/index pages and exact quota refunds still cost work; pinned generations and open handles retain bytes. |
+
 ## 4. Scaling dimensions and current product limit
 
 | Dimension | Design and cost requirement | Risk to prove |
@@ -229,7 +236,7 @@ writes even when the live view shrinks; fragmentation can leave one live tiny
 record in a 4 KiB page. A compaction rule must bound and pay for that work
 before claiming a live-space bound.
 
-## 6. Space calculation and time sensitivity
+## 6. Space calculation and quick-Commit cost
 
 The corrected [causal receipt](evidence/causal-v2/run/receipt.json) reports,
 at accepted WRITE 4,096, **16,777,216 bytes** charged for 4,096 distinct
@@ -256,27 +263,75 @@ own prospective space budget.
 Raw diagnostic Exec was **26.497 s**, Commit **0.449 s**, complete command
 **31.391 s**. The acquisition-metadata-maintenance and publication-core
 children were **10.912 s + 14.853 s = 25.765 s** through WRITE 4,096.
-These are within-run attribution, not cache-qualified comparisons. Define
-`f` as the fraction of that pool removed and `C_new` as **all** new pack,
-index, authentication, freeze, compaction and cleanup time. Then a planning
-sensitivity is:
+These are within-run attribution, not cache-qualified comparisons. For any
+candidate, the honest accounting identity is:
 
 ```text
-T_new_complete ~= 31.391 s - f * 25.765 s + C_new
+candidate complete time = existing complete time
+                        - measured old work actually eliminated
+                        + new pack/index work inside Exec
+                        + actual capture/Commit work
+                        + actual charged reclamation/cleanup work
 ```
 
-`C_new` has not been measured. The previously discussed **2 s** was an
-illustrative value for this whole term, **not** an estimate of index time;
-40–60% pool removal was likewise a sensitivity assumption, not a forecast.
-For example, removing 50% of the pool gives 18.508 s with `C_new=0`,
-20.508 s with `C_new=2 s`, and 23.508 s with `C_new=5 s`. With zero new
-cost, the unchanged 25 s complete-command gate needs more than 24.8% pool
-reduction and 2x raw Exec needs more than 51.4%. Any positive new cost raises
-those thresholds. No value in this section is a predicted performance PASS;
-future comparisons require declared equal cache state and one sealed public
-sample per arm.
+The previously discussed **2 s** was an arbitrary sensitivity input for the
+*sum* of new work. It was not measured, was not an index estimate and is **not
+a proposed fixed cost per Commit**. A clean or one-edit Commit must not scan
+the entire journal, rebuild every file index or compact unrelated pack pages.
+The design target is a bounded root/watermark pin plus tail sealing when
+capture occurs; a captured dirty file still pays its actual ordered lowering
+and SaveFile work. Reclamation pays for references actually released, under
+a bounded charged policy, in the operation or complete-command phase that
+requires it. It cannot be silently deferred past measurement or allowed to
+grow without bound. Frequent quick Commits need their own measured case;
+an `O(1)` pin does not make their Service/lifecycle or per-generation page
+cost disappear.
 
-## 7. Source seams, tests and decisions before implementation
+Ignoring unknown new work, the unchanged 25 s complete-command bound needs
+more than **6.391 s** removed from this raw diagnostic, and 2x raw Exec needs
+more than **13.248 s** removed. New work raises those requirements. The
+earlier 40–60% pool-removal range was likewise a scenario assumption, not a
+forecast. No value in this section is a predicted performance PASS; future
+comparisons require declared equal cache state and one sealed public sample
+per arm.
+
+## 7. Prospective public workload matrix
+
+The existing 100-WRITE [three-pattern specification](../../../../docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md)
+uses one 10 MiB old `data.bin` and one fd per selection. The static
+[`write-separated.c`](../../../benchmark/fs-bench-pro/writers/write-separated.c)
+already accepts counts through 4,097. A **new**, prospectively committed
+benchmark contract must extend its runner, expected manifests, source seals,
+cache policy, oracle and budgets before any candidate sample; historical
+100-WRITE receipts keep their original identities. The proposed matrix is:
+
+| Public write pattern | 100 | 512 | 4,097 | Mechanism it stresses |
+| --- | ---: | ---: | ---: | --- |
+| Append (`write` on `O_APPEND`) | one row | one row | one row | Hot right-edge index, growing length and partially filled pack tail. |
+| Dispersed one-byte overwrite (`pwrite` at the existing deterministic 10 MiB permutation offsets) | one row | one row | one row | Scattered index paths, many separated extents and pack-page fetch order. |
+| Repeated one-byte overwrite (`pwrite` at offset 5 MiB) | one row | one row | one row | Dead journal slots, compaction/refund and old-generation retention despite one final changed run. |
+
+All three tiers use the same closed, verified 10 MiB master, independent
+writable byte-copy clones, one public Mount -> one generic Exec -> one
+explicit Commit, actual callback counts, full old/new-head and byte oracle,
+clean close and one sample per cell at a frozen identity. The existing
+8,194-byte **separated-offset** #248 4,097 gate is a *fourth, distinct*
+workload and remains in the campaign; the three-pattern matrix cannot
+replace or relabel its FAIL. The dispersed schedule selects distinct,
+nonadjacent positions at all three listed counts, while the repeated case
+ends with one changed byte. These source-derived expectations belong in the
+new independent oracle, not in a product test hook.
+
+Add a prospectively named **clean/one-edit quick-Commit control** so a
+constant freeze or compaction tax is observable. A small Commit must not
+walk unrelated files or all prior journal records. Its exact fixture,
+cache contract, bounds and verifier must be frozen with the matrix. Keep
+ordinary 15 s commands, the original prospective 25 s exception where
+declared, separate sub-10 s verification, one construction worker and
+append-only PASS/FAIL/INCOMPLETE/INELIGIBLE reporting; do not enlarge a
+timeout or warm selected data to make a cell pass.
+
+## 8. Source seams, tests and decisions before implementation
 
 The new format would live in focused modules under
 [`backing/`](../../../crates/layerfs-workspace/src/backing/mod.rs): an active

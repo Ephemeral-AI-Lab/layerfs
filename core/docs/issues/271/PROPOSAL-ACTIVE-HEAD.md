@@ -83,14 +83,17 @@ amortized `O(1)` page-update route; arbitrary overlapping writes remain
 `O(log_B E + output)` rather than scanning an append log. The format must
 charge disk and resident index/journal bytes before acknowledging work.
 
-An immutable generation is constructed and pinned when a snapshot, captured
-reader or Commit needs it. A later WRITE then advances a new active head;
-G1/G2 and other retained roots continue to read their exact older bytes.
-Commit freezes the final ordered sequence, validates the same `E`, `S` and
-replacement runs, and streams through the existing bounded SaveFile route.
-The final construction can be `O(E+S)` but **belongs inside** the Commit or
-snapshot timer. Delaying all work until after measurement, letting unbounded
-garbage accumulate, or using a warm cache to hide the seal is not acceptable.
+An immutable generation is pinned when a snapshot, captured reader or Commit
+needs it. The design target is a bounded root/watermark pin and pack-tail
+seal, then page copying on the next generation's first touch. A later WRITE
+advances the new active head; G1/G2 and other retained roots keep their exact
+older bytes. Commit validates and streams the dirty files' ordered final
+sequence through the existing bounded SaveFile route. A full `O(E)` index
+rebuild on **every** small Commit would defeat the quick-operation goal; if
+the implementation requires construction, that work belongs inside the
+Commit or snapshot timer and must pass the separately specified quick-Commit
+case. Delaying work until after measurement, letting unbounded garbage
+accumulate, or using a warm cache to hide the seal is not acceptable.
 
 Publication still has to make the new bytes and attributes visible before
 the FUSE reply, including aliases and concurrent readers. Each journal/index

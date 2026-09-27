@@ -157,3 +157,8 @@ space and time complexity, and the separate current daemon limit on
 simultaneously selected Workspaces. The implementation and proof are tracked
 as [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273), a true
 sub-issue of #271.
+The prospective evaluation covers the existing 10 MiB append, dispersed and
+repeated patterns at 100, 512 and 4,097 WRITEs each, plus a clean/one-edit
+quick-Commit control. The separated-offset #248 gate remains a distinct case.
+No extended row or speed result is claimed before its own committed workload
+contract, independent oracle and one-sample run.
