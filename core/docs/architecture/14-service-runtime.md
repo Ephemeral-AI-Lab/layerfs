@@ -1229,3 +1229,16 @@ Four product surfaces complete that route:
   after `cb1bdb70e97628c2c38055ff2600e070e742010e`.
 * `WorkspaceApi::status` exposes the bounded projection and upstream counts
   described above after the acknowledgement, never between Edit and Commit.
+
+## #265 frozen final-run spool counts (2026-09-27)
+
+Source pin: the `save/file_stream.rs` change committed with this section. A
+`FileInput` owns fixed scalar counters for attempted edit-record lookups,
+successful 32-byte record reads, replacement byte-read calls and replacement
+bytes served. Its drop emits one `LFS_FILE_INPUT` diagnostic line when existing
+complexity logging is enabled. The counters cover the frozen final-run spool
+used by SaveFile, including repeated index lookups during C1 editing. They
+do not change the spool, the `EditSequence`/`EditSource` contract or the
+Commit's one History publication. A record read is a spool-file operation;
+the separate C1 stored-node counter counts provider requests, not C2 Store or
+physical-device reads. No timing or cache qualification follows from either.

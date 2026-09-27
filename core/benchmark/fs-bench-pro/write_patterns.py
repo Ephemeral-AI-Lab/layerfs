@@ -2,22 +2,21 @@
 """Three append-only public mounted-write diagnostics over one 10 MiB master."""
 import argparse
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import time
 
 from shell_package import (BASE, CORE, ROOT, case_spec, digest, identities,
-                           json_file, lft1, manifest, one_receipt, run_command,
-                           sha, write_tree)
+                           json_file, lft1, one_receipt, run_command, sha)
 from separated_writes import archive_binary, backing_samples, progress
 
 HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md"
-TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue261-ownership-io-treatment.md"
+TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue265-mounted-write-treatment.md"
 WRITER = HERE / "writers/write-separated.c"
 PATTERNS = ("append", "dispersed", "repeated")
 SIZE = 10 << 20
@@ -40,162 +39,64 @@ def expected(pattern):
     return {"data.bin": bytes(content)}
 
 
-def compatible_previous(path, current):
-    prior = json.loads(path.read_text())
-    old = prior["source"]
-    changed_core = subprocess.check_output(["git", "diff", "--name-only",
-        old["source_commit"], current["source_commit"], "--", "core/crates",
-        "core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml"],
-        cwd=ROOT, text=True).splitlines()
-    if (old["build_profile"] != "release" or
-            set(changed_core) != {"core/crates/layerfs-server/examples/verify_shell.rs"}):
-        raise ValueError(f"unreviewed release compilation changes: {changed_core}")
-    inputs = ("core/crates/layerfs-api/sdk/examples/benchmark_init.rs",
-              "core/crates/layerfs-api/sdk/examples/benchmark_shell.rs",
-              "core/Cargo.lock", ".cargo/config.toml")
-    if subprocess.run(["git", "diff", "--quiet", old["source_commit"],
-                       current["source_commit"], "--", *inputs], cwd=ROOT).returncode:
-        raise ValueError("reused SDK compilation inputs changed")
-    for name in ("benchmark_init", "benchmark_shell"):
-        if digest(prior["binaries"][name]["path"]) != prior["binaries"][name]["sha256"]:
-            raise ValueError(f"prior {name} archive changed")
-    daemon = path.parent / "image-context/layerfs-daemon"
-    if digest(daemon) != prior["daemon_sha256"]:
-        raise ValueError("prior daemon seal changed")
-    return prior, daemon
+EXTENT_SUMS = ("leaf_visits", "branch_visits", "leaf_visit_records",
+               "branch_visit_children", "leaf_writes", "branch_writes",
+               "leaf_write_records", "branch_write_children",
+               "child_edges_added", "custody_edges_added")
+
+
+def diagnostic(line, marker):
+    if not line.startswith(marker + " "):
+        return None
+    return {key: int(value) for key, value in
+            (item.split("=", 1) for item in line[len(marker) + 1:].split())}
+
+
+def extent_diagnostics(stderr):
+    totals = {key: 0 for key in EXTENT_SUMS}
+    snapshots = []
+    splices = 0
+    root_height = 0
+    edge = None
+    leaf_min = None
+    leaf_max = 0
+    lines = stderr.decode(errors="replace").splitlines()
+    for line in lines:
+        if (row := diagnostic(line, "LFS_EXTENT_SPLICE")) is not None:
+            if row["v"] != 1:
+                raise ValueError("unknown extent splice counter version")
+            splices += 1
+            for key in EXTENT_SUMS:
+                totals[key] += row[key]
+            root_height = row["root_height"]
+            if row["leaf_writes"]:
+                leaf_min = row["leaf_min"] if leaf_min is None else min(leaf_min, row["leaf_min"])
+                leaf_max = max(leaf_max, row["leaf_max"])
+        elif (row := diagnostic(line, "LFS_EXTENT_EDGE")) is not None:
+            if row["v"] != 1:
+                raise ValueError("unknown extent edge counter version")
+            edge = row
+        elif (match := re.search(r"LFS_WRITE_SAMPLE v=2 write_class=Some\((\d+)\)", line)):
+            snapshots.append({"writes": int(match[1]), "splices": splices,
+                              "root_height": root_height, "totals": totals.copy(),
+                              "leaf_min": leaf_min, "leaf_max": leaf_max,
+                              "edge": edge.copy() if edge else None})
+    return {"splices": splices, "snapshots": snapshots, "totals": totals,
+            "root_height": root_height, "leaf_min": leaf_min, "leaf_max": leaf_max,
+            "c1_edit": [diagnostic(line, "LFS_C1_EDIT_LOAD") for line in lines
+                        if line.startswith("LFS_C1_EDIT_LOAD ")],
+            "file_input": [diagnostic(line, "LFS_FILE_INPUT") for line in lines
+                           if line.startswith("LFS_FILE_INPUT ")]}
 
 
 def fields(master, pattern, command):
     case = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                         "genesis_root_serial", "branch_id", "old_commit")}
-    case.update(scenario_id=f"issue261-{pattern}-100-10m-v1",
+    case.update(scenario_id=f"issue265-{pattern}-100-10m-v1",
                 command_hex=command.encode().hex(), expected_failure="0",
                 write_pattern=pattern, pattern_count=str(COUNT),
                 telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
     return case
-
-
-def prepare(output, prior_file):
-    output = output.resolve()
-    output.mkdir(parents=True, exist_ok=False)
-    source = identities()
-    if source["source_dirty"]:
-        raise ValueError(f"committed source required: {source['dirty_paths']}")
-    prior, prior_daemon = compatible_previous(prior_file, source)
-    fixture = output / "fixture"
-    write_tree(fixture, OLD)
-    (output / "old.tsv").write_text(manifest(OLD))
-    for pattern in PATTERNS:
-        (output / f"{pattern}.tsv").write_text(manifest(expected(pattern)))
-    context = output / "image-context"
-    (context / "bin").mkdir(parents=True)
-    archive = output / "binary-archive"
-    binaries = {}
-    for name in ("benchmark_init", "benchmark_shell"):
-        binaries[name] = archive_binary(prior["binaries"][name]["path"], archive, name)
-    build = ["cargo", "+1.85.1", "build", "--release", "--manifest-path",
-             "core/Cargo.toml", "--locked", "-p", "layerfs-server",
-             "--example", "verify_shell"]
-    result, build_wall = run_command(build, output / "build-verifier")
-    json_file(output / "build-verifier.json", {"command": build,
-                                               "wall_ns": build_wall,
-                                               "exit_code": result.returncode})
-    if result.returncode:
-        raise RuntimeError("release verifier build failed; retained logs")
-    binaries["verify_shell"] = archive_binary(
-        CORE / "target/release/examples/verify_shell", archive, "verify_shell")
-    writer_build = ["zig", "cc", "-target", "aarch64-linux-musl", "-O3", "-static",
-                    str(WRITER), "-o", str(context / "bin/write-separated")]
-    result, writer_wall = run_command(writer_build, output / "build-writer")
-    json_file(output / "build-writer.json", {"command": writer_build,
-                                             "wall_ns": writer_wall,
-                                             "exit_code": result.returncode})
-    if result.returncode:
-        raise RuntimeError("static writer build failed; retained logs")
-    shutil.copyfile(prior_daemon, context / "layerfs-daemon")
-    (context / "layerfs-daemon").chmod(0o555)
-    (context / "bin/write-separated").chmod(0o555)
-    dockerfile = (f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\n"
-                  "COPY bin /fixtures/bin\n"
-                  "ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=25\n"
-                  "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n"
-                  'ENTRYPOINT ["/layerfs-daemon"]\n')
-    (context / "Dockerfile").write_text(dockerfile)
-    image, image_wall = run_command(["docker", "build", "-q", str(context)],
-                                    output / "image-build")
-    if image.returncode:
-        raise RuntimeError("diagnostic image build failed; retained logs")
-    image_id = image.stdout.decode().strip()
-    key = os.urandom(32).hex()
-    env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": key,
-           "LAYERFS_CONSTRUCTION_WORKERS": "1"}
-    master = output / "master"
-    master.mkdir()
-    init = [binaries["benchmark_init"]["path"], str(fixture),
-            str(master / "store.sqlite"), str(master / "history.sqlite"),
-            "issue261-patterns"]
-    created, init_wall = run_command(init, master / "init", timeout=30, env=env)
-    if created.returncode:
-        raise RuntimeError("master Init failed; retained logs")
-    genesis = json.loads(created.stdout.splitlines()[-1])
-    if genesis["status"] != "COMPLETE":
-        raise RuntimeError("master Init incomplete")
-    seed = {"scenario_id": "issue261-pattern-seed", "project_id": genesis["project_id"],
-            "genesis_layer": genesis["genesis_layer"], "genesis_root": genesis["root"],
-            "genesis_root_serial": genesis["root_serial"],
-            "branch_body": hashlib.sha256(b"issue261-patterns").digest()[:16].hex(),
-            "command_hex": b"printf A | dd of=data.bin bs=1 seek=0 conv=notrunc 2>/dev/null".hex(),
-            "expected_failure": "0",
-            "telemetry_run": str(int.from_bytes(os.urandom(16), "big") or 1)}
-    case_spec(master / "seed.case", seed)
-    command = [binaries["benchmark_shell"]["path"], "seed", str(master / "seed.case"),
-               str(master / "store.sqlite"), str(master / "history.sqlite"), image_id]
-    seeded, seed_wall = run_command(command, master / "seed", timeout=25, env=env)
-    if seeded.returncode:
-        raise RuntimeError("master seed failed; retained logs")
-    receipt = one_receipt(seeded.stdout)
-    if (receipt["status"] != "COMPLETE" or not receipt["head_commit"]
-            or not receipt["unmount_ok"] or not receipt["sandbox_delete_ok"]):
-        raise RuntimeError("master seed incomplete")
-    seed.update(branch_id=receipt["branch_id"], old_commit=receipt["head_commit"],
-                expected_failure="1")
-    case_spec(master / "verify.case", seed)
-    command = [binaries["verify_shell"]["path"], str(master / "verify.case"),
-               str(master / "store.sqlite"), str(master / "history.sqlite"),
-               str(output / "old.tsv"), str(output / "old.tsv")]
-    checked, verify_wall = run_command(command, master / "verify", timeout=9, env=env)
-    if checked.returncode or json.loads(checked.stdout.splitlines()[-1])["status"] != "PASS":
-        raise RuntimeError("master old-head proof failed; retained logs")
-    prepared_master = {name: seed[name] for name in ("project_id", "genesis_layer",
-        "genesis_root", "genesis_root_serial", "branch_id", "old_commit")}
-    prepared_master.update(path=str(master), store_sha256=digest(master / "store.sqlite"),
-                           history_sha256=digest(master / "history.sqlite"),
-                           proof_sha256=digest(master / "verify.stdout"))
-    (master / "store.sqlite").chmod(0o444)
-    (master / "history.sqlite").chmod(0o444)
-    prepared = {"schema": "issue261-patterns-prepared-v1", "source": source,
-        "spec_sha256": digest(SPEC), "writer_source_sha256": digest(WRITER),
-        "writer_binary_sha256": digest(context / "bin/write-separated"),
-        "daemon_sha256": digest(context / "layerfs-daemon"),
-        "dockerfile_sha256": sha(dockerfile.encode()), "image_id": image_id,
-        "fixture_sha256": sha(OLD["data.bin"]),
-        "manifest_sha256": {name: digest(output / f"{name}.tsv")
-                            for name in ("old", *PATTERNS)},
-        "cargo_config_sha256": digest(ROOT / ".cargo/config.toml"),
-        "binaries": binaries, "cursor_key": key, "master": prepared_master,
-        "clone_method": "shutil.copyfile independent writable byte copy",
-        "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
-        "build_mode": "sealed release SDK/daemon reused; locked release verifier and Zig -O3 static writer built",
-        "dependency_reuse": {"prior_prepared": str(prior_file),
-                             "prior_source_commit": prior["source"]["source_commit"],
-                             "prior_product_seal": prior["source"]["product_seal"],
-                             "reviewed_compilation_change":
-                                 "core/crates/layerfs-server/examples/verify_shell.rs"},
-        "preparation_wall_ns": {"verifier_build": build_wall, "writer_build": writer_wall,
-                                 "image": image_wall, "init": init_wall,
-                                 "seed": seed_wall, "master_verify": verify_wall}}
-    json_file(output / "prepared.json", prepared)
-    print(json.dumps({"prepared": str(output / "prepared.json"), "image_id": image_id}))
 
 
 def prepare_reuse(output, prior_file):
@@ -209,9 +110,19 @@ def prepare_reuse(output, prior_file):
     changed = subprocess.check_output(["git", "diff", "--name-only",
         prior["source"]["source_commit"], source["source_commit"], "--",
         "core/crates"], cwd=ROOT, text=True).splitlines()
-    allowed = {"core/crates/layerfs-workspace/src/backing/ownership.rs",
-               "core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs"}
-    if (prior["source"]["build_profile"] != "release" or set(changed) != allowed
+    allowed = {
+        "core/crates/layerfs-content/src/file/edit/apply.rs",
+        "core/crates/layerfs-content/src/file/edit/tree.rs",
+        "core/crates/layerfs-server/src/service/save/file_stream.rs",
+        *[f"core/crates/layerfs-workspace/src/backing/{path}" for path in (
+            "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/splice.rs",
+            "binary_plus_tree/extent/telemetry.rs", "metadata.rs", "metadata_reclaim.rs",
+            "payload.rs", "reader.rs", "segments.rs")],
+        *[f"core/crates/layerfs-workspace/tests/{name}.rs" for name in (
+            "backing_ownership", "maintenance", "payload", "symlink")],
+    }
+    if (prior["source"]["build_profile"] != "release" or
+            not changed or not set(changed) <= allowed
             or prior["spec_sha256"] != digest(SPEC)
             or prior["writer_source_sha256"] != digest(WRITER)
             or prior["fixture_sha256"] != sha(OLD["data.bin"])
@@ -227,6 +138,16 @@ def prepare_reuse(output, prior_file):
             raise ValueError(f"closed {name} master changed")
     if digest(Path(master["path"]) / "verify.stdout") != master["proof_sha256"]:
         raise ValueError("old master proof changed")
+    local_master = output / "master"
+    local_master.mkdir()
+    for name in ("store.sqlite", "history.sqlite", "verify.case", "verify.stdout"):
+        shutil.copyfile(Path(master["path"]) / name, local_master / name)
+    if (digest(local_master / "store.sqlite") != master["store_sha256"] or
+            digest(local_master / "history.sqlite") != master["history_sha256"] or
+            digest(local_master / "verify.stdout") != master["proof_sha256"]):
+        raise ValueError("local master copy differs from sealed source")
+    for name in ("store.sqlite", "history.sqlite"):
+        (local_master / name).chmod(0o444)
     for name in ("old", *PATTERNS):
         source_manifest = prior_file.parent / f"{name}.tsv"
         if digest(source_manifest) != prior["manifest_sha256"][name]:
@@ -280,16 +201,18 @@ def prepare_reuse(output, prior_file):
     env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": prior["cursor_key"],
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
     reproof_command = [binaries["verify_shell"]["path"],
-        str(Path(master["path"]) / "verify.case"),
-        str(Path(master["path"]) / "store.sqlite"),
-        str(Path(master["path"]) / "history.sqlite"),
+        str(local_master / "verify.case"),
+        str(local_master / "store.sqlite"),
+        str(local_master / "history.sqlite"),
         str(output / "old.tsv"), str(output / "old.tsv")]
     reproof, reproof_wall = run_command(reproof_command, output / "master-reproof",
                                          timeout=9, env=env)
     if (reproof.returncode or
             json.loads(reproof.stdout.splitlines()[-1])["status"] != "PASS"):
         raise RuntimeError("rebuilt verifier rejected old master; retained logs")
-    prepared = {**prior, "source": source, "binaries": binaries,
+    prepared = {**prior, "schema": "issue265-patterns-prepared-v1",
+        "source": source, "binaries": binaries,
+        "master": {**master, "path": str(local_master)},
         "treatment_spec_sha256": digest(TREATMENT),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
@@ -299,7 +222,8 @@ def prepare_reuse(output, prior_file):
         "build_mode": "locked release host SDK/verifier and aarch64 daemon rebuilt; sealed static writer reused",
         "dependency_reuse": {"prior_prepared": str(prior_file),
             "prior_source_commit": prior["source"]["source_commit"],
-            "master": "closed Store/history, exact byte identity and rebuilt-verifier proof",
+            "master": "closed Store/history copied into this worktree, exact byte identity and rebuilt-verifier proof",
+            "reviewed_core_changes": changed,
             "writer": "source and binary SHA-256 matched"},
         "preparation_wall_ns": {"build": build_wall, "image": image_wall,
                                 "master_reproof": reproof_wall}}
@@ -313,12 +237,11 @@ def run(prepared_file, output, pattern):
     output.mkdir(parents=True, exist_ok=False)
     prepared = json.loads(prepared_file.read_text())
     source = identities()
-    if (prepared["schema"] != "issue261-patterns-prepared-v1" or source["source_dirty"]
+    if (prepared["schema"] != "issue265-patterns-prepared-v1" or source["source_dirty"]
             or any(source[key] != prepared["source"][key]
                    for key in ("source_commit", "source_tree", "product_seal", "harness_seal"))
             or digest(SPEC) != prepared["spec_sha256"]
-            or ("treatment_spec_sha256" in prepared and
-                digest(TREATMENT) != prepared["treatment_spec_sha256"])
+            or digest(TREATMENT) != prepared["treatment_spec_sha256"]
             or digest(WRITER) != prepared["writer_source_sha256"]):
         raise ValueError("prepared source/workload identity changed")
     for item in prepared["binaries"].values():
@@ -380,6 +303,11 @@ def run(prepared_file, output, pattern):
     except (ValueError, KeyError, UnicodeDecodeError) as error:
         checkpoints, progress_error = None, str(error)
     samples = backing_samples(stderr)
+    try:
+        extent = extent_diagnostics(stderr)
+        extent_error = None
+    except (ValueError, KeyError) as error:
+        extent, extent_error = None, str(error)
     sample_counts = [row["write_class"] for row in samples]
     counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(",")
                   if "=" in item) if driver else {}
@@ -403,11 +331,16 @@ def run(prepared_file, output, pattern):
     phases = (len(samples) == 4 and sample_counts == [25, 50, 75, 100]
               and all(row["version"] == 2 and row["acquisition_ns"] is not None
                       and row["publication_ns"] is not None for row in samples))
+    counted = bool(extent and extent["splices"] == COUNT and
+                   [row["writes"] for row in extent["snapshots"]] == [25, 50, 75, 100]
+                   and [row["splices"] for row in extent["snapshots"]] == [25, 50, 75, 100]
+                   and all(row["edge"] is not None for row in extent["snapshots"])
+                   and len(extent["c1_edit"]) == 1 and len(extent["file_input"]) == 1)
     functional = bool(code == 0 and not timeout and driver and
                       driver.get("status") == "COMPLETE" and driver.get("commit_called")
                       and checkpoints and counts.get("write") == "100" and phases
                       and verification["status"] == "PASS" and cleanup)
-    receipt = {"schema": "issue261-patterns-attempt-v1", "family_id": "workspace_mounted_write_patterns",
+    receipt = {"schema": "issue265-patterns-attempt-v1", "family_id": "workspace_mounted_write_patterns",
         "selection": pattern, "scenario_id": before["scenario_id"],
         "operation_surface": "public WorkspaceApi mount/exec/commit",
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
@@ -427,8 +360,16 @@ def run(prepared_file, output, pattern):
         "writer_progress": checkpoints, "writer_progress_error": progress_error,
         "backing_samples": samples, "backing_sample_counts_expected": [25, 50, 75, 100],
         "phase_samples_complete": phases,
+        "extent_diagnostics": extent, "extent_diagnostics_error": extent_error,
+        "extent_diagnostics_complete": counted,
+        "payload_write_bytes_source_prediction": COUNT * 4096,
+        "retained_payload_allocated_bytes": [
+            row["backing"]["allocated_bytes"] - row["metadata"]["allocated_bytes"]
+            for row in samples],
         "complexity_lines": [line for line in stderr.decode(errors="replace").splitlines()
-                             if "LFS_PIECE_LOWER" in line or "LFS_C1_SAVE_COUNT" in line],
+                             if line.startswith(("LFS_PIECE_LOWER ", "LFS_C1_SAVE_COUNT ",
+                                                 "LFS_C1_EDIT_LOAD ", "LFS_FILE_INPUT ",
+                                                 "LFS_EXTENT_SPLICE ", "LFS_EXTENT_EDGE "))],
         "lft1": lft1(stderr), "complete_command_wall_ns": complete_ns,
         "complete_command_limit_s": 15, "driver_exit_code": code,
         "driver_timeout": timeout, "driver": driver, "projection_counts": counts,
@@ -442,7 +383,8 @@ def run(prepared_file, output, pattern):
         "functional_status": "PASS" if functional else "FAIL",
         "cache_contract": prepared["cache_contract"], "cache_status": "INELIGIBLE",
         "performance_status": "INELIGIBLE", "admission_eligible": False,
-        "row_status": "INELIGIBLE" if functional else "FAIL", "sample_count": 1}
+        "row_status": "FAIL" if not functional else
+                      ("INELIGIBLE" if counted else "INCOMPLETE"), "sample_count": 1}
     json_file(output / "receipt.json", receipt)
     (output / "SHA256SUMS").write_text("\n".join(
         f"{digest(path)}  {path.name}" for path in sorted(output.iterdir()) if path.is_file()
@@ -455,9 +397,6 @@ def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("self-check")
-    p = sub.add_parser("prepare")
-    p.add_argument("--output", required=True, type=Path)
-    p.add_argument("--prior-prepared", required=True, type=Path)
     p = sub.add_parser("prepare-reuse")
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--prior-prepared", required=True, type=Path)
@@ -471,6 +410,15 @@ def main():
         assert len(set(positions)) == COUNT and all(0 < p < SIZE - 1 for p in positions)
         assert all(abs(a - b) > 1 for i, a in enumerate(positions) for b in positions[i + 1:])
         assert [len(expected(p)["data.bin"]) for p in PATTERNS] == [SIZE + COUNT, SIZE, SIZE]
+        check = (b"LFS_EXTENT_SPLICE v=1 root_height=1 leaf_visits=1 branch_visits=1 "
+                 b"leaf_visit_records=2 branch_visit_children=2 leaf_writes=1 branch_writes=1 "
+                 b"leaf_write_records=3 branch_write_children=2 leaf_min=3 leaf_max=3 "
+                 b"child_edges_added=2 custody_edges_added=1\n"
+                 b"LFS_EXTENT_EDGE v=1 child_edges_removed=1 custody_edges_removed=1\n"
+                 b"LFS_WRITE_SAMPLE v=2 write_class=Some(25)\n")
+        parsed = extent_diagnostics(check)
+        assert parsed["splices"] == 1 and parsed["snapshots"][0]["totals"]["leaf_writes"] == 1
+        assert parsed["snapshots"][0]["edge"]["custody_edges_removed"] == 1
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "patterns": PATTERNS, "size": SIZE, "writes": COUNT}))
     else:
@@ -478,9 +426,7 @@ def main():
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with lock_path.open("a+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if args.action == "prepare":
-                prepare(args.output, args.prior_prepared)
-            elif args.action == "prepare-reuse":
+            if args.action == "prepare-reuse":
                 prepare_reuse(args.output, args.prior_prepared)
             else:
                 run(args.prepared, args.output, args.selection)

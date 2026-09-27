@@ -2,4 +2,5 @@
 pub mod cursor;
 pub mod format;
 pub mod splice;
+mod telemetry;
 pub use splice::*;

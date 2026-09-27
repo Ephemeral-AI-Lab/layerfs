@@ -707,6 +707,12 @@ fn a_page_two_passes_reach_is_demanded_once_for_the_operation() {
         edited.counters.nodes_read > 0,
         "the operation did read stored nodes"
     );
+    assert_eq!(
+        edited.counters.nodes_read,
+        edited.counters.stored_nodes_read + edited.counters.draft_nodes_read,
+        "every non-memo load belongs to exactly one source"
+    );
+    assert!(edited.counters.stored_nodes_read <= demanded.len() as u64);
 }
 
 /// The two shapes P1-9 distinguishes: the same extent-aligned range, deleted or

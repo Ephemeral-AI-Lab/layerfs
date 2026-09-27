@@ -55,6 +55,7 @@ pub trait PieceStore {
 /// itself established about the sequence it published.
 pub struct Pieces {
     pub root: PageRef,
+    pub root_height: u8,
     /// Stored extents the splice itself placed or saw. Partial when a subtree
     /// was shared; never a recorded figure.
     pub extents: u64,
@@ -316,6 +317,19 @@ pub fn replace<S: PieceStore + ?Sized>(
     replacement: &mut Parts,
     window: &mut Window,
 ) -> Result<Pieces, WorkspaceError> {
+    let counted = super::telemetry::Counted::new(store);
+    let pieces = replace_inner(&counted, old, splice, replacement, window)?;
+    counted.report(pieces.root_height);
+    Ok(pieces)
+}
+
+fn replace_inner<S: PieceStore + ?Sized>(
+    store: &S,
+    old: PageRef,
+    splice: Splice,
+    replacement: &mut Parts,
+    window: &mut Window,
+) -> Result<Pieces, WorkspaceError> {
     if splice.end < splice.start || splice.length > MAX_FILE || splice.old_base > MAX_FILE {
         return Err(WorkspaceError::Io);
     }
@@ -453,15 +467,17 @@ pub fn replace<S: PieceStore + ?Sized>(
         level.pages.append(&mut walk.leaves);
     }
     let window = walk.window;
-    let root = if level.pages.len() <= 1 {
+    let level = if level.pages.len() <= 1 {
         // One page already covers the sequence: it is the root, at its own
         // level. The tree loses a level exactly when its content collapsed.
-        level.pages.first().map_or(PageRef::NULL, |page| page.page)
+        level
     } else {
-        pack_level(store, level.pages, level.level, window)?.pages[0].page
+        pack_level(store, level.pages, level.level, window)?
     };
+    let root = level.pages.first().map_or(PageRef::NULL, |page| page.page);
     Ok(Pieces {
         root,
+        root_height: level.level,
         extents: fold.extents(),
         edits: if shared { u16::MAX } else { fold.edits() },
         replacement: total,

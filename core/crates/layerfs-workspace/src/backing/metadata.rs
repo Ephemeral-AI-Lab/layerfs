@@ -45,6 +45,9 @@ pub struct Arena {
     pub reads: AtomicU64,
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
+    /// Acknowledged decrements of edges named by extent pages during cleanup.
+    pub extent_child_edges_removed: AtomicU64,
+    pub extent_custody_edges_removed: AtomicU64,
     pub state: Mutex<ArenaState>,
     pub ledger_charge: Mutex<MetadataCharge>,
     pub _charge: MetadataCharge,
@@ -210,6 +213,8 @@ impl MetadataHost {
             reads: AtomicU64::new(0),
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
+            extent_child_edges_removed: AtomicU64::new(0),
+            extent_custody_edges_removed: AtomicU64::new(0),
             state: Mutex::new(ArenaState {
                 next: 1,
                 reserved_slots: 0,
@@ -536,14 +541,20 @@ impl MetadataHost {
         let mut pages = 0;
         let mut reusable = 0;
         let mut reserved_slots = 0;
+        let mut child_edges_removed = 0u64;
+        let mut custody_edges_removed = 0u64;
         for a in arenas.iter() {
             let s = a.state.lock().map_err(|_| WorkspaceError::Io)?;
             pages += s.pages;
             reusable += s.reusable;
             reserved_slots += s.reserved_slots;
+            child_edges_removed = child_edges_removed
+                .saturating_add(a.extent_child_edges_removed.load(Ordering::Relaxed));
+            custody_edges_removed = custody_edges_removed
+                .saturating_add(a.extent_custody_edges_removed.load(Ordering::Relaxed));
         }
         let s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-        Ok(MetadataStatus {
+        let status = MetadataStatus {
             allocated_pages: pages,
             reusable_pages: reusable,
             reserved_slots,
@@ -559,7 +570,14 @@ impl MetadataHost {
                 },
             accounting_complete: s.metadata_complete,
             admission_stopped: s.metadata_stopped,
-        })
+        };
+        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+            eprintln!(
+                "LFS_EXTENT_EDGE v=1 child_edges_removed={} custody_edges_removed={}",
+                child_edges_removed, custody_edges_removed,
+            );
+        }
+        Ok(status)
     }
     pub fn quarantine(&self, arena: &Arena, accounting_complete: bool) {
         if let Ok(mut a) = arena.state.lock() {

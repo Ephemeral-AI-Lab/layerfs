@@ -356,10 +356,17 @@ fn replace_chunked(
     // The unfinished nodes the final mapping reaches are published children first,
     // then the file state that opens it. Nothing the edit discarded is emitted.
     let root = edit.child("edit.finish").run(|_| objects.finish(summary))?;
+    let counters = objects.counters();
+    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+        eprintln!(
+            "LFS_C1_EDIT_LOAD v=1 nodes_read={} stored_nodes_read={} draft_nodes_read={}",
+            counters.nodes_read, counters.stored_nodes_read, counters.draft_nodes_read,
+        );
+    }
     Ok(ConstructedFile {
         root,
         logical_len: result_len,
-        counters: objects.counters(),
+        counters,
     })
 }
 

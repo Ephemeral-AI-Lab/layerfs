@@ -401,3 +401,28 @@ transfer. The writer-gate property itself is enforced by construction — no
 Commit phase acquires the gate across a walk or a pull — and a deterministic
 overlap check needs the page-read barrier the recorded E/F fixtures use; that
 check is not taken here.
+
+## 12. Extent splice work counters (#265, 2026-09-27)
+
+Source pin: the product change committed with this section. One splice now
+wraps its existing `PieceStore` with fixed-size counters. Each successful page
+read contributes one leaf or branch visit and its decoded body occupancy; each
+successfully completed page write contributes a leaf or branch write and its
+encoded occupancy. The returned level is the result root height. Leaf minimum
+and maximum are over pages this splice wrote, with zero when it wrote no leaf.
+Branch child and Local custody fields in successfully written extent pages
+count acknowledged upward ownership-edge updates. A cleanup page that already
+needs its body for edge release increments the corresponding child or custody
+downward counter after each acknowledged ledger update. No counter reads an
+additional page, scans the live tree or changes a page or ledger format.
+
+`LFS_EXTENT_SPLICE` is one bounded diagnostic line per splice when complexity
+logging is enabled; `LFS_EXTENT_EDGE` gives lifetime downward totals alongside
+the existing metadata status checkpoints. The prior `metadata_reads` and
+`ledger_reads`/`ledger_writes` remain separate from these extent counts. They
+describe visits and writes, not live page-kind cardinality: a page without
+edges can be reclaimed without a body read, and counting it as a live leaf
+would require either another read or a persistent per-page kind index. The
+37-page dispersed aggregate therefore remains an aggregate until independent
+page-kind evidence exists. These diagnostics do not qualify raw latency under
+the uncontrolled cache contract.
