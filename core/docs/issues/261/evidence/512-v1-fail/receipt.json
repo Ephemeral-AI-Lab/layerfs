@@ -1,0 +1,252 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    128,
+    256,
+    384,
+    512
+  ],
+  "backing_samples": [
+    {
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 1093632,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 5028,
+        "ledger_writes": 2301,
+        "lookup_scans": 0,
+        "metadata_reads": 952,
+        "payloads": 128,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 128,
+        "routine_scans": 127
+      },
+      "elapsed_ns": 565231625,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 45056,
+        "allocated_pages": 8,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4368
+      },
+      "write_class": 128
+    },
+    {
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 2158592,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 11457,
+        "ledger_writes": 5402,
+        "lookup_scans": 0,
+        "metadata_reads": 2104,
+        "payloads": 256,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 256,
+        "routine_scans": 255
+      },
+      "elapsed_ns": 1281900833,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 61440,
+        "allocated_pages": 10,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4432
+      },
+      "write_class": 256
+    }
+  ],
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-diagnostic-512-725b437-01/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-diagnostic-512-725b437-01/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/binary-archive/414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-diagnostic-512-725b437-01/case.before",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-diagnostic-512-725b437-01/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-diagnostic-512-725b437-01/history.sqlite",
+    "sha256:10477c5dc4394b7d9a1d79d6c2a64bba87aa698380b9ed02bda60fdb823c1593"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 7210857625,
+  "complexity_lines": [],
+  "daemon_sha256": "5f2ced0a818a13ca6f2ba5faddac350121f618781366ade0db123443acf6ba8f",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c",
+      "benchmark_shell": "414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8",
+      "verify_shell": "2b45760f28c7fc870a922c085a1dcc3f928c8a87de399ae43492be60bac69efa"
+    },
+    "master_proof_sha256": "609dfa34598fbabee0697ccab4f552a6956a8ec2350840c2a04340b2f54ce7a4",
+    "prepared": "benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/prepared.json"
+  },
+  "dockerfile_sha256": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+  "driver": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "cleanup_ns": 5526124459,
+    "commit_called": false,
+    "commit_ns": 0,
+    "consumer_accounted_bytes": 1793689,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 11412,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "Exec status Some(1): pwrite: Resource busy\n",
+    "exec_ns": 1301490959,
+    "exec_stderr_hex": "7077726974653a205265736f7572636520627573790a",
+    "exec_stdout_hex": "50524f475245535309313238093536373635363337350a50524f47524553530932353609313238343333323636370a",
+    "head_commit": "",
+    "mode": "run",
+    "mount_ns": 18898667,
+    "operation_ns": 1301504500,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=258,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue261-separated-512-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "FAIL",
+    "unmount_ok": true,
+    "upstream_calls": 1
+  },
+  "driver_binary_sha256": "414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8",
+  "driver_exit_code": 1,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "family_id": "workspace_mounted_separated_writes",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "functional_status": "FAIL",
+  "fuse_write_callbacks_observed": 258,
+  "fuse_write_count_provenance": "Status write class; this command makes only data mutations",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:10477c5dc4394b7d9a1d79d6c2a64bba87aa698380b9ed02bda60fdb823c1593",
+  "images": {
+    "diagnostic": "sha256:97ed723b9a11a790678b22029c1fd5c770f3d802d8159515b8d251364ebc1b8a",
+    "diagnostic512": "sha256:10477c5dc4394b7d9a1d79d6c2a64bba87aa698380b9ed02bda60fdb823c1593",
+    "gate": "sha256:24bfe84ffd0e71b11e1d76ea58a74e777a62684a413db7ee3b09e77e889151ef"
+  },
+  "lft1": {
+    "event_count": 39,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 1635053000,
+      "concurrency": 1,
+      "cpu_shared_ns": [
+        2102000,
+        4431000
+      ],
+      "first_ns": 332181791,
+      "gaps": 0,
+      "incarnation": 4495420007273,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12454083,
+      "last_ns": 1630374833,
+      "last_probe_ns": 12708,
+      "namespace": 7,
+      "opened_ns": 333549916,
+      "pid": 51528,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "fa01c86b5a708e7aa621bb42f5e2f993",
+      "sampled_max_rss": 8437760,
+      "samples": 131,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": false,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 1301491333,
+            "name": "exec"
+          }
+        ],
+        "elapsed_ns": 1301500709,
+        "name": "sdk.shell_package",
+        "outcome": "error"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "322c50162981e8c3dac84d97c8584d14336f8a19a65c3aa3bbe57dadc420e8ba7b",
+    "genesis_root": "008d3d485bdbef581a7325deb32a287a53ea336d3cce04c7d44fb718e5392c0f",
+    "genesis_root_serial": 1,
+    "history_sha256": "1ec44152d07c003d38f77e279c21749f6421c2656035703fd6292462e7cd904c",
+    "old_commit": "12eb4d3c1d46c9db3019ed80dba77eb72107296f1e37ffb01e174590e5f3fd9a02",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/master",
+    "project_id": "313d5073b51160c0b6c47bb9bc07e78b74",
+    "store_sha256": "715ca2346541db3a924179867e9c4a08919086a748803a1fc4a844572bfb7375"
+  },
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "258"
+  },
+  "row_status": "FAIL",
+  "sample_count": 1,
+  "scenario_id": "issue261-separated-512-v1",
+  "schema": "issue261-separated-attempt-v1",
+  "selection": "diagnostic512",
+  "shell_command": "/fixtures/bin/write-separated data.bin 512",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "04e76269b6a8e93674c8f827caf54a29f1a97a49d1f98b73e1023b28d00294d5",
+    "product_seal": "2a19f0d5c594c120c90da636d060cb7eecfd1b9114feb683e9e8550553cb6c6f",
+    "source_commit": "725b4379a728b754a0e9be0936c21cd840938406",
+    "source_dirty": false,
+    "source_tree": "f3345adbfe3057b7d8132176f6538ccb2fe58f3b"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "store_bytes_after": 618496,
+  "store_bytes_before": 618496,
+  "verifier": {
+    "status": "NOT_RUN"
+  },
+  "verifier_binary_sha256": "2b45760f28c7fc870a922c085a1dcc3f928c8a87de399ae43492be60bac69efa",
+  "write_syscalls_expected": 512,
+  "writer_binary_sha256": "d459b193679e21ffc2539c7894eedfb1b7e655d8f0535c0cbc99140ae5fdbc93",
+  "writer_progress": null,
+  "writer_progress_error": "unexpected progress: 'PROGRESS\\t128\\t567656375\\nPROGRESS\\t256\\t1284332667\\n'",
+  "writer_source_sha256": "d54242e4de194a678dc8463d9f7ef0311d6cca20ef2b0a7e8804622ef3a6a8ed"
+}

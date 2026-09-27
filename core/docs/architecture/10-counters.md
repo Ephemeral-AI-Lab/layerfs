@@ -29,6 +29,16 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ### #261 mounted WRITE snapshots (source `6af2c5c59` plus this change)
 
+The v2 snapshot keeps its per-mount counters in the FUSE adapter and runs
+**before** the successful WRITE reply. The projection mutation permit remains
+held through that reply, so a sequential caller's next kernel write cannot
+overtake a diagnostic scan that still holds the permit. Its cumulative `acquisition_ns` wraps
+`own_payload`; `publication_ns` wraps the semantic `write_file` call and its
+projection completion/invalidation. Both counters exclude the snapshot's own
+Status scan/logging and the kernel reply. They are diagnostic timing, not
+phase-isolated resource or speed admission evidence. The earlier v1 log ran
+after the reply and is retained under its original identity.
+
 The optional `LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL` diagnostic emits one
 `LFS_WRITE_SAMPLE` line after each configured multiple of successful FUSE
 WRITE callbacks. It prints elapsed time, the Workspace's cumulative `write`

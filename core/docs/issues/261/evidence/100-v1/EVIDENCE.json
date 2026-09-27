@@ -1,0 +1,21 @@
+{
+  "binary_store_retained_locally": true,
+  "copied_sha256": {
+    "SHA256SUMS": "8f14614ca01cc7cb82cb18e7cb66eb5534a851188a0d6ea063d0007f5376bbf4",
+    "case.before": "6ecfa778bf7ec73fb2755ca63df6f64676b698b9c3fe169ec6db6dc6db4fe34f",
+    "case.verify": "644f79997d43562124ce0e02f31dbd9d20659525bdf99450a23cefca66196d95",
+    "diagnostic.tsv": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "driver.stderr": "3f1779569cd37cae8743711c5b163e39ab8120171854ed86657056bfd136d4ef",
+    "driver.stdout": "a9aec14a6e7b396f030b74ee1c91cc6165363a6539f0fde904aa1100497de0e8",
+    "old.tsv": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e",
+    "prepared-public.json": "9ec39ddd16e28de49dda472c932a6ce6b5106f7618e8ce17c3b2e25f28587984",
+    "receipt.json": "295f55c96ffa755055b4edb11204f77e01e0da9f43ead1284231b5ed088180f4",
+    "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verifier.stdout": "3b2fa83dd63e50bcb690a99b18ed61ae233326850ef94a54798d77ce3c8ec255"
+  },
+  "omitted_binary_store_sha256": {
+    "history.sqlite": "50eb4dafd3caf84dafb82f00cc0ac4d8f12932507b4dd9b17ace3e9941b1f5ed",
+    "store.sqlite": "b4c448a807df0d41d6b8e79b89324ce223e393645573704af06eb95e9ea6f62e"
+  },
+  "origin": "benchmark-results/fs-bench-pro/issue261-diagnostic-b094a4-01"
+}

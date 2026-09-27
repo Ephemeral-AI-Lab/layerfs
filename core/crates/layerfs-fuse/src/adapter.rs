@@ -1,6 +1,7 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
 use crate::replies::{attributes, errno, inode, kind, serial};
 use crate::trace::trace;
+use crate::write_sample::WriteSamples;
 use fuser::*;
 use layerfs_workspace::{
     filesystem::projection_counters::ProjectionOp, FileAccess, FileCreateOptions, FileOpenOptions,
@@ -36,6 +37,7 @@ pub(crate) struct Adapter {
     pub(crate) workspace: Workspace,
     pub(crate) stopping: Arc<AtomicBool>,
     pub(crate) writable: bool,
+    pub(crate) write_samples: WriteSamples,
 }
 
 impl Adapter {
@@ -548,6 +550,8 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        let mut acquisition_ns = 0;
+        let mut publication_ns = 0;
         trace(
             "write",
             None,
@@ -581,20 +585,26 @@ impl Filesystem for Adapter {
             .as_mut()
             .map_err(|error| *error)
             .and_then(|(permit, append)| {
+                let started = Instant::now();
                 let payload = self
                     .workspace
                     .own_payload(data.len() as u64, &mut &data[..], deadline)
                     .map_err(errno)?;
-                permit
+                acquisition_ns = started.elapsed().as_nanos() as u64;
+                let started = Instant::now();
+                let result = permit
                     .write_file(fh.0, offset, &payload, *append, deadline)
-                    .map_err(errno)
+                    .map_err(errno);
+                publication_ns = started.elapsed().as_nanos() as u64;
+                result
             });
         // The origin permit stays alive through the send attempt. fuser does not
         // expose checked reply delivery or a later kernel-completion acknowledgement.
         match result {
             Ok(receipt) => {
+                self.write_samples
+                    .record(&self.workspace, acquisition_ns, publication_ns);
                 reply.written(receipt.accepted_bytes as u32);
-                crate::write_sample::record(&self.workspace);
             }
             Err(error) => reply.error(error),
         }
