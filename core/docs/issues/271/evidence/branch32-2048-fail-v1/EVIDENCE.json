@@ -1,0 +1,8 @@
+{
+  "attempts_at_identity": 1,
+  "note": "Host complete command timed out at 15 seconds without driver receipt or Commit. Owned daemon separately logged four count checkpoints through 2048 and Exec success; forced Busy cleanup is not a product PASS.",
+  "product_seal": "db09029ca28f2500c49fc21c791d1149565dc76212b6c19014ec45262f4205fa",
+  "schema": "issue271-branch32-2048-fail-v1",
+  "source_commit": "4ceb5d7ee79109c38fe9bf0134fb0c93cffabe6a",
+  "status": "FAIL"
+}

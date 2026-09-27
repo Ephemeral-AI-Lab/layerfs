@@ -1,0 +1,29 @@
+{
+  "id": "34067be19afab0349c328bb37fc2e1ce9358b328463dd82cd94dc9a010cab0f3",
+  "image": "sha256:d2bfe6bc0144a36a878b703a460c0ba39b743b4ba5c17171eb01e9ca74ec1896",
+  "labels": {
+    "io.layerfs.owner": "agent-sdk",
+    "io.layerfs.sandbox-name": "shell243-issue271-separated-2048-v1-43898"
+  },
+  "mounts": [
+    {
+      "destination": "/layerfs",
+      "name": "layerfs-be46e331d1652410776be02051509e71-root",
+      "type": "volume"
+    }
+  ],
+  "name": "/layerfs-be46e331d1652410776be02051509e71",
+  "state": {
+    "Dead": false,
+    "Error": "",
+    "ExitCode": 0,
+    "FinishedAt": "0001-01-01T00:00:00Z",
+    "OOMKilled": false,
+    "Paused": false,
+    "Pid": 57822,
+    "Restarting": false,
+    "Running": true,
+    "StartedAt": "2026-09-27T05:20:12.184059263Z",
+    "Status": "running"
+  }
+}

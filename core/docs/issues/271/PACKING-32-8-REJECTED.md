@@ -27,7 +27,7 @@ rejected source.
 
 The next source keeps 124-record leaf packing and changes only branch packing
 to a generic 32-child target. This leaves the 100/512 separated tree shape
-unchanged: they have two/nine leaves at the baseline packing. A root that
+unchanged: their observed final root branches hold three/sixteen leaves. A root that
 grows past 32 children gains another level, capping the child-edge list
 recharged by a narrow splice without multiplying leaf or Local-edge pages.
 The page codec still accepts 248 child references, so old full branches

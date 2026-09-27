@@ -1,0 +1,20 @@
+{
+  "container_remove_exit_code": 0,
+  "remaining_new_containers": [],
+  "remaining_new_volumes": [],
+  "state_after_stop": {
+    "Dead": false,
+    "Error": "",
+    "ExitCode": 137,
+    "FinishedAt": "2026-09-27T05:23:37.614569344Z",
+    "OOMKilled": false,
+    "Paused": false,
+    "Pid": 0,
+    "Restarting": false,
+    "Running": false,
+    "StartedAt": "2026-09-27T05:20:12.184059263Z",
+    "Status": "exited"
+  },
+  "stop_exit_code": 0,
+  "volume_remove_exit_code": 0
+}

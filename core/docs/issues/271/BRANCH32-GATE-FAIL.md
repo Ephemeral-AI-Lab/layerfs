@@ -5,7 +5,7 @@
 The frozen product source `94d86303ca6748a33b5a8bf7ce012ef9325646d0`
 keeps 124-record leaves and packs new branches to 32 children. Its native
 extent suite passed 36/36, including a read and edit of an older full
-248-child branch. The 100/512 separated trees have two/nine leaves, below
+248-child branch. The 100/512 separated trees have three/sixteen leaves, below
 this branch target; their earlier passing combined-source checks were not
 resampled. The [prospective #271 specification](../../../../docs/roadmap/0.1/0.1.7/issue271-root-edge-workload-spec.md)
 declared one final public 4,097 attempt when meaningful. This source had one.
