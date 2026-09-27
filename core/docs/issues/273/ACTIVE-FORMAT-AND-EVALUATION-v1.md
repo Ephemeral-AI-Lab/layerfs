@@ -19,6 +19,11 @@
 > The pooled inode/namespace slice subsequently fixes its typed values below
 > before those source files are committed; this is still a preselection v1
 > contract and there are no mounted-format receipts to reinterpret.
+> A later pre-mounted correction removes the namespace key's length byte.
+> Length-first ordering would make an indexed namespace scan incompatible
+> with the existing byte-ordered canonical listing and directory cookie.
+> No mounted v1 page or candidate sample has been selected; the earlier
+> source commit and this correction remain separately visible.
 
 ## Boundary and identity
 
@@ -76,7 +81,7 @@ pooled small-inode records. A leaf body holds contiguous sorted records:
 `key_length:u16, value_length:u16, key, value`; a branch body holds sorted
 `key_length:u16, key, child_page_id:u64, child_epoch:u64` records, including
 its rightmost child as the final record. Each key is that child's maximum.
-Key prefixes are `N|parent:u64|name_length:u8|name` for a
+Key prefixes are `N|parent:u64|name` for a
 namespace binding/tombstone, `I|serial:u64` for current inode attributes,
 `D|generation:u64|serial:u64` for the dirty frontier,
 `E|serial:u64|start:u64` for one extent,
@@ -103,6 +108,10 @@ serial `0..8`, kind `8`, tombstone `9`, zero `10..16`; current portable
 attributes reside in the corresponding `I` value. A dirty `D` value is
 exactly `[1]`. A leaf holds ordered,
 nonoverlapping `(start, end, Base | Zero | Packed)` intervals.
+The namespace key's remaining bytes are the 1..255-byte name, so keys for
+one parent sort in the same byte order as canonical `Inspect::List` and the
+directory cookie; an exact key is unambiguous even when one name prefixes
+another.
 The current root and at most one right-edge leaf/spine per hot file may be
 cached; every cache page, staged candidate and handle is charged to the
 Workspace's Host memory budget. The page cache is capped at 64 index and 8
