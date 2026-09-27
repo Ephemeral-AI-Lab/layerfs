@@ -27,6 +27,22 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ## 15. Counters and receipts
 
+### #261 mounted WRITE snapshots (source `6af2c5c59` plus this change)
+
+The optional `LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL` diagnostic emits one
+`LFS_WRITE_SAMPLE` line after each configured multiple of successful FUSE
+WRITE callbacks. It prints elapsed time, the Workspace's cumulative `write`
+projection class, and the existing `BackingStatus` and `MetadataStatus`.
+`write` also counts namespace mutations, so it equals actual data WRITE
+callbacks only for a workload that makes no other mutations. The backing
+snapshot scans current payload records to count retained owners; it adds
+diagnostic work and is not a speed measurement. It makes no extra control or
+Service request and does not change publication or custody.
+
+The older `LFS_PIECE_COUNT` and `LFS_PIECE_PAGES` descriptions below belong to
+the pinned #232 Phase 1C source; they have no producer at `6af2c5c59`.
+Retained #232 receipts keep their original meaning.
+
 ### #232 Phase 1C count diagnostic (2026-09-25)
 
 When `LAYERFS_COMPLEXITY_DIAGNOSTIC` is set, the Linux daemon emits

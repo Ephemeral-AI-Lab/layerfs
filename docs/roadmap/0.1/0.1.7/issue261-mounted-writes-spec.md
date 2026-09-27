@@ -108,6 +108,16 @@ derived bounds and unavailable fields with explicit provenance. Required scopes:
   head publication. Record host/container CPU, RSS/anonymous/file cache,
   private disk, Store/history bytes, resource charges, custody and cleanup.
 
+For the diagnostic image only, enable the ordinary operator counter snapshot
+`LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=25`. After each 25th successful FUSE WRITE
+reply, it emits one cumulative Workspace backing/metadata snapshot to the
+daemon log. These four snapshots may scan retained payload records and add
+diagnostic overhead; preserve their raw lines and never use that image for a
+speed claim. The diagnostic also enables the existing daemon `LFS_PIECE_LOWER`
+and host `LFS_C1_SAVE_COUNT` count logs. The gate image uses the same locked
+daemon and writer binaries without those diagnostics. The writer itself emits
+only four progress lines.
+
 The source model uses `N` accepted writes, `E` live file extents, `H` extent
 tree height, `R` final changed runs and `S` final replacement bytes. For this
 fixture `E` and `R` grow with `N`, with `R=N` and `S=N`. Intended write index

@@ -8,5 +8,7 @@ mod mount;
 mod replies;
 #[cfg(target_os = "linux")]
 mod trace;
+#[cfg(target_os = "linux")]
+mod write_sample;
 
 pub use mount::{mount, mount_writable, MountError, MountFailure, MountHandle, MountPhase};

@@ -592,7 +592,10 @@ impl Filesystem for Adapter {
         // The origin permit stays alive through the send attempt. fuser does not
         // expose checked reply delivery or a later kernel-completion acknowledgement.
         match result {
-            Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
+            Ok(receipt) => {
+                reply.written(receipt.accepted_bytes as u32);
+                crate::write_sample::record(&self.workspace);
+            }
             Err(error) => reply.error(error),
         }
     }
