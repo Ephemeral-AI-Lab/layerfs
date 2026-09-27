@@ -1,0 +1,84 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/binary-archive/23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c/benchmark_init",
+      "sha256": "23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c"
+    },
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/binary-archive/414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8/benchmark_shell",
+      "sha256": "414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/binary-archive/2b45760f28c7fc870a922c085a1dcc3f928c8a87de399ae43492be60bac69efa/verify_shell",
+      "sha256": "2b45760f28c7fc870a922c085a1dcc3f928c8a87de399ae43492be60bac69efa"
+    }
+  },
+  "build_mode": "sealed SDK/verifier/writer and prepared master reused; daemon release rebuilt if product changed",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "e05f52c25a12a6bd16ad61127825700028af149f9a40cd8782db0d069fcf3a30",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c",
+      "benchmark_shell": "414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8",
+      "verify_shell": "2b45760f28c7fc870a922c085a1dcc3f928c8a87de399ae43492be60bac69efa"
+    },
+    "compatible_product_changes": [
+      "core/crates/layerfs-workspace/src/backing/ownership.rs"
+    ],
+    "master_proof_sha256": "609dfa34598fbabee0697ccab4f552a6956a8ec2350840c2a04340b2f54ce7a4",
+    "prepared": "benchmark-results/fs-bench-pro/issue261-prepared-100-v2-f23263b-01/prepared.json"
+  },
+  "dockerfile_sha256": {
+    "diagnostic": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "diagnostic100v2": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "diagnostic100v3": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "gate": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3"
+  },
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "images": {
+    "diagnostic": "sha256:97ed723b9a11a790678b22029c1fd5c770f3d802d8159515b8d251364ebc1b8a",
+    "diagnostic100v2": "sha256:334078073e56ae35a2789c8c03de6e5248e71fc9d5213c688611acba474d46ac",
+    "diagnostic100v3": "sha256:5ec823358673d648b7b6dd2cda3e5c0b426635165d56f30408c9e085680c4393",
+    "gate": "sha256:24bfe84ffd0e71b11e1d76ea58a74e777a62684a413db7ee3b09e77e889151ef"
+  },
+  "manifest_sha256": {
+    "diagnostic": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "diagnostic100v2": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "diagnostic100v3": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "gate": "92eb1f8cbde5cd73fb3c8018ecd6470ae8f6b8fa67d051aa175c49f9aaf44925",
+    "old": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e"
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "322c50162981e8c3dac84d97c8584d14336f8a19a65c3aa3bbe57dadc420e8ba7b",
+    "genesis_root": "008d3d485bdbef581a7325deb32a287a53ea336d3cce04c7d44fb718e5392c0f",
+    "genesis_root_serial": 1,
+    "history_sha256": "1ec44152d07c003d38f77e279c21749f6421c2656035703fd6292462e7cd904c",
+    "old_commit": "12eb4d3c1d46c9db3019ed80dba77eb72107296f1e37ffb01e174590e5f3fd9a02",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/master",
+    "project_id": "313d5073b51160c0b6c47bb9bc07e78b74",
+    "store_sha256": "715ca2346541db3a924179867e9c4a08919086a748803a1fc4a844572bfb7375"
+  },
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "preparation_wall_ns": {
+    "image_diagnostic100v3": 2250615333
+  },
+  "schema": "issue261-separated-prepared-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "4c668272be0655b048d501fde54604d4ef1a6cf2147202e2001272656b09cfb0",
+    "product_seal": "dc57c20985a2a98dc53c9e7db5d32606cb1d0d62eebe5152e93d7438f154b879",
+    "source_commit": "0a3ec6d0f91db5b27f868a50805df2a8563b5d8c",
+    "source_dirty": false,
+    "source_tree": "e3f8ca5f1f7e18a8e36e26de2f584534c591676b"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "writer_binary_sha256": "d459b193679e21ffc2539c7894eedfb1b7e655d8f0535c0cbc99140ae5fdbc93",
+  "writer_source_sha256": "d54242e4de194a678dc8463d9f7ef0311d6cca20ef2b0a7e8804622ef3a6a8ed"
+}

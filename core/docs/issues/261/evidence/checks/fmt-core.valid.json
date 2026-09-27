@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "fmt",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "exit_code": 1,
+  "original_metadata_sha256": "acb27b43d1b01cc68d60ce6f179462ec37add7ea7d6172b56c408e01cbde0b74",
+  "timed_out": false,
+  "wall_ns": 1992783500
+}

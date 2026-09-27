@@ -1,0 +1,15 @@
+{
+  "command": [
+    "rustfmt",
+    "+1.85.1",
+    "--check",
+    "core/crates/layerfs-workspace/src/backing/ownership.rs",
+    "core/crates/layerfs-fuse/src/adapter.rs",
+    "core/crates/layerfs-fuse/src/mount.rs",
+    "core/crates/layerfs-fuse/src/write_sample.rs"
+  ],
+  "exit_code": 0,
+  "original_metadata_sha256": "8806f5f5fa122200a552b25cff00bdae0c03b5b5ebba6292bb40d776c52ee022",
+  "timed_out": false,
+  "wall_ns": 58137667
+}

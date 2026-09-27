@@ -1,0 +1,42 @@
+{
+  "attempted_operation_count": 0,
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "NOT_APPLICABLE",
+  "complete_command_limit_s": 25,
+  "completed_operation_count": 0,
+  "family_id": "workspace_mounted_separated_writes",
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "322c50162981e8c3dac84d97c8584d14336f8a19a65c3aa3bbe57dadc420e8ba7b",
+    "genesis_root": "008d3d485bdbef581a7325deb32a287a53ea336d3cce04c7d44fb718e5392c0f",
+    "genesis_root_serial": 1,
+    "history_sha256": "1ec44152d07c003d38f77e279c21749f6421c2656035703fd6292462e7cd904c",
+    "old_commit": "12eb4d3c1d46c9db3019ed80dba77eb72107296f1e37ffb01e174590e5f3fd9a02",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-prepared-b094a4-01/master",
+    "project_id": "313d5073b51160c0b6c47bb9bc07e78b74",
+    "store_sha256": "715ca2346541db3a924179867e9c4a08919086a748803a1fc4a844572bfb7375"
+  },
+  "performance_status": "NOT_RUN",
+  "product_exec_deadline_ms": 30000,
+  "product_seal": "dc57c20985a2a98dc53c9e7db5d32606cb1d0d62eebe5152e93d7438f154b879",
+  "reason": "Primary optimization target is 100 writes. One shared ledger read per page was removed, but 100-write evidence does not show that remaining direct-I/O work fits 25 s at 4,097; the separately declared 512 diagnostic failed before Commit, and #249 owns the 30 s product Exec deadline. No prospective final gate image/sample was built or run.",
+  "row_status": "NOT_RUN",
+  "sample_count": 0,
+  "scenario_id": "issue248-separated-4097-v1",
+  "schema": "issue261-gate-decision-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "4c668272be0655b048d501fde54604d4ef1a6cf2147202e2001272656b09cfb0",
+    "product_seal": "dc57c20985a2a98dc53c9e7db5d32606cb1d0d62eebe5152e93d7438f154b879",
+    "source_commit": "0a3ec6d0f91db5b27f868a50805df2a8563b5d8c",
+    "source_dirty": false,
+    "source_tree": "e3f8ca5f1f7e18a8e36e26de2f584534c591676b"
+  },
+  "verification_status": "NOT_RUN",
+  "writer_binary_sha256": "d459b193679e21ffc2539c7894eedfb1b7e655d8f0535c0cbc99140ae5fdbc93",
+  "writer_source_sha256": "d54242e4de194a678dc8463d9f7ef0311d6cca20ef2b0a7e8804622ef3a6a8ed"
+}

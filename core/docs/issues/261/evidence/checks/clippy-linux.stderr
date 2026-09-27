@@ -1,0 +1,59 @@
+    Checking cfg-if v1.0.4
+    Checking typenum v1.20.1
+    Checking subtle v2.6.1
+    Checking zeroize v1.9.0
+    Checking opaque-debug v0.3.1
+    Checking libc v0.2.189
+    Checking bitflags v2.13.1
+    Checking memoffset v0.9.1
+    Checking smallvec v1.16.0
+    Checking scopeguard v1.2.0
+    Checking zerocopy v0.8.56
+    Checking ref-cast v1.0.27
+    Checking num_enum v0.7.6
+    Checking memchr v2.8.3
+    Checking log v0.4.34
+    Checking lock_api v0.4.14
+    Checking curve25519-dalek v4.1.3
+    Checking generic-array v0.14.7
+    Checking inout v0.1.4
+    Checking block-buffer v0.10.4
+    Checking getrandom v0.2.17
+    Checking cpufeatures v0.2.17
+    Checking nix v0.31.3
+    Checking parking_lot_core v0.9.12
+    Checking page_size v0.6.0
+    Checking rand_core v0.6.4
+    Checking parking_lot v0.12.5
+    Checking crypto-common v0.1.7
+    Checking cipher v0.4.4
+    Checking universal-hash v0.5.1
+    Checking aead v0.5.2
+    Checking digest v0.10.7
+    Checking polyval v0.6.2
+    Checking poly1305 v0.8.0
+    Checking blake2 v0.10.6
+    Checking sha2 v0.10.9
+    Checking chacha20 v0.9.1
+    Checking aes v0.8.4
+    Checking ctr v0.9.2
+    Checking ghash v0.5.1
+    Checking chacha20poly1305 v0.10.1
+    Checking aes-gcm v0.10.3
+    Checking snow v0.9.6
+    Checking layerfs-bridge v0.1.6 (/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/core/crates/layerfs-bridge)
+    Checking layerfs-telemetry v0.1.6 (/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/core/crates/layerfs-telemetry)
+    Checking fuser v0.18.0
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/core/crates/layerfs-workspace)
+error: useless conversion to the same type: `u64`
+   --> crates/layerfs-workspace/src/backing/segments.rs:192:16
+    |
+192 |             || u64::try_from(filesystem.block_size()).ok() != Some(ALIGN as u64)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider removing `u64::try_from()`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+
+error: could not compile `layerfs-workspace` (lib) due to 1 previous error

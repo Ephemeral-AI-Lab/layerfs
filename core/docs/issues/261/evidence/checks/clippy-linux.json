@@ -1,0 +1,26 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "clippy",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--target",
+    "aarch64-unknown-linux-musl",
+    "-p",
+    "layerfs-workspace",
+    "-p",
+    "layerfs-fuse",
+    "-p",
+    "layerfs-daemon",
+    "--lib",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "wall_ns": 4443441000,
+  "exit_code": 101,
+  "timed_out": false
+}

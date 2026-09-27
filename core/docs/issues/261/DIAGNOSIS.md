@@ -10,6 +10,9 @@ The [raw receipt and logs](evidence/100-v1/) are append-only. The one later
 [512-write diagnostic](evidence/512-v1-fail/) used a separately committed
 [selection](../../../../docs/roadmap/0.1/0.1.7/issue261-512-diagnostic-spec.md),
 failed at FUSE WRITE callback 258, and is not a replacement for the 100 row.
+The corrected [100-write phase receipt](evidence/100-v2-phase/) and the
+[one-read treatment receipt](evidence/100-v3-ledger/) have distinct source and
+scenario identities and remain separate diagnostics.
 
 ## The 100-write public row
 
@@ -147,3 +150,55 @@ snapshot; the next callback may see `Busy` there. The failure at callback 258
 does not prove that exact site, so the product's refusal cause is not claimed
 as certain. The separately specified v2 100-write diagnostic moves snapshots
 before the reply and preserves v1 evidence.
+
+## Corrected 100-write phase attribution and shared fix
+
+The v2 diagnostic moved the optional snapshot before the FUSE reply, kept the
+mutation permit through the reply attempt, and recorded cumulative time in
+`own_payload` and `write_file`. It reused the same prepared old-head master
+and unchanged writer. The independent oracle passed. By write 100,
+`own_payload` totaled **205.601 ms** and `write_file` **243.501 ms**. The former
+includes routine backing maintenance before creating the new payload; the
+latter includes path copying, ownership publication and projection
+completion/invalidation. Their sum is 449.102 ms of the writer's 454.243 ms.
+This shows that both sides of a write carry substantial work; it is not an
+isolated payload-device or ledger-device timer. The v2 cumulative ledger
+counts were identical to v1: 3,679 reads and 1,680 writes.
+
+`Arena::read_owner` leaves a verified ledger page in the I/O window.
+`RootOwner::write_raw_page` and `write_page` used to call `set_owner` after
+that read to mark their edge list complete; `set_owner` read the same 4 KiB
+page again. The [prospective treatment](../../../../docs/roadmap/0.1/0.1.7/issue261-100-ledger-treatment.md)
+changed both shared page-publication paths to write the already verified page
+with the same final owner record, checksum, direct write and failure handling.
+The v3 public run and independent oracle passed. It retained 100 actual FUSE
+WRITEs, 200 final extents, 100 changed runs, 100 replacement bytes, one Commit,
+clean unmount and sandbox deletion.
+
+| 100-write diagnostic | v2 before | v3 after | Signed change |
+| --- | ---: | ---: | ---: |
+| Ledger 4 KiB reads | 3,679 | 3,440 | **−239** |
+| Ledger 4 KiB writes | 1,680 | 1,680 | 0 |
+| Metadata page reads | 700 | 700 | 0 |
+| Cumulative `own_payload` | 205.601 ms | 206.400 ms | +0.800 ms |
+| Cumulative `write_file` | 243.501 ms | 229.483 ms | −14.018 ms |
+| Public Exec | 469.417 ms | 455.678 ms | −13.739 ms |
+| Public Commit | 38.191 ms | 40.930 ms | +2.739 ms |
+| Complete command | 1,420.762 ms | 1,422.639 ms | +1.877 ms |
+
+The exact **239-read** reduction with unchanged writes and extent/Commit
+counts supports the intended mechanism: one authenticated read removed per
+completed new page. The raw Exec and publication times moved in the same
+direction, while complete command wall did not. Both rows were instrumented,
+uncontrolled-cache diagnostics (`admission_eligible=false`); they are not a
+cache-matched speed comparison or a latency PASS. The remaining 3,440 ledger
+reads and 1,680 ledger writes are real 4 KiB ownership work, including edge
+reference changes during path copying and reclaim. No whole-registry scan or
+per-write Service RPC reappeared.
+
+The [full 4,097 public gate](evidence/gate-4097-not-run.json) is **NOT_RUN** at this source. The 100-write case is
+the current optimization target; this narrow correction has not shown that
+the remaining direct-I/O cost will fit the prospectively declared 25 s
+complete-command exception. The separate 512 attempt refused before Commit,
+and the 30 s product Exec timer remains owned by #249. No workload, deadline,
+worker count or cache policy was changed to manufacture a passing gate row.
