@@ -12,6 +12,7 @@ use std::{
 
 const MAX_LEVEL: usize = 7;
 const MAX_FROZEN: usize = 32;
+pub type IndexEntry = (Vec<u8>, Vec<u8>);
 
 struct Retired {
     page: PageRef,
@@ -65,6 +66,17 @@ pub struct IndexSnapshot {
     released: bool,
 }
 
+pub struct ScanPage {
+    entries: Vec<IndexEntry>,
+    _charge: Charge,
+}
+
+impl ScanPage {
+    pub fn entries(&self) -> &[IndexEntry] {
+        &self.entries
+    }
+}
+
 impl Drop for IndexCandidate {
     fn drop(&mut self) {
         if !self.finished {
@@ -102,6 +114,29 @@ impl Index {
             }),
             _charge: budget.reserve(4096 + MAX_FROZEN * 64)?,
         }))
+    }
+
+    pub(crate) fn budget(&self) -> Arc<crate::backing::budget::Budget> {
+        self.store.budget()
+    }
+
+    pub fn generation_revision(&self) -> Result<(u64, u64), WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok((state.generation, state.revision))
+    }
+
+    pub fn frozen_between(&self, birth: u64, retired: u64) -> Result<bool, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(state.frozen.range(birth..retired).next().is_some())
+    }
+
+    pub fn frozen_count(&self) -> Result<usize, WorkspaceError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .frozen
+            .len())
     }
 
     fn node(&self, reference: PageRef) -> Result<Node, WorkspaceError> {
@@ -274,8 +309,119 @@ impl Index {
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
-        let root = self.state.lock().map_err(|_| WorkspaceError::Io)?.root;
-        self.get_at(root, key)
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        self.get_at(state.root, key)
+    }
+
+    pub fn floor(&self, key: &[u8]) -> Result<Option<IndexEntry>, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        state
+            .root
+            .map(|root| self.floor_node(root, key, 0))
+            .transpose()
+            .map(Option::flatten)
+    }
+
+    fn floor_node(
+        &self,
+        reference: PageRef,
+        key: &[u8],
+        depth: usize,
+    ) -> Result<Option<IndexEntry>, WorkspaceError> {
+        if depth > MAX_LEVEL {
+            return Err(WorkspaceError::Io);
+        }
+        match self.node(reference)? {
+            Node::Leaf(cells) => {
+                let at = match cells.binary_search_by(|cell| cell.key.as_slice().cmp(key)) {
+                    Ok(at) => Some(at),
+                    Err(0) => None,
+                    Err(at) => Some(at - 1),
+                };
+                Ok(at.map(|at| (cells[at].key.clone(), cells[at].value.clone())))
+            }
+            Node::Branch(children) => {
+                let at = children
+                    .iter()
+                    .position(|child| child.max.as_slice() >= key)
+                    .unwrap_or(children.len() - 1);
+                if let Some(found) = self.floor_node(children[at].page, key, depth + 1)? {
+                    return Ok(Some(found));
+                }
+                if at == 0 {
+                    return Ok(None);
+                }
+                self.floor_node(children[at - 1].page, &children[at - 1].max, depth + 1)
+            }
+        }
+    }
+
+    pub fn scan(
+        &self,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+    ) -> Result<ScanPage, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        self.scan_at(state.root, lower, upper, limit)
+    }
+
+    fn scan_at(
+        &self,
+        root: Option<PageRef>,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+    ) -> Result<ScanPage, WorkspaceError> {
+        if lower >= upper || limit == 0 || limit > 128 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let charge = self.store.budget().reserve(64 * 1024 + limit * 1024)?;
+        let mut entries = Vec::new();
+        if let Some(root) = root {
+            self.scan_node(root, lower, upper, limit, 0, &mut entries)?;
+        }
+        Ok(ScanPage {
+            entries,
+            _charge: charge,
+        })
+    }
+
+    fn scan_node(
+        &self,
+        reference: PageRef,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+        depth: usize,
+        entries: &mut Vec<IndexEntry>,
+    ) -> Result<(), WorkspaceError> {
+        if depth > MAX_LEVEL {
+            return Err(WorkspaceError::Io);
+        }
+        match self.node(reference)? {
+            Node::Leaf(cells) => {
+                let start = cells.partition_point(|cell| cell.key.as_slice() < lower);
+                for cell in cells.into_iter().skip(start) {
+                    if cell.key.as_slice() >= upper || entries.len() == limit {
+                        break;
+                    }
+                    entries.push((cell.key, cell.value));
+                }
+            }
+            Node::Branch(children) => {
+                for child in children {
+                    if child.max.as_slice() < lower {
+                        continue;
+                    }
+                    self.scan_node(child.page, lower, upper, limit, depth + 1, entries)?;
+                    if entries.len() == limit || child.max.as_slice() >= upper {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn get_at(
@@ -326,7 +472,7 @@ impl Index {
             || updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
             || updates.iter().any(|(key, value)| {
                 key.is_empty()
-                    || key.len() > 256
+                    || key.len() > 272
                     || value.as_ref().is_some_and(|value| value.len() > 512)
             })
         {
@@ -519,6 +665,20 @@ impl IndexCandidate {
 impl IndexSnapshot {
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         self.index.get_at(self.root, key)
+    }
+    pub fn floor(&self, key: &[u8]) -> Result<Option<IndexEntry>, WorkspaceError> {
+        self.root
+            .map(|root| self.index.floor_node(root, key, 0))
+            .transpose()
+            .map(Option::flatten)
+    }
+    pub fn scan(
+        &self,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+    ) -> Result<ScanPage, WorkspaceError> {
+        self.index.scan_at(self.root, lower, upper, limit)
     }
     pub fn root(&self) -> Option<PageRef> {
         self.root

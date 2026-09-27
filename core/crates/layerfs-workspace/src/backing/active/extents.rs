@@ -1,0 +1,329 @@
+use super::{index::Index, pack::PackedSlot};
+use crate::{backing::budget::Charge, WorkspaceError};
+use layerfs_bridge::contract::MAX_FILE;
+use std::collections::BTreeMap;
+
+const VALUE_BYTES: usize = 56;
+const MAX_AFFECTED: usize = 128;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ExtentKind {
+    Base = 0,
+    Zero = 1,
+    Packed = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Extent {
+    pub start: u64,
+    pub end: u64,
+    pub kind: ExtentKind,
+    pub source_offset: u64,
+    pub logical_page: u64,
+    pub ordinal: u16,
+    pub slot_length: u16,
+    pub generation: u64,
+    pub revision: u64,
+}
+
+pub struct ExtentPlan {
+    pub length: u64,
+    pub updates: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+    _charge: Charge,
+}
+
+impl Extent {
+    pub fn key(inode: u64, start: u64) -> [u8; 17] {
+        let mut key = [0; 17];
+        key[0] = b'E';
+        key[1..9].copy_from_slice(&inode.to_be_bytes());
+        key[9..17].copy_from_slice(&start.to_be_bytes());
+        key
+    }
+
+    pub fn inverse_key(&self, inode: u64) -> Option<[u8; 27]> {
+        if self.kind != ExtentKind::Packed {
+            return None;
+        }
+        let mut key = [0; 27];
+        key[0] = b'R';
+        key[1..9].copy_from_slice(&self.logical_page.to_be_bytes());
+        key[9..11].copy_from_slice(&self.ordinal.to_be_bytes());
+        key[11..19].copy_from_slice(&inode.to_be_bytes());
+        key[19..27].copy_from_slice(&self.start.to_be_bytes());
+        Some(key)
+    }
+
+    pub fn base(start: u64, end: u64) -> Self {
+        Self {
+            start,
+            end,
+            kind: ExtentKind::Base,
+            source_offset: start,
+            logical_page: 0,
+            ordinal: 0,
+            slot_length: 0,
+            generation: 0,
+            revision: 0,
+        }
+    }
+
+    pub fn zero(start: u64, end: u64) -> Self {
+        Self {
+            start,
+            end,
+            kind: ExtentKind::Zero,
+            source_offset: 0,
+            logical_page: 0,
+            ordinal: 0,
+            slot_length: 0,
+            generation: 0,
+            revision: 0,
+        }
+    }
+
+    pub fn packed(start: u64, slot: PackedSlot) -> Result<Self, WorkspaceError> {
+        if start != slot.offset {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let end = start
+            .checked_add(slot.length as u64)
+            .filter(|end| *end <= MAX_FILE)
+            .ok_or(WorkspaceError::Capacity)?;
+        Ok(Self {
+            start,
+            end,
+            kind: ExtentKind::Packed,
+            source_offset: 0,
+            logical_page: slot.logical_page,
+            ordinal: slot.ordinal,
+            slot_length: slot.length,
+            generation: slot.generation,
+            revision: slot.revision,
+        })
+    }
+
+    pub fn value(&self) -> Result<[u8; VALUE_BYTES], WorkspaceError> {
+        self.validate()?;
+        let mut bytes = [0; VALUE_BYTES];
+        bytes[..8].copy_from_slice(&self.end.to_be_bytes());
+        bytes[8] = self.kind as u8;
+        bytes[16..24].copy_from_slice(&self.source_offset.to_be_bytes());
+        bytes[24..32].copy_from_slice(&self.logical_page.to_be_bytes());
+        bytes[32..34].copy_from_slice(&self.ordinal.to_be_bytes());
+        bytes[34..36].copy_from_slice(&self.slot_length.to_be_bytes());
+        bytes[36..44].copy_from_slice(&self.generation.to_be_bytes());
+        bytes[44..52].copy_from_slice(&self.revision.to_be_bytes());
+        Ok(bytes)
+    }
+
+    pub fn parse(key: &[u8], bytes: &[u8], inode: u64) -> Result<Self, WorkspaceError> {
+        if key.len() != 17
+            || key[0] != b'E'
+            || key[1..9] != inode.to_be_bytes()
+            || bytes.len() != VALUE_BYTES
+            || bytes[9..16].iter().any(|b| *b != 0)
+            || bytes[52..56].iter().any(|b| *b != 0)
+        {
+            return Err(WorkspaceError::Io);
+        }
+        let number = |at: usize| -> Result<u64, WorkspaceError> {
+            Ok(u64::from_be_bytes(
+                bytes[at..at + 8]
+                    .try_into()
+                    .map_err(|_| WorkspaceError::Io)?,
+            ))
+        };
+        let kind = match bytes[8] {
+            0 => ExtentKind::Base,
+            1 => ExtentKind::Zero,
+            2 => ExtentKind::Packed,
+            _ => return Err(WorkspaceError::Io),
+        };
+        let extent = Self {
+            start: u64::from_be_bytes(key[9..17].try_into().map_err(|_| WorkspaceError::Io)?),
+            end: number(0)?,
+            kind,
+            source_offset: number(16)?,
+            logical_page: number(24)?,
+            ordinal: u16::from_be_bytes(bytes[32..34].try_into().map_err(|_| WorkspaceError::Io)?),
+            slot_length: u16::from_be_bytes(
+                bytes[34..36].try_into().map_err(|_| WorkspaceError::Io)?,
+            ),
+            generation: number(36)?,
+            revision: number(44)?,
+        };
+        extent.validate()?;
+        Ok(extent)
+    }
+
+    fn validate(&self) -> Result<(), WorkspaceError> {
+        if self.start >= self.end || self.end > MAX_FILE {
+            return Err(WorkspaceError::Io);
+        }
+        let length = self.end - self.start;
+        let source_end = self
+            .source_offset
+            .checked_add(length)
+            .ok_or(WorkspaceError::Io)?;
+        let valid = match self.kind {
+            ExtentKind::Base => {
+                self.logical_page == 0
+                    && self.ordinal == 0
+                    && self.slot_length == 0
+                    && self.generation == 0
+                    && self.revision == 0
+            }
+            ExtentKind::Zero => {
+                self.source_offset == 0
+                    && self.logical_page == 0
+                    && self.ordinal == 0
+                    && self.slot_length == 0
+                    && self.generation == 0
+                    && self.revision == 0
+            }
+            ExtentKind::Packed => {
+                self.logical_page != 0
+                    && self.slot_length != 0
+                    && self.generation != 0
+                    && self.revision != 0
+                    && source_end <= self.slot_length as u64
+            }
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(WorkspaceError::Io)
+        }
+    }
+
+    fn cut(mut self, start: u64, end: u64) -> Result<Self, WorkspaceError> {
+        if start < self.start || end > self.end || start >= end {
+            return Err(WorkspaceError::Io);
+        }
+        if self.kind != ExtentKind::Zero {
+            self.source_offset = self
+                .source_offset
+                .checked_add(start - self.start)
+                .ok_or(WorkspaceError::Io)?;
+        }
+        self.start = start;
+        self.end = end;
+        self.validate()?;
+        Ok(self)
+    }
+}
+
+impl ExtentPlan {
+    fn remove(updates: &mut BTreeMap<Vec<u8>, Option<Vec<u8>>>, inode: u64, extent: Extent) {
+        updates.insert(Extent::key(inode, extent.start).to_vec(), None);
+        if let Some(key) = extent.inverse_key(inode) {
+            updates.insert(key.to_vec(), None);
+        }
+    }
+
+    fn insert(
+        updates: &mut BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+        inode: u64,
+        extent: Extent,
+    ) -> Result<(), WorkspaceError> {
+        updates.insert(
+            Extent::key(inode, extent.start).to_vec(),
+            Some(extent.value()?.to_vec()),
+        );
+        if let Some(key) = extent.inverse_key(inode) {
+            updates.insert(key.to_vec(), Some(vec![1]));
+        }
+        Ok(())
+    }
+
+    /// Plans one tiny pwrite against the final indexed view. Initial inherited
+    /// content is one implicit Base interval until the first local edit.
+    pub fn tiny(
+        index: &Index,
+        inode: u64,
+        old_length: u64,
+        slot: PackedSlot,
+    ) -> Result<Self, WorkspaceError> {
+        if inode == 0 || inode != slot.inode || old_length > MAX_FILE {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let replacement = Extent::packed(slot.offset, slot)?;
+        let start = replacement.start;
+        let end = replacement.end;
+        let charge = index.budget().reserve(64 * 1024)?;
+        let first = Extent::key(inode, 0);
+        let lower = Extent::key(inode, start);
+        let upper = Extent::key(inode, end);
+        let prefix = &first[..9];
+        let mut affected = Vec::new();
+        if let Some((key, value)) = index.floor(&lower)? {
+            if key.starts_with(prefix) {
+                let extent = Extent::parse(&key, &value, inode)?;
+                if extent.end > start {
+                    affected.push(extent);
+                }
+            }
+        }
+        let page = index.scan(&lower, &upper, MAX_AFFECTED)?;
+        // ponytail: one update batch holds at most 128 overlapping extents;
+        // stream a range splice through IndexCandidate before wider overwrites.
+        if page.entries().len() == MAX_AFFECTED {
+            return Err(WorkspaceError::Capacity);
+        }
+        for (key, value) in page.entries() {
+            let extent = Extent::parse(key, value, inode)?;
+            if affected.last().is_none_or(|last| *last != extent) {
+                affected.push(extent);
+            }
+        }
+        let mut updates = BTreeMap::new();
+        if affected.is_empty() && old_length > 0 {
+            let any = index.scan(&first, &Extent::key(inode, MAX_FILE), 1)?;
+            if any.entries().is_empty() {
+                let base = Extent::base(0, old_length);
+                if start < old_length {
+                    affected.push(base);
+                } else {
+                    Self::insert(&mut updates, inode, base)?;
+                }
+            }
+        }
+        let mut covered = start.min(old_length);
+        let required = end.min(old_length);
+        for extent in &affected {
+            if extent.start > covered || extent.end <= covered {
+                return Err(WorkspaceError::Io);
+            }
+            covered = extent.end.min(required);
+        }
+        if covered != required {
+            return Err(WorkspaceError::Io);
+        }
+        for extent in affected {
+            Self::remove(&mut updates, inode, extent);
+            if extent.start < start {
+                let left = extent.cut(extent.start, start)?;
+                Self::insert(&mut updates, inode, left)?;
+            }
+            if extent.end > end {
+                let right = extent.cut(end, extent.end)?;
+                Self::insert(&mut updates, inode, right)?;
+            }
+        }
+        if start > old_length {
+            let gap = Extent::zero(old_length, start);
+            Self::insert(&mut updates, inode, gap)?;
+        }
+        Self::insert(&mut updates, inode, replacement)?;
+        if updates.len() > 256 {
+            return Err(WorkspaceError::Capacity);
+        }
+        Ok(Self {
+            length: old_length.max(end),
+            updates: updates.into_iter().collect(),
+            _charge: charge,
+        })
+    }
+}

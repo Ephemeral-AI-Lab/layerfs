@@ -26,6 +26,7 @@ struct State {
     tail: Option<PageRef>,
     logical_page: u64,
     next_logical: u64,
+    sealed: bool,
     body: Vec<u8>,
     records: u16,
     pending: Option<Pending>,
@@ -71,6 +72,7 @@ impl TinyPack {
                 tail: None,
                 logical_page: 0,
                 next_logical: 1,
+                sealed: false,
                 body: Vec::with_capacity(BODY_BYTES),
                 records: 0,
                 pending: None,
@@ -100,7 +102,7 @@ impl TinyPack {
         if state.stopped || state.pending.is_some() {
             return Err(WorkspaceError::Busy);
         }
-        let fits = state.body.len() + RECORD_HEADER + data.len() <= BODY_BYTES;
+        let fits = !state.sealed && state.body.len() + RECORD_HEADER + data.len() <= BODY_BYTES;
         let rewritten = if fits { state.tail } else { None };
         let logical_page = if rewritten.is_some() {
             state.logical_page
@@ -203,6 +205,15 @@ impl TinyPack {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         Ok(state.tail.map(|physical| (state.logical_page, physical)))
     }
+
+    pub fn seal(&self) -> Result<Option<(u64, PageRef)>, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.pending.is_some() || state.stopped {
+            return Err(WorkspaceError::Busy);
+        }
+        state.sealed = true;
+        Ok(state.tail.map(|physical| (state.logical_page, physical)))
+    }
 }
 
 impl PreparedSlot {
@@ -227,6 +238,7 @@ impl PreparedSlot {
         }
         state.tail = Some(self.candidate);
         state.logical_page = self.logical_page;
+        state.sealed = false;
         state.records = self.slot.ordinal + 1;
         state.body = std::mem::take(&mut self.body);
         state.pending = None;

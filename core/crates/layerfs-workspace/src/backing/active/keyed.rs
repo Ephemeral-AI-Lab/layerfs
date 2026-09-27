@@ -1,7 +1,7 @@
 use super::page::{Kind, Page, PageRef, BODY_BYTES};
 use crate::WorkspaceError;
 
-const MAX_KEY: usize = 256;
+const MAX_KEY: usize = 272;
 const MAX_VALUE: usize = 512;
 
 #[derive(Clone)]
