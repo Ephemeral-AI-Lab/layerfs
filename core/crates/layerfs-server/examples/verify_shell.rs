@@ -151,6 +151,90 @@ fn verify_tree(
     }
     Ok((seen.len(), files, bytes))
 }
+fn verify_separated(
+    provider: &StoreProvider<'_>,
+    old_root: layerfs_content::ObjectId,
+    new_root: layerfs_content::ObjectId,
+    count: usize,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut contents = Vec::new();
+    for root in [old_root, new_root] {
+        let mut tree = FilesystemRead::new(provider, FilesystemRootId(root))?;
+        let file = tree.resolve(&LogicalPath::new("data.bin")?)?.value;
+        let mut bytes = Vec::new();
+        Timing::disabled("read", |scope| {
+            read_all(provider, file.content_root, &mut bytes, scope.child("file"))
+        })
+        .0?;
+        contents.push(bytes);
+    }
+    let (old, new) = (&contents[0], &contents[1]);
+    if old.len() != 8194 || new.len() != old.len() || count > 4097 {
+        return Err("separated file length/count mismatch".into());
+    }
+    let (mut runs, mut previous_changed) = (0, false);
+    for (index, (&before, &after)) in old.iter().zip(new).enumerate() {
+        let expected = if index % 2 == 0 && index / 2 < count {
+            b'X'
+        } else {
+            b'A'
+        };
+        if before != b'A' || after != expected {
+            return Err(format!("separated byte mismatch at {index}").into());
+        }
+        let changed = before != after;
+        runs += usize::from(changed && !previous_changed);
+        previous_changed = changed;
+    }
+    if runs != count {
+        return Err(format!("changed runs {runs} != {count}").into());
+    }
+    Ok(runs)
+}
+fn verify_pattern(
+    provider: &StoreProvider<'_>,
+    old_root: layerfs_content::ObjectId,
+    new_root: layerfs_content::ObjectId,
+    pattern: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    const SIZE: usize = 10 << 20;
+    let mut expected = vec![b'A'; SIZE];
+    for i in 0..100usize {
+        let byte = b'B' + (i % 24) as u8;
+        match pattern {
+            "append" => expected.push(byte),
+            "dispersed" => expected[(104729 + i * 2654435761) % SIZE] = byte,
+            "repeated" => expected[5 << 20] = byte,
+            _ => return Err("unknown write pattern".into()),
+        }
+    }
+    let mut contents = Vec::new();
+    for root in [old_root, new_root] {
+        let mut tree = FilesystemRead::new(provider, FilesystemRootId(root))?;
+        let file = tree.resolve(&LogicalPath::new("data.bin")?)?.value;
+        let mut bytes = Vec::new();
+        Timing::disabled("read", |scope| {
+            read_all(provider, file.content_root, &mut bytes, scope.child("file"))
+        })
+        .0?;
+        contents.push(bytes);
+    }
+    let (old, new) = (&contents[0], &contents[1]);
+    if old.len() != SIZE || old.iter().any(|byte| *byte != b'A') || new != &expected {
+        return Err("write pattern old/new bytes mismatch".into());
+    }
+    let mut previous_changed = false;
+    let mut runs = 0;
+    for (index, byte) in new.iter().enumerate() {
+        let changed = old.get(index) != Some(byte);
+        runs += usize::from(changed && !previous_changed);
+        previous_changed = changed;
+    }
+    if runs != (if pattern == "dispersed" { 100 } else { 1 }) {
+        return Err(format!("write pattern changed runs {runs}").into());
+    }
+    Ok(runs)
+}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 6 {
@@ -205,23 +289,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let provider = StoreProvider::new(&store);
     let old_manifest = manifest(&args[4])?;
     let old_tree = verify_tree(&provider, old_record.root, &old_manifest)?;
-    let new_tree = if expected_failure {
-        None
+    let (new_tree, new_root) = if expected_failure {
+        (None, None)
     } else {
         let committed = history.commit(head)?.ok_or("missing new Commit")?;
         if committed.parent != Some(old) {
             return Err("new Commit parent mismatch".into());
         }
-        Some(verify_tree(
+        (
+            Some(verify_tree(
+                &provider,
+                committed.root,
+                &manifest(&args[5])?,
+            )?),
+            Some(committed.root),
+        )
+    };
+    let separated_runs = match (case.get("separated_count"), new_root) {
+        (Some(count), Some(root)) => Some(verify_separated(
             &provider,
-            committed.root,
-            &manifest(&args[5])?,
-        )?)
+            old_record.root,
+            root,
+            count.parse()?,
+        )?),
+        _ => None,
+    };
+    let pattern_runs = match (case.get("write_pattern"), new_root) {
+        (Some(pattern), Some(root)) => {
+            Some(verify_pattern(&provider, old_record.root, root, pattern)?)
+        }
+        _ => None,
     };
     let new_tree_json = new_tree.map_or("null".to_string(), |(paths, files, bytes)| {
         format!("{{\"paths\":{paths},\"files\":{files},\"bytes\":{bytes}}}")
     });
-    println!("{{\"status\":\"PASS\",\"old_commit\":{:?},\"head_commit\":{:?},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_tree\":{new_tree_json}}}",
+    let separated_runs_json = separated_runs.map_or("null".to_owned(), |runs| runs.to_string());
+    let pattern_runs_json = pattern_runs.map_or("null".to_owned(), |runs| runs.to_string());
+    println!("{{\"status\":\"PASS\",\"old_commit\":{:?},\"head_commit\":{:?},\"old_paths\":{},\"old_files\":{},\"old_bytes\":{},\"new_tree\":{new_tree_json},\"separated_runs\":{separated_runs_json},\"pattern_runs\":{pattern_runs_json}}}",
         hex(&old.to_bytes()), hex(&head.to_bytes()), old_tree.0, old_tree.1, old_tree.2,
     );
     Ok(())

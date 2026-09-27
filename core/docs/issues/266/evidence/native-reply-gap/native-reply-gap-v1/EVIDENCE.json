@@ -1,0 +1,12 @@
+{
+  "schema": "issue266-native-proof-v1",
+  "attempt": "native-reply-gap-v1",
+  "source_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-reply-gap-v1",
+  "copied_sha256": {
+    "result.json": "19f23467bf1bd08bbbda59a40190bb6ec0b274bfe63bfde13be5bdb79ac0a673",
+    "test.stdout": "c0c149d043130feff2b790f87c5cff366bc832585cbaefec27e70aff0f35f2f0",
+    "test.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "service.stderr": "df197ea98377eed1009ef51ac46f1331d1c22fc3774e5ee7ee4e15dab2ea4ee9"
+  },
+  "postmortem_cleanup": "docker rm -f layerfs-stage-202e3c06c9d84d69 and docker volume rm layerfs-stage-202e3c06c9d84d69-data both exited 0 after test-selection FAIL"
+}

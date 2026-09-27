@@ -1,0 +1,15 @@
+{
+  "command": [
+    "zig",
+    "cc",
+    "-target",
+    "aarch64-linux-musl",
+    "-O3",
+    "-static",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/core/benchmark/fs-bench-pro/writers/write-separated.c",
+    "-o",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/image-context/bin/write-separated"
+  ],
+  "exit_code": 0,
+  "wall_ns": 193817083
+}

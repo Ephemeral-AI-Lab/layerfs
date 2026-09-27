@@ -1,0 +1,648 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    25,
+    50,
+    75,
+    100
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 47766918,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 28672,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 684,
+        "ledger_writes": 314,
+        "lookup_scans": 0,
+        "metadata_reads": 164,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 47
+      },
+      "elapsed_ns": 116474000,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4344
+      },
+      "publication_ns": 45992544,
+      "version": 2,
+      "write_class": 25
+    },
+    {
+      "acquisition_ns": 104425959,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 28672,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 1409,
+        "ledger_writes": 639,
+        "lookup_scans": 0,
+        "metadata_reads": 339,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 97
+      },
+      "elapsed_ns": 225081125,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4344
+      },
+      "publication_ns": 96452252,
+      "version": 2,
+      "write_class": 50
+    },
+    {
+      "acquisition_ns": 163140459,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 28672,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 2134,
+        "ledger_writes": 964,
+        "lookup_scans": 0,
+        "metadata_reads": 514,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 147
+      },
+      "elapsed_ns": 337435250,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4344
+      },
+      "publication_ns": 148405627,
+      "version": 2,
+      "write_class": 75
+    },
+    {
+      "acquisition_ns": 215580541,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 28672,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 2859,
+        "ledger_writes": 1289,
+        "lookup_scans": 0,
+        "metadata_reads": 689,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 197
+      },
+      "elapsed_ns": 438762458,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4344
+      },
+      "publication_ns": 195823628,
+      "version": 2,
+      "write_class": 100
+    }
+  ],
+  "balance_spec_sha256": "6cce6cde9a9e2d8b612a4822f368a1f66814e5a6bdaddfd1629f7fb6988a68aa",
+  "binaries": {
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/binary-archive/22aefc3449bfc5d719a7bca7fce761eab6d70b7c7d5b19cbefce22eb755c7056/benchmark_shell",
+      "sha256": "22aefc3449bfc5d719a7bca7fce761eab6d70b7c7d5b19cbefce22eb755c7056"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    }
+  },
+  "build_mode": "locked release host SDK/verifier and aarch64 daemon rebuilt; sealed static writer reused",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/binary-archive/22aefc3449bfc5d719a7bca7fce761eab6d70b7c7d5b19cbefce22eb755c7056/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/case.before",
+    "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/history.sqlite",
+    "sha256:80049a44e8ee3879b29ef12abfa6aad3fe5eb2944322da981dd3153a72e5484e"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 1317618042,
+  "complexity_lines": [
+    "LFS_C1_EDIT_LOAD v=1 nodes_read=17 stored_nodes_read=2 draft_nodes_read=15",
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=1 spool_resident=true nodes_read=17 nodes_created=4 payloads_created=1 payload_bytes=22 peak_deferred_bytes=14264",
+    "LFS_FILE_INPUT v=1 edits=1 spool_resident=true record_lookups=6 record_reads=6 replacement_reads=2 replacement_bytes_read=2",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=0 branch_visits=0 leaf_visit_records=0 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=23",
+    "LFS_METADATA_OWNER v=1 finalizations=50",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=48",
+    "LFS_METADATA_OWNER v=1 finalizations=100",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=73",
+    "LFS_METADATA_OWNER v=1 finalizations=150",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_SPLICE v=1 root_height=0 leaf_visits=1 branch_visits=0 leaf_visit_records=3 branch_visit_children=0 leaf_writes=1 branch_writes=0 leaf_write_records=3 branch_write_children=0 leaf_min=3 leaf_max=3 child_edges_added=0 custody_edges_added=1",
+    "LFS_EXTENT_EDGE v=1 child_edges_removed=0 custody_edges_removed=98",
+    "LFS_METADATA_OWNER v=1 finalizations=200",
+    "LFS_PIECE_LOWER v=2 pieces=3 changes=1"
+  ],
+  "daemon_sha256": "4d5a9d5278fbd6c3815a0e39cf22d99df6171c3a3d253b2332586277289757ec",
+  "dependency_reuse": {
+    "master": "closed Store/history copied into this worktree, exact byte identity and rebuilt-verifier proof",
+    "prior_prepared": "benchmark-results/fs-bench-pro/issue265-balanced-prepared-ebfa8f2-01/prepared.json",
+    "prior_source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419",
+    "reviewed_core_changes": [
+      "core/crates/layerfs-workspace/src/backing/metadata.rs",
+      "core/crates/layerfs-workspace/src/backing/ownership.rs",
+      "core/crates/layerfs-workspace/tests/owner_finalization.rs"
+    ],
+    "writer": "source and binary SHA-256 matched"
+  },
+  "dockerfile_sha256": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+  "driver": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "cleanup_ns": 519306542,
+    "commit_called": true,
+    "commit_ns": 20020042,
+    "consumer_accounted_bytes": 1717236,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 39736,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 430602041,
+    "exec_stderr_hex": "",
+    "exec_stdout_hex": "50524f47524553530932350939353139333632350a50524f4752455353093530093230333738393239320a50524f4752455353093735093331363134313735300a50524f475245535309313030093431373436343132350a",
+    "head_commit": "1278bbe66865915f8c6263a026a7b6a888ebe16c74191ea355dcc11e475f075417",
+    "mode": "run",
+    "mount_ns": 17355584,
+    "operation_ns": 450630584,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=100,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue265-repeated-100-10m-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6",
+  "extent_diagnostics": {
+    "c1_edit": [
+      {
+        "draft_nodes_read": 15,
+        "nodes_read": 17,
+        "stored_nodes_read": 2,
+        "v": 1
+      }
+    ],
+    "file_input": [
+      {
+        "edits": 1,
+        "record_lookups": 6,
+        "record_reads": 6,
+        "replacement_bytes_read": 2,
+        "replacement_reads": 2,
+        "spool_resident": "true",
+        "v": 1
+      }
+    ],
+    "leaf_max": 3,
+    "leaf_min": 3,
+    "root_height": 0,
+    "snapshots": [
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 23,
+          "v": 1
+        },
+        "leaf_max": 3,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 50,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 25,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 25,
+          "leaf_visit_records": 72,
+          "leaf_visits": 24,
+          "leaf_write_records": 75,
+          "leaf_writes": 25
+        },
+        "writes": 25
+      },
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 48,
+          "v": 1
+        },
+        "leaf_max": 3,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 100,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 50,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 50,
+          "leaf_visit_records": 147,
+          "leaf_visits": 49,
+          "leaf_write_records": 150,
+          "leaf_writes": 50
+        },
+        "writes": 50
+      },
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 73,
+          "v": 1
+        },
+        "leaf_max": 3,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 150,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 75,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 75,
+          "leaf_visit_records": 222,
+          "leaf_visits": 74,
+          "leaf_write_records": 225,
+          "leaf_writes": 75
+        },
+        "writes": 75
+      },
+      {
+        "edge": {
+          "child_edges_removed": 0,
+          "custody_edges_removed": 98,
+          "v": 1
+        },
+        "leaf_max": 3,
+        "leaf_min": 3,
+        "owner": {
+          "finalizations": 200,
+          "v": 1
+        },
+        "root_height": 0,
+        "splices": 100,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 100,
+          "leaf_visit_records": 297,
+          "leaf_visits": 99,
+          "leaf_write_records": 300,
+          "leaf_writes": 100
+        },
+        "writes": 100
+      }
+    ],
+    "splices": 100,
+    "totals": {
+      "branch_visit_children": 0,
+      "branch_visits": 0,
+      "branch_write_children": 0,
+      "branch_writes": 0,
+      "child_edges_added": 0,
+      "custody_edges_added": 100,
+      "leaf_visit_records": 297,
+      "leaf_visits": 99,
+      "leaf_write_records": 300,
+      "leaf_writes": 100
+    }
+  },
+  "extent_diagnostics_complete": true,
+  "extent_diagnostics_error": null,
+  "family_id": "workspace_mounted_write_patterns",
+  "fixture_sha256": "eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472",
+  "functional_status": "PASS",
+  "fuse_write_callbacks_observed": 100,
+  "fuse_write_count_provenance": "Status write class; only data writes in shell command",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:80049a44e8ee3879b29ef12abfa6aad3fe5eb2944322da981dd3153a72e5484e",
+  "lft1": {
+    "event_count": 37,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 753900417,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        6218000,
+        6750000
+      ],
+      "first_ns": 302352583,
+      "gaps": 0,
+      "incarnation": 4798033713658,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12011959,
+      "last_ns": 750689833,
+      "last_probe_ns": 10750,
+      "namespace": 7,
+      "opened_ns": 303271167,
+      "pid": 19424,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "0546787cc93bc4698a6bd4c0a98fda4d",
+      "sampled_max_rss": 32423936,
+      "samples": 46,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 430602250,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 20020083,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 450627917,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+    "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+    "genesis_root_serial": 1,
+    "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+    "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+    "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/master",
+    "project_id": "31bf50228be038338dd77c4822bf4f886d",
+    "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+  },
+  "old_manifest_sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "owner_spec_sha256": "0f9c03572a752b05f30e5eec50771e4b07552f1efcb09fcfa7508c9aa7163247",
+  "payload_write_bytes_source_prediction": 409600,
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "100"
+  },
+  "retained_payload_allocated_bytes": [
+    8192,
+    8192,
+    8192,
+    8192
+  ],
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "issue265-repeated-100-10m-v1",
+  "schema": "issue265-patterns-attempt-v1",
+  "selection": "repeated",
+  "shell_command": "/fixtures/bin/write-separated repeated data.bin 100",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "701a00b34424ad9c05e947da86fdcd7262e0525ce253e402f5927aded634bd46",
+    "product_seal": "3931a1c4ab9c59bc0f0dbdcaf83dc85f37dfc18fce030b4c087d052d9508a93a",
+    "source_commit": "7221e177be9ebbe0baf4d51e8f7067a7dc66b37e",
+    "source_dirty": false,
+    "source_tree": "01a6d1b746ea1ca6c078358e8c2d2c549aa960db"
+  },
+  "spec_sha256": "f99e51430d0a16c7e246b236152aec73a54c66b83e72805794cadd33f12868e7",
+  "store_bytes_after": 913408,
+  "store_bytes_before": 626688,
+  "treatment_spec_sha256": "761029da660a5d41c1ccc1c6aa588875137f4af1354a0d74562083e7f9103dc2",
+  "verifier": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/case.verify",
+      "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/old.tsv",
+      "benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01/repeated.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 98883250
+  },
+  "write_syscalls_expected": 100,
+  "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3",
+  "writer_progress": [
+    {
+      "writer_elapsed_ns": 95193625,
+      "writes": 25
+    },
+    {
+      "writer_elapsed_ns": 203789292,
+      "writes": 50
+    },
+    {
+      "writer_elapsed_ns": 316141750,
+      "writes": 75
+    },
+    {
+      "writer_elapsed_ns": 417464125,
+      "writes": 100
+    }
+  ],
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

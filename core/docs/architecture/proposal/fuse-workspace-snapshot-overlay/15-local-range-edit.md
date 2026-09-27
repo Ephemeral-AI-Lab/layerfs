@@ -4,6 +4,8 @@
 > Implementation base: `4629b8d62de1e0df8a7bd9808b59a86d7c6669f3`. The page-edge
 > ownership rule below was refreshed in the issue-179 documentation round
 > against product source `f802cc124`.
+> New-page owner finalization below reflects the product source in this
+> document's commit, based on parent `12fbe4897`.
 > The source audit, v0.1.6 receipts and earlier round identities remain unchanged.
 
 This round implements one operation: local `Workspace::edit_file_range`. It uses
@@ -112,6 +114,11 @@ disk budget; the allowance is not multiplied by Workspace count.
 
 An on-disk ownership ledger tracks slot state, epoch, reference count, role and
 payload custody. The resident root registry is bounded at 32 per consumer.
+New-page owners declare their edge flag in the first ledger write. An unfinished
+candidate retains the exact acknowledged edge prefix in memory, so cleanup
+releases only those references if edge advancement fails. Successful new-page
+owner finalizations have a saturating `LFS_METADATA_OWNER` diagnostic counter;
+finalization needs no second owner-ledger read or write.
 Root drops make work eligible; explicit cleanup traverses outside the short
 Workspace lock with a bounded cursor. Unknown ledger or allocation outcomes
 retain ownership and stop affected admission. Payload cleanup cannot clear an

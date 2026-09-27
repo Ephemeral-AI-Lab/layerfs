@@ -2,7 +2,7 @@ use super::{
     budget::{Budget, Charge},
     directory::{identity, Directory},
     reader::PayloadReader,
-    segments::{self, Header, Window, ALIGN, DATA_BYTES, WINDOW_BYTES},
+    segments::{self, Header, Window, ALIGN, DATA_BYTES, INLINE_START, WINDOW_BYTES},
 };
 use crate::*;
 use layerfs_bridge::contract::Source;
@@ -153,7 +153,12 @@ pub(crate) fn header(record: &Record, index: u32) -> Header {
     }
 }
 pub(crate) fn segment_bytes(record: &Record, index: u32) -> u64 {
-    ALIGN as u64 + u64::from(header(record, index).logical).div_ceil(ALIGN as u64) * ALIGN as u64
+    if segments::inline(record.length) {
+        ALIGN as u64
+    } else {
+        ALIGN as u64
+            + u64::from(header(record, index).logical).div_ceil(ALIGN as u64) * ALIGN as u64
+    }
 }
 pub(crate) fn bare_failure(phase: BackingPhase, kind: io::ErrorKind) -> WorkspaceError {
     WorkspaceError::Backing(BackingFailure {
@@ -614,17 +619,25 @@ impl PayloadHost {
                 phase = BackingPhase::Write;
                 let header = header(&record, index);
                 header.fill(window);
-                segments::write(&file, window, 0, ALIGN)?;
+                let inline = segments::inline(record.length);
+                if !inline {
+                    segments::write(&file, window, 0, ALIGN)?;
+                }
                 check()?;
                 let mut logical = 0usize;
                 while logical < header.logical as usize {
                     check()?;
                     phase = BackingPhase::Input;
                     let count = (header.logical as usize - logical).min(WINDOW_BYTES);
+                    let start = if inline { INLINE_START } else { 0 };
                     let mut received = 0;
                     while received < count {
                         check()?;
-                        let read = source.read(&mut window.0[received..count], deadline, cancel)?;
+                        let read = source.read(
+                            &mut window.0[start + received..start + count],
+                            deadline,
+                            cancel,
+                        )?;
                         check()?;
                         if read == 0 {
                             return Err(io::ErrorKind::UnexpectedEof.into());
@@ -635,10 +648,15 @@ impl PayloadHost {
                         received += read;
                     }
                     check()?;
-                    let physical = count.div_ceil(ALIGN) * ALIGN;
-                    window.0[count..physical].fill(0);
                     phase = BackingPhase::Write;
-                    segments::write(&file, window, ALIGN as u64 + logical as u64, physical)?;
+                    if inline {
+                        window.0[start + count..ALIGN].fill(0);
+                        segments::write(&file, window, 0, ALIGN)?;
+                    } else {
+                        let physical = count.div_ceil(ALIGN) * ALIGN;
+                        window.0[count..physical].fill(0);
+                        segments::write(&file, window, ALIGN as u64 + logical as u64, physical)?;
+                    }
                     logical += count;
                     record
                         .state

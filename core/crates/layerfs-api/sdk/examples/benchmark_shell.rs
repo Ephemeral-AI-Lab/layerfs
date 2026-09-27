@@ -145,6 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("sandbox create".into());
         }
     };
+    let mount_start = Instant::now();
     let mount = match workspaces.mount(sandbox, &project, branch, None) {
         Ok(value) => value,
         Err(error) => {
@@ -162,9 +163,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("workspace mount".into());
         }
     };
+    let mount_ns = mount_start.elapsed().as_nanos();
     let mut exec_ns = 0;
     let mut commit_ns = 0;
     let mut commit_called = false;
+    let mut exec_stdout = String::new();
+    let mut exec_stderr = String::new();
     let start = Instant::now();
     let (outcome, diagnostic) = runtime
         .recorder()
@@ -181,6 +185,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if exec.stdout_truncated || exec.stderr_truncated {
                 return Err("truncated Exec output".to_string());
             }
+            exec_stdout = hex(&exec.stdout);
+            exec_stderr = hex(&exec.stderr);
             if expected_failure {
                 return match exec.exit_status {
                     Some(code) if code != 0 => Ok(None),
@@ -247,8 +253,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .join(",")
         })
         .unwrap_or_default();
-    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
-        detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
+    let upstream = post_status
+        .as_ref()
+        .ok()
+        .map_or("null".to_owned(), |status| {
+            status.upstream_calls.to_string()
+        });
+    let charged = post_status
+        .as_ref()
+        .ok()
+        .map_or("null".to_owned(), |status| {
+            status.consumer_accounted_bytes.to_string()
+        });
+    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"mount_ns\":{mount_ns},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"exec_stdout_hex\":{:?},\"exec_stderr_hex\":{:?},\"projection_counts\":{:?},\"upstream_calls\":{upstream},\"consumer_accounted_bytes\":{charged},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
+        detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, exec_stdout, exec_stderr, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
         format!("{:?}", capture.error));
     drop(owner);

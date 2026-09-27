@@ -1,0 +1,6 @@
+{
+  "stage": "evidence-packaging",
+  "status": "FAIL",
+  "reason": "first indexing command assumed prepare-reuse created a new master; it correctly reused the prior closed master; no sample or copied raw file was changed",
+  "sample_count_delta": 0
+}

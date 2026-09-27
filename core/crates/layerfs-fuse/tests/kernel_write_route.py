@@ -16,6 +16,7 @@ driver.CASES = {
     'quota': ['mounted-quota-refusal-preserves-bytes-size-mtime-and-cleanup'],
     'backing_failure': ['mounted-backing-failure-retains-accepted-prefix-and-accounted-failed-owner'],
     'origin': ['projection-write-origin-reply-slot-append-offset-and-single-attempt-contract'],
+    'reply_gap': ['healthy-reply-waits-within-original-deadline-and-release-wakes-admission'],
     'completion_failure': ['projection-write-known-publication-failure-is-reported-by-alias-flush'],
 }
 driver.REQUIREMENTS = {case: ['W-01', 'W-07', 'W-12', 'B-01', 'S-15', 'S-18'] for case in driver.CASES}

@@ -1,0 +1,21 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "zigbuild",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "--offline",
+    "--target",
+    "aarch64-unknown-linux-musl",
+    "-p",
+    "layerfs-workspace",
+    "--test",
+    "owner_finalization"
+  ],
+  "wall_ns": 1816866875,
+  "exit_code": 0,
+  "timeout": false
+}

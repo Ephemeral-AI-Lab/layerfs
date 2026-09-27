@@ -1,0 +1,368 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    128,
+    256,
+    384,
+    512
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 304294463,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 1093632,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 4198,
+        "ledger_writes": 2301,
+        "lookup_scans": 0,
+        "metadata_reads": 952,
+        "payloads": 128,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 128,
+        "routine_scans": 127
+      },
+      "elapsed_ns": 711247875,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 45056,
+        "allocated_pages": 8,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4368
+      },
+      "publication_ns": 374950293,
+      "version": 2,
+      "write_class": 128
+    },
+    {
+      "acquisition_ns": 618389420,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 2158592,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 9601,
+        "ledger_writes": 5402,
+        "lookup_scans": 0,
+        "metadata_reads": 2104,
+        "payloads": 256,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 256,
+        "routine_scans": 255
+      },
+      "elapsed_ns": 1407395166,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 61440,
+        "allocated_pages": 10,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4432
+      },
+      "publication_ns": 750401044,
+      "version": 2,
+      "write_class": 256
+    },
+    {
+      "acquisition_ns": 956283422,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 3223552,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 15540,
+        "ledger_writes": 9039,
+        "lookup_scans": 0,
+        "metadata_reads": 3256,
+        "payloads": 384,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 384,
+        "routine_scans": 383
+      },
+      "elapsed_ns": 2164948583,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 77824,
+        "allocated_pages": 12,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4432
+      },
+      "publication_ns": 1164413593,
+      "version": 2,
+      "write_class": 384
+    },
+    {
+      "acquisition_ns": 1335194848,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 4288512,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 22015,
+        "ledger_writes": 13212,
+        "lookup_scans": 0,
+        "metadata_reads": 4408,
+        "payloads": 512,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 512,
+        "routine_scans": 511
+      },
+      "elapsed_ns": 3009413959,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 94208,
+        "allocated_pages": 14,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4560
+      },
+      "publication_ns": 1624717759,
+      "version": 2,
+      "write_class": 512
+    }
+  ],
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/binary-archive/f9b99bf514059e1daac716c468c7f059f2ce78e46764ab8fb2dd859550c69e65/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/case.before",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/history.sqlite",
+    "sha256:baf42300925ed535f854a8e64bf6f0d265d4cbb3325037953188df4c39bb60d4"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 4202081583,
+  "complexity_lines": [
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=512 spool_resident=true nodes_read=0 nodes_created=0 payloads_created=0 payload_bytes=0 peak_deferred_bytes=0",
+    "LFS_PIECE_LOWER v=2 pieces=1024 changes=512"
+  ],
+  "daemon_close_observed": true,
+  "daemon_retained_observed": false,
+  "daemon_sha256": "97ecaa1b50469e402af5fb1d56a1140547db6b5aec9871ebe86fa2962e0aacb0",
+  "dependency_reuse": null,
+  "dockerfile_sha256": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+  "driver": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "cleanup_ns": 808153417,
+    "commit_called": true,
+    "commit_ns": 90577167,
+    "consumer_accounted_bytes": 1876884,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 15755,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 3000672500,
+    "exec_stderr_hex": "",
+    "exec_stdout_hex": "50524f475245535309313238093638393034363132350a50524f47524553530932353609313338353232393730380a50524f47524553530933383409323134323735303530300a50524f47524553530935313209323938373231373739320a",
+    "head_commit": "12291d44fae3f74d8f55f64c7c4c45238d9fbaf0175dabe64d20ddf8dbf35d0e39",
+    "mode": "run",
+    "mount_ns": 18081917,
+    "operation_ns": 3091259625,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=512,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue266-fuse-512-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_binary_sha256": "f9b99bf514059e1daac716c468c7f059f2ce78e46764ab8fb2dd859550c69e65",
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "family_id": "workspace_mounted_separated_writes",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "functional_status": "PASS",
+  "fuse_write_callbacks_observed": 512,
+  "fuse_write_count_provenance": "Status write class; this command makes only data mutations",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:baf42300925ed535f854a8e64bf6f0d265d4cbb3325037953188df4c39bb60d4",
+  "images": {
+    "diagnostic": "sha256:c1051db26d2863ee8a77afdf45942f0ef2ee2804c47b67025967482abca4750b",
+    "diagnostic100v2": "sha256:62c1a7384fdc03a9b4e4220596ef71d0b3254acc629c63761d65057f20188b64",
+    "diagnostic100v3": "sha256:be6c1741cc2ab15e72729ae38b6e9c0f90f5eda7fa98618d6387af3318c829a1",
+    "diagnostic512": "sha256:7e72994c7a87820eef96ea4883ce9221e43b96564b0723b7792f18ddafb9863e",
+    "fuse512": "sha256:baf42300925ed535f854a8e64bf6f0d265d4cbb3325037953188df4c39bb60d4",
+    "gate": "sha256:d6acaa54ff8b005d5026a7509d3c0623e6427e7ebf8d9caf409b09973ca98877"
+  },
+  "issue266_spec_sha256": "8ccdd919b892bbb27267bd4afda3e724423356bbdb8e00098a99753fec9488f5",
+  "lft1": {
+    "event_count": 43,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 3353714917,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        9770000,
+        16394000
+      ],
+      "first_ns": 250021208,
+      "gaps": 0,
+      "incarnation": 4710336917350,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12721625,
+      "last_ns": 3352012375,
+      "last_probe_ns": 7708,
+      "namespace": 7,
+      "opened_ns": 262459042,
+      "pid": 132,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "6c703181bb3c4a3f9995df197d2343f4",
+      "sampled_max_rss": 34422784,
+      "samples": 311,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 3000672708,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 90577250,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 3091254833,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "3230773c633b5ccfdeb2ad583ab5634950a60d142ca113a0c8d44439eadf3dbe1e",
+    "genesis_root": "c4aa80a0f7a3793c7f5e0e5edc0c1541c0babd3f5807f8291d07b35d8d0b2099",
+    "genesis_root_serial": 1,
+    "history_sha256": "9de61b66251c28b00e5f0d78c3398411fcaa746f16d586e659bd2fc89a2c645a",
+    "old_commit": "1225c7e67c60589eb484199abbead21976228e75e2e73cca4eeb483761a8e77094",
+    "path": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/master",
+    "project_id": "3151847dddb73ca00299feed4815201f73",
+    "store_sha256": "6a0589853aa5dab05bea0e7f224d9c832f70b551fd8a0e74668ffbc898bb15d9"
+  },
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "512"
+  },
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "issue266-fuse-512-v1",
+  "schema": "issue261-separated-attempt-v1",
+  "selection": "fuse512",
+  "shell_command": "/fixtures/bin/write-separated data.bin 512",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "e6b5aa699359f0aa453249c1aebecf9172b56c3954c83348cf1fbd80789ab9a7",
+    "product_seal": "401b2e3cfb94bbbaf0ebb3d0d7afab7878253fac12c429d54779d8857cb1f901",
+    "source_commit": "14859869ffac4db267ae6f4704dc7880512eb2cd",
+    "source_dirty": false,
+    "source_tree": "686c0bf57790ed2925ad1564065c0fccef27de50"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "store_bytes_after": 897024,
+  "store_bytes_before": 618496,
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "verifier": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/binary-archive/23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1/verify_shell",
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/case.verify",
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-512-v1/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/old.tsv",
+      "benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/fuse512.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 13721042
+  },
+  "verifier_binary_sha256": "23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1",
+  "write_refusals": [],
+  "write_syscalls_expected": 512,
+  "writer_binary_sha256": "6f7ed772124989209fb4e56987abae7dad5c50951c1e73d4da894e9900ea0ad2",
+  "writer_progress": [
+    {
+      "writer_elapsed_ns": 689046125,
+      "writes": 128
+    },
+    {
+      "writer_elapsed_ns": 1385229708,
+      "writes": 256
+    },
+    {
+      "writer_elapsed_ns": 2142750500,
+      "writes": 384
+    },
+    {
+      "writer_elapsed_ns": 2987217792,
+      "writes": 512
+    }
+  ],
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

@@ -162,6 +162,29 @@ Padding is explicitly initialized. Base references and logical zero spans requir
 no local payload allocation in this round; their future piece/index representation
 is still R3b work.
 
+## Version 2 one-page tiny inputs (#265, 2026-09-27)
+
+Source pin: the product change committed with this section. The version-1
+equation above remains the layout for payloads longer than 4,016 bytes and
+describes the earlier R3a evidence. An admitted input of 1..=4,016 bytes now
+uses one 4,096-byte file: bytes 0..80 keep the same identity fields but declare
+`LFSWPLD2` and version 2, with declared header/data capacities of 80/4,016;
+bytes 80..80+L hold that payload's own data, and
+the rest are zero. The one-byte case therefore reserves and observes 4,096
+bytes and makes one aligned direct write; 4,017 bytes still use the version-1
+8,192-byte layout and two writes. Empty input still creates no file.
+
+The private record's length selects the expected version. A reader refuses an
+older or unknown tiny header, validates its identity and zero padding before
+serving arbitrary ranges, and refuses a short page. No private file is adopted
+after restart or collision. Each accepted write still owns an independent
+immutable payload, with `st_blocks` reconciliation, partial failure retention,
+G1/G2 custody and checked cleanup unchanged. This is not a cross-write pack
+or a claim about physical device traffic or numerical latency. The current
+[prospective treatment](../../../../../docs/roadmap/0.1/0.1.7/issue265-mounted-write-treatment.md)
+and its native proof govern the new profile; the historical R3a quantities
+above retain their original source and test scope.
+
 ## Linux capability and failure ownership
 
 The initial native profile requires private owned directories, canonical paths,

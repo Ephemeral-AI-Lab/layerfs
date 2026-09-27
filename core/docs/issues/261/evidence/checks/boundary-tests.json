@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/tools",
+    "-p",
+    "test_*.py"
+  ],
+  "wall_ns": 81933083,
+  "exit_code": 0,
+  "timed_out": false
+}\n

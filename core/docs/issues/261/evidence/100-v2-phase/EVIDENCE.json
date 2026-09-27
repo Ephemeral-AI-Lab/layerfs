@@ -1,0 +1,21 @@
+{
+  "binary_store_retained_locally": true,
+  "copied_sha256": {
+    "SHA256SUMS": "c73a00e9a12bde6f6efd943e497a4537f40ff4de4a1b41c9368bad5b5ec8f7a6",
+    "case.before": "26cf2fd692fb2f7bf55f9051905dff860a4d97ba2a50a34abf70e19395e0e119",
+    "case.verify": "7dc573e7779d284c24855746c028d0244728594ece5656d73045f44150097381",
+    "diagnostic100v2.tsv": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "driver.stderr": "4b372e1126a7b335a05018472549f48132bee8f5de080e28c4f4b47917e58630",
+    "driver.stdout": "6bb29f832234d2651e3399f83c983f4056429d6706cdc2d7fc142cac130b3293",
+    "old.tsv": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e",
+    "prepared-public.json": "17e2bb22b93362ac6e004fba0c90307f2b4d32e8d58c60dd87438c4f1ab1e622",
+    "receipt.json": "d387156f0604df291845fa9e96f5734555d686e27f4efd841d3c25296a6b8a92",
+    "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verifier.stdout": "6ef386c20b5d07712f1f6d00d59870cc7a8b10d9af1443b8fb04f1f9acff2a8f"
+  },
+  "omitted_binary_store_sha256": {
+    "history.sqlite": "157c61a75c36350a640c8e7f2699a74ac6bef4e4845f3dc97e9c4ad6f00da2c8",
+    "store.sqlite": "4fee5bd7bd09b3e22b117d05b111fa2fe7059364656b644edd341059f369e5cf"
+  },
+  "origin": "benchmark-results/fs-bench-pro/issue261-diagnostic-100-v2-f23263b-01"
+}

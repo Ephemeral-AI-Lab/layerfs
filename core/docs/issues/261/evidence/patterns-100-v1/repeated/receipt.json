@@ -1,0 +1,374 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    25,
+    50,
+    75,
+    100
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 53638583,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 36864,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 826,
+        "ledger_writes": 364,
+        "lookup_scans": 0,
+        "metadata_reads": 164,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 47
+      },
+      "elapsed_ns": 132539584,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4320
+      },
+      "publication_ns": 50728414,
+      "version": 2,
+      "write_class": 25
+    },
+    {
+      "acquisition_ns": 118978625,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 36864,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 1701,
+        "ledger_writes": 739,
+        "lookup_scans": 0,
+        "metadata_reads": 339,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 97
+      },
+      "elapsed_ns": 254380584,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4320
+      },
+      "publication_ns": 105667914,
+      "version": 2,
+      "write_class": 50
+    },
+    {
+      "acquisition_ns": 180687669,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 36864,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 2576,
+        "ledger_writes": 1114,
+        "lookup_scans": 0,
+        "metadata_reads": 514,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 147
+      },
+      "elapsed_ns": 371905626,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4320
+      },
+      "publication_ns": 159915872,
+      "version": 2,
+      "write_class": 75
+    },
+    {
+      "acquisition_ns": 237630252,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 36864,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 3451,
+        "ledger_writes": 1489,
+        "lookup_scans": 0,
+        "metadata_reads": 689,
+        "payloads": 2,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 2,
+        "routine_scans": 197
+      },
+      "elapsed_ns": 478334001,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 20480,
+        "allocated_pages": 4,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4320
+      },
+      "publication_ns": 208279372,
+      "version": 2,
+      "write_class": 100
+    }
+  ],
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/binary-archive/23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c/benchmark_init",
+      "sha256": "23dfff45f22a09a149593c751ddb2db5972ad033956157e4da76e755960b3b8c"
+    },
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/binary-archive/414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8/benchmark_shell",
+      "sha256": "414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/binary-archive/23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1/verify_shell",
+      "sha256": "23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1"
+    }
+  },
+  "build_mode": "sealed release SDK/daemon reused; locked release verifier and Zig -O3 static writer built",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/binary-archive/414b865af73a358a384fdfdaddd1d9c502d60bcad66e2f35af30d6ee118794b8/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/case.before",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/history.sqlite",
+    "sha256:6c597d06c34b3b560b6dbd4b0e04689d5af82ccfd2bf90c98777a5e02a75be31"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 1345645250,
+  "complexity_lines": [
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=1 spool_resident=true nodes_read=17 nodes_created=4 payloads_created=1 payload_bytes=22 peak_deferred_bytes=14264",
+    "LFS_PIECE_LOWER v=2 pieces=3 changes=1"
+  ],
+  "daemon_sha256": "e05f52c25a12a6bd16ad61127825700028af149f9a40cd8782db0d069fcf3a30",
+  "dependency_reuse": {
+    "prior_prepared": "benchmark-results/fs-bench-pro/issue261-prepared-100-v3-0a3ec6d-01/prepared.json",
+    "prior_product_seal": "dc57c20985a2a98dc53c9e7db5d32606cb1d0d62eebe5152e93d7438f154b879",
+    "prior_source_commit": "0a3ec6d0f91db5b27f868a50805df2a8563b5d8c",
+    "reviewed_compilation_change": "core/crates/layerfs-server/examples/verify_shell.rs"
+  },
+  "dockerfile_sha256": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+  "driver": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "cleanup_ns": 490568875,
+    "commit_called": true,
+    "commit_ns": 23324167,
+    "consumer_accounted_bytes": 1717212,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 14333,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 467412875,
+    "exec_stderr_hex": "",
+    "exec_stdout_hex": "50524f4752455353093235093130353636353636370a50524f4752455353093530093232373530313632360a50524f4752455353093735093334353033343038340a50524f475245535309313030093435313436393337360a",
+    "head_commit": "12381510f39b57b2427939c0c2a4626a48e0651cf5de08dc2cfc30d491a168f527",
+    "mode": "run",
+    "mount_ns": 20175333,
+    "operation_ns": 490745083,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=100,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue261-repeated-100-10m-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6",
+  "family_id": "workspace_mounted_write_patterns",
+  "fixture_sha256": "eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472",
+  "functional_status": "PASS",
+  "fuse_write_callbacks_observed": 100,
+  "fuse_write_count_provenance": "Status write class; only data writes in shell command",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:6c597d06c34b3b560b6dbd4b0e04689d5af82ccfd2bf90c98777a5e02a75be31",
+  "lft1": {
+    "event_count": 37,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 809732875,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        5411000,
+        6140000
+      ],
+      "first_ns": 311800833,
+      "gaps": 0,
+      "incarnation": 4591989590410,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12185083,
+      "last_ns": 802080583,
+      "last_probe_ns": 8875,
+      "namespace": 7,
+      "opened_ns": 318989041,
+      "pid": 71025,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "cb258a4973354718bd6a556356147210",
+      "sampled_max_rss": 31932416,
+      "samples": 50,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 467413250,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 23324208,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 490742375,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+    "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+    "genesis_root_serial": 1,
+    "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+    "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/master",
+    "project_id": "31bf50228be038338dd77c4822bf4f886d",
+    "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+  },
+  "old_manifest_sha256": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "100"
+  },
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "issue261-repeated-100-10m-v1",
+  "schema": "issue261-patterns-attempt-v1",
+  "selection": "repeated",
+  "shell_command": "/fixtures/bin/write-separated repeated data.bin 100",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "67572817e6473d051d9f4788972d550d97ee2feaa8694cf841f619b6716ec569",
+    "product_seal": "41f407a2a841b28eda3177d1310e0515d7854e7b1e36f20f54eff305790cf0e5",
+    "source_commit": "7361312e6936136930584b314717067bcee1d879",
+    "source_dirty": false,
+    "source_tree": "f2b734a943814a16e319be418e84af2442c1a264"
+  },
+  "spec_sha256": "f99e51430d0a16c7e246b236152aec73a54c66b83e72805794cadd33f12868e7",
+  "store_bytes_after": 913408,
+  "store_bytes_before": 626688,
+  "verifier": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/binary-archive/23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1/verify_shell",
+      "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/case.verify",
+      "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-pattern-repeated-7361312-01/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/old.tsv",
+      "benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/repeated.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 93153625
+  },
+  "write_syscalls_expected": 100,
+  "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3",
+  "writer_progress": [
+    {
+      "writer_elapsed_ns": 105665667,
+      "writes": 25
+    },
+    {
+      "writer_elapsed_ns": 227501626,
+      "writes": 50
+    },
+    {
+      "writer_elapsed_ns": 345034084,
+      "writes": 75
+    },
+    {
+      "writer_elapsed_ns": 451469376,
+      "writes": 100
+    }
+  ],
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

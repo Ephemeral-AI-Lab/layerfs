@@ -363,9 +363,19 @@ impl Arena {
             owner.refs.checked_sub(delta.unsigned_abs())
         }
         .ok_or(WorkspaceError::Io)?;
+        self.write_loaded_owner(r, owner, window, deadline)?;
+        Ok(owner.refs)
+    }
+    /// Writes the authenticated ledger page `read_owner` left in `window`.
+    fn write_loaded_owner(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
         // `read_owner` left the authenticated ledger page in this window.
-        // A second read of the same 4 KiB page for this one reference change
-        // doubles ledger I/O on every COW publication and reclaim.
+        // Re-reading it to mark a page's completed edges doubles that I/O.
         clock(deadline).map_err(|error| self.failure(BackingPhase::Write, error.kind()))?;
         let index = (r.slot - 1) / RECORDS;
         let file = self.ledger_file(index, true, BackingPhase::Write)?;
@@ -381,7 +391,7 @@ impl Arena {
                 .unrecoverable = true;
             return Err(self.failure(BackingPhase::Write, error.kind()));
         }
-        Ok(owner.refs)
+        Ok(())
     }
     fn allocate_slot(
         &self,
@@ -508,6 +518,31 @@ impl Arena {
         clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         self.reads.fetch_add(1, Ordering::Relaxed);
         let owner = self.read_owner(r, window, deadline)?;
+        self.load_raw_body(r, owner, window)
+    }
+    /// Cleanup just authenticated this owner. Recheck the ledger pathname, but
+    /// do not issue a second direct read of its unchanged record in this step.
+    pub(super) fn load_raw_with_owner(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
+        clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        self.reads.fetch_add(1, Ordering::Relaxed);
+        if r == PageRef::NULL {
+            return Err(WorkspaceError::Io);
+        }
+        drop(self.ledger_file((r.slot - 1) / RECORDS, false, BackingPhase::Read)?);
+        self.load_raw_body(r, owner, window)
+    }
+    fn load_raw_body(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+    ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
         if owner.role != 1 {
             return Err(WorkspaceError::Io);
         }
@@ -853,12 +888,17 @@ impl RootOwner {
             &window.0[..PAGE],
         )?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = Some((r, 0));
         self.arena.set_owner(
             r,
             Owner {
                 epoch: r.epoch,
                 role: 1,
                 refs: 1,
+                edges: true,
                 device: identity.0,
                 inode: identity.1,
                 ..Owner::default()
@@ -878,13 +918,15 @@ impl RootOwner {
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
         self.add_page_edges(r, &edges, window, deadline)?;
-        let mut owner = self.arena.read_owner(r, window, deadline)?;
-        owner.edges = true;
-        self.arena.set_owner(r, owner, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .edge_progress = None;
+        let _ = self.arena.owner_finalizations.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |old| Some(old.saturating_add(1)),
+        );
         Ok((r, state))
     }
     pub fn write_page(
@@ -905,13 +947,19 @@ impl RootOwner {
         }
         let r = self.arena.allocate_slot(self, window, deadline)?;
         data.encode(self.arena.directory.incarnation, r, &mut window.0[..PAGE])?;
+        let edges = super::metadata_index::edges(&data)?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = Some((r, 0));
         self.arena.set_owner(
             r,
             Owner {
                 epoch: r.epoch,
                 role: 1,
                 refs: 1,
+                edges: true,
                 device: identity.0,
                 inode: identity.1,
                 ..Owner::default()
@@ -930,14 +978,16 @@ impl RootOwner {
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
-        self.add_page_edges(r, &super::metadata_index::edges(&data)?, window, deadline)?;
-        let mut owner = self.arena.read_owner(r, window, deadline)?;
-        owner.edges = true;
-        self.arena.set_owner(r, owner, window, deadline)?;
+        self.add_page_edges(r, &edges, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .edge_progress = None;
+        let _ = self.arena.owner_finalizations.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |old| Some(old.saturating_add(1)),
+        );
         Ok(r)
     }
 }

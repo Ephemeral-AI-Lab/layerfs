@@ -1,10 +1,12 @@
 //! Kernel argument checks and single-use replies; no filesystem algorithms.
+use crate::open_flags::{flags, KERNEL_FMODE_EXEC};
 use crate::replies::{attributes, errno, inode, kind, serial};
 use crate::trace::trace;
+use crate::write_sample::WriteSamples;
 use fuser::*;
 use layerfs_workspace::{
-    filesystem::projection_counters::ProjectionOp, FileAccess, FileCreateOptions, FileOpenOptions,
-    ProjectionReplyPermit, ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
+    filesystem::projection_counters::ProjectionOp, FileCreateOptions, ProjectionReplyPermit,
+    ReferenceScope, Workspace, MAX_DIRECTORY_ENTRIES, MAX_READ_BYTES,
 };
 use std::{
     ffi::OsStr,
@@ -20,22 +22,11 @@ use std::{
 
 pub(crate) const CALLBACK_BUDGET: Duration = Duration::from_secs(10);
 const TTL: Duration = Duration::ZERO;
-// Linux do_open_execat carries __FMODE_EXEC in file flags through FUSE_OPEN.
-const KERNEL_FMODE_EXEC: i32 = 1 << 5;
-
-// FUSE forwards kernel UAPI flags. glibc's 64-bit O_LARGEFILE is zero even
-// though the kernel sets this bit in every ordinary file description.
-#[cfg(target_arch = "aarch64")]
-const KERNEL_O_LARGEFILE: i32 = 0o400000;
-#[cfg(target_arch = "x86_64")]
-const KERNEL_O_LARGEFILE: i32 = 0o100000;
-#[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-const KERNEL_O_LARGEFILE: i32 = 0;
-
 pub(crate) struct Adapter {
     pub(crate) workspace: Workspace,
     pub(crate) stopping: Arc<AtomicBool>,
     pub(crate) writable: bool,
+    pub(crate) write_samples: WriteSamples,
 }
 
 impl Adapter {
@@ -73,40 +64,6 @@ impl Adapter {
             Errno::EROFS
         })
     }
-}
-
-fn flags(value: OpenFlags, directory: bool, writable: bool) -> Result<FileOpenOptions, Errno> {
-    let mutations = libc::O_ACCMODE | libc::O_TRUNC | libc::O_APPEND | libc::O_CREAT;
-    if (!writable || directory) && value.0 & mutations != 0 {
-        return Err(Errno::EROFS);
-    }
-    let allowed = libc::O_CLOEXEC
-        | KERNEL_O_LARGEFILE
-        | libc::O_NOFOLLOW
-        | libc::O_DIRECTORY
-        | libc::O_NOCTTY
-        | libc::O_NONBLOCK
-        | libc::O_NOATIME
-        | if directory { 0 } else { KERNEL_FMODE_EXEC }
-        | if writable && !directory {
-            libc::O_ACCMODE | libc::O_APPEND
-        } else {
-            0
-        };
-    if value.0 & !allowed != 0 {
-        return Err(Errno::EOPNOTSUPP);
-    }
-    let access = match value.0 & libc::O_ACCMODE {
-        libc::O_RDONLY => FileAccess::ReadOnly,
-        libc::O_WRONLY => FileAccess::WriteOnly,
-        libc::O_RDWR => FileAccess::ReadWrite,
-        _ => return Err(Errno::EINVAL),
-    };
-    Ok(FileOpenOptions {
-        access,
-        append: value.0 & libc::O_APPEND != 0,
-        truncate: false,
-    })
 }
 
 impl Filesystem for Adapter {
@@ -548,6 +505,8 @@ impl Filesystem for Adapter {
         _: Option<LockOwner>,
         reply: ReplyWrite,
     ) {
+        let mut acquisition_ns = 0;
+        let mut publication_ns = 0;
         trace(
             "write",
             None,
@@ -575,24 +534,45 @@ impl Filesystem for Adapter {
             self.workspace
                 .begin_projection_mutation(deadline)
                 .map(|permit| (permit, options.append))
-                .map_err(errno)
+                .map_err(|error| {
+                    self.write_samples
+                        .map_error(&self.workspace, "admission", error)
+                })
         });
         let result = permit
             .as_mut()
             .map_err(|error| *error)
             .and_then(|(permit, append)| {
+                let started = Instant::now();
                 let payload = self
                     .workspace
                     .own_payload(data.len() as u64, &mut &data[..], deadline)
-                    .map_err(errno)?;
-                permit
+                    .map_err(|error| {
+                        self.write_samples
+                            .map_error(&self.workspace, "own_payload", error)
+                    })?;
+                acquisition_ns = started.elapsed().as_nanos() as u64;
+                let started = Instant::now();
+                let result = permit
                     .write_file(fh.0, offset, &payload, *append, deadline)
-                    .map_err(errno)
+                    .map_err(|error| {
+                        self.write_samples
+                            .map_error(&self.workspace, "write_file", error)
+                    });
+                publication_ns = started.elapsed().as_nanos() as u64;
+                result
             });
         // The origin permit stays alive through the send attempt. fuser does not
         // expose checked reply delivery or a later kernel-completion acknowledgement.
+        if let Ok((origin, _)) = &mut permit {
+            origin.mark_reply_started();
+        }
         match result {
-            Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
+            Ok(receipt) => {
+                reply.written(receipt.accepted_bytes as u32);
+                self.write_samples
+                    .record(&self.workspace, acquisition_ns, publication_ns);
+            }
             Err(error) => reply.error(error),
         }
     }

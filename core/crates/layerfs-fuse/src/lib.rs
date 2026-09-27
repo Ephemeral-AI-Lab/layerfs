@@ -5,8 +5,12 @@
 mod adapter;
 mod mount;
 #[cfg(target_os = "linux")]
+mod open_flags;
+#[cfg(target_os = "linux")]
 mod replies;
 #[cfg(target_os = "linux")]
 mod trace;
+#[cfg(target_os = "linux")]
+mod write_sample;
 
 pub use mount::{mount, mount_writable, MountError, MountFailure, MountHandle, MountPhase};

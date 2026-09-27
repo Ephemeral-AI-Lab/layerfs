@@ -1,0 +1,10 @@
+{
+  "command": [
+    "python3",
+    "core/tools/check_product_boundary.py"
+  ],
+  "exit_code": 0,
+  "original_metadata_sha256": "6c7d6424f21e839150ce92fe3ae8904abcd4d251317642778d09816adbbe8723",
+  "timed_out": false,
+  "wall_ns": 129792542
+}

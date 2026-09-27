@@ -1,0 +1,16 @@
+{
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/tools",
+    "-p",
+    "test_*.py"
+  ],
+  "exit_code": 0,
+  "original_metadata_sha256": "844a8b0b9ab3ac158544b1b6827a39b63922b356ef2edcf89cbd5064ed295b82",
+  "timed_out": false,
+  "wall_ns": 81933083
+}

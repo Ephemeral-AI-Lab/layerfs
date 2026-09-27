@@ -1,0 +1,477 @@
+{
+  "admission_eligible": false,
+  "note": "Original INCOMPLETE receipts remain unchanged; this is count-only postprocessing.",
+  "report_generator_sha256": "43921f05065472db22520c5309877141ffd3762f5a5970c3ef3a960f02d613bf",
+  "rows": [
+    {
+      "counts": {
+        "c1_edit": [
+          {
+            "draft_nodes_read": 2,
+            "nodes_read": 4,
+            "stored_nodes_read": 2,
+            "v": 1
+          }
+        ],
+        "file_input": [
+          {
+            "edits": 1,
+            "record_lookups": 5,
+            "record_reads": 5,
+            "replacement_bytes_read": 100,
+            "replacement_reads": 1,
+            "spool_resident": "true",
+            "v": 1
+          }
+        ],
+        "leaf_max": 101,
+        "leaf_min": 2,
+        "root_height": 0,
+        "snapshots": [
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 276,
+              "v": 1
+            },
+            "leaf_max": 26,
+            "leaf_min": 2,
+            "root_height": 0,
+            "splices": 25,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 325,
+              "leaf_visit_records": 324,
+              "leaf_visits": 24,
+              "leaf_write_records": 350,
+              "leaf_writes": 25
+            },
+            "writes": 25
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 1176,
+              "v": 1
+            },
+            "leaf_max": 51,
+            "leaf_min": 2,
+            "root_height": 0,
+            "splices": 50,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 1275,
+              "leaf_visit_records": 1274,
+              "leaf_visits": 49,
+              "leaf_write_records": 1325,
+              "leaf_writes": 50
+            },
+            "writes": 50
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 2701,
+              "v": 1
+            },
+            "leaf_max": 76,
+            "leaf_min": 2,
+            "root_height": 0,
+            "splices": 75,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 2850,
+              "leaf_visit_records": 2849,
+              "leaf_visits": 74,
+              "leaf_write_records": 2925,
+              "leaf_writes": 75
+            },
+            "writes": 75
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 4851,
+              "v": 1
+            },
+            "leaf_max": 101,
+            "leaf_min": 2,
+            "root_height": 0,
+            "splices": 100,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 5050,
+              "leaf_visit_records": 5049,
+              "leaf_visits": 99,
+              "leaf_write_records": 5150,
+              "leaf_writes": 100
+            },
+            "writes": 100
+          }
+        ],
+        "splices": 100,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 5050,
+          "leaf_visit_records": 5049,
+          "leaf_visits": 99,
+          "leaf_write_records": 5150,
+          "leaf_writes": 100
+        }
+      },
+      "diagnostic_status": "COMPLETE",
+      "functional_status": "PASS",
+      "original_row_status": "INELIGIBLE",
+      "receipt": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-append-ebfa8f2-01/receipt.json",
+      "receipt_sha256": "0132d3bd6ef6944daaa497d78a28648fbc0ae230043ea5cab8979e447d53ab58",
+      "selection": "append",
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "b5a6b2560a4d6c08a2fe6c50f658f1911d8211e87ce577024bff96d703591889",
+        "product_seal": "cf2f3d74e1bb4fad0e2c0fbc6f44f2c53c13011bfed6e72e57cf0bfba556b2fc",
+        "source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419",
+        "source_dirty": false,
+        "source_tree": "32c669055fc96b6ad80c009f0f1d344b1531a79b"
+      },
+      "stderr_sha256": "791950da0468b44360cb17cd083acf19352744202e0c6b851aa44423db884baa",
+      "verifier_status": "PASS"
+    },
+    {
+      "counts": {
+        "c1_edit": [
+          {
+            "draft_nodes_read": 2026,
+            "nodes_read": 2028,
+            "stored_nodes_read": 2,
+            "v": 1
+          }
+        ],
+        "file_input": [
+          {
+            "edits": 100,
+            "record_lookups": 303,
+            "record_reads": 303,
+            "replacement_bytes_read": 101,
+            "replacement_reads": 101,
+            "spool_resident": "true",
+            "v": 1
+          }
+        ],
+        "leaf_max": 123,
+        "leaf_min": 3,
+        "root_height": 1,
+        "snapshots": [
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 276,
+              "v": 1
+            },
+            "leaf_max": 51,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 25,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 325,
+              "leaf_visit_records": 624,
+              "leaf_visits": 24,
+              "leaf_write_records": 675,
+              "leaf_writes": 25
+            },
+            "writes": 25
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 1176,
+              "v": 1
+            },
+            "leaf_max": 101,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 50,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 1275,
+              "leaf_visit_records": 2499,
+              "leaf_visits": 49,
+              "leaf_write_records": 2600,
+              "leaf_writes": 50
+            },
+            "writes": 50
+          },
+          {
+            "edge": {
+              "child_edges_removed": 24,
+              "custody_edges_removed": 2293,
+              "v": 1
+            },
+            "leaf_max": 123,
+            "leaf_min": 3,
+            "root_height": 1,
+            "splices": 75,
+            "totals": {
+              "branch_visit_children": 26,
+              "branch_visits": 13,
+              "branch_write_children": 28,
+              "branch_writes": 14,
+              "child_edges_added": 28,
+              "custody_edges_added": 2405,
+              "leaf_visit_records": 4727,
+              "leaf_visits": 74,
+              "leaf_write_records": 4878,
+              "leaf_writes": 76
+            },
+            "writes": 75
+          },
+          {
+            "edge": {
+              "child_edges_removed": 74,
+              "custody_edges_removed": 3364,
+              "v": 1
+            },
+            "leaf_max": 123,
+            "leaf_min": 3,
+            "root_height": 1,
+            "splices": 100,
+            "totals": {
+              "branch_visit_children": 76,
+              "branch_visits": 38,
+              "branch_write_children": 78,
+              "branch_writes": 39,
+              "child_edges_added": 78,
+              "custody_edges_added": 3512,
+              "leaf_visit_records": 6905,
+              "leaf_visits": 99,
+              "leaf_write_records": 7106,
+              "leaf_writes": 101
+            },
+            "writes": 100
+          }
+        ],
+        "splices": 100,
+        "totals": {
+          "branch_visit_children": 76,
+          "branch_visits": 38,
+          "branch_write_children": 78,
+          "branch_writes": 39,
+          "child_edges_added": 78,
+          "custody_edges_added": 3512,
+          "leaf_visit_records": 6905,
+          "leaf_visits": 99,
+          "leaf_write_records": 7106,
+          "leaf_writes": 101
+        }
+      },
+      "diagnostic_status": "COMPLETE",
+      "functional_status": "PASS",
+      "original_row_status": "INELIGIBLE",
+      "receipt": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-dispersed-ebfa8f2-01/receipt.json",
+      "receipt_sha256": "7571d9a9db09fb322837df13fd48ec20970fd7af3dedb6f0d4b6da59c2e8d01a",
+      "selection": "dispersed",
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "b5a6b2560a4d6c08a2fe6c50f658f1911d8211e87ce577024bff96d703591889",
+        "product_seal": "cf2f3d74e1bb4fad0e2c0fbc6f44f2c53c13011bfed6e72e57cf0bfba556b2fc",
+        "source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419",
+        "source_dirty": false,
+        "source_tree": "32c669055fc96b6ad80c009f0f1d344b1531a79b"
+      },
+      "stderr_sha256": "b383a4c8da47c535e76215526b04f8d4d8c48d460f3fec3fcb6de4ed0dd3e8db",
+      "verifier_status": "PASS"
+    },
+    {
+      "counts": {
+        "c1_edit": [
+          {
+            "draft_nodes_read": 15,
+            "nodes_read": 17,
+            "stored_nodes_read": 2,
+            "v": 1
+          }
+        ],
+        "file_input": [
+          {
+            "edits": 1,
+            "record_lookups": 6,
+            "record_reads": 6,
+            "replacement_bytes_read": 2,
+            "replacement_reads": 2,
+            "spool_resident": "true",
+            "v": 1
+          }
+        ],
+        "leaf_max": 3,
+        "leaf_min": 3,
+        "root_height": 0,
+        "snapshots": [
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 23,
+              "v": 1
+            },
+            "leaf_max": 3,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 25,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 25,
+              "leaf_visit_records": 72,
+              "leaf_visits": 24,
+              "leaf_write_records": 75,
+              "leaf_writes": 25
+            },
+            "writes": 25
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 48,
+              "v": 1
+            },
+            "leaf_max": 3,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 50,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 50,
+              "leaf_visit_records": 147,
+              "leaf_visits": 49,
+              "leaf_write_records": 150,
+              "leaf_writes": 50
+            },
+            "writes": 50
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 73,
+              "v": 1
+            },
+            "leaf_max": 3,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 75,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 75,
+              "leaf_visit_records": 222,
+              "leaf_visits": 74,
+              "leaf_write_records": 225,
+              "leaf_writes": 75
+            },
+            "writes": 75
+          },
+          {
+            "edge": {
+              "child_edges_removed": 0,
+              "custody_edges_removed": 98,
+              "v": 1
+            },
+            "leaf_max": 3,
+            "leaf_min": 3,
+            "root_height": 0,
+            "splices": 100,
+            "totals": {
+              "branch_visit_children": 0,
+              "branch_visits": 0,
+              "branch_write_children": 0,
+              "branch_writes": 0,
+              "child_edges_added": 0,
+              "custody_edges_added": 100,
+              "leaf_visit_records": 297,
+              "leaf_visits": 99,
+              "leaf_write_records": 300,
+              "leaf_writes": 100
+            },
+            "writes": 100
+          }
+        ],
+        "splices": 100,
+        "totals": {
+          "branch_visit_children": 0,
+          "branch_visits": 0,
+          "branch_write_children": 0,
+          "branch_writes": 0,
+          "child_edges_added": 0,
+          "custody_edges_added": 100,
+          "leaf_visit_records": 297,
+          "leaf_visits": 99,
+          "leaf_write_records": 300,
+          "leaf_writes": 100
+        }
+      },
+      "diagnostic_status": "COMPLETE",
+      "functional_status": "PASS",
+      "original_row_status": "INELIGIBLE",
+      "receipt": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-repeated-ebfa8f2-01/receipt.json",
+      "receipt_sha256": "a80742724015385376e705ae1546e937eb170b1227fce07684c0be809572824f",
+      "selection": "repeated",
+      "source": {
+        "build_profile": "release",
+        "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+        "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+        "dirty_paths": [],
+        "harness_seal": "b5a6b2560a4d6c08a2fe6c50f658f1911d8211e87ce577024bff96d703591889",
+        "product_seal": "cf2f3d74e1bb4fad0e2c0fbc6f44f2c53c13011bfed6e72e57cf0bfba556b2fc",
+        "source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419",
+        "source_dirty": false,
+        "source_tree": "32c669055fc96b6ad80c009f0f1d344b1531a79b"
+      },
+      "stderr_sha256": "5a77f616c42c1cb0473ae977053de5c6fd8bf54375bc17713973a4c2b9391ca1",
+      "verifier_status": "PASS"
+    }
+  ],
+  "schema": "issue265-patterns-postprocess-v1",
+  "source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419"
+}

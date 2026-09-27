@@ -204,6 +204,7 @@ fn mount_profile(
             workspace: workspace.clone(),
             stopping: Arc::clone(&handle.stopping),
             writable,
+            write_samples: crate::write_sample::WriteSamples::new(),
         };
         let mut config = Config::default();
         config.acl = SessionACL::Owner;

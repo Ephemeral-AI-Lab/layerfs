@@ -168,7 +168,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(())
             })();
             match cleanup {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    pipe::diagnostic("sandbox closed\n");
+                    return Ok(());
+                }
                 Err(error) => pipe::diagnostic(&format!("sandbox shutdown retained: {error}\n")),
             }
         }

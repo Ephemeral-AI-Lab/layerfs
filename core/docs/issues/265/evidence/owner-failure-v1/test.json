@@ -1,0 +1,26 @@
+{
+  "source_commit": "80b8565e4ecdcec665f9112c9f7f15c874d117c2",
+  "source_tree": "663f9a057ab3927f1b78cc01c4361bf916130300",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--mount",
+    "type=volume,source=layerfs-issue265-owner-finalize-test,target=/stage",
+    "--mount",
+    "type=bind,source=/Users/yifanxu/.codex/worktrees/d617/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/owner_finalization-462508c6c2ab671f,target=/owner-test,readonly",
+    "-e",
+    "LAYERFS_OWNER_TEST_ROOT=/stage",
+    "--entrypoint",
+    "/owner-test",
+    "layerfs-shell-package-v1:issue243",
+    "--nocapture"
+  ],
+  "image_id": "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4",
+  "binary_sha256": "f4fc76327ac56cc235b74178cf9b9007165a5d72c616d41c76fa07302935826d",
+  "wall_ns": 284890125,
+  "exit_code": 0,
+  "timeout": false,
+  "stdout_sha256": "5c276d86cc17d46bad4fd46b84f2b3d89349b39a49ae0d2404eeb2970a2e341c",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

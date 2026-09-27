@@ -2,7 +2,7 @@
 use super::{
     directory::identity,
     metadata::{Arena, MetadataHost, RootOwner},
-    metadata_pages::{PageRef, PAGE},
+    metadata_pages::{self, PageRef, PAGE},
     ownership::{page_name, CleanupFrame},
     payload::clock,
     segments::{self, Window},
@@ -70,12 +70,14 @@ impl RootOwner {
                 // sequence: both declare their own edges, so the raw body and
                 // the kind-aware extraction decide them. The cell decoder would
                 // refuse an extent page and quarantine a healthy arena.
-                let bytes = arena.load_raw(frame.page, window, deadline)?;
+                let bytes = arena.load_raw_with_owner(frame.page, owner, window, deadline)?;
                 let edges = super::metadata_index::edges_raw(
                     arena.directory.incarnation,
                     frame.page,
                     &bytes,
                 )?;
+                let extent = bytes[49] == metadata_pages::FORMAT_PIECES;
+                let leaf = bytes[48] == 0;
                 let count = partial.unwrap_or(edges.len());
                 if count > edges.len() {
                     return Err(WorkspaceError::Io);
@@ -87,6 +89,16 @@ impl RootOwner {
                 while next < count {
                     let (advanced, released) =
                         arena.change_refs_run(&edges[next..count], -1, true, window, deadline)?;
+                    if extent {
+                        let counter = if leaf {
+                            &arena.extent_custody_edges_removed
+                        } else {
+                            &arena.extent_child_edges_removed
+                        };
+                        let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
+                            Some(old.saturating_add(advanced as u64))
+                        });
+                    }
                     next += advanced;
                     let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
                     s.cleanup.last_mut().ok_or(WorkspaceError::Io)?.next = next;

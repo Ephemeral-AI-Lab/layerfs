@@ -1,0 +1,9 @@
+{
+  "attempt": "native-fixture-v1",
+  "copied_sha256": {
+    "result.json": "160bafbffc7f72b73606d70c0808e95218340a7c6243793be4a4c215d68fa6eb",
+    "service.stderr": "45ccac03adb7c6e31789b092d45c6a86678b2c688feeb7133a86a0c581ea1e28"
+  },
+  "schema": "issue266-fixture-setup-v1",
+  "source_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-fixture-v1"
+}

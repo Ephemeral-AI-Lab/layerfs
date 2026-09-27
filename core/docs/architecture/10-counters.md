@@ -27,6 +27,67 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ## 15. Counters and receipts
 
+### #261 loaded ledger page at publication (this source change)
+
+Both file-extent and keyed metadata page publication first authenticate the
+new page's ownership record, then mark its edge list complete. The mark now
+seals and writes the ledger page still in the I/O window after `read_owner`;
+it does not re-read that same 4 KiB page through `set_owner`. The existing
+`change_refs` path uses the same loaded-page writer. The owner role, epoch,
+references, file identity, checksum, failure/quarantine path and final write
+are unchanged. A candidate still records edge progress until that final mark
+succeeds, preserving cleanup and G1/G2 custody. `ledger_reads` should fall by
+one per completed page publication; `ledger_writes` is unaffected.
+
+### #261 loaded ledger owner during old-root cleanup (this source change)
+
+An edge-bearing cleanup step reads and authenticates the page owner before
+loading that page's raw body. The body load now uses the owner from that same
+step, eliminating its second 4 KiB ledger read. It still reopens and validates
+the ledger pathname identity, then validates the metadata page's file identity
+and checksum before extracting edges. A later cleanup phase or retry reads its
+owner again. `ledger_reads` can fall by one for each cleanup body load; the
+number of such loads depends on the pages retired, so no fixed reduction is
+claimed. This changes no metadata page or payload format and no custody edge.
+
+### #261 mounted WRITE snapshots (source `6af2c5c59` plus this change)
+
+The v2 snapshot keeps its per-mount counters in the FUSE adapter and runs
+**before** the successful WRITE reply. The projection mutation permit remains
+held through that reply, so a sequential caller's next kernel write cannot
+overtake a diagnostic scan that still holds the permit. Its cumulative `acquisition_ns` wraps
+`own_payload`; `publication_ns` wraps the semantic `write_file` call and its
+projection completion/invalidation. Both counters exclude the snapshot's own
+Status scan/logging and the kernel reply. They are diagnostic timing, not
+phase-isolated resource or speed admission evidence. The earlier v1 log ran
+after the reply and is retained under its original identity.
+
+The optional `LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL` diagnostic emits one
+`LFS_WRITE_SAMPLE` line after each configured multiple of successful FUSE
+WRITE callbacks. It prints elapsed time, the Workspace's cumulative `write`
+projection class, and the existing `BackingStatus` and `MetadataStatus`.
+`write` also counts namespace mutations, so it equals actual data WRITE
+callbacks only for a workload that makes no other mutations. The backing
+snapshot scans current payload records to count retained owners; it adds
+diagnostic work and is not a speed measurement. It makes no extra control or
+Service request and does not change publication or custody.
+
+The older `LFS_PIECE_COUNT` and `LFS_PIECE_PAGES` descriptions below belong to
+the pinned #232 Phase 1C source; they have no producer at `6af2c5c59`.
+Retained #232 receipts keep their original meaning.
+
+### #261 three-pattern counter interpretation (source `7361312e6`)
+
+The [10 MiB three-pattern diagnosis](../issues/261/THREE-PATTERN-DIAGNOSIS.md)
+uses the current `LFS_C1_SAVE_COUNT.nodes_read` value as a logical C1 node-load
+counter. `EditObjects::load_node` increments it on a page-memo miss before
+choosing an in-memory draft or a stored canonical page. It therefore cannot
+serve as a count of Store reads, SQLite statements or network round trips.
+Likewise `MetadataStatus.allocated_pages` is the live arena total across the
+held roots; it does not identify extent leaves, branches, keyed pages, or
+cumulative page writes. The three-pattern receipts retain the exact counters
+and label these unavailable attributions instead of assigning them zero.
+
 ### #232 Phase 1C count diagnostic (2026-09-25)
 
 When `LAYERFS_COMPLEXITY_DIAGNOSTIC` is set, the Linux daemon emits
@@ -108,7 +169,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | Type | Where | Fields |
 | --- | --- | --- |
 | `CdcCounters` | `file/cdc/gear.rs` | `bytes_scanned`, `chunks_emitted` |
-| `EditCounters` | `file/edit/tree.rs` | `nodes_read`, `nodes_created`, `payloads_created`, `payload_bytes`, `peak_deferred_bytes` |
+| `EditCounters` | `file/edit/tree.rs` | `nodes_read`, `stored_nodes_read`, `draft_nodes_read`, `nodes_created`, `payloads_created`, `payload_bytes`, `peak_deferred_bytes` |
 | `ReadCounters` | `file/mapping/read.rs` | `nodes_read`, `node_batches_read`, `max_node_batch`, `payload_ids_read`, `payload_batches_read`, `max_payload_batch`, `payload_bytes_read` |
 
 #### C1 — filesystem
@@ -334,3 +395,14 @@ consumer that reads the outcome alone must not treat a node that never completed
 an operation that completed successfully."* And `Disabled` versus `Clipped` are
 different states with different consequences, so *"a caller that checks only
 `is_incomplete()` therefore never fails a disabled row."*
+
+### 15.9 #265 final-run edit load split (2026-09-27)
+
+Source pin: the C1 change committed with this section. `EditCounters.nodes_read`
+still counts the successful `load_node` calls that missed the operation's page
+memo. `stored_nodes_read` counts calls into the authenticated provider for a
+stored page; `draft_nodes_read` counts loads from an in-memory draft node or
+draft page. They sum to `nodes_read` on a successful edit, and the C1 edit path
+emits them once as `LFS_C1_EDIT_LOAD` when complexity diagnostics are enabled.
+This separates Store **requests** from draft work. It does not report SQLite
+page reads, physical device I/O or every call served by the page memo.

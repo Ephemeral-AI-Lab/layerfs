@@ -1,0 +1,94 @@
+{
+  "cases": {
+    "append": {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "history_sqlite_sha256": "c0b38301abb6258300caa8f4c3e2029cac6191571abd0c066982398f0358c389",
+      "original_row_status": "INELIGIBLE",
+      "source": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-append-7221e17-01",
+      "source_sha256": {
+        "case.before": "6bfe69164ee701ff92061ea28b65a415b8ade519db14e789a991542ba624a534",
+        "case.verify": "f030efa2d9965fc726a3fcd9e3068cf824db25ecde953d342e7c526ce4d696cc",
+        "driver.stderr": "94a7abaa7ee279e447ab70e7c8207222137ccaddd7a427abc97d6e2c1b6ecf9a",
+        "driver.stdout": "bdbf82690ea86ac92e5c44988ddfb67972084407540f0a0ac0c67311fe454b3e",
+        "receipt.json": "e4095ba2e52bfb9da3fa4bcdf7e16e72db21ea9eb8fd53ee695a385af32f8136",
+        "source-SHA256SUMS": "c2d42e40880e12f78ff351c43686f12938b8ee288e4fdb12b6491fbe32560287",
+        "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "verifier.stdout": "9d9647432d58b415bf990509fc4f4811f1aab7c5b2665b8774fcc8005baf17b6"
+      },
+      "store_sqlite_sha256": "60767aefdf428bcd9cb9f9369f71239a40e0b18c7e6b7904884a6d762274d74e",
+      "verifier_status": "PASS"
+    },
+    "dispersed": {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "history_sqlite_sha256": "9fe5ef854c884c08282751b4ff8b6f391e2d0020825bb27546a820074aaeb941",
+      "original_row_status": "INELIGIBLE",
+      "source": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-dispersed-7221e17-01",
+      "source_sha256": {
+        "case.before": "d1f345b0d62f2050ff8a6002b5bc23be499b2eb2f34bdeb1683d11ac25b6de61",
+        "case.verify": "e3dec1d42edac6ffb05d79f40cb46a289dccad67593bb3ae18e179ba7dbe55da",
+        "driver.stderr": "de9cc466890e6033ea1a5f067fbf5d823ff5b580ea0503142c7356b3f1660e8d",
+        "driver.stdout": "e39950fc08f693aaac5b483aa570961ffcacc1641cbbe8354b34e824154baf9f",
+        "receipt.json": "931159825e4734e2b671752f52b05ea4258156fbadd9cb09eec6511de1ea5c43",
+        "source-SHA256SUMS": "e25719d9692d86a9738df8781d8a5e896102f28725e7351d1266a269d4484ce9",
+        "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "verifier.stdout": "03e2e2416b0a64f6de39ce6569e4fed03282865cbae0115b741afa2c81344afa"
+      },
+      "store_sqlite_sha256": "f82e0ad5e2cbf9519e537d37a6711542c30f07add46aeee98d3b0ecc25877a6b",
+      "verifier_status": "PASS"
+    },
+    "repeated": {
+      "cleanup_status": "PASS",
+      "functional_status": "PASS",
+      "history_sqlite_sha256": "d2ea4363c6e701bd2eae8abf51141e34f1166e1046eb417d0824277a26c95206",
+      "original_row_status": "INELIGIBLE",
+      "source": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-repeated-7221e17-01",
+      "source_sha256": {
+        "case.before": "c7e827fbe4c841a85b20c6ce6ad4e15a2ccad46882a8c7fe1ed49ddd697c7385",
+        "case.verify": "267bbcdaea066d49ccd2bbc17ec0eaa618aa2ede50b5d5adc791ddf628a25177",
+        "driver.stderr": "07972fd3afff401acf42e9c882450ff68aa90ccc24d144f1d69712a95ecf5fa3",
+        "driver.stdout": "a418f3da6f264870ab98fdf6541bbc9c33cedcf1e64dd89ca8857768479c62ac",
+        "receipt.json": "3f6b0ab00e9339cbb8d123f60d13f56ce1a8616cb92623953fe41a83f98f80dd",
+        "source-SHA256SUMS": "b4e754eb9eb96c71816d05e8fb04e515a7f06a29ebea20f168fba08166852031",
+        "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "verifier.stdout": "d38f5d327eab27efad70137dc30c97e4e9de6fe77ab80826f2fbcbf855dc59b7"
+      },
+      "store_sqlite_sha256": "04a9ff9dd3b139fa4a7a86a0ecf568dcf5fe2aec71e7553a4f135c0ec8bbea28",
+      "verifier_status": "PASS"
+    }
+  },
+  "image_id": "sha256:80049a44e8ee3879b29ef12abfa6aad3fe5eb2944322da981dd3153a72e5484e",
+  "master_hashes": {
+    "history.sqlite": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+    "store.sqlite": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be",
+    "verify.case": "47390b665723008cf79f1bbc527090b917667b070a720e0e708817e6443cadbc",
+    "verify.stdout": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0"
+  },
+  "omitted": "Mutable SQLite Store/history clones, closed prepared master and executable binaries remain in ignored worktree-local results; their exact hashes are recorded here and in original receipts.",
+  "prepared_files": {
+    "append.tsv": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc",
+    "build-daemon.json": "31859bbe5b5dbf5161dd7aa8de95e8d0cf0d23a8f599fd814aa5d87f40a457de",
+    "build-daemon.stderr": "5a298e828b66a3e62297161a50368f38977ea6dc170c73b2f91b28484409b96a",
+    "build-daemon.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-sdk.json": "327a3e5830dc1bf44be975d77a414b3d0e960ab6042369ced8008aac7c930cde",
+    "build-sdk.stderr": "bc91a3ed6ff9b29145787c6d9882965f4f24899753f0d8be62d8adc772989545",
+    "build-sdk.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-verifier.json": "21ff04ca754ad7d4eae0ceecc108b48d581e32bb7c73e7dfb50102f8f7593adf",
+    "build-verifier.stderr": "64d0cbd4b7e4c6329fde55978dd3d261407b55f34c21add0feebf7e0575ee531",
+    "build-verifier.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dispersed.tsv": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+    "image-build.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "image-build.stdout": "b76cd7831fcd0dc0285325a714ccb184d38b9f1bd4c921732bbbe8c0e4ed8747",
+    "master-reproof.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "master-reproof.stdout": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "old.tsv": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+    "prepared-public.json": "f5dd3aece19201c718466297348cbf67fa1ba5bb88cb1cb96c3b48e29f30f5ef",
+    "repeated.tsv": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6"
+  },
+  "prepared_source": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-prepared-7221e17-01",
+  "schema": "issue265-owner-finalize-evidence-v1",
+  "source_commit": "7221e177be9ebbe0baf4d51e8f7067a7dc66b37e",
+  "source_prepared_sha256": "f9944a5c4f689d920277738d6b708859549287bec032e44e6d6cf5d0bcaf0191",
+  "source_tree": "01a6d1b746ea1ca6c078358e8c2d2c549aa960db"
+}

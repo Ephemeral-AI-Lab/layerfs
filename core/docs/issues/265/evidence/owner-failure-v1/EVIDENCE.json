@@ -1,0 +1,19 @@
+{
+  "binary_sha256": "f4fc76327ac56cc235b74178cf9b9007165a5d72c616d41c76fa07302935826d",
+  "image_id": "sha256:0729600354797e8463265167e1a275803844d0e82458d8963f7ab721e0629df4",
+  "omitted": "The compiled test executable remains in this worktree-local target; its SHA-256 is pinned above.",
+  "original_gap": "core/docs/issues/265/evidence/100-write-v1/failures/native-custody-fixture-missing.json",
+  "schema": "issue265-owner-native-failure-v1",
+  "scope": "One external native ext4 definite partial-edge failure proof; no public benchmark attempt or latency claim.",
+  "source_commit": "80b8565e4ecdcec665f9112c9f7f15c874d117c2",
+  "source_files_sha256": {
+    "build.json": "7ecb8113abaa7a112159c228abcede873925cad007aba18d7bf09e13cf3851eb",
+    "build.stderr": "3adff6ac9d4658f0baf841d1b0f1f6d6c2835a01c6bd9a5f400b9709821c2220",
+    "build.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "test.json": "96d1b48aad2958afe9026a95eaf31b487991e40009ade4aefe870a4435933366",
+    "test.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "test.stdout": "5c276d86cc17d46bad4fd46b84f2b3d89349b39a49ae0d2404eeb2970a2e341c"
+  },
+  "source_results": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-owner-native-failure-80b8565-01",
+  "source_tree": "663f9a057ab3927f1b78cc01c4361bf916130300"
+}
