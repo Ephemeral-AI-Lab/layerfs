@@ -28,19 +28,21 @@ SPEC_271_2048 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-2048-diagnostic-spec.md"
 SPEC_271_SPONSOR = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md"
 SPEC_271_ONE_READ = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md"
 SPEC_271_FOUR_HOP = ROOT / "docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md"
+SPEC_271_4097 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-4097-extended-count-diagnostic-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
           "diagnostic100v3": 100, "diagnostic512": 512,
           "fuse512": 512, "diagnostic1024": 1024,
-          "diagnostic2048": 2048, "gate": 4097}
+          "diagnostic2048": 2048, "diagnostic4097": 4097, "gate": 4097}
 
 
 def fields(master, name, command):
     value = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                            "genesis_root_serial", "branch_id", "old_commit")}
     prefix = {"gate": "issue248", "fuse512": "issue266",
-              "diagnostic1024": "issue266", "diagnostic2048": "issue271"}.get(name, "issue261")
+              "diagnostic1024": "issue266", "diagnostic2048": "issue271",
+              "diagnostic4097": "issue271"}.get(name, "issue261")
     version = {"diagnostic100v2": 2, "diagnostic100v3": 3}.get(name, 1)
     pattern = "fuse" if name == "fuse512" else "separated"
     value.update(scenario_id=f"{prefix}-{pattern}-{COUNTS[name]}-v{version}",
@@ -117,7 +119,7 @@ def prepare(output):
         interval = {"diagnostic": 25, "diagnostic100v2": 25,
                     "diagnostic100v3": 25, "diagnostic512": 128,
                     "fuse512": 128, "diagnostic1024": 256,
-                    "diagnostic2048": 512}.get(name)
+                    "diagnostic2048": 512, "diagnostic4097": 512}.get(name)
         text = dockerfile.replace("ENTRYPOINT",
             f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
             "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
@@ -187,6 +189,7 @@ def prepare(output):
         "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
         "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
+        "issue271_4097_spec_sha256": digest(SPEC_271_4097),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -214,7 +217,7 @@ def prepare_reuse(output, previous_file, selection):
         raise ValueError("clean source and a sealed issue261 master required")
     if previous["source"]["build_profile"] != "release":
         raise ValueError("previous binaries are not release builds")
-    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "gate"):
+    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate"):
         raise ValueError("unsupported reuse selection")
     product_same = identity["product_seal"] == previous["source"]["product_seal"]
     changed_product = subprocess.check_output(["git", "diff", "--name-only",
@@ -243,8 +246,8 @@ def prepare_reuse(output, previous_file, selection):
         "core/crates/layerfs-workspace/tests/owner_finalization.rs",
     }
     allowed = (allowed_ownership if selection == "diagnostic100v3" else
-               allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
-    if selection in ("diagnostic100v3", "fuse512", "gate"):
+               allowed_issue266 if selection in ("fuse512", "diagnostic4097", "gate") else allowed_telemetry)
+    if selection in ("diagnostic100v3", "fuse512", "diagnostic4097", "gate"):
         allowed |= allowed_packing | allowed_sponsor
     if selection in ("diagnostic1024", "diagnostic2048"):
         allowed = allowed_packing
@@ -253,6 +256,7 @@ def prepare_reuse(output, previous_file, selection):
                              and selection != "fuse512"
                              and selection != "diagnostic1024"
                              and selection != "diagnostic2048"
+                             and selection != "diagnostic4097"
                              and selection != "gate"
                              or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
@@ -310,7 +314,7 @@ def prepare_reuse(output, previous_file, selection):
         daemon = CORE / "target/aarch64-unknown-linux-musl/release/layerfs-daemon"
     shutil.copyfile(daemon, context / "layerfs-daemon")
     (context / "layerfs-daemon").chmod(0o755)
-    interval = (512 if selection == "diagnostic2048" else
+    interval = (512 if selection in ("diagnostic2048", "diagnostic4097") else
                 256 if selection == "diagnostic1024" else
                 128 if selection in ("diagnostic512", "fuse512") else
                 25 if selection != "gate" else None)
@@ -337,6 +341,7 @@ def prepare_reuse(output, previous_file, selection):
         "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "issue271_one_read_spec_sha256": digest(SPEC_271_ONE_READ),
         "issue271_four_hop_spec_sha256": digest(SPEC_271_FOUR_HOP),
+        "issue271_4097_spec_sha256": digest(SPEC_271_4097),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -423,6 +428,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue271 sponsor one-read specification changed")
     if digest(SPEC_271_FOUR_HOP) != prepared.get("issue271_four_hop_spec_sha256"):
         raise ValueError("issue271 four-hop specification changed")
+    if selection == "diagnostic4097" and digest(SPEC_271_4097) != prepared.get("issue271_4097_spec_sha256"):
+        raise ValueError("issue271 extended diagnostic specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -456,7 +463,7 @@ def run(prepared_file, output, selection):
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
     if selection.startswith("diagnostic") or selection == "fuse512":
         env["LAYERFS_COMPLEXITY_DIAGNOSTIC"] = "1"
-    limit = 25 if selection == "gate" else 15
+    limit = 60 if selection == "diagnostic4097" else 25 if selection == "gate" else 15
     start = time.monotonic_ns()
     try:
         process = subprocess.run(command, cwd=ROOT, capture_output=True,
@@ -480,9 +487,10 @@ def run(prepared_file, output, selection):
                   if "=" in item) if driver else {}
     samples = backing_samples(stderr)
     sample_counts = [row["write_class"] for row in samples]
-    expected_samples = ([count // 4, count // 2, count * 3 // 4, count]
+    expected_samples = (list(range(512, count, 512)) if selection == "diagnostic4097" else
+                        [count // 4, count // 2, count * 3 // 4, count]
                         if selection.startswith("diagnostic") or selection == "fuse512" else [])
-    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048") or all(
+    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097") or all(
         row["version"] == 2 and row["acquisition_ns"] is not None
         and row["publication_ns"] is not None for row in samples)
     verification = {"status": "NOT_RUN"}
@@ -506,7 +514,7 @@ def run(prepared_file, output, selection):
     daemon_retained = any(term in daemon_log for term in
                           ("sandbox shutdown retained:", "workspace shutdown retained:"))
     cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
-                   and (selection not in ("fuse512", "diagnostic1024", "diagnostic2048", "gate") or (daemon_close and not daemon_retained
+                   and (selection not in ("fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate") or (daemon_close and not daemon_retained
                         and driver.get("daemon_log_attempted")
                         and not driver.get("daemon_log_truncated")
                         and driver.get("daemon_log_error") == "None")))
@@ -529,6 +537,7 @@ def run(prepared_file, output, selection):
         "issue271_sponsor_spec_sha256": prepared.get("issue271_sponsor_spec_sha256"),
         "issue271_one_read_spec_sha256": prepared.get("issue271_one_read_spec_sha256"),
         "issue271_four_hop_spec_sha256": prepared.get("issue271_four_hop_spec_sha256"),
+        "issue271_4097_spec_sha256": prepared.get("issue271_4097_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
@@ -564,6 +573,7 @@ def run(prepared_file, output, selection):
         "functional_status": "PASS" if functional else "FAIL",
         "cache_contract": prepared["cache_contract"], "cache_status": "INELIGIBLE",
         "performance_status": "INELIGIBLE", "admission_eligible": False,
+        "extended_diagnostic_only": selection == "diagnostic4097",
         "row_status": "INELIGIBLE" if functional else "FAIL", "sample_count": 1}
     json_file(output / "receipt.json", receipt)
     (output / "SHA256SUMS").write_text("\n".join(
@@ -579,7 +589,7 @@ def main():
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
     p.add_argument("--reuse-prepared", type=Path)
-    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "gate"),
+    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "diagnostic4097", "gate"),
                    default="diagnostic512")
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
@@ -596,6 +606,7 @@ def main():
         assert backing_samples(fixture_line)[0]["backing"]["ledger_reads"] == 4
         phase_line = fixture_line.replace(b"v=1", b"v=2").strip() + b" acquisition_ns=7 publication_ns=11\n"
         assert backing_samples(phase_line)[0]["publication_ns"] == 11
+        assert list(range(512, COUNTS["diagnostic4097"], 512)) == [512 * i for i in range(1, 9)]
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "counts": COUNTS}))
     elif args.action == "prepare":
