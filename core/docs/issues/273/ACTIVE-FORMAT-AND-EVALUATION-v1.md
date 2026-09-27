@@ -6,6 +6,14 @@
 > 4,097-WRITE gate remains a distinct, unchanged selection. The source baseline
 > is `48b51e874a41b3e1e6c6661e145316df8b408f07`.
 
+> **Preimplementation correction, 2026-09-27:** The direct physical slot
+> choice in checkpoint commit `d9f8ef615` would make each safe shared-tail
+> copy repoint every live extent on that page, including unrelated files.
+> The corrected v1 record carries a stable logical pack-page identity and
+> the pooled index has one physical locator for the active tail. No v1
+> product page or candidate measurement existed before this correction;
+> the original commit and issue note retain their historical wording.
+
 ## Boundary and identity
 
 One attached Workspace incarnation owns one active tuple: `(incarnation,
@@ -42,33 +50,37 @@ SHA-256 of the entire page with bytes `80..112` zeroed. Read validates the
 header, digest, file identity, expected kind and zero tail before exposing a
 record. Page ID never aliases another live page; epoch increases before reuse.
 
-A tiny packed record has a 40-byte header followed by 1..128 data bytes:
+A tiny packed record has a 48-byte header followed by 1..128 data bytes:
 inode serial `0..8`, generation `8..16`, revision `16..24`, logical offset
-`24..32`, length `32..34`, ordinal `34..36`, flags `36..38` (zero in v1), and
-zero `38..40`. The page digest authenticates the complete record. An extent
-names a direct `(page ID, epoch, ordinal, inode, generation, revision,
-logical range)`; every read checks those fields against the slot. A
-split/overlap can leave several extent references to one slot. No locator
-indirection is used in v1. A disk-backed inverse-reference index names those
-references for compaction. Records are contiguous from byte 128, with no
-separate directory: 96 one-byte records or 23 maximum-size (128-byte data)
-records fit in 3,968 body bytes. The 4,096 one-byte checkpoint therefore
-needs 43 occupied pack pages before pinned copies and the inactive tail.
+`24..32`, stable logical pack-page ID `32..40`, length `40..42`, ordinal
+`42..44`, flags `44..46` (zero in v1), and zero `46..48`. The page digest
+authenticates the complete record. An extent names `(logical pack-page ID,
+ordinal, inode, generation, revision, logical range)`; every read resolves
+that logical page through the captured index locator and checks those fields
+against the record. One locator update publishes a new physical tail copy
+without rewriting extents in other files. A split/overlap can leave several
+extent references to one slot. A disk-backed inverse-reference index names
+them for compaction. Records are contiguous from byte 128, with no separate
+directory: 80 one-byte records or 22 maximum-size records fit in 3,968 body
+bytes. The 4,096 one-byte checkpoint therefore needs 52 occupied pack pages
+before pinned copies and the inactive tail.
 
 Index pages use the same header and hash, with kinds for branch, leaf, and
 pooled small-inode records. A leaf body holds contiguous sorted records:
 `key_length:u16, value_length:u16, key, value`; a branch body holds sorted
-`key_length:u16, key, child_page_id:u64, child_epoch:u64` records plus its
-rightmost child. Key prefixes are `N|parent:u64|name_length:u8|name` for a
+`key_length:u16, key, child_page_id:u64, child_epoch:u64` records, including
+its rightmost child as the final record. Each key is that child's maximum.
+Key prefixes are `N|parent:u64|name_length:u8|name` for a
 namespace binding/tombstone, `I|serial:u64` for current inode attributes,
 `D|generation:u64|serial:u64` for the dirty frontier,
-`E|serial:u64|start:u64` for one extent, and
-`R|pack_page:u64|epoch:u64|ordinal:u16|serial:u64|start:u64` for one inverse
+`E|serial:u64|start:u64` for one extent,
+`P|logical_pack_page:u64` for one physical `(page ID, epoch)` locator, and
+`R|logical_pack_page:u64|ordinal:u16|serial:u64|start:u64` for one inverse
 slot reference. Duplicate keys and unsorted, overlapping extents are invalid.
 The inode value contains the existing 160-byte logical inode fields plus up
 to four inline extents; longer sequences use ordered `E` leaves. A short
 file therefore shares an inode page with other files. An extent value is
-`end:u64, kind:u8, source_offset:u64, page_id:u64, epoch:u64,
+`end:u64, kind:u8, source_offset:u64, logical_pack_page:u64,
 ordinal:u16, source_generation:u64, source_revision:u64`; unused source fields
 are zero. Namespace values carry `serial:u64, kind:u8, tombstone:u8` and
 bounded portable attributes where required. A leaf holds ordered,
@@ -86,7 +98,8 @@ right edge is a fast path, not a different format or acknowledgement rule.
 The active pack tail has an acknowledged page and an inactive candidate page.
 Each tiny WRITE constructs a complete candidate from the acknowledged page,
 adds or replaces its slot, writes and re-reads the inactive page, then stages
-the affected index pages. A failed or short write never selects the candidate;
+the affected index pages and one tail locator change. A failed or short write
+never selects the candidate;
 it cannot damage an earlier acknowledged slot. Candidate index pages are also
 new versions. Once all pages validate, the Workspace gate publishes bytes,
 length, attributes, dirty membership and revision as one tuple update. Old
@@ -110,9 +123,10 @@ allows `Directory::close` to remove the empty private directory.
 Every physical page records its birth capture sequence. On replacement, it
 is pinned exactly by captures made while it was current. Uncaptured old
 versions can be released in the publishing operation; captured ones enter an
-indexed retired-page queue and release after their last pin. A mixed pack page
-may be compacted only after all surviving slots and their inverse references
-are copied and the new indexed view is published. Compaction counts slots
+indexed retired-page queue and release after their last pin. A mixed sealed
+pack page may be compacted with other pages only after all surviving slots
+and their inverse references are relabelled to a new logical pack page and
+the new indexed view is published. Compaction counts slots
 moved, references changed, 4 KiB reads/writes, and actual released blocks.
 Trigger when dead bytes exceed half a sealed page or quota admission needs
 reclaimable space; cap each mutation's relocation at one page and continue
