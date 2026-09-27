@@ -151,3 +151,7 @@ bounded journal plus immutable frozen generations. Candidate-scoped ledger
 coalescing remains a smaller experiment after exact PageRef cancellation and
 distinct-page revisit counts are known. Neither design has a measured
 speedup yet; the original 25 s gate FAIL remains unchanged.
+The [Workspace-scoped model](../../../../core/docs/issues/271/WORKSPACE-SCOPED-ACTIVE-HEAD.md)
+details multi-file edits and deletion, repeated Exec/Commit generations,
+space and time complexity, and the separate current daemon limit on
+simultaneously selected Workspaces.

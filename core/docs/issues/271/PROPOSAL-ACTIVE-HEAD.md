@@ -1,8 +1,6 @@
 # Issue 271: indexed active head with a charged edit journal
 
-> **Status:** Architecture proposal from count-driven research, not an
-> implemented format or a speed claim. Target: the replacement product under
-> `core/`.
+> **Status:** Proposal; target LayerFS 0.1.7; not a released contract.
 
 The [research](RESEARCH-OWNERSHIP-EXEC.md), [original reform proposal](../../../../docs/roadmap/0.1/0.1.7/issue271-causal-telemetry-and-reform-proposal.md),
 and [append-only causal ledger](CAUSAL-DIAGNOSTIC-LEDGER.md) show where this
@@ -65,6 +63,15 @@ predictions; a new representation must pay any deferred seal or cleanup
 inside the appropriate measured phase.
 
 ## Proposed representation
+
+The [Workspace-scoped architecture and complexity proposal](WORKSPACE-SCOPED-ACTIVE-HEAD.md)
+specifies one active generation spanning inode attributes, namespace deltas,
+dirty membership and file extents; one pack shared across files; repeated
+Exec and Commit behavior; and the current single-selected-Workspace daemon
+limit. These boundaries are required to remove keyed-root publication as
+well as extent path copying. Its 64/128-byte records, 3 MiB one-file budget,
+amortized constant hot-right-edge updates and timing examples are design
+targets or sensitivity calculations, not measured after results.
 
 Use a **versioned, disk-indexed active head** for Workspace edits. Each
 accepted WRITE appends a charged edit record and updates a mutable ordered
