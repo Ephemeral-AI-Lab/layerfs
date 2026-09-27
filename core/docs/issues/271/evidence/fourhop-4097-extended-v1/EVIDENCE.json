@@ -1,0 +1,10 @@
+{
+  "classification": "extended count diagnostic only; functional PASS; cleanup PASS; cache and performance INELIGIBLE; original 25 s gate FAIL retained",
+  "harness_seal": "10555194cfcdffbf9e3b12d5eb7d4d9ed5f93cbbb3e03e116dbe477f92621679",
+  "image_id": "sha256:d8f5b6561d02bece818f449bd91db0ea0380a3cc83544d52bf7e6d07812436cf",
+  "note": "Run files and SQLite clones copied byte-for-byte. Prepared-public omits only the private cursor key. The diagnostic does not replace or promote the 25 s gate failure.",
+  "product_seal": "7e1e36eed0920a717284c277e61ed983d12d04a3669450300e3402bdb2f144fa",
+  "schema": "issue271-fourhop-4097-extended-evidence-v1",
+  "source_commit": "61eed04a979341353054781a551dd973fcb04d63",
+  "source_tree": "b2b022e5d5d850d69c8295297ec395914d84d491"
+}

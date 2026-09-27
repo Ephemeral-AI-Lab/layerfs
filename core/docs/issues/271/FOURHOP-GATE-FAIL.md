@@ -71,3 +71,7 @@ cache-qualified speed or gate-memory PASS. The one-hop 4,097 FAIL and its
 separate 2,048 diagnostic also retain their original statuses. Further work
 needs a distinct mechanism and source identity, not a larger timeout, more
 workers, a warmer cache or an unchanged-arm rerun.
+
+A later [user-requested 60 s count diagnostic](FOURHOP-4097-EXTENDED-DIAGNOSTIC.md)
+finished and exposed per-512-WRITE growth. It is a separate instrumented
+selection and does not alter this gate's FAIL status or 25 s limit.
