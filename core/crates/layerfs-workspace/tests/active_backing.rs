@@ -1284,6 +1284,33 @@ mod linux {
             };
             assert_eq!(active.read(slot, None).unwrap(), expected);
         }
+        active.write_tiny(31, 1, 0, b"C", &[]).unwrap();
+        let single = active.status().unwrap().store;
+        active
+            .publish_reconcile(&[(vec![b'Y'], Some(vec![1]))])
+            .unwrap();
+        let skipped = active.status().unwrap().store;
+        assert_eq!(skipped.pack_page_writes, single.pack_page_writes);
+        assert_eq!(skipped.pack_pages, single.pack_pages);
+        let key = Extent::key(31, 0);
+        let extent = Extent::parse(&key, &active.get(&key).unwrap().unwrap(), 31).unwrap();
+        assert_eq!(
+            active
+                .read(
+                    PackedSlot {
+                        logical_page: extent.logical_page,
+                        ordinal: extent.ordinal,
+                        inode: 31,
+                        generation: extent.generation,
+                        revision: extent.revision,
+                        offset: extent.start - extent.source_offset,
+                        length: extent.slot_length,
+                    },
+                    None,
+                )
+                .unwrap(),
+            b"C"
+        );
         drop(spare);
         f.payloads
             .reclaim(

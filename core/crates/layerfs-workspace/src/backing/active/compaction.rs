@@ -3,7 +3,7 @@ use super::{
     extents::{Extent, ExtentKind},
     generation::{locator_key, locator_value, parse_locator},
     index::Index,
-    pack::{PackRecord, TinyPack},
+    pack::{PackRecord, PackRecords, TinyPack},
     page::{Kind, PageRef, BODY_BYTES, PAGE_BYTES},
     pages::PageStore,
 };
@@ -185,6 +185,18 @@ fn live_refs(
     Ok((refs, charge))
 }
 
+fn live_bytes(records: &PackRecords, refs: &[LiveRef]) -> usize {
+    records
+        .records
+        .iter()
+        .filter(|record| {
+            refs.binary_search_by_key(&record.slot.ordinal, |reference| reference.ordinal)
+                .is_ok()
+        })
+        .map(|record| 48 + record.bytes.len())
+        .sum()
+}
+
 fn relocate_reference(
     index: &Index,
     updates: &mut BTreeMap<Vec<u8>, Option<Vec<u8>>>,
@@ -255,11 +267,13 @@ pub(super) fn plan(
             .and_then(|pages| pages.checked_mul(PAGE_BYTES))
             .ok_or(WorkspaceError::Capacity)? as u64;
         let pressure = max_sources > 1 && store.remaining_quota()? < reserve;
+        let mut partial = Vec::new();
+        let mut partial_charge = store.budget().reserve(0)?;
         if pressure {
             let mut lower = vec![b'P'];
             loop {
                 let page = index.scan(&lower, b"Q", 128)?;
-                for (key, _) in page.entries() {
+                for (key, value) in page.entries() {
                     if key.len() != 9 {
                         return Err(WorkspaceError::Io);
                     }
@@ -275,6 +289,30 @@ pub(super) fn plan(
                         )?;
                         logicals.insert(logical);
                     }
+                    if updates.get(key).is_some_and(Option::is_none) {
+                        continue;
+                    }
+                    let physical = parse_locator(value)?;
+                    if !pack.sealed(logical, physical)? {
+                        continue;
+                    }
+                    let records = pack.records(logical, physical)?;
+                    let (refs, _charge) = live_refs(index, updates, logical)?;
+                    if refs.is_empty() {
+                        continue;
+                    }
+                    let live = live_bytes(&records, &refs);
+                    let dead = records.used.checked_sub(live).ok_or(WorkspaceError::Io)?;
+                    if dead > 0 && dead <= BODY_BYTES / 2 {
+                        partial_charge.resize(
+                            partial
+                                .len()
+                                .checked_add(1)
+                                .and_then(|count| count.checked_mul(112))
+                                .ok_or(WorkspaceError::Capacity)?,
+                        )?;
+                        partial.push((logical, live));
+                    }
                 }
                 let Some((last, _)) = page.entries().last() else {
                     break;
@@ -282,6 +320,17 @@ pub(super) fn plan(
                 lower = last.clone();
                 lower.push(0);
             }
+        }
+        partial.sort_unstable_by_key(|(_, bytes)| *bytes);
+        let mut paired = BTreeSet::new();
+        let mut at = 0;
+        while at + 1 < partial.len() {
+            if partial[at].1 + partial[at + 1].1 > BODY_BYTES {
+                break;
+            }
+            paired.insert(partial[at].0);
+            paired.insert(partial[at + 1].0);
+            at += 2;
         }
         let mut destination: Option<Destination> = None;
         for logical in logicals {
@@ -304,23 +353,20 @@ pub(super) fn plan(
             if refs.is_empty() {
                 continue;
             }
-            let live: BTreeSet<_> = refs.iter().map(|reference| reference.ordinal).collect();
-            let live_bytes: usize = records
-                .records
-                .iter()
-                .filter(|record| live.contains(&record.slot.ordinal))
-                .map(|record| 48 + record.bytes.len())
-                .sum();
+            let live_bytes = live_bytes(&records, &refs);
             let dead_bytes = records
                 .used
                 .checked_sub(live_bytes)
                 .ok_or(WorkspaceError::Io)?;
-            if dead_bytes == 0 || (dead_bytes <= BODY_BYTES / 2 && !pressure) {
+            if dead_bytes == 0 || (dead_bytes <= BODY_BYTES / 2 && !paired.contains(&logical)) {
                 continue;
             }
             let mut at = 0;
             for record in &records.records {
-                if !live.contains(&record.slot.ordinal) {
+                if refs
+                    .binary_search_by_key(&record.slot.ordinal, |reference| reference.ordinal)
+                    .is_err()
+                {
                     continue;
                 }
                 if destination

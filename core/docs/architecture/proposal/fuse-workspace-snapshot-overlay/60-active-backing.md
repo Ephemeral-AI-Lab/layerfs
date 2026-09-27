@@ -1,6 +1,6 @@
 # #273 active backing storage and captured Commit
 
-> Source pin: this revision follows checkpoint-3 source `a4c54e62b` and
+> Source pin: this revision follows checkpoint-4 source `38bcf9912` and
 > describes the checkpoint-4 source committed with this revision. LocalEdit Workspaces
 > select the active owner and lower captured views through the public Service.
 > This document has no latency or release claim. The
@@ -221,8 +221,11 @@ the old physical page. Ordinary mutations relocate at most one source page;
 Commit processes all remaining touched source pages and pools their survivors
 across destination pages. When shared Host quota headroom drops below the
 conservative page reserve for its update batch, Commit also scans sealed
-locators and pools partially dead pages from earlier generations. A source
-page with at most half dead body otherwise remains charged slack. An
+locators and pools partially dead pages from earlier generations only when
+a pair's surviving records fit one destination. It leaves an isolated
+partially dead page in place so a low-quota Commit does not spend another
+page without a refund. A source page with at most half dead body otherwise
+remains charged slack. An
 admission that lacks temporary copy-on-write space refuses before publication.
 The final ordered SaveFile upload caches one charged
 pack page at a time, validating the slot identity and selected subrange. The
