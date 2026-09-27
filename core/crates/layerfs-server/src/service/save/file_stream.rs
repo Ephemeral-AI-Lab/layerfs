@@ -3,6 +3,7 @@ use crate::service::input::Exact;
 use layerfs_bridge::contract::{Code, Failure, MAX_FILE};
 use layerfs_content::{ContentError, ContentResult, Edit, EditSequence, EditSource};
 use std::{
+    cell::Cell,
     fs::{File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
@@ -64,6 +65,23 @@ pub(crate) struct FileInput {
     final_length: u64,
     bytes: Bytes,
     replacement: u64,
+    record_lookups: Cell<u64>,
+    record_reads: Cell<u64>,
+    replacement_reads: Cell<u64>,
+    replacement_bytes_read: Cell<u64>,
+}
+
+impl Drop for FileInput {
+    fn drop(&mut self) {
+        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+            eprintln!(
+                "LFS_FILE_INPUT v=1 edits={} spool_resident={} record_lookups={} record_reads={} replacement_reads={} replacement_bytes_read={}",
+                self.edit_count, self.resident(), self.record_lookups.get(),
+                self.record_reads.get(), self.replacement_reads.get(),
+                self.replacement_bytes_read.get(),
+            );
+        }
+    }
 }
 
 impl FileInput {
@@ -87,6 +105,8 @@ impl FileInput {
     }
 
     fn record(&self, index: usize) -> ContentResult<(Edit, u64)> {
+        self.record_lookups
+            .set(self.record_lookups.get().saturating_add(1));
         if index >= self.edit_count {
             return Err(ContentError::InvalidEdit { what: "edit index" });
         }
@@ -98,6 +118,8 @@ impl FileInput {
             .map_err(|_| ContentError::Io)?;
         let mut b = [0; EDIT_BYTES as usize];
         file.read_exact(&mut b).map_err(|_| ContentError::Io)?;
+        self.record_reads
+            .set(self.record_reads.get().saturating_add(1));
         let word = |at: usize| u64::from_be_bytes(b[at..at + 8].try_into().unwrap());
         Ok((Edit::new(word(0), word(8), word(16)), word(24)))
     }
@@ -126,6 +148,13 @@ impl FileInput {
                     .map_err(|_| ContentError::Io)?;
             }
         }
+        self.replacement_reads
+            .set(self.replacement_reads.get().saturating_add(1));
+        self.replacement_bytes_read.set(
+            self.replacement_bytes_read
+                .get()
+                .saturating_add(take as u64),
+        );
         Ok(take)
     }
 }
@@ -336,6 +365,10 @@ pub(crate) fn read(
         final_length,
         bytes,
         replacement,
+        record_lookups: Cell::new(0),
+        record_reads: Cell::new(0),
+        replacement_reads: Cell::new(0),
+        replacement_bytes_read: Cell::new(0),
     })
 }
 

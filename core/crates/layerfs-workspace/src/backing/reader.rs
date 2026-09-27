@@ -1,6 +1,6 @@
 use super::{
     payload::{clock, filename, header, OwnedPayload, WindowLease},
-    segments::{self, ALIGN, DATA_BYTES, WINDOW_BYTES},
+    segments::{self, ALIGN, DATA_BYTES, INLINE_START, WINDOW_BYTES},
 };
 use crate::{BackingPhase, WorkspaceError};
 use layerfs_bridge::contract::Source;
@@ -72,6 +72,17 @@ impl PayloadReader {
             segments::read(&file, window, 0, ALIGN)?;
             header(&self.owner.record, index).verify(window)?;
             self.file = Some((index, file));
+        }
+        if segments::inline(self.owner.record.length) {
+            clock(deadline)?;
+            if cancel.load(Ordering::Acquire) {
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            let count = out.len().min((self.end - self.position) as usize);
+            let start = INLINE_START + self.position as usize;
+            out[..count].copy_from_slice(&window.0[start..start + count]);
+            self.position += count as u64;
+            return Ok(count);
         }
         let local = self.position % DATA_BYTES as u64;
         let offset = ALIGN as u64 + local;

@@ -169,7 +169,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | Type | Where | Fields |
 | --- | --- | --- |
 | `CdcCounters` | `file/cdc/gear.rs` | `bytes_scanned`, `chunks_emitted` |
-| `EditCounters` | `file/edit/tree.rs` | `nodes_read`, `nodes_created`, `payloads_created`, `payload_bytes`, `peak_deferred_bytes` |
+| `EditCounters` | `file/edit/tree.rs` | `nodes_read`, `stored_nodes_read`, `draft_nodes_read`, `nodes_created`, `payloads_created`, `payload_bytes`, `peak_deferred_bytes` |
 | `ReadCounters` | `file/mapping/read.rs` | `nodes_read`, `node_batches_read`, `max_node_batch`, `payload_ids_read`, `payload_batches_read`, `max_payload_batch`, `payload_bytes_read` |
 
 #### C1 — filesystem
@@ -395,3 +395,14 @@ consumer that reads the outcome alone must not treat a node that never completed
 an operation that completed successfully."* And `Disabled` versus `Clipped` are
 different states with different consequences, so *"a caller that checks only
 `is_incomplete()` therefore never fails a disabled row."*
+
+### 15.9 #265 final-run edit load split (2026-09-27)
+
+Source pin: the C1 change committed with this section. `EditCounters.nodes_read`
+still counts the successful `load_node` calls that missed the operation's page
+memo. `stored_nodes_read` counts calls into the authenticated provider for a
+stored page; `draft_nodes_read` counts loads from an in-memory draft node or
+draft page. They sum to `nodes_read` on a successful edit, and the C1 edit path
+emits them once as `LFS_C1_EDIT_LOAD` when complexity diagnostics are enabled.
+This separates Store **requests** from draft work. It does not report SQLite
+page reads, physical device I/O or every call served by the page memo.

@@ -1,0 +1,9 @@
+{
+  "status": "NOT_RUN",
+  "attempt_exit_code": 101,
+  "selection": "linux::maintenance_frozen",
+  "phase": "external native fixture setup",
+  "source_commit": "ebfa8f242",
+  "reason": "Direct Docker test invocation omitted live LAYERFS_ENDPOINT/LAYERFS_PRIVATE_KEY/LAYERFS_SERVER_KEY; test panicked in native_workspace.rs:123 before product operation. Proper stage_route.py requires separate 64 MiB prepared Store and has a 60 s bound, outside this issue\u2019s under-30 s focused test rule.",
+  "product_operation_count": 0
+}

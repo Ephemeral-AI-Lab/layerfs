@@ -1,0 +1,77 @@
+{
+  "balance_spec_sha256": "6cce6cde9a9e2d8b612a4822f368a1f66814e5a6bdaddfd1629f7fb6988a68aa",
+  "binaries": {
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-prepared-ebfa8f2-01/binary-archive/22aefc3449bfc5d719a7bca7fce761eab6d70b7c7d5b19cbefce22eb755c7056/benchmark_shell",
+      "sha256": "22aefc3449bfc5d719a7bca7fce761eab6d70b7c7d5b19cbefce22eb755c7056"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-prepared-ebfa8f2-01/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    }
+  },
+  "build_mode": "locked release host SDK/verifier and aarch64 daemon rebuilt; sealed static writer reused",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "4168be0c57241889dc4650ea2ece419447943adcde6a30d7d618b207110b3d01",
+  "dependency_reuse": {
+    "master": "closed Store/history copied into this worktree, exact byte identity and rebuilt-verifier proof",
+    "prior_prepared": "benchmark-results/fs-bench-pro/issue265-prepared-4f644e9-02/prepared.json",
+    "prior_source_commit": "4f644e95016f0191ff0c1929c610df8f29a3ff44",
+    "reviewed_core_changes": [
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/mod.rs",
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/pack.rs",
+      "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs",
+      "core/crates/layerfs-workspace/tests/pieces_sequence.rs"
+    ],
+    "writer": "source and binary SHA-256 matched"
+  },
+  "dockerfile_sha256": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+  "fixture_sha256": "eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472",
+  "image_id": "sha256:a74ba8c027c41f5ecbd1aad7ccff109189d6ff95ffc31a620a146a03ea018291",
+  "manifest_sha256": {
+    "append": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc",
+    "dispersed": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+    "old": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+    "repeated": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6"
+  },
+  "master": {
+    "branch_id": "11094cc9de4f7dd10dabd617bb074906e8",
+    "genesis_layer": "326a560e44b5fe83f523a19227fd2b166dc2553eef53ab43a04416c94644829143",
+    "genesis_root": "91f1706b248c3da05e1acfa8a53b83cd2cb0954b3b4b03609aa711c6dd0ed5d0",
+    "genesis_root_serial": 1,
+    "history_sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19",
+    "old_commit": "12c0b3b66db8c63d5cc068e8d96c22e545e70a70633dc81b813bfbfcc44a3a62a7",
+    "path": "/Users/yifanxu/.codex/worktrees/d617/layerfs/benchmark-results/fs-bench-pro/issue265-balanced-prepared-ebfa8f2-01/master",
+    "project_id": "31bf50228be038338dd77c4822bf4f886d",
+    "proof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "store_sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+  },
+  "master_reproof_sha256": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+  "preparation_wall_ns": {
+    "build": {
+      "daemon": 7099008666,
+      "sdk": 363356542,
+      "verifier": 98292292
+    },
+    "image": 2120057042,
+    "master_reproof": 1978163750
+  },
+  "schema": "issue265-patterns-prepared-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "b5a6b2560a4d6c08a2fe6c50f658f1911d8211e87ce577024bff96d703591889",
+    "product_seal": "cf2f3d74e1bb4fad0e2c0fbc6f44f2c53c13011bfed6e72e57cf0bfba556b2fc",
+    "source_commit": "ebfa8f242eaa37a224b6e30469744011503cd419",
+    "source_dirty": false,
+    "source_tree": "32c669055fc96b6ad80c009f0f1d344b1531a79b"
+  },
+  "spec_sha256": "f99e51430d0a16c7e246b236152aec73a54c66b83e72805794cadd33f12868e7",
+  "treatment_spec_sha256": "761029da660a5d41c1ccc1c6aa588875137f4af1354a0d74562083e7f9103dc2",
+  "writer_binary_sha256": "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3",
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

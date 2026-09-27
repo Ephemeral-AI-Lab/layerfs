@@ -37,6 +37,10 @@ const DEFERRED_OBJECT_OVERHEAD: usize = 128;
 pub struct EditCounters {
     /// Stored or owned nodes read.
     pub nodes_read: u64,
+    /// Authenticated provider requests for stored mapping pages.
+    pub stored_nodes_read: u64,
+    /// Loads from this operation's in-memory draft nodes or pages.
+    pub draft_nodes_read: u64,
     /// Mapping nodes this operation created and published.
     ///
     /// One per distinct mapping object the commit walk emits, so it equals the
@@ -173,9 +177,16 @@ impl<'a> EditObjects<'a> {
         }
         self.counters.nodes_read = self.counters.nodes_read.saturating_add(1);
         let node = match self.drafts.get(&summary.id) {
-            Some(Draft::Node(node)) => node.clone(),
-            Some(Draft::Page(object)) => decode_node_with_context(object.canonical(), root)?,
+            Some(Draft::Node(node)) => {
+                self.counters.draft_nodes_read = self.counters.draft_nodes_read.saturating_add(1);
+                node.clone()
+            }
+            Some(Draft::Page(object)) => {
+                self.counters.draft_nodes_read = self.counters.draft_nodes_read.saturating_add(1);
+                decode_node_with_context(object.canonical(), root)?
+            }
             None => {
+                self.counters.stored_nodes_read = self.counters.stored_nodes_read.saturating_add(1);
                 let canonical = self.reader.read_canonical(summary.id)?;
                 self.pages.insert(summary.id, root, canonical.clone());
                 decode_node_with_context(&canonical, root)?

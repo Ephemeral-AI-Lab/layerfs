@@ -78,7 +78,7 @@ mod linux {
             let input = f.own(&[(i % 251) as u8]);
             let status = f.workspace.backing_status().unwrap();
             assert_eq!(status.payloads, 1);
-            assert_eq!(status.allocated_bytes, 8192);
+            assert_eq!(status.allocated_bytes, 4096);
             assert_eq!(status.failed_payloads, 0);
             drop(input);
         }
@@ -230,7 +230,7 @@ mod linux {
         let good = f.own(b"good");
         let after = f.workspace.backing_status().unwrap();
         assert_eq!(after.failed_payloads, 1);
-        assert!(after.allocated_bytes >= before.allocated_bytes + 8192);
+        assert!(after.allocated_bytes >= before.allocated_bytes + 4096);
         drop(good);
         observe(&f);
         f.workspace.close_clean().unwrap();

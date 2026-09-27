@@ -1,0 +1,4 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/d617/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/d617/layerfs/core/crates/layerfs-fuse)
+   Compiling layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/d617/layerfs/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 6.24s

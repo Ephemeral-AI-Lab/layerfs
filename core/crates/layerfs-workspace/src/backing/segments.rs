@@ -5,9 +5,12 @@ use std::{fs::File, io, path::Path};
 pub(crate) const ALIGN: usize = 4096;
 pub(crate) const DATA_BYTES: usize = 1_048_576;
 pub(crate) const WINDOW_BYTES: usize = 131_072;
-const MAGIC: &[u8; 8] = b"LFSWPLD1";
-const VERSION: u16 = 1;
-const FIELDS_END: usize = 80;
+pub(crate) const INLINE_START: usize = 80;
+pub(crate) const INLINE_BYTES: usize = ALIGN - INLINE_START;
+
+pub(crate) fn inline(length: u64) -> bool {
+    length > 0 && length <= INLINE_BYTES as u64
+}
 
 #[repr(align(4096))]
 pub struct Window(pub [u8; WINDOW_BYTES]);
@@ -26,6 +29,9 @@ pub(crate) fn planned(length: u64) -> io::Result<u64> {
     if length > MAX_FILE {
         return Err(invalid("payload length exceeds the logical input bound"));
     }
+    if inline(length) {
+        return Ok(ALIGN as u64);
+    }
     let data = length
         .checked_add(ALIGN as u64 - 1)
         .map(|bytes| bytes / ALIGN as u64 * ALIGN as u64)
@@ -43,15 +49,24 @@ pub(crate) fn segment_count(length: u64) -> u32 {
 }
 
 impl Header {
+    fn profile(&self) -> (&'static [u8; 8], u16, u32, u32) {
+        if inline(self.length) {
+            (b"LFSWPLD2", 2, INLINE_START as u32, INLINE_BYTES as u32)
+        } else {
+            (b"LFSWPLD1", 1, ALIGN as u32, DATA_BYTES as u32)
+        }
+    }
+
     /// Writes exactly the header region; the remaining I/O window is untouched.
     pub fn fill(&self, window: &mut Window) {
         let bytes = &mut window.0[..ALIGN];
+        let (magic, version, header_bytes, data_bytes) = self.profile();
         bytes.fill(0);
-        bytes[..8].copy_from_slice(MAGIC);
-        bytes[8..10].copy_from_slice(&VERSION.to_be_bytes());
+        bytes[..8].copy_from_slice(magic);
+        bytes[8..10].copy_from_slice(&version.to_be_bytes());
         bytes[10..12].copy_from_slice(&(ALIGN as u16).to_be_bytes());
-        bytes[12..16].copy_from_slice(&(ALIGN as u32).to_be_bytes());
-        bytes[16..20].copy_from_slice(&(DATA_BYTES as u32).to_be_bytes());
+        bytes[12..16].copy_from_slice(&header_bytes.to_be_bytes());
+        bytes[16..20].copy_from_slice(&data_bytes.to_be_bytes());
         bytes[20..24].copy_from_slice(&(WINDOW_BYTES as u32).to_be_bytes());
         bytes[24..56].copy_from_slice(&self.incarnation);
         bytes[56..64].copy_from_slice(&self.payload.to_be_bytes());
@@ -76,18 +91,26 @@ impl Header {
             return Err(invalid("invalid retained segment length"));
         }
         let bytes = &window.0[..ALIGN];
-        if bytes[..8] != MAGIC[..]
-            || bytes[8..10] != VERSION.to_be_bytes()
+        let (magic, version, header_bytes, data_bytes) = self.profile();
+        if bytes[..8] != magic[..]
+            || bytes[8..10] != version.to_be_bytes()
             || bytes[10..12] != (ALIGN as u16).to_be_bytes()
-            || bytes[12..16] != (ALIGN as u32).to_be_bytes()
-            || bytes[16..20] != (DATA_BYTES as u32).to_be_bytes()
+            || bytes[12..16] != header_bytes.to_be_bytes()
+            || bytes[16..20] != data_bytes.to_be_bytes()
             || bytes[20..24] != (WINDOW_BYTES as u32).to_be_bytes()
             || bytes[24..56] != self.incarnation
             || bytes[56..64] != self.payload.to_be_bytes()
             || bytes[64..72] != self.length.to_be_bytes()
             || bytes[72..76] != self.index.to_be_bytes()
             || bytes[76..80] != self.logical.to_be_bytes()
-            || bytes[FIELDS_END..].iter().any(|byte| *byte != 0)
+            || bytes[INLINE_START
+                + if inline(self.length) {
+                    self.logical as usize
+                } else {
+                    0
+                }..]
+                .iter()
+                .any(|byte| *byte != 0)
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

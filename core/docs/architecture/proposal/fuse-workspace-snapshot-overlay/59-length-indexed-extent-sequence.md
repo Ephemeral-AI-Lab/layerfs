@@ -401,3 +401,50 @@ transfer. The writer-gate property itself is enforced by construction — no
 Commit phase acquires the gate across a walk or a pull — and a deterministic
 overlap check needs the page-read barrier the recorded E/F fixtures use; that
 check is not taken here.
+
+## 12. Extent splice work counters (#265, 2026-09-27)
+
+Source pin: the product change committed with this section. One splice now
+wraps its existing `PieceStore` with fixed-size counters. Each successful page
+read contributes one leaf or branch visit and its decoded body occupancy; each
+successfully completed page write contributes a leaf or branch write and its
+encoded occupancy. The returned level is the result root height. Leaf minimum
+and maximum are over pages this splice wrote, with zero when it wrote no leaf.
+Branch child and Local custody fields in successfully written extent pages
+count acknowledged upward ownership-edge updates. A cleanup page that already
+needs its body for edge release increments the corresponding child or custody
+downward counter after each acknowledged ledger update. No counter reads an
+additional page, scans the live tree or changes a page or ledger format.
+
+`LFS_EXTENT_SPLICE` is one bounded diagnostic line per splice when complexity
+logging is enabled; `LFS_EXTENT_EDGE` gives lifetime downward totals alongside
+the existing metadata status checkpoints. The prior `metadata_reads` and
+`ledger_reads`/`ledger_writes` remain separate from these extent counts. They
+describe visits and writes, not live page-kind cardinality: a page without
+edges can be reclaimed without a body read, and counting it as a live leaf
+would require either another read or a persistent per-page kind index. The
+37-page dispersed aggregate therefore remains an aggregate until independent
+page-kind evidence exists. These diagnostics do not qualify raw latency under
+the uncontrolled cache contract.
+
+## 13. Balanced touched-leaf packing (#265, 2026-09-27)
+
+Source pin: the product change committed with this section, under the
+[prospective treatment](../../../../../docs/roadmap/0.1/0.1.7/issue265-balanced-leaf-treatment.md).
+The path-copied fold now holds at most 248 touched 32-byte extent records.
+When a fold boundary closes, it packs `ceil(n/124)` leaves as evenly as possible:
+126 records become 63/63, not a full 124-record leaf followed by a 2-record
+leaf. At the 248-record bound it emits two full leaves and resumes, keeping
+wide edits streaming and bounded. The branch packer moved to `extent/pack.rs`
+without changing its level rules or 16-byte child format.
+
+The extra touched-record capacity is 3,968 bytes inside the existing 640 KiB
+writer allowance. The same page encoder, `RootOwner::write_raw_page`, temporary
+root seal and ownership ledger create and release every child and Local custody
+edge. An untouched sibling is never read for balancing. The old root remains
+immutable, a write still publishes atomically, and Commit lowers the frozen
+final extents into the same canonical format. A source-equivalent in-memory
+100-dispersed-write proof now reaches two leaves and one branch with 98/103
+records at write 100; this is structural evidence, not a public latency or
+Store-I/O claim. The public count and old/new-head results belong in the
+issue-specific evidence report rather than this architecture description.
