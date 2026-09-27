@@ -24,18 +24,20 @@ SPEC_266 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-fuse-refusal-spec.md"
 SPEC_266_POST = ROOT / "docs/roadmap/0.1/0.1.7/issue266-post-reply-diagnostic-spec.md"
 SPEC_266_WAIT = ROOT / "docs/roadmap/0.1/0.1.7/issue266-reply-wait-treatment-spec.md"
 SPEC_266_1024 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-spec.md"
+SPEC_271_2048 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-2048-diagnostic-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
           "diagnostic100v3": 100, "diagnostic512": 512,
-          "fuse512": 512, "diagnostic1024": 1024, "gate": 4097}
+          "fuse512": 512, "diagnostic1024": 1024,
+          "diagnostic2048": 2048, "gate": 4097}
 
 
 def fields(master, name, command):
     value = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                            "genesis_root_serial", "branch_id", "old_commit")}
     prefix = {"gate": "issue248", "fuse512": "issue266",
-              "diagnostic1024": "issue266"}.get(name, "issue261")
+              "diagnostic1024": "issue266", "diagnostic2048": "issue271"}.get(name, "issue261")
     version = {"diagnostic100v2": 2, "diagnostic100v3": 3}.get(name, 1)
     pattern = "fuse" if name == "fuse512" else "separated"
     value.update(scenario_id=f"{prefix}-{pattern}-{COUNTS[name]}-v{version}",
@@ -111,7 +113,8 @@ def prepare(output):
     for name in COUNTS:
         interval = {"diagnostic": 25, "diagnostic100v2": 25,
                     "diagnostic100v3": 25, "diagnostic512": 128,
-                    "fuse512": 128, "diagnostic1024": 256}.get(name)
+                    "fuse512": 128, "diagnostic1024": 256,
+                    "diagnostic2048": 512}.get(name)
         text = dockerfile.replace("ENTRYPOINT",
             f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
             "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
@@ -177,6 +180,7 @@ def prepare(output):
         "issue266_post_spec_sha256": digest(SPEC_266_POST),
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
+        "issue271_2048_spec_sha256": digest(SPEC_271_2048),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -204,7 +208,7 @@ def prepare_reuse(output, previous_file, selection):
         raise ValueError("clean source and a sealed issue261 master required")
     if previous["source"]["build_profile"] != "release":
         raise ValueError("previous binaries are not release builds")
-    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "gate"):
+    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "gate"):
         raise ValueError("unsupported reuse selection")
     product_same = identity["product_seal"] == previous["source"]["product_seal"]
     changed_product = subprocess.check_output(["git", "diff", "--name-only",
@@ -230,12 +234,13 @@ def prepare_reuse(output, previous_file, selection):
                allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
     if selection in ("diagnostic100v3", "fuse512", "gate"):
         allowed |= allowed_packing
-    if selection == "diagnostic1024":
+    if selection in ("diagnostic1024", "diagnostic2048"):
         allowed = allowed_packing
     if not product_same and (selection != "diagnostic100v2"
                              and selection != "diagnostic100v3"
                              and selection != "fuse512"
                              and selection != "diagnostic1024"
+                             and selection != "diagnostic2048"
                              and selection != "gate"
                              or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
@@ -293,7 +298,8 @@ def prepare_reuse(output, previous_file, selection):
         daemon = CORE / "target/aarch64-unknown-linux-musl/release/layerfs-daemon"
     shutil.copyfile(daemon, context / "layerfs-daemon")
     (context / "layerfs-daemon").chmod(0o755)
-    interval = (256 if selection == "diagnostic1024" else
+    interval = (512 if selection == "diagnostic2048" else
+                256 if selection == "diagnostic1024" else
                 128 if selection in ("diagnostic512", "fuse512") else
                 25 if selection != "gate" else None)
     dockerfile = (
@@ -315,6 +321,7 @@ def prepare_reuse(output, previous_file, selection):
         "issue266_post_spec_sha256": digest(SPEC_266_POST),
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
+        "issue271_2048_spec_sha256": digest(SPEC_271_2048),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -393,6 +400,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue266 reply wait specification changed")
     if selection == "diagnostic1024" and digest(SPEC_266_1024) != prepared.get("issue266_1024_spec_sha256"):
         raise ValueError("issue266 1024-count specification changed")
+    if selection == "diagnostic2048" and digest(SPEC_271_2048) != prepared.get("issue271_2048_spec_sha256"):
+        raise ValueError("issue271 2048-count specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -452,7 +461,7 @@ def run(prepared_file, output, selection):
     sample_counts = [row["write_class"] for row in samples]
     expected_samples = ([count // 4, count // 2, count * 3 // 4, count]
                         if selection.startswith("diagnostic") or selection == "fuse512" else [])
-    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024") or all(
+    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048") or all(
         row["version"] == 2 and row["acquisition_ns"] is not None
         and row["publication_ns"] is not None for row in samples)
     verification = {"status": "NOT_RUN"}
@@ -476,7 +485,7 @@ def run(prepared_file, output, selection):
     daemon_retained = any(term in daemon_log for term in
                           ("sandbox shutdown retained:", "workspace shutdown retained:"))
     cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
-                   and (selection not in ("fuse512", "diagnostic1024", "gate") or (daemon_close and not daemon_retained
+                   and (selection not in ("fuse512", "diagnostic1024", "diagnostic2048", "gate") or (daemon_close and not daemon_retained
                         and driver.get("daemon_log_attempted")
                         and not driver.get("daemon_log_truncated")
                         and driver.get("daemon_log_error") == "None")))
@@ -495,6 +504,7 @@ def run(prepared_file, output, selection):
         "issue266_post_spec_sha256": prepared.get("issue266_post_spec_sha256"),
         "issue266_wait_spec_sha256": prepared.get("issue266_wait_spec_sha256"),
         "issue266_1024_spec_sha256": prepared.get("issue266_1024_spec_sha256"),
+        "issue271_2048_spec_sha256": prepared.get("issue271_2048_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
@@ -545,7 +555,7 @@ def main():
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
     p.add_argument("--reuse-prepared", type=Path)
-    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "gate"),
+    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "diagnostic2048", "gate"),
                    default="diagnostic512")
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
