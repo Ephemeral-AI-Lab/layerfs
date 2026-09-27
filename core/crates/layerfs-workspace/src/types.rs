@@ -250,6 +250,16 @@ pub struct BackingStatus {
     /// its path, so this does not grow with the frames one frozen transfer is
     /// replayed in.
     pub metadata_reads: u64,
+    /// Successful authenticated 4 KiB active-page fetches and writes, not a
+    /// claim about OS cache residency or the full transfer byte count.
+    pub active_pack_fetches: u64,
+    pub active_index_fetches: u64,
+    pub active_pack_page_writes: u64,
+    pub active_index_page_writes: u64,
+    pub active_pack_pages: usize,
+    pub active_index_pages: usize,
+    pub active_retired_pack_pages: usize,
+    pub active_retired_payloads: usize,
     /// Ownership-ledger 4 KiB reads and writes, including COW publication and
     /// reclamation. These are separate from metadata page reads.
     pub ledger_reads: u64,

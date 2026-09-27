@@ -11,8 +11,61 @@ mod linux {
     use layerfs_workspace::*;
     use std::{
         io::Write,
+        os::unix::fs::{FileExt, MetadataExt},
         time::{Duration, Instant},
     };
+    fn physical_private_files(root: &std::path::Path) -> (u64, usize) {
+        let mut pending = vec![root.to_path_buf()];
+        let mut blocks = 0;
+        let mut packs = 0;
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                let metadata = entry.metadata().unwrap();
+                if metadata.is_dir() {
+                    pending.push(entry.path());
+                } else if metadata.is_file() {
+                    blocks += metadata.blocks() * 512;
+                    packs +=
+                        usize::from(entry.file_name().to_string_lossy().starts_with("a-pack-v1"));
+                }
+            }
+        }
+        (blocks, packs)
+    }
+    fn private_files_with_prefix(root: &std::path::Path, prefix: &str) -> Vec<String> {
+        let mut pending = vec![root.to_path_buf()];
+        let mut packs = Vec::new();
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_dir() {
+                    pending.push(entry.path());
+                } else if entry.file_name().to_string_lossy().starts_with(prefix) {
+                    packs.push(entry.file_name().to_string_lossy().into_owned());
+                }
+            }
+        }
+        packs.sort();
+        packs
+    }
+    fn private_pack_files(root: &std::path::Path) -> Vec<String> {
+        private_files_with_prefix(root, "a-pack-v1")
+    }
+    fn private_file_path(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                if entry.file_type().unwrap().is_dir() {
+                    pending.push(entry.path());
+                } else if entry.file_name() == name {
+                    return entry.path();
+                }
+            }
+        }
+        panic!("private page missing: {name}")
+    }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_generation() {
@@ -93,8 +146,20 @@ mod linux {
         };
         let saved = attr(f.native.attributes(branch.effective_root, b"created"));
         assert_eq!(f.native.bytes(saved.1, 0, 1), b"x");
+        let root =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (physical, packs) = physical_private_files(&root);
+        let charged = f.workspace.backing_status().unwrap().allocated_bytes;
+        let metadata = f.workspace.metadata_status().unwrap().allocated_bytes;
+        assert!(metadata <= charged);
+        assert_eq!(physical, charged);
+        assert_eq!(packs, 0);
+        println!(
+            "STAGE_ALLOCATION physical_bytes={physical} charged_bytes={charged} metadata_bytes={metadata} pack_pages={packs}"
+        );
         check("active-fresh-name-and-file-commit");
         f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&root), (0, 0));
         check("active-committed-clean-close");
     }
     #[test]
@@ -195,6 +260,759 @@ mod linux {
         let saved = attr(f.native.attributes(branch.effective_root, b"mounted"));
         assert_eq!(f.native.bytes(saved.1, 0, 7), b"mounted");
         check("active-mounted-public-commit-bytes");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_many_file() {
+        let f = Fixture::new_fresh(Gate::None);
+        let root = f.workspace.root().serial;
+        for index in 0..128u8 {
+            let name = format!("m{index:03}");
+            let (file, handle) = f
+                .workspace
+                .create_file(
+                    root,
+                    name.as_bytes(),
+                    FileCreateOptions {
+                        mode: 0o644,
+                        umask: 0,
+                        exclusive: true,
+                        open: FileOpenOptions {
+                            access: FileAccess::ReadWrite,
+                            ..FileOpenOptions::default()
+                        },
+                    },
+                    deadline(),
+                )
+                .unwrap();
+            f.workspace
+                .write_file(handle, 0, &f.own(&[index]), deadline())
+                .unwrap();
+            f.workspace.release(handle).unwrap();
+            f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        }
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (before, packs_before) = physical_private_files(&private);
+        assert_eq!(
+            before,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert!(packs_before <= 3);
+        check("active-128-files-shared-pack-before-commit");
+        f.workspace.commit(deadline()).unwrap();
+        let (after, packs_after) = physical_private_files(&private);
+        assert_eq!(after, f.workspace.backing_status().unwrap().allocated_bytes);
+        assert_eq!(packs_after, 0);
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        for index in 0..128u8 {
+            let name = format!("m{index:03}");
+            let saved = attr(f.native.attributes(branch.effective_root, name.as_bytes()));
+            assert_eq!(f.native.bytes(saved.1, 0, 1), [index]);
+        }
+        println!("STAGE_ALLOCATION case=128 before_bytes={before} after_bytes={after} before_pack_pages={packs_before} after_pack_pages={packs_after}");
+        check("active-128-files-commit-and-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-128-files-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_repeated() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        for index in 0..4097usize {
+            f.workspace
+                .write_file(handle, 8, &f.own(&[b'B' + (index % 24) as u8]), deadline())
+                .unwrap();
+        }
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (before, packs_before) = physical_private_files(&private);
+        assert_eq!(
+            before,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        check("active-4097-repeated-public-backing");
+        let counts_before = f.workspace.backing_status().unwrap();
+        let started = Instant::now();
+        f.workspace.commit(deadline()).unwrap();
+        let commit_wall = started.elapsed();
+        let counts_after = f.workspace.backing_status().unwrap();
+        assert!(counts_after.active_pack_fetches > counts_before.active_pack_fetches);
+        println!("STAGE_PHASE case=repeated4097 commit_wall_ns={} pack_fetches={} index_fetches={} pack_page_writes={} index_page_writes={} cache_claim=none", commit_wall.as_nanos(), counts_after.active_pack_fetches - counts_before.active_pack_fetches, counts_after.active_index_fetches - counts_before.active_index_fetches, counts_after.active_pack_page_writes - counts_before.active_pack_page_writes, counts_after.active_index_page_writes - counts_before.active_index_page_writes);
+        let (after, packs_after) = physical_private_files(&private);
+        assert_eq!(after, f.workspace.backing_status().unwrap().allocated_bytes);
+        assert_eq!(packs_after, 0);
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(f.native.bytes(saved.1, 8, 1), [b'B' + (4096 % 24) as u8]);
+        println!("STAGE_ALLOCATION case=repeated4097 before_bytes={before} after_bytes={after} before_pack_pages={packs_before} after_pack_pages={packs_after}");
+        check("active-4097-repeated-commit-and-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-4097-repeated-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_retained32() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let mut pins = Vec::new();
+        let mut first_root = None;
+        for index in 0..32u8 {
+            f.workspace
+                .write_file(handle, 0, &f.own(&[b'B' + index]), deadline())
+                .unwrap();
+            pins.push(
+                f.workspace
+                    .opendir(f.workspace.root().serial, ReferenceScope::Local)
+                    .unwrap(),
+            );
+            f.workspace.commit(deadline()).unwrap();
+            if index == 0 {
+                let Response::History(result) = f.branch() else {
+                    panic!("branch result")
+                };
+                let HistoryResult::BranchSnapshot(branch) = *result else {
+                    panic!("branch snapshot")
+                };
+                first_root = Some(branch.effective_root);
+            }
+        }
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (retained, retained_packs) = physical_private_files(&private);
+        assert_eq!(
+            retained,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert!(retained_packs >= 31);
+        let first = attr(f.native.attributes(first_root.unwrap(), b"data.bin"));
+        assert_eq!(f.native.bytes(first.1, 0, 1), b"B");
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let last = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(f.native.bytes(last.1, 0, 1), [b'B' + 31]);
+        check("active-32-retained-generations-and-old-new-oracle");
+        for pin in pins {
+            f.workspace.releasedir(pin).unwrap();
+        }
+        let (released, released_packs) = physical_private_files(&private);
+        assert_eq!(
+            released,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert_eq!(released_packs, 0);
+        assert!(released < retained);
+        println!("STAGE_ALLOCATION case=retained32 retained_bytes={retained} released_bytes={released} retained_pack_pages={retained_packs} released_pack_pages={released_packs}");
+        check("active-32-pins-release-exact-blocks");
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-32-generations-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_mixed_compact() {
+        let f = Fixture::new_fresh(Gate::None);
+        let root = f.workspace.root().serial;
+        for index in 0..128u8 {
+            let name = format!("c{index:03}");
+            let (file, handle) = f
+                .workspace
+                .create_file(
+                    root,
+                    name.as_bytes(),
+                    FileCreateOptions {
+                        mode: 0o644,
+                        umask: 0,
+                        exclusive: true,
+                        open: FileOpenOptions {
+                            access: FileAccess::ReadWrite,
+                            ..FileOpenOptions::default()
+                        },
+                    },
+                    deadline(),
+                )
+                .unwrap();
+            f.workspace
+                .write_file(handle, 0, &f.own(b"A"), deadline())
+                .unwrap();
+            f.workspace.release(handle).unwrap();
+            f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        }
+        let first = f.workspace.stage(deadline()).unwrap();
+        for index in (0..10).chain(std::iter::once(80)) {
+            let name = format!("c{index:03}");
+            let file = f.lookup(name.as_bytes());
+            let handle = f
+                .workspace
+                .open_file(
+                    file.serial,
+                    FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                    ReferenceScope::Local,
+                    deadline(),
+                )
+                .unwrap();
+            f.workspace
+                .write_file(handle, 1, &f.own(b"!"), deadline())
+                .unwrap();
+            f.workspace.release(handle).unwrap();
+            f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        }
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (before, before_packs) = physical_private_files(&private);
+        assert_eq!(
+            before,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert_eq!(before_packs, 3);
+        let counts_before = f.workspace.backing_status().unwrap();
+        let started = Instant::now();
+        f.workspace.commit_staged(&first, deadline()).unwrap();
+        let commit_wall = started.elapsed();
+        let counts_after = f.workspace.backing_status().unwrap();
+        println!("STAGE_PHASE case=mixed128 commit_staged_wall_ns={} pack_fetches={} index_fetches={} pack_page_writes={} index_page_writes={} cache_claim=none", commit_wall.as_nanos(), counts_after.active_pack_fetches - counts_before.active_pack_fetches, counts_after.active_index_fetches - counts_before.active_index_fetches, counts_after.active_pack_page_writes - counts_before.active_pack_page_writes, counts_after.active_index_page_writes - counts_before.active_index_page_writes);
+        let (middle, middle_packs) = physical_private_files(&private);
+        assert_eq!(
+            middle,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert_eq!(middle_packs, 2);
+        let g1 = attr(f.native.attributes(first.stage().candidate_root, b"c000"));
+        assert_eq!(f.native.bytes(g1.1, 0, 1), b"A");
+        let live = f.lookup(b"c000");
+        let handle = f
+            .workspace
+            .open(live.serial, ReferenceScope::Local)
+            .unwrap();
+        assert_eq!(f.read(handle, 0, 2), b"A!");
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(live.serial, 1, ReferenceScope::Local);
+        println!("STAGE_ALLOCATION case=mixed128 before_bytes={before} middle_bytes={middle} before_pack_pages={before_packs} middle_pack_pages={middle_packs}");
+        check("active-mixed-two-pages-compact-to-one-destination");
+        f.workspace.commit(deadline()).unwrap();
+        let (after, after_packs) = physical_private_files(&private);
+        assert_eq!(after, f.workspace.backing_status().unwrap().allocated_bytes);
+        assert_eq!(after_packs, 0);
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let g2 = attr(f.native.attributes(branch.effective_root, b"c000"));
+        assert_eq!(f.native.bytes(g2.1, 0, 2), b"A!");
+        let other = attr(f.native.attributes(branch.effective_root, b"c020"));
+        assert_eq!(f.native.bytes(other.1, 0, 1), b"A");
+        check("active-mixed-g1-g2-bytes-and-refund");
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-mixed-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_mutation_compact() {
+        let f = Fixture::new_fresh(Gate::None);
+        let root = f.workspace.root().serial;
+        for index in 0..128u8 {
+            let name = format!("u{index:03}");
+            let (file, handle) = f
+                .workspace
+                .create_file(
+                    root,
+                    name.as_bytes(),
+                    FileCreateOptions {
+                        mode: 0o644,
+                        umask: 0,
+                        exclusive: true,
+                        open: FileOpenOptions {
+                            access: FileAccess::ReadWrite,
+                            ..FileOpenOptions::default()
+                        },
+                    },
+                    deadline(),
+                )
+                .unwrap();
+            f.workspace
+                .write_file(handle, 0, &f.own(b"A"), deadline())
+                .unwrap();
+            f.workspace.release(handle).unwrap();
+            f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        }
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let old = private_pack_files(&private);
+        assert_eq!(old.len(), 2);
+        for index in 0..45u8 {
+            let name = format!("u{index:03}");
+            let file = f.lookup(name.as_bytes());
+            let handle = f
+                .workspace
+                .open_file(
+                    file.serial,
+                    FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                    ReferenceScope::Local,
+                    deadline(),
+                )
+                .unwrap();
+            f.workspace
+                .write_file(handle, 0, &f.own(b"B"), deadline())
+                .unwrap();
+            f.workspace.release(handle).unwrap();
+            f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        }
+        let current = private_pack_files(&private);
+        assert!(!current.contains(&old[0]));
+        assert_eq!(
+            physical_private_files(&private).0,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        let survivor = f.lookup(b"u079");
+        let handle = f
+            .workspace
+            .open(survivor.serial, ReferenceScope::Local)
+            .unwrap();
+        assert_eq!(f.read(handle, 0, 1), b"A");
+        f.workspace.release(handle).unwrap();
+        f.workspace
+            .forget(survivor.serial, 1, ReferenceScope::Local);
+        println!(
+            "STAGE_ALLOCATION case=mutation_compact old_pack_pages={} current_pack_pages={}",
+            old.len(),
+            current.len()
+        );
+        check("active-mutation-compacts-mixed-sealed-page");
+        f.workspace.commit(deadline()).unwrap();
+        assert_eq!(physical_private_files(&private).1, 0);
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-mutation-compaction-commit-and-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_payload_refund() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let data = vec![b'Z'; 8192];
+        let payload = f.own(&data);
+        f.workspace
+            .write_file(handle, 0, &payload, deadline())
+            .unwrap();
+        drop(payload);
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let before = private_files_with_prefix(&private, "p-");
+        assert_eq!(before.len(), 1);
+        check("active-large-payload-owned-before-commit");
+        f.workspace.commit(deadline()).unwrap();
+        let after = private_files_with_prefix(&private, "p-");
+        assert!(after.is_empty());
+        assert_eq!(
+            physical_private_files(&private).0,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(f.native.bytes(saved.1, 0, data.len()), data);
+        println!(
+            "STAGE_ALLOCATION case=payload_refund before_files={} after_files={}",
+            before.len(),
+            after.len()
+        );
+        check("active-large-payload-refund-and-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-large-payload-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_quota_refusal() {
+        let f = Fixture::with_quota(Gate::None, 2 * 1024 * 1024);
+        f.edit(b"data.bin", 10, 11, b"A");
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let input = f.own(b"B");
+        let before = f.workspace.backing_status().unwrap();
+        let available = before.quota_bytes - before.allocated_bytes - before.reserved_bytes;
+        let mut blocks = available / 4096;
+        while blocks + blocks.div_ceil(256) > available / 4096 {
+            blocks -= 1;
+        }
+        let spare = f.own(&vec![0xcc; blocks as usize * 4096]);
+        let full = f.workspace.backing_status().unwrap();
+        assert!(full.quota_bytes - full.allocated_bytes - full.reserved_bytes <= 4096);
+        let revision = f.workspace.status().unwrap().revision;
+        let error = f
+            .workspace
+            .write_file(handle, 10, &input, deadline())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceError::Backing(_) | WorkspaceError::Capacity
+        ));
+        assert_eq!(f.workspace.status().unwrap().revision, revision);
+        assert_eq!(f.read(handle, 10, 1), b"A");
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(
+            physical_private_files(&private).0,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        println!("STAGE_ALLOCATION case=quota_refusal full_bytes={} remaining_bytes={} refusal={error:?}", full.allocated_bytes, full.quota_bytes - full.allocated_bytes - full.reserved_bytes);
+        check("active-quota-refusal-keeps-acknowledged-bytes-and-charge");
+        drop(spare);
+        drop(input);
+        f.workspace.reclaim_payloads(deadline()).unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 2, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-quota-refusal-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_separated4096() {
+        let f = Fixture::new_fresh(Gate::None);
+        let (file, handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"separated",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        let mut oracle = vec![b'A'; 8194];
+        f.workspace
+            .write_file(handle, 0, &f.own(&oracle), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let file = f.lookup(b"separated");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        for index in 0..4096usize {
+            let byte = b'B' + (index % 24) as u8;
+            f.workspace
+                .write_file(handle, (index * 2) as u64, &f.own(&[byte]), deadline())
+                .unwrap();
+            oracle[index * 2] = byte;
+        }
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let (before, packs_before) = physical_private_files(&private);
+        assert_eq!(
+            before,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        assert!(
+            before <= 3 * 1024 * 1024,
+            "one-file 3 MiB design bound: {before}"
+        );
+        check("active-4096-separated-full-private-backing-bound");
+        let counts_before = f.workspace.backing_status().unwrap();
+        let started = Instant::now();
+        f.workspace
+            .commit(Instant::now() + Duration::from_secs(25))
+            .unwrap();
+        let commit_wall = started.elapsed();
+        let counts_after = f.workspace.backing_status().unwrap();
+        println!("STAGE_PHASE case=separated4096 commit_wall_ns={} pack_fetches={} index_fetches={} cache_claim=none", commit_wall.as_nanos(), counts_after.active_pack_fetches - counts_before.active_pack_fetches, counts_after.active_index_fetches - counts_before.active_index_fetches);
+        let (after, packs_after) = physical_private_files(&private);
+        assert_eq!(after, counts_after.allocated_bytes);
+        assert_eq!(packs_after, 0);
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"separated"));
+        assert_eq!(f.native.bytes(saved.1, 0, oracle.len()), oracle);
+        println!("STAGE_ALLOCATION case=separated4096 before_bytes={before} after_bytes={after} before_pack_pages={packs_before} after_pack_pages={packs_after}");
+        check("active-4096-separated-commit-and-full-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-4096-separated-exact-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_cleanup_failure() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(handle, 0, &f.own(b"A"), deadline())
+            .unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        let old = private_pack_files(&private);
+        assert_eq!(old.len(), 1);
+        let second = f.own(b"B");
+        let old_page = std::fs::OpenOptions::new()
+            .write(true)
+            .open(private_file_path(&private, &old[0]))
+            .unwrap();
+        assert_eq!(old_page.write_at(&[0xff], 128).unwrap(), 1);
+        drop(old_page);
+        let error = f
+            .workspace
+            .write_file(handle, 0, &second, deadline())
+            .unwrap_err();
+        let WorkspaceError::Published {
+            receipt,
+            published_handle,
+            cause,
+        } = error
+        else {
+            panic!("published failure must retain receipt: {error:?}")
+        };
+        assert_eq!(receipt.accepted_bytes, 1);
+        assert_eq!(receipt.inode, file.serial);
+        assert_eq!(published_handle, None);
+        assert!(matches!(*cause, WorkspaceError::Io));
+        assert_eq!(f.read(handle, 0, 1), b"B");
+        assert_eq!(
+            physical_private_files(&private).0,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        check("active-postpublication-cleanup-failure-keeps-receipt-and-new-bytes");
+        assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
+        check("active-failed-cleanup-retains-charged-custody");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_split_slot() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(handle, 100, &f.own(&[b'X'; 128]), deadline())
+            .unwrap();
+        f.workspace
+            .write_file(handle, 104, &f.own(b"YYYY"), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        let mut expected: Vec<u8> = (0..256).map(|index| (index % 251) as u8).collect();
+        expected[100..228].fill(b'X');
+        expected[104..108].fill(b'Y');
+        let before = f.workspace.backing_status().unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let after = f.workspace.backing_status().unwrap();
+        assert!(after.active_pack_fetches > before.active_pack_fetches);
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
+        check("active-split-packed-slot-final-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        check("active-split-packed-slot-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_quick_controls() {
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                data.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        for index in 0..4097usize {
+            let byte = b'B' + (index % 24) as u8;
+            f.workspace
+                .write_file(handle, (index * 2) as u64, &f.own(&[byte]), deadline())
+                .unwrap();
+        }
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(data.serial, 1, ReferenceScope::Local);
+        let pinned = f
+            .workspace
+            .opendir(f.workspace.root().serial, ReferenceScope::Local)
+            .unwrap();
+        f.workspace
+            .commit(Instant::now() + Duration::from_secs(25))
+            .unwrap();
+        let held = f.workspace.backing_status().unwrap();
+        assert!(held.active_pack_pages >= 52);
+        let clean_started = Instant::now();
+        f.workspace.commit(deadline()).unwrap();
+        let clean_wall = clean_started.elapsed();
+        let clean = f.workspace.backing_status().unwrap();
+        assert_eq!(clean.active_pack_fetches - held.active_pack_fetches, 0);
+        assert!(clean.active_index_fetches - held.active_index_fetches < 128);
+        println!("STAGE_PHASE case=clean_control commit_wall_ns={} pack_fetches={} index_fetches={} retained_pack_pages={} cache_claim=none", clean_wall.as_nanos(), clean.active_pack_fetches - held.active_pack_fetches, clean.active_index_fetches - held.active_index_fetches, clean.active_pack_pages);
+        check("active-clean-commit-skips-retained-old-journal");
+        let other = f.lookup(b"other.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                other.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(handle, 0, &f.own(b"Q"), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(other.serial, 1, ReferenceScope::Local);
+        let before = f.workspace.backing_status().unwrap();
+        let edit_started = Instant::now();
+        f.workspace.commit(deadline()).unwrap();
+        let edit_wall = edit_started.elapsed();
+        let after = f.workspace.backing_status().unwrap();
+        assert!(after.active_pack_fetches - before.active_pack_fetches <= 2);
+        assert!(after.active_index_fetches - before.active_index_fetches < 256);
+        println!("STAGE_PHASE case=one_edit_control commit_wall_ns={} pack_fetches={} index_fetches={} retained_pack_pages={} cache_claim=none", edit_wall.as_nanos(), after.active_pack_fetches - before.active_pack_fetches, after.active_index_fetches - before.active_index_fetches, after.active_pack_pages);
+        check("active-one-edit-commit-skips-retained-old-journal");
+        f.workspace.releasedir(pinned).unwrap();
+        assert_eq!(f.workspace.backing_status().unwrap().active_pack_pages, 0);
+        f.workspace.close_clean().unwrap();
+        check("active-quick-controls-refund-and-clean-close");
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]

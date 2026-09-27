@@ -1,4 +1,5 @@
 use super::{
+    compaction,
     extents::{Extent, ExtentKind, ExtentPlan},
     index::{Index, IndexSnapshot, ScanPage},
     pack::{PackedSlot, TinyPack},
@@ -24,16 +25,19 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-struct State {
-    retired: Vec<RetiredPack>,
-    retired_charge: Charge,
-    large: BTreeMap<u64, LargeOwner>,
-    stopped: bool,
-    closed: bool,
+pub(super) struct State {
+    pub(super) retired: Vec<RetiredPack>,
+    pub(super) retired_charge: Charge,
+    pub(super) large: BTreeMap<u64, LargeOwner>,
+    pub(super) retired_large: BTreeMap<u64, u64>,
+    pub(super) retired_large_charge: Charge,
+    pub(super) stopped: bool,
+    pub(super) closed: bool,
 }
 
-struct LargeOwner {
+pub(super) struct LargeOwner {
     payload: OwnedPayload,
+    pub(super) birth: u64,
     _charge: Charge,
 }
 type KeyUpdates = Vec<(Vec<u8>, Option<Vec<u8>>)>;
@@ -41,11 +45,11 @@ type KeyUpdates = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 /// Coordinates one Workspace's pack tail and pooled index. The index root is
 /// the publication point; a prepared pack page is verified before it is named.
 pub struct ActiveBacking {
-    store: Arc<PageStore>,
-    payloads: Arc<PayloadHost>,
-    pack: Arc<TinyPack>,
-    index: Arc<Index>,
-    state: Mutex<State>,
+    pub(super) store: Arc<PageStore>,
+    pub(super) payloads: Arc<PayloadHost>,
+    pub(super) pack: Arc<TinyPack>,
+    pub(super) index: Arc<Index>,
+    pub(super) state: Mutex<State>,
     _charge: Charge,
 }
 
@@ -78,6 +82,7 @@ pub struct ActivePublication {
 pub struct ActiveStatus {
     pub store: StoreStatus,
     pub retired_pack_pages: usize,
+    pub retired_payloads: usize,
     pub stopped: bool,
     pub closed: bool,
 }
@@ -86,7 +91,7 @@ pub(super) fn locator_key(logical: u64) -> Vec<u8> {
     [vec![b'P'], logical.to_be_bytes().to_vec()].concat()
 }
 
-fn locator_value(physical: PageRef) -> Vec<u8> {
+pub(super) fn locator_value(physical: PageRef) -> Vec<u8> {
     [physical.id.to_be_bytes(), physical.epoch.to_be_bytes()].concat()
 }
 
@@ -121,6 +126,8 @@ impl ActiveBacking {
                 retired: Vec::new(),
                 retired_charge: budget.reserve(0)?,
                 large: BTreeMap::new(),
+                retired_large: BTreeMap::new(),
+                retired_large_charge: budget.reserve(0)?,
                 stopped: false,
                 closed: false,
             }),
@@ -133,6 +140,7 @@ impl ActiveBacking {
         Ok(ActiveStatus {
             store: self.store.status()?,
             retired_pack_pages: state.retired.len(),
+            retired_payloads: state.retired_large.len(),
             stopped: state.stopped,
             closed: state.closed,
         })
@@ -163,6 +171,9 @@ impl ActiveBacking {
         &self,
         updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<u64, WorkspaceError> {
+        if updates.is_empty() {
+            return Err(WorkspaceError::InvalidInput);
+        }
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
@@ -466,11 +477,18 @@ impl ActiveBacking {
             .then(|| {
                 Ok::<_, WorkspaceError>(LargeOwner {
                     payload: payload.clone(),
+                    birth: revision,
                     _charge: self.store.budget().reserve(128)?,
                 })
             })
             .transpose()?;
-        self.publish_no_pack(&mut state, planned, extra, new_owner)
+        self.publish_no_pack(
+            &mut state,
+            planned,
+            extra,
+            new_owner,
+            Some(payload.record.id),
+        )
     }
 
     /// Publishes a length change and its final Zero/retained extent view.
@@ -537,7 +555,7 @@ impl ActiveBacking {
             (key.to_vec(), Some(selected.value()?.to_vec())),
             (dirty_key(generation, inode).to_vec(), Some(vec![1])),
         ];
-        self.publish_no_pack(&mut state, planned, extra, None)
+        self.publish_no_pack(&mut state, planned, extra, None, None)
     }
 
     fn publish_no_pack(
@@ -546,6 +564,7 @@ impl ActiveBacking {
         planned: ExtentPlan,
         extra: KeyUpdates,
         new_owner: Option<LargeOwner>,
+        live_payload: Option<u64>,
     ) -> Result<ActivePublication, WorkspaceError> {
         let length = planned.length;
         let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
@@ -554,17 +573,63 @@ impl ActiveBacking {
                 return Err(WorkspaceError::InvalidInput);
             }
         }
-        let retained_tail = self.pack.tail()?.map(|(logical, _)| logical);
+        let tail = self.pack.tail()?;
+        let retained_tail = match tail {
+            Some((logical, physical)) if !self.pack.sealed(logical, physical)? => Some(logical),
+            _ => None,
+        };
         let dead = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
-        let candidate = self
-            .index
-            .prepare(&updates.into_iter().collect::<Vec<_>>())?;
-        let published_revision = candidate.publish()?;
+        let dead_large = reclaim::prune_dead_payloads(&self.index, &updates)?;
+        self.reserve_retired_large(state, dead_large.len())?;
+        let (generation, prior_revision) = self.index.generation_revision()?;
+        let revision = prior_revision
+            .checked_add(1)
+            .ok_or(WorkspaceError::Capacity)?;
+        let plan = compaction::plan(
+            self.store.clone(),
+            &self.pack,
+            &self.index,
+            &mut updates,
+            generation,
+            revision,
+            1,
+        )?;
+        let update_vec: Vec<_> = updates
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        let candidate = match self.index.prepare(&update_vec) {
+            Ok(candidate) => candidate,
+            Err(error) => return Err(plan.abort().err().unwrap_or(error)),
+        };
+        let published_revision = match candidate.publish() {
+            Ok(revision) => revision,
+            Err(error) => return Err(plan.abort().err().unwrap_or(error)),
+        };
+        let compacted = plan.finish();
         if let Some(owner) = new_owner {
             state.large.insert(owner.payload.record.id, owner);
         }
+        Self::record_retired_large(state, live_payload, dead_large, published_revision);
         let mut cleanup_error = None;
-        for page in dead {
+        for (logical, page) in dead
+            .into_iter()
+            .map(|page| {
+                (
+                    tail.map_or(
+                        0,
+                        |(logical, current)| if current == page { logical } else { 0 },
+                    ),
+                    page,
+                )
+            })
+            .chain(compacted)
+        {
+            if tail.is_some_and(|(_, current)| current == page) {
+                if let Err(error) = self.pack.forget_if(logical, page) {
+                    cleanup_error.get_or_insert(error);
+                }
+            }
             let State {
                 retired,
                 retired_charge,
@@ -637,18 +702,51 @@ impl ActiveBacking {
             Ok(dead) => dead,
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
         };
+        let dead_large = match reclaim::prune_dead_payloads(&self.index, &updates) {
+            Ok(dead) => dead,
+            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+        };
+        if let Err(error) = self.reserve_retired_large(&mut state, dead_large.len()) {
+            return Err(prepared.abort().err().unwrap_or(error));
+        }
+        let plan = match compaction::plan(
+            self.store.clone(),
+            &self.pack,
+            &self.index,
+            &mut updates,
+            generation,
+            revision,
+            1,
+        ) {
+            Ok(plan) => plan,
+            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+        };
         let updates: Vec<_> = updates.into_iter().collect();
         let candidate = match self.index.prepare(&updates) {
             Ok(candidate) => candidate,
-            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+            Err(error) => {
+                let plan_error = plan.abort().err();
+                let slot_error = prepared.abort().err();
+                return Err(plan_error.or(slot_error).unwrap_or(error));
+            }
         };
         let published_revision = match candidate.publish() {
             Ok(revision) => revision,
-            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+            Err(error) => {
+                let plan_error = plan.abort().err();
+                let slot_error = prepared.abort().err();
+                return Err(plan_error.or(slot_error).unwrap_or(error));
+            }
         };
+        let compacted = plan.finish();
         let rewritten = prepared.retired_physical();
         let mut cleanup_error = prepared.publish().err();
-        for page in rewritten.into_iter().chain(dead.into_iter()) {
+        Self::record_retired_large(&mut state, None, dead_large, published_revision);
+        for page in rewritten
+            .into_iter()
+            .chain(dead.into_iter())
+            .chain(compacted.into_iter().map(|(_, page)| page))
+        {
             let State {
                 retired,
                 retired_charge,
@@ -697,7 +795,7 @@ impl ActiveBacking {
     /// Directory handles can retain it across later namespace revisions.
     pub fn pin_view(self: &Arc<Self>) -> Result<ActiveSnapshot, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        if state.stopped || state.closed {
+        if state.closed {
             return Err(WorkspaceError::Busy);
         }
         let generation = self.index.generation_revision()?.0;
@@ -730,6 +828,10 @@ impl ActiveBacking {
         }
         self.store.close()?;
         state.large.clear();
+        state.retired_large.clear();
+        state.retired_large_charge.resize(0)?;
+        state.retired = Vec::new();
+        state.retired_charge.resize(0)?;
         state.closed = true;
         Ok(())
     }

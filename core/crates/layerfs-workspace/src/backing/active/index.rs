@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     mem::size_of,
     sync::{Arc, Mutex},
 };
@@ -167,151 +167,6 @@ impl Index {
         })
     }
 
-    fn split(
-        &self,
-        node: Node,
-        generation: u64,
-        revision: u64,
-        created: &mut Vec<PageRef>,
-    ) -> Result<Vec<Child>, WorkspaceError> {
-        if node.body_len() <= BODY_BYTES {
-            return Ok(vec![self.write(&node, generation, revision, created)?]);
-        }
-        if node.len() < 2 {
-            return Err(WorkspaceError::Capacity);
-        }
-        let target = node.body_len() / 2;
-        let middle = match &node {
-            Node::Leaf(cells) => {
-                let mut bytes = 0;
-                cells
-                    .iter()
-                    .position(|cell| {
-                        bytes += 4 + cell.key.len() + cell.value.len();
-                        bytes >= target
-                    })
-                    .unwrap_or(0)
-                    + 1
-            }
-            Node::Branch(children) => {
-                let mut bytes = 0;
-                children
-                    .iter()
-                    .position(|child| {
-                        bytes += 2 + child.max.len() + 16;
-                        bytes >= target
-                    })
-                    .unwrap_or(0)
-                    + 1
-            }
-        }
-        .clamp(1, node.len() - 1);
-        let (left, right) = match node {
-            Node::Leaf(mut cells) => {
-                let right = cells.split_off(middle);
-                (Node::Leaf(cells), Node::Leaf(right))
-            }
-            Node::Branch(mut children) => {
-                let right = children.split_off(middle);
-                (Node::Branch(children), Node::Branch(right))
-            }
-        };
-        if left.body_len() > BODY_BYTES || right.body_len() > BODY_BYTES {
-            return Err(WorkspaceError::Capacity);
-        }
-        Ok(vec![
-            self.write(&left, generation, revision, created)?,
-            self.write(&right, generation, revision, created)?,
-        ])
-    }
-
-    fn change(
-        &self,
-        old: Option<PageRef>,
-        key: &[u8],
-        value: Option<&[u8]>,
-        depth: usize,
-        context: &mut ChangeContext,
-    ) -> Result<Vec<Child>, WorkspaceError> {
-        if depth > MAX_LEVEL {
-            return Err(WorkspaceError::Capacity);
-        }
-        let Some(reference) = old else {
-            return match value {
-                Some(value) => self.split(
-                    Node::Leaf(vec![Cell {
-                        key: key.to_vec(),
-                        value: value.to_vec(),
-                    }]),
-                    context.generation,
-                    context.revision,
-                    &mut context.created,
-                ),
-                None => Ok(Vec::new()),
-            };
-        };
-        let node = self.node(reference)?;
-        let replacement = match node {
-            Node::Leaf(mut cells) => {
-                match cells.binary_search_by(|cell| cell.key.as_slice().cmp(key)) {
-                    Ok(at) => match value {
-                        Some(value) => cells[at].value = value.to_vec(),
-                        None => {
-                            cells.remove(at);
-                        }
-                    },
-                    Err(at) => {
-                        if let Some(value) = value {
-                            cells.insert(
-                                at,
-                                Cell {
-                                    key: key.to_vec(),
-                                    value: value.to_vec(),
-                                },
-                            );
-                        } else {
-                            return Ok(vec![Child {
-                                max: cells.last().ok_or(WorkspaceError::Io)?.key.clone(),
-                                page: reference,
-                            }]);
-                        }
-                    }
-                }
-                if cells.is_empty() {
-                    Vec::new()
-                } else {
-                    self.split(
-                        Node::Leaf(cells),
-                        context.generation,
-                        context.revision,
-                        &mut context.created,
-                    )?
-                }
-            }
-            Node::Branch(mut children) => {
-                let at = children
-                    .iter()
-                    .position(|child| child.max.as_slice() >= key)
-                    .unwrap_or(children.len() - 1);
-                let child = children[at].page;
-                let changed = self.change(Some(child), key, value, depth + 1, context)?;
-                children.splice(at..=at, changed);
-                match children.len() {
-                    0 => Vec::new(),
-                    1 => children,
-                    _ => self.split(
-                        Node::Branch(children),
-                        context.generation,
-                        context.revision,
-                        &mut context.created,
-                    )?,
-                }
-            }
-        };
-        context.replaced.push(reference);
-        Ok(replacement)
-    }
-
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         self.get_at(state.root, key)
@@ -465,14 +320,178 @@ impl Index {
         Err(WorkspaceError::Capacity)
     }
 
-    /// Updates are sorted and unique. A candidate is unobservable until the
-    /// surrounding Workspace publication accepts it.
+    fn bulk_leaves(
+        &self,
+        cells: Vec<Cell>,
+        context: &mut ChangeContext,
+    ) -> Result<Vec<Child>, WorkspaceError> {
+        let mut result = Vec::new();
+        let mut group = Vec::new();
+        let mut used = 0;
+        for cell in cells {
+            let size = 4 + cell.key.len() + cell.value.len();
+            if size > BODY_BYTES {
+                return Err(WorkspaceError::Capacity);
+            }
+            if used + size > BODY_BYTES {
+                result.push(self.write(
+                    &Node::Leaf(std::mem::take(&mut group)),
+                    context.generation,
+                    context.revision,
+                    &mut context.created,
+                )?);
+                used = 0;
+            }
+            used += size;
+            group.push(cell);
+        }
+        if !group.is_empty() {
+            result.push(self.write(
+                &Node::Leaf(group),
+                context.generation,
+                context.revision,
+                &mut context.created,
+            )?);
+        }
+        Ok(result)
+    }
+
+    fn bulk_branches(
+        &self,
+        children: Vec<Child>,
+        context: &mut ChangeContext,
+    ) -> Result<Vec<Child>, WorkspaceError> {
+        if children.len() <= 1 {
+            return Ok(children);
+        }
+        let mut result = Vec::new();
+        let mut group = Vec::new();
+        let mut used = 0;
+        for child in children {
+            let size = 2 + child.max.len() + 16;
+            if size > BODY_BYTES {
+                return Err(WorkspaceError::Capacity);
+            }
+            if used + size > BODY_BYTES {
+                result.push(self.write(
+                    &Node::Branch(std::mem::take(&mut group)),
+                    context.generation,
+                    context.revision,
+                    &mut context.created,
+                )?);
+                used = 0;
+            }
+            used += size;
+            group.push(child);
+        }
+        if !group.is_empty() {
+            result.push(self.write(
+                &Node::Branch(group),
+                context.generation,
+                context.revision,
+                &mut context.created,
+            )?);
+        }
+        Ok(result)
+    }
+
+    fn bulk_change(
+        &self,
+        old: Option<PageRef>,
+        updates: &[(Vec<u8>, Option<Vec<u8>>)],
+        depth: usize,
+        context: &mut ChangeContext,
+    ) -> Result<Vec<Child>, WorkspaceError> {
+        if depth > MAX_LEVEL {
+            return Err(WorkspaceError::Capacity);
+        }
+        let Some(reference) = old else {
+            let cells = updates
+                .iter()
+                .filter_map(|(key, value)| {
+                    value.as_ref().map(|value| Cell {
+                        key: key.clone(),
+                        value: value.clone(),
+                    })
+                })
+                .collect();
+            return self.bulk_leaves(cells, context);
+        };
+        if updates.is_empty() {
+            let node = self.node(reference)?;
+            return Ok(vec![Child {
+                max: node.max().to_vec(),
+                page: reference,
+            }]);
+        }
+        let replacement = match self.node(reference)? {
+            Node::Leaf(cells) => {
+                let mut old = cells.into_iter().peekable();
+                let mut merged = Vec::new();
+                for (key, value) in updates {
+                    while old
+                        .peek()
+                        .is_some_and(|cell| cell.key.as_slice() < key.as_slice())
+                    {
+                        merged.push(old.next().ok_or(WorkspaceError::Io)?);
+                    }
+                    if old.peek().is_some_and(|cell| cell.key == *key) {
+                        old.next();
+                    }
+                    if let Some(value) = value {
+                        merged.push(Cell {
+                            key: key.clone(),
+                            value: value.clone(),
+                        });
+                    }
+                }
+                merged.extend(old);
+                self.bulk_leaves(merged, context)?
+            }
+            Node::Branch(children) => {
+                let mut merged = Vec::new();
+                let mut at = 0;
+                let count = children.len();
+                for (position, child) in children.into_iter().enumerate() {
+                    let end = if position + 1 == count {
+                        updates.len()
+                    } else {
+                        at + updates[at..]
+                            .partition_point(|(key, _)| key.as_slice() <= child.max.as_slice())
+                    };
+                    if end == at {
+                        merged.push(child);
+                    } else {
+                        merged.extend(self.bulk_change(
+                            Some(child.page),
+                            &updates[at..end],
+                            depth + 1,
+                            context,
+                        )?);
+                    }
+                    at = end;
+                }
+                self.bulk_branches(merged, context)?
+            }
+        };
+        context.replaced.push(reference);
+        Ok(replacement)
+    }
+
+    pub fn prepare_bulk(
+        self: &Arc<Self>,
+        updates: &[(Vec<u8>, Option<Vec<u8>>)],
+    ) -> Result<IndexCandidate, WorkspaceError> {
+        self.prepare(updates)
+    }
+
+    /// Sorted unique updates share one reached-leaf traversal and one candidate
+    /// root. A clean Commit may publish an empty update to advance its revision.
     pub fn prepare(
         self: &Arc<Self>,
         updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<IndexCandidate, WorkspaceError> {
-        if updates.is_empty()
-            || updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
+        if updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
             || updates.iter().any(|(key, value)| {
                 key.is_empty()
                     || key.len() > 272
@@ -495,84 +514,57 @@ impl Index {
             state.pending = true;
             (state.root, state.generation, state.revision)
         };
-        let next_revision = revision + 1;
-        let mut new_root = root;
         let mut context = ChangeContext {
             generation,
-            revision: next_revision,
+            revision: revision + 1,
             created: Vec::new(),
             replaced: Vec::new(),
         };
-        let mut created = BTreeSet::new();
-        let mut replaced = BTreeSet::new();
-        let mut release_failed = false;
         let result = (|| {
-            for (key, value) in updates {
-                let mut changed = self.change(new_root, key, value.as_deref(), 0, &mut context)?;
-                new_root = match changed.len() {
-                    0 => None,
-                    1 => Some(changed.remove(0).page),
-                    _ => {
-                        if let Some(root) = new_root {
-                            if self.height(root)? >= MAX_LEVEL {
-                                return Err(WorkspaceError::Capacity);
-                            }
-                        }
-                        let branch = Node::Branch(changed);
-                        Some(
-                            self.write(&branch, generation, next_revision, &mut context.created)?
-                                .page,
-                        )
-                    }
-                };
-                let entries = created
-                    .len()
-                    .checked_add(replaced.len())
-                    .and_then(|count| count.checked_add(context.created.len()))
-                    .and_then(|count| count.checked_add(context.replaced.len()))
-                    .ok_or(WorkspaceError::Capacity)?;
-                scratch.resize(
-                    entries
-                        .checked_mul(64)
-                        .and_then(|bytes| bytes.checked_add(128 * 1024))
-                        .ok_or(WorkspaceError::Capacity)?,
-                )?;
-                created.extend(context.created.drain(..));
-                for page in context.replaced.drain(..) {
-                    if created.remove(&page) {
-                        if let Err(error) = self.store.release(page) {
-                            release_failed = true;
-                            return Err(error);
-                        }
-                    } else {
-                        replaced.insert(page);
-                    }
+            let budget = updates
+                .iter()
+                .try_fold(128 * 1024usize, |bytes, (key, value)| {
+                    bytes
+                        .checked_add(128 + key.len() + value.as_ref().map_or(0, Vec::len))
+                        .ok_or(WorkspaceError::Capacity)
+                })?;
+            scratch.resize(budget)?;
+            let mut children = self.bulk_change(root, updates, 0, &mut context)?;
+            let mut height = root.map(|root| self.height(root)).transpose()?.unwrap_or(0);
+            while children.len() > 1 {
+                if height >= MAX_LEVEL {
+                    return Err(WorkspaceError::Capacity);
                 }
+                children = self.bulk_branches(children, &mut context)?;
+                height += 1;
             }
-            Ok::<(), WorkspaceError>(())
+            Ok::<_, WorkspaceError>(children.pop().map(|child| child.page))
         })();
-        if let Err(error) = result {
-            let mut cleanup = Ok(());
-            for page in context.created.into_iter().chain(created.into_iter()) {
-                if let Err(failure) = self.store.release(page) {
-                    cleanup = Err(failure);
+        let new_root = match result {
+            Ok(root) => root,
+            Err(error) => {
+                let mut cleanup = None;
+                for page in &context.created {
+                    if let Err(failure) = self.store.release(*page) {
+                        cleanup = Some(failure);
+                    }
                 }
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.pending = false;
+                if cleanup.is_some() {
+                    state.stopped = true;
+                }
+                return Err(cleanup.unwrap_or(error));
             }
-            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-            state.pending = false;
-            if release_failed || cleanup.is_err() {
-                state.stopped = true;
-            }
-            return Err(cleanup.err().unwrap_or(error));
-        }
+        };
         Ok(IndexCandidate {
             index: self.clone(),
             expected_root: root,
             expected_revision: revision,
             generation,
             root: new_root,
-            created: created.into_iter().collect(),
-            replaced: replaced.into_iter().collect(),
+            created: context.created,
+            replaced: context.replaced,
             _scratch: scratch,
             finished: false,
         })

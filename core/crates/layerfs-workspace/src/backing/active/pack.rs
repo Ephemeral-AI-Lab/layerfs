@@ -17,6 +17,17 @@ pub struct PackedSlot {
     pub length: u16,
 }
 
+pub(super) struct PackRecord {
+    pub slot: PackedSlot,
+    pub bytes: Vec<u8>,
+}
+
+pub(super) struct PackRecords {
+    pub records: Vec<PackRecord>,
+    pub used: usize,
+    _charge: Charge,
+}
+
 struct Pending {
     candidate: PageRef,
     rewritten: Option<PageRef>,
@@ -64,6 +75,84 @@ impl Drop for PreparedSlot {
 }
 
 impl TinyPack {
+    pub(super) fn reserve_logical(&self) -> Result<u64, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped {
+            return Err(WorkspaceError::Busy);
+        }
+        let logical = state.next_logical;
+        state.next_logical = logical.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        Ok(logical)
+    }
+
+    pub(super) fn records(
+        &self,
+        logical: u64,
+        physical: PageRef,
+    ) -> Result<PackRecords, WorkspaceError> {
+        let page = self.store.read(physical, Kind::Pack)?;
+        let body = page.verify(Kind::Pack, self.store.incarnation(), physical)?;
+        let charge = self.store.budget().reserve(
+            BODY_BYTES * 2 + page.records() as usize * std::mem::size_of::<PackRecord>(),
+        )?;
+        let mut records = Vec::with_capacity(page.records() as usize);
+        let mut at = 0;
+        for ordinal in 0..page.records() {
+            if at + RECORD_HEADER > body.len() {
+                return Err(WorkspaceError::Io);
+            }
+            let read_u64 = |offset: usize| -> Result<u64, WorkspaceError> {
+                Ok(u64::from_be_bytes(
+                    body[at + offset..at + offset + 8]
+                        .try_into()
+                        .map_err(|_| WorkspaceError::Io)?,
+                ))
+            };
+            let length = u16::from_be_bytes(
+                body[at + 40..at + 42]
+                    .try_into()
+                    .map_err(|_| WorkspaceError::Io)?,
+            );
+            let end = at + RECORD_HEADER + length as usize;
+            if length == 0
+                || length as usize > TINY_LIMIT
+                || end > body.len()
+                || body[at + 42..at + 44] != ordinal.to_be_bytes()
+                || body[at + 44..at + 48] != [0; 4]
+                || read_u64(32)? != logical
+            {
+                return Err(WorkspaceError::Io);
+            }
+            let slot = PackedSlot {
+                logical_page: logical,
+                ordinal,
+                inode: read_u64(0)?,
+                generation: read_u64(8)?,
+                revision: read_u64(16)?,
+                offset: read_u64(24)?,
+                length,
+            };
+            if slot.inode == 0
+                || slot.generation > page.generation()
+                || slot.revision > page.revision()
+            {
+                return Err(WorkspaceError::Io);
+            }
+            records.push(PackRecord {
+                slot,
+                bytes: body[at + RECORD_HEADER..end].to_vec(),
+            });
+            at = end;
+        }
+        if at != body.len() {
+            return Err(WorkspaceError::Io);
+        }
+        Ok(PackRecords {
+            records,
+            used: at,
+            _charge: charge,
+        })
+    }
     pub fn new(store: Arc<PageStore>) -> Result<Arc<Self>, WorkspaceError> {
         let body_charge = store.budget().reserve(BODY_BYTES)?;
         Ok(Arc::new(Self {
@@ -206,6 +295,11 @@ impl TinyPack {
         Ok(state.tail.map(|physical| (state.logical_page, physical)))
     }
 
+    pub(super) fn sealed(&self, logical: u64, physical: PageRef) -> Result<bool, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(state.logical_page != logical || state.tail != Some(physical) || state.sealed)
+    }
+
     pub fn seal(&self) -> Result<Option<(u64, PageRef)>, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.pending.is_some() || state.stopped {
@@ -213,6 +307,22 @@ impl TinyPack {
         }
         state.sealed = true;
         Ok(state.tail.map(|physical| (state.logical_page, physical)))
+    }
+
+    /// A published index no longer names this sealed tail. The next append
+    /// starts a new logical page; a frozen locator still names the old page.
+    pub fn forget_if(&self, logical: u64, physical: PageRef) -> Result<(), WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.logical_page == logical && state.tail == Some(physical) {
+            if !state.sealed || state.pending.is_some() {
+                return Err(WorkspaceError::Io);
+            }
+            state.tail = None;
+            state.logical_page = 0;
+            state.records = 0;
+            state.body.clear();
+        }
+        Ok(())
     }
 }
 

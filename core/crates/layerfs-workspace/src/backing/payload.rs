@@ -755,6 +755,17 @@ impl Workspace {
         if let Some(host) = &self.host.metadata {
             (status.ledger_reads, status.ledger_writes) = host.ledger_io()?;
         }
+        if let Some(active) = &self.inner.active {
+            let selected = active.status()?;
+            status.active_pack_fetches = selected.store.pack_fetches;
+            status.active_index_fetches = selected.store.index_fetches;
+            status.active_pack_page_writes = selected.store.pack_page_writes;
+            status.active_index_page_writes = selected.store.index_page_writes;
+            status.active_pack_pages = selected.store.pack_pages;
+            status.active_index_pages = selected.store.index_pages;
+            status.active_retired_pack_pages = selected.retired_pack_pages;
+            status.active_retired_payloads = selected.retired_payloads;
+        }
         self.host.exec.snapshot(&mut status);
         Ok(status)
     }

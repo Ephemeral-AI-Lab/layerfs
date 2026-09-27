@@ -11,7 +11,10 @@ use crate::{
 use std::{
     collections::BTreeMap,
     io,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
 const ENTRY_BYTES: usize = 128;
@@ -38,12 +41,18 @@ struct State {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StoreStatus {
     pub pages: usize,
+    pub pack_pages: usize,
+    pub index_pages: usize,
     pub allocated_bytes: u64,
     pub reserved_bytes: u64,
     pub pinned_pages: usize,
     pub incomplete_pages: usize,
     pub admission_stopped: bool,
     pub accounting_complete: bool,
+    pub pack_fetches: u64,
+    pub index_fetches: u64,
+    pub pack_page_writes: u64,
+    pub index_page_writes: u64,
 }
 
 /// One page per verified private file permits exact block refunds. The host
@@ -52,6 +61,10 @@ pub struct PageStore {
     directory: Arc<Directory>,
     host: Arc<MetadataHost>,
     state: Mutex<State>,
+    pack_fetches: AtomicU64,
+    index_fetches: AtomicU64,
+    pack_page_writes: AtomicU64,
+    index_page_writes: AtomicU64,
     _charge: Charge,
 }
 
@@ -122,6 +135,10 @@ impl PageStore {
                 stopped: false,
                 complete: true,
             }),
+            pack_fetches: AtomicU64::new(0),
+            index_fetches: AtomicU64::new(0),
+            pack_page_writes: AtomicU64::new(0),
+            index_page_writes: AtomicU64::new(0),
             _charge: budget.reserve(1024)?,
         }))
     }
@@ -132,6 +149,15 @@ impl PageStore {
 
     pub fn budget(&self) -> Arc<crate::backing::budget::Budget> {
         self.host.payloads.budget.clone()
+    }
+
+    pub(super) fn remaining_quota(&self) -> Result<u64, WorkspaceError> {
+        let status = self.host.payloads.status()?;
+        status
+            .quota_bytes
+            .checked_sub(status.allocated_bytes)
+            .and_then(|left| left.checked_sub(status.reserved_bytes))
+            .ok_or(WorkspaceError::Io)
     }
 
     pub fn kind(&self, reference: PageRef) -> Result<Kind, WorkspaceError> {
@@ -146,7 +172,7 @@ impl PageStore {
         Ok(entry.kind)
     }
 
-    fn stop(&self) {
+    pub(super) fn stop(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.stopped = true;
         }
@@ -356,6 +382,11 @@ impl PageStore {
             .get_mut(&reference)
             .ok_or(WorkspaceError::Io)?
             .ready = true;
+        match kind {
+            Kind::Pack => &self.pack_page_writes,
+            Kind::IndexLeaf | Kind::IndexBranch => &self.index_page_writes,
+        }
+        .fetch_add(1, Ordering::Relaxed);
         Ok(reference)
     }
 
@@ -384,6 +415,11 @@ impl PageStore {
         };
         page.bytes.copy_from_slice(&window.0[..PAGE_BYTES]);
         page.verify(kind, self.directory.incarnation, reference)?;
+        match kind {
+            Kind::Pack => &self.pack_fetches,
+            Kind::IndexLeaf | Kind::IndexBranch => &self.index_fetches,
+        }
+        .fetch_add(1, Ordering::Relaxed);
         Ok(page)
     }
 
@@ -478,6 +514,16 @@ impl PageStore {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         Ok(StoreStatus {
             pages: state.entries.len(),
+            pack_pages: state
+                .entries
+                .values()
+                .filter(|entry| entry.kind == Kind::Pack)
+                .count(),
+            index_pages: state
+                .entries
+                .values()
+                .filter(|entry| entry.kind != Kind::Pack)
+                .count(),
             allocated_bytes: state.allocated,
             reserved_bytes: state.entries.values().map(|entry| entry.reserved).sum(),
             pinned_pages: state
@@ -488,6 +534,10 @@ impl PageStore {
             incomplete_pages: state.entries.values().filter(|entry| !entry.ready).count(),
             admission_stopped: state.stopped,
             accounting_complete: state.complete,
+            pack_fetches: self.pack_fetches.load(Ordering::Relaxed),
+            index_fetches: self.index_fetches.load(Ordering::Relaxed),
+            pack_page_writes: self.pack_page_writes.load(Ordering::Relaxed),
+            index_page_writes: self.index_page_writes.load(Ordering::Relaxed),
         })
     }
 

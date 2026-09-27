@@ -1,7 +1,7 @@
-# #273 active backing storage foundation
+# #273 active backing storage and captured Commit
 
-> Source pin: this revision follows the checkpoint-2 handoff `3897d7cdd` and
-> describes the source committed with this revision. LocalEdit Workspaces
+> Source pin: this revision follows checkpoint-3 source `a4c54e62b` and
+> describes the checkpoint-4 source committed with this revision. LocalEdit Workspaces
 > select the active owner and lower captured views through the public Service.
 > This document has no latency or release claim. The
 > prospective [format and evaluation contract](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
@@ -188,7 +188,7 @@ content and metadata roots as the next base for touched inodes, clears their
 fresh status, and advances the Branch context under the state gate. It keeps
 G2 extents and namespace records intact, including bytes and names that were
 published while G1 Stage ran. Repeated G1 content extents and retained
-namespace rows remain physically owned until the checkpoint-4 reclaim work.
+namespace rows remain physically owned until the retirement described below.
 
 External release tests on an owned Linux ext4 volume proved G1 staged bytes
 beside G2 live bytes, two Commit outcomes, a fresh named file followed by
@@ -198,5 +198,43 @@ the native Save call while a G2 edit published, then checked the frozen
 candidate and the live successor separately. A privileged FUSE test wrote and appended
 through the mounted path, unmounted, committed, and independently read the
 new canonical content root. Those are functional observations at the
-source of this revision. They do not establish the mixed-page space bound,
-the public 3 × 3 timing matrix, or the unchanged #248 gate.
+checkpoint-3 source. They do not establish the public 3 × 3 timing matrix
+or the unchanged #248 gate.
+
+## Checkpoint 4 retirement and compaction
+
+Every published extent replacement removes its old `R` or `L` inverse
+reference. Paged inverse scans determine whether a pack page or large Payload
+still has a current owner; a 128-entry scan limit cannot mistake the first
+full page for the whole set. The owner records its birth and retirement
+revision. The index releases a physical pack page or large Payload only after
+all captured and read views whose revisions could name it are gone. Cleanup
+uses the PageStore and PayloadHost unlink paths, retaining the actual
+`st_blocks * 512` Host charge if unlink or identity verification fails. A
+failed cleanup stops further admission but a verified read pin can still read
+the already published bytes.
+
+A mutation that kills more than half of a sealed pack page's body relocates
+its surviving slots into a new pooled page. It rewrites the selected `E` and
+`R` records and `P` locator in one candidate index publication, then retires
+the old physical page. Ordinary mutations relocate at most one source page;
+Commit processes all remaining touched source pages and pools their survivors
+across destination pages. When shared Host quota headroom drops below the
+conservative page reserve for its update batch, Commit also scans sealed
+locators and pools partially dead pages from earlier generations. A source
+page with at most half dead body otherwise remains charged slack. An
+admission that lacks temporary copy-on-write space refuses before publication.
+The final ordered SaveFile upload caches one charged
+pack page at a time, validating the slot identity and selected subrange. The
+pooled index applies a sorted update batch to each reached leaf once; a clean
+Commit advances the revision without scanning old journal entries.
+
+Public Linux Service diagnostics in the checkpoint-4 evidence record show
+128 one-byte files, 4,097 repeated one-byte overwrites, 32 retained
+generations, mixed sealed-page relocation, a large `p-*` Payload refund,
+and 4,096 separated writes with full byte oracles and exact clean-close
+refunds. The separated-write functional row observed 1,224,704 B of private
+allocation before Commit and 24,576 B afterward, below the prospective
+3 MiB checkpoint target. These runs do not enforce a cold cache and provide
+no eligible latency comparison. The public matrix, separate Commit controls,
+and #248 performance gate require the checkpoint-5 receipt set.

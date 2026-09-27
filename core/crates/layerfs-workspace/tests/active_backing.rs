@@ -1220,6 +1220,83 @@ mod linux {
     }
 
     #[test]
+    fn quota_pressure_pools_partially_dead_sealed_pages() {
+        let f = Fixture::new(2 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        for inode in 1..=128u64 {
+            active.write_tiny(inode, 0, 0, b"A", &[]).unwrap();
+        }
+        active.capture().unwrap().release().unwrap();
+        for inode in (1..=30u64).chain(83..=112) {
+            active.write_tiny(inode, 1, 0, b"B", &[]).unwrap();
+        }
+        let before = f.payloads.status().unwrap();
+        let available = before.quota_bytes - before.allocated_bytes - before.reserved_bytes;
+        let spend = (available - 120 * 1024) / 4096;
+        let mut blocks = spend;
+        while blocks + blocks.div_ceil(256) > spend {
+            blocks -= 1;
+        }
+        let body = vec![0xcc; blocks as usize * 4096];
+        let spare = f
+            .payloads
+            .acquire(
+                f.directory.clone(),
+                body.len() as u64,
+                &mut &body[..],
+                Instant::now() + Duration::from_secs(10),
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+        let full = f.payloads.status().unwrap();
+        let remaining = full.quota_bytes - full.allocated_bytes - full.reserved_bytes;
+        assert!(remaining < 33 * 4096);
+        let old = active.status().unwrap().store;
+        let published = active
+            .publish_reconcile(&[(vec![b'Z'], Some(vec![1]))])
+            .unwrap();
+        assert!(published.cleanup_error.is_none());
+        let next = active.status().unwrap().store;
+        println!("ACTIVE_PRESSURE remaining_before={remaining} pack_before={} pack_after={} moved_page_writes={}", old.pack_pages, next.pack_pages, next.pack_page_writes - old.pack_page_writes);
+        assert_eq!(next.pack_page_writes - old.pack_page_writes, 1);
+        assert!(next.pack_pages < old.pack_pages);
+        assert_eq!(f.payloads.status().unwrap().allocated_bytes, f.physical());
+        for inode in 1..=128u64 {
+            let key = Extent::key(inode, 0);
+            let extent = Extent::parse(&key, &active.get(&key).unwrap().unwrap(), inode).unwrap();
+            let slot = PackedSlot {
+                logical_page: extent.logical_page,
+                ordinal: extent.ordinal,
+                inode,
+                generation: extent.generation,
+                revision: extent.revision,
+                offset: extent.start - extent.source_offset,
+                length: extent.slot_length,
+            };
+            let expected = if inode <= 30 || (83..=112).contains(&inode) {
+                b"B"
+            } else {
+                b"A"
+            };
+            assert_eq!(active.read(slot, None).unwrap(), expected);
+        }
+        drop(spare);
+        f.payloads
+            .reclaim(
+                f.directory.incarnation,
+                Instant::now() + Duration::from_secs(10),
+            )
+            .unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
     fn pooled_inode_namespace_and_dirty_records_share_index_pages() {
         let f = Fixture::new(1 << 20);
         let index = Index::new(f.store.clone()).unwrap();

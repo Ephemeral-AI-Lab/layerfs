@@ -2,8 +2,8 @@
 use crate::{
     backing::{
         active::{
-            dirty_key, inode_key, namespace_key, ActiveSnapshot, Extent, ExtentKind, HotInode,
-            NamespaceRecord,
+            dirty_key, inode_key, namespace_key, ActivePackReader, ActiveSnapshot, Extent,
+            ExtentKind, HotInode, NamespaceRecord,
         },
         budget::Charge,
     },
@@ -14,7 +14,7 @@ use crate::{
 };
 use layerfs_bridge::contract::{
     put_directory_identity, put_directory_row, put_rooted_identity, put_stream_tag,
-    CommitOutcomeWire, Operation, PreparedChanges, PreparedTotals, Response, Root, Source,
+    CommitOutcomeWire, Inspect, Operation, PreparedChanges, PreparedTotals, Response, Root, Source,
     ROLE_DIRECTORY_DECLARATION, ROLE_DIRECTORY_PATCH, ROLE_EXISTING_FILE, ROLE_EXISTING_SYMLINK,
     ROLE_FRESH_FILE, ROLE_FRESH_SYMLINK,
 };
@@ -49,6 +49,7 @@ impl Source for ActiveStream {
 struct ActiveUpload {
     workspace: Workspace,
     view: Arc<ActiveSnapshot>,
+    pack_reader: ActivePackReader,
     serial: u64,
     descriptors: Vec<u8>,
     extents: Vec<Extent>,
@@ -83,11 +84,22 @@ impl ActiveUpload {
                 .extend_from_slice(&if kind == 0 { extent.source_offset } else { 0 }.to_be_bytes());
             descriptors.extend_from_slice(&(extent.end - extent.start).to_be_bytes());
         }
-        charge
-            .resize(descriptors.capacity() + extents.capacity() * std::mem::size_of::<Extent>())?;
+        charge.resize(
+            descriptors.capacity()
+                + extents.capacity() * std::mem::size_of::<Extent>()
+                + std::mem::size_of::<ActivePackReader>(),
+        )?;
+        let active = workspace
+            .inner
+            .active
+            .as_ref()
+            .cloned()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let pack_reader = ActivePackReader::new(active, view.clone());
         Ok(Self {
             workspace,
             view,
+            pack_reader,
             serial,
             descriptors,
             extents,
@@ -137,32 +149,51 @@ impl ActiveUpload {
         if take == 0 {
             return Err(WorkspaceError::Io);
         }
-        let backing = self
-            .workspace
-            .inner
-            .active
-            .as_ref()
-            .ok_or(WorkspaceError::Unsupported)?;
-        let read = backing.read_file(
-            self.serial,
-            extent.start + self.offset,
-            &mut out[..take],
-            Some(&self.view),
-            |_, _, _| Err(WorkspaceError::Io),
-            |payload, start, output| {
-                let mut reader = payload.reader(start..start + output.len() as u64)?;
-                let mut done = 0;
-                while done < output.len() {
-                    let count = Source::read(&mut reader, &mut output[done..], deadline, cancel)
-                        .map_err(|_| WorkspaceError::Io)?;
-                    if count == 0 {
-                        return Err(WorkspaceError::Io);
-                    }
-                    done += count;
-                }
-                Ok(())
-            },
-        )?;
+        let read = match extent.kind {
+            ExtentKind::Zero => {
+                out[..take].fill(0);
+                take
+            }
+            ExtentKind::Packed => {
+                self.pack_reader.read(
+                    self.serial,
+                    extent,
+                    extent.start + self.offset,
+                    &mut out[..take],
+                )?;
+                take
+            }
+            ExtentKind::Payload => {
+                let backing = self
+                    .workspace
+                    .inner
+                    .active
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                backing.read_file(
+                    self.serial,
+                    extent.start + self.offset,
+                    &mut out[..take],
+                    Some(&self.view),
+                    |_, _, _| Err(WorkspaceError::Io),
+                    |payload, start, output| {
+                        let mut reader = payload.reader(start..start + output.len() as u64)?;
+                        let mut done = 0;
+                        while done < output.len() {
+                            let count =
+                                Source::read(&mut reader, &mut output[done..], deadline, cancel)
+                                    .map_err(|_| WorkspaceError::Io)?;
+                            if count == 0 {
+                                return Err(WorkspaceError::Io);
+                            }
+                            done += count;
+                        }
+                        Ok(())
+                    },
+                )?
+            }
+            ExtentKind::Base => return Err(WorkspaceError::Io),
+        };
         if read != take {
             return Err(WorkspaceError::Io);
         }
@@ -415,7 +446,25 @@ pub(super) fn prepare<'a>(
             let base_length = if inode.fresh {
                 0
             } else {
-                workspace.state()?.node(*serial)?.original.size
+                let remote = first_remote
+                    .take()
+                    .map_or_else(|| workspace.begin(true, deadline), Ok)?;
+                let response = workspace.remote_call(
+                    (workspace.inner.store, captured.generation),
+                    Operation::Inspect {
+                        root: inode.base,
+                        query: Inspect::File,
+                    },
+                    &mut &[][..],
+                    0,
+                    &mut io::sink(),
+                    deadline,
+                );
+                drop(remote);
+                let Response::File { length, .. } = response? else {
+                    return Err(WorkspaceError::InvalidInput);
+                };
+                length
             };
             if !inode.fresh
                 && ((extents.len() == 1
@@ -782,12 +831,30 @@ pub(super) fn reconcile(
         .ok_or(WorkspaceError::Capacity)?;
     let mut updates = BTreeMap::new();
     let mut node_updates = Vec::new();
+    let current_view = active.pin_view()?;
     for (serial, original) in &dirty {
         updates.insert(dirty_key(captured.generation, *serial).to_vec(), None);
         let current = active.get(&inode_key(*serial))?.ok_or(WorkspaceError::Io)?;
         let mut current = HotInode::parse(&current)?;
         if current.kind != original.kind {
             return Err(WorkspaceError::Io);
+        }
+        if current.revision == original.revision && current.kind == NodeKind::File {
+            let (extents, _charge) = scan_extents(workspace, &current_view, *serial, current)?;
+            for extent in extents {
+                if current.storage == 2 {
+                    updates.insert(Extent::key(*serial, extent.start).to_vec(), None);
+                }
+                if let Some(key) = extent.inverse_key(*serial) {
+                    updates.insert(key, None);
+                }
+            }
+            current.storage = u8::from(current.length > 0);
+            current.inline = if current.length > 0 {
+                [Some(Extent::base(0, current.length)), None, None, None]
+            } else {
+                [None; 4]
+            };
         }
         if original.kind != NodeKind::Directory {
             let host = workspace
@@ -828,8 +895,10 @@ pub(super) fn reconcile(
         current.revision = revision;
         updates.insert(inode_key(*serial).to_vec(), Some(current.value()?.to_vec()));
     }
+    drop(current_view);
     let mut status = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
-    let published = active.publish_records(&updates.into_iter().collect::<Vec<_>>())?;
+    let publication = active.publish_reconcile(&updates.into_iter().collect::<Vec<_>>())?;
+    let published = publication.revision;
     if published != revision {
         return Err(WorkspaceError::Io);
     }
@@ -862,5 +931,9 @@ pub(super) fn reconcile(
     drop(status);
     drop(old_branch);
     captured.release_active()?;
+    active.maintain_until(deadline)?;
+    if let Some(error) = publication.cleanup_error {
+        return Err(error);
+    }
     Ok(revision)
 }

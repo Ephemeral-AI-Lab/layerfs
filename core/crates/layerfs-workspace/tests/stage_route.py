@@ -37,6 +37,17 @@ CASES = {
     'active_close': ['active-fresh-name-and-file-commit', 'active-committed-clean-close'],
     'active_namespace': ['active-fresh-directory-link-and-symlink-commit', 'active-successor-rename-and-unlink-commit'],
     'active_mounted': ['active-mounted-fuse-write-unmount', 'active-mounted-public-commit-bytes'],
+    'active_many_file': ['active-128-files-shared-pack-before-commit', 'active-128-files-commit-and-byte-oracle', 'active-128-files-exact-clean-close'],
+    'active_repeated': ['active-4097-repeated-public-backing', 'active-4097-repeated-commit-and-byte-oracle', 'active-4097-repeated-exact-clean-close'],
+    'active_retained32': ['active-32-retained-generations-and-old-new-oracle', 'active-32-pins-release-exact-blocks', 'active-32-generations-exact-clean-close'],
+    'active_mixed_compact': ['active-mixed-two-pages-compact-to-one-destination', 'active-mixed-g1-g2-bytes-and-refund', 'active-mixed-exact-clean-close'],
+    'active_mutation_compact': ['active-mutation-compacts-mixed-sealed-page', 'active-mutation-compaction-commit-and-close'],
+    'active_payload_refund': ['active-large-payload-owned-before-commit', 'active-large-payload-refund-and-byte-oracle', 'active-large-payload-exact-clean-close'],
+    'active_quota_refusal': ['active-quota-refusal-keeps-acknowledged-bytes-and-charge', 'active-quota-refusal-exact-clean-close'],
+    'active_separated4096': ['active-4096-separated-full-private-backing-bound', 'active-4096-separated-commit-and-full-byte-oracle', 'active-4096-separated-exact-clean-close'],
+    'active_cleanup_failure': ['active-postpublication-cleanup-failure-keeps-receipt-and-new-bytes', 'active-failed-cleanup-retains-charged-custody'],
+    'active_split_slot': ['active-split-packed-slot-final-byte-oracle', 'active-split-packed-slot-clean-close'],
+    'active_quick_controls': ['active-clean-commit-skips-retained-old-journal', 'active-one-edit-commit-skips-retained-old-journal', 'active-quick-controls-refund-and-clean-close'],
     'headroom': ['reserved-stage-progress-with-ordinary-disk-quota-occupied', 'exact-stage-and-retained-submission'],
     'metadata_only': ['metadata-only-stage-preserves-root-without-file-save', 'exact-stage-and-retained-submission'],
     'completion_failure': ['known-file-save-survives-native-completion-publication-failure'],
@@ -56,6 +67,17 @@ REQUIREMENTS = {
     'active_close': ['S-17', 'B-26', 'B-28'],
     'active_namespace': ['S-17', 'B-26', 'B-28'],
     'active_mounted': ['S-02', 'S-17', 'H-01'],
+    'active_many_file': ['S-17', 'B-26', 'B-28'],
+    'active_repeated': ['S-17', 'B-26', 'B-28'],
+    'active_retained32': ['S-17', 'B-26', 'B-28'],
+    'active_mixed_compact': ['S-17', 'B-26', 'B-28'],
+    'active_mutation_compact': ['S-17', 'B-26', 'B-28'],
+    'active_payload_refund': ['S-17', 'B-26', 'B-28'],
+    'active_quota_refusal': ['S-15', 'B-26', 'B-28'],
+    'active_separated4096': ['S-17', 'B-26', 'B-28'],
+    'active_cleanup_failure': ['S-15', 'B-26', 'B-28'],
+    'active_split_slot': ['S-17', 'B-26', 'B-28'],
+    'active_quick_controls': ['S-17', 'B-26', 'B-28'],
     'headroom': ['B-26', 'H-01'],
     'metadata_only': ['H-01', 'B-28'],
     'completion_failure': ['B-20', 'B-26', 'H-07', 'S-15'],
@@ -321,7 +343,7 @@ def execute(args, report, started):
             if f'{TEST_MARKER} {check["id"]} PASS' in text: check['status'] = 'PASS'
         report['observations'] = []
         for line in text.splitlines():
-            for marker in ('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
+            for marker in ('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'STAGE_ALLOCATION ', 'STAGE_PHASE ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
                 if marker in line:
                     report['observations'].append(line[line.index(marker):]); break
         if proxy:
