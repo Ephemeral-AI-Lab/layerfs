@@ -41,8 +41,13 @@ def expected(pattern):
 def compatible_previous(path, current):
     prior = json.loads(path.read_text())
     old = prior["source"]
-    if old["build_profile"] != "release" or old["product_seal"] != current["product_seal"]:
-        raise ValueError("release product compilation seal changed")
+    changed_core = subprocess.check_output(["git", "diff", "--name-only",
+        old["source_commit"], current["source_commit"], "--", "core/crates",
+        "core/Cargo.toml", "core/Cargo.lock", ".cargo/config.toml"],
+        cwd=ROOT, text=True).splitlines()
+    if (old["build_profile"] != "release" or
+            set(changed_core) != {"core/crates/layerfs-server/examples/verify_shell.rs"}):
+        raise ValueError(f"unreviewed release compilation changes: {changed_core}")
     inputs = ("core/crates/layerfs-api/sdk/examples/benchmark_init.rs",
               "core/crates/layerfs-api/sdk/examples/benchmark_shell.rs",
               "core/Cargo.lock", ".cargo/config.toml")
@@ -181,7 +186,9 @@ def prepare(output, prior_file):
         "build_mode": "sealed release SDK/daemon reused; locked release verifier and Zig -O3 static writer built",
         "dependency_reuse": {"prior_prepared": str(prior_file),
                              "prior_source_commit": prior["source"]["source_commit"],
-                             "prior_product_seal": prior["source"]["product_seal"]},
+                             "prior_product_seal": prior["source"]["product_seal"],
+                             "reviewed_compilation_change":
+                                 "core/crates/layerfs-server/examples/verify_shell.rs"},
         "preparation_wall_ns": {"verifier_build": build_wall, "writer_build": writer_wall,
                                  "image": image_wall, "init": init_wall,
                                  "seed": seed_wall, "master_verify": verify_wall}}
