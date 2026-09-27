@@ -1,0 +1,11 @@
+[
+    {
+        "CreatedAt": "2026-09-27T07:01:21Z",
+        "Driver": "local",
+        "Labels": null,
+        "Mountpoint": "/var/lib/docker/volumes/layerfs-3a252beb99b96c1ae6b70746e4f2c85d-root/_data",
+        "Name": "layerfs-3a252beb99b96c1ae6b70746e4f2c85d-root",
+        "Options": null,
+        "Scope": "local"
+    }
+]

@@ -54,6 +54,7 @@ impl PieceStore for Store {
     fn write<T>(
         &self,
         _level: u8,
+        _sponsor: PageRef,
         _window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
@@ -993,7 +994,7 @@ fn older_full_branch_remains_readable_and_repackages_on_edit() {
         for piece in &pieces {
             let page = f
                 .store
-                .write(0, window, |page, bytes| {
+                .write(0, PageRef::NULL, window, |page, bytes| {
                     metadata_pages::encode_pieces_leaf(
                         INCARNATION,
                         page,
@@ -1006,7 +1007,7 @@ fn older_full_branch_remains_readable_and_repackages_on_edit() {
             children.push(metadata_pages::ChildRef { page, length: 1 });
         }
         f.store
-            .write(1, window, |page, bytes| {
+            .write(1, PageRef::NULL, window, |page, bytes| {
                 metadata_pages::encode_pieces_branch(INCARNATION, page, 1, &children, bytes)?;
                 Ok(page)
             })

@@ -73,11 +73,12 @@ impl<S: PieceStore + ?Sized> PieceStore for Counted<'_, S> {
     fn write<T>(
         &self,
         level: u8,
+        sponsor: PageRef,
         window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
         let occupancy = Cell::new(None);
-        let value = self.store.write(level, window, |page, bytes| {
+        let value = self.store.write(level, sponsor, window, |page, bytes| {
             let value = encode(page, bytes)?;
             if let Ok(used) = metadata_pages::body_used(bytes) {
                 let count = used

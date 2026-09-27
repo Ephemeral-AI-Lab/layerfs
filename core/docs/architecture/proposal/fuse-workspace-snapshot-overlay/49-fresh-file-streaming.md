@@ -105,3 +105,30 @@ production source. The unchanged counter
 staged archives of crates and core/crates, excluding tests including inline
 cfg(test), docs, fixtures, tooling, manifests and generated/dependency code. No
 relocation or reference retirement.
+
+## Later SaveFile cause observations (#271, 2026-09-27)
+
+Source pin: the telemetry-only product change committed with this section,
+after the [prospective cause diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-spec.md).
+For a SaveFile, the host records an LFT1 `service.pre_save_input` child around
+the bounded descriptor parse, edit spool and end-of-input check, before C2
+`begin_save`. One `LFS_FILE_STREAM_CAUSE` operator record counts declared and
+parsed extents, edit records, and completed spool bytes, with timed spool
+write calls. The daemon's one `LFS_COMMIT_SOURCE_CAUSE` record separates
+descriptor and replacement source calls from authenticated private payload
+opens and aligned reads. These are different clock domains and overlapping
+parent/child times; no cross-host subtraction is implied. The existing
+bounded stream, spool policy, C1 edit algorithm, Service request count and
+Commit acknowledgment are unchanged. Raw observations are not a qualified
+Commit speed claim.
+
+## Atomic operator record correction (#271, 2026-09-27)
+
+The first [cause row](../../../issues/271/CAUSAL-DIAGNOSTIC-LEDGER.md)
+showed that a Commit source record assembled by `eprintln!` can interleave
+with the telemetry queue's concurrent stderr chunks. Under the
+[preregistered v2 diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-v2-spec.md),
+each host and daemon Commit cause record is assembled in memory and issued
+with one write syscall. Its fixed field set fits below Linux `PIPE_BUF`.
+Failed or short operator writes leave the diagnostic evidence incomplete;
+they do not alter SaveFile validation or acknowledgment.

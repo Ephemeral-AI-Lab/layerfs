@@ -576,6 +576,7 @@ impl Workspace {
         let result = if Instant::now() >= deadline {
             Err(io::ErrorKind::TimedOut.into())
         } else {
+            let _timed = self.host.exec.checked_notifier.start();
             delivery(receipt, entry, deadline)
         };
         let notifier_returned_ok = result.is_ok();

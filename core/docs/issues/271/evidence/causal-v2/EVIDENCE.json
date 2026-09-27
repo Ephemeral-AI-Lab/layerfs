@@ -1,0 +1,26 @@
+{
+  "causal_status": "PASS",
+  "files_sha256": {
+    "build-daemon.json": "e69ffe2f3aa4541b2a9518fca8829e4c63f3a7877296c6ec5d6e3a2406df3f98",
+    "build-host-0.json": "726ef52a609e4d402d0917a5ff6e04a96235387eb8024ae6e7ff83f2197eae4a",
+    "build-host-1.json": "a029b8720418db6f8da215cdaf672febb2f11f54dec266d0ed2dff0c018f5fb9",
+    "diagnostic4097causev2.tsv": "92eb1f8cbde5cd73fb3c8018ecd6470ae8f6b8fa67d051aa175c49f9aaf44925",
+    "master-verify-new.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "master-verify-new.stdout": "890125a3225f1aebd174e149c921480a6c6d6700d06754e1f20038dfb6465764",
+    "old.tsv": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e",
+    "prepared-public.json": "9d09b1bdcedad5691d47fe168248433d68f52d6f64303810805d45e0e6857820",
+    "run/SHA256SUMS": "dd153cb7a843ba986fb6efd61dfdae7b89cc45db4fc47349f21fd1f0b7b0e436",
+    "run/case.before": "eae938157020c43cfe3863c68115f6cd07d895487bad32888aa7be1436452775",
+    "run/case.verify": "345436001b005c1cffbdf1e80748c0ac910ca4fb90a2b6a8b3c801b020cc20b7",
+    "run/driver.stderr": "d9b272e86f23809682e8b1ea0908400f250145e8ca7c5033cbca789691c65c22",
+    "run/driver.stdout": "448d3c017271bea9ae98f15bc6736f8e0b9d3609f26640a779aed4904d41270b",
+    "run/history.sqlite": "705a04f7ff9fef58bc9a883d3d5dbf569cd04540cabe5725d5a711fb04c2b4e8",
+    "run/receipt.json": "3bcb32dad75004fb188d54cb7733bcbfed5c8c1e445db267184dc2a2c56acf5f",
+    "run/store.sqlite": "1cf752b49511eff52b890ca751827cbf027ff2a6aa920fc06853ed58bb7ae17a",
+    "run/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run/verifier.stdout": "03fa0a37804f1221aa87f763e0f678c18fb025038bbdba3d93d13693b3ba746e"
+  },
+  "row_status": "INELIGIBLE",
+  "schema": "issue271-causal-evidence-v2",
+  "source_commit": "70863270093d0726e0c4e1912ae2f7c405268483"
+}

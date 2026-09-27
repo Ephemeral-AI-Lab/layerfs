@@ -470,3 +470,76 @@ Commit format do not change. The rejected 32-record/eight-child attempt and
 its append-only diagnostic live in the [#271 issue report](../../../issues/271/PACKING-32-8-REJECTED.md).
 Any result for this packing target belongs with its own source-identified
 receipt, not in this architecture description.
+
+## 15. Sponsored copied-page custody (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, after the
+[prospective ownership trial](../../../../../docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md).
+For a copied extent leaf or branch, the writer may reference its authenticated
+old page as a **custody sponsor**. The new page charges only references absent
+from that old page's sorted edge multiset, plus one reference to the sponsor.
+It uses this route only when it saves at least one ledger edge and the old
+page itself has no sponsor. Thus a sponsorship chain has at most one hop.
+The `next` field of a live page owner record names the sponsor; old records
+have a null `next`, and the immutable extent page format is unchanged.
+
+The sponsor keeps unchanged child or Local custody pages live even after its
+own old root is released. G1/G2 may both read their exact immutable pages.
+Cleanup recomputes the same edge difference from authenticated bodies,
+releases the acknowledged difference prefix, then releases the sponsor last.
+If that last decrement frees the sponsor, the current cleanup frame has
+already advanced to its page-deletion phase; it never needs to reread the
+freed sponsor. An interrupted candidate records the charged prefix in
+`edge_progress`; an uncertain ledger write still quarantines admission.
+Every retained page stays quota-charged until its final authenticated cleanup
+refund. The public write publication, page identity/checksum, canonical
+Commit root and single construction worker are unchanged. New charged
+child/Local/sponsor counters distinguish ledger updates from encoded edge
+fields in the existing extent-page write diagnostic. Count and public-route
+results are retained in the #271 issue report, not inferred here.
+
+The follow-up source committed with this note reuses the already authenticated
+sponsor owner when loading its body. `load_raw_with_owner` rechecks the ledger
+pathname and page identity without a second 4 KiB owner-ledger read. The body
+checksum, edge-difference rule, one-hop limit and cleanup order above stay the
+same. Its count result is a separate source identity under the
+[prospective one-read correction](../../../../../docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md).
+
+## 16. Four-hop custody bound (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, after the
+[prospective four-hop treatment](../../../../../docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md).
+The live role-1 owner record's previously unused `length` field now records
+the sponsor depth: zero for full ownership, 1..4 for a sponsored page. An
+older record with a null sponsor remains depth zero; a non-null sponsor with
+no depth marker uses full ownership on the next copy. Each new page still
+charges its unique child or Local edges plus one old-page reference before
+publication. A fifth copy charges all encoded edges itself and starts a new
+chain, so retained sponsor ancestry is bounded independent of edit count.
+
+Cleanup still releases unique edges first and the sponsor last. The fixed
+cleanup stack now holds 42 frames to cover the eight keyed levels, four
+sponsored pages at each of eight extent levels and terminal custody frames;
+ancestors, and every extra frame's resident bytes are reserved with its
+`RootOwner`. Old roots remain readable while held, and a page and its quota
+charge survive until their final sponsor or root reference reaches zero.
+The page body, authenticated identity/checksum, canonical Commit and generic
+public write route do not change. This source has its own count and custody
+evidence; the one-hop measurements in §15 retain their original identities.
+
+## 17. Causal ownership counters (#271, 2026-09-27)
+
+Source pin: the telemetry-only product change committed with this section,
+under the [prospective cause diagnostic](../../../../../docs/roadmap/0.1/0.1.7/issue271-causal-diagnostic-spec.md).
+The authenticated ledger path records cumulative ledger-file open/identity
+validation calls and time alongside its existing 4 KiB read/write counts.
+Immutable metadata-page file creation, allocation and first write have a
+separate inclusive timer. Bounded sponsor attempts, acceptances and depth-four
+fallback counts distinguish the copied page's edge decision from the charged
+ledger work. `MetadataStatus` exposes those fixed-size operator counters at
+the ordinary sparse WRITE snapshot; disabled diagnostics do not read clocks
+or update them. These categories overlap the FUSE publication and maintenance
+timers, so their nanoseconds cannot be added to a parent as independent work.
+The page format, sponsorship bound, cleanup order and quota accounting remain
+as in §§15–16. Count evidence and any performance decision belong in the
+separate #271 receipt, not in this architecture description.

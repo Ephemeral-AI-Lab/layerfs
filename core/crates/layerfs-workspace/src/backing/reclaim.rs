@@ -3,6 +3,7 @@ use super::{
     payload::{clock, filename, header, segment_bytes, PayloadHost, Record},
     segments::{self, Window, ALIGN},
 };
+use crate::runtime::host::MaintenanceCounters;
 use crate::*;
 use std::{
     io,
@@ -289,11 +290,21 @@ impl PayloadHost {
 }
 impl Workspace {
     pub(crate) fn maintain_backing(&self, deadline: Instant) -> Result<(), WorkspaceError> {
+        self.maintain_backing_with(deadline, None)
+    }
+    pub(crate) fn maintain_backing_with(
+        &self,
+        deadline: Instant,
+        counters: Option<&MaintenanceCounters>,
+    ) -> Result<(), WorkspaceError> {
+        let _total = counters.and_then(|c| c.total.start());
         clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         if let Some(host) = &self.host.metadata {
+            let _timed = counters.and_then(|c| c.metadata.start());
             host.maintain(deadline)?;
         }
         if let Some(host) = &self.host.payloads {
+            let _timed = counters.and_then(|c| c.payload.start());
             host.maintain(deadline)?;
         }
         Ok(())

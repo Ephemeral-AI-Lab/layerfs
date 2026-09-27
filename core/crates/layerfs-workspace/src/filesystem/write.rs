@@ -392,7 +392,11 @@ impl Workspace {
                 reserved.validate(&state, original.serial)?;
             }
         }
-        self.maintain_backing(deadline)?;
+        let measured = matches!(mutation.origin(), MutationOrigin::ProjectionWrite { .. });
+        self.maintain_backing_with(deadline, measured.then_some(&self.host.exec.publication))?;
+        let _core = measured
+            .then(|| self.host.exec.publication_core.start())
+            .flatten();
         // The mounted publication waits for a current holder instead of
         // refusing: reconciliation holds the gate only for its two short
         // ordering points, and that microsecond overlap must never surface as

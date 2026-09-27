@@ -1,0 +1,13 @@
+{
+  "classification": "rejected count treatment; functional PASS, cache-INELIGIBLE",
+  "harness_seal": "2a0754c3dea5a6abafb70e3edcf3f4d92374dd4f9e301fd6f153177954cd68fd",
+  "note": "Original run files and SQLite clones are copied byte-for-byte; prepared-public files omit only the private cursor key. The original prepared files and master remain under ignored benchmark-results. No 4,097 attempt was made at this source.",
+  "product_seal": "97f3bab6762075fb04ef22ddd9a4bf9aed442bebacb918f41ba7cbff2f970291",
+  "schema": "issue271-leaf64-evidence-v1",
+  "selections": {
+    "100": "diagnostic100v3",
+    "512": "fuse512"
+  },
+  "source_commit": "e255e688bdac46f57c9ccbadb859869ea1fedf4e",
+  "source_tree": "db44cb1f1d3ce7410741d0878cedd269e434cc59"
+}

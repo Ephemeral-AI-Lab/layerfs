@@ -30,16 +30,20 @@ pub fn mutate(
         replacement,
     } = &r.operation
     {
-        file_input = Some(file_stream::read(
-            input,
-            base.is_some(),
-            *base_length,
-            *length,
-            *extents,
-            *replacement,
-            deadline,
-        )?);
-        end_input(input)?;
+        file_input = Some(scope.child("service.pre_save_input").run(|_| {
+            let file = file_stream::read(
+                input,
+                r.id,
+                base.is_some(),
+                *base_length,
+                *length,
+                *extents,
+                *replacement,
+                deadline,
+            )?;
+            end_input(input)?;
+            Ok::<_, Failure>(file)
+        })?);
     }
     if matches!(
         r.operation,

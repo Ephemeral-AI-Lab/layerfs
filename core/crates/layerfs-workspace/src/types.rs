@@ -226,7 +226,7 @@ impl std::fmt::Display for BackingFailure {
 }
 impl std::error::Error for BackingFailure {}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct BackingStatus {
     pub quota_bytes: u64,
     pub allocated_bytes: u64,
@@ -247,6 +247,28 @@ pub struct BackingStatus {
     /// reclamation. These are separate from metadata page reads.
     pub ledger_reads: u64,
     pub ledger_writes: u64,
+    /// Timer and sponsor counters are populated only when enabled at startup.
+    pub operator_diagnostics_enabled: bool,
+    /// Cumulative call counts and monotonic nanoseconds for `own_payload`
+    /// and projected WRITE publication. Maintenance children overlap a parent.
+    pub acquisition_maintenance_calls: u64,
+    pub acquisition_maintenance_ns: u64,
+    pub acquisition_metadata_maintenance_calls: u64,
+    pub acquisition_metadata_maintenance_ns: u64,
+    pub acquisition_payload_maintenance_calls: u64,
+    pub acquisition_payload_maintenance_ns: u64,
+    pub payload_acquire_calls: u64,
+    pub payload_acquire_ns: u64,
+    pub publication_maintenance_calls: u64,
+    pub publication_maintenance_ns: u64,
+    pub publication_metadata_maintenance_calls: u64,
+    pub publication_metadata_maintenance_ns: u64,
+    pub publication_payload_maintenance_calls: u64,
+    pub publication_payload_maintenance_ns: u64,
+    pub publication_core_calls: u64,
+    pub publication_core_ns: u64,
+    pub checked_notifier_calls: u64,
+    pub checked_notifier_ns: u64,
     pub readers: usize,
     pub acquiring: bool,
     pub cleaning: bool,
@@ -401,7 +423,7 @@ pub struct MetadataCleanupReport {
     pub payload_custodies_released: usize,
     pub remaining_roots: usize,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MetadataStatus {
     pub allocated_pages: usize,
     pub reusable_pages: usize,
@@ -411,6 +433,16 @@ pub struct MetadataStatus {
     pub allocated_bytes: u64,
     pub reserved_bytes: u64,
     pub working_bytes: usize,
+    pub operator_diagnostics_enabled: bool,
+    /// Local ledger-file open and identity validation, including failures.
+    pub ledger_file_calls: u64,
+    pub ledger_file_ns: u64,
+    /// Immutable metadata-page file creation, allocation and first write.
+    pub metadata_page_create_calls: u64,
+    pub metadata_page_create_ns: u64,
+    pub sponsor_attempts: u64,
+    pub sponsor_accepted: u64,
+    pub sponsor_depth_fallbacks: u64,
     pub accounting_complete: bool,
     pub admission_stopped: bool,
 }

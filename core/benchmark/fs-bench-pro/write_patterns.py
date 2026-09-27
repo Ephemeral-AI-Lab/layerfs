@@ -19,6 +19,9 @@ SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md"
 TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue265-mounted-write-treatment.md"
 BALANCE = ROOT / "docs/roadmap/0.1/0.1.7/issue265-balanced-leaf-treatment.md"
 OWNER = ROOT / "docs/roadmap/0.1/0.1.7/issue265-owner-finalize-treatment.md"
+SPONSOR = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md"
+ONE_READ = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md"
+FOUR_HOP = ROOT / "docs/roadmap/0.1/0.1.7/issue271-four-hop-custody-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 PATTERNS = ("append", "dispersed", "repeated")
 SIZE = 10 << 20
@@ -165,9 +168,9 @@ def prepare_reuse(output, prior_file):
         "core/crates/layerfs-server/src/service/save/file_stream.rs",
         *[f"core/crates/layerfs-workspace/src/backing/{path}" for path in (
             "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/pack.rs",
-            "binary_plus_tree/extent/splice.rs",
+            "binary_plus_tree/extent/splice.rs", "binary_plus_tree/extent/cursor.rs",
             "binary_plus_tree/extent/telemetry.rs", "metadata.rs", "metadata_reclaim.rs",
-            "ownership.rs", "payload.rs", "reader.rs", "segments.rs")],
+            "ownership.rs", "ownership/sponsored.rs", "payload.rs", "reader.rs", "segments.rs")],
         *[f"core/crates/layerfs-workspace/tests/{name}.rs" for name in (
             "backing_ownership", "maintenance", "owner_finalization", "payload", "pieces_sequence", "symlink")],
     }
@@ -266,6 +269,9 @@ def prepare_reuse(output, prior_file):
         "treatment_spec_sha256": digest(TREATMENT),
         "balance_spec_sha256": digest(BALANCE),
         "owner_spec_sha256": digest(OWNER),
+        "sponsor_spec_sha256": digest(SPONSOR),
+        "one_read_spec_sha256": digest(ONE_READ),
+        "four_hop_spec_sha256": digest(FOUR_HOP),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": sha(dockerfile.encode()),
@@ -296,6 +302,9 @@ def run(prepared_file, output, pattern):
             or digest(TREATMENT) != prepared["treatment_spec_sha256"]
             or digest(BALANCE) != prepared["balance_spec_sha256"]
             or digest(OWNER) != prepared["owner_spec_sha256"]
+            or digest(SPONSOR) != prepared["sponsor_spec_sha256"]
+            or digest(ONE_READ) != prepared["one_read_spec_sha256"]
+            or digest(FOUR_HOP) != prepared["four_hop_spec_sha256"]
             or digest(WRITER) != prepared["writer_source_sha256"]):
         raise ValueError("prepared source/workload identity changed")
     for item in prepared["binaries"].values():
@@ -402,6 +411,9 @@ def run(prepared_file, output, pattern):
         "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
         "balance_spec_sha256": prepared["balance_spec_sha256"],
         "owner_spec_sha256": prepared["owner_spec_sha256"],
+        "sponsor_spec_sha256": prepared["sponsor_spec_sha256"],
+        "one_read_spec_sha256": prepared["one_read_spec_sha256"],
+        "four_hop_spec_sha256": prepared["four_hop_spec_sha256"],
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
         "daemon_sha256": prepared["daemon_sha256"],

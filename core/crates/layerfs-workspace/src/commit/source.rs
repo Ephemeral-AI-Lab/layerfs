@@ -6,6 +6,7 @@ use crate::{
         reader::PayloadReader,
     },
     overlay::pieces::{Inode, PieceKind},
+    runtime::host::operator_diagnostics_enabled,
     *,
 };
 use layerfs_bridge::contract::Source;
@@ -17,6 +18,73 @@ use std::{
     },
     time::Instant,
 };
+
+#[derive(Default)]
+pub(crate) struct ReplacementDiagnostic {
+    pub(crate) cursor_next_calls: u64,
+    pub(crate) cursor_next_ns: u64,
+    pub(crate) reader_create_calls: u64,
+    pub(crate) reader_create_ns: u64,
+    pub(crate) local_read_calls: u64,
+    pub(crate) local_read_bytes: u64,
+    pub(crate) local_read_ns: u64,
+    pub(crate) segment_open_calls: u64,
+    pub(crate) segment_open_ns: u64,
+    pub(crate) aligned_read_calls: u64,
+    pub(crate) aligned_read_bytes: u64,
+    pub(crate) aligned_read_ns: u64,
+}
+
+fn read_local(
+    reader: &mut PayloadReader,
+    out: &mut [u8],
+    deadline: Instant,
+    cancel: &AtomicBool,
+    diagnostic: &mut ReplacementDiagnostic,
+    enabled: bool,
+) -> Result<usize, WorkspaceError> {
+    let before = reader.io_counts();
+    let started = enabled.then(Instant::now);
+    let result = Source::read(reader, out, deadline, cancel);
+    if let Some(started) = started {
+        diagnostic.local_read_calls = diagnostic.local_read_calls.saturating_add(1);
+        diagnostic.local_read_ns = diagnostic
+            .local_read_ns
+            .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        if let Ok(count) = result.as_ref() {
+            diagnostic.local_read_bytes = diagnostic.local_read_bytes.saturating_add(*count as u64);
+        }
+        let after = reader.io_counts();
+        diagnostic.segment_open_calls = diagnostic
+            .segment_open_calls
+            .saturating_add(after.open_calls.saturating_sub(before.open_calls));
+        diagnostic.segment_open_ns = diagnostic
+            .segment_open_ns
+            .saturating_add(after.open_ns.saturating_sub(before.open_ns));
+        diagnostic.aligned_read_calls = diagnostic.aligned_read_calls.saturating_add(
+            after
+                .aligned_read_calls
+                .saturating_sub(before.aligned_read_calls),
+        );
+        diagnostic.aligned_read_bytes = diagnostic.aligned_read_bytes.saturating_add(
+            after
+                .aligned_read_bytes
+                .saturating_sub(before.aligned_read_bytes),
+        );
+        diagnostic.aligned_read_ns = diagnostic
+            .aligned_read_ns
+            .saturating_add(after.aligned_read_ns.saturating_sub(before.aligned_read_ns));
+    }
+    result.map_err(|error| {
+        error
+            .get_ref()
+            .and_then(|inner| inner.downcast_ref::<BackingFailure>())
+            .map_or(WorkspaceError::Io, |failure| {
+                WorkspaceError::Backing(failure.clone())
+            })
+    })
+}
+
 pub struct ReplacementSource {
     workspace: Workspace,
     root: Arc<RootOwner>,
@@ -32,6 +100,8 @@ pub struct ReplacementSource {
     /// holds the metadata writer gate over the transfer.
     cursor: Option<Cursor<Arc<Arena>>>,
     pub failure: Option<WorkspaceError>,
+    pub(crate) diagnostic: ReplacementDiagnostic,
+    pub(crate) diagnostic_enabled: bool,
 }
 impl ReplacementSource {
     pub fn new(workspace: Workspace, root: Arc<RootOwner>, inode: Inode) -> Self {
@@ -46,6 +116,8 @@ impl ReplacementSource {
             zero: false,
             cursor: None,
             failure: None,
+            diagnostic: ReplacementDiagnostic::default(),
+            diagnostic_enabled: operator_diagnostics_enabled(),
         }
     }
     pub fn complete(&self) -> bool {
@@ -83,15 +155,14 @@ impl ReplacementSource {
             let limit =
                 self.left
                     .min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
-            let count = Source::read(reader, &mut out[filled..filled + limit], deadline, cancel)
-                .map_err(|error| {
-                    error
-                        .get_ref()
-                        .and_then(|inner| inner.downcast_ref::<BackingFailure>())
-                        .map_or(WorkspaceError::Io, |failure| {
-                            WorkspaceError::Backing(failure.clone())
-                        })
-                })?;
+            let count = read_local(
+                reader,
+                &mut out[filled..filled + limit],
+                deadline,
+                cancel,
+                &mut self.diagnostic,
+                self.diagnostic_enabled,
+            )?;
             if count == 0 {
                 return Err(WorkspaceError::Io);
             }
@@ -140,7 +211,16 @@ impl ReplacementSource {
         }
         while filled < out.len() {
             let cursor = self.cursor.as_mut().ok_or(WorkspaceError::Io)?;
-            let Some((start, piece)) = cursor.next(window)? else {
+            let started = self.diagnostic_enabled.then(Instant::now);
+            let next = cursor.next(window);
+            if let Some(started) = started {
+                self.diagnostic.cursor_next_calls += 1;
+                self.diagnostic.cursor_next_ns = self
+                    .diagnostic
+                    .cursor_next_ns
+                    .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            }
+            let Some((start, piece)) = next? else {
                 break;
             };
             if start != self.position {
@@ -171,25 +251,28 @@ impl ReplacementSource {
                 }
                 PieceKind::Local => {
                     let payload = self.root.arena.payload(piece.payload, piece.custody)?;
-                    let mut reader = payload.reader(piece.offset..piece.offset + piece.length)?;
+                    let started = self.diagnostic_enabled.then(Instant::now);
+                    let opened = payload.reader(piece.offset..piece.offset + piece.length);
+                    if let Some(started) = started {
+                        self.diagnostic.reader_create_calls += 1;
+                        self.diagnostic.reader_create_ns =
+                            self.diagnostic.reader_create_ns.saturating_add(
+                                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                            );
+                    }
+                    let mut reader = opened?;
                     let mut left = piece.length;
                     while left > 0 && filled < out.len() {
                         let limit =
                             left.min((out.len() - filled).min(MAX_READ_BYTES) as u64) as usize;
-                        let count = Source::read(
+                        let count = read_local(
                             &mut reader,
                             &mut out[filled..filled + limit],
                             deadline,
                             cancel,
-                        )
-                        .map_err(|error| {
-                            error
-                                .get_ref()
-                                .and_then(|inner| inner.downcast_ref::<BackingFailure>())
-                                .map_or(WorkspaceError::Io, |failure| {
-                                    WorkspaceError::Backing(failure.clone())
-                                })
-                        })?;
+                            &mut self.diagnostic,
+                            self.diagnostic_enabled,
+                        )?;
                         if count == 0 {
                             return Err(WorkspaceError::Io);
                         }

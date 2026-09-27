@@ -6,6 +6,7 @@ use crate::{
         metadata_pieces::Cursor,
     },
     overlay::pieces::{Inode, PieceKind},
+    runtime::host::operator_diagnostics_enabled,
     *,
 };
 use layerfs_bridge::contract::Source;
@@ -23,6 +24,7 @@ pub(crate) struct FileUpload<'a> {
     root: Arc<RootOwner>,
     inode: Inode,
     source: &'a mut ReplacementSource,
+    declared_extents: u64,
     remaining: u64,
     position: u64,
     record: [u8; 24],
@@ -33,6 +35,55 @@ pub(crate) struct FileUpload<'a> {
     /// pages are read without the metadata writer gate.
     cursor: Option<Cursor<Arc<Arena>>>,
     pub(crate) failure: Option<WorkspaceError>,
+    diagnostic_enabled: bool,
+    descriptor_source_calls: u64,
+    descriptor_source_bytes: u64,
+    descriptor_source_ns: u64,
+    descriptor_cursor_next_calls: u64,
+    descriptor_cursor_next_ns: u64,
+    replacement_source_calls: u64,
+    replacement_source_bytes: u64,
+    replacement_source_ns: u64,
+}
+
+impl Drop for FileUpload<'_> {
+    fn drop(&mut self) {
+        if !self.diagnostic_enabled {
+            return;
+        }
+        let source = &self.source.diagnostic;
+        let record = format!(
+            "LFS_COMMIT_SOURCE_CAUSE v=1 scope=save_file source_complete={} declared_extents={} final_length={} replacement_bytes={} descriptor_source_calls={} descriptor_source_bytes={} descriptor_source_ns={} descriptor_cursor_next_calls={} descriptor_cursor_next_ns={} replacement_source_calls={} replacement_source_bytes={} replacement_source_ns={} replacement_cursor_next_calls={} replacement_cursor_next_ns={} local_reader_create_calls={} local_reader_create_ns={} local_read_calls={} local_read_bytes={} local_read_ns={} local_segment_open_calls={} local_segment_open_ns={} local_aligned_read_calls={} local_aligned_read_bytes={} local_aligned_read_ns={}\n",
+            self.complete(),
+            self.declared_extents,
+            self.inode.length,
+            self.inode.replacement,
+            self.descriptor_source_calls,
+            self.descriptor_source_bytes,
+            self.descriptor_source_ns,
+            self.descriptor_cursor_next_calls,
+            self.descriptor_cursor_next_ns,
+            self.replacement_source_calls,
+            self.replacement_source_bytes,
+            self.replacement_source_ns,
+            source.cursor_next_calls,
+            source.cursor_next_ns,
+            source.reader_create_calls,
+            source.reader_create_ns,
+            source.local_read_calls,
+            source.local_read_bytes,
+            source.local_read_ns,
+            source.segment_open_calls,
+            source.segment_open_ns,
+            source.aligned_read_calls,
+            source.aligned_read_bytes,
+            source.aligned_read_ns,
+        );
+        #[cfg(target_os = "linux")]
+        let _ = nix::unistd::write(io::stderr(), record.as_bytes());
+        #[cfg(not(target_os = "linux"))]
+        let _ = io::Write::write(&mut io::stderr(), record.as_bytes());
+    }
 }
 
 impl<'a> FileUpload<'a> {
@@ -48,12 +99,22 @@ impl<'a> FileUpload<'a> {
             root,
             inode,
             source,
+            declared_extents: extents,
             remaining: extents,
             position: 0,
             record: [0; 24],
             record_at: 24,
             cursor: None,
             failure: None,
+            diagnostic_enabled: operator_diagnostics_enabled(),
+            descriptor_source_calls: 0,
+            descriptor_source_bytes: 0,
+            descriptor_source_ns: 0,
+            descriptor_cursor_next_calls: 0,
+            descriptor_cursor_next_ns: 0,
+            replacement_source_calls: 0,
+            replacement_source_bytes: 0,
+            replacement_source_ns: 0,
         }
     }
 
@@ -102,7 +163,15 @@ impl<'a> FileUpload<'a> {
         }
         while filled < out.len() && self.remaining > 0 {
             let cursor = self.cursor.as_mut().ok_or(WorkspaceError::Io)?;
-            let (start, piece) = cursor.next(window)?.ok_or(WorkspaceError::Io)?;
+            let started = self.diagnostic_enabled.then(Instant::now);
+            let next = cursor.next(window);
+            if let Some(started) = started {
+                self.descriptor_cursor_next_calls += 1;
+                self.descriptor_cursor_next_ns = self
+                    .descriptor_cursor_next_ns
+                    .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            }
+            let (start, piece) = next?.ok_or(WorkspaceError::Io)?;
             if start != self.position {
                 return Err(WorkspaceError::Io);
             }
@@ -144,7 +213,19 @@ impl Source for FileUpload<'_> {
             return Ok(0);
         }
         if self.remaining > 0 || self.record_at < 24 {
-            return self.descriptor_bytes(out, deadline).map_err(|error| {
+            let started = self.diagnostic_enabled.then(Instant::now);
+            let result = self.descriptor_bytes(out, deadline);
+            if let Some(started) = started {
+                self.descriptor_source_calls += 1;
+                self.descriptor_source_ns = self
+                    .descriptor_source_ns
+                    .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+                if let Ok(count) = result.as_ref() {
+                    self.descriptor_source_bytes =
+                        self.descriptor_source_bytes.saturating_add(*count as u64);
+                }
+            }
+            return result.map_err(|error| {
                 self.failure = Some(error.clone());
                 io::Error::other(error)
             });
@@ -153,6 +234,18 @@ impl Source for FileUpload<'_> {
             self.failure = Some(WorkspaceError::Io);
             return Err(io::ErrorKind::InvalidData.into());
         }
-        self.source.read(out, deadline, cancel)
+        let started = self.diagnostic_enabled.then(Instant::now);
+        let result = self.source.read(out, deadline, cancel);
+        if let Some(started) = started {
+            self.replacement_source_calls += 1;
+            self.replacement_source_ns = self
+                .replacement_source_ns
+                .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            if let Ok(count) = result.as_ref() {
+                self.replacement_source_bytes =
+                    self.replacement_source_bytes.saturating_add(*count as u64);
+            }
+        }
+        result
     }
 }

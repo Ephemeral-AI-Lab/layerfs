@@ -14,6 +14,7 @@ use std::{
     time::Instant,
 };
 mod ledger_batch;
+mod sponsored;
 const RECORDS: u32 = 62;
 #[derive(Clone, Copy)]
 pub struct CleanupFrame {
@@ -204,6 +205,7 @@ impl Arena {
         update: bool,
         phase: BackingPhase,
     ) -> Result<std::fs::File, WorkspaceError> {
+        let _timed = self.telemetry.ledger_file.start();
         let expected = {
             *self
                 .state
@@ -858,76 +860,14 @@ impl RootOwner {
         }
         result
     }
-    /// Writes one page whose body an encoder fills for the allocated identity.
-    /// Ownership, references and accounting are the same as `write_page`; the
-    /// raw form exists because a piece page is not a keyed-cell page.
-    pub(crate) fn write_raw_page<S>(
+    fn create_page_file(
         &self,
-        window: &mut Window,
+        name: &str,
+        window: &Window,
         deadline: Instant,
-        encode: impl FnOnce(PageRef, &mut [u8]) -> Result<S, WorkspaceError>,
-    ) -> Result<(PageRef, S), WorkspaceError> {
-        if self
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .temporary
-            .len()
-            == 128
-        {
-            return Err(WorkspaceError::Capacity);
-        }
-        let r = self.arena.allocate_slot(self, window, deadline)?;
-        let state = encode(r, &mut window.0[..PAGE])?;
-        // A page's edges are declared by the page itself, and the window is the
-        // only place the encoded bytes exist: the ledger write below reuses the
-        // same window page, so the edges must be taken before it.
-        let edges = super::metadata_index::edges_raw(
-            self.arena.directory.incarnation,
-            r,
-            &window.0[..PAGE],
-        )?;
-        let identity = self.create_file(&page_name(r), window, deadline)?;
-        self.state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .edge_progress = Some((r, 0));
-        self.arena.set_owner(
-            r,
-            Owner {
-                epoch: r.epoch,
-                role: 1,
-                refs: 1,
-                edges: true,
-                device: identity.0,
-                inode: identity.1,
-                ..Owner::default()
-            },
-            window,
-            deadline,
-        )?;
-        {
-            let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-            s.temporary.push(r);
-            s.pending = None;
-            s.slot_pending = None;
-        }
-        self.arena
-            .state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .pages += 1;
-        self.add_page_edges(r, &edges, window, deadline)?;
-        self.state
-            .lock()
-            .map_err(|_| WorkspaceError::Io)?
-            .edge_progress = None;
-        let _ = self.arena.owner_finalizations.fetch_update(
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-            |old| Some(old.saturating_add(1)),
-        );
-        Ok((r, state))
+    ) -> Result<(u64, u64), WorkspaceError> {
+        let _timed = self.arena.telemetry.metadata_page_create.start();
+        self.create_file(name, window, deadline)
     }
     pub fn write_page(
         &self,
@@ -948,7 +888,7 @@ impl RootOwner {
         let r = self.arena.allocate_slot(self, window, deadline)?;
         data.encode(self.arena.directory.incarnation, r, &mut window.0[..PAGE])?;
         let edges = super::metadata_index::edges(&data)?;
-        let identity = self.create_file(&page_name(r), window, deadline)?;
+        let identity = self.create_page_file(&page_name(r), window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?

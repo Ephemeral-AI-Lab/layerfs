@@ -1,0 +1,17 @@
+{
+  "classification": "100/512 count predicate PASS, pattern oracles PASS, 4097 gate FAIL, cache-INELIGIBLE",
+  "harness_seal": "f94785da09c51baea2957edbfa30396ad34f4b416f2a8c6fa4b1e2d6dd6b64e0",
+  "note": "Original run files and SQLite clones copied byte-for-byte. Prepared-public omits only private cursor key. Gate host receipt remains FAIL; daemon and forced-cleanup logs are postmortem observations, not a promotion.",
+  "product_seal": "7e1e36eed0920a717284c277e61ed983d12d04a3669450300e3402bdb2f144fa",
+  "schema": "issue271-fourhop-evidence-v1",
+  "selections": {
+    "100": "diagnostic100v3",
+    "512": "fuse512",
+    "append": "append",
+    "dispersed": "dispersed",
+    "gate": "gate",
+    "repeated": "repeated"
+  },
+  "source_commit": "933b3457c916519f458137e4c4f19662c8e9228e",
+  "source_tree": "e559b758358e9a27e36eeb0059510677f8516041"
+}

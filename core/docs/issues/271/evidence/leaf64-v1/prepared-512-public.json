@@ -1,0 +1,97 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d/benchmark_init",
+      "sha256": "172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d"
+    },
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be/benchmark_shell",
+      "sha256": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    }
+  },
+  "build_mode": "sealed SDK/verifier/writer and prepared master reused; daemon release rebuilt if product changed",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "1bb00c39b982749a9c689045e3c5140815f71165c3795df8145d51989a902617",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d",
+      "benchmark_shell": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be",
+      "verify_shell": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    },
+    "compatible_product_changes": [],
+    "master_proof_sha256": "890125a3225f1aebd174e149c921480a6c6d6700d06754e1f20038dfb6465764",
+    "prepared": "benchmark-results/fs-bench-pro/issue271/leaf64-100-prepared-v1/prepared.json"
+  },
+  "dockerfile_sha256": {
+    "diagnostic": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "diagnostic100v2": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "diagnostic100v3": "a5b0983a5bc7c61f5ec18c11197a84c96391aa5fb641e18654005ef7f7ce2c05",
+    "diagnostic1024": "db6096074e91737e2536b90a345cdbaf690afa9cf2189734f3fa90f61fe04754",
+    "diagnostic512": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+    "fuse512": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+    "gate": "d351105281e5e33ecf4b861cdb4f7a42e199830723a73b7226b933223d7cf3e3"
+  },
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "images": {
+    "diagnostic": "sha256:9730e7f6001d26f55432de237f14f377273cfa38718dc787474275540912a1cd",
+    "diagnostic100v2": "sha256:c4069180a000d3d7abbe0c02e496559bdf546919bbc91219efbf327c95e2d1b8",
+    "diagnostic100v3": "sha256:73fbabda32e689744bebd81a074df5d4a370eb1b430996d4e2ed133786bb681a",
+    "diagnostic1024": "sha256:b0726ab964cde218f0892eba4a08ac3b9f8ff5874c22a55563e8769f6d236086",
+    "diagnostic512": "sha256:65191cdf60f89cfaaac334c1912f6efdfc9b69921a99d32240602541c083a2a6",
+    "fuse512": "sha256:d602455bcf936984b6be30ae17fdaf131182c0a8d29cc63d5946cb1ad526a218",
+    "gate": "sha256:f07ac132d39f20ad6ec04eff36f26ba62874f141029a9aac1045759f0f1e8643"
+  },
+  "issue266_1024_spec_sha256": "980f0a9336becb26126fd39df0e1de1dedec978fb1b36de23b0f3b1de08ce867",
+  "issue266_post_spec_sha256": "e561f8e02d2058ece02807f559b68c8919fa9d4c4641894463a9bb6f03bd2eed",
+  "issue266_spec_sha256": "8ccdd919b892bbb27267bd4afda3e724423356bbdb8e00098a99753fec9488f5",
+  "issue266_wait_spec_sha256": "5aa09a37a49416c585ee7e0304699f40eaf42d4ab48df37a69a90694baaf2866",
+  "issue271_2048_spec_sha256": "e0073421409fdfd1871746c1d3d5e183a6917769254591744ee11f8023dd11c1",
+  "issue271_leaf64_spec_sha256": "879a563c81bd56f1cd17cca2329114886259f28d141765aac5772c9951d7fae1",
+  "manifest_sha256": {
+    "diagnostic": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "diagnostic100v2": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "diagnostic100v3": "e59513f6ec3b9c8c71dbeed4fd2090502d491e5489f3423e86192c4791d85239",
+    "diagnostic1024": "8edd43329f7533d384e2556aadf2b7562448280b58144ef4886c63e8994ab90a",
+    "diagnostic512": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+    "fuse512": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+    "gate": "92eb1f8cbde5cd73fb3c8018ecd6470ae8f6b8fa67d051aa175c49f9aaf44925",
+    "old": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e"
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "32d0a789bac2f4b875d616012c0a003a2aca2eeaead8717cfa7332cd433321a348",
+    "genesis_root": "a1a41401f8d9d5de6e5cabd3d8f49f68d30549e1288c9dd278c91da413f56b58",
+    "genesis_root_serial": 1,
+    "history_sha256": "96275c90cb7ee51074cb456dbf1f29f164442df1b1f5e7ea200c58449d52b038",
+    "old_commit": "12ef44464e764a34399e5be721a9d14ab714813471949c06bf20413d2ca6f9a098",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/master",
+    "project_id": "3139aa4755cbda68b7890b9e8f483309f2",
+    "store_sha256": "ce49eb722338ea58f2cb397128e69fee5c4c0abf05821e2b4a959101257cc683"
+  },
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "preparation_wall_ns": {
+    "image_fuse512": 421226792
+  },
+  "schema": "issue261-separated-prepared-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "2a0754c3dea5a6abafb70e3edcf3f4d92374dd4f9e301fd6f153177954cd68fd",
+    "product_seal": "97f3bab6762075fb04ef22ddd9a4bf9aed442bebacb918f41ba7cbff2f970291",
+    "source_commit": "e255e688bdac46f57c9ccbadb859869ea1fedf4e",
+    "source_dirty": false,
+    "source_tree": "db44cb1f1d3ce7410741d0878cedd269e434cc59"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "writer_binary_sha256": "0133f1f93f233540a0913fc56dac69af8f90ccac7a674f340561dc2069640083",
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

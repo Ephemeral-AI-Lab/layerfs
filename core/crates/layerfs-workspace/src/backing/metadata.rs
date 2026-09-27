@@ -8,6 +8,7 @@ use super::{
     segments::Window,
 };
 use crate::*;
+mod telemetry;
 use std::{
     mem::size_of,
     sync::{
@@ -16,6 +17,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use telemetry::ArenaTelemetry;
 pub const CANDIDATE_BYTES: u64 = 137 * 4096;
 pub const ESCROW: u64 = 208 * 4096;
 pub const WORKING: usize = 640 * 1024;
@@ -23,6 +25,10 @@ const RETAINED: usize = 128 * 1024;
 /// Not part of the public API.
 pub type MetadataCharge = (Charge, Charge);
 pub const MAX_ROOTS: usize = 32;
+// Eight keyed levels, four sponsored pages at each of eight extent levels,
+// plus a custody/terminal frame: bounded independent of edit count.
+pub const CLEANUP_FRAMES: usize = (super::metadata_pages::LEVEL_LIMIT as usize + 1) * 5 + 2;
+const ROOT_OVERHEAD: usize = 384 + (CLEANUP_FRAMES - 12) * size_of::<CleanupFrame>();
 pub struct MetadataHost {
     pub payloads: Arc<PayloadHost>,
     pub gate: AtomicBool,
@@ -45,7 +51,12 @@ pub struct Arena {
     pub reads: AtomicU64,
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
+    pub(crate) telemetry: ArenaTelemetry,
     pub owner_finalizations: AtomicU64,
+    pub extent_child_edges_added: AtomicU64,
+    pub extent_custody_edges_added: AtomicU64,
+    pub extent_sponsor_edges_added: AtomicU64,
+    pub extent_sponsor_edges_removed: AtomicU64,
     /// Acknowledged decrements of edges named by extent pages during cleanup.
     pub extent_child_edges_removed: AtomicU64,
     pub extent_custody_edges_removed: AtomicU64,
@@ -214,7 +225,12 @@ impl MetadataHost {
             reads: AtomicU64::new(0),
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
+            telemetry: ArenaTelemetry::default(),
             owner_finalizations: AtomicU64::new(0),
+            extent_child_edges_added: AtomicU64::new(0),
+            extent_custody_edges_added: AtomicU64::new(0),
+            extent_sponsor_edges_added: AtomicU64::new(0),
+            extent_sponsor_edges_removed: AtomicU64::new(0),
             extent_child_edges_removed: AtomicU64::new(0),
             extent_custody_edges_removed: AtomicU64::new(0),
             state: Mutex::new(ArenaState {
@@ -321,17 +337,18 @@ impl MetadataHost {
             return Err(WorkspaceError::Capacity);
         }
         grow(&mut roots, self, &self.root_charge, MAX_ROOTS)?;
-        let mut charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+        let mut charge =
+            self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + ROOT_OVERHEAD)?;
         let mut temporary = Vec::new();
         temporary
             .try_reserve_exact(128)
             .map_err(|_| WorkspaceError::Capacity)?;
         resize_memory(
             &mut charge,
-            size_of::<RootOwner>() + temporary.capacity() * size_of::<PageRef>() + 384,
+            size_of::<RootOwner>() + temporary.capacity() * size_of::<PageRef>() + ROOT_OVERHEAD,
         )?;
         let custodies = super::metadata_index::vector(1)?;
-        let cleanup = super::metadata_index::vector(12)?;
+        let cleanup = super::metadata_index::vector(CLEANUP_FRAMES)?;
         let a = arena.state.lock().map_err(|_| WorkspaceError::Io)?;
         if a.blocked {
             return Err(WorkspaceError::Busy);
@@ -369,7 +386,8 @@ impl MetadataHost {
         fund: Option<&Arc<ProgressFund>>,
         allowance: u64,
     ) -> Result<Arc<RootOwner>, WorkspaceError> {
-        let charge = self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + 384)?;
+        let charge =
+            self.memory(size_of::<RootOwner>() + 128 * size_of::<PageRef>() + ROOT_OVERHEAD)?;
         Ok(Arc::new(RootOwner {
             arena: arena.clone(),
             parent: None,
@@ -386,7 +404,7 @@ impl MetadataHost {
                 completion_generation: None,
                 pending: None,
                 custodies: super::metadata_index::vector(1)?,
-                cleanup: super::metadata_index::vector(12)?,
+                cleanup: super::metadata_index::vector(CLEANUP_FRAMES)?,
                 cleanup_failed: false,
             }),
             _charge: charge,
@@ -545,6 +563,10 @@ impl MetadataHost {
         let mut reserved_slots = 0;
         let mut child_edges_removed = 0u64;
         let mut custody_edges_removed = 0u64;
+        let mut child_edges_added = 0u64;
+        let mut custody_edges_added = 0u64;
+        let mut sponsor_edges_added = 0u64;
+        let mut sponsor_edges_removed = 0u64;
         let mut owner_finalizations = 0u64;
         for a in arenas.iter() {
             let s = a.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -555,11 +577,19 @@ impl MetadataHost {
                 .saturating_add(a.extent_child_edges_removed.load(Ordering::Relaxed));
             custody_edges_removed = custody_edges_removed
                 .saturating_add(a.extent_custody_edges_removed.load(Ordering::Relaxed));
+            child_edges_added = child_edges_added
+                .saturating_add(a.extent_child_edges_added.load(Ordering::Relaxed));
+            custody_edges_added = custody_edges_added
+                .saturating_add(a.extent_custody_edges_added.load(Ordering::Relaxed));
+            sponsor_edges_added = sponsor_edges_added
+                .saturating_add(a.extent_sponsor_edges_added.load(Ordering::Relaxed));
+            sponsor_edges_removed = sponsor_edges_removed
+                .saturating_add(a.extent_sponsor_edges_removed.load(Ordering::Relaxed));
             owner_finalizations =
                 owner_finalizations.saturating_add(a.owner_finalizations.load(Ordering::Relaxed));
         }
         let s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
-        let status = MetadataStatus {
+        let mut status = MetadataStatus {
             allocated_pages: pages,
             reusable_pages: reusable,
             reserved_slots,
@@ -573,13 +603,21 @@ impl MetadataHost {
                 } else {
                     0
                 },
+            operator_diagnostics_enabled: crate::runtime::host::operator_diagnostics_enabled(),
             accounting_complete: s.metadata_complete,
             admission_stopped: s.metadata_stopped,
+            ..MetadataStatus::default()
         };
+        for arena in arenas.iter() {
+            arena.telemetry.add_to(&mut status);
+        }
         if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
             eprintln!(
                 "LFS_EXTENT_EDGE v=1 child_edges_removed={} custody_edges_removed={}",
                 child_edges_removed, custody_edges_removed,
+            );
+            eprintln!(
+                "LFS_EXTENT_OWNER v=1 child_added={child_edges_added} child_removed={child_edges_removed} custody_added={custody_edges_added} custody_removed={custody_edges_removed} sponsor_added={sponsor_edges_added} sponsor_removed={sponsor_edges_removed}"
             );
             eprintln!("LFS_METADATA_OWNER v=1 finalizations={owner_finalizations}");
         }
@@ -835,7 +873,7 @@ impl RootOwner {
                 // this way could never close clean.
                 if self.arena.change_refs(page, -1, window, deadline)? == 0 {
                     let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                    if state.cleanup.len() == 12 {
+                    if state.cleanup.len() == CLEANUP_FRAMES {
                         return Err(WorkspaceError::Capacity);
                     }
                     state.cleanup.push(CleanupFrame {
@@ -863,7 +901,7 @@ impl RootOwner {
             let Some(page) = page else { break };
             if self.arena.change_refs(page, -1, window, deadline)? == 0 {
                 let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                if state.cleanup.len() == 12 {
+                if state.cleanup.len() == CLEANUP_FRAMES {
                     return Err(WorkspaceError::Capacity);
                 }
                 state.cleanup.push(CleanupFrame {
