@@ -62,6 +62,19 @@ FUSE rename(parent,name,                    FUSE rename(parent,name,
           +---------- publish one root ----------------+
 ```
 
+```text
+Resident Node today                         Resident directory Node target
+  serial                                    serial
+  parent serial                             parent serial + one charged name
+  path: [u8; 4096]                         attached-to-live-root state
+  path_len                                  lookup/handle refs; Handle pins View
+
+The private D/N/I COW key space remains the same; its parent-directory
+bindings already persist the move. No P(parent-edge) page is added for the
+mounted route. Full paths, when an interface asks for one, are derived or
+streamed from components rather than retained on every resident Node.
+```
+
 The current [Node](../../../crates/layerfs-workspace/src/runtime/state.rs)
 stores `[u8; 4096]` plus `path_len`; [rename path
 preflight](../../../crates/layerfs-workspace/src/filesystem/rename_paths.rs)
@@ -257,29 +270,49 @@ docs and tools contribute zero. All Core production files stay below 1000
 physical lines and `lib.rs`/`mod.rs` below 200.
 
 ```text
+Legend: + new production file, ~ edit existing file, - remove, = source kept
+
 core/crates/
-  layerfs-workspace/src/
-    runtime/
-      state.rs                 resident Node fields and charged tables
-      ancestry.rs              NEW: closure, attachment, cycle walk
-    filesystem/
-      namespace.rs             one-component name grammar
-      namespace_view.rs        effective serial/name lookup and listing
-      rename.rs                candidate COW publication
-      rename_preflight.rs      NEW: parent/replacement/cycle validation
-      rename_paths.rs          REMOVE after callers are identity-relative
-      original.rs, read.rs     identity-based stale baseline reads
-      directory.rs, symlink.rs component readdir and identity readlink
-  layerfs-bridge/src/
-    contract/request.rs        additive InodeReadlink Inspect variant
-    adapters/native/           validated codec and client
-  layerfs-server/src/service/read/content.rs
-                               dispatch the identity readlink variant
+├── layerfs-workspace/
+│   ├── src/
+│   │   ├── runtime/
+│   │   │   ├── state.rs                    ~ Node fields, charge, collection
+│   │   │   ├── ancestry.rs                 + closure, attached state, cycle walk
+│   │   │   └── mod.rs                      ~ thin declaration only
+│   │   └── filesystem/
+│   │       ├── namespace.rs                ~ component-name grammar and lookup
+│   │       ├── namespace_view.rs           ~ effective serial/name view
+│   │       ├── create.rs, remove.rs        ~ component mutation callers
+│   │       ├── directory.rs                ~ readdir and frozen handle `..`
+│   │       ├── original.rs, read.rs        ~ stale serial-based reads
+│   │       ├── symlink.rs                  ~ identity-based readlink
+│   │       ├── rename_preflight.rs         + attachment/replacement/cycle check
+│   │       ├── rename.rs                   ~ COW publication, moved Node edge
+│   │       ├── rename_paths.rs             - path scan/rewrite removed
+│   │       └── mod.rs                      ~ thin declaration only
+│   └── tests/
+│       └── namespace.rs                    ~ focused public Workspace behavior
+├── layerfs-bridge/
+│   ├── src/
+│   │   ├── contract/request.rs             ~ InodeReadlink Inspect variant
+│   │   └── adapters/native/
+│   │       ├── protocol/metadata.rs        ~ checked wire codec
+│   │       └── client.rs                   ~ checked response validation
+│   └── tests/attributes.rs                 ~ external identity-readlink cases
+├── layerfs-server/src/service/read/content.rs
+│                                        ~ dispatch identity readlink
+├── layerfs-content/src/filesystem/read.rs = readlink_inode already exists
+├── layerfs-fuse/src/adapter.rs           = parent/name route already exists
+└── layerfs-api/sdk/
+    ├── src/workspace.rs                  = generic Exec API already exists
+    └── tests/
+        ├── inherited_workspace.rs       ~ deep move and count oracle
+        └── agent_route.rs               ~ mounted Exec and explicit Commit
 ```
 
 | Responsibility | Proposed files; current physical lines | Change |
 | --- | --- | --- |
-| Resident identity and ancestry | `workspace/src/runtime/state.rs` (700), new `runtime/ancestry.rs` if closure does not fit cleanly | Replace fixed path array with charged one-component identity link; maintain ancestor closure, attached state, and `node_index` walk. Split by responsibility before `state.rs` nears 999 lines. |
+| Resident identity and ancestry | `workspace/src/runtime/state.rs` (700), planned new `runtime/ancestry.rs` | Replace fixed path array with charged one-component identity link; maintain ancestor closure, attached state, and `node_index` walk. Split by responsibility before `state.rs` nears 999 lines. |
 | Component namespace operations | `workspace/src/filesystem/namespace.rs` (267), `namespace_view.rs` (408), `create.rs` (759), `remove.rs` (438), `directory.rs` (158) | Separate name validation from aggregate `child_path`; remove path arguments, preserve paged child lookup/list and live/frozen handle rules. |
 | Rename | `workspace/src/filesystem/rename.rs` (942), new `rename_preflight.rs`, retire `rename_paths.rs` (113) | Move ancestry/cycle/replacement preparation out of the near-limit file; remove descendant scan and cached-path rewrite; update only the moved resident directory's parent link under final lock. `filesystem/mod.rs` (17) gets a thin declaration only. |
 | Identity reads | `workspace/src/filesystem/original.rs` (71), `read.rs` (264), `symlink.rs` (160) | Stale read/original use serial attributes; symlink target uses identity readlink. |
