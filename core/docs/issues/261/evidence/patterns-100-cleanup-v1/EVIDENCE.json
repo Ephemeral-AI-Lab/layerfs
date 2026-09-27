@@ -1,0 +1,97 @@
+{
+  "copied_raw_sha256": {
+    "append.tsv": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc",
+    "append/case.before": "38d72bd3b2c09b1e9172a2e5511b694daa6b63add8f73a22804f2f5aefb6bad8",
+    "append/case.verify": "8d9f9b4973d91ca0d38df2e7870ccac30f35e9ac3fa944e9c523358e285f08e8",
+    "append/driver.stderr": "1f033f10e68462788542650e61c61837d986f31eb9d438df7e3fe12fa256743a",
+    "append/driver.stdout": "0c947c594195d825c3a9d532be28da1c2a931ad565da8a69813743d60e39d492",
+    "append/receipt.json": "8623006b9fbf0d72f20fc600681fe59dc525372a91248ae032a098aab7dac7f5",
+    "append/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "append/verifier.stdout": "f06e7050ac3dc10bb9a07eef492303da18b3fe60dda0f350a1aca57234841c1e",
+    "build-daemon.json": "e330504dd5ef967bf367c626763b19fb2d47724dea0d5489e2dc1449aa0bd9f5",
+    "build-daemon.stderr": "01f0af4370d118e348471e926c3ac0cbdae80cb6a74001709e24a306914ebff0",
+    "build-daemon.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-sdk.json": "87ca7caf7d8758769b7d563c4c4c920a4413879c0e48811d6eb7265a438a38e1",
+    "build-sdk.stderr": "b65d97c967cb13bb2fd061b2f5b86011ef366acea387375a92a9808f93395384",
+    "build-sdk.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "build-verifier.json": "a779cbd086f74d4294bcab1113a8439a57c88f624a26e22b42952af6a1a7082e",
+    "build-verifier.stderr": "64d0cbd4b7e4c6329fde55978dd3d261407b55f34c21add0feebf7e0575ee531",
+    "build-verifier.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dispersed.tsv": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+    "dispersed/case.before": "8f959d9627283b0ed2bbc49b09200df476254ab7ee0ba7a61708098bdf550bd5",
+    "dispersed/case.verify": "cf0b6392bbc5022fe60dd55bf4d244908b0c44355eefd06ab0bf7f90f507e468",
+    "dispersed/driver.stderr": "7bb2421a2de1f42db0e056f8b62631d6f73ad02bea43210a01a5a3172e758d3f",
+    "dispersed/driver.stdout": "662d39ce35fe681f57b10836d29648002a65731e3c265e34e79d21c9eb2af779",
+    "dispersed/receipt.json": "29731d453864aa89a127e67da3a6f79ee425f24e3fc5b51c5c47f8fcda8ecc97",
+    "dispersed/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "dispersed/verifier.stdout": "4cf9707c02b63682c8ccb4cb7bee4116885cf56c45218108f4dba96148a67629",
+    "image-build.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "image-build.stdout": "255b59594fd1b55beaf271eee56f25637bb3a1c9a8c5cc27dfc598d0a19c6ac9",
+    "master-reproof.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "master-reproof.stdout": "d2f535e0a405eca68746b7968350118b85ddbe69b95a66416a38238a7da5f6c0",
+    "old.tsv": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+    "repeated.tsv": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6",
+    "repeated/case.before": "1dc535c64a749760661d6c1ae5ea679c6ed476f5f0f476a2649129c5f759c9d8",
+    "repeated/case.verify": "3c110bd8598c93a492c43ca82b7e5b7c4ba3a8adacadc58b0eacdf5e4d33317a",
+    "repeated/driver.stderr": "ada33e84f35016b41c8910771a453827dbf1f11534cccfaa58f0c5a15cff5bf3",
+    "repeated/driver.stdout": "47fd71d430527896ded413481dc341143ba656bcfe35db65b7c397a031c1f75d",
+    "repeated/receipt.json": "83cc1bcb3aa00d32b161cc2ee186119cee7da96e980fd94e29f8e38f34cca864",
+    "repeated/verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repeated/verifier.stdout": "2fb971b84a19fe6d14bcb5530c2900a74ed363aa8a6584905863667b07e60f30"
+  },
+  "ignored_binary_artifacts": {
+    "append": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-append-ad9f91b-01/history.sqlite",
+        "sha256": "4ef30d0b72b0e0e34f099ea2930d64f75ec121c84da6c1ce32acad66ac968bd6"
+      },
+      "store": {
+        "bytes": 913408,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-append-ad9f91b-01/store.sqlite",
+        "sha256": "d433164467ee54bd3ef51965f22abfcfece2efa5b730c891f8109086813b7479"
+      }
+    },
+    "dispersed": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-dispersed-ad9f91b-01/history.sqlite",
+        "sha256": "b16bdd3276b79b553c544978008b9225aafa832282bc0d9d7e9870819d719d90"
+      },
+      "store": {
+        "bytes": 917504,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-dispersed-ad9f91b-01/store.sqlite",
+        "sha256": "f405d75cfdfab9fbad7a8c96528b253507431ffbfb7995f1151da37c9bae8185"
+      }
+    },
+    "master": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/master/history.sqlite",
+        "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+      },
+      "store": {
+        "bytes": 626688,
+        "retained_path": "/Users/yifanxu/.codex/worktrees/issue-261-mounted-writes/layerfs/benchmark-results/fs-bench-pro/issue261-patterns-prepared-7361312-01/master/store.sqlite",
+        "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+      }
+    },
+    "repeated": {
+      "history": {
+        "bytes": 86016,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-repeated-ad9f91b-01/history.sqlite",
+        "sha256": "41dd3c828272e5522e3169f69f3fa95a27e55e8594e9ba1cdbb60c9c0ac6d076"
+      },
+      "store": {
+        "bytes": 913408,
+        "retained_path": "benchmark-results/fs-bench-pro/issue261-pattern-repeated-ad9f91b-01/store.sqlite",
+        "sha256": "1c9b1d87a83df49ff2bb3d68aeadbb335f7ec2ef9395f70213519a0508663ce3"
+      }
+    }
+  },
+  "packaging_failure_sha256": "1bccea84f56f8723dbeed0cca40d9963beffca93bcbb7fc613a4e1ddfb9ecff2",
+  "redacted_prepared_sha256": "f5bfeeb08dd36b89f3b477da5f3f722fcca8c1b5b23b4456e0e8deba3a9045e3",
+  "sample_count_per_case": 1,
+  "schema": "issue261-patterns-cleanup-evidence-v1",
+  "source_commit": "ad9f91bf48187588f4735cccff1efa8e47475d52"
+}

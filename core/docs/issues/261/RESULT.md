@@ -5,6 +5,9 @@
 A later [three-pattern 100-write diagnosis](THREE-PATTERN-DIAGNOSIS.md) compares
 true append, dispersed and repeated edits of one 10 MiB old head. Its distinct
 receipts and source identity do not replace the separated-offset result below.
+The subsequent [independent scaling audit](OPTIMIZATION-AUDIT.md) and
+[cleanup-read treatment](CLEANUP-TREATMENT.md) retain one changed-source
+attempt per case, including their count reductions and cache limitations.
 
 The change starts at repair commit `6af2c5c59a48d0b6c85d656e55aecc353e346728`
 in its own managed worktree. The primary target was an existing mounted file,
@@ -88,6 +91,9 @@ excluded. Every comparison is first parent → committed tree; reference stays
 | `f23263b72` | Pre-reply phase snapshots | 58,467 → 58,499 (+32) | 123,884 → 123,916 (+32) |
 | `56d05e532` | Ledger treatment declaration | 58,499 → 58,499 (0) | 123,916 → 123,916 (0) |
 | `0a3ec6d0f` | Reuse verified ledger page | 58,499 → 58,509 (+10) | 123,916 → 123,926 (+10) |
+| `e2d8cb2de` | Prospective cleanup-read treatment | 58,509 → 58,509 (0) | 123,926 → 123,926 (0) |
+| `52dc157d4` | Cleanup-read source, runner and scaling audit | 58,509 → 58,532 (+23) | 123,926 → 123,949 (+23) |
+| `ad9f91bf4` | Worktree-local diagnostic lock | 58,532 → 58,532 (0) | 123,949 → 123,949 (0) |
 
 The final evidence/documentation commit keeps both production totals unchanged;
 its exact comparison is in that commit message. The combined growth is +78
