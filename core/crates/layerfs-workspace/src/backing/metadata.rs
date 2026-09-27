@@ -46,6 +46,10 @@ pub struct Arena {
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
     pub owner_finalizations: AtomicU64,
+    pub extent_child_edges_added: AtomicU64,
+    pub extent_custody_edges_added: AtomicU64,
+    pub extent_sponsor_edges_added: AtomicU64,
+    pub extent_sponsor_edges_removed: AtomicU64,
     /// Acknowledged decrements of edges named by extent pages during cleanup.
     pub extent_child_edges_removed: AtomicU64,
     pub extent_custody_edges_removed: AtomicU64,
@@ -215,6 +219,10 @@ impl MetadataHost {
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
             owner_finalizations: AtomicU64::new(0),
+            extent_child_edges_added: AtomicU64::new(0),
+            extent_custody_edges_added: AtomicU64::new(0),
+            extent_sponsor_edges_added: AtomicU64::new(0),
+            extent_sponsor_edges_removed: AtomicU64::new(0),
             extent_child_edges_removed: AtomicU64::new(0),
             extent_custody_edges_removed: AtomicU64::new(0),
             state: Mutex::new(ArenaState {
@@ -545,6 +553,10 @@ impl MetadataHost {
         let mut reserved_slots = 0;
         let mut child_edges_removed = 0u64;
         let mut custody_edges_removed = 0u64;
+        let mut child_edges_added = 0u64;
+        let mut custody_edges_added = 0u64;
+        let mut sponsor_edges_added = 0u64;
+        let mut sponsor_edges_removed = 0u64;
         let mut owner_finalizations = 0u64;
         for a in arenas.iter() {
             let s = a.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -555,6 +567,14 @@ impl MetadataHost {
                 .saturating_add(a.extent_child_edges_removed.load(Ordering::Relaxed));
             custody_edges_removed = custody_edges_removed
                 .saturating_add(a.extent_custody_edges_removed.load(Ordering::Relaxed));
+            child_edges_added = child_edges_added
+                .saturating_add(a.extent_child_edges_added.load(Ordering::Relaxed));
+            custody_edges_added = custody_edges_added
+                .saturating_add(a.extent_custody_edges_added.load(Ordering::Relaxed));
+            sponsor_edges_added = sponsor_edges_added
+                .saturating_add(a.extent_sponsor_edges_added.load(Ordering::Relaxed));
+            sponsor_edges_removed = sponsor_edges_removed
+                .saturating_add(a.extent_sponsor_edges_removed.load(Ordering::Relaxed));
             owner_finalizations =
                 owner_finalizations.saturating_add(a.owner_finalizations.load(Ordering::Relaxed));
         }
@@ -580,6 +600,9 @@ impl MetadataHost {
             eprintln!(
                 "LFS_EXTENT_EDGE v=1 child_edges_removed={} custody_edges_removed={}",
                 child_edges_removed, custody_edges_removed,
+            );
+            eprintln!(
+                "LFS_EXTENT_OWNER v=1 child_added={child_edges_added} child_removed={child_edges_removed} custody_added={custody_edges_added} custody_removed={custody_edges_removed} sponsor_added={sponsor_edges_added} sponsor_removed={sponsor_edges_removed}"
             );
             eprintln!("LFS_METADATA_OWNER v=1 finalizations={owner_finalizations}");
         }

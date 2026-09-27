@@ -25,6 +25,7 @@ SPEC_266_POST = ROOT / "docs/roadmap/0.1/0.1.7/issue266-post-reply-diagnostic-sp
 SPEC_266_WAIT = ROOT / "docs/roadmap/0.1/0.1.7/issue266-reply-wait-treatment-spec.md"
 SPEC_266_1024 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-spec.md"
 SPEC_271_2048 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-2048-diagnostic-spec.md"
+SPEC_271_SPONSOR = ROOT / "docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
@@ -181,6 +182,7 @@ def prepare(output):
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
+        "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -230,10 +232,16 @@ def prepare_reuse(output, previous_file, selection):
     allowed_packing = {"core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/pack.rs",
                        "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs",
                        "core/crates/layerfs-workspace/tests/pieces_sequence.rs"}
+    allowed_sponsor = {
+        *[f"core/crates/layerfs-workspace/src/backing/{name}" for name in (
+            "binary_plus_tree/extent/cursor.rs", "binary_plus_tree/extent/telemetry.rs",
+            "metadata.rs", "metadata_reclaim.rs", "ownership.rs", "ownership/sponsored.rs")],
+        "core/crates/layerfs-workspace/tests/owner_finalization.rs",
+    }
     allowed = (allowed_ownership if selection == "diagnostic100v3" else
                allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
     if selection in ("diagnostic100v3", "fuse512", "gate"):
-        allowed |= allowed_packing
+        allowed |= allowed_packing | allowed_sponsor
     if selection in ("diagnostic1024", "diagnostic2048"):
         allowed = allowed_packing
     if not product_same and (selection != "diagnostic100v2"
@@ -322,6 +330,7 @@ def prepare_reuse(output, previous_file, selection):
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
+        "issue271_sponsor_spec_sha256": digest(SPEC_271_SPONSOR),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -402,6 +411,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue266 1024-count specification changed")
     if selection == "diagnostic2048" and digest(SPEC_271_2048) != prepared.get("issue271_2048_spec_sha256"):
         raise ValueError("issue271 2048-count specification changed")
+    if digest(SPEC_271_SPONSOR) != prepared.get("issue271_sponsor_spec_sha256"):
+        raise ValueError("issue271 sponsorship specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -505,6 +516,7 @@ def run(prepared_file, output, selection):
         "issue266_wait_spec_sha256": prepared.get("issue266_wait_spec_sha256"),
         "issue266_1024_spec_sha256": prepared.get("issue266_1024_spec_sha256"),
         "issue271_2048_spec_sha256": prepared.get("issue271_2048_spec_sha256"),
+        "issue271_sponsor_spec_sha256": prepared.get("issue271_sponsor_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],

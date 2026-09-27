@@ -42,10 +42,11 @@ impl<S: PieceStore + ?Sized> PieceStore for &S {
     fn write<T>(
         &self,
         level: u8,
+        sponsor: PageRef,
         window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
-        (**self).write(level, window, encode)
+        (**self).write(level, sponsor, window, encode)
     }
     fn incarnation(&self) -> [u8; 32] {
         (**self).incarnation()
@@ -58,10 +59,11 @@ impl<S: PieceStore + ?Sized> PieceStore for std::sync::Arc<S> {
     fn write<T>(
         &self,
         level: u8,
+        sponsor: PageRef,
         window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
-        (**self).write(level, window, encode)
+        (**self).write(level, sponsor, window, encode)
     }
     fn incarnation(&self) -> [u8; 32] {
         (**self).incarnation()

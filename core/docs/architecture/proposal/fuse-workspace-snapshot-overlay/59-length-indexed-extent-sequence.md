@@ -470,3 +470,30 @@ Commit format do not change. The rejected 32-record/eight-child attempt and
 its append-only diagnostic live in the [#271 issue report](../../../issues/271/PACKING-32-8-REJECTED.md).
 Any result for this packing target belongs with its own source-identified
 receipt, not in this architecture description.
+
+## 15. Sponsored copied-page custody (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, after the
+[prospective ownership trial](../../../../../docs/roadmap/0.1/0.1.7/issue271-sponsored-page-treatment-spec.md).
+For a copied extent leaf or branch, the writer may reference its authenticated
+old page as a **custody sponsor**. The new page charges only references absent
+from that old page's sorted edge multiset, plus one reference to the sponsor.
+It uses this route only when it saves at least one ledger edge and the old
+page itself has no sponsor. Thus a sponsorship chain has at most one hop.
+The `next` field of a live page owner record names the sponsor; old records
+have a null `next`, and the immutable extent page format is unchanged.
+
+The sponsor keeps unchanged child or Local custody pages live even after its
+own old root is released. G1/G2 may both read their exact immutable pages.
+Cleanup recomputes the same edge difference from authenticated bodies,
+releases the acknowledged difference prefix, then releases the sponsor last.
+If that last decrement frees the sponsor, the current cleanup frame has
+already advanced to its page-deletion phase; it never needs to reread the
+freed sponsor. An interrupted candidate records the charged prefix in
+`edge_progress`; an uncertain ledger write still quarantines admission.
+Every retained page stays quota-charged until its final authenticated cleanup
+refund. The public write publication, page identity/checksum, canonical
+Commit root and single construction worker are unchanged. New charged
+child/Local/sponsor counters distinguish ledger updates from encoded edge
+fields in the existing extent-page write diagnostic. Count and public-route
+results are retained in the #271 issue report, not inferred here.

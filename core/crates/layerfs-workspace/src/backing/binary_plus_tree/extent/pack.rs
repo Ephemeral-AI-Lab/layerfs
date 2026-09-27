@@ -3,7 +3,7 @@ use super::splice::{Level, PieceStore};
 use crate::{
     backing::{
         metadata_index::vector,
-        metadata_pages::{self, ChildRef},
+        metadata_pages::{self, ChildRef, PageRef},
         segments::Window,
     },
     WorkspaceError,
@@ -36,6 +36,7 @@ pub(super) fn lift<S: PieceStore + ?Sized>(
     store: &S,
     mut children: Vec<ChildRef>,
     level: u8,
+    sponsor: PageRef,
     window: &mut Window,
 ) -> Result<Level, WorkspaceError> {
     if level == 0 {
@@ -44,7 +45,7 @@ pub(super) fn lift<S: PieceStore + ?Sized>(
     if children.len() > 1 {
         // A parent can accept several replacement pages at this level. Only
         // the root may keep packing until it becomes one page.
-        return pack_once(store, children, level - 1, window);
+        return pack_once(store, children, level - 1, sponsor, window);
     }
     let Some(child) = children.pop() else {
         return Ok(Level {
@@ -56,7 +57,7 @@ pub(super) fn lift<S: PieceStore + ?Sized>(
         return Err(WorkspaceError::Io);
     }
     let incarnation = store.incarnation();
-    let page = store.write(level, window, |r, bytes| {
+    let page = store.write(level, sponsor, window, |r, bytes| {
         metadata_pages::encode_pieces_branch(incarnation, r, level, &[child], bytes).map(|()| r)
     })?;
     Ok(Level {
@@ -80,12 +81,14 @@ pub(super) fn pack_level<S: PieceStore + ?Sized>(
     store: &S,
     mut lower: Vec<ChildRef>,
     mut child_level: u8,
+    mut sponsor: PageRef,
     window: &mut Window,
 ) -> Result<Level, WorkspaceError> {
     while lower.len() > 1 {
-        let packed = pack_once(store, lower, child_level, window)?;
+        let packed = pack_once(store, lower, child_level, sponsor, window)?;
         lower = packed.pages;
         child_level = packed.level;
+        sponsor = PageRef::NULL;
     }
     Ok(Level {
         pages: lower,
@@ -97,6 +100,7 @@ fn pack_once<S: PieceStore + ?Sized>(
     store: &S,
     lower: Vec<ChildRef>,
     child_level: u8,
+    sponsor: PageRef,
     window: &mut Window,
 ) -> Result<Level, WorkspaceError> {
     let branch = child_level.checked_add(1).ok_or(WorkspaceError::Capacity)?;
@@ -115,7 +119,8 @@ fn pack_once<S: PieceStore + ?Sized>(
         let length = chunk.iter().try_fold(0u64, |sum, c| {
             sum.checked_add(c.length).ok_or(WorkspaceError::Io)
         })?;
-        let page = store.write(branch, window, |r, bytes| {
+        let candidate = if chunks == 1 { sponsor } else { PageRef::NULL };
+        let page = store.write(branch, candidate, window, |r, bytes| {
             metadata_pages::encode_pieces_branch(store.incarnation(), r, branch, chunk, bytes)
                 .map(|()| r)
         })?;

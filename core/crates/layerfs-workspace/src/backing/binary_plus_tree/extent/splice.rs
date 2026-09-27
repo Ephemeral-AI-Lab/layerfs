@@ -39,6 +39,7 @@ pub trait PieceStore {
     fn write<T>(
         &self,
         level: u8,
+        sponsor: PageRef,
         window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError>;
@@ -467,7 +468,7 @@ fn replace_inner<S: PieceStore + ?Sized>(
         // level. The tree loses a level exactly when its content collapsed.
         level
     } else {
-        pack_level(store, level.pages, level.level, window)?
+        pack_level(store, level.pages, level.level, PageRef::NULL, window)?
     };
     let root = level.pages.first().map_or(PageRef::NULL, |page| page.page);
     Ok(Pieces {
@@ -490,6 +491,7 @@ impl PieceStore for Arena {
     fn write<T>(
         &self,
         _level: u8,
+        _sponsor: PageRef,
         _window: &mut Window,
         _encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
@@ -518,6 +520,9 @@ struct Walk<'a, 'w, S: PieceStore + ?Sized> {
     fold: Fold,
     /// Records of the leaf currently open for writing.
     records: Vec<PieceRecord>,
+    /// An old leaf can keep unchanged Local custody edges for one new page.
+    source_leaf: PageRef,
+    active_leaf: PageRef,
     /// Leaf pages written or shared, in sequence order.
     leaves: Vec<ChildRef>,
     /// The last extent placed, for merging with the next one.
@@ -557,6 +562,8 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             shared: false,
             fold: Fold::new(),
             records: vector(2 * LEAF_RECORDS)?,
+            source_leaf: PageRef::NULL,
+            active_leaf: PageRef::NULL,
             leaves: Vec::new(),
             last: None,
             line: 0,
@@ -618,7 +625,9 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             return Err(WorkspaceError::Io);
         }
         if bytes[48] == 0 {
+            self.active_leaf = page;
             let covered = self.leaf(&bytes, splice, source)?;
+            self.active_leaf = PageRef::NULL;
             Ok((
                 Level {
                     pages: std::mem::take(&mut self.leaves),
@@ -684,9 +693,9 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             self.close_leaf()?;
             level.append(&mut self.leaves);
             let rebuilt = if top {
-                pack_level(self.store, level, branch_level - 1, self.window)?
+                pack_level(self.store, level, branch_level - 1, page, self.window)?
             } else {
-                lift(self.store, level, branch_level, self.window)?
+                lift(self.store, level, branch_level, page, self.window)?
             };
             // The merge point the parent folds at: the subtree's end, or the
             // interval's start when the subtree reaches past it.
@@ -787,14 +796,17 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
             let length = batch.iter().try_fold(0u64, |sum, r| {
                 sum.checked_add(r.length).ok_or(WorkspaceError::Io)
             })?;
-            let page = self.store.write(0, self.window, |r, bytes| {
-                metadata_pages::encode_pieces_leaf(incarnation, r, batch, bytes).map(|()| r)
-            })?;
+            let page = self
+                .store
+                .write(0, self.source_leaf, self.window, |r, bytes| {
+                    metadata_pages::encode_pieces_leaf(incarnation, r, batch, bytes).map(|()| r)
+                })?;
             self.leaves.push(ChildRef { page, length });
         }
         records.clear();
         self.records = records;
         self.last = None;
+        self.source_leaf = PageRef::NULL;
         Ok(())
     }
     fn emit(&mut self, piece: Piece) -> Result<(), WorkspaceError> {
@@ -825,6 +837,9 @@ impl<'a, 'w, S: PieceStore + ?Sized> Walk<'a, 'w, S> {
         if self.records.len() == 2 * LEAF_RECORDS {
             self.close_leaf()?;
         }
+        if self.records.is_empty() {
+            self.source_leaf = self.active_leaf;
+        }
         self.records.push(piece.record());
         self.last = Some(piece);
         self.line = self
@@ -846,10 +861,11 @@ impl PieceStore for RootOwner {
     fn write<T>(
         &self,
         _level: u8,
+        sponsor: PageRef,
         window: &mut Window,
         encode: impl FnOnce(PageRef, &mut [u8]) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
-        Ok(self.write_raw_page(window, lease(), encode)?.1)
+        Ok(self.write_raw_page(sponsor, window, lease(), encode)?.1)
     }
     fn incarnation(&self) -> [u8; 32] {
         self.arena.directory.incarnation

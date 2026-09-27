@@ -71,11 +71,8 @@ impl RootOwner {
                 // the kind-aware extraction decide them. The cell decoder would
                 // refuse an extent page and quarantine a healthy arena.
                 let bytes = arena.load_raw_with_owner(frame.page, owner, window, deadline)?;
-                let edges = super::metadata_index::edges_raw(
-                    arena.directory.incarnation,
-                    frame.page,
-                    &bytes,
-                )?;
+                let edges =
+                    arena.sponsored_edges(frame.page, &bytes, owner.next, window, deadline)?;
                 let extent = bytes[49] == metadata_pages::FORMAT_PIECES;
                 let leaf = bytes[48] == 0;
                 let count = partial.unwrap_or(edges.len());
@@ -90,18 +87,30 @@ impl RootOwner {
                     let (advanced, released) =
                         arena.change_refs_run(&edges[next..count], -1, true, window, deadline)?;
                     if extent {
+                        let sponsor_advanced = usize::from(
+                            owner.next != PageRef::NULL && next + advanced == edges.len(),
+                        );
                         let counter = if leaf {
                             &arena.extent_custody_edges_removed
                         } else {
                             &arena.extent_child_edges_removed
                         };
                         let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
-                            Some(old.saturating_add(advanced as u64))
+                            Some(old.saturating_add((advanced - sponsor_advanced) as u64))
                         });
+                        if sponsor_advanced != 0 {
+                            arena
+                                .extent_sponsor_edges_removed
+                                .fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                     next += advanced;
                     let mut s = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                    s.cleanup.last_mut().ok_or(WorkspaceError::Io)?.next = next;
+                    let frame = s.cleanup.last_mut().ok_or(WorkspaceError::Io)?;
+                    frame.next = next;
+                    if released.is_some() && next == count {
+                        frame.phase = 1;
+                    }
                     if let Some(r) = released {
                         if s.cleanup.len() == 12 {
                             return Err(WorkspaceError::Capacity);

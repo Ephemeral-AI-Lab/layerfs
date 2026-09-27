@@ -5,6 +5,7 @@ use layerfs_bridge::contract::Source;
 use layerfs_workspace::{
     sequence::{
         metadata_pages::{self, Cell, PageRef},
+        metadata_pieces::{self, Replacement, Splice},
         Budget, MetadataHost, PayloadHost,
     },
     Piece, PieceKind, WorkspaceError,
@@ -179,6 +180,87 @@ fn first_owner_write_covers_keyed_extent_and_shared_custody() {
     assert_eq!(byte, *b"x");
     drop(reader);
     drop(retained);
+    drop(lease);
+
+    // One copied page borrows the eight unchanged Local edges through its
+    // authenticated old page. A failed, unsealed candidate refunds that one
+    // sponsor reference; a sealed G2 keeps G1 readable after G1's root drops.
+    let mut lease = payloads.window(1, 3).unwrap();
+    let window = lease.window.as_mut().unwrap();
+    let base_refs = arena.read_owner(custody, window, deadline).unwrap().refs;
+    let g1 = host.candidate(&arena, 4, false, None).unwrap();
+    let g1_page = g1.build_pieces(&[piece; 8], 8, window).unwrap();
+    g1.seal(g1_page, window, deadline).unwrap();
+    let g1_bytes = arena.load_raw(g1_page, window, deadline).unwrap();
+    assert_eq!(
+        arena.read_owner(custody, window, deadline).unwrap().refs,
+        base_refs + 8
+    );
+
+    let copy = |owner: &std::sync::Arc<layerfs_workspace::sequence::RootOwner>,
+                window: &mut layerfs_workspace::sequence::Window| {
+        let mut replacement = Replacement::new();
+        replacement.extend(piece);
+        metadata_pieces::replace(
+            owner.as_ref(),
+            g1_page,
+            Splice {
+                start: 0,
+                end: 1,
+                old_base: 0,
+                old_replacement: 8,
+                length: 8,
+            },
+            &mut replacement.into_parts(),
+            window,
+        )
+        .unwrap()
+        .root
+    };
+    let abandoned = host.candidate(&arena, 5, false, None).unwrap();
+    let abandoned_page = copy(&abandoned, window);
+    assert_eq!(
+        arena
+            .read_owner(abandoned_page, window, deadline)
+            .unwrap()
+            .next,
+        g1_page
+    );
+    drop(abandoned);
+    drop(lease);
+    host.reclaim(incarnation, deadline).unwrap();
+    let mut lease = payloads.window(1, 3).unwrap();
+    let window = lease.window.as_mut().unwrap();
+    assert_eq!(arena.read_owner(g1_page, window, deadline).unwrap().refs, 1);
+
+    let g2 = host.candidate(&arena, 6, false, None).unwrap();
+    let g2_page = copy(&g2, window);
+    g2.seal(g2_page, window, deadline).unwrap();
+    assert_eq!(
+        arena.read_owner(g2_page, window, deadline).unwrap().next,
+        g1_page
+    );
+    assert_eq!(
+        arena.read_owner(custody, window, deadline).unwrap().refs,
+        base_refs + 8
+    );
+    drop(g1);
+    drop(lease);
+    host.reclaim(incarnation, deadline).unwrap();
+    let mut lease = payloads.window(1, 3).unwrap();
+    let window = lease.window.as_mut().unwrap();
+    assert_eq!(arena.load_raw(g1_page, window, deadline).unwrap(), g1_bytes);
+    assert!(arena.load_raw(g2_page, window, deadline).is_ok());
+    assert_eq!(arena.read_owner(g1_page, window, deadline).unwrap().refs, 1);
+    drop(g2);
+    drop(lease);
+    host.reclaim(incarnation, deadline).unwrap();
+    let mut lease = payloads.window(1, 3).unwrap();
+    let window = lease.window.as_mut().unwrap();
+    assert_eq!(
+        arena.read_owner(custody, window, deadline).unwrap().refs,
+        base_refs
+    );
     drop(lease);
 
     drop(new);
