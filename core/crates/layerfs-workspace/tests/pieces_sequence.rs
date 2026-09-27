@@ -445,6 +445,11 @@ fn dispersed_100_extent_page_occupancy_diagnostic() {
             let occupancy: Vec<_> = leaves.iter().map(|(_, _, entries)| *entries).collect();
             assert_eq!(occupancy.iter().sum::<usize>(), (2 * (i + 1) + 1) as usize);
             assert_eq!(replacement, i + 1);
+            assert_eq!(
+                (leaves.len(), branches),
+                if i < 50 { (1, 0) } else { (2, 1) },
+                "the touched fold must balance its two leaves"
+            );
             println!(
                 "ISSUE265_EXTENT_SHAPE writes={} leaves={} branches={} root_height={} min={} max={} occupancy={:?}",
                 i + 1, leaves.len(), branches, changed.root_height,

@@ -426,3 +426,25 @@ would require either another read or a persistent per-page kind index. The
 37-page dispersed aggregate therefore remains an aggregate until independent
 page-kind evidence exists. These diagnostics do not qualify raw latency under
 the uncontrolled cache contract.
+
+## 13. Balanced touched-leaf packing (#265, 2026-09-27)
+
+Source pin: the product change committed with this section, under the
+[prospective treatment](../../../../../docs/roadmap/0.1/0.1.7/issue265-balanced-leaf-treatment.md).
+The path-copied fold now holds at most 248 touched 32-byte extent records.
+When a fold boundary closes, it packs `ceil(n/124)` leaves as evenly as possible:
+126 records become 63/63, not a full 124-record leaf followed by a 2-record
+leaf. At the 248-record bound it emits two full leaves and resumes, keeping
+wide edits streaming and bounded. The branch packer moved to `extent/pack.rs`
+without changing its level rules or 16-byte child format.
+
+The extra touched-record capacity is 3,968 bytes inside the existing 640 KiB
+writer allowance. The same page encoder, `RootOwner::write_raw_page`, temporary
+root seal and ownership ledger create and release every child and Local custody
+edge. An untouched sibling is never read for balancing. The old root remains
+immutable, a write still publishes atomically, and Commit lowers the frozen
+final extents into the same canonical format. A source-equivalent in-memory
+100-dispersed-write proof now reaches two leaves and one branch with 98/103
+records at write 100; this is structural evidence, not a public latency or
+Store-I/O claim. The public count and old/new-head results belong in the
+issue-specific evidence report rather than this architecture description.

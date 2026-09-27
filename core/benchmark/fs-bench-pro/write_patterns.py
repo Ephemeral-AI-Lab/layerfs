@@ -17,6 +17,7 @@ from separated_writes import archive_binary, backing_samples, progress
 HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md"
 TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue265-mounted-write-treatment.md"
+BALANCE = ROOT / "docs/roadmap/0.1/0.1.7/issue265-balanced-leaf-treatment.md"
 WRITER = HERE / "writers/write-separated.c"
 PATTERNS = ("append", "dispersed", "repeated")
 SIZE = 10 << 20
@@ -144,7 +145,8 @@ def prepare_reuse(output, prior_file):
     output.mkdir(parents=True, exist_ok=False)
     source = identities()
     prior = json.loads(prior_file.read_text())
-    if source["source_dirty"] or prior["schema"] != "issue261-patterns-prepared-v1":
+    if (source["source_dirty"] or prior["schema"] not in
+            ("issue261-patterns-prepared-v1", "issue265-patterns-prepared-v1")):
         raise ValueError("committed source and sealed pattern master required")
     changed = subprocess.check_output(["git", "diff", "--name-only",
         prior["source"]["source_commit"], source["source_commit"], "--",
@@ -155,11 +157,12 @@ def prepare_reuse(output, prior_file):
         "core/crates/layerfs-content/tests/edit_localized.rs",
         "core/crates/layerfs-server/src/service/save/file_stream.rs",
         *[f"core/crates/layerfs-workspace/src/backing/{path}" for path in (
-            "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/splice.rs",
+            "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/pack.rs",
+            "binary_plus_tree/extent/splice.rs",
             "binary_plus_tree/extent/telemetry.rs", "metadata.rs", "metadata_reclaim.rs",
             "payload.rs", "reader.rs", "segments.rs")],
         *[f"core/crates/layerfs-workspace/tests/{name}.rs" for name in (
-            "backing_ownership", "maintenance", "payload", "symlink")],
+            "backing_ownership", "maintenance", "payload", "pieces_sequence", "symlink")],
     }
     if (prior["source"]["build_profile"] != "release" or
             not changed or not set(changed) <= allowed
@@ -254,6 +257,7 @@ def prepare_reuse(output, prior_file):
         "source": source, "binaries": binaries,
         "master": {**master, "path": str(local_master)},
         "treatment_spec_sha256": digest(TREATMENT),
+        "balance_spec_sha256": digest(BALANCE),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": sha(dockerfile.encode()),
@@ -282,6 +286,7 @@ def run(prepared_file, output, pattern):
                    for key in ("source_commit", "source_tree", "product_seal", "harness_seal"))
             or digest(SPEC) != prepared["spec_sha256"]
             or digest(TREATMENT) != prepared["treatment_spec_sha256"]
+            or digest(BALANCE) != prepared["balance_spec_sha256"]
             or digest(WRITER) != prepared["writer_source_sha256"]):
         raise ValueError("prepared source/workload identity changed")
     for item in prepared["binaries"].values():
@@ -385,6 +390,7 @@ def run(prepared_file, output, pattern):
         "operation_surface": "public WorkspaceApi mount/exec/commit",
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
         "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
+        "balance_spec_sha256": prepared["balance_spec_sha256"],
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
         "daemon_sha256": prepared["daemon_sha256"],
