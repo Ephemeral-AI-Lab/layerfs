@@ -8,6 +8,8 @@ pins its evidence, including the first `INCOMPLETE` cause row, the corrected
 cause-complete row, and the unchanged 25 s public gate FAIL. Neither format
 nor speedup is implemented. Source-derived counts and the raw durations below
 are not cache-qualified comparative latency evidence.
+Implementation and proof are tracked in [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273),
+a true sub-issue of [#271](https://github.com/Ephemeral-AI-Lab/layerfs/issues/271).
 
 ## 1. The actual replacement boundary
 

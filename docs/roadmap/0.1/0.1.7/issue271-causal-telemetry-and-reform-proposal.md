@@ -154,4 +154,6 @@ speedup yet; the original 25 s gate FAIL remains unchanged.
 The [Workspace-scoped model](../../../../core/docs/issues/271/WORKSPACE-SCOPED-ACTIVE-HEAD.md)
 details multi-file edits and deletion, repeated Exec/Commit generations,
 space and time complexity, and the separate current daemon limit on
-simultaneously selected Workspaces.
+simultaneously selected Workspaces. The implementation and proof are tracked
+as [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273), a true
+sub-issue of #271.

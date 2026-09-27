@@ -68,7 +68,8 @@ The [Workspace-scoped architecture and complexity proposal](WORKSPACE-SCOPED-ACT
 specifies one active generation spanning inode attributes, namespace deltas,
 dirty membership and file extents; one pack shared across files; repeated
 Exec and Commit behavior; and the current single-selected-Workspace daemon
-limit. These boundaries are required to remove keyed-root publication as
+limit. Its implementation and proof are tracked in [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273),
+a sub-issue of #271. These boundaries are required to remove keyed-root publication as
 well as extent path copying. Its 64/128-byte records, 3 MiB one-file budget,
 amortized constant hot-right-edge updates and timing examples are design
 targets or sensitivity calculations, not measured after results.
