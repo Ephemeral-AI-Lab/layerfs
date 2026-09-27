@@ -17,7 +17,7 @@ use crate::{
     backing::{
         metadata::{Arena, RootOwner},
         metadata_index::vector,
-        metadata_pages::{self, ChildRef, PageRef, PieceRecord, MAX_EXTENT, PAGE, RECORD},
+        metadata_pages::{self, ChildRef, PageRef, PieceRecord, MAX_EXTENT, PAGE},
         segments::Window,
     },
     overlay::pieces::{Piece, PieceKind},
@@ -25,8 +25,8 @@ use crate::{
 };
 use layerfs_bridge::contract::MAX_FILE;
 use std::time::{Duration, Instant};
-/// Leaf capacity in extent records: the whole payload area of one page.
-const LEAF_RECORDS: usize = (PAGE - metadata_pages::HEADER) / RECORD;
+/// New-leaf packing target. The codec still reads the full 124-record format.
+const LEAF_RECORDS: usize = 64;
 
 /// One page store behind the extent-sequence traversal. In production this is
 /// the Workspace's own COW arena, reached through the root that owns the pages

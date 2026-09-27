@@ -153,8 +153,9 @@ the walk reaches — each page of the tree is entered about once — rather than
 | One read at an offset | `O(H)` index pages plus the leaf it lands in |
 | Commit walk of one file | one ordered pass, `O(H + L)` private page visits for `L` leaves, bounded edit buffer and bounded cursor |
 
-`H ≈ log_F P` for `P` extents, fanout `F` (a branch page holds 248 children, a
-leaf 124 records) and `K` extents touched by one callback. The logical file
+`H ≈ log_F P` for `P` extents, fanout `F` (the codec accepts 248 children in a
+branch and 124 records in a leaf; current new-page packing targets are in
+§15) and `K` extents touched by one callback. The logical file
 ceiling remains 4 GiB.
 
 ## 6. What this does not yet do
@@ -470,3 +471,23 @@ Commit format do not change. The rejected 32-record/eight-child attempt and
 its append-only diagnostic live in the [#271 issue report](../../../issues/271/PACKING-32-8-REJECTED.md).
 Any result for this packing target belongs with its own source-identified
 receipt, not in this architecture description.
+
+## 15. Moderate new-leaf packing trial (#271, 2026-09-27)
+
+Source pin: the product change committed with this section, after the
+[prospective 64-record treatment](../../../../../docs/roadmap/0.1/0.1.7/issue271-moderate-leaf-treatment-spec.md).
+New extent leaves target **64 records**; branches still target 32 children.
+The authenticated page codec still accepts older 124-record leaves and
+248-child branches. A touched old full leaf is folded into new pages; an
+untouched one remains shared and readable. The fold buffers at most 128
+records and balances them across its output leaves, so page construction
+remains bounded within the existing writer allowance.
+
+`RootOwner::write_raw_page` still records and charges every edge the encoded
+page names before that page may publish. The old root and its edges stay live
+until their own cleanup. A copied leaf now charges at most 64 Local edges;
+more leaf pages can increase branch writes, ledger I/O and Commit visits.
+No page format, owner record, quota, atomic publication or canonical Commit
+rule changes. The selected count and public-route results belong in the
+[#271 issue report](../../../issues/271/BASELINE.md); this packing bound is
+an algorithm description, not a latency result.

@@ -25,6 +25,7 @@ SPEC_266_POST = ROOT / "docs/roadmap/0.1/0.1.7/issue266-post-reply-diagnostic-sp
 SPEC_266_WAIT = ROOT / "docs/roadmap/0.1/0.1.7/issue266-reply-wait-treatment-spec.md"
 SPEC_266_1024 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-spec.md"
 SPEC_271_2048 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-2048-diagnostic-spec.md"
+SPEC_271_LEAF64 = ROOT / "docs/roadmap/0.1/0.1.7/issue271-moderate-leaf-treatment-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
@@ -181,6 +182,7 @@ def prepare(output):
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
+        "issue271_leaf64_spec_sha256": digest(SPEC_271_LEAF64),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -322,6 +324,7 @@ def prepare_reuse(output, previous_file, selection):
         "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
         "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "issue271_2048_spec_sha256": digest(SPEC_271_2048),
+        "issue271_leaf64_spec_sha256": digest(SPEC_271_LEAF64),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -402,6 +405,8 @@ def run(prepared_file, output, selection):
         raise ValueError("issue266 1024-count specification changed")
     if selection == "diagnostic2048" and digest(SPEC_271_2048) != prepared.get("issue271_2048_spec_sha256"):
         raise ValueError("issue271 2048-count specification changed")
+    if digest(SPEC_271_LEAF64) != prepared.get("issue271_leaf64_spec_sha256"):
+        raise ValueError("issue271 leaf treatment specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -505,6 +510,7 @@ def run(prepared_file, output, selection):
         "issue266_wait_spec_sha256": prepared.get("issue266_wait_spec_sha256"),
         "issue266_1024_spec_sha256": prepared.get("issue266_1024_spec_sha256"),
         "issue271_2048_spec_sha256": prepared.get("issue271_2048_spec_sha256"),
+        "issue271_leaf64_spec_sha256": prepared.get("issue271_leaf64_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
