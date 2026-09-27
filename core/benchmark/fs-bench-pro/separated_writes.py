@@ -213,7 +213,10 @@ def prepare_reuse(output, previous_file, selection):
     allowed_ownership = {"core/crates/layerfs-workspace/src/backing/ownership.rs"}
     allowed_issue266 = {"core/crates/layerfs-workspace/src/runtime/coherence.rs",
                         "core/crates/layerfs-fuse/src/adapter.rs",
+                        "core/crates/layerfs-fuse/src/lib.rs",
+                        "core/crates/layerfs-fuse/src/open_flags.rs",
                         "core/crates/layerfs-fuse/src/write_sample.rs",
+                        "core/crates/layerfs-fuse/tests/kernel_write.rs",
                         "core/crates/layerfs-daemon/src/run.rs"}
     allowed = (allowed_ownership if selection == "diagnostic100v3" else
                allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
