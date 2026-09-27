@@ -9,7 +9,7 @@
 //! fault injection for the stale-daemon outcome; it performs no cleanup and no
 //! edit.
 use layerfs_api_core::{SandboxId, SandboxStatus, WorkspaceError};
-use layerfs_bridge::contract::{Code, CommitOutcomeWire};
+use layerfs_bridge::contract::{Code, CommitOutcomeWire, Inspect, Operation, Request, Response};
 use layerfs_sdk::{HistoryMode, ProjectApi, SandboxApi, Server, ServerConfig, WorkspaceApi};
 use layerfs_telemetry::{
     output::{Identity, OutputConfig},
@@ -345,4 +345,297 @@ fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
 
     server.shutdown();
     assert!(cleanup.failures.is_empty(), "{:?}", cleanup.failures);
+}
+
+#[test]
+fn sdk_exec_moves_inherited_directory_and_commits_complete_tree() {
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-inherited-exec-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir_all(source.join("packages/old/subtree/child")).unwrap();
+    std::fs::create_dir(source.join("packages/new")).unwrap();
+    std::fs::write(
+        source.join("packages/old/subtree/child/grand.txt"),
+        b"grand-base",
+    )
+    .unwrap();
+    std::fs::write(
+        source.join("packages/old/subtree/sibling.txt"),
+        b"sibling-base",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(
+        source.join("packages/old/subtree/child/grand.txt"),
+        std::fs::Permissions::from_mode(0o640),
+    )
+    .unwrap();
+    std::fs::set_permissions(
+        source.join("packages/old/subtree/sibling.txt"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"inherited-exec".to_vec(),
+        incarnation: 1,
+        cursor_key: [43; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+        failures: Vec::new(),
+        diagnostics: None,
+    };
+    let project = ProjectApi::new(&server)
+        .init("inherited-exec", &source)
+        .unwrap();
+    let branch = ProjectApi::new(&server)
+        .fork(&project, [46; 16], "main")
+        .unwrap();
+    let sandbox = create(&mut cleanup, &image, "inherited-exec").unwrap();
+    let workspaces = WorkspaceApi::new(&owner);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    assert_eq!(
+        workspaces
+            .exec(&mount.id, "printf baseline > .marker")
+            .unwrap()
+            .exit_status,
+        Some(0)
+    );
+    let CommitOutcomeWire::Committed(before) = workspaces.commit(&mount.id).unwrap().outcome else {
+        panic!("base commit")
+    };
+    let edit = workspaces
+        .exec(
+            &mount.id,
+            "umask 022 && mv packages/old/subtree packages/new/subtree && printf grand-new > packages/new/subtree/child/grand.txt.next && mv -f packages/new/subtree/child/grand.txt.next packages/new/subtree/child/grand.txt",
+        )
+        .unwrap();
+    assert_eq!(edit.exit_status, Some(0));
+    let CommitOutcomeWire::Committed(after) = workspaces.commit(&mount.id).unwrap().outcome else {
+        panic!("move commit")
+    };
+    let inspect = |root, query| {
+        server
+            .service()
+            .handle(
+                &server.peer().unwrap(),
+                &Request {
+                    id: 9,
+                    generation: 1,
+                    store: server.store(),
+                    profile: 1,
+                    deadline_ms: 10000,
+                    response_bytes: 16384,
+                    operation: Operation::Inspect { root, query },
+                },
+                &mut std::io::empty(),
+                &mut std::io::sink(),
+            )
+            .0
+    };
+    let names = |root, path: &[u8]| {
+        let Response::List {
+            entries,
+            continuation: None,
+        } = inspect(
+            root,
+            Inspect::List {
+                path: path.to_vec(),
+                after: Vec::new(),
+                entries: 128,
+                bytes: 16384,
+            },
+        )
+        .unwrap()
+        else {
+            panic!("complete listing")
+        };
+        entries
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(before.root, b""), names(after.root, b""));
+    assert_eq!(
+        names(after.root, b""),
+        vec![b".marker".to_vec(), b"packages".to_vec()]
+    );
+    assert_eq!(
+        names(before.root, b"packages/old"),
+        vec![b"subtree".to_vec()]
+    );
+    assert_eq!(names(before.root, b"packages/new"), Vec::<Vec<u8>>::new());
+    assert_eq!(
+        names(after.root, b"packages"),
+        vec![b"new".to_vec(), b"old".to_vec()]
+    );
+    assert_eq!(names(after.root, b"packages/old"), Vec::<Vec<u8>>::new());
+    assert_eq!(
+        names(after.root, b"packages/new"),
+        vec![b"subtree".to_vec()]
+    );
+    assert_eq!(
+        names(after.root, b"packages/new/subtree"),
+        vec![b"child".to_vec(), b"sibling.txt".to_vec()]
+    );
+    assert_eq!(
+        names(after.root, b"packages/new/subtree/child"),
+        vec![b"grand.txt".to_vec()]
+    );
+    assert_eq!(
+        names(before.root, b"packages/old/subtree"),
+        vec![b"child".to_vec(), b"sibling.txt".to_vec()]
+    );
+    let attributes = |root, path: &[u8]| {
+        inspect(
+            root,
+            Inspect::Attributes {
+                path: path.to_vec(),
+            },
+        )
+        .unwrap()
+    };
+    let Response::Attributes {
+        serial: old_dir,
+        mode: old_mode,
+        ..
+    } = attributes(before.root, b"packages/old/subtree")
+    else {
+        panic!("old directory")
+    };
+    let Response::Attributes {
+        serial: new_dir,
+        mode: new_mode,
+        ..
+    } = attributes(after.root, b"packages/new/subtree")
+    else {
+        panic!("new directory")
+    };
+    assert_eq!((old_dir, old_mode), (new_dir, new_mode));
+    let Response::Attributes {
+        serial: old_child,
+        mode: old_child_mode,
+        ..
+    } = attributes(before.root, b"packages/old/subtree/child")
+    else {
+        panic!("old child")
+    };
+    let Response::Attributes {
+        serial: new_child,
+        mode: new_child_mode,
+        ..
+    } = attributes(after.root, b"packages/new/subtree/child")
+    else {
+        panic!("new child")
+    };
+    assert_eq!((old_child, old_child_mode), (new_child, new_child_mode));
+    let Response::Attributes {
+        content: grand_root,
+        mode: grand_mode,
+        ..
+    } = attributes(after.root, b"packages/new/subtree/child/grand.txt")
+    else {
+        panic!("new grandchild")
+    };
+    let Response::Attributes {
+        content: sibling_root,
+        mode: sibling_mode,
+        ..
+    } = attributes(after.root, b"packages/new/subtree/sibling.txt")
+    else {
+        panic!("sibling")
+    };
+    let Response::Attributes {
+        content: old_grand_root,
+        mode: old_grand_mode,
+        ..
+    } = attributes(before.root, b"packages/old/subtree/child/grand.txt")
+    else {
+        panic!("old grandchild")
+    };
+    assert_eq!((sibling_mode, old_grand_mode), (0o600, 0o640));
+    assert_eq!(grand_mode, 0o644);
+    let read = |content, length| {
+        let mut output = Vec::new();
+        let (response, _) = server.service().handle(
+            &server.peer().unwrap(),
+            &Request {
+                id: 10,
+                generation: 1,
+                store: server.store(),
+                profile: 1,
+                deadline_ms: 10000,
+                response_bytes: length,
+                operation: Operation::ReadFile {
+                    root: content,
+                    start: 0,
+                    end: length,
+                },
+            },
+            &mut std::io::empty(),
+            &mut output,
+        );
+        assert_eq!(response.unwrap(), Response::Read { length });
+        output
+    };
+    assert_eq!(read(grand_root, 9), b"grand-new");
+    assert_eq!(read(sibling_root, 12), b"sibling-base");
+    assert_eq!(read(old_grand_root, 10), b"grand-base");
+    let Response::Attributes {
+        content: marker_root,
+        ..
+    } = attributes(after.root, b".marker")
+    else {
+        panic!("marker")
+    };
+    assert_eq!(read(marker_root, 8), b"baseline");
+    for (root, path) in [
+        (before.root, b"packages/new/subtree".as_slice()),
+        (after.root, b"packages/old/subtree".as_slice()),
+        (
+            after.root,
+            b"packages/new/subtree/child/grand.txt.next".as_slice(),
+        ),
+    ] {
+        assert_eq!(
+            inspect(
+                root,
+                Inspect::Attributes {
+                    path: path.to_vec()
+                }
+            )
+            .unwrap_err()
+            .code,
+            Code::PathNotFound
+        );
+    }
+    let status = workspaces.status(&mount.id).unwrap();
+    assert!(status.projection_count("rename").unwrap_or(0) >= 2);
+    println!(
+        "INHERITED_EXEC rename={} create={} write={} commits=2 fuse={:?}",
+        status.projection_count("rename").unwrap_or(0),
+        status.projection_count("create").unwrap_or(0),
+        status.projection_count("write").unwrap_or(0),
+        status.projection
+    );
+    workspaces.unmount(&mount.id).unwrap();
+    delete(&mut cleanup, sandbox);
+    server.shutdown();
+    assert!(cleanup.failures.is_empty());
 }

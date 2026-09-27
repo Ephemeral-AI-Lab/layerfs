@@ -75,7 +75,7 @@ impl Workspace {
         name: &[u8],
         deadline: Instant,
     ) -> Result<Resolved, WorkspaceError> {
-        let path = child_path(path, name)?;
+        child_path(path, name)?;
         let mut base = Some(view.base);
         let mut binding = None;
         let mut local = None;
@@ -214,8 +214,14 @@ impl Workspace {
             }
         }
         let base = base.ok_or(WorkspaceError::NotFound)?;
-        let response =
-            self.inspect_view(operation, base, Inspect::Attributes { path }, deadline)?;
+        let query = match binding {
+            Some((serial, _)) => Inspect::InodeAttributes { serial },
+            None => Inspect::ChildAttributes {
+                parent,
+                name: name.to_vec(),
+            },
+        };
+        let response = self.inspect_view(operation, base, query, deadline)?;
         let (original, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
         if binding.is_some_and(|(serial, kind)| serial != original.serial || kind != original.kind)
@@ -316,8 +322,8 @@ impl Workspace {
             let response = self.inspect_view(
                 operation,
                 base,
-                Inspect::List {
-                    path: path.to_vec(),
+                Inspect::InodeList {
+                    serial,
                     after: cursor.clone(),
                     entries: limit as u16,
                     bytes: 16384,

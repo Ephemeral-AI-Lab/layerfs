@@ -17,5 +17,6 @@ layerfs-telemetry = { path = "../../layerfs-telemetry", features = ["native"] }
 
 [dev-dependencies]
 layerfs-content = { path = "../../layerfs-content" }
+layerfs-workspace = { path = "../../layerfs-workspace" }
 nix = { version = "=0.31.3", features = ["poll"] }
 sha2 = "=0.10.9"

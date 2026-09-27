@@ -556,6 +556,7 @@ dependencies = [
  "layerfs-server",
  "layerfs-storage",
  "layerfs-telemetry",
+ "layerfs-workspace",
  "nix",
  "sha2",
 ]

@@ -165,7 +165,7 @@ impl Workspace {
                 if source_attr.attr.kind != NodeKind::Directory {
                     return Err(WorkspaceError::IsDirectory);
                 }
-                let path = child_path(&parents[1].path, destination)?;
+                let path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
                 let entries = self.list_view(
                     &mut operation,
                     &view,
@@ -181,19 +181,41 @@ impl Workspace {
                 return Err(WorkspaceError::NotDirectory);
             }
         }
+        let old_path = child_path(&parents[0].path, source)?;
+        let new_path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
         if source_attr.attr.kind == NodeKind::Directory
-            && self.descends_from(destination_parent, source_attr.attr.serial)?
+            && (self.descends_from(destination_parent, source_attr.attr.serial)?
+                || parents[if same_parent { 0 } else { 1 }].path == old_path
+                || parents[if same_parent { 0 } else { 1 }]
+                    .path
+                    .strip_prefix(old_path.as_slice())
+                    .is_some_and(|suffix| suffix.first() == Some(&b'/')))
         {
             // Moving a directory beneath its own descendant would create a cycle.
             return Err(WorkspaceError::InvalidInput);
         }
-        let moved = self.moved_identity(
-            &mut operation,
-            &view,
-            &source_attr,
-            &child_path(&parents[0].path, source)?,
-            deadline,
-        )?;
+        if source_attr.attr.kind == NodeKind::Directory {
+            self.preflight_rename_paths(
+                &mut operation,
+                &view,
+                source_attr.attr.serial,
+                &old_path,
+                &new_path,
+                deadline,
+            )?;
+        }
+        let moved_directory = if source_attr.attr.kind == NodeKind::Directory
+            && self.record_absent(&view, source_attr.attr.serial, true, deadline)?
+        {
+            Some(Directory::initial(source_attr.original, source_attr.base))
+        } else {
+            None
+        };
+        let moved = if source_attr.attr.kind == NodeKind::Directory {
+            None
+        } else {
+            self.moved_identity(&mut operation, &view, &source_attr, &old_path, deadline)?
+        };
         let replaced = if let Some(replaced) = destination_attr
             .as_ref()
             .filter(|replaced| replaced.attr.kind == NodeKind::File)
@@ -222,9 +244,9 @@ impl Workspace {
         }
         // Exactly one dirty key per edited parent this generation has not marked
         // yet, plus the moved identity when this publication writes the record
-        // its new binding needs. A moved directory is refused above unless its
-        // record already exists, and a symlink's record is never a counted
-        // dirty identity, so only a regular file adds one here.
+        // its new binding needs. A moved directory's canonical-origin record
+        // is not a dirty metadata patch; a symlink is not counted either, so
+        // only a regular file adds a dirty identity here.
         let parent_dirty = parents.iter().filter(|parent| !parent.dirty).count();
         let new_dirty = parent_dirty
             + usize::from(moved.as_ref().is_some_and(|moved| moved.dirty))
@@ -392,8 +414,15 @@ impl Workspace {
                     rows += 1;
                     row_bytes += added as isize;
                 }
+                let previous_removals = parent.directory.tombstones;
                 parent.directory.tombstones =
                     directories::keep_name(&candidate, parent.directory, name, window, deadline)?;
+                if parent.directory.tombstones != previous_removals {
+                    // A same-generation move-back trades this tombstone for its
+                    // binding. Both rows have the same encoded name width.
+                    rows -= 1;
+                    row_bytes -= added as isize;
+                }
                 let mut entry = vector(1)?;
                 entry.push(Cell::new(
                     &metadata_pages::entry_key(name)?,
@@ -486,6 +515,16 @@ impl Workspace {
             )?);
             root = candidate.update(root, cells, window, deadline)?;
         }
+        if let Some(mut directory) = moved_directory {
+            directory.generation = generation;
+            directory.revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+            let mut cells = vector(1)?;
+            cells.push(Cell::new(
+                &metadata_pages::namespace_key(source_attr.attr.serial),
+                &directory.value(),
+            )?);
+            root = candidate.update(root, cells, window, deadline)?;
+        }
         if let Some(resolved) = destination_attr
             .as_ref()
             .filter(|resolved| resolved.attr.kind == NodeKind::File && replaced)
@@ -542,6 +581,9 @@ impl Workspace {
         if state.completion.is_none() != needs_completion {
             return Err(WorkspaceError::Busy);
         }
+        if source_attr.attr.kind == NodeKind::Directory {
+            super::rename_paths::check_cached(&state, &old_path, &new_path)?;
+        }
         for parent in &parents {
             let index = state
                 .nodes
@@ -551,27 +593,11 @@ impl Workspace {
             state.nodes[index].attr = parent.directory.attributes(state.nodes[index].attr);
         }
         // The moved name is the destination name from here on, for the moved
-        // identity and for every descendant a moved directory carries. A cached
-        // path is the locator a later service read uses, so a stale one would ask
-        // for a name this operation just removed.
-        let new_path = child_path(&parents[if same_parent { 0 } else { 1 }].path, destination)?;
-        let old_path = child_path(&parents[0].path, source)?;
+        // identity and every resident descendant. Identity-keyed inherited
+        // reads do not use these paths, but later local mutation and handle
+        // operations do, so the prechecked rewrite must be exact.
         if source_attr.attr.kind == NodeKind::Directory {
-            for node in &mut state.nodes {
-                if node.path() == old_path.as_slice() {
-                    node.parent = destination_parent;
-                }
-                if node.path().starts_with(&old_path) {
-                    let suffix = node.path()[old_path.len()..].to_vec();
-                    let mut replaced = new_path.clone();
-                    replaced.extend_from_slice(&suffix);
-                    if replaced.len() <= crate::runtime::state::PATH_BYTES {
-                        let len = replaced.len();
-                        node.path[..len].copy_from_slice(&replaced);
-                        node.path_len = len;
-                    }
-                }
-            }
+            super::rename_paths::publish(&mut state, &old_path, &new_path, destination_parent);
         } else {
             for node in &mut state.nodes {
                 if node.path() == old_path.as_slice() {
@@ -678,7 +704,7 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<bool, WorkspaceError> {
         let Some(owner) = &view.root else {
-            return Ok(false);
+            return Ok(true);
         };
         let host = self
             .host
@@ -717,10 +743,8 @@ impl Workspace {
     /// fresh-only, so its target is materialised into the local payload owner
     /// through the same root that resolved the source name; it is never a
     /// counted dirty identity, because the service already owns the identity
-    /// and would refuse a fresh declaration for a serial its base holds. A
-    /// directory whose record is absent is refused: its inherited children
-    /// resolve through the canonical tree by path, and the bounded profile has
-    /// no identity-keyed service query that could re-anchor them after a move.
+    /// and would refuse a fresh declaration for a serial its base holds.
+    /// Directories use a canonical-origin record in `rename_from`.
     fn moved_identity(
         &self,
         operation: &mut crate::runtime::state::OperationGuard,
