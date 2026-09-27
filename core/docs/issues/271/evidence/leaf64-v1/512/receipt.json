@@ -1,0 +1,383 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    128,
+    256,
+    384,
+    512
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 272252623,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 585728,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 4263,
+        "ledger_writes": 2186,
+        "lookup_scans": 0,
+        "metadata_reads": 1042,
+        "payloads": 128,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 128,
+        "routine_scans": 127
+      },
+      "elapsed_ns": 606483959,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 61440,
+        "allocated_pages": 12,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4392
+      },
+      "publication_ns": 307955165,
+      "version": 2,
+      "write_class": 128
+    },
+    {
+      "acquisition_ns": 581846164,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 1150976,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 9476,
+        "ledger_writes": 5097,
+        "lookup_scans": 0,
+        "metadata_reads": 2194,
+        "payloads": 256,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 256,
+        "routine_scans": 255
+      },
+      "elapsed_ns": 1265860709,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 102400,
+        "allocated_pages": 20,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4456
+      },
+      "publication_ns": 652561122,
+      "version": 2,
+      "write_class": 256
+    },
+    {
+      "acquisition_ns": 879860331,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 1716224,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 15267,
+        "ledger_writes": 8586,
+        "lookup_scans": 0,
+        "metadata_reads": 3346,
+        "payloads": 384,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 384,
+        "routine_scans": 383
+      },
+      "elapsed_ns": 1906269751,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 143360,
+        "allocated_pages": 28,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4456
+      },
+      "publication_ns": 990595415,
+      "version": 2,
+      "write_class": 384
+    },
+    {
+      "acquisition_ns": 1205483492,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 2281472,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 21570,
+        "ledger_writes": 12587,
+        "lookup_scans": 0,
+        "metadata_reads": 4498,
+        "payloads": 512,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 512,
+        "routine_scans": 511
+      },
+      "elapsed_ns": 2602253918,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 184320,
+        "allocated_pages": 36,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4584
+      },
+      "publication_ns": 1357150831,
+      "version": 2,
+      "write_class": 512
+    }
+  ],
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "PASS",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/case.before",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/history.sqlite",
+    "sha256:d602455bcf936984b6be30ae17fdaf131182c0a8d29cc63d5946cb1ad526a218"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 3919574333,
+  "complexity_lines": [
+    "LFS_C1_SAVE_COUNT v=1 replacement_bytes=512 spool_resident=true nodes_read=0 nodes_created=0 payloads_created=0 payload_bytes=0 peak_deferred_bytes=0",
+    "LFS_PIECE_LOWER v=2 pieces=1024 changes=512"
+  ],
+  "daemon_close_observed": true,
+  "daemon_retained_observed": false,
+  "daemon_sha256": "1bb00c39b982749a9c689045e3c5140815f71165c3795df8145d51989a902617",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d",
+      "benchmark_shell": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be",
+      "verify_shell": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    },
+    "compatible_product_changes": [],
+    "master_proof_sha256": "890125a3225f1aebd174e149c921480a6c6d6700d06754e1f20038dfb6465764",
+    "prepared": "benchmark-results/fs-bench-pro/issue271/leaf64-100-prepared-v1/prepared.json"
+  },
+  "dockerfile_sha256": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+  "driver": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "cleanup_ns": 854732084,
+    "commit_called": true,
+    "commit_ns": 86366333,
+    "consumer_accounted_bytes": 1876944,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 147803,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "",
+    "exec_ns": 2594779917,
+    "exec_stderr_hex": "",
+    "exec_stdout_hex": "50524f475245535309313238093538363234303333340a50524f47524553530932353609313234353630393333340a50524f47524553530933383409313838363031383136380a50524f47524553530935313209323538323030343235310a",
+    "head_commit": "12c8cf260fc73f0cb8a2bb8a57b4be176c67a4c1e6d77cac81e122dd3a74e3688f",
+    "mode": "run",
+    "mount_ns": 15977541,
+    "operation_ns": 2681155833,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=512,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue266-fuse-512-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "COMPLETE",
+    "unmount_ok": true,
+    "upstream_calls": 4
+  },
+  "driver_binary_sha256": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be",
+  "driver_exit_code": 0,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "family_id": "workspace_mounted_separated_writes",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "functional_status": "PASS",
+  "fuse_write_callbacks_observed": 512,
+  "fuse_write_count_provenance": "Status write class; this command makes only data mutations",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:d602455bcf936984b6be30ae17fdaf131182c0a8d29cc63d5946cb1ad526a218",
+  "images": {
+    "diagnostic": "sha256:9730e7f6001d26f55432de237f14f377273cfa38718dc787474275540912a1cd",
+    "diagnostic100v2": "sha256:c4069180a000d3d7abbe0c02e496559bdf546919bbc91219efbf327c95e2d1b8",
+    "diagnostic100v3": "sha256:73fbabda32e689744bebd81a074df5d4a370eb1b430996d4e2ed133786bb681a",
+    "diagnostic1024": "sha256:b0726ab964cde218f0892eba4a08ac3b9f8ff5874c22a55563e8769f6d236086",
+    "diagnostic512": "sha256:65191cdf60f89cfaaac334c1912f6efdfc9b69921a99d32240602541c083a2a6",
+    "fuse512": "sha256:d602455bcf936984b6be30ae17fdaf131182c0a8d29cc63d5946cb1ad526a218",
+    "gate": "sha256:f07ac132d39f20ad6ec04eff36f26ba62874f141029a9aac1045759f0f1e8643"
+  },
+  "issue266_1024_spec_sha256": "980f0a9336becb26126fd39df0e1de1dedec978fb1b36de23b0f3b1de08ce867",
+  "issue266_post_spec_sha256": "e561f8e02d2058ece02807f559b68c8919fa9d4c4641894463a9bb6f03bd2eed",
+  "issue266_spec_sha256": "8ccdd919b892bbb27267bd4afda3e724423356bbdb8e00098a99753fec9488f5",
+  "issue266_wait_spec_sha256": "5aa09a37a49416c585ee7e0304699f40eaf42d4ab48df37a69a90694baaf2866",
+  "issue271_2048_spec_sha256": "e0073421409fdfd1871746c1d3d5e183a6917769254591744ee11f8023dd11c1",
+  "issue271_leaf64_spec_sha256": "879a563c81bd56f1cd17cca2329114886259f28d141765aac5772c9951d7fae1",
+  "lft1": {
+    "event_count": 42,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 2960768834,
+      "concurrency": 2,
+      "cpu_shared_ns": [
+        11721000,
+        23382000
+      ],
+      "first_ns": 272251875,
+      "gaps": 0,
+      "incarnation": 5006323375167,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 14825958,
+      "last_ns": 2960616167,
+      "last_probe_ns": 9000,
+      "namespace": 7,
+      "opened_ns": 279614709,
+      "pid": 54645,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "2ecc91ba3b095731028160dc636086a8",
+      "sampled_max_rss": 33112064,
+      "samples": 270,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": true,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 2594780084,
+            "name": "exec"
+          },
+          {
+            "children": [],
+            "elapsed_ns": 86366625,
+            "name": "commit"
+          }
+        ],
+        "elapsed_ns": 2681152958,
+        "name": "sdk.shell_package"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "32d0a789bac2f4b875d616012c0a003a2aca2eeaead8717cfa7332cd433321a348",
+    "genesis_root": "a1a41401f8d9d5de6e5cabd3d8f49f68d30549e1288c9dd278c91da413f56b58",
+    "genesis_root_serial": 1,
+    "history_sha256": "96275c90cb7ee51074cb456dbf1f29f164442df1b1f5e7ea200c58449d52b038",
+    "old_commit": "12ef44464e764a34399e5be721a9d14ab714813471949c06bf20413d2ca6f9a098",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/master",
+    "project_id": "3139aa4755cbda68b7890b9e8f483309f2",
+    "store_sha256": "ce49eb722338ea58f2cb397128e69fee5c4c0abf05821e2b4a959101257cc683"
+  },
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "512"
+  },
+  "row_status": "INELIGIBLE",
+  "sample_count": 1,
+  "scenario_id": "issue266-fuse-512-v1",
+  "schema": "issue261-separated-attempt-v1",
+  "selection": "fuse512",
+  "shell_command": "/fixtures/bin/write-separated data.bin 512",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "2a0754c3dea5a6abafb70e3edcf3f4d92374dd4f9e301fd6f153177954cd68fd",
+    "product_seal": "97f3bab6762075fb04ef22ddd9a4bf9aed442bebacb918f41ba7cbff2f970291",
+    "source_commit": "e255e688bdac46f57c9ccbadb859869ea1fedf4e",
+    "source_dirty": false,
+    "source_tree": "db44cb1f1d3ce7410741d0878cedd269e434cc59"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "store_bytes_after": 897024,
+  "store_bytes_before": 618496,
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "verifier": {
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/case.verify",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/store.sqlite",
+      "/Users/yifanxu/.codex/worktrees/issue271-root-custody/layerfs/benchmark-results/fs-bench-pro/issue271/leaf64-512-v1/history.sqlite",
+      "benchmark-results/fs-bench-pro/issue271/leaf64-512-prepared-v1/old.tsv",
+      "benchmark-results/fs-bench-pro/issue271/leaf64-512-prepared-v1/fuse512.tsv"
+    ],
+    "exit_code": 0,
+    "status": "PASS",
+    "wall_ns": 15418916
+  },
+  "verifier_binary_sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b",
+  "write_refusals": [],
+  "write_syscalls_expected": 512,
+  "writer_binary_sha256": "0133f1f93f233540a0913fc56dac69af8f90ccac7a674f340561dc2069640083",
+  "writer_progress": [
+    {
+      "writer_elapsed_ns": 586240334,
+      "writes": 128
+    },
+    {
+      "writer_elapsed_ns": 1245609334,
+      "writes": 256
+    },
+    {
+      "writer_elapsed_ns": 1886018168,
+      "writes": 384
+    },
+    {
+      "writer_elapsed_ns": 2582004251,
+      "writes": 512
+    }
+  ],
+  "writer_progress_error": null,
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}
