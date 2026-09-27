@@ -48,7 +48,7 @@ EXTENT_SUMS = ("leaf_visits", "branch_visits", "leaf_visit_records",
 def diagnostic(line, marker):
     if not line.startswith(marker + " "):
         return None
-    return {key: int(value) for key, value in
+    return {key: int(value) if value.isdigit() else value for key, value in
             (item.split("=", 1) for item in line[len(marker) + 1:].split())}
 
 
@@ -87,6 +87,45 @@ def extent_diagnostics(stderr):
                         if line.startswith("LFS_C1_EDIT_LOAD ")],
             "file_input": [diagnostic(line, "LFS_FILE_INPUT") for line in lines
                            if line.startswith("LFS_FILE_INPUT ")]}
+
+
+def report(receipt_files, output):
+    """Interpret retained raw diagnostics without changing an attempt receipt."""
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    rows = []
+    for receipt_file in receipt_files:
+        receipt = json.loads(receipt_file.read_text())
+        stderr = receipt_file.parent / "driver.stderr"
+        expected = next((line.split()[0] for line in
+            (receipt_file.parent / "SHA256SUMS").read_text().splitlines()
+            if line.endswith("  driver.stderr")), None)
+        if (receipt["schema"] != "issue265-patterns-attempt-v1" or
+                expected is None or digest(stderr) != expected):
+            raise ValueError(f"raw receipt or stderr seal mismatch: {receipt_file}")
+        counts = extent_diagnostics(stderr.read_bytes())
+        complete = (counts["splices"] == COUNT and
+                    [row["writes"] for row in counts["snapshots"]] == [25, 50, 75, 100]
+                    and [row["splices"] for row in counts["snapshots"]] == [25, 50, 75, 100]
+                    and all(row["edge"] is not None for row in counts["snapshots"])
+                    and len(counts["c1_edit"]) == 1 and len(counts["file_input"]) == 1)
+        rows.append({"selection": receipt["selection"], "receipt": str(receipt_file.resolve()),
+                     "receipt_sha256": digest(receipt_file), "stderr_sha256": expected,
+                     "original_row_status": receipt["row_status"],
+                     "functional_status": receipt["functional_status"],
+                     "verifier_status": receipt["verifier"]["status"],
+                     "source": receipt["source"], "diagnostic_status":
+                     "COMPLETE" if complete else "INCOMPLETE", "counts": counts})
+    if [row["selection"] for row in rows] != list(PATTERNS):
+        raise ValueError("report requires one append/dispersed/repeated cohort in order")
+    json_file(output / "report.json", {"schema": "issue265-patterns-postprocess-v1",
+        "report_generator_sha256": digest(Path(__file__)), "source_commit":
+        subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "admission_eligible": False, "rows": rows,
+        "note": "Original INCOMPLETE receipts remain unchanged; this is count-only postprocessing."})
+    (output / "SHA256SUMS").write_text(f"{digest(output / 'report.json')}  report.json\n")
+    print(json.dumps({"report": str(output / "report.json"),
+                      "diagnostic_status": [row["diagnostic_status"] for row in rows]}))
 
 
 def fields(master, pattern, command):
@@ -405,6 +444,9 @@ def main():
     p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--selection", required=True, choices=PATTERNS)
+    p = sub.add_parser("report")
+    p.add_argument("--receipts", required=True, type=Path, nargs=3)
+    p.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     if args.action == "self-check":
         positions = [(104729 + i * 2654435761) % SIZE for i in range(COUNT)]
@@ -422,6 +464,8 @@ def main():
         assert parsed["snapshots"][0]["edge"]["custody_edges_removed"] == 1
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "patterns": PATTERNS, "size": SIZE, "writes": COUNT}))
+    elif args.action == "report":
+        report(args.receipts, args.output)
     else:
         lock_path = ROOT / "benchmark-results/fs-bench-pro/.run.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)

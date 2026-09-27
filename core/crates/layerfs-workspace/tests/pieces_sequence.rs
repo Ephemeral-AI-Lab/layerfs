@@ -414,6 +414,49 @@ fn a_shared_subtree_is_not_rewritten() {
 }
 
 #[test]
+fn dispersed_100_extent_page_occupancy_diagnostic() {
+    const SIZE: u64 = 10 << 20;
+    let f = Fixture::new();
+    let mut root = PageRef::NULL;
+    let mut replacement = 0;
+    let mut old_at_50 = PageRef::NULL;
+    for i in 0..100u64 {
+        let at = (104_729 + i * 2_654_435_761) % SIZE;
+        let changed = f
+            .splice(
+                root,
+                at,
+                at + 1,
+                SIZE,
+                replacement,
+                SIZE,
+                &[local(0, 1, i + 1, (i + 1) as u32)],
+            )
+            .unwrap();
+        root = changed.root;
+        replacement = changed.replacement;
+        if i == 49 {
+            old_at_50 = root;
+        }
+        if [25, 50, 75, 100].contains(&(i + 1)) {
+            let pages = tree(&f, root);
+            let leaves: Vec<_> = pages.iter().filter(|(_, level, _)| *level == 0).collect();
+            let branches = pages.len() - leaves.len();
+            let occupancy: Vec<_> = leaves.iter().map(|(_, _, entries)| *entries).collect();
+            assert_eq!(occupancy.iter().sum::<usize>(), (2 * (i + 1) + 1) as usize);
+            assert_eq!(replacement, i + 1);
+            println!(
+                "ISSUE265_EXTENT_SHAPE writes={} leaves={} branches={} root_height={} min={} max={} occupancy={:?}",
+                i + 1, leaves.len(), branches, changed.root_height,
+                occupancy.iter().min().unwrap(), occupancy.iter().max().unwrap(), occupancy,
+            );
+        }
+    }
+    assert_eq!(f.walk(old_at_50, SIZE).len(), 101);
+    assert_eq!(f.walk(root, SIZE).len(), 201);
+}
+
+#[test]
 fn a_cursor_seeks_and_reads_only_the_path_it_needs() {
     let f = Fixture::new();
     let pieces: Vec<Piece> = (0..700).map(|index| base(index * 64, 64)).collect();
