@@ -18,7 +18,7 @@ path and keyed inode/root path, charges their owner edges, publishes a new
 immutable `RootOwner`, and completes checked invalidation before replying.
 The next acquisition may reclaim that old root. The path is in
 [`filesystem/write.rs`](../../../crates/layerfs-workspace/src/filesystem/write.rs),
-[`backing/metadata_pieces.rs`](../../../crates/layerfs-workspace/src/backing/metadata_pieces.rs),
+[`backing/binary_plus_tree/extent/splice.rs`](../../../crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs),
 [`backing/ownership.rs`](../../../crates/layerfs-workspace/src/backing/ownership.rs)
 and [`backing/metadata_reclaim.rs`](../../../crates/layerfs-workspace/src/backing/metadata_reclaim.rs).
 Commit's [`capture_submission`](../../../crates/layerfs-workspace/src/overlay/snapshot.rs)
@@ -51,7 +51,7 @@ file in the Workspace. All windows, index cache pages, journal tail bytes and
 allocator state are charged to that Workspace under the Host budget.
 
 ```text
-                   Workspace (id, incarnation, quota)
+            Workspace (id, incarnation; Host-shared quota)
       +-------------------------------------------------------+
       | frozen namespace/root G0: Arc<RootOwner>             |
       | active generation A: (generation, revision)          |
@@ -75,6 +75,62 @@ allocator state are charged to that Workspace under the Host budget.
       +-------------------------------------------------------+
 ```
 
+### Physical placement and removal
+
+The existing [`WorkspaceConfig.root`](../../../crates/layerfs-workspace/src/types.rs)
+is a Host path. Attachment gives each Workspace one private directory at
+`<root>/private-backing/<workspace-id>/`, separate from its mounted
+`<root>/workspace/<workspace-id>/` path. Today that private directory holds
+`p-*` payload segments, `m-page-*` metadata pages and `m-ledger-*` ownership
+files. The proposed files belong **inside the same Workspace-owned private
+directory**, not in the mounted file tree, the Store, or a directory per file
+or Exec:
+
+```text
+<root>/private-backing/
+  <workspace-id>/                 existing private directory
+    p-* / m-page-* / m-ledger-*    existing formats retained where needed
+    a-pack-*                      proposed shared packed-page segments
+    a-index-*                     proposed pooled inode/namespace/extent pages
+```
+
+`a-pack-*` and `a-index-*` are illustrative names, **not a frozen format**.
+Their versioned headers, page identities and authenticated slot validation
+must bind the Workspace incarnation, page reuse epoch, inode,
+generation/revision and logical range so a reused slot cannot alias old
+bytes. Follow the existing
+[`Directory`](../../../crates/layerfs-workspace/src/backing/directory.rs)
+and [`segments`](../../../crates/layerfs-workspace/src/backing/segments.rs)
+ownership, no-symlink and aligned-I/O checks. The current large-payload
+`segments::allocate` accepts only a new segment and is not, unchanged, a
+growing packed-file allocator. The active format needs a proved page-growth
+and cleanup rule. A partial or uncertain rewrite of a shared tail must not
+damage earlier acknowledged slots: use page copy/dual buffering or prove an
+equivalent publication protocol. Allocate 4 KiB pages only as needed;
+preallocating a large mostly empty segment per Workspace or file would
+defeat quick-edit space efficiency. Attribute actual allocated blocks,
+reservations and bounded resident windows to this Workspace, with admission
+against the **Host-wide** disk and memory budgets. The current product has
+no independent per-Workspace disk quota.
+
+Unlink first removes a name from the current namespace. An open handle or
+frozen generation may still own the content. A pack page is refundable only
+when **all** its slots are unreferenced; a partly live page needs charged
+compaction that copies surviving slots, publishes their new locations and
+waits for old pins before releasing its blocks. Direct `(page, slot)` extent
+references make relocation update every referring extent; stable slot IDs
+instead add an indexed lookup. Freeze that choice in the format contract.
+Index pages obey the same pin rule. A quota refund follows **physical** block
+release, not a logical tombstone: the existing segment API can unlink a whole
+file but cannot punch a page-sized hole or shrink a retained file. A new
+physical release method or segment-level compaction must prove exact refunds.
+`close_clean` must release active/frozen pins, reclaim or retain failed files
+with exact accounting, and remove pack/index files **before**
+[`Directory::close`](../../../crates/layerfs-workspace/src/backing/directory.rs)
+removes the empty private directory. A failed or uncertain unlink retains
+custody for inspection and cannot report a clean close. These files are
+temporary Workspace backing; the design adds no `fsync` durability promise.
+
 For three one-byte writes of `X` at offsets 0, 2 and 4 into the original
 8,194-byte `A` file, one file's ordered leaf view is:
 
@@ -94,10 +150,10 @@ the many-file space advantage. The slot width, authentication grammar and
 index record width need a versioned
 format specification. A 64- or 128-byte slot is an **illustrative design
 choice**, not an existing encoding. A first slot reserves a physical pack
-page; later files may use its remaining slots. Per-slot authentication and a
-generation boundary must keep old slots verifiable when a tail page is
-extended, closed or pinned. A frozen generation closes its current tail before
-the next generation appends.
+page; later files may use its remaining slots. Per-slot authentication or an
+immutable authenticated page, with a generation boundary, must keep old
+slots verifiable when a tail page is extended, closed or pinned. A frozen
+generation closes its current tail before the next generation appends.
 
 ## 3. Operation flow and publication invariant
 
@@ -179,7 +235,7 @@ these public FUSE operations.
 
 There are two different existing edit mechanisms. A WRITE currently uses the
 Workspace's immutable extent splice in
-[`backing/metadata_pieces.rs`](../../../crates/layerfs-workspace/src/backing/metadata_pieces.rs),
+[`backing/binary_plus_tree/extent/splice.rs`](../../../crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs),
 then publishes a copied keyed root. That physical per-WRITE mechanism is the
 work to retire. Its logical Base/Zero/replacement interval semantics stay.
 At Commit, [`commit/save.rs`](../../../crates/layerfs-workspace/src/commit/save.rs)
@@ -249,23 +305,60 @@ not a licence to omit large-file-count or frequent-generation cases.
 
 ## 5. Complexity: one-file shape and general Workspace
 
-Definitions: `W` total accepted WRITEs, `F` files, `E_f` extents of file `f`,
-`E_D` the total extents in files dirty at capture, `R_D` their changed runs,
-`S_D` their replacement bytes, `P_D` private Local payload files, `Q_fetch`
-actual packed-page fetches during ordered streaming, `D` dirty identities,
-`K_i` extents overlapped by WRITE `i`, `B` index fanout, `Delta` total
-ownership-edge and reclamation work, and `r` packed bytes per tiny record.
-Big O below abstracts fixed 4 KiB page sizes and does not turn
-the observed 4,097-WRITE curve into a global theorem.
+Definitions: `W` cumulative accepted tiny WRITEs, `F` indexed files, `N`
+active namespace records, `E_f` extents of file `f`, `E = sum E_f`, `D`
+dirty identities, `N_D` changed namespace records at capture, `E_D`
+extents in dirty files, `R_D` their final changed
+runs, `S_D` their replacement bytes, `P_D` private Local payload files,
+`Q_fetch` **actual** packed-page fetches during ordered streaming, `K_i`
+extents overlapped by WRITE `i`, `x_i` its input bytes, `C_i` page-copy work
+caused by a frozen generation, `B` index fanout, and `Delta` cumulative old
+ownership-edge/reclamation work. Big O abstracts fixed 4 KiB pages; the
+observed 4,097-WRITE curve is not a global complexity proof.
 
 | Work | Current immutable publication | Proposed active generation |
 | --- | --- | --- |
-| One narrow WRITE | Tree paths `O(log_B E_f + log_B M)` plus charged/reclaimed edges, where `M` is keyed metadata size. | Pack append plus disk inode, dirty-index and extent lookup `O(log_B F + log_B D + log_B E_f + K_i)` in general. A cached hot inode already dirty in this generation and an increasing-offset right edge target amortized `O(1)` page updates. |
+| One WRITE | Tree paths `O(log_B E_f + log_B M)` plus charged/reclaimed edges, where `M` is keyed metadata size. | General indexed lookup and overlap update target `O(log_B F + log_B D + log_B E_f + K_i + x_i + C_i)`. A cached, already-dirty hot inode with an increasing-offset right edge and no frozen-page copy targets amortized `O(1 + x_i)` work. Every acknowledged tiny WRITE may still issue a full 4 KiB physical page write. |
 | `W` increasing-offset WRITEs to one hot file | Structural `O(W log_B W + Delta)`; measured ownership cost is large but no global `O(W^2)` proof exists. | Target `O(W)` journal/index updates, with occasional bounded page splits. FUSE still handles `Theta(W)` callbacks. |
-| Logical unlink/delete | Copies affected namespace/keyed paths and later releases the file's owned references. | Target indexed namespace tombstone/update, then charged reclamation of pages/slots no generation or open handle retains. Logical publication can be small; total cleanup remains proportional to what becomes unreferenced. |
-| Commit one captured generation | `O(D + E_D + R_D + S_D + P_D)` plus namespace changes; one Local private-file open/read per relevant payload. | `O(D + E_D + R_D + S_D + Q_fetch)` plus namespace changes and the actual freeze, construction, compaction and cleanup work. It must traverse dirty identities, not every Workspace file. Across many Commits, sum these costs for every captured generation. |
-| Charged backing | For this tiny shape, `O(4096W + sum E_f + pinned deltas)` bytes. | Without compaction, `O(rW + sum E_f + pinned unique pages)` for cumulative writes. A live-space target needs charged bounded compaction of dead slots and page-level fragmentation. |
+| Read `y` bytes crossing `T` extents | Indexed seek, then extent/output work. | `O(log_B F + log_B E_f + T + y + q)` where `q` counts actual packed-page fetches; remote Base reads retain their own cost. |
+| Logical unlink/delete | Copies affected namespace/keyed paths and later releases the file's owned references. | Indexed tombstone target `O(log_B N + log_B F)` plus affected identity/link work. Physical reclaim is separately at least proportional to pages/slots released and survivors relocated. |
+| Capture | Pins an immutable `RootOwner`. | Target `O(1)` root/watermark/dirty-frontier pin and one bounded tail seal, **only** if published pages are complete. Later first-touch copies pay `C_i` in the later mutation; no whole-index rebuild. |
+| Commit one captured generation | `O(D + N_D + E_D + R_D + S_D + P_D)`; one Local private-file open/read per relevant payload. | `O(D + N_D + E_D + R_D + S_D + Q_fetch)` plus actual freeze, construction, compaction and cleanup. It traverses changed identities, not every Workspace file; frequent Commits sum this cost for every generation. |
+| Physical reclamation | Releases unowned private payload and metadata files with charged edge walks. | With an indexed victim list, target `O(U + V + A + R)` logical/page work for `U` physical pages released, `V` live slots moved, `A` locator/extent references updated and `R` ownership references retired, plus actual bytes copied and I/O. No whole-journal scan or unmeasured cleanup. |
+| Charged backing | For this separated tiny-write shape, `O(4096W + E + pinned deltas)` bytes. | Exactly account for full pack/index pages and legacy large payloads. Without compaction, dead records can make pack space `Theta(W)` even when the current file has one live changed byte. A conditional live-space target appears below. |
 | Resident memory | Per-payload registry records grow with retained payloads; I/O windows are bounded. | Target bounded charged page cache and pack tail plus live handles; the inode map and extent indexes live on disk. No uncharged `O(F)` root cache. |
+
+For physical space, let `b = 4096` bytes/page, `h` pack header bytes,
+`r` slot bytes, `c = floor((b-h)/r)` slots/page, `J` allocated pack pages,
+`I` allocated index pages, `L` live active slots, `G` frozen generations
+with sealed tails, and `P_pin` unique **pack** pages retained only by older
+views. The active-page charge is **`b(J+I)`**, plus existing large-payload,
+ownership and bounded resident charges. At least `ceil(L/c)` pack pages are
+needed for live active slots; actual `J` includes dead slots, partially
+filled tails and pages retained by pins. The proposed live index has
+`O(E + F + N + D)` records, plus `O(L)` locator entries if stable slot IDs
+are selected. Physical `I` also includes page rounding, branches,
+free-list/ownership records and uniquely pinned copies. A separate 4 KiB
+root page for each tiny file would make the `F` term `4096F`, defeating the
+many-file target.
+
+Without compaction, one long generation can retain roughly `ceil(W/c)`
+pack pages even if repeated overwrites leave `L = 1`. With a sealed tail
+per generation, one retained one-edit generation can cost one 4 KiB page:
+`G` such generations can occupy `4096G` pack bytes, not `rG`. The desired
+**conditional** bound after proved compaction is `J = O(ceil(L/c) + P_pin +
+G + C)`, where `C` is a fixed bound on pages simultaneously copied during
+compaction; it requires a measured fragmentation trigger and physical release
+mechanism. Across several Workspaces, sum each Workspace's pages and allow
+at least one partial tail per active Workspace under the shared Host budget.
+Neither this bound nor the `O(1)` hot WRITE target has been implemented.
+The slot-location choice can add work to these time bounds: direct
+`(page, slot)` extents avoid an extra read lookup but can make compaction
+update many extent references; stable slot IDs need a disk-backed locator
+lookup and update, potentially `O(log_B L)` on a cold path. The hot-path
+`O(1)` target requires a bounded cached or append-ordered locator route if
+that indirection is selected. Count locator fetches and updates before
+claiming either bound.
 
 The one-file monotone target does **not** imply constant time for a large
 multi-file working set. With cold index roots, each WRITE pays disk lookup;
@@ -393,9 +486,40 @@ timeout or warm selected data to make it pass.
 
 ## 8. Source seams, tests and decisions before implementation
 
-The new format would live in focused modules under
-[`backing/`](../../../crates/layerfs-workspace/src/backing/mod.rs): an active
-generation/transaction owner, packed journal, and disk inode/extent index.
+The provisional minimum is one focused family in the existing
+[`layerfs-workspace`](../../../crates/layerfs-workspace/src/lib.rs) crate;
+create each file when its responsibility becomes real, rather than merging
+unused scaffolding:
+
+```text
+core/crates/layerfs-workspace/
+  src/backing/active/           NEW; private to one Workspace incarnation
+    mod.rs                      declarations/delegation only
+    generation.rs               revision, atomic publication, capture, pins
+    pack.rs                     authenticated tiny slots and bounded readers
+    pages.rs                    pooled physical pages, cache, quota charges
+    keyed.rs                    inode, namespace and dirty indexes
+    extents.rs                  ordered per-file intervals and right edge
+    reclaim.rs                  pin-aware compaction, release and refunds
+  src/runtime/                  existing state, attachment, lifecycle
+  src/overlay/snapshot.rs       existing capture boundary
+  src/filesystem/               existing public mutation/read paths
+  src/commit/                   existing final-view SaveFile lowering
+  tests/                        external public behavior proofs
+core/benchmark/fs-bench-pro/    prospective workload and quick-Commit cases
+```
+
+The existing immutable extent codec/cursor and keyed reader remain useful
+for frozen or old roots; the path-copying
+[`extent/splice.rs`](../../../crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs)
+and [`keyed/update.rs`](../../../crates/layerfs-workspace/src/backing/binary_plus_tree/keyed/update.rs)
+cannot become mutable active writers unchanged. Reuse current budgets,
+verified directory handles and aligned I/O primitives where their contracts
+fit, and keep the Bridge `SaveFile`, Service and C1 edit interfaces. A new
+crate or broad FUSE adapter rewrite is not part of the plan; the adapter may
+need only a small call-site change after the charged tiny-write staging seam
+is decided.
+
 Integration reaches [`runtime/state.rs`](../../../crates/layerfs-workspace/src/runtime/state.rs)
 and [`overlay/snapshot.rs`](../../../crates/layerfs-workspace/src/overlay/snapshot.rs)
 for version capture; [`filesystem/write.rs`](../../../crates/layerfs-workspace/src/filesystem/write.rs),
@@ -412,11 +536,27 @@ exactly. Legacy immutable pages remain readable under an
 explicit version rule. Keep product-only source below the Core file ceilings
 and behavior tests external to `src/`.
 
+Planning only: the current committed baseline is **59,621 Core** and
+**65,417 reference** production LOC (**125,038 combined**). A complete first
+switch may add roughly **2,500–4,500** active-backing lines and
+**1,000–2,000** integration lines, then retire **200–700** old hot-path lines:
+about **+3,000–6,000 net Core production LOC**, or **62,600–65,600 Core**.
+Old `RootOwner`, ledger, immutable tree and private payload readers cannot
+be counted as deletions at first switch because frozen/old roots, result
+roots and large payloads may still use them. This range is not a staged LOC
+comparison; every implementation commit must count its exact first-parent
+and staged product source with `tools/production_loc.py`. The existing
+`metadata.rs`, `ownership.rs`, `rename.rs`, extent `splice.rs` and FUSE
+`adapter.rs` are near the 999-physical-line ceiling; put new behavior in
+focused files, with `mod.rs` under its 200-line declaration limit.
+
 Before product code, decide and write the record/index bytes, per-slot versus
-per-page authentication, physical quota charge/refund rule, failed-write
-progress and quarantine, snapshot pinning, bounded cache eviction, pack-page
-compaction trigger, old-format access, and whether concurrent active
-Workspaces require a separate daemon-control project. Existing limits include
+per-page authentication, tail rewrite safety, page/segment growth and physical
+release, direct slot reference versus stable locator, Host quota
+charge/refund rule, failed-write progress and quarantine, snapshot pinning,
+bounded cache eviction, pack-page compaction trigger, old-format access,
+and whether concurrent active Workspaces require a separate daemon-control
+project. Existing limits include
 256 resident nodes and 128 handles in
 [`runtime/state.rs`](../../../crates/layerfs-workspace/src/runtime/state.rs),
 32 retained roots in
@@ -442,12 +582,12 @@ per-WRITE dual writer or a benchmark-only route.
 
 | Checkpoint | Work and owning boundary | Evidence required to advance |
 | --- | --- | --- |
-| 0. Freeze contracts | Specify pack/index bytes, authentication, quota and refunds, partial-failure progress, frozen-page lifetime, bounded compaction, old-root access and supported file/generation counts. Commit the new public workload and cache contract before samples. | Format review and complete case registry, including fixed budgets, arm order and `NOT_RUN` rules. |
-| 1. Build Workspace storage | Implement one Workspace-owned pack, pooled disk inode map, ordered per-file extent index, dirty frontier and bounded charged page cache in `backing/` and `runtime/`. | External checks for authenticated append/read, overlap and split, quota refusal, abandoned candidates and exact page cleanup; no resident map or pack tail per file. |
-| 2. Integrate one active view | Select the new representation once per Workspace incarnation, covering WRITE/read, inode attributes, dirty membership and create/truncate/unlink/rename in one revisioned tuple. Preserve regular and directory handle semantics and checked invalidation. | Public semantic and byte-oracle proof for append, dispersed/repeated edits, temp-file rename, delete, aliases, holes, open-unlinked handles and failed/unknown outcomes. No per-WRITE immutable keyed-root publication on this route. |
+| 0. Freeze contracts | Specify versioned `a-pack-*`/`a-index-*` page bytes under the existing Workspace private directory; slot/page authentication, safe tail publication, lazy growth, direct versus indirect locators, exact physical release, Host-quota refunds, frozen-page lifetime and supported file/generation counts. Freeze the §5 complexity targets and public workload/cache contract before samples. | Reviewed format and ownership rules, with a complete case registry, fixed budgets, arm order and `NOT_RUN` rules. No presumed per-Workspace disk quota or unchanged reuse of the large-payload allocator. |
+| 1. Build Workspace storage | Implement one Workspace-owned pack, pooled disk inode/namespace/extent indexes, dirty frontier and bounded charged page cache in `backing/active/`; use verified directory and aligned-I/O primitives where valid. | External checks for authenticated append/read, overlap/split, partial tail failure, exact `st_blocks` charges, quota refusal, abandoned candidates and cleanup. No preallocated large empty segment, resident map, pack tail or root page per file. |
+| 2. Integrate one active view | Select the new representation once per Workspace incarnation, covering WRITE/read, inode attributes, dirty membership and create/truncate/unlink/rename in one revisioned tuple. Preserve regular and directory handle semantics and checked invalidation. | Public mounted-view semantics and byte oracle for append, dispersed/repeated edits, temp-file rename, delete, aliases, holes, open-unlinked handles and failed/unknown outcomes. No per-WRITE immutable keyed-root publication on this route. |
 | 3. Freeze and lower | Atomically pin namespace, inode/index roots, dirty frontier and pack watermark in `overlay/snapshot.rs`; preserve successor writes and reconciliation. Adapt `commit/{lower,upload,source,reconcile}.rs` to emit the existing final ordered `SaveFile` descriptors and replacement bytes. | G1/G2 and concurrent read/Commit proof; descriptor/replacement and saved-root parity for existing-base edits; C1 `apply_edits` and fresh-file `construct_stream` stay unchanged. Clean and one-edit Commit do not rebuild every index or scan prior journal history. |
-| 4. Bound lifetime work | Complete page/slot reclamation, compaction, quota refunds and clean-close pin accounting across several Execs, Commits, files and retained generations. | Charged backing, resident memory and physical I/O meet the frozen bounds, with work attributed to its real phase. The ≤3 MiB backing target applies only to the one-file 4,096-write fixture. |
-| 5. Freeze and measure | Seal the complete candidate source and run the declared public control/candidate cells once per arm with symmetric enforced cache state, one construction worker, separate verification and append-only receipts. Attribute Exec, Commit, freeze and reclamation, plus callback and Service counts. | Correctness, custody, cleanup and resource gates pass; every registered cell has a result, including failures and `NOT_RUN`. The #248 25 s gate stays 25 s. Any 2× claim needs its own cache-qualified matched evidence across declared workloads. |
+| 4. Bound lifetime work | Complete pin-aware slot/page reclamation, compaction, actual block release, Host-quota refunds and clean-close accounting across several Execs, Commits, files and generations. | Track `J`, `I`, `L`, pinned pages, page slack, bytes relocated and allocated blocks; repeated overwrite and `G` retained one-edit generations exercise the §5 space bound. No refund before physical release; failed cleanup remains owned. The ≤3 MiB target applies only to the one-file 4,096-write fixture. |
+| 5. Freeze and measure | Seal the complete candidate and run declared public control/candidate cells once per arm with symmetric enforced cache state, one construction worker, separate verification and append-only receipts. Attribute Exec, Commit, freeze, pack/index I/O and reclamation, plus callback and Service counts. | Correctness, custody, cleanup and resource gates pass; every registered cell has a result, including failures and `NOT_RUN`. Count right-edge updates, cold seeks, page copies, actual fetches and physical bytes to test the §5 bounds. The #248 25 s gate stays 25 s; any 2× claim needs its own cache-qualified matched evidence. |
 
 Checkpoint 2 switches the whole mutable Workspace view, not an individual
 file, Exec or syscall: namespace, identities, attributes, extents, dirty

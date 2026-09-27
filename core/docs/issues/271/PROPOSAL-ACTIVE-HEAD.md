@@ -82,15 +82,29 @@ localized construction stay in place: Commit lowers the **final indexed
 view**, not the historical journal records. The C writer exercises ordinary
 mounted `write`/`pwrite` calls through FUSE; it is an application-level
 workload, while its uncontrolled-cache diagnostics remain speed-ineligible.
+The [physical layout, source-file map and Big O model](WORKSPACE-SCOPED-ACTIVE-HEAD.md)
+place illustrative `a-pack-*` and `a-index-*` files under each existing
+`<WorkspaceConfig.root>/private-backing/<workspace-id>/` directory. Their
+full allocated pages count against the shared Host quota; unlink removes a
+name first, while pinned or mixed pack pages remain charged until physical
+release. The first implementation is provisionally **+3,000–6,000 Core
+production LOC**, because old-root and large-payload readers cannot be
+deleted at the initial switch. Neither those filenames nor that LOC range
+is a committed format or a measured outcome.
 
 Use a **versioned, disk-indexed active head** for Workspace edits. Each
 accepted WRITE appends a charged edit record and updates a mutable ordered
 index of the current file view under the existing writer gate. A bounded
 in-memory right spine can make the separated, increasing-offset case an
 amortized `O(1)` page-update route; arbitrary overlapping writes remain
-`O(log_B E + K)` for `K` affected extents. Reads use the index in
-`O(log_B E + output)` rather than scanning an append log. The format must
-charge disk and resident index/journal bytes before acknowledging work.
+`O(log_B F + log_B D + log_B E_f + K + x + C)` in the general Workspace
+model: `F` indexed files, `D` dirty identities, `E_f` extents in the file,
+`K` overlapped extents, `x` written bytes and `C` frozen-page copy work.
+Reads use an indexed seek plus touched extents, returned bytes and actual
+pack-page fetches rather than scanning an append log. The format must charge
+full allocated pack/index pages and resident windows before acknowledging
+work. A proved compaction rule is needed to make retained space depend on
+live slots and pinned generations rather than cumulative overwrite count.
 
 An immutable generation is pinned when a snapshot, captured reader or Commit
 needs it. The design target is a bounded root/watermark pin and pack-tail
