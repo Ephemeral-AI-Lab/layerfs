@@ -217,3 +217,74 @@ adapter **0 → 0**, combined **124,057 → 124,057 (+0)** for each first-parent
 comparison. The same `tools/production_loc.py --root .` product scope and
 exclusions used in the table above apply; the staged product snapshots are
 identical to their respective first parents.
+
+## Native reply-gap proof follow-up
+
+The earlier native fixture `NOT_RUN` qualification above records the state at
+that report's source. Its two setup FAIL receipts remain intact. A third
+[failed setup](evidence/native-fixture-setup/native-fixture-v3/result.json)
+used a correctly provisioned C2 Store and still received `InvalidInput` at
+the prepared-alias Commit. The shared native driver was sending the alias row
+inside the request, while the current prepared-stream protocol requires seven
+declared row totals in the request and a versioned row body. The driver now
+encodes that body once for the three existing alias-fixture callers. A fresh
+[fixture preparation](evidence/native-fixture-setup/native-fixture-v4/result.json)
+then passed in **0.636303 s** with closed producer processes and no cache or
+performance claim. The earlier default-debug-daemon failure also explains why
+the commands below explicitly select the release profile.
+
+The first [focused route attempt](evidence/native-reply-gap/native-reply-gap-v1/result.json)
+was a **FAIL** at **0.731125 s**: its registered `reply_gap` case selected zero
+tests because the Rust function had a `_wait` suffix. The selection was fixed
+and the retained container and volume were removed in recorded postmortem
+cleanup. The next [reply-gap test execution](evidence/native-reply-gap/native-reply-gap-v2/result.json)
+selected **one** Linux test and passed: **0.21 s** test, **1.107362 s** complete
+command, test exit 0, service exit 0 and cleanup PASS. Rustfmt then changed
+only whitespace in the external test. A [final-source proof](evidence/native-reply-gap/native-reply-gap-v3/result.json)
+rebuilt that test binary and passed the same single selection in **0.22 s**,
+with a **1.092133 s** complete command, test exit 0, service exit 0 and
+cleanup PASS. A separate call first
+showed that an admission attempt with its original 100 ms deadline returns
+`Deadline` while the healthy origin permit is held. A second thread then
+announced its admission attempt, produced no result while that origin was held,
+and returned successful admission from that same attempt after the origin
+permit dropped. This closes the focused native projection API proof gap; it is
+not another public 512/4,097 performance sample or a kernel-mounted concurrency
+proof. The 4,097 FAIL and its missing callback/Commit result remain unchanged.
+
+The worktree-local commands were:
+
+```sh
+cargo +1.85.1 build --release --manifest-path core/Cargo.toml --locked -p layerfs-server --example prepare_store
+core/target/release/examples/prepare_store benchmark-results/fs-bench-pro/issue266/native-r1-store-v1/store.sqlite
+LAYERFS_PROOF_PROFILE=release python3 core/crates/layerfs-workspace/tests/prepare_large_edit.py \
+  --store-master benchmark-results/fs-bench-pro/issue266/native-r1-store-v1/store.sqlite \
+  --binaries core/target/release --producer-source 15302704bf6d985f1f29c484f2baabeb97f5843a \
+  --producer-seal c0d856c04d62cbb41b9d1d02f92dfa16f7e11817b32637d29590a7fd6f1a82b9 \
+  --output benchmark-results/fs-bench-pro/issue266/native-fixture-v4
+cargo +1.85.1 zigbuild --release --target aarch64-unknown-linux-musl \
+  --manifest-path core/Cargo.toml --locked -p layerfs-fuse --test kernel_write
+LAYERFS_PROOF_PROFILE=release python3 core/crates/layerfs-fuse/tests/kernel_write_route.py \
+  --fixture benchmark-results/fs-bench-pro/issue266/native-fixture-v4/result.json \
+  --binaries core/target/release \
+  --test-binary core/target/aarch64-unknown-linux-musl/release/deps/kernel_write-502106b9f7dc1ff2 \
+  --case reply_gap --output benchmark-results/fs-bench-pro/issue266/native-reply-gap-v3
+```
+
+These output paths name the retained attempts; reproduction needs fresh output
+paths. Both actual test commands were below the requested 30-second focused bound and
+the fixture was setup outside it. No public WRITE selection was repeated. The
+three historical fixture FAILs, zero-test FAIL and both focused PASSes are all
+retained with copied-file hashes. This follow-up changed external tests and
+their drivers, not product code: Core **58,640 → 58,640 (+0)**, reference
+**65,417 → 65,417 (+0)**, adapter **0 → 0**, combined
+**124,057 → 124,057 (+0)**, using the same first-parent production counter
+and source scope described above. The final test source hash is
+`d6d28dcbc676ab5479653117428a5ea209bf4c646da858c455cb4bb55b8d1fd2`;
+the receipt's `source` field names the pre-commit parent and its independent
+test-source hash names the exact executed external test. Locked release host
+fixture and Linux test builds passed, as did focused Rustfmt, Python compile
+and source/document whitespace checks. The unrestricted staged whitespace
+check flagged only the literal trailing blank lines in three preserved test
+stdout files. Full Core test and Clippy were not run for this external-test
+follow-up; no CI or retired preflight result is claimed.

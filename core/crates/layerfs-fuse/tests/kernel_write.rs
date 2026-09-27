@@ -17,7 +17,7 @@ mod linux {
         process::Command,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, Barrier,
+            mpsc, Arc, Barrier,
         },
         time::{Duration, Instant},
     };
@@ -675,7 +675,7 @@ mod linux {
 
     #[test]
     #[ignore = "native projection reply admission; no kernel mount"]
-    fn kernel_write_reply_gap_wait() {
+    fn kernel_write_reply_gap() {
         let f = Fixture::new(Gate::None);
         let mut lease = f.workspace.reserve_mount().unwrap();
         lease.bind_invalidation(Arc::new(|_, _, _| Ok(()))).unwrap();
@@ -692,8 +692,27 @@ mod linux {
             Err(WorkspaceError::Deadline)
         ));
         assert!(started.elapsed() >= Duration::from_millis(50));
-        drop(origin);
-        drop(f.workspace.begin_projection_mutation(deadline()).unwrap());
+        let (ready_tx, ready_rx) = mpsc::sync_channel(0);
+        let (result_tx, result_rx) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let waiter = scope.spawn(|| {
+                ready_tx.send(()).unwrap();
+                result_tx
+                    .send(f.workspace.begin_projection_mutation(deadline()).map(drop))
+                    .unwrap();
+            });
+            ready_rx.recv().unwrap();
+            assert!(matches!(
+                result_rx.recv_timeout(Duration::from_millis(100)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ));
+            drop(origin);
+            assert!(result_rx
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+                .is_ok());
+            waiter.join().unwrap();
+        });
         lease.finish().unwrap();
         f.workspace.close_clean().unwrap();
         check("healthy-reply-waits-within-original-deadline-and-release-wakes-admission");

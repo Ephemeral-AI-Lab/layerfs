@@ -165,11 +165,10 @@ def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o64
         kind, body = route.exchange(daemon, 3, 2, created['root'] + b'\x01' + route.blob(b'data.bin'))
         assert kind == 6 and body[0] == 4, body
         serial = struct.unpack('>Q', body[1:9])[0]
-        prepared = (b'\x05' + b'\xa4'*32 + snapshot['branch']['branch'] + route.optional(None) + created['head_layer']
-                    + struct.pack('>Q', 1) + created['root'] + snapshot['scope']
-                    + struct.pack('>QH', created['root_serial'], 1) + struct.pack('>QH', created['root_serial'], 1)
-                    + route.blob(b'alias') + struct.pack('>QH', serial, 0))
-        kind, body = route.exchange(daemon, 4, route.COMMAND_OPCODE, prepared, route.HISTORY_PROFILE)
+        prepared, rows = route.prepared_alias(
+            b'\xa4'*32, snapshot['branch']['branch'], created['head_layer'],
+            created['root'], snapshot['scope'], created['root_serial'], serial)
+        kind, body = route.exchange(daemon, 4, route.COMMAND_OPCODE, prepared, route.HISTORY_PROFILE, rows)
         assert kind == 6, body
         tag, committed = route.history(body); assert tag == 'Committed'
         return {'branch': snapshot['branch']['branch'].hex(), 'root': committed['root'].hex(),
