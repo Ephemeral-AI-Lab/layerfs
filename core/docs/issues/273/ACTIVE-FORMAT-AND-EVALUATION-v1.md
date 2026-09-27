@@ -24,6 +24,12 @@
 > with the existing byte-ordered canonical listing and directory cookie.
 > No mounted v1 page or candidate sample has been selected; the earlier
 > source commit and this correction remain separately visible.
+> Before the mounted switch, the large-WRITE review found that a 128-byte
+> packed slot cannot represent the public 128 KiB FUSE WRITE without splitting
+> one syscall into a large unbounded index batch. The v1 extent grammar below
+> now reserves a Payload kind and `L` inverse key for the existing `p-*`
+> allocator. No mounted v1 page or candidate sample exists; this amendment
+> precedes the corresponding product code.
 
 ## Boundary and identity
 
@@ -87,7 +93,9 @@ namespace binding/tombstone, `I|serial:u64` for current inode attributes,
 `E|serial:u64|start:u64` for one extent,
 `P|logical_pack_page:u64` for one physical `(page ID, epoch)` locator, and
 `R|logical_pack_page:u64|ordinal:u16|serial:u64|start:u64` for one inverse
-slot reference. Duplicate keys and unsorted, overlapping extents are invalid.
+slot reference. `L|payload_id:u64|serial:u64|start:u64` is the inverse
+reference for one large payload extent. Duplicate keys and unsorted,
+overlapping extents are invalid.
 The `I` value is 416 bytes: a 160-byte active inode header plus four 64-byte
 inline slots. Header offsets are revision `0..8`, generation `8..16`, length
 `16..24`, kind `24` (`0` file, `1` directory, `2` symlink), fresh flag `25`,
@@ -98,16 +106,31 @@ and zero `112..160`. Each occupied inline slot is an 8-byte logical start
 followed by the 56-byte extent value; unused slots are zero. Short files
 therefore share pooled inode pages; longer sequences use ordered `E` leaves.
 An extent value is
-exactly 56 bytes: end `0..8`, kind `8` (`0` Base, `1` Zero, `2` Packed),
+exactly 56 bytes: end `0..8`, kind `8` (`0` Base, `1` Zero, `2` Packed,
+`3` Payload),
 zero `9..16`, source offset `16..24`, logical pack page `24..32`, ordinal
 `32..34`, full packed-slot length `34..36`, source generation `36..44`, source
 revision `44..52`, and zero `52..56`. Unused source fields are zero. The
-`P` locator value is the physical page ID and epoch (16 bytes); an `R`
-inverse-reference value is exactly `[1]`. A namespace `N` value is 16 bytes:
+Payload kind uses the existing verified `p-*` large-payload allocator: its
+`source_offset` selects bytes within that payload, `logical_pack_page` holds
+the nonzero payload ID, `ordinal` and `slot_length` are zero,
+`source_generation` holds the payload's declared byte length, and
+`source_revision` is zero. Every selected Payload range must fit that length.
+The active Workspace retains a Host-memory-charged ownership descriptor for
+each live or pinned payload ID; an `L` inverse reference counts each selected
+extent. A payload becomes reclaimable only after its last current inverse
+reference and every frozen/read pin that could name it have ended. Physical
+`p-*` block refunds still follow the existing PayloadHost custody and actual
+unlink, never a logical extent deletion. A failed transfer or cleanup remains
+owned and charged. The 128-byte packed slot stays the small-write fast path;
+one larger public WRITE publishes one Payload extent and one Workspace
+revision without a per-WRITE `RootOwner`.
+The `P` locator value is the physical page ID and epoch (16 bytes); `R` and
+`L` inverse-reference values are exactly `[1]`. A namespace `N` value is 16 bytes:
 serial `0..8`, kind `8`, tombstone `9`, zero `10..16`; current portable
 attributes reside in the corresponding `I` value. A dirty `D` value is
 exactly `[1]`. A leaf holds ordered,
-nonoverlapping `(start, end, Base | Zero | Packed)` intervals.
+nonoverlapping `(start, end, Base | Zero | Packed | Payload)` intervals.
 The namespace key's remaining bytes are the 1..255-byte name, so keys for
 one parent sort in the same byte order as canonical `Inspect::List` and the
 directory cookie; an exact key is unambiguous even when one name prefixes
