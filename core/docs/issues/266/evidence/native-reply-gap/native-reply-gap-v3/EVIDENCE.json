@@ -1,0 +1,11 @@
+{
+  "schema": "issue266-native-proof-v1",
+  "attempt": "native-reply-gap-v3",
+  "source_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-reply-gap-v3",
+  "copied_sha256": {
+    "result.json": "9989506d3b1aad2ced137827753cf00096c1ec0bfa8c912696bb6b287dba19e5",
+    "test.stdout": "3888fe71bbab54b8f798ed4bc2e1115729ee29a19e45361503c9e32916af51bd",
+    "test.stderr": "63c2ae553cebc720acc2c2c1f1a0b877b0f53cae6b196e7150e085506f7bdcac",
+    "service.stderr": "c70b90e22535c4801fe8ad614e1fd34a2fff10b3198880872ad6770b954cba51"
+  }
+}

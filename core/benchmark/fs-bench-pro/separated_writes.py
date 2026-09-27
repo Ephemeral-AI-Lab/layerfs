@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One append-only public mounted-write diagnostic/gate for issues #261/#248."""
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -19,18 +20,25 @@ SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-mounted-writes-spec.md"
 SPEC_512 = ROOT / "docs/roadmap/0.1/0.1.7/issue261-512-diagnostic-spec.md"
 SPEC_100_V2 = ROOT / "docs/roadmap/0.1/0.1.7/issue261-100-phase-diagnostic-v2.md"
 SPEC_TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue261-100-ledger-treatment.md"
+SPEC_266 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-fuse-refusal-spec.md"
+SPEC_266_POST = ROOT / "docs/roadmap/0.1/0.1.7/issue266-post-reply-diagnostic-spec.md"
+SPEC_266_WAIT = ROOT / "docs/roadmap/0.1/0.1.7/issue266-reply-wait-treatment-spec.md"
+SPEC_266_1024 = ROOT / "docs/roadmap/0.1/0.1.7/issue266-1024-count-diagnostic-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
 COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
-          "diagnostic100v3": 100, "diagnostic512": 512, "gate": 4097}
+          "diagnostic100v3": 100, "diagnostic512": 512,
+          "fuse512": 512, "diagnostic1024": 1024, "gate": 4097}
 
 
 def fields(master, name, command):
     value = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                            "genesis_root_serial", "branch_id", "old_commit")}
-    prefix = "issue248" if name == "gate" else "issue261"
+    prefix = {"gate": "issue248", "fuse512": "issue266",
+              "diagnostic1024": "issue266"}.get(name, "issue261")
     version = {"diagnostic100v2": 2, "diagnostic100v3": 3}.get(name, 1)
-    value.update(scenario_id=f"{prefix}-separated-{COUNTS[name]}-v{version}",
+    pattern = "fuse" if name == "fuse512" else "separated"
+    value.update(scenario_id=f"{prefix}-{pattern}-{COUNTS[name]}-v{version}",
                  command_hex=command.encode().hex(), expected_failure="0",
                  separated_count=str(COUNTS[name]),
                  telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
@@ -102,7 +110,8 @@ def prepare(output):
     dockerfiles = {}
     for name in COUNTS:
         interval = {"diagnostic": 25, "diagnostic100v2": 25,
-                    "diagnostic100v3": 25, "diagnostic512": 128}.get(name)
+                    "diagnostic100v3": 25, "diagnostic512": 128,
+                    "fuse512": 128, "diagnostic1024": 256}.get(name)
         text = dockerfile.replace("ENTRYPOINT",
             f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
             "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
@@ -164,12 +173,16 @@ def prepare(output):
         "extension_spec_sha256": digest(SPEC_512),
         "phase_spec_sha256": digest(SPEC_100_V2),
         "treatment_spec_sha256": digest(SPEC_TREATMENT),
+        "issue266_spec_sha256": digest(SPEC_266),
+        "issue266_post_spec_sha256": digest(SPEC_266_POST),
+        "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
+        "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
         "fixture_sha256": sha(ORIGINAL["data.bin"]),
         "manifest_sha256": {name: digest(output / f"{name}.tsv")
-                            for name in ("old", "diagnostic", "gate")},
+                            for name in ("old", *COUNTS)},
         "binaries": binaries, "images": images, "cursor_key": key,
         "master": prepared_master, "clone_method": "shutil.copyfile independent writable byte copy",
         "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
@@ -191,7 +204,7 @@ def prepare_reuse(output, previous_file, selection):
         raise ValueError("clean source and a sealed issue261 master required")
     if previous["source"]["build_profile"] != "release":
         raise ValueError("previous binaries are not release builds")
-    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3"):
+    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "gate"):
         raise ValueError("unsupported reuse selection")
     product_same = identity["product_seal"] == previous["source"]["product_seal"]
     changed_product = subprocess.check_output(["git", "diff", "--name-only",
@@ -201,9 +214,19 @@ def prepare_reuse(output, previous_file, selection):
                          "core/crates/layerfs-fuse/src/mount.rs",
                          "core/crates/layerfs-fuse/src/write_sample.rs"}
     allowed_ownership = {"core/crates/layerfs-workspace/src/backing/ownership.rs"}
-    allowed = allowed_ownership if selection == "diagnostic100v3" else allowed_telemetry
+    allowed_issue266 = {"core/crates/layerfs-workspace/src/runtime/coherence.rs",
+                        "core/crates/layerfs-fuse/src/adapter.rs",
+                        "core/crates/layerfs-fuse/src/lib.rs",
+                        "core/crates/layerfs-fuse/src/open_flags.rs",
+                        "core/crates/layerfs-fuse/src/write_sample.rs",
+                        "core/crates/layerfs-fuse/tests/kernel_write.rs",
+                        "core/crates/layerfs-daemon/src/run.rs"}
+    allowed = (allowed_ownership if selection == "diagnostic100v3" else
+               allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
     if not product_same and (selection != "diagnostic100v2"
                              and selection != "diagnostic100v3"
+                             and selection != "fuse512"
+                             and selection != "gate"
                              or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
     relevant = ["core/crates/layerfs-api/sdk/examples/benchmark_init.rs",
@@ -260,11 +283,15 @@ def prepare_reuse(output, previous_file, selection):
         daemon = CORE / "target/aarch64-unknown-linux-musl/release/layerfs-daemon"
     shutil.copyfile(daemon, context / "layerfs-daemon")
     (context / "layerfs-daemon").chmod(0o755)
-    interval = 128 if selection == "diagnostic512" else 25
-    dockerfile = (f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\n"
-        f"COPY bin /fixtures/bin\nENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
-        "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n"
-        "ENTRYPOINT [\"/layerfs-daemon\"]\n")
+    interval = (256 if selection == "diagnostic1024" else
+                128 if selection in ("diagnostic512", "fuse512") else
+                25 if selection != "gate" else None)
+    dockerfile = (
+        f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\nCOPY bin /fixtures/bin\n"
+        + (f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
+           "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n" if interval else "")
+        + 'ENTRYPOINT ["/layerfs-daemon"]\n'
+    )
     (context / "Dockerfile").write_text(dockerfile)
     image, wall = run_command(["docker", "build", "-q", str(context)],
                               output / f"image-build-{selection}")
@@ -274,6 +301,10 @@ def prepare_reuse(output, previous_file, selection):
         "spec_sha256": digest(SPEC), "extension_spec_sha256": digest(SPEC_512),
         "phase_spec_sha256": digest(SPEC_100_V2),
         "treatment_spec_sha256": digest(SPEC_TREATMENT),
+        "issue266_spec_sha256": digest(SPEC_266),
+        "issue266_post_spec_sha256": digest(SPEC_266_POST),
+        "issue266_wait_spec_sha256": digest(SPEC_266_WAIT),
+        "issue266_1024_spec_sha256": digest(SPEC_266_1024),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -344,6 +375,14 @@ def run(prepared_file, output, selection):
         raise ValueError("100 phase diagnostic specification changed")
     if selection == "diagnostic100v3" and digest(SPEC_TREATMENT) != prepared.get("treatment_spec_sha256"):
         raise ValueError("100 ledger treatment specification changed")
+    if selection in ("fuse512", "gate") and digest(SPEC_266) != prepared.get("issue266_spec_sha256"):
+        raise ValueError("issue266 diagnostic specification changed")
+    if selection == "fuse512" and digest(SPEC_266_POST) != prepared.get("issue266_post_spec_sha256"):
+        raise ValueError("issue266 post-reply specification changed")
+    if selection in ("fuse512", "gate") and digest(SPEC_266_WAIT) != prepared.get("issue266_wait_spec_sha256"):
+        raise ValueError("issue266 reply wait specification changed")
+    if selection == "diagnostic1024" and digest(SPEC_266_1024) != prepared.get("issue266_1024_spec_sha256"):
+        raise ValueError("issue266 1024-count specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -375,7 +414,7 @@ def run(prepared_file, output, selection):
                prepared["images"][selection]]
     env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": prepared["cursor_key"],
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
-    if selection.startswith("diagnostic"):
+    if selection.startswith("diagnostic") or selection == "fuse512":
         env["LAYERFS_COMPLEXITY_DIAGNOSTIC"] = "1"
     limit = 25 if selection == "gate" else 15
     start = time.monotonic_ns()
@@ -402,8 +441,8 @@ def run(prepared_file, output, selection):
     samples = backing_samples(stderr)
     sample_counts = [row["write_class"] for row in samples]
     expected_samples = ([count // 4, count // 2, count * 3 // 4, count]
-                        if selection.startswith("diagnostic") else [])
-    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3") or all(
+                        if selection.startswith("diagnostic") or selection == "fuse512" else [])
+    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024") or all(
         row["version"] == 2 and row["acquisition_ns"] is not None
         and row["publication_ns"] is not None for row in samples)
     verification = {"status": "NOT_RUN"}
@@ -422,7 +461,15 @@ def run(prepared_file, output, selection):
         except subprocess.TimeoutExpired:
             verification = {"status": "FAIL", "timeout": True,
                             "command": verify_command}
-    cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok"))
+    daemon_log = stderr.decode(errors="replace")
+    daemon_close = "sandbox closed\n" in daemon_log
+    daemon_retained = any(term in daemon_log for term in
+                          ("sandbox shutdown retained:", "workspace shutdown retained:"))
+    cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
+                   and (selection not in ("fuse512", "diagnostic1024", "gate") or (daemon_close and not daemon_retained
+                        and driver.get("daemon_log_attempted")
+                        and not driver.get("daemon_log_truncated")
+                        and driver.get("daemon_log_error") == "None")))
     functional = bool(code == 0 and not timed_out and driver and
         driver.get("status") == "COMPLETE" and driver.get("commit_called") and
         checkpoints and sample_counts == expected_samples and phase_samples_complete and
@@ -434,6 +481,10 @@ def run(prepared_file, output, selection):
         "extension_spec_sha256": prepared.get("extension_spec_sha256"),
         "phase_spec_sha256": prepared.get("phase_spec_sha256"),
         "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
+        "issue266_spec_sha256": prepared.get("issue266_spec_sha256"),
+        "issue266_post_spec_sha256": prepared.get("issue266_post_spec_sha256"),
+        "issue266_wait_spec_sha256": prepared.get("issue266_wait_spec_sha256"),
+        "issue266_1024_spec_sha256": prepared.get("issue266_1024_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
@@ -462,6 +513,10 @@ def run(prepared_file, output, selection):
         "history_bytes_before": history_bytes_before,
         "history_bytes_after": Path(clone["history"]).stat().st_size,
         "verifier": verification, "cleanup_status": "PASS" if cleanup else "FAIL",
+        "daemon_close_observed": daemon_close,
+        "daemon_retained_observed": daemon_retained,
+        "write_refusals": [line for line in daemon_log.splitlines()
+                           if "LFS_WRITE_REFUSAL" in line or "LFS_PROJECTION_REFUSAL" in line],
         "functional_status": "PASS" if functional else "FAIL",
         "cache_contract": prepared["cache_contract"], "cache_status": "INELIGIBLE",
         "performance_status": "INELIGIBLE", "admission_eligible": False,
@@ -480,7 +535,7 @@ def main():
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
     p.add_argument("--reuse-prepared", type=Path)
-    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3"),
+    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3", "fuse512", "diagnostic1024", "gate"),
                    default="diagnostic512")
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
@@ -500,12 +555,20 @@ def main():
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "counts": COUNTS}))
     elif args.action == "prepare":
-        if args.reuse_prepared:
-            prepare_reuse(args.output, args.reuse_prepared, args.reuse_selection)
-        else:
-            prepare(args.output)
+        lock_path = ROOT / "benchmark-results/fs-bench-pro/.run.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if args.reuse_prepared:
+                prepare_reuse(args.output, args.reuse_prepared, args.reuse_selection)
+            else:
+                prepare(args.output)
     else:
-        run(args.prepared, args.output, args.selection)
+        lock_path = ROOT / "benchmark-results/fs-bench-pro/.run.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            run(args.prepared, args.output, args.selection)
 
 
 if __name__ == "__main__":

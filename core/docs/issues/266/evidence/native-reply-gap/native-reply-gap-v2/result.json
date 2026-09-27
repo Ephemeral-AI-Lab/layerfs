@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "mode": "functional-mounted-write",
+  "case": "reply_gap",
+  "checks": [
+    {
+      "id": "healthy-reply-waits-within-original-deadline-and-release-wakes-admission",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "W-01",
+    "W-07",
+    "W-12",
+    "B-01",
+    "S-15",
+    "S-18"
+  ],
+  "requirement_scope": "Actual Linux direct-I/O existing-file WRITE; origin/completion_failure are native projection API subsets",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": 10,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "size SETATTR/truncating open outside this WRITE-only selection",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound",
+    "authenticated daemon edit/Commit controls"
+  ],
+  "source": "15302704bf6d985f1f29c484f2baabeb97f5843a",
+  "product_inputs_sha256": "c0d856c04d62cbb41b9d1d02f92dfa16f7e11817b32637d29590a7fd6f1a82b9",
+  "driver_sha256": "8df21908da506ccd17e0c5738cca9446923fb0f22bff47df728529c980c1346a",
+  "test_source_sha256": "9085d35308027f67264e52c2842f231eaa554bd6cbd3a6e85aad496a0aa66a02",
+  "entrypoint_sha256": "7c04cdbf6a710048afb09a4a6af801ce9cb50a3fb29a0407016409964e5735ce",
+  "helper_source_sha256": "a15f90cae1a15ce30754752140cdcaee2090f6491ccc4a140be5e2d6a57083fd",
+  "test_binary_sha256": "767ae002ff92ffa88382d1c2c3b25ad47966d4f2031205a80b310281f70bd0b9",
+  "binaries": {
+    "layerfs-server": "3a7700781245347fd45f59de53987eadececea06512d757f40a08e18391aa257",
+    "layerfs-daemon": "f01f86cf352a9f5b28d669e345371ef50fa0652a927b68f16ae08f09d3d45842",
+    "examples/public_key": "0d1ef0446b4d55a36c6d0fb2d53d7e2eba29226b3818d949b038fcdabc19c28f"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "755419d01b86",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266",
+    "build_target": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-fixture-v4/result.json",
+      "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/kernel_write-502106b9f7dc1ff2"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-reply-gap-v2",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": []
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-fixture-v4/result.json",
+    "receipt_sha256": "be57cdfa8fc182722a457daf8f6bca6cc101cb054d5b737916e6ed913a43d5c1",
+    "closed_store_sha256": "c6455ee04b17dac737f1d3998bb24870070af5e41197d0dd364b2feb808dc3a1",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "544a85f8f03d3a028b71c61aa376117a50356055f797e153775e235b0201efff",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public ImportNativeDirectory, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "actual_nano_cpus": 2000000000,
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::kernel_write_reply_gap",
+  "test_exit": 0,
+  "observations": [],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 1.1073617090005428
+}

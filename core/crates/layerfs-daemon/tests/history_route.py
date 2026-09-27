@@ -83,6 +83,16 @@ def optional(value):
     return b"\0" if value is None else b"\1" + value
 
 
+def prepared_alias(workspace, branch, base_layer, base_root, scope, root_serial, serial):
+    name = b"alias"
+    header = (b"\x05" + workspace + branch + optional(None) + base_layer
+              + struct.pack(">Q", 1) + base_root + scope + struct.pack(">Q", root_serial)
+              + struct.pack(">7Q", 1, 1, 10 + len(name), 0, 0, 0, 0))
+    body = (b"\x01" + struct.pack(">QI", root_serial, 1) + blob(name)
+            + struct.pack(">Q", serial))
+    return header, body
+
+
 def save_file_metadata(length):
     return b"\0" + struct.pack(">QQQQ", 0, length, int(length != 0), length)
 

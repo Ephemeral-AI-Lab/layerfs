@@ -1,0 +1,10 @@
+{
+  "schema": "issue266-native-proof-v1",
+  "attempt": "native-fixture-v4",
+  "source_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/native-fixture-v4",
+  "copied_sha256": {
+    "result.json": "be57cdfa8fc182722a457daf8f6bca6cc101cb054d5b737916e6ed913a43d5c1",
+    "daemon.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "service.stderr": "fa13a14f4fed9f3a1f8dd054eb7c5653322fb7bd43baed2fe46e442277a9c303"
+  }
+}

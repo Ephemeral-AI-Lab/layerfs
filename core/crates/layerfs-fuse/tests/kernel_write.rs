@@ -17,7 +17,7 @@ mod linux {
         process::Command,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, Barrier,
+            mpsc, Arc, Barrier,
         },
         time::{Duration, Instant},
     };
@@ -671,6 +671,51 @@ mod linux {
             .forget(data.serial, u64::MAX, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
         check("projection-write-origin-reply-slot-append-offset-and-single-attempt-contract");
+    }
+
+    #[test]
+    #[ignore = "native projection reply admission; no kernel mount"]
+    fn kernel_write_reply_gap() {
+        let f = Fixture::new(Gate::None);
+        let mut lease = f.workspace.reserve_mount().unwrap();
+        lease.bind_invalidation(Arc::new(|_, _, _| Ok(()))).unwrap();
+        let mut origin = f.workspace.begin_projection_mutation(deadline()).unwrap();
+        assert!(matches!(
+            f.workspace.begin_projection_mutation(deadline()),
+            Err(WorkspaceError::Busy)
+        ));
+        origin.mark_reply_started();
+        let started = Instant::now();
+        assert!(matches!(
+            f.workspace
+                .begin_projection_mutation(started + Duration::from_millis(100)),
+            Err(WorkspaceError::Deadline)
+        ));
+        assert!(started.elapsed() >= Duration::from_millis(50));
+        let (ready_tx, ready_rx) = mpsc::sync_channel(0);
+        let (result_tx, result_rx) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let waiter = scope.spawn(|| {
+                ready_tx.send(()).unwrap();
+                result_tx
+                    .send(f.workspace.begin_projection_mutation(deadline()).map(drop))
+                    .unwrap();
+            });
+            ready_rx.recv().unwrap();
+            assert!(matches!(
+                result_rx.recv_timeout(Duration::from_millis(100)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ));
+            drop(origin);
+            assert!(result_rx
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+                .is_ok());
+            waiter.join().unwrap();
+        });
+        lease.finish().unwrap();
+        f.workspace.close_clean().unwrap();
+        check("healthy-reply-waits-within-original-deadline-and-release-wakes-admission");
     }
 
     #[test]

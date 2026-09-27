@@ -1,0 +1,20 @@
+{
+  "copied_sha256": {
+    "SHA256SUMS": "3f5fe4dd3ef77123a52d398ebc0cefd40cd472efdfc6bb072a0c5c38bcdfa7cf",
+    "case.before": "154742d99ef1cfad4d3b1ceda4f01af26a914d618ec88236ce10ff61139e18c1",
+    "case.verify": "2e4ac5f27a2dd00f803f14083dda93c08098c8596d54e5001359d76715528cb6",
+    "driver.stderr": "1b1f74299ae6362d037901d07ed485636f325c080174c373aeff71937f7814a1",
+    "driver.stdout": "d6011ae447fb3ed995f6bbf51513884241da2432d722f92d7139ec94e2cc7acb",
+    "prepared-public.json": "3b067f98eec294bc9c4640d1135dfd3eb352e3c3ee8fb2a4031b4fb2b586ee58",
+    "receipt.json": "d409517e69b023fd426249e81f2aa2c49676f0da32107b78b7235ab214addbd8",
+    "verifier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verifier.stdout": "5558c9be206776a00787772088c182c26559c52cd24291ffc15269b62c8742c5"
+  },
+  "label": "treatment-512",
+  "original_attempt_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/treatment-512-v1",
+  "original_history_sha256": "7c2af3383de9a96d34344c6ba5ed2d20f257d06045bb8a70917522c42d77f89e",
+  "original_prepared_sha256": "e59940c2b5716f3b0aef445348507c678807cc80a3c1bb445812d293ae450cf4",
+  "original_store_sha256": "daa2334faa2a42f64f57d4d80e4141da27ac0b3ad0f3eb86e600a6601cad2713",
+  "redacted_prepared_field": "cursor_key",
+  "schema": "issue266-evidence-v1"
+}

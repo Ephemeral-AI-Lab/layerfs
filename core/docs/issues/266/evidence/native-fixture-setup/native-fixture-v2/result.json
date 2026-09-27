@@ -1,0 +1,25 @@
+{
+  "status": "FAIL",
+  "mode": "prepared-local-edit-large-fixture",
+  "logical_bytes": 67108864,
+  "recipe": "byte at absolute offset i is i % 251",
+  "performance_claim": false,
+  "cache_claim": null,
+  "producer_source": "a2e986a06d901c6d03bcce36cf7bbd5afc262a8a",
+  "producer_product_inputs_sha256": "8d93f981a486ea33b2618c37b439db76e7abd5bd25e23ba674ac7f23fc45e10e",
+  "driver_sha256": "5eaed1097f4d12c226c30877864e614b4cbc5d41aeb96b263610d7c24db7075c",
+  "hard_budget_seconds": 60,
+  "binary_sha256": {
+    "layerfs-daemon": "f01f86cf352a9f5b28d669e345371ef50fa0652a927b68f16ae08f09d3d45842",
+    "layerfs-server": "3a7700781245347fd45f59de53987eadececea06512d757f40a08e18391aa257",
+    "examples/public_key": "0d1ef0446b4d55a36c6d0fb2d53d7e2eba29226b3818d949b038fcdabc19c28f"
+  },
+  "store_master_sha256": "6a0589853aa5dab05bea0e7f224d9c832f70b551fd8a0e74668ffbc898bb15d9",
+  "clone_method": "independent-byte-copy of closed Store; fresh history catalog",
+  "input_sha256": "98dc891b284e4d84ac25b0c0a24fdbe39a7f0dbd643ad5e8aa06e02fc6258254",
+  "file_root": "ea17b152bec37892b51b9aa27a5acabc81304aee108d4869e6c5615804bfd133",
+  "namespace_route": "native-directory import of the same bytes under the same canonical root",
+  "failure": "EOFError('terminal response missing')",
+  "service_forced_cleanup": true,
+  "command_wall_seconds": 2.2562651250045747
+}
