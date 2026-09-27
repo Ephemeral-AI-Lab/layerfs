@@ -260,6 +260,43 @@ impl Extent {
 }
 
 impl ExtentPlan {
+    /// Shrink removes every selected interval beyond the new EOF; extension
+    /// owns Zero bytes. Both reuse the ordinary range splice and inverse keys.
+    pub fn resize(
+        index: &Index,
+        inode: u64,
+        old_length: u64,
+        new_length: u64,
+    ) -> Result<Self, WorkspaceError> {
+        if inode == 0 || old_length > MAX_FILE || new_length > MAX_FILE {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        if new_length == old_length {
+            return Ok(Self {
+                length: new_length,
+                updates: Vec::new(),
+                _charge: index.budget().reserve(0)?,
+            });
+        }
+        let mut planned = Self::replace(
+            index,
+            inode,
+            old_length,
+            Extent::zero(new_length.min(old_length), new_length.max(old_length)),
+        )?;
+        if new_length < old_length {
+            let key = Extent::key(inode, new_length);
+            let removed = planned
+                .updates
+                .iter_mut()
+                .find(|(current, _)| current.as_slice() == key.as_slice())
+                .ok_or(WorkspaceError::Io)?;
+            removed.1 = None;
+            planned.length = new_length;
+        }
+        Ok(planned)
+    }
+
     fn remove(updates: &mut BTreeMap<Vec<u8>, Option<Vec<u8>>>, inode: u64, extent: Extent) {
         updates.insert(Extent::key(inode, extent.start).to_vec(), None);
         if let Some(key) = extent.inverse_key(inode) {

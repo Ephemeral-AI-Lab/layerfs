@@ -42,6 +42,10 @@ the caller proves it is unpinned and calls release. The current writer creates
 a new page file for each candidate. `backing/active/extents.rs` stores final
 nonoverlapping Base/Zero/Packed intervals and inverse `R` references. A tiny
 splice updates the overlapping extents and their inverse references together.
+Length changes use that same range splice: shrink removes selected extents
+beyond EOF, while extension publishes Zero intervals, so a later growth cannot
+expose bytes cut by an earlier truncate. An old pinned view keeps its old
+intervals and packed bytes.
 The extent codec now also reserves Payload kind `3` and an `L` inverse key
 for an owned large `p-*` payload. The codec validates its declared byte range;
 the active wrapper publishes a larger payload, its inode and dirty key in one

@@ -429,14 +429,6 @@ impl ActiveBacking {
             payload.len(),
         )?;
         let extra = self.inode_updates(inode, original, generation, revision, planned.length)?;
-        let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
-        for (key, value) in extra {
-            if updates.insert(key, value).is_some() {
-                return Err(WorkspaceError::InvalidInput);
-            }
-        }
-        let retained_tail = self.pack.tail()?.map(|(logical, _)| logical);
-        let dead = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
         let new_owner = (!state.large.contains_key(&payload.record.id))
             .then(|| {
                 Ok::<_, WorkspaceError>(LargeOwner {
@@ -445,12 +437,53 @@ impl ActiveBacking {
                 })
             })
             .transpose()?;
+        self.publish_no_pack(&mut state, planned, extra, new_owner)
+    }
+
+    /// Publishes a length change and its final Zero/retained extent view.
+    pub fn resize_file(
+        &self,
+        inode: u64,
+        original: HotInode,
+        new_length: u64,
+    ) -> Result<ActivePublication, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.closed {
+            return Err(WorkspaceError::Busy);
+        }
+        let _working = self.store.budget().reserve(256 * 1024)?;
+        self.index.maintain()?;
+        let (generation, prior_revision) = self.index.generation_revision()?;
+        let revision = prior_revision
+            .checked_add(1)
+            .ok_or(WorkspaceError::Capacity)?;
+        let planned = ExtentPlan::resize(&self.index, inode, original.length, new_length)?;
+        let extra = self.inode_updates(inode, original, generation, revision, planned.length)?;
+        self.publish_no_pack(&mut state, planned, extra, None)
+    }
+
+    fn publish_no_pack(
+        &self,
+        state: &mut State,
+        planned: ExtentPlan,
+        extra: KeyUpdates,
+        new_owner: Option<LargeOwner>,
+    ) -> Result<ActivePublication, WorkspaceError> {
+        let length = planned.length;
+        let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
+        for (key, value) in extra {
+            if updates.insert(key, value).is_some() {
+                return Err(WorkspaceError::InvalidInput);
+            }
+        }
+        let retained_tail = self.pack.tail()?.map(|(logical, _)| logical);
+        let dead = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
         let candidate = self
             .index
             .prepare(&updates.into_iter().collect::<Vec<_>>())?;
         let published_revision = candidate.publish()?;
         if let Some(owner) = new_owner {
-            state.large.insert(payload.record.id, owner);
+            state.large.insert(owner.payload.record.id, owner);
         }
         let mut cleanup_error = None;
         for page in dead {
@@ -474,7 +507,7 @@ impl ActiveBacking {
             state.stopped = true;
         }
         Ok(ActivePublication {
-            length: planned.length,
+            length,
             revision: published_revision,
             cleanup_error,
         })

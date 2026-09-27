@@ -694,6 +694,90 @@ mod linux {
     }
 
     #[test]
+    fn truncate_then_extend_zeroes_old_bytes_without_changing_frozen_view() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let initial = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 16,
+            kind: NodeKind::File,
+            fresh: false,
+            storage: 2,
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: [None; 4],
+        };
+        active.write_tiny_file(1, initial, 2, b"X").unwrap();
+        let frozen = active.capture().unwrap();
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!(active.resize_file(1, selected, 0).unwrap().length, 0);
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!(active.resize_file(1, selected, 5).unwrap().length, 5);
+        let mut live = [1; 5];
+        assert_eq!(
+            active
+                .read_file(
+                    1,
+                    0,
+                    &mut live,
+                    None,
+                    |_, _, _| unreachable!(),
+                    |_, _, _| unreachable!()
+                )
+                .unwrap(),
+            5
+        );
+        assert_eq!(live, [0; 5]);
+        let mut old = [0; 16];
+        let base = |root, source: u64, output: &mut [u8]| {
+            assert_eq!(root, [7; 32]);
+            assert!(source + output.len() as u64 <= 16);
+            output.fill(b'A');
+            Ok(())
+        };
+        assert_eq!(
+            active
+                .read_file(
+                    1,
+                    0,
+                    &mut old,
+                    Some(&frozen),
+                    base,
+                    |_, _, _| unreachable!()
+                )
+                .unwrap(),
+            16
+        );
+        assert_eq!(&old, b"AAXAAAAAAAAAAAAA");
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        active.write_tiny_file(1, selected, 2, b"Z").unwrap();
+        let mut live = [0; 5];
+        active
+            .read_file(
+                1,
+                0,
+                &mut live,
+                None,
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(live, [0, 0, b'Z', 0, 0]);
+        frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
     fn large_payload_and_tiny_overlap_share_one_active_view() {
         let f = Fixture::new(8 << 20);
         let active = ActiveBacking::new(
