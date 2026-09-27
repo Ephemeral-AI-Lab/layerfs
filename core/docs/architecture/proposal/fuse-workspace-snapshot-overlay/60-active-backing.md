@@ -36,7 +36,13 @@ The current active wrapper in `backing/active/generation.rs` publishes pack,
 extent, locator, inode attributes and dirty membership through one index root
 change for `write_tiny_file`. Its lower-level `write_tiny` still accepts
 caller-supplied records for backing tests. Neither method is selected by the
-public Workspace yet. `backing/active/reclaim.rs` removes a sealed logical page only when
+public Workspace yet. A separate `publish_records` call publishes namespace,
+inode and dirty changes without a pack append; range scans expose bounded
+current and frozen index pages for the later namespace and Commit readers.
+The range reader selects one current or frozen inode and extent view, copies
+authenticated packed bytes and Zero ranges, then issues canonical Base reads
+after releasing the active lock. Its Base-span scratch is Host-memory charged.
+`backing/active/reclaim.rs` removes a sealed logical page only when
 its inverse references are all gone; captured index generations defer that
 physical release until their readers finish. Mixed live/dead-page compaction
 remains open. No reader may infer that an unselected candidate is current.
@@ -64,7 +70,9 @@ checks two shared pack pages and a 32-generation case checks physical pins and
 refunds. A typed record case places 128 inode, namespace and dirty identities
 in the shared index. A backing test checks same-revision inode, extent and
 dirty publication, a retained inode version after capture, and a complete
-128-byte replacement of 128 one-byte extents. These are backing tests. Public FUSE WRITE, namespace
-operations, final-view SaveFile lowering, mixed-page compaction and the #273
-benchmark registry are still unproven and
-remain on the old production route.
+128-byte replacement of 128 one-byte extents. Another backs atomic namespace
+publication and its captured dirty state; an indexed read test covers
+inherited Base, packed, hole and frozen bytes. These are backing tests. Public
+FUSE WRITE and namespace operations, final-view SaveFile lowering, mixed-page
+compaction and the #273 benchmark registry are still unproven and remain on
+the old production route.

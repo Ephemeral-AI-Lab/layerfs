@@ -1,6 +1,6 @@
 use super::{
-    extents::ExtentPlan,
-    index::{Index, IndexSnapshot},
+    extents::{Extent, ExtentKind, ExtentPlan},
+    index::{Index, IndexSnapshot, ScanPage},
     pack::{PackedSlot, TinyPack},
     page::PageRef,
     pages::{PageStore, StoreStatus},
@@ -9,10 +9,12 @@ use super::{
 };
 use crate::{
     backing::{budget::Charge, directory::Directory, metadata::MetadataHost},
-    NodeKind, WorkspaceError,
+    NodeKind, WorkspaceError, MAX_READ_BYTES,
 };
+use layerfs_bridge::contract::Root;
 use std::{
     collections::BTreeMap,
+    mem::size_of,
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -117,6 +119,29 @@ impl ActiveBacking {
         self.index.get(key)
     }
 
+    pub fn scan(
+        &self,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+    ) -> Result<ScanPage, WorkspaceError> {
+        let _state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        self.index.scan(lower, upper, limit)
+    }
+
+    /// Publishes namespace, inode and dirty records without a pack append.
+    /// The caller supplies one complete mutation's sorted, unique key changes.
+    pub fn publish_records(
+        &self,
+        updates: &[(Vec<u8>, Option<Vec<u8>>)],
+    ) -> Result<u64, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.closed {
+            return Err(WorkspaceError::Busy);
+        }
+        self.index.prepare(updates)?.publish()
+    }
+
     /// Reads one slot from the selected generation's locator root.
     pub fn read(
         &self,
@@ -134,6 +159,114 @@ impl ActiveBacking {
         }
         .ok_or(WorkspaceError::NotFound)?;
         self.pack.read(slot, parse_locator(&locator)?)
+    }
+
+    /// Reads one indexed file revision. Packed bytes are copied while the
+    /// current root is locked; canonical Base reads run after that lock ends.
+    pub fn read_file(
+        &self,
+        inode: u64,
+        offset: u64,
+        output: &mut [u8],
+        snapshot: Option<&ActiveSnapshot>,
+        mut read_base: impl FnMut(Root, u64, &mut [u8]) -> Result<(), WorkspaceError>,
+    ) -> Result<usize, WorkspaceError> {
+        if output.len() > MAX_READ_BYTES
+            || snapshot.is_some_and(|view| !std::ptr::eq(Arc::as_ptr(&view.active), self))
+        {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let mut spans = Vec::<(usize, u64, usize)>::new();
+        let mut spans_charge = self.store.budget().reserve(0)?;
+        let _slot_charge = self.store.budget().reserve(128)?;
+        let (selected, length) = {
+            let _state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let get = |key: &[u8]| match snapshot {
+                Some(view) => view.get(key),
+                None => self.index.get(key),
+            };
+            let selected =
+                HotInode::parse(&get(&inode_key(inode))?.ok_or(WorkspaceError::NotFound)?)?;
+            if selected.kind != NodeKind::File {
+                return Err(WorkspaceError::WrongKind);
+            }
+            let length = selected
+                .length
+                .saturating_sub(offset)
+                .min(output.len() as u64) as usize;
+            let mut completed = 0;
+            while completed < length {
+                let position = offset + completed as u64;
+                let extent = if selected.storage == 1 {
+                    selected
+                        .inline
+                        .into_iter()
+                        .flatten()
+                        .find(|extent| extent.start <= position && position < extent.end)
+                } else if selected.storage == 2 {
+                    let key = Extent::key(inode, position);
+                    let found = match snapshot {
+                        Some(view) => view
+                            .index
+                            .as_ref()
+                            .ok_or(WorkspaceError::Closed)?
+                            .floor(&key)?,
+                        None => self.index.floor(&key)?,
+                    };
+                    found
+                        .filter(|(key, _)| key.starts_with(&key[..9]))
+                        .map(|(key, value)| Extent::parse(&key, &value, inode))
+                        .transpose()?
+                } else {
+                    None
+                }
+                .filter(|extent| extent.start <= position && position < extent.end)
+                .ok_or(WorkspaceError::Io)?;
+                let count = (extent.end - position).min((length - completed) as u64) as usize;
+                let source = extent.source_offset + (position - extent.start);
+                match extent.kind {
+                    ExtentKind::Zero => output[completed..completed + count].fill(0),
+                    ExtentKind::Base => {
+                        if spans.len() == spans.capacity() {
+                            let next = spans.capacity().max(4).saturating_mul(2);
+                            spans_charge.resize(next * size_of::<(usize, u64, usize)>())?;
+                            spans
+                                .try_reserve_exact(next - spans.capacity())
+                                .map_err(|_| WorkspaceError::Capacity)?;
+                            spans_charge
+                                .resize(spans.capacity() * size_of::<(usize, u64, usize)>())?;
+                        }
+                        spans.push((completed, source, count));
+                    }
+                    ExtentKind::Packed => {
+                        let slot = PackedSlot {
+                            logical_page: extent.logical_page,
+                            ordinal: extent.ordinal,
+                            inode,
+                            generation: extent.generation,
+                            revision: extent.revision,
+                            offset: extent
+                                .start
+                                .checked_sub(extent.source_offset)
+                                .ok_or(WorkspaceError::Io)?,
+                            length: extent.slot_length,
+                        };
+                        let locator =
+                            get(&locator_key(slot.logical_page))?.ok_or(WorkspaceError::Io)?;
+                        let data = self.pack.read(slot, parse_locator(&locator)?)?;
+                        let at = source as usize;
+                        output[completed..completed + count]
+                            .copy_from_slice(data.get(at..at + count).ok_or(WorkspaceError::Io)?);
+                    }
+                }
+                completed += count;
+            }
+            (selected, length)
+        };
+        for (start, source, count) in spans {
+            read_base(selected.base, source, &mut output[start..start + count])?;
+        }
+        Ok(length)
     }
 
     /// One tiny data and index publication. Extra keyed updates supply inode,
@@ -323,6 +456,18 @@ impl ActiveBacking {
 impl ActiveSnapshot {
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         self.index.as_ref().ok_or(WorkspaceError::Closed)?.get(key)
+    }
+
+    pub fn scan(
+        &self,
+        lower: &[u8],
+        upper: &[u8],
+        limit: usize,
+    ) -> Result<ScanPage, WorkspaceError> {
+        self.index
+            .as_ref()
+            .ok_or(WorkspaceError::Closed)?
+            .scan(lower, upper, limit)
     }
 
     pub fn release(mut self) -> Result<(), WorkspaceError> {

@@ -497,6 +497,134 @@ mod linux {
     }
 
     #[test]
+    fn namespace_records_share_one_revision_and_freeze_with_dirty_state() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let directory = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 0,
+            kind: NodeKind::Directory,
+            fresh: true,
+            storage: 0,
+            mode: 0o755,
+            seconds: 0,
+            nanos: 0,
+            base: [0; 32],
+            metadata: [0; 32],
+            inline: [None; 4],
+        };
+        let old = namespace_key(1, b"old").unwrap();
+        let new = namespace_key(1, b"new").unwrap();
+        let binding = NamespaceRecord {
+            serial: 2,
+            kind: NodeKind::Directory,
+            tombstone: false,
+        };
+        assert_eq!(
+            active
+                .publish_records(&[
+                    (dirty_key(1, 2).to_vec(), Some(vec![1])),
+                    (
+                        inode_key(2).to_vec(),
+                        Some(directory.value().unwrap().to_vec())
+                    ),
+                    (old.clone(), Some(binding.value().unwrap().to_vec())),
+                ])
+                .unwrap(),
+            1
+        );
+        let frozen = active.capture().unwrap();
+        let tombstone = NamespaceRecord {
+            tombstone: true,
+            ..binding
+        };
+        assert_eq!(
+            active
+                .publish_records(&[
+                    (dirty_key(2, 2).to_vec(), Some(vec![1])),
+                    (new.clone(), Some(binding.value().unwrap().to_vec())),
+                    (old.clone(), Some(tombstone.value().unwrap().to_vec())),
+                ])
+                .unwrap(),
+            2
+        );
+        assert_eq!(
+            frozen.get(&old).unwrap(),
+            Some(binding.value().unwrap().to_vec())
+        );
+        assert_eq!(frozen.get(&new).unwrap(), None);
+        assert_eq!(frozen.get(&dirty_key(1, 2)).unwrap(), Some(vec![1]));
+        assert_eq!(frozen.get(&dirty_key(2, 2)).unwrap(), None);
+        assert_eq!(
+            active.get(&old).unwrap(),
+            Some(tombstone.value().unwrap().to_vec())
+        );
+        assert_eq!(
+            active.get(&new).unwrap(),
+            Some(binding.value().unwrap().to_vec())
+        );
+        assert_eq!(active.scan(&[b'D'], &[b'E'], 8).unwrap().entries().len(), 2);
+        frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn indexed_read_keeps_base_holes_and_frozen_packed_bytes() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let inherited = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 16,
+            kind: NodeKind::File,
+            fresh: false,
+            storage: 2,
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: [None; 4],
+        };
+        active.write_tiny_file(1, inherited, 2, b"X").unwrap();
+        let frozen = active.capture().unwrap();
+        let current = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        active.write_tiny_file(1, current, 20, b"Z").unwrap();
+        let base = |root, source: u64, output: &mut [u8]| {
+            assert_eq!(root, [7; 32]);
+            assert!(source + output.len() as u64 <= 16);
+            output.fill(b'A');
+            Ok(())
+        };
+        let mut old = [0; 21];
+        assert_eq!(
+            active
+                .read_file(1, 0, &mut old, Some(&frozen), base)
+                .unwrap(),
+            16
+        );
+        assert_eq!(&old[..16], b"AAXAAAAAAAAAAAAA");
+        let mut live = [0; 21];
+        assert_eq!(active.read_file(1, 0, &mut live, None, base).unwrap(), 21);
+        assert_eq!(&live, b"AAXAAAAAAAAAAAAA\0\0\0\0Z");
+        frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
     fn one_tiny_write_may_replace_128_one_byte_extents() {
         let f = Fixture::new(64 << 20);
         let active = ActiveBacking::new(
