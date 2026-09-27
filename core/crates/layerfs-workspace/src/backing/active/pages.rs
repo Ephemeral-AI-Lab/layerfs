@@ -1,0 +1,510 @@
+use super::page::{Kind, Page, PageRef, PAGE_BYTES};
+use crate::{
+    backing::{
+        budget::Charge,
+        directory::{identity, Directory},
+        metadata::MetadataHost,
+        segments,
+    },
+    BackingFailure, BackingPhase, WorkspaceError,
+};
+use std::{
+    collections::BTreeMap,
+    io,
+    sync::{Arc, Mutex},
+};
+
+const ENTRY_BYTES: usize = 128;
+
+struct Entry {
+    identity: Option<(u64, u64)>,
+    allocated: u64,
+    reserved: u64,
+    kind: Kind,
+    ready: bool,
+    pins: usize,
+    unlinked: bool,
+}
+
+struct State {
+    next: u64,
+    entries: BTreeMap<PageRef, Entry>,
+    entry_charge: Charge,
+    allocated: u64,
+    stopped: bool,
+    complete: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StoreStatus {
+    pub pages: usize,
+    pub allocated_bytes: u64,
+    pub reserved_bytes: u64,
+    pub pinned_pages: usize,
+    pub incomplete_pages: usize,
+    pub admission_stopped: bool,
+    pub accounting_complete: bool,
+}
+
+/// One page per verified private file permits exact block refunds. The host
+/// quota is shared with legacy payload and metadata backing.
+pub struct PageStore {
+    directory: Arc<Directory>,
+    host: Arc<MetadataHost>,
+    state: Mutex<State>,
+    _charge: Charge,
+}
+
+pub struct PagePin {
+    store: Arc<PageStore>,
+    reference: PageRef,
+}
+
+impl Drop for PagePin {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.store.state.lock() {
+            if let Some(entry) = state.entries.get_mut(&self.reference) {
+                entry.pins -= 1;
+            }
+        }
+    }
+}
+
+fn name(kind: Kind, reference: PageRef) -> String {
+    let prefix = if kind == Kind::Pack {
+        "a-pack-v1"
+    } else {
+        "a-index-v1"
+    };
+    format!("{prefix}-{:016x}-{:016x}", reference.id, reference.epoch)
+}
+
+fn failure(
+    phase: BackingPhase,
+    reference: PageRef,
+    allocated: u64,
+    complete: bool,
+    error: &io::Error,
+) -> WorkspaceError {
+    WorkspaceError::Backing(BackingFailure {
+        phase,
+        payload: reference.id,
+        declared_bytes: PAGE_BYTES as u64,
+        completed_bytes: 0,
+        created_segments: u32::from(allocated > 0),
+        allocated_bytes: allocated,
+        reserved_bytes: 0,
+        cleanup_failed: phase == BackingPhase::Cleanup,
+        accounting_complete: complete,
+        kind: error.kind(),
+    })
+}
+
+impl PageStore {
+    pub fn new(
+        directory: Arc<Directory>,
+        host: Arc<MetadataHost>,
+    ) -> Result<Arc<Self>, WorkspaceError> {
+        if directory.incarnation == [0; 32]
+            || directory.path.parent() != Some(&*host.payloads.common.path)
+        {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let budget = &host.payloads.budget;
+        Ok(Arc::new(Self {
+            directory,
+            host: host.clone(),
+            state: Mutex::new(State {
+                next: 1,
+                entries: BTreeMap::new(),
+                entry_charge: budget.reserve(0)?,
+                allocated: 0,
+                stopped: false,
+                complete: true,
+            }),
+            _charge: budget.reserve(1024)?,
+        }))
+    }
+
+    pub fn incarnation(&self) -> [u8; 32] {
+        self.directory.incarnation
+    }
+
+    pub fn budget(&self) -> Arc<crate::backing::budget::Budget> {
+        self.host.payloads.budget.clone()
+    }
+
+    pub fn kind(&self, reference: PageRef) -> Result<Kind, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let entry = state
+            .entries
+            .get(&reference)
+            .ok_or(WorkspaceError::NotFound)?;
+        if !entry.ready {
+            return Err(WorkspaceError::Io);
+        }
+        Ok(entry.kind)
+    }
+
+    fn stop(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.stopped = true;
+        }
+    }
+
+    pub fn create(
+        &self,
+        kind: Kind,
+        generation: u64,
+        revision: u64,
+        records: u16,
+        body: &[u8],
+    ) -> Result<PageRef, WorkspaceError> {
+        let _scratch = self
+            .host
+            .payloads
+            .budget
+            .reserve(PAGE_BYTES + ENTRY_BYTES)?;
+        let reference = {
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if state.stopped {
+                return Err(WorkspaceError::Busy);
+            }
+            let id = state.next;
+            state.next = state.next.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+            PageRef { id, epoch: 1 }
+        };
+        let page = Page::new(
+            kind,
+            self.directory.incarnation,
+            reference,
+            generation,
+            revision,
+            records,
+            body,
+        )?;
+        let directory = self.directory.file()?;
+        self.host.reserve(PAGE_BYTES as u64)?;
+        {
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let Some(bytes) = state
+                .entries
+                .len()
+                .checked_add(1)
+                .and_then(|entries| entries.checked_mul(ENTRY_BYTES))
+            else {
+                self.host.release(0, PAGE_BYTES as u64)?;
+                return Err(WorkspaceError::Capacity);
+            };
+            if let Err(error) = state.entry_charge.resize(bytes) {
+                self.host.release(0, PAGE_BYTES as u64)?;
+                return Err(error);
+            }
+            state.entries.insert(
+                reference,
+                Entry {
+                    identity: None,
+                    allocated: 0,
+                    reserved: PAGE_BYTES as u64,
+                    kind,
+                    ready: false,
+                    pins: 0,
+                    unlinked: false,
+                },
+            );
+        }
+        let filename = name(kind, reference);
+        let file = match segments::create(&directory, &filename) {
+            Ok(file) => file,
+            Err(error) => {
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.entries.remove(&reference);
+                if error.kind() == io::ErrorKind::AlreadyExists {
+                    state.stopped = true;
+                }
+                let bytes = state.entries.len() * ENTRY_BYTES;
+                state.entry_charge.resize(bytes)?;
+                drop(state);
+                self.host.release(0, PAGE_BYTES as u64)?;
+                return Err(failure(BackingPhase::Create, reference, 0, true, &error));
+            }
+        };
+        let file_identity = match file.metadata() {
+            Ok(metadata) => identity(&metadata),
+            Err(error) => {
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.stopped = true;
+                state.complete = false;
+                return Err(failure(BackingPhase::Create, reference, 0, false, &error));
+            }
+        };
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .entries
+            .get_mut(&reference)
+            .ok_or(WorkspaceError::Io)?
+            .identity = Some(file_identity);
+        let allocation = segments::allocate(&file, PAGE_BYTES as u64);
+        let observed = segments::allocated(&file);
+        let allocated = match observed {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                state.stopped = true;
+                state.complete = false;
+                return Err(failure(BackingPhase::Allocate, reference, 0, false, &error));
+            }
+        };
+        if let Err(error) = self.host.transfer(allocated, PAGE_BYTES as u64) {
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            state.stopped = true;
+            state.complete = false;
+            return Err(error);
+        }
+        {
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            state.allocated = state
+                .allocated
+                .checked_add(allocated)
+                .ok_or(WorkspaceError::Io)?;
+            let entry = state
+                .entries
+                .get_mut(&reference)
+                .ok_or(WorkspaceError::Io)?;
+            entry.allocated = allocated;
+            entry.reserved = 0;
+            if allocated > PAGE_BYTES as u64 {
+                state.stopped = true;
+            }
+        }
+        if let Err(error) = allocation {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Allocate,
+                reference,
+                allocated,
+                true,
+                &error,
+            ));
+        }
+        if allocated != PAGE_BYTES as u64 {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Allocate,
+                reference,
+                allocated,
+                true,
+                &io::Error::other("active page allocation size mismatch"),
+            ));
+        }
+        let mut lease = self.host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        window.0[..PAGE_BYTES].copy_from_slice(&page.bytes);
+        if let Err(error) = segments::write(&file, window, 0, PAGE_BYTES) {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Write,
+                reference,
+                allocated,
+                true,
+                &error,
+            ));
+        }
+        window.0[..PAGE_BYTES].fill(0);
+        if let Err(error) = segments::read(&file, window, 0, PAGE_BYTES) {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Verify,
+                reference,
+                allocated,
+                true,
+                &error,
+            ));
+        }
+        let mut verified = Page {
+            bytes: [0; PAGE_BYTES],
+        };
+        verified.bytes.copy_from_slice(&window.0[..PAGE_BYTES]);
+        if verified
+            .verify(kind, self.directory.incarnation, reference)
+            .is_err()
+        {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Verify,
+                reference,
+                allocated,
+                true,
+                &io::Error::new(io::ErrorKind::InvalidData, "active page readback mismatch"),
+            ));
+        }
+        if verified.bytes != page.bytes {
+            self.stop();
+            return Err(failure(
+                BackingPhase::Verify,
+                reference,
+                allocated,
+                true,
+                &io::Error::new(io::ErrorKind::InvalidData, "active page readback changed"),
+            ));
+        }
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .entries
+            .get_mut(&reference)
+            .ok_or(WorkspaceError::Io)?
+            .ready = true;
+        Ok(reference)
+    }
+
+    pub fn read(&self, reference: PageRef, kind: Kind) -> Result<Page, WorkspaceError> {
+        let (expected, charged) = {
+            let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let entry = state
+                .entries
+                .get(&reference)
+                .ok_or(WorkspaceError::NotFound)?;
+            if !entry.ready || entry.kind != kind {
+                return Err(WorkspaceError::Io);
+            }
+            (entry.identity.ok_or(WorkspaceError::Io)?, entry.allocated)
+        };
+        let directory = self.directory.file()?;
+        let file = segments::open(&directory, &name(kind, reference))?;
+        if identity(&file.metadata()?) != expected || segments::allocated(&file)? != charged {
+            return Err(WorkspaceError::Io);
+        }
+        let mut lease = self.host.payloads.window(1, 3)?;
+        let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
+        segments::read(&file, window, 0, PAGE_BYTES)?;
+        let mut page = Page {
+            bytes: [0; PAGE_BYTES],
+        };
+        page.bytes.copy_from_slice(&window.0[..PAGE_BYTES]);
+        page.verify(kind, self.directory.incarnation, reference)?;
+        Ok(page)
+    }
+
+    pub fn pin(self: &Arc<Self>, reference: PageRef) -> Result<PagePin, WorkspaceError> {
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let entry = state
+            .entries
+            .get_mut(&reference)
+            .ok_or(WorkspaceError::NotFound)?;
+        if !entry.ready {
+            return Err(WorkspaceError::Io);
+        }
+        entry.pins = entry.pins.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        Ok(PagePin {
+            store: self.clone(),
+            reference,
+        })
+    }
+
+    pub fn release(&self, reference: PageRef) -> Result<u64, WorkspaceError> {
+        let (kind, expected, charged, reserved, unlinked) = {
+            let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            let entry = state
+                .entries
+                .get(&reference)
+                .ok_or(WorkspaceError::NotFound)?;
+            if entry.pins > 0 {
+                return Err(WorkspaceError::Busy);
+            }
+            (
+                entry.kind,
+                entry.identity,
+                entry.allocated,
+                entry.reserved,
+                entry.unlinked,
+            )
+        };
+        let mut charged = charged;
+        if !unlinked {
+            let expected = expected.ok_or(WorkspaceError::Busy)?;
+            let directory = self.directory.file()?;
+            let filename = name(kind, reference);
+            let file = segments::open(&directory, &filename)?;
+            let metadata = file.metadata()?;
+            let actual = segments::allocated(&file)?;
+            if identity(&metadata) != expected || (reserved == 0 && actual != charged) {
+                return Err(WorkspaceError::Io);
+            }
+            if reserved > 0 {
+                self.host.transfer(actual, reserved)?;
+                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                let entry = state
+                    .entries
+                    .get_mut(&reference)
+                    .ok_or(WorkspaceError::Io)?;
+                entry.allocated = actual;
+                entry.reserved = 0;
+                state.allocated = state
+                    .allocated
+                    .checked_add(actual)
+                    .ok_or(WorkspaceError::Io)?;
+                charged = actual;
+            }
+            drop(file);
+            segments::unlink(&directory, &filename).map_err(|error| {
+                failure(BackingPhase::Cleanup, reference, charged, true, &error)
+            })?;
+            self.state
+                .lock()
+                .map_err(|_| WorkspaceError::Io)?
+                .entries
+                .get_mut(&reference)
+                .ok_or(WorkspaceError::Io)?
+                .unlinked = true;
+        }
+        self.host.release(charged, 0)?;
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        state.allocated = state
+            .allocated
+            .checked_sub(charged)
+            .ok_or(WorkspaceError::Io)?;
+        state.entries.remove(&reference).ok_or(WorkspaceError::Io)?;
+        let bytes = state.entries.len() * ENTRY_BYTES;
+        state.entry_charge.resize(bytes)?;
+        if state.entries.is_empty() {
+            state.complete = true;
+        }
+        Ok(charged)
+    }
+
+    pub fn status(&self) -> Result<StoreStatus, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(StoreStatus {
+            pages: state.entries.len(),
+            allocated_bytes: state.allocated,
+            reserved_bytes: state.entries.values().map(|entry| entry.reserved).sum(),
+            pinned_pages: state
+                .entries
+                .values()
+                .filter(|entry| entry.pins > 0)
+                .count(),
+            incomplete_pages: state.entries.values().filter(|entry| !entry.ready).count(),
+            admission_stopped: state.stopped,
+            accounting_complete: state.complete,
+        })
+    }
+
+    pub fn close(&self) -> Result<(), WorkspaceError> {
+        loop {
+            let (next, complete) = {
+                let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                (state.entries.keys().next().copied(), state.complete)
+            };
+            let Some(reference) = next else {
+                return if complete {
+                    Ok(())
+                } else {
+                    Err(WorkspaceError::Io)
+                };
+            };
+            self.release(reference)?;
+        }
+    }
+}
