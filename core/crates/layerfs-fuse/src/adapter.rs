@@ -611,9 +611,9 @@ impl Filesystem for Adapter {
         // expose checked reply delivery or a later kernel-completion acknowledgement.
         match result {
             Ok(receipt) => {
+                reply.written(receipt.accepted_bytes as u32);
                 self.write_samples
                     .record(&self.workspace, acquisition_ns, publication_ns);
-                reply.written(receipt.accepted_bytes as u32);
             }
             Err(error) => reply.error(error),
         }
