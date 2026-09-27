@@ -16,15 +16,17 @@ from shell_package import (BASE, CORE, ROOT, case_spec, digest, identities,
 
 HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-mounted-writes-spec.md"
+SPEC_512 = ROOT / "docs/roadmap/0.1/0.1.7/issue261-512-diagnostic-spec.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
-COUNTS = {"diagnostic": 100, "gate": 4097}
+COUNTS = {"diagnostic": 100, "diagnostic512": 512, "gate": 4097}
 
 
 def fields(master, name, command):
     value = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                            "genesis_root_serial", "branch_id", "old_commit")}
-    value.update(scenario_id=f"issue261-separated-{COUNTS[name]}-v1",
+    prefix = "issue248" if name == "gate" else "issue261"
+    value.update(scenario_id=f"{prefix}-separated-{COUNTS[name]}-v1",
                  command_hex=command.encode().hex(), expected_failure="0",
                  separated_count=str(COUNTS[name]),
                  telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
@@ -94,9 +96,11 @@ def prepare(output):
     images = {}
     image_wall = {}
     dockerfiles = {}
-    for name in ("diagnostic", "gate"):
-        text = dockerfile.replace("ENTRYPOINT", "ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=25\n"
-            "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if name == "diagnostic" else dockerfile
+    for name in COUNTS:
+        interval = {"diagnostic": 25, "diagnostic512": 128}.get(name)
+        text = dockerfile.replace("ENTRYPOINT",
+            f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
+            "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
         (context / "Dockerfile").write_text(text)
         dockerfiles[name] = sha(text.encode())
         image, wall = run_command(["docker", "build", "-q", str(context)],
@@ -152,6 +156,7 @@ def prepare(output):
     (master / "history.sqlite").chmod(0o444)
     prepared = {"schema": "issue261-separated-prepared-v1", "source": identity,
         "spec_sha256": digest(SPEC), "writer_source_sha256": digest(WRITER),
+        "extension_spec_sha256": digest(SPEC_512),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -167,6 +172,78 @@ def prepare(output):
     json_file(output / "prepared.json", prepared)
     print(json.dumps({"prepared": str(output / "prepared.json"),
                       "images": images, "master": str(master)}))
+
+
+def prepare_reuse(output, previous_file):
+    """Add the declared 512 diagnostic without repeating Init or seed."""
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    identity = identities()
+    previous = json.loads(previous_file.read_text())
+    if identity["source_dirty"] or previous["schema"] != "issue261-separated-prepared-v1":
+        raise ValueError("clean source and a sealed issue261 master required")
+    if identity["product_seal"] != previous["source"]["product_seal"]:
+        raise ValueError("product changed since master preparation")
+    relevant = ["core/crates/layerfs-api/sdk/examples/benchmark_init.rs",
+                "core/crates/layerfs-api/sdk/examples/benchmark_shell.rs",
+                "core/crates/layerfs-server/examples/verify_shell.rs",
+                "core/Cargo.lock", ".cargo/config.toml"]
+    if subprocess.run(["git", "diff", "--quiet", previous["source"]["source_commit"],
+                       identity["source_commit"], "--", *relevant], cwd=ROOT).returncode:
+        raise ValueError("release binary compilation inputs changed")
+    if digest(WRITER) != previous["writer_source_sha256"] or sha(ORIGINAL["data.bin"]) != previous["fixture_sha256"]:
+        raise ValueError("writer or fixture changed")
+    master = previous["master"]
+    for name in ("store", "history"):
+        if digest(Path(master["path"]) / f"{name}.sqlite") != master[f"{name}_sha256"]:
+            raise ValueError(f"{name} master seal mismatch")
+    master_proof = Path(master["path"]) / "verify.stdout"
+    if json.loads(master_proof.read_text().splitlines()[-1])["status"] != "PASS":
+        raise ValueError("prior master proof is not PASS")
+    for binary in previous["binaries"].values():
+        if digest(binary["path"]) != binary["sha256"]:
+            raise ValueError("archived release binary seal mismatch")
+    for name in ("old", "diagnostic", "gate"):
+        source = previous_file.parent / f"{name}.tsv"
+        if digest(source) != previous["manifest_sha256"][name]:
+            raise ValueError(f"{name} manifest seal mismatch")
+        shutil.copyfile(source, output / source.name)
+    (output / "diagnostic512.tsv").write_text(manifest(expected(512)))
+    context = output / "image-context"
+    (context / "bin").mkdir(parents=True)
+    old_context = previous_file.parent / "image-context"
+    for source, target, expected_sha in (
+        (old_context / "layerfs-daemon", context / "layerfs-daemon", previous["daemon_sha256"]),
+        (old_context / "bin/write-separated", context / "bin/write-separated", previous["writer_binary_sha256"]),
+    ):
+        if digest(source) != expected_sha:
+            raise ValueError(f"image binary seal mismatch: {source.name}")
+        shutil.copyfile(source, target)
+        target.chmod(0o755)
+    dockerfile = (f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\n"
+        "COPY bin /fixtures/bin\nENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=128\n"
+        "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n"
+        "ENTRYPOINT [\"/layerfs-daemon\"]\n")
+    (context / "Dockerfile").write_text(dockerfile)
+    image, wall = run_command(["docker", "build", "-q", str(context)],
+                              output / "image-build-diagnostic512")
+    if image.returncode:
+        raise RuntimeError("512 diagnostic image build failed; retained output")
+    prepared = {**previous, "source": identity,
+        "spec_sha256": digest(SPEC), "extension_spec_sha256": digest(SPEC_512),
+        "images": {**previous["images"], "diagnostic512": image.stdout.decode().strip()},
+        "dockerfile_sha256": {**previous["dockerfile_sha256"], "diagnostic512": sha(dockerfile.encode())},
+        "manifest_sha256": {**previous["manifest_sha256"],
+                            "diagnostic512": digest(output / "diagnostic512.tsv")},
+        "build_mode": "sealed release binaries and prepared master reused; image interval changed",
+        "dependency_reuse": {"prepared": str(previous_file),
+                             "master_proof_sha256": digest(master_proof),
+                             "binary_sha256": {name: value["sha256"] for name, value in previous["binaries"].items()}},
+        "preparation_wall_ns": {"image_diagnostic512": wall}}
+    json_file(output / "prepared.json", prepared)
+    print(json.dumps({"prepared": str(output / "prepared.json"),
+                      "reused_master": master["path"],
+                      "image_id": prepared["images"]["diagnostic512"]}))
 
 
 def progress(driver, count):
@@ -212,6 +289,8 @@ def run(prepared_file, output, selection):
         raise ValueError("source changed since preparation")
     if digest(SPEC) != prepared["spec_sha256"] or digest(WRITER) != prepared["writer_source_sha256"]:
         raise ValueError("workload/spec changed")
+    if selection == "diagnostic512" and digest(SPEC_512) != prepared.get("extension_spec_sha256"):
+        raise ValueError("512 diagnostic specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -243,9 +322,9 @@ def run(prepared_file, output, selection):
                prepared["images"][selection]]
     env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": prepared["cursor_key"],
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
-    if selection == "diagnostic":
+    if selection.startswith("diagnostic"):
         env["LAYERFS_COMPLEXITY_DIAGNOSTIC"] = "1"
-    limit = 15 if selection == "diagnostic" else 25
+    limit = 25 if selection == "gate" else 15
     start = time.monotonic_ns()
     try:
         process = subprocess.run(command, cwd=ROOT, capture_output=True,
@@ -269,7 +348,8 @@ def run(prepared_file, output, selection):
                   if "=" in item) if driver else {}
     samples = backing_samples(stderr)
     sample_counts = [row["write_class"] for row in samples]
-    expected_samples = [25, 50, 75, 100] if selection == "diagnostic" else []
+    expected_samples = ([count // 4, count // 2, count * 3 // 4, count]
+                        if selection.startswith("diagnostic") else [])
     verification = {"status": "NOT_RUN"}
     if driver and driver.get("head_commit"):
         after = {**before, "expected_head_commit": driver["head_commit"]}
@@ -295,6 +375,8 @@ def run(prepared_file, output, selection):
         "family_id": "workspace_mounted_separated_writes",
         "scenario_id": before["scenario_id"], "operation_surface": "public WorkspaceApi mount/exec/commit",
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
+        "extension_spec_sha256": prepared.get("extension_spec_sha256"),
+        "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
         "daemon_sha256": prepared["daemon_sha256"],
@@ -338,6 +420,7 @@ def main():
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--reuse-prepared", type=Path)
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--selection", required=True, choices=COUNTS)
@@ -354,7 +437,10 @@ def main():
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "counts": COUNTS}))
     elif args.action == "prepare":
-        prepare(args.output)
+        if args.reuse_prepared:
+            prepare_reuse(args.output, args.reuse_prepared)
+        else:
+            prepare(args.output)
     else:
         run(args.prepared, args.output, args.selection)
 
