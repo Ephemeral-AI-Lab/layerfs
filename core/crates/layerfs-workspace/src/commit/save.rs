@@ -2,7 +2,7 @@
 use super::{
     lower::Dirty,
     source::ReplacementSource,
-    stream::{measure_prepared_totals, PreparedStream},
+    stream::{measure_prepared_totals, PreparedBody, PreparedStream},
     upload,
 };
 use crate::{
@@ -37,8 +37,11 @@ impl Workspace {
         submission: &'a Submission,
         deadline: Instant,
         first_remote: &mut Option<crate::runtime::state::OperationGuard>,
-    ) -> Result<(PreparedChanges, PreparedStream<'a>), WorkspaceError> {
+    ) -> Result<(PreparedChanges, PreparedBody<'a>), WorkspaceError> {
         let captured = submission.capture()?;
+        if captured.active.is_some() {
+            return super::active::prepare(self, submission, deadline, first_remote);
+        }
         let mut count = 0;
         submission.phase(StagePhase::LocalBookkeeping, None)?;
         let mut walk = self.dirty_walk(submission, deadline)?;
@@ -258,7 +261,7 @@ impl Workspace {
             root_serial: context.root_serial.ok_or(WorkspaceError::Io)?,
         };
         let stream = PreparedStream::open(self, submission, deadline, changes.totals)?;
-        Ok((changes, stream))
+        Ok((changes, PreparedBody::Legacy(stream)))
     }
     fn stage_captured(
         &self,

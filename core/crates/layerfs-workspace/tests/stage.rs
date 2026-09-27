@@ -15,6 +15,189 @@ mod linux {
     };
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_generation() {
+        let f = Fixture::new(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let held = f
+            .workspace
+            .open(file.serial, ReferenceScope::Local)
+            .unwrap();
+        f.edit(b"data.bin", 10, 14, b"G1G1");
+        let first = f.workspace.stage(deadline()).unwrap();
+        f.edit(b"data.bin", 10, 14, b"G2G2");
+        let staged = attr(
+            f.native
+                .attributes(first.stage().candidate_root, b"data.bin"),
+        );
+        assert_eq!(
+            f.native.bytes(staged.1, 8, 8),
+            [8, 9, b'G', b'1', b'G', b'1', 14, 15]
+        );
+        assert_eq!(f.read(held, 10, 4), b"G2G2");
+        check("active-g1-staged-bytes-and-g2-live-bytes");
+        f.workspace.commit_staged(&first, deadline()).unwrap();
+        assert_eq!(f.read(held, 10, 4), b"G2G2");
+        let second = f.workspace.commit(deadline()).unwrap();
+        let branch = f.branch();
+        let Response::History(result) = branch else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(
+            f.native.bytes(saved.1, 8, 8),
+            [8, 9, b'G', b'2', b'G', b'2', 14, 15]
+        );
+        let outcome_root = match second.outcome {
+            CommitOutcomeWire::Committed(commit) => commit.root,
+            CommitOutcomeWire::UpToDate { root, .. } => root,
+        };
+        assert_eq!(outcome_root, branch.effective_root);
+        f.workspace.release(held).unwrap();
+        check("active-g1-g2-commits-and-final-bytes");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_close() {
+        let f = Fixture::new_fresh(Gate::None);
+        let (file, handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"created",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(handle, 0, &f.own(b"x"), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"created"));
+        assert_eq!(f.native.bytes(saved.1, 0, 1), b"x");
+        check("active-fresh-name-and-file-commit");
+        f.workspace.close_clean().unwrap();
+        check("active-committed-clean-close");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_namespace() {
+        let f = Fixture::new_fresh(Gate::None);
+        let root = f.workspace.root().serial;
+        let directory = f
+            .workspace
+            .mkdir(root, b"local", 0o755, 0, deadline())
+            .unwrap();
+        let (file, handle) = f
+            .workspace
+            .create_file(
+                directory.serial,
+                b"file",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(handle, 0, &f.own(b"abc"), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace
+            .link(root, b"new-alias", file.serial, deadline())
+            .unwrap();
+        f.workspace
+            .symlink(root, b"shortcut", b"local/file", deadline())
+            .unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let by_path = attr(f.native.attributes(branch.effective_root, b"local/file"));
+        let by_alias = attr(f.native.attributes(branch.effective_root, b"new-alias"));
+        assert_eq!(by_path, by_alias);
+        assert_eq!(f.native.bytes(by_path.1, 0, 3), b"abc");
+        assert_eq!(by_path.0, file.serial);
+        check("active-fresh-directory-link-and-symlink-commit");
+        f.workspace
+            .rename(
+                root,
+                b"new-alias",
+                root,
+                b"renamed",
+                RenameFlags::default(),
+                deadline(),
+            )
+            .unwrap();
+        f.workspace.unlink(root, b"shortcut", deadline()).unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let moved = attr(f.native.attributes(branch.effective_root, b"renamed"));
+        assert_eq!(moved.0, file.serial);
+        assert_eq!(f.native.bytes(moved.1, 0, 3), b"abc");
+        check("active-successor-rename-and-unlink-commit");
+    }
+    #[test]
+    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
+    fn stage_active_mounted() {
+        let f = Fixture::new_fresh(Gate::None);
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let path = f.workspace.mount_path().join("mounted");
+        std::fs::write(&path, b"mount").unwrap();
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"ed")
+            .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"mounted");
+        mount.unmount(deadline()).unwrap();
+        check("active-mounted-fuse-write-unmount");
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"mounted"));
+        assert_eq!(f.native.bytes(saved.1, 0, 7), b"mounted");
+        check("active-mounted-public-commit-bytes");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
     fn stage_semantics() {
         let f = Fixture::new(Gate::Delivery);
         let branch = f.branch();
@@ -62,7 +245,17 @@ mod linux {
             )
             .unwrap();
         let payload = second.own_payload(1, &mut &b"B"[..], deadline()).unwrap();
-        let second_handle = second.open(data.serial, ReferenceScope::Local).unwrap();
+        let second_handle = second
+            .open_file(
+                data.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
         second
             .write_file(second_handle, 0, &payload, deadline())
             .unwrap();

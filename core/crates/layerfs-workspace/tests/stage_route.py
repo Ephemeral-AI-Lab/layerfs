@@ -33,6 +33,10 @@ sys.path.insert(0, str(ROOT / 'core/benchmark/fs-bench-pro-storage-content/share
 import isolation
 
 CASES = {
+    'active_generation': ['active-g1-staged-bytes-and-g2-live-bytes', 'active-g1-g2-commits-and-final-bytes'],
+    'active_close': ['active-fresh-name-and-file-commit', 'active-committed-clean-close'],
+    'active_namespace': ['active-fresh-directory-link-and-symlink-commit', 'active-successor-rename-and-unlink-commit'],
+    'active_mounted': ['active-mounted-fuse-write-unmount', 'active-mounted-public-commit-bytes'],
     'headroom': ['reserved-stage-progress-with-ordinary-disk-quota-occupied', 'exact-stage-and-retained-submission'],
     'metadata_only': ['metadata-only-stage-preserves-root-without-file-save', 'exact-stage-and-retained-submission'],
     'completion_failure': ['known-file-save-survives-native-completion-publication-failure'],
@@ -48,6 +52,10 @@ CASES = {
     'metadata_denied': ['known-metadata-denial-retains-saved-file-G-and-D1'],
 }
 REQUIREMENTS = {
+    'active_generation': ['S-02', 'S-03', 'H-01', 'H-02'],
+    'active_close': ['S-17', 'B-26', 'B-28'],
+    'active_namespace': ['S-17', 'B-26', 'B-28'],
+    'active_mounted': ['S-02', 'S-17', 'H-01'],
     'headroom': ['B-26', 'H-01'],
     'metadata_only': ['H-01', 'B-28'],
     'completion_failure': ['B-20', 'B-26', 'H-07', 'S-15'],

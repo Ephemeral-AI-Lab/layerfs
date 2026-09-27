@@ -610,7 +610,7 @@ mod linux {
                     (old.clone(), Some(tombstone.value().unwrap().to_vec())),
                 ])
                 .unwrap(),
-            2
+            3 // capture advances the active revision with the Workspace revision
         );
         assert_eq!(
             frozen.get(&old).unwrap(),

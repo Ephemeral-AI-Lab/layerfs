@@ -138,6 +138,10 @@ impl ActiveBacking {
         })
     }
 
+    pub fn generation_revision(&self) -> Result<(u64, u64), WorkspaceError> {
+        self.index.generation_revision()
+    }
+
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         let _state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         self.index.get(key)
@@ -678,11 +682,8 @@ impl ActiveBacking {
             return Err(WorkspaceError::Busy);
         }
         let generation = self.index.generation_revision()?.0;
+        let tail = self.pack.seal()?;
         let snapshot = self.index.capture()?;
-        let tail = match self.pack.seal() {
-            Ok(tail) => tail,
-            Err(error) => return Err(snapshot.release().err().unwrap_or(error)),
-        };
         Ok(ActiveSnapshot {
             active: self.clone(),
             index: Some(snapshot),

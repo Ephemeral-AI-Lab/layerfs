@@ -1,8 +1,9 @@
 # #273 active backing storage foundation
 
-> Source pin: this revision follows the checkpoint-2 format amendment
-> `e97900efa` and describes the source committed with this revision. LocalEdit
-> Workspaces select the active owner. This document has no latency or release claim. The
+> Source pin: this revision follows the checkpoint-2 handoff `3897d7cdd` and
+> describes the source committed with this revision. LocalEdit Workspaces
+> select the active owner and lower captured views through the public Service.
+> This document has no latency or release claim. The
 > prospective [format and evaluation contract](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
 > states the target behavior and remaining proof gates.
 
@@ -24,7 +25,8 @@ version replaces them; only the final candidate pages and original replaced
 pages remain owned for publication. Its scratch grows under the Host memory
 budget rather than a fixed update-count ceiling. A capture pins a root/revision
 in constant index-state work and advances the generation; a read view pins
-the same current root without advancing it. Retired index and pack pages are held by
+the same current root without advancing it. Capture advances the index revision
+with the Workspace revision while keeping the old root pinned. Retired index and pack pages are held by
 pins whose revisions fall between each page's birth and retirement revisions.
 The 32 capture limit and 128 possible directory-handle pins are charged in
 the index owner. Captures require explicit release; a dropped read view
@@ -118,10 +120,10 @@ a later handle selects the moved directory's charged origin map.
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured
-views and checkpoint-3 lowering. `stage` and `commit` explicitly refuse an
-active incarnation until checkpoint 3 can freeze and lower its complete
-tuple; neither can acknowledge an empty legacy root as active data. A dirty
-Workspace refuses clean close until that lowering path exists. If backing
+views and legacy lowering. `stage` and `commit` consume the captured active
+tuple described below; neither can acknowledge an empty legacy root as active
+data. A dirty Workspace refuses clean close until Commit installs its
+successor. If backing
 cleanup fails after index publication, the public method completes any checked
 notification and returns `Published` with the receipt, retained handle if any,
 and cleanup cause. A caller can distinguish accepted data from a
@@ -154,5 +156,47 @@ directory handles. A privileged Docker FUSE test covers actual mounted
 create, append, hard link, cross-directory rename, truncate, symlink and
 removals with exact revision accounting. A second mounted test forces an
 entry-notifier EIO on `/dev/fuse` after active create and checks the retained
-receipt and handle. Final-view SaveFile lowering, mixed-page compaction,
-clean close after Commit and the #273 benchmark registry remain open.
+receipt and handle. Mixed-page compaction and the #273 benchmark registry
+remain open.
+
+## Checkpoint 3 active capture and lowering
+
+`overlay/snapshot.rs` pins one active index revision, generation, namespace,
+dirty frontier and sealed pack tail under the Workspace state gate. Its
+submission retains the selected Branch context and counters. The active index
+advances its generation and revision at that same capture; later mutations
+publish into G2 while a G1 Stage reads the pinned G1 root. The old rooted
+capture remains available for legacy frozen-root callers. Active snapshots
+are released explicitly after the known Commit outcome is installed; a
+retained or failed submission keeps its pin and charge.
+
+`commit/active.rs` scans the captured `D` records and their final `I`, `E`
+and `N` values. It sends one existing `SaveFile` request per dirty regular
+file, with ordered Base, replacement and Zero descriptors. Packed and Payload
+bytes are read through the pinned active view, so the upload does not replay
+old journal records. The existing Service chooses C1 `apply_edits` for an
+existing base and `construct_stream` for a fresh file. Portable metadata and
+symlink targets follow the existing Service operations. Prepared directory
+and identity rows use the existing C5 wire format. Their resident encoded
+body, dirty set and extent/name scratch are charged to the Host memory budget.
+This implementation still scans retained `N` rows for a directory it changed;
+its name cost has not yet been proved proportional only to this generation's
+name changes.
+
+The active reconciliation path removes captured dirty keys, installs saved
+content and metadata roots as the next base for touched inodes, clears their
+fresh status, and advances the Branch context under the state gate. It keeps
+G2 extents and namespace records intact, including bytes and names that were
+published while G1 Stage ran. Repeated G1 content extents and retained
+namespace rows remain physically owned until the checkpoint-4 reclaim work.
+
+External release tests on an owned Linux ext4 volume proved G1 staged bytes
+beside G2 live bytes, two Commit outcomes, a fresh named file followed by
+clean close, and a directory/file/link/symlink Commit followed by rename and
+unlink in a second generation. The existing Stage semantics case also held
+the native Save call while a G2 edit published, then checked the frozen
+candidate and the live successor separately. A privileged FUSE test wrote and appended
+through the mounted path, unmounted, committed, and independently read the
+new canonical content root. Those are functional observations at the
+source of this revision. They do not establish the mixed-page space bound,
+the public 3 × 3 timing matrix, or the unchanged #248 gate.

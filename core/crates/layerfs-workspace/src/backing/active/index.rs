@@ -589,10 +589,16 @@ impl Index {
             return Err(WorkspaceError::Busy);
         }
         if capture {
-            state.generation = state
+            let next_generation = state
                 .generation
                 .checked_add(1)
                 .ok_or(WorkspaceError::Capacity)?;
+            let next_revision = state
+                .revision
+                .checked_add(1)
+                .ok_or(WorkspaceError::Capacity)?;
+            state.generation = next_generation;
+            state.revision = next_revision;
             state.captured += 1;
         }
         *state.frozen.entry(revision).or_default() += 1;
