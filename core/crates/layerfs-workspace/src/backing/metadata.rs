@@ -45,6 +45,7 @@ pub struct Arena {
     pub reads: AtomicU64,
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
+    pub owner_finalizations: AtomicU64,
     /// Acknowledged decrements of edges named by extent pages during cleanup.
     pub extent_child_edges_removed: AtomicU64,
     pub extent_custody_edges_removed: AtomicU64,
@@ -213,6 +214,7 @@ impl MetadataHost {
             reads: AtomicU64::new(0),
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
+            owner_finalizations: AtomicU64::new(0),
             extent_child_edges_removed: AtomicU64::new(0),
             extent_custody_edges_removed: AtomicU64::new(0),
             state: Mutex::new(ArenaState {
@@ -543,6 +545,7 @@ impl MetadataHost {
         let mut reserved_slots = 0;
         let mut child_edges_removed = 0u64;
         let mut custody_edges_removed = 0u64;
+        let mut owner_finalizations = 0u64;
         for a in arenas.iter() {
             let s = a.state.lock().map_err(|_| WorkspaceError::Io)?;
             pages += s.pages;
@@ -552,6 +555,8 @@ impl MetadataHost {
                 .saturating_add(a.extent_child_edges_removed.load(Ordering::Relaxed));
             custody_edges_removed = custody_edges_removed
                 .saturating_add(a.extent_custody_edges_removed.load(Ordering::Relaxed));
+            owner_finalizations =
+                owner_finalizations.saturating_add(a.owner_finalizations.load(Ordering::Relaxed));
         }
         let s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
         let status = MetadataStatus {
@@ -576,6 +581,7 @@ impl MetadataHost {
                 "LFS_EXTENT_EDGE v=1 child_edges_removed={} custody_edges_removed={}",
                 child_edges_removed, custody_edges_removed,
             );
+            eprintln!("LFS_METADATA_OWNER v=1 finalizations={owner_finalizations}");
         }
         Ok(status)
     }

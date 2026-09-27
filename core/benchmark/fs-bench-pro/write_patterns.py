@@ -18,6 +18,7 @@ HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md"
 TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue265-mounted-write-treatment.md"
 BALANCE = ROOT / "docs/roadmap/0.1/0.1.7/issue265-balanced-leaf-treatment.md"
+OWNER = ROOT / "docs/roadmap/0.1/0.1.7/issue265-owner-finalize-treatment.md"
 WRITER = HERE / "writers/write-separated.c"
 PATTERNS = ("append", "dispersed", "repeated")
 SIZE = 10 << 20
@@ -59,6 +60,7 @@ def extent_diagnostics(stderr):
     splices = 0
     root_height = 0
     edge = None
+    owner = None
     leaf_min = None
     leaf_max = 0
     lines = stderr.decode(errors="replace").splitlines()
@@ -77,11 +79,16 @@ def extent_diagnostics(stderr):
             if row["v"] != 1:
                 raise ValueError("unknown extent edge counter version")
             edge = row
+        elif (row := diagnostic(line, "LFS_METADATA_OWNER")) is not None:
+            if row["v"] != 1:
+                raise ValueError("unknown metadata owner counter version")
+            owner = row
         elif (match := re.search(r"LFS_WRITE_SAMPLE v=2 write_class=Some\((\d+)\)", line)):
             snapshots.append({"writes": int(match[1]), "splices": splices,
                               "root_height": root_height, "totals": totals.copy(),
                               "leaf_min": leaf_min, "leaf_max": leaf_max,
-                              "edge": edge.copy() if edge else None})
+                              "edge": edge.copy() if edge else None,
+                              "owner": owner.copy() if owner else None})
     return {"splices": splices, "snapshots": snapshots, "totals": totals,
             "root_height": root_height, "leaf_min": leaf_min, "leaf_max": leaf_max,
             "c1_edit": [diagnostic(line, "LFS_C1_EDIT_LOAD") for line in lines
@@ -160,9 +167,9 @@ def prepare_reuse(output, prior_file):
             "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/pack.rs",
             "binary_plus_tree/extent/splice.rs",
             "binary_plus_tree/extent/telemetry.rs", "metadata.rs", "metadata_reclaim.rs",
-            "payload.rs", "reader.rs", "segments.rs")],
+            "ownership.rs", "payload.rs", "reader.rs", "segments.rs")],
         *[f"core/crates/layerfs-workspace/tests/{name}.rs" for name in (
-            "backing_ownership", "maintenance", "payload", "pieces_sequence", "symlink")],
+            "backing_ownership", "maintenance", "owner_finalization", "payload", "pieces_sequence", "symlink")],
     }
     if (prior["source"]["build_profile"] != "release" or
             not changed or not set(changed) <= allowed
@@ -258,6 +265,7 @@ def prepare_reuse(output, prior_file):
         "master": {**master, "path": str(local_master)},
         "treatment_spec_sha256": digest(TREATMENT),
         "balance_spec_sha256": digest(BALANCE),
+        "owner_spec_sha256": digest(OWNER),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": sha(dockerfile.encode()),
@@ -287,6 +295,7 @@ def run(prepared_file, output, pattern):
             or digest(SPEC) != prepared["spec_sha256"]
             or digest(TREATMENT) != prepared["treatment_spec_sha256"]
             or digest(BALANCE) != prepared["balance_spec_sha256"]
+            or digest(OWNER) != prepared["owner_spec_sha256"]
             or digest(WRITER) != prepared["writer_source_sha256"]):
         raise ValueError("prepared source/workload identity changed")
     for item in prepared["binaries"].values():
@@ -380,6 +389,7 @@ def run(prepared_file, output, pattern):
                    [row["writes"] for row in extent["snapshots"]] == [25, 50, 75, 100]
                    and [row["splices"] for row in extent["snapshots"]] == [25, 50, 75, 100]
                    and all(row["edge"] is not None for row in extent["snapshots"])
+                   and all(row["owner"] is not None for row in extent["snapshots"])
                    and len(extent["c1_edit"]) == 1 and len(extent["file_input"]) == 1)
     functional = bool(code == 0 and not timeout and driver and
                       driver.get("status") == "COMPLETE" and driver.get("commit_called")
@@ -391,6 +401,7 @@ def run(prepared_file, output, pattern):
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
         "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
         "balance_spec_sha256": prepared["balance_spec_sha256"],
+        "owner_spec_sha256": prepared["owner_spec_sha256"],
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
         "daemon_sha256": prepared["daemon_sha256"],
@@ -415,7 +426,8 @@ def run(prepared_file, output, pattern):
         "complexity_lines": [line for line in stderr.decode(errors="replace").splitlines()
                              if line.startswith(("LFS_PIECE_LOWER ", "LFS_C1_SAVE_COUNT ",
                                                  "LFS_C1_EDIT_LOAD ", "LFS_FILE_INPUT ",
-                                                 "LFS_EXTENT_SPLICE ", "LFS_EXTENT_EDGE "))],
+                                                 "LFS_EXTENT_SPLICE ", "LFS_EXTENT_EDGE ",
+                                                 "LFS_METADATA_OWNER "))],
         "lft1": lft1(stderr), "complete_command_wall_ns": complete_ns,
         "complete_command_limit_s": 15, "driver_exit_code": code,
         "driver_timeout": timeout, "driver": driver, "projection_counts": counts,
@@ -464,10 +476,12 @@ def main():
                  b"leaf_write_records=3 branch_write_children=2 leaf_min=3 leaf_max=3 "
                  b"child_edges_added=2 custody_edges_added=1\n"
                  b"LFS_EXTENT_EDGE v=1 child_edges_removed=1 custody_edges_removed=1\n"
+                 b"LFS_METADATA_OWNER v=1 finalizations=3\n"
                  b"LFS_WRITE_SAMPLE v=2 write_class=Some(25)\n")
         parsed = extent_diagnostics(check)
         assert parsed["splices"] == 1 and parsed["snapshots"][0]["totals"]["leaf_writes"] == 1
         assert parsed["snapshots"][0]["edge"]["custody_edges_removed"] == 1
+        assert parsed["snapshots"][0]["owner"]["finalizations"] == 3
         print(json.dumps({"spec_sha256": digest(SPEC), "writer_sha256": digest(WRITER),
                           "patterns": PATTERNS, "size": SIZE, "writes": COUNT}))
     elif args.action == "report":

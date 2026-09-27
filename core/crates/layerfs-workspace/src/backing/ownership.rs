@@ -888,12 +888,17 @@ impl RootOwner {
             &window.0[..PAGE],
         )?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = Some((r, 0));
         self.arena.set_owner(
             r,
             Owner {
                 epoch: r.epoch,
                 role: 1,
                 refs: 1,
+                edges: true,
                 device: identity.0,
                 inode: identity.1,
                 ..Owner::default()
@@ -913,13 +918,15 @@ impl RootOwner {
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
         self.add_page_edges(r, &edges, window, deadline)?;
-        let mut owner = self.arena.read_owner(r, window, deadline)?;
-        owner.edges = true;
-        self.arena.write_loaded_owner(r, owner, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .edge_progress = None;
+        let _ = self.arena.owner_finalizations.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |old| Some(old.saturating_add(1)),
+        );
         Ok((r, state))
     }
     pub fn write_page(
@@ -940,13 +947,19 @@ impl RootOwner {
         }
         let r = self.arena.allocate_slot(self, window, deadline)?;
         data.encode(self.arena.directory.incarnation, r, &mut window.0[..PAGE])?;
+        let edges = super::metadata_index::edges(&data)?;
         let identity = self.create_file(&page_name(r), window, deadline)?;
+        self.state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .edge_progress = Some((r, 0));
         self.arena.set_owner(
             r,
             Owner {
                 epoch: r.epoch,
                 role: 1,
                 refs: 1,
+                edges: true,
                 device: identity.0,
                 inode: identity.1,
                 ..Owner::default()
@@ -965,14 +978,16 @@ impl RootOwner {
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .pages += 1;
-        self.add_page_edges(r, &super::metadata_index::edges(&data)?, window, deadline)?;
-        let mut owner = self.arena.read_owner(r, window, deadline)?;
-        owner.edges = true;
-        self.arena.write_loaded_owner(r, owner, window, deadline)?;
+        self.add_page_edges(r, &edges, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
             .edge_progress = None;
+        let _ = self.arena.owner_finalizations.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |old| Some(old.saturating_add(1)),
+        );
         Ok(r)
     }
 }
