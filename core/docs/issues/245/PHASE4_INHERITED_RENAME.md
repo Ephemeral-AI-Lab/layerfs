@@ -82,6 +82,10 @@ head's bytes. In a separate owned Linux container and volume, the locked
 release command selected this one new test: **1 passed**, 0.15 s test time,
 16.9 s complete command including Cargo's rebuild. The earlier six tests were
 not rerun because the product source was unchanged.
+The Linux target's warning-denying Clippy check then found two test-only
+temporary `Vec` arguments (one pre-existing, one in the new case). Both now
+pass slices directly; targeted locked release Clippy passed. The selected test
+was not rerun for this argument-only cleanup.
 
 | Untimed count diagnostic | 3 inherited descendants | 67 inherited descendants |
 | --- | ---: | ---: |

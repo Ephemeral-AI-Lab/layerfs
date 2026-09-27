@@ -550,7 +550,7 @@ fn growing_move_checks_near_and_overlong_cached_descendant_before_publication() 
         .unwrap();
     let target = f
         .workspace
-        .mkdir(first.serial, &vec![b'b'; 63], 0o755, 0, deadline())
+        .mkdir(first.serial, &[b'b'; 63], 0o755, 0, deadline())
         .unwrap();
     let before = f.commit();
     assert_eq!(3 + 15 * 251 + 5, 3773);
@@ -618,7 +618,7 @@ fn growing_inherited_move_checks_uncached_descendant_before_publication() {
         .unwrap();
     let target = f
         .workspace
-        .mkdir(first.serial, &vec![b'b'; 63], 0o755, 0, deadline())
+        .mkdir(first.serial, &[b'b'; 63], 0o755, 0, deadline())
         .unwrap();
     let revision = f.workspace.status().unwrap().revision;
     assert_eq!(
