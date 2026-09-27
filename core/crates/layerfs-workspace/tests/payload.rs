@@ -211,6 +211,119 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "requires owned ext4 mount via LAYERFS_PAYLOAD_TEST_ROOT"]
+    fn tiny_payload_page_profile() {
+        let parent = PathBuf::from(
+            std::env::var_os("LAYERFS_PAYLOAD_TEST_ROOT").expect("explicit owned ext4 root"),
+        );
+        let f = Fixture::new(&parent, 4 * MIB);
+        for (length, allocation, magic) in [
+            (1, 4096, b"LFSWPLD2"),
+            (4016, 4096, b"LFSWPLD2"),
+            (4017, 8192, b"LFSWPLD1"),
+            (MIB + 1, MIB + 2 * 4096 + 4096, b"LFSWPLD1"),
+        ] {
+            let payload = f
+                .workspace
+                .own_payload(length, &mut Generated::new(length), deadline())
+                .unwrap();
+            let files = f.files();
+            assert_eq!(files.len(), length.div_ceil(MIB) as usize);
+            assert_eq!(
+                f.workspace.backing_status().unwrap().allocated_bytes,
+                allocation
+            );
+            let first = fs::read(&files[0]).unwrap();
+            assert_eq!(&first[..8], magic);
+            assert_eq!(
+                u16::from_be_bytes(first[8..10].try_into().unwrap()),
+                if length <= 4016 { 2 } else { 1 }
+            );
+            assert_eq!(
+                u32::from_be_bytes(first[12..16].try_into().unwrap()),
+                if length <= 4016 { 80 } else { 4096 }
+            );
+            assert_eq!(
+                u32::from_be_bytes(first[16..20].try_into().unwrap()),
+                if length <= 4016 { 4016 } else { MIB as u32 }
+            );
+            if length <= 4016 {
+                assert_eq!(first.len(), 4096);
+                for (index, byte) in first[80..80 + length as usize].iter().enumerate() {
+                    assert_eq!(*byte, (index % 251) as u8);
+                }
+                assert!(first[80 + length as usize..].iter().all(|byte| *byte == 0));
+            } else {
+                assert!(first[80..4096].iter().all(|byte| *byte == 0));
+            }
+            for (start, count) in [(0, 1), (length / 2, 1), (length - 1, 1), (0, length)] {
+                let mut reader = payload.reader(start..start + count).unwrap();
+                verify(&mut reader, start, count);
+            }
+            drop(payload);
+            let cleanup = f.workspace.reclaim_payloads(deadline()).unwrap();
+            assert_eq!(cleanup.bytes_released, allocation);
+            assert!(f.files().is_empty());
+        }
+        let token = f
+            .workspace
+            .own_payload(1, &mut &[7][..], deadline())
+            .unwrap();
+        let path = f.files().pop().unwrap();
+        let raw = fs::OpenOptions::new().write(true).open(&path).unwrap();
+        raw.write_all_at(&[1], 4095).unwrap();
+        let mut reader = token.reader(0..1).unwrap();
+        assert!(reader
+            .read(&mut [0], deadline(), &AtomicBool::new(false))
+            .is_err());
+        drop(reader);
+        raw.write_all_at(&[0], 4095).unwrap();
+        drop(raw);
+        drop(token);
+        f.workspace.reclaim_payloads(deadline()).unwrap();
+        f.clean();
+
+        let limited = Fixture::new(&parent, 4096);
+        let held = limited
+            .workspace
+            .own_payload(1, &mut &[1][..], deadline())
+            .unwrap();
+        assert!(limited
+            .workspace
+            .own_payload(1, &mut &[2][..], deadline())
+            .is_err());
+        drop(held);
+        limited.workspace.reclaim_payloads(deadline()).unwrap();
+        let short = limited.workspace.own_payload(2, &mut &[1][..], deadline());
+        assert!(short.is_err());
+        assert_eq!(
+            limited.workspace.backing_status().unwrap().failed_payloads,
+            1
+        );
+        limited.workspace.reclaim_payloads(deadline()).unwrap();
+        limited.clean();
+
+        let collision = Fixture::new(&parent, 4096);
+        let path = collision.backing().join("p-0000000000000001-00000000");
+        fs::write(&path, [0; 4096]).unwrap();
+        assert!(collision
+            .workspace
+            .own_payload(1, &mut &[1][..], deadline())
+            .is_err());
+        assert!(
+            collision
+                .workspace
+                .backing_status()
+                .unwrap()
+                .admission_stopped
+        );
+        fs::remove_file(path).unwrap();
+        collision.workspace.reclaim_payloads(deadline()).unwrap();
+        collision.clean();
+        pass("tiny-versioned-page-boundary-padding-and-cleanup");
+    }
+
+    #[test]
     #[ignore = "requires owned ext4 mounts; run tests/payload_route.py"]
     fn linux_owned_payload_contract() {
         let parent = PathBuf::from(
@@ -558,14 +671,14 @@ mod linux {
         f.clean();
         pass("clean-close");
 
-        let exact = Fixture::new(&parent, 8192);
+        let exact = Fixture::new(&parent, 4096);
         let payload = exact
             .workspace
             .own_payload(1, &mut &[1][..], deadline())
             .unwrap();
         assert_eq!(
             exact.workspace.backing_status().unwrap().allocated_bytes,
-            8192
+            4096
         );
         assert!(exact
             .workspace

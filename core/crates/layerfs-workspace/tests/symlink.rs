@@ -820,7 +820,7 @@ mod linux {
         assert_eq!(parts[2], "00000000");
         let identity = fs::symlink_metadata(path).unwrap();
         assert!(identity.is_file() && !identity.file_type().is_symlink());
-        assert_eq!((identity.len(), identity.blocks() * 512), (8192, 8192));
+        assert_eq!((identity.len(), identity.blocks() * 512), (4096, 4096));
         let raw = fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -866,7 +866,7 @@ mod linux {
                 backing.allocated_bytes,
                 backing.reserved_bytes
             ),
-            (1, 8192, 0)
+            (1, 4096, 0)
         );
         assert!(!backing.accounting_complete && !backing.cleanup_failed);
         assert_eq!(
@@ -905,7 +905,7 @@ mod linux {
         assert_eq!(submission.stage_token, None);
         let retained = f.workspace.backing_status().unwrap();
         assert_eq!((retained.payloads, retained.failed_payloads), (1, 1));
-        assert!(retained.retained_payloads >= 1 && retained.allocated_bytes >= 8192);
+        assert!(retained.retained_payloads >= 1 && retained.allocated_bytes >= 4096);
         assert!(!retained.accounting_complete && retained.admission_stopped);
         assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
         assert_eq!(snapshot(&f), branch);

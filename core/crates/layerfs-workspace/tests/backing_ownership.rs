@@ -20,7 +20,7 @@ use std::{
 const MIB: u64 = 1024 * 1024;
 const AWAIT: u64 = 20;
 const PAYLOAD: u64 = 1;
-const SEGMENT: u64 = 8192;
+const SEGMENT: u64 = 4096;
 /// The acquisition counts this diagnostic walks through. Each row reports the
 /// average routine ownership work one accepted write paid since the row before.
 const CHECKPOINTS: [usize; 6] = [1, 8, 64, 256, 512, 1024];
