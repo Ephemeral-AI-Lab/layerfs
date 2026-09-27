@@ -518,6 +518,31 @@ impl Arena {
         clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         self.reads.fetch_add(1, Ordering::Relaxed);
         let owner = self.read_owner(r, window, deadline)?;
+        self.load_raw_body(r, owner, window)
+    }
+    /// Cleanup just authenticated this owner. Recheck the ledger pathname, but
+    /// do not issue a second direct read of its unchanged record in this step.
+    pub(super) fn load_raw_with_owner(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
+        clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        self.reads.fetch_add(1, Ordering::Relaxed);
+        if r == PageRef::NULL {
+            return Err(WorkspaceError::Io);
+        }
+        drop(self.ledger_file((r.slot - 1) / RECORDS, false, BackingPhase::Read)?);
+        self.load_raw_body(r, owner, window)
+    }
+    fn load_raw_body(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+    ) -> Result<[u8; metadata_pages::PAGE], WorkspaceError> {
         if owner.role != 1 {
             return Err(WorkspaceError::Io);
         }

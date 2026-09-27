@@ -39,6 +39,17 @@ are unchanged. A candidate still records edge progress until that final mark
 succeeds, preserving cleanup and G1/G2 custody. `ledger_reads` should fall by
 one per completed page publication; `ledger_writes` is unaffected.
 
+### #261 loaded ledger owner during old-root cleanup (this source change)
+
+An edge-bearing cleanup step reads and authenticates the page owner before
+loading that page's raw body. The body load now uses the owner from that same
+step, eliminating its second 4 KiB ledger read. It still reopens and validates
+the ledger pathname identity, then validates the metadata page's file identity
+and checksum before extracting edges. A later cleanup phase or retry reads its
+owner again. `ledger_reads` can fall by one for each cleanup body load; the
+number of such loads depends on the pages retired, so no fixed reduction is
+claimed. This changes no metadata page or payload format and no custody edge.
+
 ### #261 mounted WRITE snapshots (source `6af2c5c59` plus this change)
 
 The v2 snapshot keeps its per-mount counters in the FUSE adapter and runs

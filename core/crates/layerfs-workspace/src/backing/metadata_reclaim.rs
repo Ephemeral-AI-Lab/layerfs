@@ -70,7 +70,7 @@ impl RootOwner {
                 // sequence: both declare their own edges, so the raw body and
                 // the kind-aware extraction decide them. The cell decoder would
                 // refuse an extent page and quarantine a healthy arena.
-                let bytes = arena.load_raw(frame.page, window, deadline)?;
+                let bytes = arena.load_raw_with_owner(frame.page, owner, window, deadline)?;
                 let edges = super::metadata_index::edges_raw(
                     arena.directory.incarnation,
                     frame.page,

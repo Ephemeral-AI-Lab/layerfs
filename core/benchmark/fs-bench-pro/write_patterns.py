@@ -16,6 +16,7 @@ from separated_writes import archive_binary, backing_samples, progress
 
 HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-three-pattern-100-spec.md"
+TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue261-ownership-io-treatment.md"
 WRITER = HERE / "writers/write-separated.c"
 PATTERNS = ("append", "dispersed", "repeated")
 SIZE = 10 << 20
@@ -196,6 +197,116 @@ def prepare(output, prior_file):
     print(json.dumps({"prepared": str(output / "prepared.json"), "image_id": image_id}))
 
 
+def prepare_reuse(output, prior_file):
+    """Rebuild changed product binaries around the same closed, verified master."""
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    source = identities()
+    prior = json.loads(prior_file.read_text())
+    if source["source_dirty"] or prior["schema"] != "issue261-patterns-prepared-v1":
+        raise ValueError("committed source and sealed pattern master required")
+    changed = subprocess.check_output(["git", "diff", "--name-only",
+        prior["source"]["source_commit"], source["source_commit"], "--",
+        "core/crates"], cwd=ROOT, text=True).splitlines()
+    allowed = {"core/crates/layerfs-workspace/src/backing/ownership.rs",
+               "core/crates/layerfs-workspace/src/backing/metadata_reclaim.rs"}
+    if (prior["source"]["build_profile"] != "release" or set(changed) != allowed
+            or prior["spec_sha256"] != digest(SPEC)
+            or prior["writer_source_sha256"] != digest(WRITER)
+            or prior["fixture_sha256"] != sha(OLD["data.bin"])
+            or prior["cargo_config_sha256"] != digest(ROOT / ".cargo/config.toml")):
+        raise ValueError(f"unreviewed source or workload change: {changed}")
+    if subprocess.run(["git", "diff", "--quiet", prior["source"]["source_commit"],
+                       source["source_commit"], "--", "core/Cargo.lock",
+                       ".cargo/config.toml"], cwd=ROOT).returncode:
+        raise ValueError("locked compilation inputs changed")
+    master = prior["master"]
+    for name in ("store", "history"):
+        if digest(Path(master["path"]) / f"{name}.sqlite") != master[f"{name}_sha256"]:
+            raise ValueError(f"closed {name} master changed")
+    if digest(Path(master["path"]) / "verify.stdout") != master["proof_sha256"]:
+        raise ValueError("old master proof changed")
+    for name in ("old", *PATTERNS):
+        source_manifest = prior_file.parent / f"{name}.tsv"
+        if digest(source_manifest) != prior["manifest_sha256"][name]:
+            raise ValueError(f"{name} manifest changed")
+        shutil.copyfile(source_manifest, output / f"{name}.tsv")
+    prior_writer = prior_file.parent / "image-context/bin/write-separated"
+    if digest(prior_writer) != prior["writer_binary_sha256"]:
+        raise ValueError("sealed writer changed")
+    context = output / "image-context"
+    (context / "bin").mkdir(parents=True)
+    shutil.copyfile(prior_writer, context / "bin/write-separated")
+    (context / "bin/write-separated").chmod(0o555)
+    builds = {
+        "sdk": ["cargo", "+1.85.1", "build", "--release", "--manifest-path",
+                "core/Cargo.toml", "--locked", "-p", "layerfs-sdk",
+                "--example", "benchmark_shell"],
+        "verifier": ["cargo", "+1.85.1", "build", "--release", "--manifest-path",
+                     "core/Cargo.toml", "--locked", "-p", "layerfs-server",
+                     "--example", "verify_shell"],
+        "daemon": ["cargo", "+1.85.1", "zigbuild", "--release", "--manifest-path",
+                   "core/Cargo.toml", "--locked", "--offline", "--target",
+                   "aarch64-unknown-linux-musl", "-p", "layerfs-daemon"],
+    }
+    build_wall = {}
+    for name, command in builds.items():
+        result, wall = run_command(command, output / f"build-{name}")
+        build_wall[name] = wall
+        json_file(output / f"build-{name}.json", {"command": command,
+                                                  "wall_ns": wall,
+                                                  "exit_code": result.returncode})
+        if result.returncode:
+            raise RuntimeError(f"{name} release build failed; retained logs")
+    archive = output / "binary-archive"
+    binaries = {name: archive_binary(path, archive, name) for name, path in {
+        "benchmark_shell": CORE / "target/release/examples/benchmark_shell",
+        "verify_shell": CORE / "target/release/examples/verify_shell",
+    }.items()}
+    daemon = CORE / "target/aarch64-unknown-linux-musl/release/layerfs-daemon"
+    shutil.copyfile(daemon, context / "layerfs-daemon")
+    (context / "layerfs-daemon").chmod(0o555)
+    dockerfile = (f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\n"
+                  "COPY bin /fixtures/bin\n"
+                  "ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=25\n"
+                  "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\n"
+                  'ENTRYPOINT ["/layerfs-daemon"]\n')
+    (context / "Dockerfile").write_text(dockerfile)
+    image, image_wall = run_command(["docker", "build", "-q", str(context)],
+                                    output / "image-build")
+    if image.returncode:
+        raise RuntimeError("changed-source image build failed; retained logs")
+    env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": prior["cursor_key"],
+           "LAYERFS_CONSTRUCTION_WORKERS": "1"}
+    reproof_command = [binaries["verify_shell"]["path"],
+        str(Path(master["path"]) / "verify.case"),
+        str(Path(master["path"]) / "store.sqlite"),
+        str(Path(master["path"]) / "history.sqlite"),
+        str(output / "old.tsv"), str(output / "old.tsv")]
+    reproof, reproof_wall = run_command(reproof_command, output / "master-reproof",
+                                         timeout=9, env=env)
+    if (reproof.returncode or
+            json.loads(reproof.stdout.splitlines()[-1])["status"] != "PASS"):
+        raise RuntimeError("rebuilt verifier rejected old master; retained logs")
+    prepared = {**prior, "source": source, "binaries": binaries,
+        "treatment_spec_sha256": digest(TREATMENT),
+        "writer_binary_sha256": digest(context / "bin/write-separated"),
+        "daemon_sha256": digest(context / "layerfs-daemon"),
+        "dockerfile_sha256": sha(dockerfile.encode()),
+        "image_id": image.stdout.decode().strip(),
+        "master_reproof_sha256": digest(output / "master-reproof.stdout"),
+        "build_mode": "locked release host SDK/verifier and aarch64 daemon rebuilt; sealed static writer reused",
+        "dependency_reuse": {"prior_prepared": str(prior_file),
+            "prior_source_commit": prior["source"]["source_commit"],
+            "master": "closed Store/history, exact byte identity and rebuilt-verifier proof",
+            "writer": "source and binary SHA-256 matched"},
+        "preparation_wall_ns": {"build": build_wall, "image": image_wall,
+                                "master_reproof": reproof_wall}}
+    json_file(output / "prepared.json", prepared)
+    print(json.dumps({"prepared": str(output / "prepared.json"),
+                      "image_id": prepared["image_id"]}))
+
+
 def run(prepared_file, output, pattern):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -205,6 +316,8 @@ def run(prepared_file, output, pattern):
             or any(source[key] != prepared["source"][key]
                    for key in ("source_commit", "source_tree", "product_seal", "harness_seal"))
             or digest(SPEC) != prepared["spec_sha256"]
+            or ("treatment_spec_sha256" in prepared and
+                digest(TREATMENT) != prepared["treatment_spec_sha256"])
             or digest(WRITER) != prepared["writer_source_sha256"]):
         raise ValueError("prepared source/workload identity changed")
     for item in prepared["binaries"].values():
@@ -219,6 +332,10 @@ def run(prepared_file, output, pattern):
     master = prepared["master"]
     if digest(Path(master["path"]) / "verify.stdout") != master["proof_sha256"]:
         raise ValueError("old-head master proof changed")
+    if ("master_reproof_sha256" in prepared and
+            digest(prepared_file.parent / "master-reproof.stdout") !=
+            prepared["master_reproof_sha256"]):
+        raise ValueError("changed-source master reproof changed")
     for name in ("old", pattern):
         if digest(prepared_file.parent / f"{name}.tsv") != prepared["manifest_sha256"][name]:
             raise ValueError(f"{name} manifest changed")
@@ -293,6 +410,7 @@ def run(prepared_file, output, pattern):
         "selection": pattern, "scenario_id": before["scenario_id"],
         "operation_surface": "public WorkspaceApi mount/exec/commit",
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
+        "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
         "daemon_sha256": prepared["daemon_sha256"],
@@ -339,6 +457,9 @@ def main():
     p = sub.add_parser("prepare")
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--prior-prepared", required=True, type=Path)
+    p = sub.add_parser("prepare-reuse")
+    p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--prior-prepared", required=True, type=Path)
     p = sub.add_parser("run")
     p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
@@ -353,6 +474,8 @@ def main():
                           "patterns": PATTERNS, "size": SIZE, "writes": COUNT}))
     elif args.action == "prepare":
         prepare(args.output, args.prior_prepared)
+    elif args.action == "prepare-reuse":
+        prepare_reuse(args.output, args.prior_prepared)
     else:
         run(args.prepared, args.output, args.selection)
 
