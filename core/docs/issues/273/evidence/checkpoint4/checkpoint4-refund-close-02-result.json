@@ -1,0 +1,91 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-stage",
+  "case": "active_close",
+  "checks": [
+    {
+      "id": "active-fresh-name-and-file-commit",
+      "status": "PASS"
+    },
+    {
+      "id": "active-committed-clean-close",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "S-17",
+    "B-26",
+    "B-28"
+  ],
+  "requirement_scope": "stage-only subsets; no full Pair 1 completion",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "Workspace CommitStaged/reconciliation and repeated Commits",
+    "mounted writes",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound"
+  ],
+  "source": "da2c96ee995eaf901701724bb9f1a04b2646e6db",
+  "product_inputs_sha256": "aa19ed09cb500f386a8a4d334b7056d4ee56f61a0439795326feb2520350944a",
+  "driver_sha256": "affecff45b318e17b366e805d3b175263be26817d08982d84a9b0535c989f673",
+  "test_source_sha256": "509de7f15423ee1d9a5f87372f6ee000c544c227ee1136a0e8d2dbe775ca3597",
+  "entrypoint_sha256": "affecff45b318e17b366e805d3b175263be26817d08982d84a9b0535c989f673",
+  "helper_source_sha256": "572f6e03451f17ed638f83a8b26aca547ee2e17ff15847fda53593909d8a16ca",
+  "test_binary_sha256": "c0860106f36f8f3b5c9336007473e8714e380a59e77cf4779ab99b6907867fb6",
+  "binaries": {
+    "layerfs-server": "95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530",
+    "layerfs-daemon": "7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68",
+    "examples/public_key": "6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "be94c9481be3",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273",
+    "build_target": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint3-prepared-v1/result.json",
+      "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint4-refund-close-02",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": []
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint3-prepared-v1/result.json",
+    "receipt_sha256": "46dda1824619dedbba61ff5c71b63b16f6150ca9609adbb4c05fcd283786bcb9",
+    "closed_store_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "10121fe1e4dcfff444088232bf21513a881b287e0750f47691c023da2d246bd7",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public ImportNativeDirectory, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "actual_nano_cpus": 2000000000,
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::stage_active_close",
+  "test_exit": 0,
+  "observations": [],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 0.94618020899361
+}

@@ -1,0 +1,4 @@
+
+thread 'linux::stage_active_repeated' panicked at crates/layerfs-workspace/tests/stage.rs:323:40:
+called `Result::unwrap()` on an `Err` value: Commit(CommitFailure { generation: 1, phase: Preparing, disposition: KnownBeforeCommit, cause: Stage(StageFailure { generation: 1, phase: LocalBookkeeping, disposition: KnownBeforeStage, cause: NotFound, observed_stage: None, known_stage: None, source_failure: None, pending: None }), stage: None, observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::stage_active_separated4096 ... STAGE_CHECK active-4096-separated-full-private-backing-bound PASS
+STAGE_PHASE case=separated4096 commit_wall_ns=12590158214 pack_fetches=4148 index_fetches=75670 cache_claim=none
+STAGE_ALLOCATION case=separated4096 before_bytes=1839104 after_bytes=20480 before_pack_pages=52 after_pack_pages=0
+STAGE_CHECK active-4096-separated-commit-and-full-byte-oracle PASS
+STAGE_CHECK active-4096-separated-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 39.30s
+

@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::stage_active_repeated ... STAGE_CHECK active-4097-repeated-public-backing PASS
+STAGE_PHASE case=repeated4097 commit_wall_ns=40818792 pack_fetches=2 index_fetches=18 pack_page_writes=0 index_page_writes=1 cache_claim=none
+STAGE_ALLOCATION case=repeated4097 before_bytes=16384 after_bytes=12288 before_pack_pages=1 after_pack_pages=0
+STAGE_CHECK active-4097-repeated-commit-and-byte-oracle PASS
+STAGE_CHECK active-4097-repeated-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 6.06s
+

@@ -1,0 +1,3 @@
+*.log whitespace=-blank-at-eof
+*.stdout whitespace=-blank-at-eof
+*.stderr whitespace=-blank-at-eof

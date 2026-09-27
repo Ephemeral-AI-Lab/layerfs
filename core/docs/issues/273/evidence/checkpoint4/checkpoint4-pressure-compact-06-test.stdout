@@ -1,0 +1,12 @@
+
+running 1 test
+test linux::stage_active_pressure_compact ... STAGE_ALLOCATION case=pressure_compact remaining_before=69632 remaining_after=688128 pack_before=4 pack_after=3 relocated_page_writes=0
+FAILED
+
+failures:
+
+failures:
+    linux::stage_active_pressure_compact
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 25 filtered out; finished in 1.91s
+

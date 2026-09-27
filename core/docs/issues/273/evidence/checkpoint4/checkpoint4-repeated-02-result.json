@@ -1,0 +1,95 @@
+{
+  "status": "PASS",
+  "mode": "functional-workspace-stage",
+  "case": "active_repeated",
+  "checks": [
+    {
+      "id": "active-4097-repeated-public-backing",
+      "status": "PASS"
+    },
+    {
+      "id": "active-4097-repeated-commit-and-byte-oracle",
+      "status": "PASS"
+    },
+    {
+      "id": "active-4097-repeated-exact-clean-close",
+      "status": "PASS"
+    }
+  ],
+  "packet_requirement_ids": [
+    "S-17",
+    "B-26",
+    "B-28"
+  ],
+  "requirement_scope": "stage-only subsets; no full Pair 1 completion",
+  "hard_budget_seconds": 60,
+  "stage_deadline_seconds": 10,
+  "commit_deadline_seconds": null,
+  "performance_claim": false,
+  "cache_claim": null,
+  "not_run": [
+    "Workspace CommitStaged/reconciliation and repeated Commits",
+    "mounted writes",
+    "namespace mutations and npm",
+    "R6",
+    "hard RSS/cgroup bound"
+  ],
+  "source": "da2c96ee995eaf901701724bb9f1a04b2646e6db",
+  "product_inputs_sha256": "f8ed423895fcb168eb43f78221d76fcabe4ef1c2f5e99fb9bae5376b03d441f1",
+  "driver_sha256": "7facfa56e92d55a664d706ec3d8743345e8039d21f49a2a0c6e9f046850c3ae1",
+  "test_source_sha256": "7f3b562d02cd8f9a8bb3c8706314873b9698f5808810ba919819bb9b346f41f3",
+  "entrypoint_sha256": "7facfa56e92d55a664d706ec3d8743345e8039d21f49a2a0c6e9f046850c3ae1",
+  "helper_source_sha256": "572f6e03451f17ed638f83a8b26aca547ee2e17ff15847fda53593909d8a16ca",
+  "test_binary_sha256": "6ca122c84fd95dee17db7af3719b1a53cf7c4b29d722dd1f3a1356f8a3cddaee",
+  "binaries": {
+    "layerfs-server": "95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530",
+    "layerfs-daemon": "7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68",
+    "examples/public_key": "6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9"
+  },
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "resource_isolation": {
+    "scope": "per-worktree",
+    "worktree_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs",
+    "harness_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/benchmark/fs-bench-pro-storage-content",
+    "label": "be94c9481be3",
+    "lock_path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/benchmark/fs-bench-pro-storage-content/.measurement.lock",
+    "artifact_root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273",
+    "build_target": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target",
+    "measurement_excludes": "other runs in this worktree only; other worktrees run freely",
+    "shared_read_only": [
+      "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint3-prepared-v1/result.json",
+      "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4"
+    ],
+    "claim": "state isolation, not resource isolation: overlapping work on this host still perturbs a timed phase, and that interference is recorded per row",
+    "run_output": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint4-repeated-02",
+    "linux_build_target": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target-linux",
+    "observation": "process snapshot before public test; no quiet-host assertion",
+    "concurrent_work": []
+  },
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint3-prepared-v1/result.json",
+    "receipt_sha256": "46dda1824619dedbba61ff5c71b63b16f6150ca9609adbb4c05fcd283786bcb9",
+    "closed_store_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "fixture": {
+    "branch": "11a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "root": "2989ec9a509a2f4283040c4f49d63981922788c7a6f4a52959901297733b4e8f",
+    "root_serial": 1,
+    "file_serial": 2,
+    "data_mode": 420,
+    "route": "public ImportNativeDirectory, Fork, explicit fixture alias Commit before Workspace attach"
+  },
+  "actual_nano_cpus": 2000000000,
+  "caller_identity": "0:0",
+  "kernel": "Linux 6.12.76-linuxkit aarch64 GNU/Linux",
+  "filesystem": "ext4",
+  "test_selection": "linux::stage_active_repeated",
+  "test_exit": 0,
+  "observations": [],
+  "cleanup": "PASS: test process exited; owned Linux runtime/backing removed; no clean Workspace close claim",
+  "service_exit": 0,
+  "command_wall_seconds": 11.69080350000877
+}

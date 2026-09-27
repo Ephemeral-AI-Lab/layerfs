@@ -1,0 +1,205 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace)
+   Compiling layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-fuse)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.18s
+     Running unittests src/lib.rs (core/target/debug/deps/layerfs_workspace-66e5e7c121c634b6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/active_backing.rs (core/target/debug/deps/active_backing-c1a1ec5d458fc710)
+
+running 3 tests
+test large_payload_extent_has_checked_range_and_inverse_identity ... ok
+test namespace_keys_follow_canonical_name_order ... ok
+test page_v1_checks_identity_and_all_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attachment.rs (core/target/debug/deps/attachment-e33a9ed67964ef44)
+
+running 3 tests
+test unacquired_failure_and_expired_admission_leave_no_attachment ... ok
+test exact_attachment_observation_preserves_the_existing_owner ... ok
+test active_attachment_is_observable_and_refuses_cleanup_without_holding_registry ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/backing_ownership.rs (core/target/debug/deps/backing_ownership-1e79cabfde4bd9e9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/coherence.rs (core/target/debug/deps/coherence-9a407f8b5c85ed65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_overlap.rs (core/target/debug/deps/commit_overlap-89b5865973532fab)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_progress.rs (core/target/debug/deps/commit_progress-69bfb471da5bf98c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/commit_staged.rs (core/target/debug/deps/commit_staged-3cde09b431377ee6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/composite.rs (core/target/debug/deps/composite-a8b62e41dad70bf7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/create.rs (core/target/debug/deps/create-317972efc4814853)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fresh_stream.rs (core/target/debug/deps/fresh_stream-2de9dc38c885aeca)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/keyed_tree.rs (core/target/debug/deps/keyed_tree-78fe8fc6a6c9fe61)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/maintenance.rs (core/target/debug/deps/maintenance-42ed25b5bdcca232)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mkdir.rs (core/target/debug/deps/mkdir-1e00b8216bc51fec)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_create.rs (core/target/debug/deps/mounted_create-5a4ee6c0f82a5c32)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_mkdir.rs (core/target/debug/deps/mounted_mkdir-ed0888fafb063c2b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_namespace.rs (core/target/debug/deps/mounted_namespace-9c0cdbbd16f5d65c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mounted_symlink.rs (core/target/debug/deps/mounted_symlink-d0fd924ecc6ee1a3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/namespace.rs (core/target/debug/deps/namespace-5e63bc437b0da20e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/open.rs (core/target/debug/deps/open-0db66a82e2ef2f6e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/owner_finalization.rs (core/target/debug/deps/owner_finalization-bb8fdc3c705ad406)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/payload.rs (core/target/debug/deps/payload-6e6e45f88f20a0dc)
+
+running 1 test
+test private_payload_profile_explicitly_requires_linux ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pieces_sequence.rs (core/target/debug/deps/pieces_sequence-23cdc3b86172b9d2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prepared_namespace.rs (core/target/debug/deps/prepared_namespace-1c412f55ac6a8d09)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/readable.rs (core/target/debug/deps/readable-8ebeb84f50fae68f)
+
+running 9 tests
+test root_owner_reads_mode_zero_but_execute_requires_an_execute_bit ... ok
+test branch_symlink_permission_and_failed_attach_are_explicit ... ok
+test directory_cookies_are_stable_and_bound_to_handles ... ok
+test immutable_reads_handles_eof_and_terminal_failure ... ok
+test detach_waits_for_projection_handles_and_preserves_local_handles ... ok
+test mount_lease_reply_ownership_admission_and_clean_close ... ok
+test full_cookie_table_still_replays_existing_positions ... ok
+test failed_close_keeps_its_registry_count_until_cleanup_succeeds ... ok
+test registry_grows_on_demand_and_keeps_retained_capacity_charged ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/resize.rs (core/target/debug/deps/resize-86885638aa884390)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stage.rs (core/target/debug/deps/stage-0ad33830fda39059)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/symlink.rs (core/target/debug/deps/symlink-ea2aa494cf55b435)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wide_namespace.rs (core/target/debug/deps/wide_namespace-e86df89006c991b4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/write.rs (core/target/debug/deps/write-0b6b24df933cb741)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests layerfs_workspace
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
