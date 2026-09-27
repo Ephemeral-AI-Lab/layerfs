@@ -49,6 +49,8 @@ tracked by #248 and #249 below.
   researches [#264](https://github.com/Ephemeral-AI-Lab/layerfs/issues/264)'s
   resource-charged mounted path model, private-backing costs, CAS/CDC/delta
   boundaries, complexity and a provisional file/LOC plan.
+- [Phase 4.5 C1 Commit follow-up](PHASE4_5_C1_COMMIT_FOLLOWUP.md) records the
+  separate path-local validation proposal, C1 count evidence and format gates.
 - [Phase 1 implementation handoff prompt](HANDOFF_PHASE1_PROMPT.md) gives a
   new agent the reading order, before/after architecture, provisional file
   ownership and LOC range, complexity model, ordinary FUSE route, and
