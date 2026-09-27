@@ -11,6 +11,7 @@ impl Arena {
         r: PageRef,
         bytes: &[u8],
         sponsor: PageRef,
+        sponsor_owner: Option<Owner>,
         window: &mut Window,
         deadline: Instant,
     ) -> Result<Vec<PageRef>, WorkspaceError> {
@@ -18,7 +19,11 @@ impl Arena {
         if sponsor == PageRef::NULL {
             return Ok(current);
         }
-        let previous = self.load_raw(sponsor, window, deadline)?;
+        let owner = match sponsor_owner {
+            Some(owner) => owner,
+            None => self.read_owner(sponsor, window, deadline)?,
+        };
+        let previous = self.load_raw_with_owner(sponsor, owner, window, deadline)?;
         if bytes[49] != metadata_pages::FORMAT_PIECES
             || previous[49] != metadata_pages::FORMAT_PIECES
             || bytes[48] != previous[48]
@@ -81,9 +86,14 @@ impl RootOwner {
                 return Err(WorkspaceError::Io);
             }
             if old.next == PageRef::NULL {
-                let reduced =
-                    self.arena
-                        .sponsored_edges(r, &encoded, proposed_sponsor, window, deadline)?;
+                let reduced = self.arena.sponsored_edges(
+                    r,
+                    &encoded,
+                    proposed_sponsor,
+                    Some(old),
+                    window,
+                    deadline,
+                )?;
                 if reduced.len() < edges.len() {
                     edges = reduced;
                     sponsor = proposed_sponsor;

@@ -71,8 +71,8 @@ impl RootOwner {
                 // the kind-aware extraction decide them. The cell decoder would
                 // refuse an extent page and quarantine a healthy arena.
                 let bytes = arena.load_raw_with_owner(frame.page, owner, window, deadline)?;
-                let edges =
-                    arena.sponsored_edges(frame.page, &bytes, owner.next, window, deadline)?;
+                let edges = arena
+                    .sponsored_edges(frame.page, &bytes, owner.next, None, window, deadline)?;
                 let extent = bytes[49] == metadata_pages::FORMAT_PIECES;
                 let leaf = bytes[48] == 0;
                 let count = partial.unwrap_or(edges.len());

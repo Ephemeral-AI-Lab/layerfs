@@ -497,3 +497,10 @@ Commit root and single construction worker are unchanged. New charged
 child/Local/sponsor counters distinguish ledger updates from encoded edge
 fields in the existing extent-page write diagnostic. Count and public-route
 results are retained in the #271 issue report, not inferred here.
+
+The follow-up source committed with this note reuses the already authenticated
+sponsor owner when loading its body. `load_raw_with_owner` rechecks the ledger
+pathname and page identity without a second 4 KiB owner-ledger read. The body
+checksum, edge-difference rule, one-hop limit and cleanup order above stay the
+same. Its count result is a separate source identity under the
+[prospective one-read correction](../../../../../docs/roadmap/0.1/0.1.7/issue271-sponsor-one-read-spec.md).
