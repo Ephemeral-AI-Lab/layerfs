@@ -19,6 +19,7 @@ pub(crate) enum EntryState {
 pub(crate) struct AttachResources {
     pub directory: Option<Arc<Directory>>,
     pub arena: Option<Arc<Arena>>,
+    pub active: Option<Arc<crate::backing::active::ActiveBacking>>,
     mount: MountLeaf,
 }
 #[derive(Default)]
@@ -76,6 +77,11 @@ impl AttachResources {
         path: &Path,
         deadline: Instant,
     ) -> Result<(), WorkspaceError> {
+        if let Some(active) = &self.active {
+            clock(deadline)?;
+            active.close_clean()?;
+            self.active = None;
+        }
         if let Some(arena) = &self.arena {
             clock(deadline)?;
             host.inner

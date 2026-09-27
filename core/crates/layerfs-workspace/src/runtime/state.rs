@@ -31,6 +31,7 @@ pub(crate) struct Inner {
     pub store: u32,
     pub access: WorkspaceAccess,
     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
+    pub active: Option<Arc<crate::backing::active::ActiveBacking>>,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
     pub directory: Option<Arc<crate::backing::directory::Directory>>,

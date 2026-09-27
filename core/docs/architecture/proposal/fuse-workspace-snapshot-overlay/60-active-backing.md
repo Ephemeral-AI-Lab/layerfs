@@ -77,6 +77,14 @@ reservations, pins and incomplete candidates. The page registry's metadata
 and I/O scratch are charged to the Host memory budget. These files are
 temporary Workspace backing; no sync or crash recovery is added.
 
+Local-edit attachment now constructs one active owner for the Workspace
+incarnation after acquiring the verified private directory. Failed attachment
+closes that owner before the arena and directory; clean close drains it before
+metadata and payload cleanup. Repeating the active owner's already-complete
+close is safe when a later cleanup phase failed and the Workspace retries.
+The mounted mutation and read methods still use the old root, so this
+lifecycle ownership alone does not select the active view.
+
 The external `active_backing` test covers format corruption/identity,
 multi-page pooled index lookup, a captured old locator beside a successor
 locator, tiny slots from two inodes in one logical tail, Host quota refusal,

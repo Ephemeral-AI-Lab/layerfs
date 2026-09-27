@@ -606,7 +606,10 @@ impl ActiveBacking {
 
     pub fn close_clean(&self) -> Result<(), WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        if state.closed || self.index.frozen_count()? > 0 {
+        if state.closed {
+            return Ok(());
+        }
+        if self.index.frozen_count()? > 0 {
             return Err(WorkspaceError::Busy);
         }
         if state.stopped {

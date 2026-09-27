@@ -102,6 +102,9 @@ impl Workspace {
             state.overlay.take()
         };
         drop(retired);
+        if let Some(active) = &self.inner.active {
+            active.close_clean()?;
+        }
         if let (Some(host), Some(arena)) = (&self.host.metadata, &self.inner.arena) {
             host.close(arena, deadline)?;
         }
