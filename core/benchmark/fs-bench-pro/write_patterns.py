@@ -170,6 +170,18 @@ def prepare_reuse(output, prior_file):
             "ownership.rs", "payload.rs", "reader.rs", "segments.rs")],
         *[f"core/crates/layerfs-workspace/tests/{name}.rs" for name in (
             "backing_ownership", "maintenance", "owner_finalization", "payload", "pieces_sequence", "symlink")],
+        # Reviewed #266 FUSE reply-gap source and external native drivers. All
+        # changed release binaries are rebuilt below for the merged product.
+        "core/crates/layerfs-daemon/src/run.rs",
+        "core/crates/layerfs-daemon/tests/history_route.py",
+        "core/crates/layerfs-daemon/tests/mounted_read.py",
+        *[f"core/crates/layerfs-fuse/src/{name}" for name in (
+            "adapter.rs", "lib.rs", "open_flags.rs", "write_sample.rs")],
+        *[f"core/crates/layerfs-fuse/tests/{name}" for name in (
+            "kernel_write.rs", "kernel_write_route.py")],
+        "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+        "core/crates/layerfs-workspace/tests/prepare_large_edit.py",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
     }
     if (prior["source"]["build_profile"] != "release" or
             not changed or not set(changed) <= allowed
