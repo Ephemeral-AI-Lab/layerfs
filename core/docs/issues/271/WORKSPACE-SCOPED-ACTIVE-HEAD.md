@@ -175,6 +175,54 @@ these public FUSE operations.
 | Repeated overwrite | Avoid repeated immutable root churn even though the final file has one changed run. | Old packed slots become dead; bounded, charged compaction is decisive for space and speed. |
 | Unlink/delete | Publish a namespace tombstone in the same active generation without copying the whole current root, if the namespace delta is implemented. | Physical release of unpinned pack/index pages and exact quota refunds still cost work; pinned generations and open handles retain bytes. |
 
+### Preserve localized edits; keep the workload public
+
+There are two different existing edit mechanisms. A WRITE currently uses the
+Workspace's immutable extent splice in
+[`backing/metadata_pieces.rs`](../../../crates/layerfs-workspace/src/backing/metadata_pieces.rs),
+then publishes a copied keyed root. That physical per-WRITE mechanism is the
+work to retire. Its logical Base/Zero/replacement interval semantics stay.
+At Commit, [`commit/save.rs`](../../../crates/layerfs-workspace/src/commit/save.rs)
+lowers the frozen final file and sends `SaveFile` with ordered descriptors and
+a replacement stream through
+[`commit/upload.rs`](../../../crates/layerfs-workspace/src/commit/upload.rs)
+and [`commit/source.rs`](../../../crates/layerfs-workspace/src/commit/source.rs).
+For an existing base root, the Service uses C1
+[`apply_edits`](../../../crates/layerfs-server/src/service/save/content.rs);
+fresh content uses `construct_stream`. The proposed index must normalize its
+**final** Base/Zero/Packed extents into that same validated wire format:
+Packed maps to a Local descriptor whose replacement bytes come from the
+authenticated slot. Pack offsets never enter the Bridge wire. Both descriptor
+and replacement cursors must read the same pinned final view. Historical
+journal records cannot be replayed as C1 edits: thousands of repeated writes
+to one byte yield one final changed run, not thousands of ordered edits.
+The Service/C1 localized construction remains unchanged.
+
+A one-byte overwrite of the 10 MiB base keeps untouched prefix and suffix
+as Base intervals and sends one replacement byte; Workspace does not
+materialize the whole base file. Larger files may require more Base
+descriptors under the extent-size limit, and C1 still pays for affected
+content chunks and metadata. Prove locality with old-payload-read,
+replacement-byte and descriptor counts as base size grows; do not infer it
+from one fast wall time.
+
+The benchmark's [`write-separated.c`](../../../benchmark/fs-bench-pro/writers/write-separated.c)
+is an application program, invoked by
+[`write_patterns.py`](../../../benchmark/fs-bench-pro/write_patterns.py)
+inside a generic Exec. The daemon runs the shell with the mounted Workspace
+as its current directory in
+[`execution.rs`](../../../crates/layerfs-daemon/src/execution.rs).
+The program opens `data.bin` once and issues one ordinary `write` or `pwrite`
+per requested byte; those calls enter the normal
+[`FUSE write callback`](../../../crates/layerfs-fuse/src/adapter.rs).
+It does not call Workspace, C1 or C2 APIs. The runner prepares an independent
+clone and checks the public operation count and an external result oracle.
+Progress printing is inside Exec time. This establishes an authentic
+application-level mutation route, not a qualified latency comparison: the
+retained diagnostics had uncontrolled cache and remain `INELIGIBLE` for speed.
+The current Python selection is fixed at 100 writes; its 512/4,097
+extensions require a new prospective contract and receipts.
+
 ## 4. Scaling dimensions and current product limit
 
 | Dimension | Design and cost requirement | Risk to prove |
@@ -215,7 +263,7 @@ the observed 4,097-WRITE curve into a global theorem.
 | One narrow WRITE | Tree paths `O(log_B E_f + log_B M)` plus charged/reclaimed edges, where `M` is keyed metadata size. | Pack append plus disk inode, dirty-index and extent lookup `O(log_B F + log_B D + log_B E_f + K_i)` in general. A cached hot inode already dirty in this generation and an increasing-offset right edge target amortized `O(1)` page updates. |
 | `W` increasing-offset WRITEs to one hot file | Structural `O(W log_B W + Delta)`; measured ownership cost is large but no global `O(W^2)` proof exists. | Target `O(W)` journal/index updates, with occasional bounded page splits. FUSE still handles `Theta(W)` callbacks. |
 | Logical unlink/delete | Copies affected namespace/keyed paths and later releases the file's owned references. | Target indexed namespace tombstone/update, then charged reclamation of pages/slots no generation or open handle retains. Logical publication can be small; total cleanup remains proportional to what becomes unreferenced. |
-| Commit one captured generation | `O(E_D + R_D + S_D + P_D)` plus namespace changes; one Local private-file open/read per relevant payload. | `O(E_D + R_D + S_D + Q_fetch)` plus the actual freeze, construction, compaction and cleanup work. It must traverse dirty files, not every Workspace file. Across many Commits, sum these costs for every captured generation. |
+| Commit one captured generation | `O(D + E_D + R_D + S_D + P_D)` plus namespace changes; one Local private-file open/read per relevant payload. | `O(D + E_D + R_D + S_D + Q_fetch)` plus namespace changes and the actual freeze, construction, compaction and cleanup work. It must traverse dirty identities, not every Workspace file. Across many Commits, sum these costs for every captured generation. |
 | Charged backing | For this tiny shape, `O(4096W + sum E_f + pinned deltas)` bytes. | Without compaction, `O(rW + sum E_f + pinned unique pages)` for cumulative writes. A live-space target needs charged bounded compaction of dead slots and page-level fragmentation. |
 | Resident memory | Per-payload registry records grow with retained payloads; I/O windows are bounded. | Target bounded charged page cache and pack tail plus live handles; the inode map and extent indexes live on disk. No uncharged `O(F)` root cache. |
 
@@ -292,8 +340,9 @@ more than **6.391 s** removed from this raw diagnostic, and 2x raw Exec needs
 more than **13.248 s** removed. New work raises those requirements. The
 earlier 40–60% pool-removal range was likewise a scenario assumption, not a
 forecast. No value in this section is a predicted performance PASS; future
-comparisons require declared equal cache state and one sealed public sample
-per arm.
+comparisons require cache state declared and enforced equally in both arms
+and one sealed public sample per case per arm. A byte-copy clone alone is
+not a cold-cache contract.
 
 ## 7. Prospective public workload matrix
 
@@ -314,7 +363,12 @@ cache policy, oracle and budgets before any candidate sample; historical
 All three tiers use the same closed, verified 10 MiB master, independent
 writable byte-copy clones, one public Mount -> one generic Exec -> one
 explicit Commit, actual callback counts, full old/new-head and byte oracle,
-clean close and one sample per cell at a frozen identity. The existing
+and clean close. A speed comparison needs one sample per case **per source
+arm**, matched control and candidate identities except for the declared
+product treatment, and a prospectively fixed arm order and completeness
+rule. Cache state must be declared and enforced identically; a clone does
+not establish cold cache. The historical uncontrolled-cache 100-WRITE
+receipts are not numerical speed controls. The existing
 8,194-byte **separated-offset** #248 4,097 gate is a *fourth, distinct*
 workload and remains in the campaign; the three-pattern matrix cannot
 replace or relabel its FAIL. The dispersed schedule selects distinct,
@@ -322,14 +376,20 @@ nonadjacent positions at all three listed counts, while the repeated case
 ends with one changed byte. These source-derived expectations belong in the
 new independent oracle, not in a product test hook.
 
-Add a prospectively named **clean/one-edit quick-Commit control** so a
-constant freeze or compaction tax is observable. A small Commit must not
-walk unrelated files or all prior journal records. Its exact fixture,
-cache contract, bounds and verifier must be frozen with the matrix. Keep
-ordinary 15 s commands, the original prospective 25 s exception where
-declared, separate sub-10 s verification, one construction worker and
-append-only PASS/FAIL/INCOMPLETE/INELIGIBLE reporting; do not enlarge a
-timeout or warm selected data to make a cell pass.
+Register separate **clean Commit** and **one-edit Commit** controls so a
+constant freeze or compaction tax is observable. Include a prior retained
+generation with substantial unrelated journal state in the one-edit control
+to expose an accidental whole-journal scan; its preparation and cache state
+must be declared and charged to their own operation and complete-command
+boundaries. A small Commit must not walk unrelated files or all prior
+journal records. Freeze both controls' fixtures, cache contracts, limits and
+verifiers with the matrix. Keep ordinary 15 s complete commands; any new
+25 s exception must be named prospectively and does not inherit the #248
+exception or the 60 s diagnostic limit. Verification remains separate and
+under 10 s, with one construction worker and append-only
+PASS/FAIL/INCOMPLETE/INELIGIBLE/NOT_RUN reporting. A cell that cannot fit
+is reported `NOT_RUN` with measured wall and reason; do not enlarge its
+timeout or warm selected data to make it pass.
 
 ## 8. Source seams, tests and decisions before implementation
 
@@ -372,3 +432,28 @@ count as this proof. Use new external tests through the public SDK/FUSE route
 and an independent old/new-head byte oracle. Register new benchmark
 selections and gates before sampling; the original 25 s gate and
 incomplete/cache-ineligible historical rows retain their status.
+
+## 9. Implementation rollout and stop/go gates
+
+These are review checkpoints for one replacement architecture, not claims
+that a pack-only or index-only build improves Exec. Keep the current public
+writer until a complete Workspace generation can take over. Do not add a
+per-WRITE dual writer or a benchmark-only route.
+
+| Checkpoint | Work and owning boundary | Evidence required to advance |
+| --- | --- | --- |
+| 0. Freeze contracts | Specify pack/index bytes, authentication, quota and refunds, partial-failure progress, frozen-page lifetime, bounded compaction, old-root access and supported file/generation counts. Commit the new public workload and cache contract before samples. | Format review and complete case registry, including fixed budgets, arm order and `NOT_RUN` rules. |
+| 1. Build Workspace storage | Implement one Workspace-owned pack, pooled disk inode map, ordered per-file extent index, dirty frontier and bounded charged page cache in `backing/` and `runtime/`. | External checks for authenticated append/read, overlap and split, quota refusal, abandoned candidates and exact page cleanup; no resident map or pack tail per file. |
+| 2. Integrate one active view | Select the new representation once per Workspace incarnation, covering WRITE/read, inode attributes, dirty membership and create/truncate/unlink/rename in one revisioned tuple. Preserve regular and directory handle semantics and checked invalidation. | Public semantic and byte-oracle proof for append, dispersed/repeated edits, temp-file rename, delete, aliases, holes, open-unlinked handles and failed/unknown outcomes. No per-WRITE immutable keyed-root publication on this route. |
+| 3. Freeze and lower | Atomically pin namespace, inode/index roots, dirty frontier and pack watermark in `overlay/snapshot.rs`; preserve successor writes and reconciliation. Adapt `commit/{lower,upload,source,reconcile}.rs` to emit the existing final ordered `SaveFile` descriptors and replacement bytes. | G1/G2 and concurrent read/Commit proof; descriptor/replacement and saved-root parity for existing-base edits; C1 `apply_edits` and fresh-file `construct_stream` stay unchanged. Clean and one-edit Commit do not rebuild every index or scan prior journal history. |
+| 4. Bound lifetime work | Complete page/slot reclamation, compaction, quota refunds and clean-close pin accounting across several Execs, Commits, files and retained generations. | Charged backing, resident memory and physical I/O meet the frozen bounds, with work attributed to its real phase. The ≤3 MiB backing target applies only to the one-file 4,096-write fixture. |
+| 5. Freeze and measure | Seal the complete candidate source and run the declared public control/candidate cells once per arm with symmetric enforced cache state, one construction worker, separate verification and append-only receipts. Attribute Exec, Commit, freeze and reclamation, plus callback and Service counts. | Correctness, custody, cleanup and resource gates pass; every registered cell has a result, including failures and `NOT_RUN`. The #248 25 s gate stays 25 s. Any 2× claim needs its own cache-qualified matched evidence across declared workloads. |
+
+Checkpoint 2 switches the whole mutable Workspace view, not an individual
+file, Exec or syscall: namespace, identities, attributes, extents, dirty
+frontier and pack watermark must share one revision. Checkpoints 3 and 4
+may be developed alongside it, but the new route is not ready for default
+selection or release until capture, Commit, retention and cleanup all pass.
+Old frozen roots remain readable until their pins end. A format, workload or
+cache-contract change after checkpoint 5 starts a new source or scenario
+identity; earlier FAIL and `INELIGIBLE` evidence remains as recorded.

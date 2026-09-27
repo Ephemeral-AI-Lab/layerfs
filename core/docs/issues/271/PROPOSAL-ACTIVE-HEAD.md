@@ -74,6 +74,15 @@ well as extent path copying. Its 64/128-byte records, 3 MiB one-file budget,
 amortized constant hot-right-edge updates and timing examples are design
 targets or sensitivity calculations, not measured after results.
 
+The detailed proposal's [implementation rollout](WORKSPACE-SCOPED-ACTIVE-HEAD.md)
+freezes the format and public workload contract first, switches one complete
+Workspace incarnation, then proves capture, cleanup and performance before
+default selection. The existing Service `SaveFile` and C1 `apply_edits`
+localized construction stay in place: Commit lowers the **final indexed
+view**, not the historical journal records. The C writer exercises ordinary
+mounted `write`/`pwrite` calls through FUSE; it is an application-level
+workload, while its uncontrolled-cache diagnostics remain speed-ineligible.
+
 Use a **versioned, disk-indexed active head** for Workspace edits. Each
 accepted WRITE appends a charged edit record and updates a mutable ordered
 index of the current file view under the existing writer gate. A bounded
