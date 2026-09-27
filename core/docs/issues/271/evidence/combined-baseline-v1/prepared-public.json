@@ -1,0 +1,70 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d/benchmark_init",
+      "sha256": "172e8286e08b13e8277800d3fe8f2a6374dee2da677cb189bc09026998140d1d"
+    },
+    "benchmark_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be/benchmark_shell",
+      "sha256": "9a0f6e917cf24a5c2a48b4c83a23eccc70f15c73f575375e202f01248fabb4be"
+    },
+    "verify_shell": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/binary-archive/4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b/verify_shell",
+      "sha256": "4acfc8c69d6c4e8abf487a12ffac200449155b255e2c5bac2cceff1b17b0de8b"
+    }
+  },
+  "build_mode": "locked Cargo release, worktree-local target; Zig -O3 static writer",
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "daemon_sha256": "d7b4df376b83981d833fb6e8efbe1128d1b8232e9c523461a1ad462b9d92c45e",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "images": {
+    "diagnostic": "sha256:9730e7f6001d26f55432de237f14f377273cfa38718dc787474275540912a1cd",
+    "diagnostic100v2": "sha256:c4069180a000d3d7abbe0c02e496559bdf546919bbc91219efbf327c95e2d1b8",
+    "diagnostic100v3": "sha256:72400ecd964af7801847269ed7e7e4dc408a0dd8172b2434776f36b87148e00d",
+    "diagnostic1024": "sha256:b0726ab964cde218f0892eba4a08ac3b9f8ff5874c22a55563e8769f6d236086",
+    "diagnostic512": "sha256:65191cdf60f89cfaaac334c1912f6efdfc9b69921a99d32240602541c083a2a6",
+    "fuse512": "sha256:35f6258bf5622c085af902643ccad53e56a0ba817b5bbd8970b4e00fd55ed336",
+    "gate": "sha256:35a7ef061ae850dbd71b02ad432a4ab21f4e8b9a41107e09c2867cfc1073941b"
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "32d0a789bac2f4b875d616012c0a003a2aca2eeaead8717cfa7332cd433321a348",
+    "genesis_root": "a1a41401f8d9d5de6e5cabd3d8f49f68d30549e1288c9dd278c91da413f56b58",
+    "genesis_root_serial": 1,
+    "history_sha256": "96275c90cb7ee51074cb456dbf1f29f164442df1b1f5e7ea200c58449d52b038",
+    "old_commit": "12ef44464e764a34399e5be721a9d14ab714813471949c06bf20413d2ca6f9a098",
+    "path": "/Users/yifanxu/.codex/worktrees/issue-271-root-edge-io/layerfs/benchmark-results/fs-bench-pro/issue271/combined-baseline-prepared-v1/master",
+    "project_id": "3139aa4755cbda68b7890b9e8f483309f2",
+    "store_sha256": "ce49eb722338ea58f2cb397128e69fee5c4c0abf05821e2b4a959101257cc683"
+  },
+  "preparation_wall_ns": {
+    "image": {
+      "diagnostic": 2981780042,
+      "diagnostic100v2": 300624209,
+      "diagnostic100v3": 348237250,
+      "diagnostic1024": 320625416,
+      "diagnostic512": 373494750,
+      "fuse512": 316140125,
+      "gate": 369408708
+    },
+    "init": 938076792,
+    "seed": 3752272833,
+    "verify": 1368562166
+  },
+  "schema": "issue261-separated-prepared-v1",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "e6576111c4eafd0bd852e0f4dc723d499453fb056a107220dceb3c2467823650",
+    "product_seal": "caa60189727a0a57d18a24f4e787d47e13949e50ed6c74d8b0bdf1b2ea5428da",
+    "source_commit": "ebbd5606fb5087c2b5934e156279eaca3de158e9",
+    "source_dirty": false,
+    "source_tree": "de4a1354dca5ab5855f8000787fb2a27c2d3d77e"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "writer_binary_sha256": "0133f1f93f233540a0913fc56dac69af8f90ccac7a674f340561dc2069640083",
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}

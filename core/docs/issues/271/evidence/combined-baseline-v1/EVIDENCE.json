@@ -1,0 +1,12 @@
+{
+  "classification": "diagnostic, cache-INELIGIBLE",
+  "note": "Independent old/new oracle and full receipts are in each count directory; prepared-public omits the private cursor key.",
+  "product_seal": "caa60189727a0a57d18a24f4e787d47e13949e50ed6c74d8b0bdf1b2ea5428da",
+  "schema": "issue271-combined-baseline-evidence-v1",
+  "selections": {
+    "100": "diagnostic100v3",
+    "512": "fuse512"
+  },
+  "source_commit": "ebbd5606fb5087c2b5934e156279eaca3de158e9",
+  "source_tree": "de4a1354dca5ab5855f8000787fb2a27c2d3d77e"
+}
