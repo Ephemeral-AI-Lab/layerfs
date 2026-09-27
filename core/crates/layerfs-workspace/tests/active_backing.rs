@@ -61,6 +61,7 @@ mod linux {
     };
     use layerfs_workspace::{NodeKind, OwnedPayload, PortableAttributes, WorkspaceError};
     use std::{
+        collections::BTreeSet,
         fs,
         os::unix::fs::{DirBuilderExt, MetadataExt},
         path::PathBuf,
@@ -1234,6 +1235,28 @@ mod linux {
         for inode in (1..=30u64).chain(83..=112) {
             active.write_tiny(inode, 1, 0, b"B", &[]).unwrap();
         }
+        let old_slots: Vec<_> = (1..=128u64)
+            .map(|inode| {
+                let key = Extent::key(inode, 0);
+                let extent =
+                    Extent::parse(&key, &active.get(&key).unwrap().unwrap(), inode).unwrap();
+                (extent.logical_page, extent.ordinal)
+            })
+            .collect();
+        let pack_blocks = || {
+            fs::read_dir(&*f.directory.path)
+                .unwrap()
+                .map(|entry| entry.unwrap())
+                .filter(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with("a-pack-v1-")
+                })
+                .map(|entry| entry.metadata().unwrap().blocks() * 512)
+                .sum::<u64>()
+        };
+        let old_pack_blocks = pack_blocks();
         let before = f.payloads.status().unwrap();
         let available = before.quota_bytes - before.allocated_bytes - before.reserved_bytes;
         let spend = (available - 120 * 1024) / 4096;
@@ -1265,9 +1288,16 @@ mod linux {
         assert_eq!(next.pack_page_writes - old.pack_page_writes, 1);
         assert!(next.pack_pages < old.pack_pages);
         assert_eq!(f.payloads.status().unwrap().allocated_bytes, f.physical());
+        let mut changed_refs = 0;
+        let mut moved_slots = BTreeSet::new();
         for inode in 1..=128u64 {
             let key = Extent::key(inode, 0);
             let extent = Extent::parse(&key, &active.get(&key).unwrap().unwrap(), inode).unwrap();
+            let old_slot = old_slots[(inode - 1) as usize];
+            if old_slot != (extent.logical_page, extent.ordinal) {
+                changed_refs += 1;
+                moved_slots.insert(old_slot);
+            }
             let slot = PackedSlot {
                 logical_page: extent.logical_page,
                 ordinal: extent.ordinal,
@@ -1284,6 +1314,14 @@ mod linux {
             };
             assert_eq!(active.read(slot, None).unwrap(), expected);
         }
+        assert_eq!((moved_slots.len(), changed_refs), (68, 68));
+        assert_eq!(old_pack_blocks - pack_blocks(), 4096);
+        println!(
+            "ACTIVE_PRESSURE slots_moved={} references_changed={} pack_blocks_refunded={}",
+            moved_slots.len(),
+            changed_refs,
+            old_pack_blocks - pack_blocks()
+        );
         active.write_tiny(31, 1, 0, b"C", &[]).unwrap();
         let single = active.status().unwrap().store;
         active
