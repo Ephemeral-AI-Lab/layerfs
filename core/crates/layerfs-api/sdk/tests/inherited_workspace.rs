@@ -8,9 +8,9 @@ use layerfs_bridge::contract::{
 use layerfs_sdk::{HistoryMode, ProjectApi, Server, ServerConfig};
 use layerfs_telemetry::runtime::Runtime;
 use layerfs_workspace::{
-    AttachOptions, Base, FileAccess, FileOpenOptions, HandleId, NodeAttributes, ReferenceScope,
-    RenameFlags, Workspace, WorkspaceAccess, WorkspaceConfig, WorkspaceError, WorkspaceHost,
-    DEFAULT_MEMORY_BUDGET_BYTES,
+    AttachOptions, Base, FileAccess, FileOpenOptions, HandleId, NodeAttributes, NodeKind,
+    ReferenceScope, RenameFlags, Workspace, WorkspaceAccess, WorkspaceConfig, WorkspaceError,
+    WorkspaceHost, DEFAULT_MEMORY_BUDGET_BYTES,
 };
 use std::{
     fs,
@@ -295,6 +295,43 @@ impl Fixture {
             )
             .unwrap()
     }
+}
+
+#[test]
+fn pinned_directory_retains_forgotten_ancestors_and_detached_parent_refuses_mutation() {
+    let f = Fixture::new();
+    let root = f.workspace.root().serial;
+    let packages = f.lookup(root, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let subtree = f.lookup(old.serial, b"subtree");
+    f.workspace.forget(old.serial, 1, ReferenceScope::Local);
+    f.workspace
+        .forget(packages.serial, 1, ReferenceScope::Local);
+    let child = f.lookup(subtree.serial, b"child");
+    assert_eq!(f.lookup(child.serial, b"grand.txt").kind, NodeKind::File);
+    let held = f
+        .workspace
+        .mkdir(subtree.serial, b"empty", 0o755, 0, deadline())
+        .unwrap();
+    let handle = f
+        .workspace
+        .opendir(held.serial, ReferenceScope::Local)
+        .unwrap();
+    f.workspace
+        .rmdir(subtree.serial, b"empty", deadline())
+        .unwrap();
+    assert_eq!(
+        f.workspace
+            .mknod(held.serial, b"lost", 0o600, 0, deadline()),
+        Err(WorkspaceError::NotFound)
+    );
+    assert_eq!(
+        f.workspace
+            .lookup(held.serial, b"lost", ReferenceScope::Local, deadline()),
+        Err(WorkspaceError::NotFound)
+    );
+    assert!(f.workspace.readdir(handle, 0, 2, deadline()).is_ok());
+    f.workspace.releasedir(handle).unwrap();
 }
 
 #[test]

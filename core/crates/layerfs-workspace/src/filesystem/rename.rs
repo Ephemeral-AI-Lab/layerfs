@@ -583,7 +583,16 @@ impl Workspace {
         }
         if source_attr.attr.kind == NodeKind::Directory {
             super::rename_paths::check_cached(&state, &old_path, &new_path)?;
+            if state.live_chain(
+                destination_parent,
+                Some(source_attr.attr.serial),
+                self.inner.root.serial,
+            )? {
+                return Err(WorkspaceError::InvalidInput);
+            }
         }
+        state.live_chain(source_parent, None, self.inner.root.serial)?;
+        state.live_chain(destination_parent, None, self.inner.root.serial)?;
         for parent in &parents {
             let index = state
                 .nodes
@@ -619,6 +628,9 @@ impl Workspace {
                 .iter()
                 .position(|node| node.attr.serial == replaced.attr.serial)
             {
+                if replaced.attr.kind == NodeKind::Directory {
+                    state.nodes[index].attached = false;
+                }
                 state.nodes[index].names = state.nodes[index].names.saturating_sub(1);
                 let reference = state.nodes[index].references(if origin.projected() {
                     ReferenceScope::Projection
@@ -865,6 +877,9 @@ impl Workspace {
                 if node.attr.kind != NodeKind::Directory {
                     return Err(WorkspaceError::NotDirectory);
                 }
+                if !node.attached {
+                    return Err(WorkspaceError::NotFound);
+                }
                 check_access(node.attr, self.inner.root.uid, 3)?;
                 (node.path().to_vec(), node.attr)
             };
@@ -905,26 +920,7 @@ impl Workspace {
     /// True when `serial` is `ancestor` or one of its cached descendants.
     fn descends_from(&self, serial: u64, ancestor: u64) -> Result<bool, WorkspaceError> {
         let state = self.state()?;
-        let mut current = serial;
-        let mut steps = 0;
-        loop {
-            if current == ancestor {
-                return Ok(true);
-            }
-            let node = match state.nodes.iter().find(|node| node.attr.serial == current) {
-                Some(node) => node,
-                None => return Ok(false),
-            };
-            if node.attr.serial == self.inner.root.serial {
-                return Ok(false);
-            }
-            current = node.parent;
-            steps += 1;
-            if steps > crate::runtime::state::NODE_LIMIT {
-                // A bounded refusal, distinct from a detected cycle.
-                return Err(WorkspaceError::Unsupported);
-            }
-        }
+        state.live_chain(serial, Some(ancestor), self.inner.root.serial)
     }
 }
 /// The captured record one parent delta was loaded from, if it had one.

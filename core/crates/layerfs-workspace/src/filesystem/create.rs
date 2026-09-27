@@ -148,6 +148,9 @@ impl Workspace {
             if node.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if !node.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(node.attr, self.inner.root.uid, if file { 1 } else { 3 })?;
             child_path(node.path(), name)?;
             (
@@ -598,6 +601,7 @@ impl Workspace {
             return Err(WorkspaceError::Service(Code::Unknown.into()));
         }
         let parent_node = *state.node_index.get(&parent).ok_or(WorkspaceError::Busy)?;
+        state.live_chain(parent, None, self.inner.root.serial)?;
         check_access(state.nodes[parent_node].attr, self.inner.root.uid, 3)?;
         state.frontier_bytes(
             &self.host,

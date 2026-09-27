@@ -113,6 +113,10 @@ pub(crate) struct Node {
     pub path: [u8; PATH_BYTES],
     pub path_len: usize,
     pub parent: u64,
+    /// False once this directory loses its only live name. Held handles may
+    /// still read their selected view but cannot navigate or mutate through it.
+    pub attached: bool,
+    pub retained: bool,
     pub lookups: u64,
     pub projection_lookups: u64,
     pub handles: usize,
@@ -128,8 +132,7 @@ pub(crate) struct Handle {
     pub scope: ReferenceScope,
     pub options: FileOpenOptions,
     pub ready: bool,
-    // The handle pins this view and its Node. Native namespace edits only add
-    // names, so the pinned Node path remains the exact immutable locator.
+    // The handle pins this view and its Node.
     pub view: Option<crate::filesystem::namespace_view::View>,
 }
 pub(crate) struct Cookie {
@@ -171,6 +174,8 @@ impl Node {
             path: stored,
             path_len: path.len(),
             parent,
+            attached: true,
+            retained: false,
             lookups: 0,
             projection_lookups: 0,
             handles: 0,
@@ -396,12 +401,32 @@ impl State {
         self.unbound.contains(&serial)
     }
     pub fn collect(&mut self, root: u64) {
-        self.nodes.retain(|node| {
-            node.attr.serial == root
+        for node in &mut self.nodes {
+            node.retained = node.attr.serial == root
                 || node.lookups > 0
                 || node.projection_lookups > 0
-                || node.handles > 0
-        });
+                || node.handles > 0;
+        }
+        for index in 0..self.nodes.len() {
+            if !self.nodes[index].retained
+                || !self.nodes[index].attached
+                || self.nodes[index].attr.kind != NodeKind::Directory
+            {
+                continue;
+            }
+            let mut parent = self.nodes[index].parent;
+            for _ in 0..self.nodes.len() {
+                if parent == root {
+                    break;
+                }
+                let Some(&index) = self.node_index.get(&parent) else {
+                    break;
+                };
+                self.nodes[index].retained = true;
+                parent = self.nodes[index].parent;
+            }
+        }
+        self.nodes.retain(|node| node.retained);
         self.node_index.clear();
         for (index, node) in self.nodes.iter().enumerate() {
             self.node_index.insert(node.attr.serial, index);

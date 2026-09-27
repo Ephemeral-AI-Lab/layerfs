@@ -162,6 +162,9 @@ impl Workspace {
             if parent.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if !parent.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(parent.attr, self.inner.root.uid, 1)?;
             (
                 parent.path().to_vec(),
@@ -178,6 +181,7 @@ impl Workspace {
         if state.revision != revision || state.baseline != baseline {
             return Err(WorkspaceError::Busy);
         }
+        state.live_chain(parent, None, self.inner.root.serial)?;
         self.cache_lookup(&mut state, resolved, &path, parent, scope, baseline)
     }
     pub(super) fn cache_lookup(

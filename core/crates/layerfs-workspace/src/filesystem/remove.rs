@@ -83,6 +83,9 @@ impl Workspace {
             if node.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if !node.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(node.attr, self.inner.root.uid, 3)?;
             if parent == self.inner.root.serial {
                 // The root's own name is not removable, but its children are.
@@ -344,6 +347,7 @@ impl Workspace {
             .iter()
             .position(|node| node.attr.serial == parent)
             .ok_or(WorkspaceError::Busy)?;
+        state.live_chain(parent, None, self.inner.root.serial)?;
         state.nodes[parent_node].attr = parent_directory.attributes(state.nodes[parent_node].attr);
         // One name of the child is gone, and the local lookup reference that name
         // owned is gone with it. A regular inode this generation created that no
@@ -353,6 +357,9 @@ impl Workspace {
             .iter()
             .position(|node| node.attr.serial == child.serial)
         {
+            if child.kind == NodeKind::Directory {
+                state.nodes[index].attached = false;
+            }
             if child.kind == NodeKind::File {
                 state.nodes[index].names = state.nodes[index].names.saturating_sub(1);
             }

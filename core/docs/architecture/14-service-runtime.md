@@ -1,5 +1,12 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#264 Phase 4.5A, source in this commit from `ef3a31048`:** A pinned live
+> directory retains its resident ancestor chain through collection. Removed or
+> replaced held directories become detached and cannot authorize live namespace
+> operations. Rename checks attached ancestors by serial without a fixed depth
+> refusal, including under its final publication lock. Mounted paths and the
+> inherited-descendant growth scan remain in this intermediate slice.
+
 > **#258 identity Inspect extension:** The source in the same commit as this
 > paragraph adds native Inspect subtags 5–7 for child attributes by parent
 > serial, attributes by inode serial, and bounded directory listing by serial.

@@ -1,3 +1,4 @@
+mod ancestry;
 pub(crate) mod attachment;
 pub(crate) mod coherence;
 pub(crate) mod host;
