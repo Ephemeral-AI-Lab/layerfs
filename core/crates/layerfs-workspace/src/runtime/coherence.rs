@@ -1,7 +1,13 @@
 //! One projection binding, bounded reply exclusion, and checked mutation completion.
 use super::{lifecycle::MountLease, state::State};
 use crate::{backing::budget::Charge, *};
-use std::{alloc::Layout, io, mem::size_of, time::Instant};
+use std::{
+    alloc::Layout,
+    io,
+    mem::size_of,
+    sync::atomic::{AtomicU8, Ordering},
+    time::Instant,
+};
 
 const PROJECTION_REPLIES: usize = 2;
 
@@ -47,6 +53,7 @@ pub(crate) struct ProjectionState {
     pub replies: usize,
     pub mutation_held: bool,
     pub status: CoherenceStatus,
+    refusals_logged: AtomicU8,
     callback_charge: Option<Charge>,
     _charge: Charge,
 }
@@ -62,12 +69,31 @@ impl ProjectionState {
             replies: 0,
             mutation_held: false,
             status: CoherenceStatus::Unbound,
+            refusals_logged: AtomicU8::new(0),
             callback_charge: None,
             _charge: charge,
         }))
     }
     pub fn in_flight(&self) -> bool {
         matches!(self.status, CoherenceStatus::Pending { .. })
+    }
+    fn log_refusal(&self, site: &str, revision: u64, deadline: Option<Instant>) {
+        if self
+            .refusals_logged
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                (n < 8).then_some(n + 1)
+            })
+            .is_ok()
+        {
+            eprintln!(
+                "LFS_PROJECTION_REFUSAL v=1 site={site} revision={revision} status={:?} delivery={} mutation_held={} replies={} remaining_ns={:?}",
+                self.status,
+                self.delivery.is_some(),
+                self.mutation_held,
+                self.replies,
+                deadline.map(|end| end.saturating_duration_since(Instant::now()).as_nanos()),
+            );
+        }
     }
 }
 
@@ -398,12 +424,14 @@ impl Workspace {
         if !state.mounted {
             return Err(WorkspaceError::Closed);
         }
+        let revision = state.revision;
         let projection = state.projection.as_mut().ok_or(WorkspaceError::Io)?;
         if projection.status != CoherenceStatus::Ready
             || projection.delivery.is_none()
             || projection.mutation_held
             || projection.replies != 0
         {
+            projection.log_refusal("begin_projection_mutation", revision, Some(deadline));
             return Err(WorkspaceError::Busy);
         }
         projection.mutation_held = true;
@@ -495,6 +523,7 @@ impl Workspace {
             || projection.replies > PROJECTION_REPLIES
             || (publication && projection.replies != 1)
         {
+            projection.log_refusal("check_projected_mutation", state.revision, None);
             return Err(WorkspaceError::Busy);
         }
         Ok(())

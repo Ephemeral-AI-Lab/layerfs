@@ -579,7 +579,10 @@ impl Filesystem for Adapter {
             self.workspace
                 .begin_projection_mutation(deadline)
                 .map(|permit| (permit, options.append))
-                .map_err(errno)
+                .map_err(|error| {
+                    self.write_samples
+                        .map_error(&self.workspace, "admission", error)
+                })
         });
         let result = permit
             .as_mut()
@@ -589,12 +592,18 @@ impl Filesystem for Adapter {
                 let payload = self
                     .workspace
                     .own_payload(data.len() as u64, &mut &data[..], deadline)
-                    .map_err(errno)?;
+                    .map_err(|error| {
+                        self.write_samples
+                            .map_error(&self.workspace, "own_payload", error)
+                    })?;
                 acquisition_ns = started.elapsed().as_nanos() as u64;
                 let started = Instant::now();
                 let result = permit
                     .write_file(fh.0, offset, &payload, *append, deadline)
-                    .map_err(errno);
+                    .map_err(|error| {
+                        self.write_samples
+                            .map_error(&self.workspace, "write_file", error)
+                    });
                 publication_ns = started.elapsed().as_nanos() as u64;
                 result
             });

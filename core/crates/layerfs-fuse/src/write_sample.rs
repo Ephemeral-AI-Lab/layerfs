@@ -1,5 +1,6 @@
 //! Optional, bounded write-path counter snapshots for operators.
-use layerfs_workspace::Workspace;
+use fuser::Errno;
+use layerfs_workspace::{Workspace, WorkspaceError};
 use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
@@ -10,6 +11,7 @@ pub(crate) struct WriteSamples {
     start: Instant,
     acquisition_ns: AtomicU64,
     publication_ns: AtomicU64,
+    refusals: AtomicU64,
 }
 
 impl WriteSamples {
@@ -23,7 +25,28 @@ impl WriteSamples {
             start: Instant::now(),
             acquisition_ns: AtomicU64::new(0),
             publication_ns: AtomicU64::new(0),
+            refusals: AtomicU64::new(0),
         }
+    }
+
+    pub(crate) fn map_error(
+        &self,
+        workspace: &Workspace,
+        stage: &str,
+        error: WorkspaceError,
+    ) -> Errno {
+        if matches!(&error, WorkspaceError::Busy)
+            && self
+                .refusals
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    (n < 8).then_some(n + 1)
+                })
+                .is_ok()
+        {
+            let status = workspace.status();
+            eprintln!("LFS_WRITE_REFUSAL v=1 stage={stage} status={status:?}");
+        }
+        crate::replies::errno(error)
     }
 
     pub(crate) fn record(&self, workspace: &Workspace, acquisition_ns: u64, publication_ns: u64) {
