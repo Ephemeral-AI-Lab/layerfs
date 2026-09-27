@@ -113,6 +113,7 @@ def prepare_reuse(output, prior_file):
     allowed = {
         "core/crates/layerfs-content/src/file/edit/apply.rs",
         "core/crates/layerfs-content/src/file/edit/tree.rs",
+        "core/crates/layerfs-content/tests/edit_localized.rs",
         "core/crates/layerfs-server/src/service/save/file_stream.rs",
         *[f"core/crates/layerfs-workspace/src/backing/{path}" for path in (
             "binary_plus_tree/extent/mod.rs", "binary_plus_tree/extent/splice.rs",
