@@ -221,11 +221,21 @@ def prepare_reuse(output, previous_file, selection):
                         "core/crates/layerfs-fuse/src/write_sample.rs",
                         "core/crates/layerfs-fuse/tests/kernel_write.rs",
                         "core/crates/layerfs-daemon/src/run.rs"}
+    # This treatment changes only daemon-side extent packing and its external
+    # test; the archived SDK/verifier have no Workspace package dependency.
+    allowed_packing = {"core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/pack.rs",
+                       "core/crates/layerfs-workspace/src/backing/binary_plus_tree/extent/splice.rs",
+                       "core/crates/layerfs-workspace/tests/pieces_sequence.rs"}
     allowed = (allowed_ownership if selection == "diagnostic100v3" else
                allowed_issue266 if selection in ("fuse512", "gate") else allowed_telemetry)
+    if selection in ("diagnostic100v3", "fuse512", "gate"):
+        allowed |= allowed_packing
+    if selection == "diagnostic1024":
+        allowed = allowed_packing
     if not product_same and (selection != "diagnostic100v2"
                              and selection != "diagnostic100v3"
                              and selection != "fuse512"
+                             and selection != "diagnostic1024"
                              and selection != "gate"
                              or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
