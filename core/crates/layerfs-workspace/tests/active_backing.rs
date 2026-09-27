@@ -59,7 +59,7 @@ mod linux {
         metadata::MetadataHost,
         payload::PayloadHost,
     };
-    use layerfs_workspace::{NodeKind, OwnedPayload, WorkspaceError};
+    use layerfs_workspace::{NodeKind, OwnedPayload, PortableAttributes, WorkspaceError};
     use std::{
         fs,
         os::unix::fs::{DirBuilderExt, MetadataExt},
@@ -718,9 +718,13 @@ mod linux {
         active.write_tiny_file(1, initial, 2, b"X").unwrap();
         let frozen = active.capture().unwrap();
         let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        let mtime = (selected.seconds, selected.nanos);
         assert_eq!(active.resize_file(1, selected, 0).unwrap().length, 0);
         let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!((selected.seconds, selected.nanos), mtime);
         assert_eq!(active.resize_file(1, selected, 5).unwrap().length, 5);
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!((selected.seconds, selected.nanos), mtime);
         let mut live = [1; 5];
         assert_eq!(
             active
@@ -772,6 +776,81 @@ mod linux {
             .unwrap();
         assert_eq!(live, [0, 0, b'Z', 0, 0]);
         frozen.release().unwrap();
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn metadata_first_touch_keeps_inherited_bytes_and_selected_mtime() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let original = HotInode {
+            revision: 1,
+            generation: 1,
+            length: 8,
+            kind: NodeKind::File,
+            fresh: false,
+            storage: 2,
+            mode: 0o644,
+            seconds: 7,
+            nanos: 8,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: [None; 4],
+        };
+        active
+            .set_attributes_file(
+                1,
+                original,
+                PortableAttributes {
+                    mode: Some(0o600),
+                    mtime: Some((123, 456)),
+                    ..PortableAttributes::default()
+                },
+            )
+            .unwrap();
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!(
+            (
+                selected.storage,
+                selected.mode,
+                selected.seconds,
+                selected.nanos
+            ),
+            (1, 0o600, 123, 456)
+        );
+        let mut bytes = [0; 8];
+        active
+            .read_file(
+                1,
+                0,
+                &mut bytes,
+                None,
+                |root, _, output| {
+                    assert_eq!(root, [7; 32]);
+                    output.fill(b'A');
+                    Ok(())
+                },
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(&bytes, b"AAAAAAAA");
+        active.resize_file(1, selected, 3).unwrap();
+        let selected = HotInode::parse(&active.get(&inode_key(1)).unwrap().unwrap()).unwrap();
+        assert_eq!(
+            (
+                selected.length,
+                selected.mode,
+                selected.seconds,
+                selected.nanos
+            ),
+            (3, 0o600, 123, 456)
+        );
         active.close_clean().unwrap();
         drop(active);
         f.clean();

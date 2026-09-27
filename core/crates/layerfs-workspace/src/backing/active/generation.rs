@@ -14,7 +14,7 @@ use crate::{
         metadata::MetadataHost,
         payload::{OwnedPayload, PayloadHost},
     },
-    NodeKind, WorkspaceError, MAX_READ_BYTES,
+    NodeKind, PortableAttributes, WorkspaceError, MAX_READ_BYTES,
 };
 use layerfs_bridge::contract::Root;
 use std::{
@@ -370,14 +370,14 @@ impl ActiveBacking {
         if selected.kind != NodeKind::File || selected.length != original.length {
             return Err(WorkspaceError::InvalidInput);
         }
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| WorkspaceError::Io)?;
         selected.length = length;
         selected.generation = generation;
         selected.revision = revision;
         selected.storage = 2;
         selected.inline = [None; 4];
+        let time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| WorkspaceError::Io)?;
         selected.seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
         selected.nanos = time.subsec_nanos();
         Ok(vec![
@@ -447,6 +447,24 @@ impl ActiveBacking {
         original: HotInode,
         new_length: u64,
     ) -> Result<ActivePublication, WorkspaceError> {
+        self.set_attributes_file(
+            inode,
+            original,
+            PortableAttributes {
+                size: Some(new_length),
+                ..PortableAttributes::default()
+            },
+        )
+    }
+
+    /// Publishes one portable metadata change, materializing a single inline
+    /// Base extent for an inherited file first touched only by attributes.
+    pub fn set_attributes_file(
+        &self,
+        inode: u64,
+        original: HotInode,
+        request: PortableAttributes,
+    ) -> Result<ActivePublication, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
@@ -457,8 +475,35 @@ impl ActiveBacking {
         let revision = prior_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
-        let planned = ExtentPlan::resize(&self.index, inode, original.length, new_length)?;
-        let extra = self.inode_updates(inode, original, generation, revision, planned.length)?;
+        let key = inode_key(inode);
+        let stored = self.index.get(&key)?;
+        let mut selected = match &stored {
+            Some(value) => HotInode::parse(value)?,
+            None => original,
+        };
+        if selected.kind != original.kind || selected.length != original.length {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        request.check(selected.kind, selected.length)?;
+        let length = request.size.unwrap_or(selected.length);
+        let planned = ExtentPlan::resize(&self.index, inode, selected.length, length)?;
+        if length != selected.length {
+            selected.storage = 2;
+            selected.inline = [None; 4];
+        } else if stored.is_none() && selected.kind == NodeKind::File && length > 0 {
+            selected.storage = 1;
+            selected.inline = [Some(Extent::base(0, length)), None, None, None];
+        }
+        selected.length = length;
+        selected.generation = generation;
+        selected.revision = revision;
+        selected.mode = request.mode.unwrap_or(selected.mode);
+        (selected.seconds, selected.nanos) =
+            request.mtime.unwrap_or((selected.seconds, selected.nanos));
+        let extra = vec![
+            (key.to_vec(), Some(selected.value()?.to_vec())),
+            (dirty_key(generation, inode).to_vec(), Some(vec![1])),
+        ];
         self.publish_no_pack(&mut state, planned, extra, None)
     }
 
