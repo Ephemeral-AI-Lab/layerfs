@@ -27,6 +27,18 @@ Chapter numbers are global to the set: this paper holds **chapter 15**.
 
 ## 15. Counters and receipts
 
+### #261 loaded ledger page at publication (this source change)
+
+Both file-extent and keyed metadata page publication first authenticate the
+new page's ownership record, then mark its edge list complete. The mark now
+seals and writes the ledger page still in the I/O window after `read_owner`;
+it does not re-read that same 4 KiB page through `set_owner`. The existing
+`change_refs` path uses the same loaded-page writer. The owner role, epoch,
+references, file identity, checksum, failure/quarantine path and final write
+are unchanged. A candidate still records edge progress until that final mark
+succeeds, preserving cleanup and G1/G2 custody. `ledger_reads` should fall by
+one per completed page publication; `ledger_writes` is unaffected.
+
 ### #261 mounted WRITE snapshots (source `6af2c5c59` plus this change)
 
 The v2 snapshot keeps its per-mount counters in the FUSE adapter and runs

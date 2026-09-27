@@ -363,9 +363,19 @@ impl Arena {
             owner.refs.checked_sub(delta.unsigned_abs())
         }
         .ok_or(WorkspaceError::Io)?;
+        self.write_loaded_owner(r, owner, window, deadline)?;
+        Ok(owner.refs)
+    }
+    /// Writes the authenticated ledger page `read_owner` left in `window`.
+    fn write_loaded_owner(
+        &self,
+        r: PageRef,
+        owner: Owner,
+        window: &mut Window,
+        deadline: Instant,
+    ) -> Result<(), WorkspaceError> {
         // `read_owner` left the authenticated ledger page in this window.
-        // A second read of the same 4 KiB page for this one reference change
-        // doubles ledger I/O on every COW publication and reclaim.
+        // Re-reading it to mark a page's completed edges doubles that I/O.
         clock(deadline).map_err(|error| self.failure(BackingPhase::Write, error.kind()))?;
         let index = (r.slot - 1) / RECORDS;
         let file = self.ledger_file(index, true, BackingPhase::Write)?;
@@ -381,7 +391,7 @@ impl Arena {
                 .unrecoverable = true;
             return Err(self.failure(BackingPhase::Write, error.kind()));
         }
-        Ok(owner.refs)
+        Ok(())
     }
     fn allocate_slot(
         &self,
@@ -880,7 +890,7 @@ impl RootOwner {
         self.add_page_edges(r, &edges, window, deadline)?;
         let mut owner = self.arena.read_owner(r, window, deadline)?;
         owner.edges = true;
-        self.arena.set_owner(r, owner, window, deadline)?;
+        self.arena.write_loaded_owner(r, owner, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
@@ -933,7 +943,7 @@ impl RootOwner {
         self.add_page_edges(r, &super::metadata_index::edges(&data)?, window, deadline)?;
         let mut owner = self.arena.read_owner(r, window, deadline)?;
         owner.edges = true;
-        self.arena.set_owner(r, owner, window, deadline)?;
+        self.arena.write_loaded_owner(r, owner, window, deadline)?;
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?

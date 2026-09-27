@@ -18,16 +18,18 @@ HERE = Path(__file__).resolve().parent
 SPEC = ROOT / "docs/roadmap/0.1/0.1.7/issue261-mounted-writes-spec.md"
 SPEC_512 = ROOT / "docs/roadmap/0.1/0.1.7/issue261-512-diagnostic-spec.md"
 SPEC_100_V2 = ROOT / "docs/roadmap/0.1/0.1.7/issue261-100-phase-diagnostic-v2.md"
+SPEC_TREATMENT = ROOT / "docs/roadmap/0.1/0.1.7/issue261-100-ledger-treatment.md"
 WRITER = HERE / "writers/write-separated.c"
 ORIGINAL = {"data.bin": b"A" * 8194}
-COUNTS = {"diagnostic": 100, "diagnostic100v2": 100, "diagnostic512": 512, "gate": 4097}
+COUNTS = {"diagnostic": 100, "diagnostic100v2": 100,
+          "diagnostic100v3": 100, "diagnostic512": 512, "gate": 4097}
 
 
 def fields(master, name, command):
     value = {key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
                                            "genesis_root_serial", "branch_id", "old_commit")}
     prefix = "issue248" if name == "gate" else "issue261"
-    version = 2 if name == "diagnostic100v2" else 1
+    version = {"diagnostic100v2": 2, "diagnostic100v3": 3}.get(name, 1)
     value.update(scenario_id=f"{prefix}-separated-{COUNTS[name]}-v{version}",
                  command_hex=command.encode().hex(), expected_failure="0",
                  separated_count=str(COUNTS[name]),
@@ -99,7 +101,8 @@ def prepare(output):
     image_wall = {}
     dockerfiles = {}
     for name in COUNTS:
-        interval = {"diagnostic": 25, "diagnostic100v2": 25, "diagnostic512": 128}.get(name)
+        interval = {"diagnostic": 25, "diagnostic100v2": 25,
+                    "diagnostic100v3": 25, "diagnostic512": 128}.get(name)
         text = dockerfile.replace("ENTRYPOINT",
             f"ENV LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}\n"
             "ENV LAYERFS_COMPLEXITY_DIAGNOSTIC=1\nENTRYPOINT") if interval else dockerfile
@@ -160,6 +163,7 @@ def prepare(output):
         "spec_sha256": digest(SPEC), "writer_source_sha256": digest(WRITER),
         "extension_spec_sha256": digest(SPEC_512),
         "phase_spec_sha256": digest(SPEC_100_V2),
+        "treatment_spec_sha256": digest(SPEC_TREATMENT),
         "writer_binary_sha256": digest(context / "bin/write-separated"),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "dockerfile_sha256": dockerfiles,
@@ -187,7 +191,7 @@ def prepare_reuse(output, previous_file, selection):
         raise ValueError("clean source and a sealed issue261 master required")
     if previous["source"]["build_profile"] != "release":
         raise ValueError("previous binaries are not release builds")
-    if selection not in ("diagnostic512", "diagnostic100v2"):
+    if selection not in ("diagnostic512", "diagnostic100v2", "diagnostic100v3"):
         raise ValueError("unsupported reuse selection")
     product_same = identity["product_seal"] == previous["source"]["product_seal"]
     changed_product = subprocess.check_output(["git", "diff", "--name-only",
@@ -196,8 +200,11 @@ def prepare_reuse(output, previous_file, selection):
     allowed_telemetry = {"core/crates/layerfs-fuse/src/adapter.rs",
                          "core/crates/layerfs-fuse/src/mount.rs",
                          "core/crates/layerfs-fuse/src/write_sample.rs"}
+    allowed_ownership = {"core/crates/layerfs-workspace/src/backing/ownership.rs"}
+    allowed = allowed_ownership if selection == "diagnostic100v3" else allowed_telemetry
     if not product_same and (selection != "diagnostic100v2"
-                             or not changed_product or set(changed_product) - allowed_telemetry):
+                             and selection != "diagnostic100v3"
+                             or not changed_product or set(changed_product) - allowed):
         raise ValueError(f"unreviewed product changes since master preparation: {changed_product}")
     relevant = ["core/crates/layerfs-api/sdk/examples/benchmark_init.rs",
                 "core/crates/layerfs-api/sdk/examples/benchmark_shell.rs",
@@ -266,6 +273,7 @@ def prepare_reuse(output, previous_file, selection):
     prepared = {**previous, "source": identity,
         "spec_sha256": digest(SPEC), "extension_spec_sha256": digest(SPEC_512),
         "phase_spec_sha256": digest(SPEC_100_V2),
+        "treatment_spec_sha256": digest(SPEC_TREATMENT),
         "daemon_sha256": digest(context / "layerfs-daemon"),
         "images": {**previous["images"], selection: image.stdout.decode().strip()},
         "dockerfile_sha256": {**previous["dockerfile_sha256"], selection: sha(dockerfile.encode())},
@@ -334,6 +342,8 @@ def run(prepared_file, output, selection):
         raise ValueError("512 diagnostic specification changed")
     if selection == "diagnostic100v2" and digest(SPEC_100_V2) != prepared.get("phase_spec_sha256"):
         raise ValueError("100 phase diagnostic specification changed")
+    if selection == "diagnostic100v3" and digest(SPEC_TREATMENT) != prepared.get("treatment_spec_sha256"):
+        raise ValueError("100 ledger treatment specification changed")
     for binary in prepared["binaries"].values():
         if digest(binary["path"]) != binary["sha256"]:
             raise ValueError("binary seal mismatch")
@@ -393,7 +403,7 @@ def run(prepared_file, output, selection):
     sample_counts = [row["write_class"] for row in samples]
     expected_samples = ([count // 4, count // 2, count * 3 // 4, count]
                         if selection.startswith("diagnostic") else [])
-    phase_samples_complete = selection != "diagnostic100v2" or all(
+    phase_samples_complete = selection not in ("diagnostic100v2", "diagnostic100v3") or all(
         row["version"] == 2 and row["acquisition_ns"] is not None
         and row["publication_ns"] is not None for row in samples)
     verification = {"status": "NOT_RUN"}
@@ -423,6 +433,7 @@ def run(prepared_file, output, selection):
         "source": prepared["source"], "spec_sha256": prepared["spec_sha256"],
         "extension_spec_sha256": prepared.get("extension_spec_sha256"),
         "phase_spec_sha256": prepared.get("phase_spec_sha256"),
+        "treatment_spec_sha256": prepared.get("treatment_spec_sha256"),
         "dependency_reuse": prepared.get("dependency_reuse"),
         "writer_source_sha256": prepared["writer_source_sha256"],
         "writer_binary_sha256": prepared["writer_binary_sha256"],
@@ -469,7 +480,7 @@ def main():
     sub.add_parser("self-check")
     p = sub.add_parser("prepare"); p.add_argument("--output", required=True, type=Path)
     p.add_argument("--reuse-prepared", type=Path)
-    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2"),
+    p.add_argument("--reuse-selection", choices=("diagnostic512", "diagnostic100v2", "diagnostic100v3"),
                    default="diagnostic512")
     p = sub.add_parser("run"); p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
