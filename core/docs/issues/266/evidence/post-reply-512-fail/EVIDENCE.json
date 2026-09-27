@@ -1,0 +1,17 @@
+{
+  "copied_sha256": {
+    "SHA256SUMS": "8d64354b3f5c63e2baca303669b30560b2b541bafdf46ad1dee7aec097a13a6f",
+    "case.before": "36ea26923ca294057f7310d471ee1d5fee98bba107853a12ed3a5689702008cb",
+    "driver.stderr": "da8a3784ac18a5c0e526d11842fdb834966ea718ac009537c1d9b6222bdac785",
+    "driver.stdout": "b1dae1c6f864d116cf90ad38d6f97de699b851c48685fdc513b1a4e830e78f1a",
+    "prepared-public.json": "6c93934f82050d11e1c72a259535a4e3baebbc5f4d172213be098a4813e63781",
+    "receipt.json": "8c81f6369b8a64349e952cd458eee7119be6f9efdccb7eef40625177d8064abe"
+  },
+  "label": "post-reply-512-fail",
+  "original_attempt_dir": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1",
+  "original_history_sha256": "9de61b66251c28b00e5f0d78c3398411fcaa746f16d586e659bd2fc89a2c645a",
+  "original_prepared_sha256": "2f5a7c37abeaa5a358708d59889082d0f696682f432e63e8fdd31a9ff01cad73",
+  "original_store_sha256": "6a0589853aa5dab05bea0e7f224d9c832f70b551fd8a0e74668ffbc898bb15d9",
+  "redacted_prepared_field": "cursor_key",
+  "schema": "issue266-evidence-v1"
+}

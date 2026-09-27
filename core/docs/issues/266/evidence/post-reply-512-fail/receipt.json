@@ -1,0 +1,238 @@
+{
+  "admission_eligible": false,
+  "backing_sample_counts_expected": [
+    128,
+    256,
+    384,
+    512
+  ],
+  "backing_samples": [
+    {
+      "acquisition_ns": 248404789,
+      "backing": {
+        "accounting_complete": "true",
+        "acquiring": "false",
+        "admission_stopped": "false",
+        "allocated_bytes": 1093632,
+        "cleaning": "false",
+        "failed_payloads": 0,
+        "ledger_reads": 4198,
+        "ledger_writes": 2301,
+        "lookup_scans": 0,
+        "metadata_reads": 952,
+        "payloads": 128,
+        "quota_bytes": 1073741824,
+        "readers": 0,
+        "reserved_bytes": 851968,
+        "retained_payloads": 128,
+        "routine_scans": 127
+      },
+      "elapsed_ns": 593192250,
+      "metadata": {
+        "accounting_complete": "true",
+        "admission_stopped": "false",
+        "allocated_bytes": 45056,
+        "allocated_pages": 8,
+        "external_roots": 1,
+        "reserved_bytes": 851968,
+        "reserved_slots": 0,
+        "reusable_pages": 0,
+        "roots": 2,
+        "working_bytes": 4368
+      },
+      "publication_ns": 315198452,
+      "version": 2,
+      "write_class": 128
+    }
+  ],
+  "cache_contract": "uncontrolled ordinary host/container cache; no prewarm; latency INELIGIBLE",
+  "cache_status": "INELIGIBLE",
+  "cleanup_status": "FAIL",
+  "clone": {
+    "history": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1/history.sqlite",
+    "store": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1/store.sqlite"
+  },
+  "clone_method": "shutil.copyfile independent writable byte copy",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/binary-archive/f9b99bf514059e1daac716c468c7f059f2ce78e46764ab8fb2dd859550c69e65/benchmark_shell",
+    "run",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1/case.before",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1/store.sqlite",
+    "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/postreply-512-v1/history.sqlite",
+    "sha256:b6c4287a91faea9d63ca2544fb4ae6c353ac332d17590cdef9939961d2bdadab"
+  ],
+  "complete_command_limit_s": 15,
+  "complete_command_wall_ns": 6477323792,
+  "complexity_lines": [],
+  "daemon_close_observed": false,
+  "daemon_retained_observed": true,
+  "daemon_sha256": "c4c7f401d92340deb988c8b14c919d9cf3934ec183b76d8ec614cf55520b22e3",
+  "dependency_reuse": {
+    "binary_sha256": {
+      "benchmark_init": "248c3fcdcfda530a9c4a3b335b91feb4286cc416c211cac724d22419d2cd7041",
+      "benchmark_shell": "f9b99bf514059e1daac716c468c7f059f2ce78e46764ab8fb2dd859550c69e65",
+      "verify_shell": "23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1"
+    },
+    "compatible_product_changes": [
+      "core/crates/layerfs-fuse/src/adapter.rs"
+    ],
+    "master_proof_sha256": "c3b0e7e1c987285641ddbe07ca33f48f1a3ade4d15b50b5bdaef5a15187ef91a",
+    "prepared": "benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/prepared.json"
+  },
+  "dockerfile_sha256": "651d678e5342fb524b3a7688a1005a87eb306014f5e17d4a0de0d729eb6276da",
+  "driver": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "cleanup_ns": 5496649041,
+    "commit_called": false,
+    "commit_ns": 0,
+    "consumer_accounted_bytes": 1753377,
+    "daemon_log_attempted": true,
+    "daemon_log_bytes": 11111,
+    "daemon_log_error": "None",
+    "daemon_log_truncated": false,
+    "detail": "Exec status Some(1): pwrite: Resource busy\n",
+    "exec_ns": 583190542,
+    "exec_stderr_hex": "7077726974653a205265736f7572636520627573790a",
+    "exec_stdout_hex": "50524f475245535309313238093536393739353739320a",
+    "head_commit": "",
+    "mode": "run",
+    "mount_ns": 19122542,
+    "operation_ns": 583208042,
+    "projection_counts": "lookup=1,getattr=3,read=0,write=129,readdir=0,open=1,setattr=0,rename=0,other=0",
+    "sandbox_delete_ok": true,
+    "scenario_id": "issue266-fuse-512-v1",
+    "schema": "issue243-shell-driver-v1",
+    "status": "FAIL",
+    "unmount_ok": true,
+    "upstream_calls": 1
+  },
+  "driver_binary_sha256": "f9b99bf514059e1daac716c468c7f059f2ce78e46764ab8fb2dd859550c69e65",
+  "driver_exit_code": 1,
+  "driver_timeout": false,
+  "expected_manifest_sha256": "c4091f74a040c7a0042ba38e279e9779a402793c883f138f2337fa8e71633da0",
+  "extension_spec_sha256": "6a8a9dcdff03cf564416914d3ec00abfb67cea2833d32985945ee74b2bb0da06",
+  "family_id": "workspace_mounted_separated_writes",
+  "fixture_sha256": "871461a44757b68cc17766f85975e57a898d08979b77cc15ead01491353be3c4",
+  "functional_status": "FAIL",
+  "fuse_write_callbacks_observed": 129,
+  "fuse_write_count_provenance": "Status write class; this command makes only data mutations",
+  "history_bytes_after": 86016,
+  "history_bytes_before": 86016,
+  "image_id": "sha256:b6c4287a91faea9d63ca2544fb4ae6c353ac332d17590cdef9939961d2bdadab",
+  "images": {
+    "diagnostic": "sha256:c1051db26d2863ee8a77afdf45942f0ef2ee2804c47b67025967482abca4750b",
+    "diagnostic100v2": "sha256:62c1a7384fdc03a9b4e4220596ef71d0b3254acc629c63761d65057f20188b64",
+    "diagnostic100v3": "sha256:be6c1741cc2ab15e72729ae38b6e9c0f90f5eda7fa98618d6387af3318c829a1",
+    "diagnostic512": "sha256:7e72994c7a87820eef96ea4883ce9221e43b96564b0723b7792f18ddafb9863e",
+    "fuse512": "sha256:b6c4287a91faea9d63ca2544fb4ae6c353ac332d17590cdef9939961d2bdadab",
+    "gate": "sha256:d6acaa54ff8b005d5026a7509d3c0623e6427e7ebf8d9caf409b09973ca98877"
+  },
+  "issue266_post_spec_sha256": "e561f8e02d2058ece02807f559b68c8919fa9d4c4641894463a9bb6f03bd2eed",
+  "issue266_spec_sha256": "8ccdd919b892bbb27267bd4afda3e724423356bbdb8e00098a99753fec9488f5",
+  "lft1": {
+    "event_count": 38,
+    "operation": {
+      "clock": "local-monitor",
+      "closed_ns": 904467417,
+      "concurrency": 1,
+      "cpu_shared_ns": [
+        1449000,
+        2214000
+      ],
+      "first_ns": 321203750,
+      "gaps": 0,
+      "incarnation": 4713698198705,
+      "key": 243000,
+      "kind": "operation",
+      "largest_gap_ns": 12427291,
+      "last_ns": 901977708,
+      "last_probe_ns": 23542,
+      "namespace": 7,
+      "opened_ns": 321261958,
+      "pid": 1324,
+      "resource_status": "sampled",
+      "role": 1,
+      "run": "bf3b259ad006fed072f955ca30ef2559",
+      "sampled_max_rss": 8519680,
+      "samples": 59,
+      "scope": "process-shared",
+      "selected": 3,
+      "source": "getrusage+libproc",
+      "success": false,
+      "timing": {
+        "children": [
+          {
+            "children": [],
+            "elapsed_ns": 583190834,
+            "name": "exec"
+          }
+        ],
+        "elapsed_ns": 583202375,
+        "name": "sdk.shell_package",
+        "outcome": "error"
+      },
+      "v": 1
+    },
+    "operation_event_count": 1
+  },
+  "master": {
+    "branch_id": "111e48eb29a1337de64a74a18e42cf8318",
+    "genesis_layer": "3230773c633b5ccfdeb2ad583ab5634950a60d142ca113a0c8d44439eadf3dbe1e",
+    "genesis_root": "c4aa80a0f7a3793c7f5e0e5edc0c1541c0babd3f5807f8291d07b35d8d0b2099",
+    "genesis_root_serial": 1,
+    "history_sha256": "9de61b66251c28b00e5f0d78c3398411fcaa746f16d586e659bd2fc89a2c645a",
+    "old_commit": "1225c7e67c60589eb484199abbead21976228e75e2e73cca4eeb483761a8e77094",
+    "path": "/Users/yifanxu/.codex/worktrees/c7cb/layerfs/benchmark-results/fs-bench-pro/issue266/diagnostic-prepared-v1/master",
+    "project_id": "3151847dddb73ca00299feed4815201f73",
+    "store_sha256": "6a0589853aa5dab05bea0e7f224d9c832f70b551fd8a0e74668ffbc898bb15d9"
+  },
+  "operation_surface": "public WorkspaceApi mount/exec/commit",
+  "performance_status": "INELIGIBLE",
+  "phase_samples_complete": true,
+  "phase_spec_sha256": "2fa3f71ba4dd1964e20536ba189a919f5b9232e52585ba551b0fabec3e4dab78",
+  "projection_counts": {
+    "getattr": "3",
+    "lookup": "1",
+    "open": "1",
+    "other": "0",
+    "read": "0",
+    "readdir": "0",
+    "rename": "0",
+    "setattr": "0",
+    "write": "129"
+  },
+  "row_status": "FAIL",
+  "sample_count": 1,
+  "scenario_id": "issue266-fuse-512-v1",
+  "schema": "issue261-separated-attempt-v1",
+  "selection": "fuse512",
+  "shell_command": "/fixtures/bin/write-separated data.bin 512",
+  "source": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "12702bb143ac7dc388d361948789d0f61c5aa1dfc42ad6a8b91a4c017966830a",
+    "product_seal": "6db1d157c8fc0ec85f4382ff4873e9498af6042ea20f47a03554d54b7f8da01c",
+    "source_commit": "4006d98938a00857baf43189b11971ec767c0ee2",
+    "source_dirty": false,
+    "source_tree": "c353455659ec0c8407a9677adfddceddd53cded0"
+  },
+  "spec_sha256": "28dcd23aff5802b496f1360908d86f2c729cdde0440c81875f48c3687ccb46aa",
+  "store_bytes_after": 618496,
+  "store_bytes_before": 618496,
+  "treatment_spec_sha256": "2817982904dfc33918f9fd367fc38dc4cd148005b7e96a916a70acd2400da1fd",
+  "verifier": {
+    "status": "NOT_RUN"
+  },
+  "verifier_binary_sha256": "23f22d53ba4cbc7e71ac87859261fbbf70876917c451b32663276bcd259fa2e1",
+  "write_refusals": [
+    "LFS_PROJECTION_REFUSAL v=1 site=begin_projection_mutation revision=128 status=Ready delivery=true mutation_held=true replies=1 remaining_ns=Some(9999999083)",
+    "LFS_WRITE_REFUSAL v=1 stage=admission status=Ok(WorkspaceStatus { submission: None, generation: 1, revision: 128, dirty_inodes: 1, mounted: true, stopping: false, closed: false, active_operations: 0, nodes: 2, handles: 1, projection_handles: 1, projection_replies: 1, projection_calls: [(\"lookup\", 1), (\"getattr\", 3), (\"read\", 0), (\"write\", 129), (\"readdir\", 0), (\"open\", 1), (\"setattr\", 0), (\"rename\", 0), (\"other\", 0)], upstream_calls: 1, coherence: Some(Ready), cookies: 0, accounted_bytes: 1753377 })"
+  ],
+  "write_syscalls_expected": 512,
+  "writer_binary_sha256": "6f7ed772124989209fb4e56987abae7dad5c50951c1e73d4da894e9900ea0ad2",
+  "writer_progress": null,
+  "writer_progress_error": "unexpected progress: 'PROGRESS\\t128\\t569795792\\n'",
+  "writer_source_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+}
