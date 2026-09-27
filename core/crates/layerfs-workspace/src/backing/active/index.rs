@@ -11,7 +11,8 @@ use std::{
 };
 
 const MAX_LEVEL: usize = 7;
-const MAX_FROZEN: usize = 32;
+const MAX_CAPTURES: usize = 32;
+const MAX_PINNED_REVISIONS: usize = MAX_CAPTURES + 128;
 pub type IndexEntry = (Vec<u8>, Vec<u8>);
 
 struct Retired {
@@ -33,6 +34,7 @@ struct State {
     revision: u64,
     pending: bool,
     stopped: bool,
+    captured: usize,
     frozen: BTreeMap<u64, usize>,
     retired: Vec<Retired>,
     retired_charge: Charge,
@@ -62,7 +64,8 @@ pub struct IndexCandidate {
 pub struct IndexSnapshot {
     index: Arc<Index>,
     root: Option<PageRef>,
-    generation: u64,
+    revision: u64,
+    captured: bool,
     released: bool,
 }
 
@@ -108,11 +111,12 @@ impl Index {
                 revision: 0,
                 pending: false,
                 stopped: false,
+                captured: 0,
                 frozen: BTreeMap::new(),
                 retired: Vec::new(),
                 retired_charge: budget.reserve(0)?,
             }),
-            _charge: budget.reserve(4096 + MAX_FROZEN * 64)?,
+            _charge: budget.reserve(4096 + MAX_PINNED_REVISIONS * 128)?,
         }))
     }
 
@@ -549,20 +553,39 @@ impl Index {
         })
     }
 
-    pub fn capture(self: &Arc<Self>) -> Result<IndexSnapshot, WorkspaceError> {
+    fn pin(self: &Arc<Self>, capture: bool) -> Result<IndexSnapshot, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        if state.pending || state.stopped || state.frozen.len() == MAX_FROZEN {
+        let revision = state.revision;
+        if state.pending
+            || state.stopped
+            || (capture && state.captured == MAX_CAPTURES)
+            || (state.frozen.len() == MAX_PINNED_REVISIONS && !state.frozen.contains_key(&revision))
+        {
             return Err(WorkspaceError::Busy);
         }
-        let generation = state.generation;
-        state.generation = generation.checked_add(1).ok_or(WorkspaceError::Capacity)?;
-        *state.frozen.entry(generation).or_default() += 1;
+        if capture {
+            state.generation = state
+                .generation
+                .checked_add(1)
+                .ok_or(WorkspaceError::Capacity)?;
+            state.captured += 1;
+        }
+        *state.frozen.entry(revision).or_default() += 1;
         Ok(IndexSnapshot {
             index: self.clone(),
             root: state.root,
-            generation,
+            revision,
+            captured: capture,
             released: false,
         })
+    }
+
+    pub fn capture(self: &Arc<Self>) -> Result<IndexSnapshot, WorkspaceError> {
+        self.pin(true)
+    }
+
+    pub fn pin_current(self: &Arc<Self>) -> Result<IndexSnapshot, WorkspaceError> {
+        self.pin(false)
     }
 
     pub fn maintain(&self) -> Result<u64, WorkspaceError> {
@@ -612,7 +635,6 @@ impl IndexCandidate {
             .revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
-        let generation = state.generation;
         let mut retire = Vec::with_capacity(self.replaced.len());
         for reference in &self.replaced {
             let page = self
@@ -621,8 +643,8 @@ impl IndexCandidate {
                 .read(*reference, self.index.store.kind(*reference)?)?;
             retire.push(Retired {
                 page: *reference,
-                birth: page.generation(),
-                retired: generation,
+                birth: page.revision(),
+                retired: next,
             });
         }
         let growth = state
@@ -687,11 +709,14 @@ impl IndexSnapshot {
         let mut state = self.index.state.lock().map_err(|_| WorkspaceError::Io)?;
         let count = state
             .frozen
-            .get_mut(&self.generation)
+            .get_mut(&self.revision)
             .ok_or(WorkspaceError::Io)?;
         *count -= 1;
         if *count == 0 {
-            state.frozen.remove(&self.generation);
+            state.frozen.remove(&self.revision);
+        }
+        if self.captured {
+            state.captured -= 1;
         }
         self.released = true;
         drop(state);

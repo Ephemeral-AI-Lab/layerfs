@@ -41,6 +41,7 @@ pub struct ActiveSnapshot {
     index: Option<IndexSnapshot>,
     pub generation: u64,
     pub tail: Option<(u64, PageRef)>,
+    read_view: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -399,7 +400,7 @@ impl ActiveBacking {
                 retired,
                 retired_charge,
                 page,
-                generation,
+                published_revision,
             ) {
                 cleanup_error.get_or_insert(error);
             }
@@ -420,17 +421,37 @@ impl ActiveBacking {
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
         }
+        let generation = self.index.generation_revision()?.0;
         let snapshot = self.index.capture()?;
         let tail = match self.pack.seal() {
             Ok(tail) => tail,
             Err(error) => return Err(snapshot.release().err().unwrap_or(error)),
         };
-        let generation = self.index.generation_revision()?.0 - 1;
         Ok(ActiveSnapshot {
             active: self.clone(),
             index: Some(snapshot),
             generation,
             tail,
+            read_view: false,
+        })
+    }
+
+    /// Pins a current read view without advancing the mutation generation.
+    /// Directory handles can retain it across later namespace revisions.
+    pub fn pin_view(self: &Arc<Self>) -> Result<ActiveSnapshot, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.closed {
+            return Err(WorkspaceError::Busy);
+        }
+        let generation = self.index.generation_revision()?.0;
+        let tail = self.pack.tail()?;
+        let snapshot = self.index.pin_current()?;
+        Ok(ActiveSnapshot {
+            active: self.clone(),
+            index: Some(snapshot),
+            generation,
+            tail,
+            read_view: true,
         })
     }
 
@@ -470,17 +491,33 @@ impl ActiveSnapshot {
             .scan(lower, upper, limit)
     }
 
-    pub fn release(mut self) -> Result<(), WorkspaceError> {
+    fn release_inner(&mut self) -> Result<(), WorkspaceError> {
         let mut state = self.active.state.lock().map_err(|_| WorkspaceError::Io)?;
-        self.index.take().ok_or(WorkspaceError::Closed)?.release()?;
-        reclaim::maintain_pack(&self.active.store, &self.active.index, &mut state.retired)
+        let result = self
+            .index
+            .take()
+            .ok_or(WorkspaceError::Closed)?
+            .release()
+            .and_then(|()| {
+                reclaim::maintain_pack(&self.active.store, &self.active.index, &mut state.retired)
+            });
+        if result.is_err() {
+            state.stopped = true;
+        }
+        result
+    }
+
+    pub fn release(mut self) -> Result<(), WorkspaceError> {
+        self.release_inner()
     }
 }
 
 impl Drop for ActiveSnapshot {
     fn drop(&mut self) {
         if self.index.is_some() {
-            if let Ok(mut state) = self.active.state.lock() {
+            if self.read_view {
+                let _ = self.release_inner();
+            } else if let Ok(mut state) = self.active.state.lock() {
                 state.stopped = true;
             }
         }

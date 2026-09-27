@@ -625,6 +625,60 @@ mod linux {
     }
 
     #[test]
+    fn read_view_pins_same_generation_revision_without_capture() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let first = active.write_tiny(1, 0, 0, b"A", &[]).unwrap();
+        let old_name = namespace_key(1, b"old").unwrap();
+        let binding = NamespaceRecord {
+            serial: 1,
+            kind: NodeKind::File,
+            tombstone: false,
+        };
+        active
+            .publish_records(&[(old_name.clone(), Some(binding.value().unwrap().to_vec()))])
+            .unwrap();
+        let view = active.pin_view().unwrap();
+        let second = active.write_tiny(1, 1, 0, b"B", &[]).unwrap();
+        active
+            .publish_records(&[(
+                old_name.clone(),
+                Some(
+                    NamespaceRecord {
+                        tombstone: true,
+                        ..binding
+                    }
+                    .value()
+                    .unwrap()
+                    .to_vec(),
+                ),
+            )])
+            .unwrap();
+        assert_eq!(view.generation, 1);
+        assert_eq!(active.read(first.slot, Some(&view)).unwrap(), b"A");
+        assert_eq!(active.read(second.slot, None).unwrap(), b"B");
+        assert_eq!(
+            view.get(&old_name).unwrap(),
+            Some(binding.value().unwrap().to_vec())
+        );
+        assert_eq!(
+            NamespaceRecord::parse(&active.get(&old_name).unwrap().unwrap())
+                .unwrap()
+                .tombstone,
+            true
+        );
+        drop(view);
+        assert_eq!(active.status().unwrap().retired_pack_pages, 0);
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
     fn one_tiny_write_may_replace_128_one_byte_extents() {
         let f = Fixture::new(64 << 20);
         let active = ActiveBacking::new(

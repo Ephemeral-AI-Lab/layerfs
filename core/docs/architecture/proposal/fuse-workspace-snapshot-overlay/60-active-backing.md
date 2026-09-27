@@ -16,9 +16,13 @@ with four optional inline extents and 16-byte namespace bindings/tombstones,
 plus fixed inode, namespace and generation-dirty keys. The same pooled index
 holds these records beside extent, inverse-reference and locator records; no
 tiny file gets its own root page. `backing/active/index.rs` stages copy-on-write index pages
-and publishes one current root. A capture pins a root/generation in constant
-index-state work, while old page versions created before that capture stay
-charged until its explicit release. The currently implemented generic index
+and publishes one current root. A capture pins a root/revision in constant
+index-state work and advances the generation; a read view pins the same
+current root without advancing it. Retired index and pack pages are held by
+pins whose revisions fall between each page's birth and retirement revisions.
+The 32 capture limit and 128 possible directory-handle pins are charged in
+the index owner. Captures require explicit release; a dropped read view
+releases its pin and retains a stop/error state if cleanup fails. The currently implemented generic index
 does **not** yet supply the specialized hot-right-edge update or a streaming
 extent cursor for writes larger than a tiny slot. Its bounded 128-row scan and
 predecessor lookup cover all extent starts within one 128-byte tiny write,
@@ -72,7 +76,9 @@ in the shared index. A backing test checks same-revision inode, extent and
 dirty publication, a retained inode version after capture, and a complete
 128-byte replacement of 128 one-byte extents. Another backs atomic namespace
 publication and its captured dirty state; an indexed read test covers
-inherited Base, packed, hole and frozen bytes. These are backing tests. Public
+inherited Base, packed, hole and frozen bytes. A same-generation read view
+keeps old namespace and packed bytes across successor mutations without
+capturing a generation. These are backing tests. Public
 FUSE WRITE and namespace operations, final-view SaveFile lowering, mixed-page
 compaction and the #273 benchmark registry are still unproven and remain on
 the old production route.

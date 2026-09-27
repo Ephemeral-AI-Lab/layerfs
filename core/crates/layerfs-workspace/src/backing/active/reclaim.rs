@@ -67,10 +67,10 @@ pub(super) fn retire_pack(
     retired: &mut Vec<RetiredPack>,
     charge: &mut Charge,
     page: PageRef,
-    generation: u64,
+    revision: u64,
 ) -> Result<(), WorkspaceError> {
-    let birth = store.read(page, Kind::Pack)?.generation();
-    if !index.frozen_between(birth, generation)? {
+    let birth = store.read(page, Kind::Pack)?.revision();
+    if !index.frozen_between(birth, revision)? {
         match store.release(page) {
             Ok(_) => return Ok(()),
             Err(WorkspaceError::Busy) => {}
@@ -91,7 +91,7 @@ pub(super) fn retire_pack(
     retired.push(RetiredPack {
         page,
         birth,
-        retired: generation,
+        retired: revision,
     });
     Ok(())
 }
