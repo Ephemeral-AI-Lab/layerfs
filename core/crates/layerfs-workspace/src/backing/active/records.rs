@@ -66,10 +66,9 @@ pub fn namespace_key(parent: u64, name: &[u8]) -> Result<Vec<u8>, WorkspaceError
     {
         return Err(WorkspaceError::InvalidInput);
     }
-    let mut key = Vec::with_capacity(10 + name.len());
+    let mut key = Vec::with_capacity(9 + name.len());
     key.push(b'N');
     key.extend_from_slice(&parent.to_be_bytes());
-    key.push(name.len() as u8);
     key.extend_from_slice(name);
     Ok(key)
 }

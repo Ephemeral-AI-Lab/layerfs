@@ -15,14 +15,18 @@ its maximum key. `backing/active/records.rs` encodes 416-byte inode values
 with four optional inline extents and 16-byte namespace bindings/tombstones,
 plus fixed inode, namespace and generation-dirty keys. The same pooled index
 holds these records beside extent, inverse-reference and locator records; no
-tiny file gets its own root page. `backing/active/index.rs` stages copy-on-write index pages
-and publishes one current root. A capture pins a root/revision in constant
-index-state work and advances the generation; a read view pins the same
+tiny file gets its own root page. The `N|parent|name` key omits a length
+prefix so names sort in the same byte order as canonical directory listings
+and existing continuation cookies. `backing/active/index.rs` stages
+copy-on-write index pages and publishes one current root. A capture pins a
+root/revision in constant index-state work and advances the generation; a
+read view pins the same
 current root without advancing it. Retired index and pack pages are held by
 pins whose revisions fall between each page's birth and retirement revisions.
 The 32 capture limit and 128 possible directory-handle pins are charged in
 the index owner. Captures require explicit release; a dropped read view
-releases its pin and retains a stop/error state if cleanup fails. The currently implemented generic index
+releases its pin and retains a stop/error state if cleanup fails. The generic
+index
 does **not** yet supply the specialized hot-right-edge update or a streaming
 extent cursor for writes larger than a tiny slot. Its bounded 128-row scan and
 predecessor lookup cover all extent starts within one 128-byte tiny write,

@@ -1,4 +1,4 @@
-use layerfs_workspace::backing::active::{Kind, Page, PageRef};
+use layerfs_workspace::backing::active::{namespace_key, Kind, Page, PageRef};
 
 #[test]
 fn page_v1_checks_identity_and_all_bytes() {
@@ -14,6 +14,17 @@ fn page_v1_checks_identity_and_all_bytes() {
         .is_err());
     page.bytes[128] ^= 1;
     assert!(page.verify(Kind::Pack, [9; 32], reference).is_err());
+}
+
+#[test]
+fn namespace_keys_follow_canonical_name_order() {
+    let mut keys = [b"z".as_slice(), b"aa", b"a"].map(|name| namespace_key(7, name).unwrap());
+    keys.sort();
+    assert_eq!(
+        keys,
+        [b"a".as_slice(), b"aa", b"z"].map(|name| namespace_key(7, name).unwrap())
+    );
+    assert!(namespace_key(7, b"z").unwrap() < namespace_key(8, b"a").unwrap());
 }
 
 #[cfg(target_os = "linux")]
