@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_active_page_profile ... PAGE_CAUSE case=append4097 exec_ns=5162681710 pack_writes=4097 index_writes=16683 fit_merge_ns=59581912 actual_merge_ns=51964571 node_encode_ns=11230110 cache_decode_ns=14292 page_encode_ns=317648934 create_identity_ns=145372109 preallocate_ns=352507796 direct_write_ns=1671235595 readback_io_ns=965444260 readback_auth_ns=358972430 release_ns=164567279 backing_bytes_before=12288 backing_bytes_after=1155072 cache_claim=none
+STAGE_CHECK active-page-profile-4097-full-byte-oracle PASS
+STAGE_CHECK active-page-profile-4097-clean-close-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 31 filtered out; finished in 5.37s
+

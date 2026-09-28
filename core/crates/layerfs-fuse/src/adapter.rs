@@ -543,6 +543,19 @@ impl Filesystem for Adapter {
             .as_mut()
             .map_err(|error| *error)
             .and_then(|(permit, append)| {
+                if data.len() <= 128 {
+                    let started = Instant::now();
+                    let result = permit
+                        .write_tiny_file(fh.0, offset, data, *append, deadline)
+                        .map_err(|error| {
+                            self.write_samples
+                                .map_error(&self.workspace, "write_tiny_file", error)
+                        });
+                    // Includes the bounded charged copy. No temporary input
+                    // has been acquired outside the publication timer.
+                    publication_ns = started.elapsed().as_nanos() as u64;
+                    return result;
+                }
                 let started = Instant::now();
                 let payload = self
                     .workspace

@@ -168,6 +168,29 @@ impl ProjectionMutationPermit {
             MutationOrigin::ProjectionWrite { append },
         )
     }
+    /// Same public projection/reply attempt, with a bounded charged copy of
+    /// kernel bytes instead of an immutable temporary-file acquisition.
+    pub fn write_tiny_file(
+        &mut self,
+        handle: HandleId,
+        offset: u64,
+        bytes: &[u8],
+        append: bool,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.write_tiny_file_from(
+            handle,
+            offset,
+            bytes,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionWrite { append },
+        )
+    }
+
     /// Publishes a size-only SETATTR and returns its exact attributes. The kernel
     /// owns post-reply cache invalidation; this operation sends no notification.
     pub fn set_len(

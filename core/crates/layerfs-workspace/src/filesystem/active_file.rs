@@ -80,23 +80,21 @@ impl Workspace {
                 }
                 (0, Some(request))
             }
-            FileMutation::Write {
-                offset,
-                replacement,
-                origin,
-                ..
-            } => {
+            FileMutation::Write { offset, origin, .. }
+            | FileMutation::TinyWrite { offset, origin, .. } => {
+                let length = match mutation {
+                    FileMutation::Write { replacement, .. } => replacement.len(),
+                    FileMutation::TinyWrite { bytes, .. } => bytes.len() as u64,
+                    FileMutation::Attributes { .. } => return Err(WorkspaceError::Io),
+                };
                 if append && origin.projected() && offset != attr.size {
                     return Err(WorkspaceError::InvalidInput);
                 }
                 let at = if append { attr.size } else { offset };
-                if at
-                    .checked_add(replacement.len())
-                    .is_none_or(|end| end > MAX_FILE)
-                {
+                if at.checked_add(length).is_none_or(|end| end > MAX_FILE) {
                     return Err(WorkspaceError::Capacity);
                 }
-                (replacement.len(), None)
+                (length, None)
             }
         };
         if accepted == 0 && requested.is_none() {
@@ -141,7 +139,10 @@ impl Workspace {
                 let at = if append { attr.size } else { offset };
                 if replacement.len() <= 128 {
                     let mut reader = replacement.reader(0..replacement.len())?;
-                    let mut bytes = vec![0; replacement.len() as usize];
+                    let mut small_charge = self.host.budget.reserve(replacement.len() as usize)?;
+                    let mut bytes = Vec::with_capacity(replacement.len() as usize);
+                    small_charge.resize(bytes.capacity())?;
+                    bytes.resize(replacement.len() as usize, 0);
                     let mut done = 0;
                     while done < bytes.len() {
                         let read = Source::read(
@@ -163,6 +164,11 @@ impl Workspace {
                         active.write_payload_file(original.serial, selected, at, replacement)?;
                     (result.revision, result.cleanup_error, result.inode)
                 }
+            }
+            FileMutation::TinyWrite { offset, bytes, .. } => {
+                let at = if append { attr.size } else { offset };
+                let result = active.write_tiny_file(original.serial, selected, at, bytes)?;
+                (result.revision, result.cleanup_error, result.inode)
             }
         };
         let next = state

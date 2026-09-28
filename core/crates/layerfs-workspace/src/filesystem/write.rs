@@ -32,11 +32,19 @@ pub(crate) enum FileMutation<'a> {
         replacement: &'a OwnedPayload,
         origin: MutationOrigin,
     },
+    TinyWrite {
+        handle: HandleId,
+        offset: u64,
+        bytes: &'a [u8],
+        origin: MutationOrigin,
+    },
 }
 impl FileMutation<'_> {
     pub(crate) fn origin(self) -> MutationOrigin {
         match self {
-            Self::Write { origin, .. } | Self::Attributes { origin, .. } => origin,
+            Self::Write { origin, .. }
+            | Self::TinyWrite { origin, .. }
+            | Self::Attributes { origin, .. } => origin,
         }
     }
 }
@@ -93,7 +101,9 @@ impl Workspace {
             self.check_projected_mutation(state, false)?;
         }
         let handle = match mutation {
-            FileMutation::Write { handle, .. } => Some(handle),
+            FileMutation::Write { handle, .. } | FileMutation::TinyWrite { handle, .. } => {
+                Some(handle)
+            }
             FileMutation::Attributes { handle, .. } => handle,
         };
         if let Some(handle) = handle {
@@ -125,13 +135,77 @@ impl Workspace {
         deadline: Instant,
         origin: MutationOrigin,
     ) -> Result<MutationReceipt, WorkspaceError> {
+        self.write_file_mutation_from(
+            handle,
+            offset,
+            FileMutation::Write {
+                handle,
+                offset,
+                replacement,
+                origin,
+            },
+            deadline,
+        )
+    }
+
+    /// A FUSE callback's <=128-byte input is copied and Budget-charged before
+    /// any mutation can publish or reply. Larger and ordinary local inputs
+    /// retain their existing immutable OwnedPayload route.
+    pub(crate) fn write_tiny_file_from(
+        &self,
+        handle: HandleId,
+        offset: u64,
+        input: &[u8],
+        deadline: Instant,
+        origin: MutationOrigin,
+    ) -> Result<MutationReceipt, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
         }
+        if input.len() > 128 {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let mut charge = self.host.budget.reserve(input.len())?;
+        let mut bytes = Vec::with_capacity(input.len());
+        charge.resize(bytes.capacity())?;
+        bytes.extend_from_slice(input);
+        let result = self.write_file_mutation_from(
+            handle,
+            offset,
+            FileMutation::TinyWrite {
+                handle,
+                offset,
+                bytes: &bytes,
+                origin,
+            },
+            deadline,
+        );
+        drop(charge);
+        result
+    }
+
+    fn write_file_mutation_from(
+        &self,
+        handle: HandleId,
+        offset: u64,
+        mutation: FileMutation<'_>,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        if self.inner.access != WorkspaceAccess::LocalEdit {
+            return Err(WorkspaceError::ReadOnly);
+        }
+        let length = match mutation {
+            FileMutation::Write { replacement, .. } => replacement.len(),
+            FileMutation::TinyWrite { bytes, .. } => bytes.len() as u64,
+            FileMutation::Attributes { .. } => return Err(WorkspaceError::InvalidInput),
+        };
+        let origin = mutation.origin();
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
-        self.check_payload_owner(replacement)?;
-        if replacement.len() > 8 * 1024 * 1024 {
+        if let FileMutation::Write { replacement, .. } = mutation {
+            self.check_payload_owner(replacement)?;
+        }
+        if length > 8 * 1024 * 1024 {
             return Err(WorkspaceError::Capacity);
         }
         let serial = {
@@ -142,15 +216,11 @@ impl Workspace {
                 self.check_projected_mutation(&state, false)?;
             }
             let append = origin.append(selected.options.append);
-            if !append
-                && offset
-                    .checked_add(replacement.len())
-                    .is_none_or(|end| end > MAX_FILE)
-            {
+            if !append && offset.checked_add(length).is_none_or(|end| end > MAX_FILE) {
                 return Err(WorkspaceError::Capacity);
             }
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-            if replacement.is_empty() && !(origin.projected() && append) {
+            if length == 0 && !(origin.projected() && append) {
                 return Ok(MutationReceipt {
                     incarnation: self.inner.incarnation,
                     generation: state.generation,
@@ -160,12 +230,6 @@ impl Workspace {
                 });
             }
             selected.serial
-        };
-        let mutation = FileMutation::Write {
-            handle,
-            offset,
-            replacement,
-            origin,
         };
         let original = self.serial_original(serial, deadline, &mut operation);
         {

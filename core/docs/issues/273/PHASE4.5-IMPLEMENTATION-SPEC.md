@@ -743,3 +743,19 @@ and the underlying stored/verified Page. Cold reads and admission of an
 existing page continue to use full decode/identity verification. This avoids
 one duplicate decode of a newly published hot node; it is not an authorization
 to omit page readback or to reuse a node after another incarnation is selected.
+
+### Checkpoint-5 tiny projected input ownership
+
+An ordinary FUSE WRITE callback of at most 128 bytes no longer creates a
+private `p-*` temporary input file solely to read the same byte during
+publication. The projection permit makes one attempt and copies the kernel
+slice into a Budget-reserved, capacity-checked bounded owned vector before
+mutation or reply; that vector and its charge remain live through publication.
+The existing `Workspace::write_file` OwnedPayload API and large projected
+WRITE route remain unchanged. The ordinary public projection checks (append
+EOF, handle, coherence, revision, deadline, custody, notification and exact
+published outcome) still pass through one shared mutation function. The
+callback's publication timer includes acquisition/copy/charge for this path,
+and its acquisition timer is zero because it acquired no temporary file; no
+work moves before Exec or after acknowledgement. This avoids the temporary
+input round trip, not the authenticated active-page write/readback workload.

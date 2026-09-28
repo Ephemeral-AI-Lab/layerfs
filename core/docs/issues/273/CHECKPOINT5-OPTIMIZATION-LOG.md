@@ -149,3 +149,34 @@
   harness PASS; aarch64 zigbuild PASS. Public stage route complete wall
   8.958 s under its 60 s functional limit; this is **not** the registered
   15/25-second mounted performance case.
+
+## Iteration 004 — reuse the authenticated prepared hot Node
+
+- Verified product `c561576dc23715711980448dcd6138f2507a0901`, first parent
+  `fb53ac28cbcdc4c14ab4424f5beaa202987e3ff4`. `Mutation::page` transfers
+  the already encoded Node into its hot cache only after `create_from` verified
+  exact physical readback and page identity; the cached kind and record count
+  still match the selected slot. Previously selected/cold nodes continue to
+  authenticate and decode. No physical readback or node-validation omission
+  applies to incoming bytes, existing pages or another revision. The existing
+  conservative cache charge precedes the retained Arc allocation.
+- Causal, public functional append-4,097 diagnostic on the same independently
+  prepared 8,194-byte seed (NOT registered mounted performance):
+  cache decode cumulative WRITE-region time 221,887,020 -> 14,292 ns,
+  difference 221,872,728 ns, denominator 16,683 index writes in both cases;
+  physical creations 4,097 pack + 16,683 index in both. WRITE loop
+  5,450.864 -> 5,162.682 ms; **do not use** that one wall difference as a
+  qualified speed gain or noise distribution. New direct-write/readback stayed
+  necessary and cumulative (1,671.236/965.444 ms). Full bytes and clean-close
+  refund PASS, complete functional route 8.593 s (60 s bound), ext4
+  `active_backing` 32/32 PASS on an owned Docker volume. Stage result and
+  production phase counters are preserved in `iter-004/RESULTS.json` and raw
+  stdout/stderr/receipts. Cache claim null, numeric performance INELIGIBLE.
+- Host workspace release tests, all-target clippy, fmt, product boundary and
+  aarch64 zigbuild PASS. Production LOC for `c561576dc`: Core
+  67,479 -> 67,506 (+27), reference 65,417 -> 65,417, combined
+  132,896 -> 132,923 (+27), exact first-parent/staged/committed snapshots
+  counted with `tools/production_loc.py`. Next cause: extra FUSE small-input
+  temporary-file create/read/release, previously bounded in retained evidence
+  at 723 ms acquisition for 4,097 append writes; keep that work in the timed
+  WRITE and preserve ordinary projection custody.
