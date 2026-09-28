@@ -781,6 +781,7 @@ impl Workspace {
             status.active_hot_cursor_admissions = selected.store.hot_cursor_admissions;
             status.active_hot_carries = selected.store.hot_carries;
             status.active_hot_normalizations = selected.store.hot_normalizations;
+            status.active_representation_only_pages = selected.store.representation_only_pages;
             status.active_retirement_inspections = selected.store.retirement_inspections;
             status.active_hot_nodes = selected.hot_nodes;
             status.active_hot_cursors = selected.hot_cursors;

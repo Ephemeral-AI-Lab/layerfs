@@ -278,6 +278,8 @@ pub struct BackingStatus {
     pub active_hot_cursor_admissions: u64,
     pub active_hot_carries: u64,
     pub active_hot_normalizations: u64,
+    /// Index page versions induced by representation-only subtree changes.
+    pub active_representation_only_pages: u64,
     pub active_retirement_inspections: u64,
     pub active_hot_nodes: usize,
     pub active_hot_cursors: usize,

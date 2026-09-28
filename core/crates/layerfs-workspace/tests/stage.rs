@@ -989,10 +989,11 @@ mod linux {
         if let Some(before) = before_write {
             let after = f.workspace.backing_status().unwrap();
             let diff = |old: u64, new: u64| new.checked_sub(old).unwrap();
-            println!("GENERIC_WRITE_CAUSE writes={count} hot={} admissions={} normalizations={} seeks={} index_fetches={} index_writes={} pack_writes={} fit_merge_ns={} actual_merge_ns={} cache_decode_ns={} create_identity_ns={} preallocate_ns={} direct_write_ns={} readback_io_ns={} readback_auth_ns={} release_ns={}",
+            println!("GENERIC_WRITE_CAUSE writes={count} hot={} admissions={} normalizations={} representation_only_pages={} seeks={} index_fetches={} index_writes={} pack_writes={} fit_merge_ns={} actual_merge_ns={} cache_decode_ns={} create_identity_ns={} preallocate_ns={} direct_write_ns={} readback_io_ns={} readback_auth_ns={} release_ns={}",
                 diff(before.active_hot_writes, after.active_hot_writes),
                 diff(before.active_hot_admissions, after.active_hot_admissions),
                 diff(before.active_hot_normalizations, after.active_hot_normalizations),
+                diff(before.active_representation_only_pages, after.active_representation_only_pages),
                 diff(before.active_index_seeks, after.active_index_seeks),
                 diff(before.active_index_fetches, after.active_index_fetches),
                 diff(before.active_index_page_writes, after.active_index_page_writes),
@@ -1068,6 +1069,114 @@ mod linux {
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_generic_profile() {
         source_grouping(4097, 1024, true);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_changed_closure_probe() {
+        // Functional/count diagnostic only: one continuing inode changes from
+        // eligible EOF to non-monotone generic writes on two distant Base
+        // offsets. No elapsed-time or benchmark admission claim.
+        let f = Fixture::new_fresh(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let mut oracle = vec![0; file.size as usize];
+        let mut at = 0;
+        while at < oracle.len() {
+            let bytes = f.read(handle, at as u64, (oracle.len() - at).min(MAX_READ_BYTES));
+            assert!(!bytes.is_empty());
+            oracle[at..at + bytes.len()].copy_from_slice(&bytes);
+            at += bytes.len();
+        }
+        let beginning = f.workspace.backing_status().unwrap();
+        for index in 0..32 {
+            f.workspace
+                .write_file(
+                    handle,
+                    oracle.len() as u64,
+                    &f.own(&[b'X' + (index % 2) as u8]),
+                    deadline(),
+                )
+                .unwrap();
+            oracle.push(b'X' + (index % 2) as u8);
+        }
+        let after_append = f.workspace.backing_status().unwrap();
+        for (group, start) in [("one-offset", 0), ("alternating", 48)] {
+            let before = f.workspace.backing_status().unwrap();
+            for i in start..start + 48 {
+                let offset = if group == "one-offset" || i % 2 == 0 {
+                    11
+                } else {
+                    64_011
+                };
+                let byte = b'a' + (i % 26) as u8;
+                f.workspace
+                    .write_file(handle, offset, &f.own(&[byte]), deadline())
+                    .unwrap();
+                oracle[offset as usize] = byte;
+            }
+            let after = f.workspace.backing_status().unwrap();
+            let diff = |old: u64, new: u64| new.checked_sub(old).unwrap();
+            let representation = diff(
+                before.active_representation_only_pages,
+                after.active_representation_only_pages,
+            );
+            let pages = diff(
+                before.active_index_page_writes,
+                after.active_index_page_writes,
+            );
+            assert!(representation <= pages);
+            println!("CHANGED_CLOSURE_PROBE group={group} writes=48 hot={} cursor_admissions={} admissions={} normalizations={} representation_only_pages={representation} seeks={} visits={} index_fetches={} index_pages={pages} directory_pages={} pack_pages={} carries={} retirements={} physical_bytes={} budget_bytes={}",
+                diff(before.active_hot_writes, after.active_hot_writes),
+                diff(before.active_hot_cursor_admissions, after.active_hot_cursor_admissions),
+                diff(before.active_hot_admissions, after.active_hot_admissions),
+                diff(before.active_hot_normalizations, after.active_hot_normalizations),
+                diff(before.active_index_seeks, after.active_index_seeks),
+                diff(before.active_index_node_visits, after.active_index_node_visits),
+                diff(before.active_index_fetches, after.active_index_fetches),
+                diff(before.active_directory_page_writes, after.active_directory_page_writes),
+                diff(before.active_pack_page_writes, after.active_pack_page_writes),
+                diff(before.active_hot_carries, after.active_hot_carries),
+                diff(before.active_retirement_inspections, after.active_retirement_inspections),
+                after.allocated_bytes, after.active_hot_reserved_bytes);
+        }
+        assert_eq!(
+            after_append.active_pack_page_writes - beginning.active_pack_page_writes,
+            32
+        );
+        let mut actual = Vec::new();
+        for at in (0..oracle.len()).step_by(MAX_READ_BYTES) {
+            actual.extend(f.read(handle, at as u64, (oracle.len() - at).min(MAX_READ_BYTES)));
+        }
+        assert_eq!(actual, oracle);
+        check("active-changed-closure-private-byte-and-count-oracle");
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        assert_eq!(f.native.bytes(saved.1, 0, oracle.len()), oracle);
+        f.workspace.close_clean().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-changed-closure-commit-and-clean-close");
     }
 
     #[test]

@@ -406,3 +406,24 @@ draft page. They sum to `nodes_read` on a successful edit, and the C1 edit path
 emits them once as `LFS_C1_EDIT_LOAD` when complexity diagnostics are enabled.
 This separates Store **requests** from draft work. It does not report SQLite
 page reads, physical device I/O or every call served by the page memo.
+
+### 15.10 #273 representation-only active index versions
+
+Source baseline: `e80d3cd288672f708f92fcb0dc0ebc7342802889`; description
+and implementation are co-committed in the subsequent #273 instrumentation commit.
+
+`BackingStatus.active_representation_only_pages` is a cumulative production
+count of index pages emitted by generic `Mutation::change` while its local
+ordered update slice is empty. An unchanged subtree may still need a new
+parent page to reconnect a newly admitted or evicted hot/cold target; the
+counter is a *subset* of `active_index_page_writes`, not another page or an
+assertion that its work can be removed. It includes failed staged attempts,
+just as the existing creation counters do; compare phase-local differences
+only for successful public WRITEs with exact callback and cleanup proofs.
+Hot directory versions, explicitly changed-key paths, and page readbacks
+remain in their existing counters and are not added to this field. A value of
+zero cannot prove absence of extra work on changed paths. The external
+changed-closure diagnostic tests repeated and alternating generic WRITEs
+against full live/committed bytes and clean-close physical custody. No
+format, selected identity, eviction rule, timing boundary or benchmark
+admission contract changes with this telemetry.

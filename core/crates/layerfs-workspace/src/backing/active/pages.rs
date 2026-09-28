@@ -102,6 +102,9 @@ pub struct StoreStatus {
     pub hot_cursor_admissions: u64,
     pub hot_carries: u64,
     pub hot_normalizations: u64,
+    /// Index page versions created in a subtree with no key update, solely
+    /// to reconnect changed hot/cold targets. Includes staged attempts.
+    pub representation_only_pages: u64,
     pub retirement_inspections: u64,
     pub minimum_leaf_split_bytes: Option<u64>,
     pub minimum_branch_split_bytes: Option<u64>,
@@ -117,6 +120,7 @@ pub(super) enum Counter {
     Admission,
     Carry,
     Normalization,
+    RepresentationOnly,
     Retirement,
     CursorAdmission,
 }
@@ -131,7 +135,7 @@ pub struct PageStore {
     index_fetches: AtomicU64,
     pack_page_writes: AtomicU64,
     index_page_writes: AtomicU64,
-    counters: [AtomicU64; 10],
+    counters: [AtomicU64; 11],
     cause_ns: [AtomicU64; 11],
     split_minimum: [AtomicU64; 2],
     _charge: Charge,
@@ -756,6 +760,8 @@ impl PageStore {
                 .load(Ordering::Relaxed),
             hot_carries: self.counters[Counter::Carry as usize].load(Ordering::Relaxed),
             hot_normalizations: self.counters[Counter::Normalization as usize]
+                .load(Ordering::Relaxed),
+            representation_only_pages: self.counters[Counter::RepresentationOnly as usize]
                 .load(Ordering::Relaxed),
             retirement_inspections: self.counters[Counter::Retirement as usize]
                 .load(Ordering::Relaxed),

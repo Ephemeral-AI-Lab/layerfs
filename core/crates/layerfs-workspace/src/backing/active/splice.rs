@@ -858,6 +858,7 @@ impl Mutation {
             }
         };
         let _ = kind;
+        let before_pages = self.created.len();
         let children = self.emit(
             store,
             generation,
@@ -867,6 +868,12 @@ impl Mutation {
             nodes,
             lower,
         )?;
+        if updates.is_empty() {
+            store.count(
+                Counter::RepresentationOnly,
+                (self.created.len() - before_pages) as u64,
+            );
+        }
         self.replaced.push(previous);
         Ok(children)
     }
