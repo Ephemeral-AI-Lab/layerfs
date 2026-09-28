@@ -399,6 +399,10 @@ def main():
               'hard_budget_seconds': 60, 'stage_deadline_seconds': 25 if args.case == 'frontier' else 10,
               'commit_deadline_seconds': (25 if args.case == 'frontier' else 10) if MODE in ('functional-workspace-composite-commit', 'functional-workspace-resize', 'functional-workspace-write') else (10 if MODE in ('functional-workspace-commit-staged', 'functional-workspace-maintenance', 'functional-mounted-sdk-coherence', 'functional-mounted-write', 'functional-mounted-resize', 'functional-native-mount-failure') else None), 'performance_claim': False, 'cache_claim': None,
               'not_run': NOT_RUN}
+    if args.case in ('active_hot_publication', 'active_hot_continuity'):
+        report.update(requirement_scope='phase-4.5 public hot WRITE, Commit/reconcile and continuing-process subsets',
+                      commit_deadline_seconds=10,
+                      not_run=['checkpoint 5 and matched performance arms', 'concurrent SDK Exec admission', 'hard RSS/cgroup bound'])
     started = time.monotonic()
     def expired(_signal, _frame):
         raise TimeoutError('complete functional selection exceeded 60 seconds')

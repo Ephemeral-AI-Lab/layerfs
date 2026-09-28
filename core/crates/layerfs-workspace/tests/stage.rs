@@ -1617,6 +1617,17 @@ mod linux {
             .unwrap()
     }
 
+    fn complete_read(f: &Fixture, handle: HandleId, length: usize) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(length);
+        while bytes.len() < length {
+            let count = (length - bytes.len()).min(MAX_READ_BYTES);
+            let next = f.read(handle, bytes.len() as u64, count);
+            assert_eq!(next.len(), count);
+            bytes.extend(next);
+        }
+        bytes
+    }
+
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_hot_publication() {
@@ -1634,9 +1645,9 @@ mod linux {
         assert_eq!(alias.serial, file.serial);
         let held = writable(&f, file.serial);
         let inherited = writable(&f, other.serial);
-        let mut first_oracle = f.read(held, 0, file.size as usize);
+        let mut first_oracle = complete_read(&f, held, file.size as usize);
         let old_bytes = first_oracle.clone();
-        let mut second_oracle = f.read(inherited, 0, other.size as usize);
+        let mut second_oracle = complete_read(&f, inherited, other.size as usize);
         let mut ordinary = 0;
         let before = f.workspace.backing_status().unwrap();
         for index in 0..512usize {
@@ -1669,9 +1680,12 @@ mod linux {
                 && after.active_hot_cursors <= 8
                 && after.active_hot_reserved_bytes <= 1 << 20
         );
-        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(complete_read(&f, held, first_oracle.len()), first_oracle);
         let alias_handle = writable(&f, alias.serial);
-        assert_eq!(f.read(alias_handle, 0, first_oracle.len()), first_oracle);
+        assert_eq!(
+            complete_read(&f, alias_handle, first_oracle.len()),
+            first_oracle
+        );
         f.workspace.release(alias_handle).unwrap();
         let private = std::path::PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap());
         assert!(!private_files_with_prefix(&private, "a-hot-v2").is_empty());
@@ -1711,7 +1725,7 @@ mod linux {
                 .unwrap();
         }
         f.workspace.commit_staged(&staged, deadline()).unwrap();
-        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(complete_read(&f, held, first_oracle.len()), first_oracle);
         assert_eq!(
             f.native.bytes(saved.1, 0, first_oracle.len() - 1),
             &first_oracle[..first_oracle.len() - 1]
@@ -1744,7 +1758,7 @@ mod linux {
                 .unwrap();
             first_oracle.push(b'c' + (index % 10) as u8);
         }
-        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(complete_read(&f, held, first_oracle.len()), first_oracle);
         assert_eq!(f.workspace.getattr(unrelated.serial).unwrap().size, 5);
         check("active-hot-g1-g2-and-post-commit-continuation");
         f.workspace
@@ -1755,7 +1769,7 @@ mod linux {
         first_oracle.truncate(200);
         f.workspace.set_len(file.serial, 260, deadline()).unwrap();
         first_oracle.resize(260, 0);
-        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(complete_read(&f, held, first_oracle.len()), first_oracle);
         f.workspace
             .rename(
                 f.workspace.root().serial,
@@ -1770,7 +1784,7 @@ mod linux {
             .unlink(f.workspace.root().serial, b"alias", deadline())
             .unwrap();
         f.workspace.forget(file.serial, 1, ReferenceScope::Local);
-        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(complete_read(&f, held, first_oracle.len()), first_oracle);
         let (_, orphan) = f
             .workspace
             .create_file(
