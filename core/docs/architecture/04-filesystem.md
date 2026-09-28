@@ -5,6 +5,20 @@
 > caller's ordering-memory resource instead of a fixed 4,096-entry walk count.
 > The older source pins below document their respective historical sections.
 
+> **Current-source correction (validation ordering charges):** the update pass
+> that identifies directory parents left with no binding at all now retains and
+> charges one membership entry per declared-new parent other than the root,
+> joining one binding pass against that targeted set instead of retaining every
+> positive child binding; a declared-new parent set wider than
+> `floor(ordering_bytes / 1024)` is still refused before any root exists.
+> Validation's declared-total checks — row counts, changed names and the grouped
+> prefetch demand — are now bounded by the per-serial allowance
+> (`maximum_touched_serials`, `ordering_bytes / 16`) instead of
+> `ordering_bytes / 1024`, so an operation whose count array fits its budget no
+> longer refuses in validation first; the base-record memo and the
+> effective-tree walk entry bounds keep the conservative `ordering_bytes / 1024`
+> rate. Described in §5.9.
+
 > **Status:** Research; informative and not a product contract.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
@@ -396,7 +410,25 @@ the spool removes its file; `cleanup` is the checked form of the same act.
 Validation derives a resident-entry allowance as
 `floor(FilesystemResources.ordering_bytes / 1024)`. Row counts, changed names,
 the reachability frontier and each effective-tree walk are checked against that
-declared resource. The effective-cycle allowance is cumulative across one
+declared resource.
+
+The unreachable-parent pass that precedes validation retains one charged
+membership entry per declared-new directory parent other than the root — only
+such a parent can end the operation with no binding at all — and joins one
+binding pass against that targeted set, charging no per-binding storage. A
+declared-new parent set wider than `floor(ordering_bytes / 1024)` is refused
+before any root exists, while a wide fan-out under one parent is charged as one
+entry.
+
+Validation's declared totals — the row counts, the changed names and the grouped
+prefetch demand — are bounded by the per-serial allowance
+(`maximum_touched_serials`) the count array and the touched-serial collection
+already charge at, because rows stream one decoded row at a time and the same
+budget's count array must not be silently outranked by a coarser per-entry rate.
+The base-record memo (an evicting cache of decoded `InodeValue` records) and the
+entries an effective-tree walk examines keep the conservative
+`floor(ordering_bytes / 1024)` per-entry rate, so resident decoded state remains
+bounded well under the declared bytes. The effective-cycle allowance is cumulative across one
 operation's rebound directories. The memo of authenticated base records and
 absent serials evicts when full; eviction can add reads but cannot admit an
 unchecked binding. The service checks prepared totals before decoding a wide
