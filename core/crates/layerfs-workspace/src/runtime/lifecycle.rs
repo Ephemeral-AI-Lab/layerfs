@@ -127,6 +127,7 @@ impl Workspace {
         state.closed = true;
         state.nodes = Vec::new();
         state.node_index.clear();
+        state.inherited_names.clear();
         state.node_index_charge.resize(0)?;
         state.handles = Vec::new();
         state.cookies.clear();

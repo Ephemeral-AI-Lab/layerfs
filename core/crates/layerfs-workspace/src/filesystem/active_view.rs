@@ -164,6 +164,36 @@ impl Workspace {
         {
             return Err(WorkspaceError::NotFound);
         }
+        // A service SaveFile may be in flight while G2 still edits an already
+        // resolved name. Canonical facts are immutable within one baseline;
+        // never borrow a live entry for a pinned view from an older base.
+        let cached = {
+            let state = self.state()?;
+            if view.base == state.base {
+                state
+                    .inherited_names
+                    .get(&(parent, name.to_vec()))
+                    .and_then(|(serial, _)| state.node(*serial).ok())
+                    .filter(|node| node.baseline == state.baseline && node.attached)
+                    .map(|node| (node.original, node.content, node.metadata))
+            } else {
+                None
+            }
+        };
+        if let Some((original, content, metadata)) = cached {
+            let attr = match active.get(&inode_key(original.serial))? {
+                Some(value) => HotInode::parse(&value)?.attributes(original)?,
+                None => original,
+            };
+            return Ok(Resolved {
+                original,
+                attr,
+                content,
+                metadata,
+                canonical: true,
+                base: view.base,
+            });
+        }
         let response = self.inspect_view(
             operation,
             view.base,

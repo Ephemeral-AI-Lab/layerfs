@@ -547,6 +547,7 @@ impl WorkspaceHost {
                     nodes,
                     node_index,
                     node_index_charge,
+                    inherited_names: std::collections::BTreeMap::new(),
                     overlay: None,
                     is_active: resources.active.is_some(),
                     completion: None,

@@ -50,6 +50,9 @@ pub(crate) struct State {
     pub nodes: Vec<Node>,
     pub node_index: BTreeMap<u64, usize>,
     pub node_index_charge: Charge,
+    /// Canonical names resolved in this baseline; active bindings/tombstones
+    /// take precedence. Each entry carries its own persistent Budget charge.
+    pub inherited_names: BTreeMap<(u64, Vec<u8>), (u64, Charge)>,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
     pub is_active: bool,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
@@ -508,6 +511,8 @@ impl State {
         for (index, node) in self.nodes.iter().enumerate() {
             self.node_index.insert(node.attr.serial, index);
         }
+        self.inherited_names
+            .retain(|_, (serial, _)| self.node_index.contains_key(serial));
         self.node_index_charge
             .resize(self.nodes.len() * 96)
             .expect("shrinking the node index charge cannot fail");

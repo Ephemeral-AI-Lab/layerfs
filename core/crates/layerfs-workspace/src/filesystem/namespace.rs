@@ -168,6 +168,24 @@ impl Workspace {
             canonical,
             ..
         } = resolved;
+        // Reserve a canonical name before changing lookup ownership; a failed
+        // Budget admission cannot leave a visible but unindexed reference.
+        let pending_name = if state.is_active && canonical {
+            let name = path
+                .rsplit(|byte| *byte == b'/')
+                .next()
+                .ok_or(WorkspaceError::Io)?;
+            if state.inherited_names.contains_key(&(parent, name.to_vec())) {
+                None
+            } else {
+                let charge = self.host.budget.reserve(96 + name.len())?;
+                let mut stored = crate::backing::metadata_index::vector(name.len())?;
+                stored.extend_from_slice(name);
+                Some((stored, charge))
+            }
+        } else {
+            None
+        };
         if let Ok(node) = state.node_mut(attr.serial) {
             if canonical
                 && node.baseline == baseline
@@ -213,6 +231,11 @@ impl Workspace {
             node.names = state.resolved_names(&attr);
             *node.references(scope) = 1;
             state.push_node(node);
+        }
+        if let Some((name, charge)) = pending_name {
+            state
+                .inherited_names
+                .insert((parent, name), (attr.serial, charge));
         }
         Ok(state.presented(attr))
     }

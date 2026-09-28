@@ -247,6 +247,18 @@ fallible local completion persistence call, the submission now advances to
 that phase and retains the known saved roots; a denied or unknown metadata save
 still reports `StagePhase::MetadataSave`. No retry or backing sync was added.
 
+**Resident canonical memo (same commit as this paragraph; first parent
+`277afbc5f`):** on a successful active lookup, the Workspace charges and
+retains the authenticated `(parent serial, component) → resident serial`
+binding within its current canonical baseline. Active index tombstones and
+new bindings take precedence. A lookup of that resident base identity reads
+its original roots and the pinned active revision locally, so a G2 write can
+continue while the host service is inside a separate G1 SaveFile. A pinned
+view from an older canonical base never borrows the live cache. Forget/handle
+release prunes entries when their resident Node retires, and checked clean
+close drops the memo. This is a bounded resident cache, not a second
+namespace publisher or a new canonical path format.
+
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured
