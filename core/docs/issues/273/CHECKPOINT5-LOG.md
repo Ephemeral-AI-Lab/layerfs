@@ -285,6 +285,12 @@ python3 core/crates/layerfs-workspace/tests/stage_route.py \
   inputs are unchanged, so it is not rerun.
 - The ten route rows above were executed at this identity with identity-matched
   Linux artifacts.
+- **Independent re-verification of retained evidence** (read-only, no sample
+  repeated): all 24 attempt `SHA256SUMS` re-hashed with no mismatch, and the
+  shared oracle was re-run against the retained clone Store/history and declared
+  manifests for `control/01`, `candidate/01`, `control/09`, `candidate/06` and
+  `candidate/12` — all PASS. Recorded in
+  `evidence/checkpoint5/INDEPENDENT-REVERIFICATION.json`.
 
 ## 10. Remaining failures, gaps and what still blocks closure
 

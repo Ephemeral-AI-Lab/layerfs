@@ -1,0 +1,31 @@
+{
+ "attempt_manifest_failures": [],
+ "attempt_manifests_verified": 24,
+ "oracle_binary_sha256": "837df9a26eb73cdf3b0fa00326e0e02b6da624eab504349f2871680aaae214d1",
+ "oracle_reruns": [
+  {
+   "attempt": "control/01-issue273-append-100-10m-v1",
+   "status": "PASS"
+  },
+  {
+   "attempt": "candidate/01-issue273-append-100-10m-v1",
+   "status": "PASS"
+  },
+  {
+   "attempt": "control/09-issue273-repeated-4097-10m-v1",
+   "status": "PASS"
+  },
+  {
+   "attempt": "candidate/06-issue273-dispersed-4097-10m-v1",
+   "status": "PASS"
+  },
+  {
+   "attempt": "candidate/12-issue248-separated-4097-v1",
+   "status": "PASS"
+  }
+ ],
+ "processed_from": "benchmark-results/fs-bench-pro/issue273/checkpoint5/campaign-3",
+ "schema": "issue273-checkpoint5-independent-reverification-v1",
+ "scope": "Read-only re-verification of retained raw evidence: every attempt folder's SHA256SUMS re-hashed, and the shared independent oracle re-run against the retained clone Store/history and declared manifests. No product command was re-executed and no sample was repeated.",
+ "verifier": "core/crates/layerfs-server/examples/verify_checkpoint5.rs (shared oracle, built once)"
+}
