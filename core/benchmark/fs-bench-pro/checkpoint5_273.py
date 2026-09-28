@@ -890,12 +890,34 @@ def run(args):
                       "complete_command_wall_ns": measured["complete_command_wall_ns"]}))
 
 
+def space_metrics(receipt):
+    """Two declared scopes, never summed.
+
+    `backing.allocated_bytes` is the whole private-backing physical charge; the
+    product's own `active-4096-separated-full-private-backing-bound` test
+    equality-asserts it against the recursive `st_blocks * 512` sum of the
+    private directory. `metadata.allocated_bytes` is the metadata-host pages
+    *inside* that same charge, so adding the two double-counts them.
+    """
+    samples = receipt.get("backing_samples") or []
+    return {
+        "private_backing_allocated_bytes": max(
+            (row["backing"]["allocated_bytes"] for row in samples), default=None),
+        "metadata_allocated_bytes_subscope": max(
+            (row["metadata"]["allocated_bytes"] for row in samples), default=None),
+        "private_backing_source": ("LFS_WRITE_SAMPLE backing.allocated_bytes, max over the "
+                                   "declared class checkpoints" if samples else None),
+        "summing_scopes_would_double_count": True,
+    }
+
+
 def report(args):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     rows = []
     for receipt_file in sorted(Path(args.root).glob("*/[0-9][0-9]-*/receipt.json")):
         receipt = json.loads(receipt_file.read_text())
+        driver = receipt["driver"] or {}
         rows.append({
             "arm": receipt["arm"], "order": receipt["selection_order"],
             "scenario_id": receipt["scenario_id"], "receipt": str(receipt_file),
@@ -906,58 +928,92 @@ def report(args):
             "complete_command_wall_ns": receipt["complete_command_wall_ns"],
             "complete_command_limit_s": receipt["complete_command_limit_s"],
             "limit_met": receipt["complete_command_limit_met"],
-            "exec_ns": (receipt["driver"] or {}).get("exec_ns"),
-            "commit_ns": (receipt["driver"] or {}).get("commit_ns"),
-            "cleanup_ns": (receipt["driver"] or {}).get("cleanup_ns"),
-            "charged_backing_bytes": receipt["charged_backing_bytes"],
-            "quota_charge_bytes": receipt["quota_charge_bytes"],
-            "clone_physical_bytes": receipt["clone_physical_bytes"],
+            "exec_ns": driver.get("exec_ns"), "commit_ns": driver.get("commit_ns"),
+            "mount_ns": driver.get("mount_ns"), "cleanup_ns": driver.get("cleanup_ns"),
+            "driver_status": driver.get("status"), "driver_detail": driver.get("detail"),
+            "fuse_write_count": receipt["fuse_write_callbacks_observed"],
+            "writes_expected": receipt["writes_expected"],
             "cache_status": receipt["cache_status"],
             "commit_cache_status": receipt["commit_cache_status"],
+            "instrumentation_complete": receipt["instrumentation_complete"],
+            "writer_progress_ok": receipt["writer_progress_ok"],
+            "phase_samples_complete": receipt["phase_samples_complete"],
+            "c1_counters_complete": receipt["c1_counters_complete"],
+            "extent_counters_emitted_by_this_arm": receipt["extent_counters_emitted_by_this_arm"],
+            "extent_counts_complete": receipt["extent_counts_complete"],
+            "quota_charge_bytes": receipt["quota_charge_bytes"],
+            "clone_physical_bytes": receipt["clone_physical_bytes"],
+            "cleanup_status": receipt["cleanup_status"],
             "source_commit": receipt["source"]["source_commit"],
             "product_source_seal": receipt["source"]["product_source_seal"],
-            "failure": receipt.get("failure_class"),
+            "harness_seal": receipt["source"]["harness_seal"],
+            **space_metrics(receipt),
         })
     pairs = []
-    for row in SELECTIONS:
-        control = next((item for item in rows if item["order"] == row["order"]
-                        and item["arm"] == "control"), None)
-        candidate = next((item for item in rows if item["order"] == row["order"]
-                          and item["arm"] == "candidate"), None)
-        entry = {"order": row["order"], "scenario_id": row["scenario_id"],
-                 "limit_s": row["limit_s"], "writes": row["writes"]}
-        for metric in ("exec_ns", "commit_ns", "complete_command_wall_ns",
-                       "charged_backing_bytes"):
-            left = control.get(metric) if control else None
-            right = candidate.get(metric) if candidate else None
-            entry[metric] = {"control": left, "candidate": right,
-                             "ratio_control_over_candidate":
-                                 round(left / right, 6) if left and right else None}
-        entry["control_row_status"] = control["row_status"] if control else "NOT_RUN"
-        entry["candidate_row_status"] = candidate["row_status"] if candidate else "NOT_RUN"
-        entry["cache_status"] = {"control": control["cache_status"] if control else None,
-                                 "candidate": candidate["cache_status"] if candidate else None}
-        entry["commit_cache_status"] = "INELIGIBLE"
+    for selection in SELECTIONS:
+        control = next((row for row in rows if row["order"] == selection["order"]
+                        and row["arm"] == "control"), None)
+        candidate = next((row for row in rows if row["order"] == selection["order"]
+                          and row["arm"] == "candidate"), None)
+        entry = {"order": selection["order"], "scenario_id": selection["scenario_id"],
+                 "limit_s": selection["limit_s"], "writes": selection["writes"],
+                 "control_row_status": control["row_status"] if control else "NOT_RUN",
+                 "candidate_row_status": candidate["row_status"] if candidate else "NOT_RUN",
+                 "cache_status": {"control": control["cache_status"] if control else None,
+                                  "candidate": candidate["cache_status"] if candidate else None}}
+        metrics = (("exec_ns", "exec"), ("commit_ns", "commit"),
+                   ("complete_command_wall_ns", "complete_command"),
+                   ("private_backing_allocated_bytes", "charged_backing"))
+        for field, name in metrics:
+            left = control.get(field) if control else None
+            right = candidate.get(field) if candidate else None
+            paired = bool(left and right and control["row_status"] != "FAIL"
+                          and candidate["row_status"] != "FAIL")
+            eligible = paired and (name == "exec" or name == "charged_backing")
+            entry[name] = {
+                "control": left, "candidate": right,
+                "ratio_control_over_candidate": round(left / right, 6) if paired else None,
+                "paired": paired,
+                "numeric_eligibility": "INELIGIBLE",
+                "reason": ("the Commit phase and the complete command contain private-backing "
+                           "pages written by the same command's Exec; the container cache "
+                           "cannot be invalidated between the two product calls"
+                           if name in ("commit", "complete_command") else
+                           "both arms are cache-invalidated on the host source and the "
+                           "declared container state is identical by construction, but no "
+                           "cache-qualified speedup is claimed without a matched pair and a "
+                           "row status other than FAIL")
+                if paired else "no matched pair of non-FAIL rows",
+            }
         pairs.append(entry)
+    route = None
+    if args.route:
+        route = json.loads(args.route.read_text())
     document = {"schema": "issue273-checkpoint5-report-v1", "rows": rows, "pairs": pairs,
+                "registered_selections": [row["scenario_id"] for row in SELECTIONS],
+                "route_evidence": route,
                 "report_generator_sha256": digest(Path(__file__)),
                 "admission_eligible": False,
+                "space_scope_note": "private_backing_allocated_bytes and "
+                                    "metadata_allocated_bytes_subscope are nested; do not sum them",
                 "note": "Raw append-only receipts; no row is admission eligible and no "
                         "historical timing is used as a denominator."}
     json_file(output / "report.json", document)
-    table = ["| # | selection | limit | control wall | candidate wall | ratio | control | candidate |",
-             "| ---: | --- | ---: | ---: | ---: | ---: | --- | --- |"]
+    table = ["| # | selection | limit | control wall (s) | candidate wall (s) | control | candidate |",
+             "| ---: | --- | ---: | ---: | ---: | --- | --- |"]
     for entry in pairs:
-        wall = entry["complete_command_wall_ns"]
+        wall = entry["complete_command"]
+        left = "n/a" if wall["control"] is None else f"{wall['control'] / 1e9:.3f}"
+        right = "n/a" if wall["candidate"] is None else f"{wall['candidate'] / 1e9:.3f}"
         table.append(f"| {entry['order']} | `{entry['scenario_id']}` | {entry['limit_s']} s | "
-                     f"{wall['control']} | {wall['candidate']} | "
-                     f"{wall['ratio_control_over_candidate']} | "
-                     f"{entry['control_row_status']} | {entry['candidate_row_status']} |")
+                     f"{left} | {right} | {entry['control_row_status']} | "
+                     f"{entry['candidate_row_status']} |")
     (output / "REPORT.md").write_text("\n".join(table) + "\n")
     (output / "SHA256SUMS").write_text("\n".join(
         f"{digest(path)}  {path.name}" for path in sorted(output.iterdir())
         if path.is_file() and path.name != "SHA256SUMS") + "\n")
-    print(json.dumps({"report": str(output / "report.json"), "rows": len(rows)}))
+    print(json.dumps({"report": str(output / "report.json"), "rows": len(rows),
+                      "pairs": len(pairs)}))
 
 
 def campaign(args):
@@ -1060,6 +1116,7 @@ def main():
     p.add_argument("--output", required=True, type=Path)
     p = sub.add_parser("report")
     p.add_argument("--root", required=True, type=Path)
+    p.add_argument("--route", type=Path)
     p.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     if args.action == "self-check":
