@@ -396,7 +396,12 @@ from direct hot propagation; `admission_no_key` creates a generic no-key
 node from a cold target admitted to a hot slot; `normalization_no_key` starts
 at a selected hot node marked for normalization/eviction; `connection_no_key`
 is the residual no-key recursive connection; `height_pages` arise from root
-height growth. Each successfully emitted index page is counted once; hot
+height growth. Each successfully emitted leaf/branch is counted once; the existing
+`index_page_writes` total **also includes hot-directory pages**, recorded
+separately as `directory_pages` in the causal line. A base Commit can prepare
+one candidate in the successor generation while its G1 capture is still held;
+the external WRITE observer excludes this pinned candidate before matching
+the subsequent contiguous, individually acknowledged WRITE revisions. Hot
 slot creation and normalizations may overlap these creation causes and are
 separate event counters. `connection_no_key` is **not** a proven removable
 page: changed child target, fence, epoch and selected pin obligations remain.

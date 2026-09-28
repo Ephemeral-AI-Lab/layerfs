@@ -9,7 +9,7 @@ ROW = ('LFS_INDEX_PAGE_CAUSE v=1 generation=2 revision=11 update_keys=3 '
        'replaced=3 hot_before=1 hot_after=1')
 CAUSE = ('GENERIC_WRITE_CAUSE writes=1 hot=0 admissions=0 normalizations=1 '
          'representation_only_pages=1 seeks=15 index_fetches=0 '
-         'index_writes=4 pack_writes=1')
+         'index_writes=5 pack_writes=1')
 
 
 class ActiveRcaTest(unittest.TestCase):
@@ -26,6 +26,12 @@ class ActiveRcaTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'role totals'):
             summarize(ROW, CAUSE.replace('representation_only_pages=1',
                                         'representation_only_pages=0'), 1)
+
+    def test_prior_c5_capture_excluded_and_directory_counted(self):
+        previous = ROW.replace('revision=11', 'revision=10').replace('captured=0', 'captured=1')
+        result = summarize(previous+'\n'+ROW, CAUSE, 1)
+        self.assertEqual(result['excluded_prior_c5_revisions'], [10])
+        self.assertEqual(result['totals']['index_pages']+result['totals']['directory_pages'], 5)
 
     def test_duplicate_revision_rejected(self):
         with self.assertRaisesRegex(ValueError, 'distinct prepared'):

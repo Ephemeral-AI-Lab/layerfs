@@ -51,9 +51,15 @@ def parse_rows(text):
 
 
 def summarize(stderr, stdout, expected, generation=2):
-    rows = [row for row in parse_rows(stderr) if row['generation'] == generation]
-    if len(rows) != expected or len({row['revision'] for row in rows}) != expected:
-        raise ValueError(f'expected {expected} distinct prepared revisions; got {len(rows)}')
+    candidates = [row for row in parse_rows(stderr) if row['generation'] == generation]
+    # The first generation-2 candidate may be the prior base Commit's local
+    # C5 publication. Its capture is held; the subsequent WRITE group begins
+    # only after that pin has been released. Never credit it to a WRITE.
+    prefix, rows = candidates[:-expected], candidates[-expected:]
+    if (expected <= 0 or len(rows) != expected or
+            (prefix and (len(prefix) != 1 or prefix[0]['captured'] == 0)) or
+            len({row['revision'] for row in rows}) != expected):
+        raise ValueError(f'expected {expected} distinct prepared revisions; got {len(candidates)}')
     revisions = sorted(row['revision'] for row in rows)
     if revisions != list(range(revisions[0], revisions[0]+expected)):
         raise ValueError('missing/duplicate index revision')
@@ -63,12 +69,15 @@ def summarize(stderr, stdout, expected, generation=2):
     if not cause or int(cause[1]) != expected:
         raise ValueError('missing public WRITE sample')
     totals = {name: sum(row[name] for row in rows) for name in ROLES | {'index_pages', 'directory_pages'}}
-    if (totals['index_pages'] != int(cause[5]) or
+    # StoreStatus.index_page_writes counts HotDirectory too; the disjoint
+    # page-cause buckets intentionally classify only leaf/branch versions.
+    if (totals['index_pages'] + totals['directory_pages'] != int(cause[5]) or
             sum(totals[name] for name in ('admission_no_key', 'normalization_no_key', 'connection_no_key')) != int(cause[2])):
         raise ValueError('mutation role totals disagree with public WRITE counters')
     return {'writes': expected, 'generation': generation,
             'first_revision': revisions[0], 'last_revision': revisions[-1],
             'totals': totals,
+            'excluded_prior_c5_revisions': [row['revision'] for row in prefix],
             'rows': rows, 'status': 'SOURCE_COUNT_ONLY', 'admission_eligible': False}
 
 
