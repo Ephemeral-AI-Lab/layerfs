@@ -862,12 +862,12 @@ mod linux {
         let old = private_pack_files(&private);
         assert_eq!(old.len(), 1);
         let second = f.own(b"B");
-        let old_page = std::fs::OpenOptions::new()
-            .write(true)
-            .open(private_file_path(&private, &old[0]))
-            .unwrap();
-        assert_eq!(old_page.write_at(&[0xff], 128).unwrap(), 1);
-        drop(old_page);
+        let old_path = private_file_path(&private, &old[0]);
+        // Keep the old allocated file, but make its registered relative path
+        // a different identity. Retirement must refuse rather than refund or
+        // adopt that replacement, even though the new selected bytes are valid.
+        std::fs::rename(&old_path, old_path.with_extension("retained")).unwrap();
+        std::fs::create_dir(&old_path).unwrap();
         let error = f
             .workspace
             .write_file(handle, 0, &second, deadline())
@@ -885,6 +885,14 @@ mod linux {
         assert_eq!(published_handle, None);
         assert!(matches!(*cause, WorkspaceError::Io));
         assert_eq!(f.read(handle, 0, 1), b"B");
+        println!("STAGE_FAILURE case=cleanup_failure injection=physical-path-identity-conflict accepted_bytes={} cause={cause:?}", receipt.accepted_bytes);
+        assert!(
+            f.workspace
+                .backing_status()
+                .unwrap()
+                .active_retired_pack_pages
+                > 0
+        );
         assert_eq!(
             physical_private_files(&private).0,
             f.workspace.backing_status().unwrap().allocated_bytes

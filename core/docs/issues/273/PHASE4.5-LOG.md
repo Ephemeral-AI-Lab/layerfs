@@ -255,3 +255,14 @@ capacity charged. Shared prune paths now precharge touched logical-ID sets,
 returned owner vectors and P-key additions through publication. A focused
 ordinary-API reconcile Budget-refusal test preserves the selected revision,
 bytes and physical charge without allocating candidate pages.
+
+At `a2359620a`, all 14 original registered public cases pass, including the
+unchanged 4,096-separated Commit. The additional `active_cleanup_failure`
+case failed before any of its proof markers: corrupting a retired page's body
+no longer causes release to fail, because release checks retained physical
+identity/allocation rather than rereading dead body bytes. Its corrected
+external fixture preserves the old allocated file under a retained name and
+puts a different identity at its registered path. The existing Published
+receipt/new-byte/Busy assertions remain, with an explicit failed-pack custody
+count. This corrects the injection to a real custody failure; it changes no
+product source, work bound, deadline or successful historical receipt.
