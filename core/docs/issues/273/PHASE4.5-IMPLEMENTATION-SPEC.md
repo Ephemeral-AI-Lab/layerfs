@@ -770,3 +770,31 @@ suffix. A full/anchored production observation is required for the external
 causal diagnostic; an interleaved, absent or overflowed line is explicitly
 INCOMPLETE and never counted as zero. This charges telemetry overhead within
 the same phase and does not warm any source path.
+
+### Checkpoint-5 source-window and extent-scan amendment (prospective)
+
+The upload now precharges **1,024** required Packed references while retaining
+the **32,768-byte** scatter cap and one decoded pack page. Reference and sort
+index capacities are charged before allocation (including old/new overlap)
+against the existing Budget; there is no increased hot/index cache limit. The
+previous 256-reference window and its receipts retain their original identity.
+The diagnostic line is now `LFS_ACTIVE_SOURCE v=2` with an explicit 1,024
+reference bound; the harness rejects v1 as a current v2 row. With one-byte
+replacements and 80 chronological records per pack, a 4,097-reference file
+uses five windows, predicting approximately 209 distinct-pack/window loads
+for the registered dispersed permutation (versus observed 827 under v1);
+this is an **unsampled hypothesis**, not an observed count or speedup. Packed
+bytes beyond 32 KiB still force an earlier window boundary. Full extents and
+24-byte descriptors remain O(E_f), charged; paged extent scan now reserves
+capacity geometrically, rather than asking for a new exact reallocation on
+every 128-entry scan. That removes a worst-case O(E_f²/128) prefix-copy cost
+without changing the selected-index paging or extent identity checks.
+
+For N packed references, window limits K=1,024 and B=32,768, and d_i distinct
+required packs in window i, source loads are at most Σd_i ≤ N. This does
+**not** establish O(P) total loads for P file packs: when >8 packs interleave
+in output order, a pack can be needed in every window. An arbitrary full-file
+pack-once scatter would need storage for out-of-order replacement bytes (or
+a change to the ordered SaveFile protocol); it is not silently introduced.
+Remaining repeated reads across windows require further source-bound evidence
+and cannot be declared resolved by this amendment alone.

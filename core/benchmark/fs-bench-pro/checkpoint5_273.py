@@ -356,12 +356,12 @@ def c1_observation(extent):
 
 
 PACK_SOURCE = re.compile(
-    r"LFS_ACTIVE_SOURCE v=1 complete=(true|false) "
+    r"LFS_ACTIVE_SOURCE v=2 complete=(true|false) "
     r"windows=(\d+) references=(\d+) distinct_packs=(\d+) fill_ns=(\d+) "
     r"pack_loads=(\d+) pack_hits=(\d+) locator_lookups=(\d+) "
     r"index_reads=(\d+) index_seeks=(\d+) locator_ns=(\d+) pack_ns=(\d+) "
     r"decoded_records=(\d+) decoded_bytes=(\d+) copied_bytes=(\d+) "
-    r"ref_limit=256 byte_limit=32768")
+    r"ref_limit=1024 byte_limit=32768")
 PACK_SOURCE_KEYS = ("windows", "references", "distinct_packs", "fill_ns", "pack_loads",
                     "pack_hits", "locator_lookups", "index_reads", "index_seeks",
                     "locator_ns", "pack_ns", "decoded_records", "decoded_bytes",
@@ -385,7 +385,7 @@ def source_observation(stderr):
             or counts["references"] < counts["windows"]):
         return {"status": "INCOMPLETE", "reason": "inconsistent phase counters",
                 "line_count": 1, "counts": None}
-    return {"status": "PASS", "reason": "complete emitted production v1 row",
+    return {"status": "PASS", "reason": "complete emitted production v2 row",
             "line_count": 1, "counts": counts}
 
 
@@ -853,7 +853,7 @@ def run(args):
         "writer_progress": checkpoints, "writer_progress_error": progress_error,
         "backing_samples": samples, "backing_sample_counts_expected": expected_samples,
         "pack_source": pack_source,
-        "pack_source_availability": ("production_candidate_v1" if prepared["arm"] ==
+        "pack_source_availability": ("production_candidate_v2" if prepared["arm"] ==
                                      "candidate" else "baseline_not_instrumented"),
         "phase_samples_complete": phases,
         "extent_diagnostics": extent,

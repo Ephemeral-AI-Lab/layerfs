@@ -9,8 +9,9 @@ use crate::{
 use std::{fmt, mem::size_of, sync::Arc, time::Instant};
 
 // Both limits apply to required replacement references, not file length or
-// unrelated records. Only one decoded pack page remains in the reader.
-const REFS: usize = 256;
+// unrelated records. The larger reference bound reduces pack revisits
+// without increasing the 32 KiB scatter buffer or the single decoded page.
+const REFS: usize = 1024;
 const BYTES: usize = 32 * 1024;
 
 #[derive(Clone, Copy)]

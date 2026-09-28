@@ -1017,7 +1017,7 @@ mod linux {
         let reads = after.active_pack_fetches - before.active_pack_fetches;
         let seeks = after.active_index_seeks - before.active_index_seeks;
         assert!(reads > 0 && reads <= max_reads, "pack reads: {reads}");
-        println!("SOURCE_GROUPING case=dispersed{count} commit_wall_ns={commit_wall_ns} pack_reads={reads} index_seeks={seeks} ref_limit=256 byte_limit=32768");
+        println!("SOURCE_GROUPING case=dispersed{count} commit_wall_ns={commit_wall_ns} pack_reads={reads} index_seeks={seeks} ref_limit=1024 byte_limit=32768");
         let Response::History(result) = f.branch() else {
             panic!("branch result")
         };
@@ -1050,7 +1050,7 @@ mod linux {
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_source_grouping_4097() {
-        source_grouping(4097, 1024, false);
+        source_grouping(4097, 300, false);
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]

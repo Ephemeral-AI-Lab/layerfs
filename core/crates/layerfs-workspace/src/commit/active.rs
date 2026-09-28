@@ -307,11 +307,24 @@ pub(super) fn scan_extents(
         };
         loop {
             let page = view.scan(&lower, &upper, 128)?;
-            charge
-                .resize((extents.len() + page.entries().len()) * std::mem::size_of::<Extent>())?;
-            extents
-                .try_reserve_exact(page.entries().len())
-                .map_err(|_| WorkspaceError::Capacity)?;
+            let needed = extents
+                .len()
+                .checked_add(page.entries().len())
+                .ok_or(WorkspaceError::Capacity)?;
+            if needed > extents.capacity() {
+                // A per-page exact reserve can relocate the entire prefix at
+                // every 128-entry scan. Grow geometrically, charging capacity
+                // before allocating; never scan unrelated file extents again.
+                let target = needed.max(extents.capacity().saturating_mul(2));
+                charge.resize(
+                    target
+                        .checked_mul(std::mem::size_of::<Extent>())
+                        .ok_or(WorkspaceError::Capacity)?,
+                )?;
+                extents
+                    .try_reserve_exact(target - extents.len())
+                    .map_err(|_| WorkspaceError::Capacity)?;
+            }
             charge.resize(extents.capacity() * std::mem::size_of::<Extent>())?;
             for (key, value) in page.entries() {
                 extents.push(Extent::parse(key, value, serial)?);
@@ -530,7 +543,7 @@ pub(super) fn prepare<'a>(
                     let mut line = SourceLine::new();
                     if writeln!(
                         &mut line,
-                        "LFS_ACTIVE_SOURCE v=1 complete={} windows={} references={} distinct_packs={} fill_ns={} pack_loads={} pack_hits={} locator_lookups={} index_reads={} index_seeks={} locator_ns={} pack_ns={} decoded_records={} decoded_bytes={} copied_bytes={} ref_limit=256 byte_limit=32768",
+                        "LFS_ACTIVE_SOURCE v=2 complete={} windows={} references={} distinct_packs={} fill_ns={} pack_loads={} pack_hits={} locator_lookups={} index_reads={} index_seeks={} locator_ns={} pack_ns={} decoded_records={} decoded_bytes={} copied_bytes={} ref_limit=1024 byte_limit=32768",
                         upload.complete(), windows, references, distinct_packs, fill_ns,
                         stats.loads, stats.hits, stats.locator_lookups, stats.index_reads,
                         stats.index_seeks, stats.locator_ns, stats.pack_ns,
