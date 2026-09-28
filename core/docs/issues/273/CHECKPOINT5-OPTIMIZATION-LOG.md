@@ -1511,3 +1511,77 @@ The source-count question is whether pages/WRITE and normalized pages/WRITE
 continue to plateau through 4,197 and 8,192; raw wall is insufficient to
 assign a physical I/O or private cache cause. No limit/window/worker is
 raised, no frozen #271 arm is sampled, and draft PR #274/#273 remain open.
+
+### Iteration 019 result — raw WRITE-loop wall ratios, **INELIGIBLE** for speed admission
+
+- Prospective *test-only* source `e70b6ab73d0d692813f7870f7c44c48574e83ae7`
+  (parent `420790236106a1706b779de022c247c069ea37de`) records one
+  diagnostic-only monotonic loop timer on the same public Stage route.
+  **No product, Budget, quota, registered workload, construction worker or
+  canonical format changed.** First-parent/staged/committed production LOC
+  by `python3 tools/production_loc.py --json --root <git archive snapshot>`:
+  Core **68,031 -> 68,031 (+0)**, reference **65,417 -> 65,417 (+0)**,
+  combined **133,448 -> 133,448 (+0)**. Source, test binary and Stage
+  driver SHA identities match all three new cases. The first local
+  external derivation script FAILed to recognize the timer because Rust's
+  one-line test-status prefix preceded `GENERIC_WRITE_PHASE`; that raw
+  parser failure is preserved, and only its *external* parser was fixed.
+  None of the three public Stage cases was rerun.
+- The owner wrote **4,197**; the registered matrix tier is **4,097**.
+  Both plus **8,192** were prospectively selected, in that order, once
+  per case at the same new test identity. All three accepted their exact
+  WRITEs and PASS independent full 8,194-byte bytes, known Commit, charged
+  private backing and exact Workspace clean-close/refund on separately
+  owned ext4 volumes; all Stage cleanup PASS. They reuse the protected
+  master via independently checked copies; that is **not** a cold-cache
+  guarantee. The WRITE-loop timer includes owned public one-byte input
+  acquisition, `write_file` ACKs and the external one-byte oracle update;
+  the separate call-sum excludes input acquisition. Status scans,
+  SaveFile, Commit and full byte verification occur **after** this loop.
+  Instrumentation is active in **all** three cases and observer overhead
+  is part of the reported wall.
+
+  | Public Stage dispersed writes | WRITE loop raw s | Public `write_file` call-sum raw s | Index+directory page versions | Seeks | Hot no-key pages | Generic split events | SaveFile pack loads |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 4,097 | **10.495** | 9.617 | 27,780 | 61,327 | 810 | 285 | 209 |
+  | 4,197 **nonregistered** | **11.011** | 10.061 | 28,570 | 62,727 | 867 | 301 | 233 |
+  | 8,192 **nonregistered** | **22.857** | 20.915 | 62,117 | 114,714 | 3,154 | 375 | 824 |
+
+  Raw **descriptive, numerically INELIGIBLE** WRITE-loop quotients are
+  **8,192/4,097 = 2.178** for **1.9995×** the WRITEs, and **8,192/4,197
+  = 2.076** for **1.9519×** the WRITEs. Raw loop wall/WRITE rises
+  **8.92%** versus 4,097 and **6.35%** versus 4,197; index page
+  versions/WRITE rise **11.83% / 11.39%** on those same comparisons.
+  Seeks/WRITE instead *fall* from **14.97 / 14.95** to **14.00**;
+  generic split **events** rise **285/301 -> 375**, not in proportion
+  to a whole-history scan. No-key versions begin at the archived
+  2,659-WRITE threshold, never exceed one per affected WRITE here and
+  rise **810/867 -> 3,154** as a finite turnover signature; none is
+  proved safe to remove. SaveFile pack loads and the separate Commit
+  calls are **not inside** the WRITE-loop timer.
+- **No qualified bad-scaling/speed law follows from those quotients.**
+  Test-case execution order is fixed once; host/private cache, Docker
+  metadata, backend/device/VM and thermal state were not independently
+  matched, and the earlier cgroup-v2 peak-reset falsifier remains. All
+  result receipts carry `performance_claim=false`, `cache_claim=null`,
+  `admission_eligible=false`, under the **60-second Stage functional**
+  command bound—not the registered mounted 15/25-second perf gate.
+  Complete Stage command walls are **13.502 / 12.264 / 24.369 s** and
+  even reverse the order between 4,097 and 4,197, underscoring why the
+  whole-command wall cannot identify WRITE scaling here. The finite
+  excess per-WRITE wall and page-count amplification warrant further
+  source-local turnover investigation, but do not prove unbounded W²
+  latency or a matched speed regression. The nine registered mounted
+  candidate rows in iter-018 retain their separate **INELIGIBLE** status;
+  no new frozen-control sample or numeric release claim was taken.
+- Host locked-release Workspace/FUSE tests, warning-denying all-target
+  Clippy/fmt, product boundary 350 files, tools 9/9 and external page
+  parser 5/5 PASS; exact aarch64 release Linux Stage test binary and
+  three public cases PASS. Raw `RCA.json`, `RESULTS.json`, per-WRITE
+  source-role rows, unqualified timer lines, every attempt, test/fixture/
+  product SHA pins, actual commands and own-directory `SHA256SUMS` are
+  **gitignored local** under
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-019/`.
+  No GitHub raw-evidence URL is asserted. SDK pin/owner ruling, frozen
+  matched control, private cache and phase-cgroup capabilities remain
+  **NOT_RUN/INELIGIBLE**. PR #274 remains draft and #273 open.
