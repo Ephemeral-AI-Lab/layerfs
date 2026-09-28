@@ -579,3 +579,55 @@ Avoidability of generic admission/normalization turnover and the remaining
 physical publication multiplication therefore remains a source-analysis
 item; the nine verified but INELIGIBLE candidate rows cannot close the
 §8/§10 no-bad-factor or numeric admission gates by themselves.
+
+## Iteration 011 — transient Vec overlap custody and failed observer row
+
+- Committed product/spec correction `2c4b0752c9557b15aacad0ac3f5d6ebcb4b763be`
+  (tree `9cb97c0f78bc07f4eea324612821101b26c48fc6`), first parent
+  `29efd57ce63d43dd8c9cf3b44dd0dcc4fa98ee46`. Iterations 009/010
+  reserved new geometric capacity, but did not charge the old vector while
+  its allocator might still retain it. The corrected selected extent and
+  captured directory scanners precharge old + target capacity (and required
+  name bytes), allocate a separate destination, charge actual old + actual
+  new capacity, move descriptors and release the empty old allocation.
+  This changes neither canonical bytes nor source order. The earlier
+  009/010 pack counts remain raw facts, **not** proof of correctly charged
+  transient peak. `try_reserve_exact` may return a larger-than-requested
+  capacity; actual capacity is checked before transfer, and any failure
+  leaves unpublished work unwritten. No constant-RAM claim.
+- Production LOC: Core **67,662 -> 67,684 (+22)**, reference
+  **65,417 -> 65,417 (+0)**, combined **133,079 -> 133,101 (+22)**;
+  method `python3 tools/production_loc.py --json --root <first-parent and
+  staged/committed snapshot>`. Host workspace release tests PASS,
+  all-target clippy/fmt, boundary and core tools 9/9, harness 15/15,
+  self-check PASS; exact Linux `active_backing` 32/32 PASS in owned ext4
+  Docker volume with serial tests and `TMPDIR=LAYERFS_ACTIVE_TEST_ROOT=/work`.
+  Seven registered public stage subsets PASS: 128-file shared-pack/bytes/
+  close, quota refusal, G1/G2, 32 generations, mutation compaction,
+  live 4,097-record Workspace quick controls and 4,097 dispersed source
+  grouping at exactly 209 reads. These do not establish matched timing.
+- Nine **new** candidate-only, independently verified registered rows at
+  this changed product identity: all nine full-byte/cleanup and oracle
+  verifications PASS and have complete anchored v2 pack-source lines;
+  observed pack loads remain append 2/7/52, dispersed 2/7/209, repeated
+  1/1/1 (100/512/4,097), each one sample/arm/identity. Eight rows are
+  INELIGIBLE for unsupported private cache/cgroup and no control; the
+  **repeated-100 row is INCOMPLETE**: only 25/50/75 of its four required
+  backing checkpoints parsed. Its final 100 checkpoint was *emitted* by
+  `write_sample.rs`, but a separate LFT1 writer split its multi-fragment
+  `eprintln!` format. Its valid byte oracle, pack line and command wall
+  do not repair that observer. Raw stderr/receipt remain intact and must
+  not be relabelled or replayed on the same product identity.
+- The independently verified #248 gate is also INCOMPLETE due missing
+  explicit `LFS_C1_EDIT_LOAD`; the public SDK live-journal clean and
+  one-edit controls remain NOT_RUN. Control arm, matched numeric evidence,
+  exact three-Exec and full mutations selections and private cache/cgroup
+  proofs remain NOT_RUN/unsupported. All raw outcomes, six phase-local
+  domains, identities, source/provenance/statuses, stderr, stage proofs,
+  complete wall and a 274-file checksum manifest are retained under
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-011/`.
+- Next product/observer fix: emit a bounded *single-write* FUSE status line
+  and require an anchored complete v4 row prospectively. No earlier
+  interleaved row is repaired. Preserve v3 accounting for baseline; no
+  emission defect is permission to resample the unchanged arm. The #248
+  missing-zero and SDK live-pin blockers are independent and remain open.

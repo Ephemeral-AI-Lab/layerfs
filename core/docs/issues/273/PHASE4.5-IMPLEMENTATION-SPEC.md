@@ -826,3 +826,17 @@ vectors exist. This is a custody/refusal correction, not a measured speed
 improvement. Earlier iterations 009/010 remain count and functional evidence,
 **not** complete transient-memory/Budget proof. Publish any resource proof
 only from a new committed candidate and a separately retained result.
+
+### Checkpoint-5 atomic public WRITE observer amendment (prospective)
+
+The optional public FUSE operator checkpoint formatted its ~2.6 KiB status
+line through fragmented `eprintln!` writes. A concurrent LFT1 writer can
+splice the final checkpoint between those fragments; the old attempt stays
+INCOMPLETE and must not be repaired or replayed. Format the same v4 fields
+into one **bounded 4,096-byte stack observation**, included in the WRITE/Exec
+process wall (not a retained Workspace cache), and emit one pipe-sized write.
+Overflow yields a distinct INCOMPLETE marker; the shared external parser
+accepts complete anchored v3/v4 lines but never reconstructs interleaving
+or promotes absent data. No buffer limit, old receipt, WRITE algorithm or
+constructor changes. The optional operator stack is a separate transient
+FUSE process domain; it is not misrepresented as charged Workspace Budget.

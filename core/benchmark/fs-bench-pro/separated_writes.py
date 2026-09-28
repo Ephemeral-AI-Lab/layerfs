@@ -488,8 +488,8 @@ def backing_samples(stderr):
         r"metadata=Ok\(MetadataStatus \{ (.*?) \}\)"
         r"(?: acquisition_ns=(\d+) publication_ns=(\d+))?")
     for line in stderr.decode(errors="replace").splitlines():
-        found = pattern.search(line)
-        if found:
+        found = pattern.fullmatch(line)
+        if found and (int(found[1]) < 3 or found[6] is not None):
             def fields(value):
                 return {key: int(raw) if raw.isdigit() else raw
                         for key, raw in (part.split(": ", 1)
@@ -556,8 +556,8 @@ def causal_diagnostics(stderr, samples):
         errors.append("causal 512-WRITE checkpoints incomplete")
     previous = {}
     for row in samples:
-        if row["version"] != 3:
-            errors.append(f"WRITE {row['write_class']}: expected LFS_WRITE_SAMPLE v=3")
+        if row["version"] not in (3, 4):
+            errors.append(f"WRITE {row['write_class']}: expected LFS_WRITE_SAMPLE v=3 or v=4")
         for scope, names in (("backing", CAUSE_BACKING), ("metadata", CAUSE_METADATA)):
             fields = row[scope]
             if fields.get("operator_diagnostics_enabled") != "true":

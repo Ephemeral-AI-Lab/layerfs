@@ -11,7 +11,7 @@ sys.path.insert(0, str(HERE))
 spec = importlib.util.spec_from_file_location("checkpoint5_273", HERE / "checkpoint5_273.py")
 checkpoint = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkpoint)
-from separated_writes import progress
+from separated_writes import backing_samples, progress
 
 
 class Ordering(unittest.TestCase):
@@ -77,6 +77,17 @@ class Ordering(unittest.TestCase):
                         raw.replace(b"decoded_records", b"LFT1 {}decoded_records")):
             self.assertEqual(checkpoint.source_observation(damaged)["status"], "INCOMPLETE")
             self.assertIsNone(checkpoint.source_observation(damaged)["counts"])
+
+    def test_atomic_write_sample_refuses_interleaving_without_repair(self):
+        line = (b"LFS_WRITE_SAMPLE v=4 write_class=Some(100) elapsed_ns=123 "
+                b"backing=Ok(BackingStatus { a: 2 }) "
+                b"metadata=Ok(MetadataStatus { b: 3 }) "
+                b"acquisition_ns=0 publication_ns=9")
+        self.assertEqual(backing_samples(line + b"\n")[0]["write_class"], 100)
+        self.assertEqual(backing_samples(line.replace(b"metadata=", b"LFT1 {}metadata=")
+                                         + b"\n"), [])
+        self.assertEqual(backing_samples(b"LFS_WRITE_SAMPLE v=4 status=INCOMPLETE_OVERFLOW\n"), [])
+        self.assertEqual(backing_samples(line.replace(b" publication_ns=9", b"") + b"\n"), [])
 
     def test_unqualified_pair_has_no_numeric_ratio(self):
         row = {"row_status": "INELIGIBLE", "cache_status": "PASS",
