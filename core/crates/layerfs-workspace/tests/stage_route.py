@@ -193,7 +193,7 @@ def import_path(service_dir):
 
 
 def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o644,
-              directories=(), files=(), symlinks=()):
+              directories=(), files=(), symlinks=(), data_bytes=FIXTURE_BYTES):
     """Import the fixture namespace over the product's only initialization route.
 
     Every entry is a real host entry, so its name, mode and bytes come from the
@@ -206,7 +206,12 @@ def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o64
     daemon, _ = route.start_daemon(service_dir, port, client_key, server_public, 1, None)
     try:
         source = import_path(service_dir)
-        (source / 'data.bin').write_bytes(FIXTURE_PAYLOAD)
+        # The native/unknown SaveFile fault runs a 4 MiB in-place edit. Import
+        # a file at least that large for those cases; the default 326300-byte
+        # fixture would refuse in the test's own precondition before SaveFile.
+        assert data_bytes in (FIXTURE_BYTES, 4 * 1024 * 1024)
+        data = (bytes(range(251)) * ((data_bytes + 250) // 251))[:data_bytes]
+        (source / 'data.bin').write_bytes(data)
         (source / 'other.bin').write_bytes(FIXTURE_PAYLOAD)
         if wide:
             for index in range(102):
@@ -239,6 +244,7 @@ def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o64
         tag, committed = route.history(body); assert tag == 'Committed'
         return {'branch': snapshot['branch']['branch'].hex(), 'root': committed['root'].hex(),
                 'root_serial': created['root_serial'], 'file_serial': serial, 'data_mode': data_mode,
+                'data_bytes': data_bytes,
                 'route': 'public ImportNativeDirectory, Fork, explicit fixture alias Commit before Workspace attach'}
     finally:
         daemon.stdin.close()
@@ -284,7 +290,10 @@ def execute(args, report, started):
     try:
         readiness = mounted.line_until(service, timeout=min(10, remaining())); assert 'ready' in readiness, readiness
         port = int(readiness.strip().rsplit(':', 1)[1])
-        report['fixture'] = bootstrap(service_dir, port, client_key, server_public, args.case == 'frontier', DATA_MODES.get(args.case, 0o644))
+        report['fixture'] = bootstrap(
+            service_dir, port, client_key, server_public,
+            args.case == 'frontier', DATA_MODES.get(args.case, 0o644),
+            data_bytes=4 * 1024 * 1024 if args.case in ('native_save', 'unknown_save') else FIXTURE_BYTES)
         command(['docker', 'volume', 'create', volume]); made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',
