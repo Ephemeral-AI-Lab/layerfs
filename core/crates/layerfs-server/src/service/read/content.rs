@@ -2,6 +2,7 @@
 use crate::service::error::content;
 use layerfs_bridge::contract::*;
 use layerfs_content::filesystem::root::FilesystemRootId;
+use layerfs_content::filesystem::Resolved;
 use layerfs_content::object::inode_leaf::InodeKind;
 use layerfs_content::{read_range, FileView, FilesystemRead, LogicalPath, ObjectId, PathName};
 use layerfs_storage::{Store, StoreProvider};
@@ -56,38 +57,12 @@ pub fn read(
                 Inspect::Stat { path } | Inspect::Attributes { path } => {
                     let path = LogicalPath::from_bytes(path).map_err(content)?;
                     let value = fs.resolve(&path).map_err(content)?;
-                    let meta = fs.read_portable(&path).map_err(content)?;
                     if matches!(query, Inspect::Attributes { .. }) {
-                        let size = match value.value.kind {
-                            InodeKind::RegularFile => FileView::open(
-                                &provider,
-                                value.value.content_root,
-                                scope.child("service.inspect"),
-                            )
-                            .map_err(content)?
-                            .logical_len(),
-                            InodeKind::Directory => 0,
-                            InodeKind::Symlink => {
-                                fs.readlink(&path).map_err(content)?.as_bytes().len() as u64
-                            }
-                        };
-                        if size > MAX_FILE {
-                            return Err(Code::Capacity.into());
-                        }
-                        let response = Response::Attributes {
-                            serial: value.serial,
-                            kind: value.value.kind.code(),
-                            references: value.value.namespace_ref_count,
-                            content: *value.value.content_root.as_bytes(),
-                            metadata: *value.value.metadata_root.as_bytes(),
-                            mode: meta.mode,
-                            mtime: meta.mtime_seconds,
-                            nanoseconds: meta.mtime_nanoseconds,
-                            size,
-                        };
+                        let response = full_attributes(&provider, &mut fs, value, scope)?;
                         response.validate_attributes(Some(path.is_root()))?;
                         return Ok(response);
                     }
+                    let meta = fs.read_portable(&path).map_err(content)?;
                     Ok(Response::Stat {
                         serial: value.serial,
                         kind: value.value.kind.code(),
@@ -98,6 +73,17 @@ pub fn read(
                         mtime: meta.mtime_seconds,
                         nanoseconds: meta.mtime_nanoseconds,
                     })
+                }
+                Inspect::ChildAttributes { parent, name } => {
+                    let name = PathName::from_bytes(name).map_err(content)?;
+                    let value = fs.resolve_child(*parent, &name).map_err(content)?;
+                    let response = full_attributes(&provider, &mut fs, value, scope)?;
+                    response.validate_attributes(Some(false))?;
+                    Ok(response)
+                }
+                Inspect::InodeAttributes { serial } => {
+                    let value = fs.resolve_inode(*serial).map_err(content)?;
+                    full_attributes(&provider, &mut fs, value, scope)
                 }
                 Inspect::List {
                     path,
@@ -123,6 +109,29 @@ pub fn read(
                         continuation: page.continuation.map(|name| name.as_bytes().to_vec()),
                     })
                 }
+                Inspect::InodeList {
+                    serial,
+                    after,
+                    entries,
+                    bytes,
+                } => {
+                    let after = if after.is_empty() {
+                        None
+                    } else {
+                        Some(PathName::from_bytes(after).map_err(content)?)
+                    };
+                    let page = fs
+                        .list_inode(*serial, after.as_ref(), *entries as usize, *bytes as usize)
+                        .map_err(content)?;
+                    Ok(Response::List {
+                        entries: page
+                            .entries
+                            .into_iter()
+                            .map(|(name, serial)| (name.as_bytes().to_vec(), serial))
+                            .collect(),
+                        continuation: page.continuation.map(|name| name.as_bytes().to_vec()),
+                    })
+                }
                 Inspect::Readlink { path } => {
                     let path = LogicalPath::from_bytes(path).map_err(content)?;
                     Ok(Response::Link(
@@ -134,4 +143,44 @@ pub fn read(
         }
         _ => Err(Code::Unsupported.into()),
     }
+}
+
+fn full_attributes(
+    provider: &StoreProvider<'_>,
+    fs: &mut FilesystemRead<'_>,
+    value: Resolved,
+    scope: &TimingScope<'_, Active>,
+) -> Result<Response, Failure> {
+    let meta = fs.read_portable_inode(value.serial).map_err(content)?;
+    let size = match value.value.kind {
+        InodeKind::RegularFile => FileView::open(
+            provider,
+            value.value.content_root,
+            scope.child("service.inspect"),
+        )
+        .map_err(content)?
+        .logical_len(),
+        InodeKind::Directory => 0,
+        InodeKind::Symlink => fs
+            .readlink_inode(value.serial)
+            .map_err(content)?
+            .as_bytes()
+            .len() as u64,
+    };
+    if size > MAX_FILE {
+        return Err(Code::Capacity.into());
+    }
+    let response = Response::Attributes {
+        serial: value.serial,
+        kind: value.value.kind.code(),
+        references: value.value.namespace_ref_count,
+        content: *value.value.content_root.as_bytes(),
+        metadata: *value.value.metadata_root.as_bytes(),
+        mode: meta.mode,
+        mtime: meta.mtime_seconds,
+        nanoseconds: meta.mtime_nanoseconds,
+        size,
+    };
+    response.validate_attributes(None)?;
+    Ok(response)
 }

@@ -1,5 +1,23 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#258 identity Inspect extension:** The source in the same commit as this
+> paragraph adds native Inspect subtags 5–7 for child attributes by parent
+> serial, attributes by inode serial, and bounded directory listing by serial.
+> C1 authenticates the requested immutable filesystem root and its inode table;
+> the service obtains children from the parent's directory root. The existing
+> path subtags and response tags retain their encodings. This supports a moved
+> inherited Workspace directory without a copied descendant tree.
+
+> **#258 Workspace rename publication:** The Workspace source in the same commit
+> as this paragraph stores one canonical-origin directory record when a
+> base-resident directory first moves. Its original immutable root and serial
+> locate inherited children for lookup and listing even when the live binding
+> has a different path. Both parent deltas, that record, and checked resident
+> path rewrites publish through one candidate root. A later Commit lowers only
+> changed namespace rows; C1 retains the moved directory's existing content
+> root and inherited child identities. A frozen G1 and later G2 use their own
+> pinned roots, and old Commit roots stay readable.
+
 > **Prepared-stream correction:** the changes committed with this paragraph,
 > based on `7499d6d56`, check declared row totals against C1's ordering-memory
 > budget before decoding the body. Subject validation flushes a read wave within

@@ -229,23 +229,36 @@ impl Workspace {
             state.directory_names + new_rows,
             state.directory_bytes + new_bytes,
         )?;
+        // A directory move's path bounds are proven before publication: the
+        // moved directory itself, every resident descendant, and - for a
+        // growing move - the inherited subtree's never-resident descendants,
+        // which only a canonical walk can see. Refusal here changes nothing.
         if moved.attr.kind == NodeKind::Directory {
+            drop(state);
+            self.preflight_rename_paths(
+                &mut operation,
+                &view,
+                moved.attr.serial,
+                &old_path,
+                &new_path,
+                deadline,
+            )?;
+            state = self.state()?;
+        }
+        // Every resident node inside the moved subtree keeps its original
+        // canonical path in the pinned views' origins, so an inherited child
+        // resolved through the moved directory still falls back to the base
+        // record at the path that base knows it by.
+        let next_origins = if moved.attr.kind == NodeKind::Directory {
+            let mut origins = state.active_origins.clone();
             let prefix = [old_path.as_slice(), b"/"].concat();
             for node in &state.nodes {
-                if node.path().starts_with(&prefix)
-                    && new_path.len() + node.path().len() - old_path.len()
-                        > crate::runtime::state::PATH_BYTES
-                {
-                    return Err(WorkspaceError::Capacity);
+                let within = node.path() == old_path.as_slice() || node.path().starts_with(&prefix);
+                if within {
+                    origins = origins.moved(node.attr.serial, node.path(), &self.host.budget)?;
                 }
             }
-        }
-        let next_origins = if moved.attr.kind == NodeKind::Directory {
-            Some(
-                state
-                    .active_origins
-                    .moved(moved.attr.serial, &old_path, &self.host.budget)?,
-            )
+            Some(origins)
         } else {
             None
         };

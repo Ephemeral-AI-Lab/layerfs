@@ -15,8 +15,6 @@ driver.NOT_RUN = [
     'symlink operations (the mounted_symlink route covers them)',
     'rename exchange/whiteout flags',
     'cross-Workspace operations',
-    'committed-directory move refusal (bounded profile: Unsupported, no identity-keyed '
-    'service query to re-anchor a committed directory\'s children after a move)',
     'prepared npm workload', 'R6', 'hard RSS/cgroup memory bound', 'crash/restart recovery',
 ]
 

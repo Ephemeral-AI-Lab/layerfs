@@ -18,6 +18,7 @@ pub mod projection_counters;
 mod read;
 mod remove;
 pub(crate) mod rename;
+mod rename_paths;
 mod resize;
 mod symlink;
 pub mod view_reads;

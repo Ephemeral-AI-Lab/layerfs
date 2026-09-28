@@ -47,6 +47,19 @@ fn parents() -> Session {
     session
 }
 
+#[test]
+fn inherited_children_resolve_and_list_by_parent_identity() {
+    let session = parents();
+    let mut read = session.read().unwrap();
+    let child = read.resolve_child(1, &name_of("d2")).unwrap();
+    assert_eq!(child.serial, 2);
+    assert_eq!(child, read.resolve_inode(2).unwrap());
+    let page = read.list_inode(1, None, 8, 4096).unwrap();
+    assert_eq!(page.entries.len(), 5);
+    assert_eq!(page.entries[0].1, 2);
+    assert!(read.resolve_child(1, &name_of("missing")).is_err());
+}
+
 fn apply(
     session: &Session,
     directories: &[DirectoryUpdate],

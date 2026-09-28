@@ -84,3 +84,68 @@ fn complete_attributes_roundtrip_and_reject_invalid_fields() {
         .validate_attributes(Some(true))
         .is_err());
 }
+
+#[test]
+fn identity_inspect_queries_roundtrip_and_check_bounds() {
+    for query in [
+        Inspect::ChildAttributes {
+            parent: 7,
+            name: b"child".to_vec(),
+        },
+        Inspect::InodeAttributes { serial: 8 },
+        Inspect::InodeList {
+            serial: 7,
+            after: b"child".to_vec(),
+            entries: 16,
+            bytes: 4096,
+        },
+    ] {
+        let request = Request {
+            id: 2,
+            generation: 1,
+            store: 1,
+            profile: 1,
+            deadline_ms: 1000,
+            response_bytes: 0,
+            operation: Operation::Inspect {
+                root: [2; 32],
+                query,
+            },
+        };
+        assert_eq!(
+            decode_request(2, &encode_request(&request).unwrap()).unwrap(),
+            request
+        );
+    }
+    for query in [
+        Inspect::ChildAttributes {
+            parent: 0,
+            name: b"child".to_vec(),
+        },
+        Inspect::ChildAttributes {
+            parent: 7,
+            name: b"../child".to_vec(),
+        },
+        Inspect::InodeAttributes { serial: 0 },
+        Inspect::InodeList {
+            serial: 7,
+            after: Vec::new(),
+            entries: 129,
+            bytes: 4096,
+        },
+    ] {
+        let request = Request {
+            id: 2,
+            generation: 1,
+            store: 1,
+            profile: 1,
+            deadline_ms: 1000,
+            response_bytes: 0,
+            operation: Operation::Inspect {
+                root: [2; 32],
+                query,
+            },
+        };
+        assert!(encode_request(&request).is_err());
+    }
+}

@@ -1,5 +1,11 @@
 # Filesystem trees
 
+> **#258 stable identity reads:** The source in the same commit as this note
+> extends `FilesystemRead` with parent-serial child resolution, inode-serial
+> resolution/listing, and portable metadata and symlink reads by inode serial.
+> Each query stays bound to one authenticated immutable root. The canonical
+> filesystem format and profile are unchanged.
+
 > **Current-source correction:** the changes committed with this paragraph,
 > based on `7499d6d56`, bound C1's prepared-update validation frontier by the
 > caller's ordering-memory resource instead of a fixed 4,096-entry walk count.

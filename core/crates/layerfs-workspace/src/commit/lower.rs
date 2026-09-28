@@ -49,27 +49,45 @@ pub(crate) struct DirtyWalk {
     revision: u64,
     prefix: [u8; 17],
     frontier: KeyCursor,
-    names: KeyCursor,
-    inodes: KeyCursor,
+    names: RecordCursor,
+    inodes: RecordCursor,
     after: u64,
 }
 
 /// Advances one ordered cursor to `key` and returns that exact record, if the
-/// tree holds it. Records below `key` are consumed; the cursor stays positioned,
-/// so ascending targets cost one pass over the records between them.
+/// tree holds it. One later record is retained as lookahead: consuming it on a
+/// miss would make the next dirty serial disappear when inode kinds alternate.
+struct RecordCursor {
+    cursor: KeyCursor,
+    next: Option<Cell>,
+}
+impl RecordCursor {
+    fn new(cursor: KeyCursor) -> Self {
+        Self { cursor, next: None }
+    }
+}
 fn reach(
-    cursor: &mut KeyCursor,
+    cursor: &mut RecordCursor,
     key: &[u8],
     window: &mut Window,
 ) -> Result<Option<Cell>, WorkspaceError> {
-    while let Some(cell) = cursor.next(window)? {
+    loop {
+        let cell = match cursor.next.take() {
+            Some(cell) => cell,
+            None => match cursor.cursor.next(window)? {
+                Some(cell) => cell,
+                None => return Ok(None),
+            },
+        };
         match cell.key().cmp(key) {
             Ordering::Less => continue,
             Ordering::Equal => return Ok(Some(cell)),
-            Ordering::Greater => return Ok(None),
+            Ordering::Greater => {
+                cursor.next = Some(cell);
+                return Ok(None);
+            }
         }
     }
-    Ok(None)
 }
 
 impl DirtyWalk {
@@ -179,8 +197,8 @@ impl Workspace {
             revision: captured.revision,
             prefix: metadata_pages::dirty_key(captured.generation, 0),
             frontier,
-            names,
-            inodes,
+            names: RecordCursor::new(names),
+            inodes: RecordCursor::new(inodes),
             after: 0,
         })
     }
@@ -334,7 +352,7 @@ impl Workspace {
 pub(crate) struct IdentitySection<'a> {
     captured: &'a Captured,
     walk: DirtyWalk,
-    results: KeyCursor,
+    results: RecordCursor,
     seen: usize,
     identities: usize,
     files: usize,
@@ -377,7 +395,7 @@ impl<'a> IdentitySection<'a> {
         Ok(Self {
             captured,
             walk,
-            results,
+            results: RecordCursor::new(results),
             seen: 0,
             identities: 0,
             files: 0,

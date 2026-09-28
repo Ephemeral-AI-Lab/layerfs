@@ -202,6 +202,24 @@ where, because a limit that is stated but not enforced is not a limit.
 
 ### Workspace private backing — keyed namespace tree (#256)
 
+The #258 directory-rename source in the same commit as this paragraph checks
+the destination prefix and every resident descendant path before publication,
+then checks resident paths again under the final state lock. A destination that
+makes an inherited prefix longer or deeper is checked against the effective
+subtree by bounded pages before publication; a path over 4,096 bytes or 256
+components refuses the whole rename. This adds no fixed descendant-count cap,
+but a growing-prefix move can pay for every inherited descendant. The scan has
+one charged frame per path component, shares no copied-up subtree, and stops at
+the existing deadline or resource budget. A canonical maximum-relative-path
+summary would be needed to make all growing-prefix moves independent of subtree
+size.
+
+C1's current `validate::check_parent_aliases` reads the full base tree when a
+stored directory gains a changed binding, and `check_effective_cycles` reads the
+effective moved subtree. Those are Commit-time costs on the frozen generation;
+the local rename publication is atomic, but neither the current Commit nor all
+growing-prefix renames have a proved path-local complexity bound.
+
 The keyed tree holds one Workspace generation's dirty identities, inodes and
 directory bindings. Its bounds are page-format bounds; the *number* of names or
 dirty identities a generation may hold is not bounded by a constant, it is
@@ -239,6 +257,13 @@ records and the inode records are three ordered passes over that one keyed tree,
 and a maintained directory's final bindings are the ordered merge of its entry
 leaves and its removal leaves. A pass reads each reached leaf once, so its page
 visits follow the tree's height and leaves rather than the number of names.
+
+The #258 source in the same commit as this paragraph keeps one lookahead record
+for each serial-ordered namespace, inode and saved-result cursor. A miss for a
+dirty serial no longer consumes the first record for a later serial, which is
+required when directory and file identities alternate in the frontier. The
+lookahead stays bounded to one fixed record per cursor and preserves the
+ordered `O(H + L)` traversal.
 
 The lowered rows do not travel inside the request. A prepared command carries a
 *declaration* - the identity of the update plus the exact totals of the ordered

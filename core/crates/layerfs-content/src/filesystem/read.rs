@@ -135,6 +135,35 @@ impl<'a> FilesystemRead<'a> {
         Ok(Resolved { serial, value })
     }
 
+    /// Resolves a child from a stable parent identity, independent of its path.
+    pub fn resolve_child(&mut self, parent: u64, name: &PathName) -> ContentResult<Resolved> {
+        let table = self.table();
+        let directory = self.inode(table, parent)?;
+        if directory.kind != InodeKind::Directory {
+            return Err(ContentError::WrongLogicalRole);
+        }
+        let serial = directory_lookup_counted(
+            self.reader,
+            crate::filesystem::sorted::finish::DirectoryRoot(directory.content_root),
+            name,
+            &mut self.work.directory,
+        )?
+        .map(|(_, serial)| serial)
+        .ok_or(ContentError::PathNotFound)?;
+        Ok(Resolved {
+            serial,
+            value: self.inode(table, serial)?,
+        })
+    }
+
+    /// Reads a stable inode identity in this immutable filesystem root.
+    pub fn resolve_inode(&mut self, serial: u64) -> ContentResult<Resolved> {
+        Ok(Resolved {
+            serial,
+            value: self.inode(self.table(), serial)?,
+        })
+    }
+
     /// Stats one canonical path.
     pub fn stat(&mut self, path: &LogicalPath) -> ContentResult<Stat> {
         Ok(self.resolve(path)?.value.into())
@@ -161,6 +190,28 @@ impl<'a> FilesystemRead<'a> {
             &mut self.work.directory,
         )?;
         Ok(page)
+    }
+
+    /// Lists an inherited directory after a Workspace has moved its binding.
+    pub fn list_inode(
+        &mut self,
+        serial: u64,
+        after: Option<&PathName>,
+        max_entries: usize,
+        max_bytes: usize,
+    ) -> ContentResult<ListingPage> {
+        let directory = self.resolve_inode(serial)?.value;
+        if directory.kind != InodeKind::Directory {
+            return Err(ContentError::WrongLogicalRole);
+        }
+        list_after(
+            self.reader,
+            crate::filesystem::sorted::finish::DirectoryRoot(directory.content_root),
+            after,
+            max_entries,
+            max_bytes,
+            &mut self.work.directory,
+        )
     }
 
     /// Resolves several names inside one directory, sharing each level's wave.
@@ -208,6 +259,26 @@ impl<'a> FilesystemRead<'a> {
             resolved.value.kind,
             &mut self.work.attributes,
         )
+    }
+
+    /// Reads portable metadata by identity in this immutable filesystem root.
+    pub fn read_portable_inode(&mut self, serial: u64) -> ContentResult<PortableMetadata> {
+        let value = self.resolve_inode(serial)?.value;
+        read_portable(
+            self.reader,
+            value.metadata_root,
+            value.kind,
+            &mut self.work.attributes,
+        )
+    }
+
+    /// Reads a symlink target by identity when its name has moved.
+    pub fn readlink_inode(&mut self, serial: u64) -> ContentResult<SymlinkTarget> {
+        let value = self.resolve_inode(serial)?.value;
+        if value.kind != InodeKind::Symlink {
+            return Err(ContentError::WrongLogicalRole);
+        }
+        SymlinkTarget::decode(&self.reader.read_canonical(value.content_root)?)
     }
 
     /// Reads one attribute value with an explicit byte bound.

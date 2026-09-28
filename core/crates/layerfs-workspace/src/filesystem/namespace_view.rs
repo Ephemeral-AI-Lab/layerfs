@@ -274,8 +274,14 @@ impl Workspace {
             }
         }
         let base = base.ok_or(WorkspaceError::NotFound)?;
-        let response =
-            self.inspect_view(operation, base, Inspect::Attributes { path }, deadline)?;
+        let query = match binding {
+            Some((serial, _)) => Inspect::InodeAttributes { serial },
+            None => Inspect::ChildAttributes {
+                parent,
+                name: name.to_vec(),
+            },
+        };
+        let response = self.inspect_view(operation, base, query, deadline)?;
         let (original, content, metadata) =
             attributes(response, false, self.inner.root.uid, self.inner.root.gid)?;
         if binding.is_some_and(|(serial, kind)| serial != original.serial || kind != original.kind)
@@ -379,8 +385,8 @@ impl Workspace {
             let response = self.inspect_view(
                 operation,
                 base,
-                Inspect::List {
-                    path: path.to_vec(),
+                Inspect::InodeList {
+                    serial,
                     after: cursor.clone(),
                     entries: limit as u16,
                     bytes: 16384,
