@@ -349,3 +349,25 @@ Core 67,158, reference 65,417, combined 132,575. Counting method:
 `python3 tools/production_loc.py --json`. Scope: first-party product
 implementation only; `core/benchmark/` is not product source and the oracle is
 an example outside product `src/`.
+
+## 12. Read-only root-cause audit after the slowness review
+
+The owner requested research with subagents. The source-pinned
+[root-cause research](CHECKPOINT5-ROOT-CAUSE-RESEARCH.md) and its
+[derived arithmetic](evidence/checkpoint5-root-cause/DERIVED.json) add no new
+performance sample and preserve all original receipts and row statuses.
+
+They qualify section 6's cold-input claim: the campaign harness hashes each
+Store/history file after eviction and zero-residency verification, reading the
+input again before launch. Thus the recorded check does not establish cold
+Exec inputs. Private backing also requests O_DIRECT in both Linux arms, so
+the blanket explanation based on warm Linux file-data pages is too broad;
+remaining cache domains and runtime handling still require separate evidence.
+No row is promoted to qualified speed evidence.
+
+The audit finds working eligible hot traversal counts alongside costly
+file-per-page publication/readback, scattered Commit pack-cache misses and a
+quadratic full-patch prefix search in reconcile. It also identifies quick-row
+observer/retained-journal coverage gaps and arithmetic corrections to the
+derived slowness summary. See the research for exact source/receipt anchors,
+measured-region attribution, prediction limits and the next causal diagnostics.
