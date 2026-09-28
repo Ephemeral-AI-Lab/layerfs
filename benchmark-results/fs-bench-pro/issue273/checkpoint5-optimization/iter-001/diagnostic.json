@@ -1,0 +1,58 @@
+{
+  "admission_eligible": false,
+  "cache_contract": "v2, not run",
+  "commands_tested": [
+    [
+      "python3",
+      "core/benchmark/fs-bench-pro/checkpoint5_273.py",
+      "self-check"
+    ],
+    "python3 -m unittest discover -s core/benchmark/fs-bench-pro/tests -p test_*.py",
+    "cargo +1.85.1 test --release --manifest-path core/Cargo.toml --locked --offline -p layerfs-workspace",
+    "cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --workspace --all-targets -- -D warnings",
+    "cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check",
+    "python3 core/tools/check_product_boundary.py",
+    "python3 -m unittest discover -s core/tools -p test_*.py",
+    "cargo +1.85.1 zigbuild --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-workspace --tests"
+  ],
+  "derived_source_sha256": "3f35911b9e578b81195d8fa988aed7d200a8ac9ddc19a0dd63edec9c7eba3086",
+  "method": "ordered BTreeMap prefix-range source inspection vs retained whole-map deletion-shape arithmetic; no product runtime instrumentation, elapsed-time sample or new count",
+  "nonpassing": [
+    "Linux zigbuild: zig binary unavailable; exact Linux active_backing NOT_RUN",
+    "mounted and matched performance matrix NOT_RUN; no qualified latency result",
+    "source grouping and WRITE amplification unresolved"
+  ],
+  "performance_claim": false,
+  "rows": [
+    {
+      "candidate_patch_lookup_upper_bound": "P*ceil(log2(M+1))+R; R is matching entries actually visited; selection scans additional",
+      "candidate_whole_map_entry_probes": 0,
+      "new_runtime_count": "NOT_RUN",
+      "previous_initial_patch_entries": 303,
+      "previous_whole_map_entry_probes_deletion_shape": 607,
+      "writes": 100
+    },
+    {
+      "candidate_patch_lookup_upper_bound": "P*ceil(log2(M+1))+R; R is matching entries actually visited; selection scans additional",
+      "candidate_whole_map_entry_probes": 0,
+      "new_runtime_count": "NOT_RUN",
+      "previous_initial_patch_entries": 1539,
+      "previous_whole_map_entry_probes_deletion_shape": 10794,
+      "writes": 512
+    },
+    {
+      "candidate_patch_lookup_upper_bound": "P*ceil(log2(M+1))+R; R is matching entries actually visited; selection scans additional",
+      "candidate_whole_map_entry_probes": 0,
+      "new_runtime_count": "NOT_RUN",
+      "previous_initial_patch_entries": 12294,
+      "previous_whole_map_entry_probes_deletion_shape": 640614,
+      "writes": 4097
+    }
+  ],
+  "schema": "issue273-checkpoint5-optimization-causal-oracle-v1",
+  "source_commit": "f81b7413b0b614d6cd8b05c8752b3f9c89d0ec65",
+  "source_tree": "65d79519f133a266a4504836eb665a5ed979cc07",
+  "status": "SOURCE_DERIVED_DIAGNOSTIC_ONLY",
+  "test_coverage_note": "17 host workspace tests (1+3+4+9), Linux-gated reconciliation NOT_RUN",
+  "verifier": "SKIPPED"
+}

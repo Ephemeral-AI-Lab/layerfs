@@ -1,0 +1,28 @@
+{
+ "spec_sha256": "4c0701d4bead6c07103476f04d53d8b5e1bb00f99a4ce7b82be4c5dde108b898",
+ "writer_sha256": "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0",
+ "oracle_source_sha256": "104896177223d12828319ac5ca219cbfbbebb2c7ae5bc9ee1fbc99d70b8222c8",
+ "harness_sha256": "2f37ea48d251658f2f27bb2e95628d223513ffe916822c435921aad13ae8f13b",
+ "selections": [
+  "issue273-append-100-10m-v1",
+  "issue273-append-512-10m-v1",
+  "issue273-append-4097-10m-v1",
+  "issue273-dispersed-100-10m-v1",
+  "issue273-dispersed-512-10m-v1",
+  "issue273-dispersed-4097-10m-v1",
+  "issue273-repeated-100-10m-v1",
+  "issue273-repeated-512-10m-v1",
+  "issue273-repeated-4097-10m-v1",
+  "issue273-clean-commit-v1",
+  "issue273-one-edit-commit-v1",
+  "issue248-separated-4097-v1"
+ ],
+ "manifests": {
+  "old": "d664c30d37508679421ab4989c3256f5da430edda0c4dc4d148d863085249927",
+  "append": "8be1076d3284ca7daf8be30197fff138cbc9872a573b8d2bac80e3f41a9604fc",
+  "dispersed": "b9f6ccc3fe182377f6eac4009450db59177649e4a906d812ef539f31c2c54079",
+  "repeated": "52ccb3b0de2001e89325508fa7aca6e48bb870df6a09541f4a66255ae553c8f6",
+  "gate-old": "048ad43d8d2664ae6aee48f89e772b8ead56d512ec190dedc43e065f62f6038e",
+  "gate-new": "92eb1f8cbde5cd73fb3c8018ecd6470ae8f6b8fa67d051aa175c49f9aaf44925"
+ }
+}
