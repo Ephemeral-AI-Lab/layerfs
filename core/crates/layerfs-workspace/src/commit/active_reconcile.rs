@@ -207,7 +207,8 @@ pub(super) fn reconcile(
             current.base = row.content;
             current.metadata = row.metadata;
         }
-        current.fresh = false;
+        current.fresh =
+            row.original.fresh && row.original.kind == NodeKind::File && row.original.links == 0;
         current.generation = state.generation;
         current.revision = revision;
         updates.insert(

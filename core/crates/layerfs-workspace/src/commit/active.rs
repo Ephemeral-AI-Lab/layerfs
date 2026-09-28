@@ -442,7 +442,8 @@ pub(super) fn prepare<'a>(
                     sum.checked_add(extent.end - extent.start)
                         .ok_or(WorkspaceError::Capacity)
                 })?;
-            let base_length = if inode.fresh {
+            let has_base = inode.base != [0; 32];
+            let base_length = if !has_base {
                 0
             } else {
                 let remote = first_remote
@@ -465,7 +466,7 @@ pub(super) fn prepare<'a>(
                 };
                 length
             };
-            if !inode.fresh
+            if has_base
                 && ((extents.len() == 1
                     && extents[0].kind == ExtentKind::Base
                     && extents[0].source_offset == 0
@@ -490,7 +491,7 @@ pub(super) fn prepare<'a>(
                 let response = workspace.remote_call(
                     (workspace.inner.store, captured.generation),
                     Operation::SaveFile {
-                        base: (!inode.fresh).then_some(inode.base),
+                        base: has_base.then_some(inode.base),
                         base_length,
                         length: inode.length,
                         extents: count,
@@ -592,6 +593,11 @@ pub(super) fn prepare<'a>(
                 totals.patches += 1;
             }
         } else {
+            // A fresh open-unlinked file has saved private facts but no
+            // canonical binding. It cannot declare an unreachable new inode.
+            if inode.fresh && inode.kind == NodeKind::File && inode.links == 0 {
+                continue;
+            }
             let (content, metadata) = saved.get(serial).ok_or(WorkspaceError::Io)?;
             let role = match (inode.fresh, inode.kind) {
                 (true, NodeKind::File) => ROLE_FRESH_FILE,

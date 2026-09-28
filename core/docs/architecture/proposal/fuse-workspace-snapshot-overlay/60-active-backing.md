@@ -107,6 +107,10 @@ still pays its actual affected-index work under the gate. Upload retains
 charged O(E_f) final extent scratch; it is not a streaming or constant-RAM
 Commit claim. Unrelated cursors survive and affected files can readmit after
 saved-base installation without a backing reset or process barrier.
+Fresh open-unlinked files retain saved private facts without declaring an
+unbound new canonical inode. Reconcile keeps their unintroduced identity,
+and subsequent saves may use an installed content base independently of
+that namespace-introduction flag.
 
 `backing/active/pack.rs` writes tiny records into a Workspace-shared logical
 tail. A slot uses a stable logical page ID and ordinal. A candidate physical

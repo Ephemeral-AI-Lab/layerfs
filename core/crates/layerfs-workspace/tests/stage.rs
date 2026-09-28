@@ -1823,11 +1823,17 @@ mod linux {
             .write_file(orphan, 8, &f.own(b"!"), deadline())
             .unwrap();
         assert_eq!(f.read(orphan, 0, 9), b"oooooooo!");
-        f.workspace.release(orphan).unwrap();
         f.workspace.release(held).unwrap();
         f.workspace.release(inherited).unwrap();
         f.workspace.release(unheld).unwrap();
         f.workspace.commit(deadline()).unwrap();
+        assert_eq!(f.read(orphan, 0, 9), b"oooooooo!");
+        f.workspace
+            .write_file(orphan, 9, &f.own(b"?"), deadline())
+            .unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        assert_eq!(f.read(orphan, 0, 10), b"oooooooo!?");
+        f.workspace.release(orphan).unwrap();
         let Response::History(result) = f.branch() else {
             panic!("branch")
         };
@@ -2011,6 +2017,8 @@ mod linux {
         let alias = attr(f.native.attributes(branch.effective_root, b"alias"));
         assert_eq!(saved, alias);
         assert_eq!(f.native.bytes(saved.1, original.size, 5), b"BCDEF");
+        f.workspace
+            .forget(original.serial, 1, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
         check("active-mounted-same-process-handle-post-commit-and-refund");
     }
