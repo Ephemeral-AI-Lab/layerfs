@@ -156,6 +156,12 @@ def selections():
 SELECTIONS = selections()
 BY_ID = {row["scenario_id"]: row for row in SELECTIONS}
 RETAINED_COMMAND = "/fixtures/bin/write-separated dispersed data.bin 4097"
+# Labelled harness diagnostic; never a registered selection and never a result.
+PREFLIGHT = {"order": 0, "scenario_id": "issue273-harness-preflight-v1", "master": "patterns",
+             "pattern": "append", "count": 100, "interval": MATRIX_INTERVAL[100], "limit_s": 15,
+             "command": "/fixtures/bin/write-separated append data.bin 100",
+             "oracle_manifest": "matrix-append-100", "old_manifest": "old",
+             "separated_count": None, "writes": 100}
 
 
 def seal(entries):
@@ -212,9 +218,9 @@ def require_clean(identity):
 
 def run_in(repo, command, log, timeout=None, env=None):
     started = time.monotonic_ns()
-    with Path(str(log) + ".stdout").open("wb") as out, Path(str(log) + ".stderr").open("wb") as err:
-        result = subprocess.run(command, cwd=repo, stdout=out, stderr=err,
-                                timeout=timeout, env=env)
+    result = subprocess.run(command, cwd=repo, capture_output=True, timeout=timeout, env=env)
+    Path(str(log) + ".stdout").write_bytes(result.stdout)
+    Path(str(log) + ".stderr").write_bytes(result.stderr)
     return result, time.monotonic_ns() - started
 
 
@@ -314,6 +320,24 @@ def load_master(name, destination):
                                             "genesis_root_serial", "branch_id", "old_commit")}}
 
 
+def splice_curve(stderr, expected_samples):
+    """Cumulative v1 extent-splice totals at each declared write-class sample."""
+    splices = 0
+    curve = []
+    for line in stderr.decode(errors="replace").splitlines():
+        if line.startswith("LFS_EXTENT_SPLICE "):
+            splices += 1
+        elif line.startswith("LFS_WRITE_SAMPLE ") and "write_class=Some(" in line:
+            match = re.search(r"write_class=Some\((\d+)\)", line)
+            if match:
+                curve.append({"write_class": int(match[1]), "splices": splices})
+    classes = [row["write_class"] for row in curve]
+    complete = bool(curve) and classes == list(expected_samples) and all(
+        row["splices"] == row["write_class"] for row in curve)
+    return {"total_splices": splices, "curve": curve, "classes": classes,
+            "expected_classes": list(expected_samples), "complete": complete}
+
+
 def cache_files(paths):
     """Darwin mmap/msync invalidation plus whole-input residency evidence."""
     residency = Residency()
@@ -357,8 +381,8 @@ def case_spec(path, values):
 
 
 def verifier(oracle_path, case, store, history, old_manifest, new_manifest, env, output, label):
-    command = [oracle_path, str(case), str(store), str(history),
-               str(old_manifest), str(new_manifest)]
+    command = [str(value) for value in (oracle_path, case, store, history,
+                                        old_manifest, new_manifest)]
     started = time.monotonic_ns()
     try:
         result = subprocess.run(command, cwd=OWNER, capture_output=True, timeout=9, env=env)
@@ -485,7 +509,8 @@ def prepare(args):
         raise ValueError("shared oracle binary seal mismatch")
     if digest(ORACLE_SOURCE) != oracle_record["oracle_source_sha256"]:
         raise ValueError("shared oracle source changed")
-    builds, paths = build_arm(repo, output, ("benchmark_shell", "verify_shell"))
+    builds, paths = build_arm(repo, output, ("benchmark_shell", "verify_shell",
+                                             "layerfs-daemon"))
     archive = output / "binary-archive"
     binaries = {name: archive_binary(paths[name], archive, name)
                 for name in ("benchmark_shell", "verify_shell")}
@@ -581,13 +606,27 @@ def retained(args):
     verify_case = output / "case.verify"
     case_spec(verify_case, {**case_fields(master, selection, RETAINED_COMMAND),
                             "expected_head_commit": driver["head_commit"]})
-    check = verifier(prepared["binaries"]["verify_shell"]["path"], verify_case,
+    check = verifier(prepared["binaries"]["verify_checkpoint5"]["path"], verify_case,
                      clone["store"], clone["history"],
                      args.prepared.parent / "old.tsv",
                      args.prepared.parent / "retained-old.tsv", env, output,
                      "retained-oracle")
     if check["status"] != "PASS":
         raise RuntimeError("retained base failed the independent oracle")
+    # The frozen arm verifier hard-codes the 100-write schedule, so it re-proves
+    # the retained base as a plain old/new tree identity without pattern keys.
+    tree_case = output / "case.retained-tree"
+    plain = {key: value for key, value in case_fields(
+        master, {"scenario_id": "issue273-retained-base-tree",
+                 "pattern": None, "count": 0, "separated_count": None}, RETAINED_COMMAND).items()}
+    case_spec(tree_case, {**plain, "expected_head_commit": driver["head_commit"]})
+    tree_check = verifier(prepared["binaries"]["verify_shell"]["path"], tree_case,
+                          clone["store"], clone["history"],
+                          args.prepared.parent / "old.tsv",
+                          args.prepared.parent / "retained-old.tsv", env, output,
+                          "retained-tree")
+    if tree_check["status"] != "PASS":
+        raise RuntimeError("retained base failed the arm's own tree verifier")
     retained_master = output / "master"
     retained_master.mkdir()
     for file in ("store.sqlite", "history.sqlite"):
@@ -598,7 +637,11 @@ def retained(args):
               "command": command, "shell_command": RETAINED_COMMAND,
               "complete_command_wall_ns": measured["complete_command_wall_ns"],
               "limit_s": 25, "cache": cache, "driver": driver,
-              "oracle": check, "head_commit": driver["head_commit"],
+              "oracle": check, "arm_verifier": tree_check,
+              "head_commit": driver["head_commit"],
+              **{key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
+                                              "genesis_root_serial", "branch_id")},
+              "base_old_commit": master["old_commit"],
               "store_sha256": digest(retained_master / "store.sqlite"),
               "history_sha256": digest(retained_master / "history.sqlite"),
               "path": str(retained_master),
@@ -617,7 +660,9 @@ def run(args):
     output.mkdir(parents=True, exist_ok=False)
     prepared = json.loads(args.prepared.read_text())
     identity = release_check(prepared, args.prepared, output)
-    selection = BY_ID[args.selection]
+    selection = BY_ID.get(args.selection) or PREFLIGHT
+    if args.selection == PREFLIGHT["scenario_id"] and "preflight" not in str(output):
+        raise ValueError("the harness pre-flight must use an output path that names it")
     env = arm_env(prepared)
     if selection["master"] == "retained":
         retained_record = json.loads(args.retained.read_text())
@@ -716,34 +761,46 @@ def run(args):
         verification["arm"] = {"status": "NOT_RUN",
                                "reason": "the driver produced no head Commit"}
     cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok"))
-    expected_samples = ([selection["count"] // 4, selection["count"] // 2,
-                         selection["count"] * 3 // 4, selection["count"]]
-                        if selection["count"] else [])
+    expected_samples = list(range(selection["interval"], selection["count"] + 1,
+                                   selection["interval"])) if selection["count"] else []
     phases = [row["write_class"] for row in samples] == expected_samples
-    complex_ok = (extent.get("splices") == selection["count"]
-                  and [row["writes"] for row in extent.get("snapshots", [])] == expected_samples
-                  and [row["splices"] for row in extent.get("snapshots", [])] == expected_samples
-                  and len(extent.get("c1_edit", [])) == 1
-                  and len(extent.get("file_input", [])) == 1) if selection["count"] else None
+    splices = splice_curve(stderr, expected_samples)
+    splice_lines = splices["total_splices"]
+    extent_present = splice_lines > 0
+    extent_complete = None
+    if extent_present and selection["count"]:
+        extent_complete = bool(splices["complete"]
+                               and splices["total_splices"] == selection["count"])
+    c1_complete = bool(len(extent.get("c1_edit", [])) == 1
+                       and len(extent.get("file_input", [])) == 1)
+    fusecount_ok = (int(counts.get("write", -1)) == selection["writes"]) if driver else False
+    progress_ok = bool(selection["count"] == 0 or (checkpoints and
+                       [row["writes"] for row in checkpoints] ==
+                       [selection["count"] // 4, selection["count"] // 2,
+                        selection["count"] * 3 // 4, selection["count"]]))
     verified = (verification["oracle"]["status"] == "PASS"
                 and verification["arm"]["status"] in ("PASS", "NOT_APPLICABLE"))
     functional = bool(driver and driver.get("status") == "COMPLETE"
                       and driver.get("commit_called") and not measured["timeout"]
                       and measured["exit_code"] == 0 and verified and cleanup)
     limit_met = measured["complete_command_wall_ns"] <= selection["limit_s"] * 1_000_000_000
-    counts_ok = bool(complex_ok) if selection["count"] else (int(counts.get("write", -1)) == 0)
-    instrumentation = bool(phases and (complex_ok in (True, None)) and driver)
+    counts_ok = fusecount_ok and progress_ok
+    instrumentation = bool(driver and fusecount_ok and progress_ok and phases and c1_complete
+                           and (extent_complete in (True, None)))
     if not functional:
         status = "FAIL"
     elif not limit_met:
         status = "FAIL"
-    elif not instrumentation or retained_reproof is None and selection["master"] == "retained":
+    elif not instrumentation:
+        status = "INCOMPLETE"
+    elif selection["master"] == "retained" and retained_reproof is None:
         status = "INCOMPLETE"
     else:
         status = "INELIGIBLE"
     receipt = {
         "schema": "issue273-checkpoint5-attempt-v2",
         "family_id": "workspace_mounted_checkpoint", "arm": prepared["arm"],
+        "registered_selection": selection["order"] != 0,
         "scenario_id": selection["scenario_id"], "scenario_version": 1, "mode": "performance",
         "selection_order": selection["order"], "sample_count": 1,
         "admission_eligible": False,
@@ -781,8 +838,13 @@ def run(args):
         "writer_progress": checkpoints, "writer_progress_error": progress_error,
         "backing_samples": samples, "backing_sample_counts_expected": expected_samples,
         "phase_samples_complete": phases,
-        "extent_diagnostics": extent, "extent_counts_complete": complex_ok,
-        "counts_ok": counts_ok,
+        "extent_diagnostics": extent,
+        "extent_splice_lines": splice_lines, "extent_splice_curve": splices,
+        "extent_counters_emitted_by_this_arm": extent_present,
+        "extent_counts_complete": extent_complete,
+        "c1_counters_complete": c1_complete, "writer_progress_ok": progress_ok,
+        "fuse_write_count_ok": fusecount_ok, "counts_ok": counts_ok,
+        "instrumentation_complete": instrumentation,
         "complexity_lines": [line for line in stderr.decode(errors="replace").splitlines()
                              if line.startswith(("LFS_C1_EDIT_LOAD", "LFS_FILE_INPUT",
                                                  "LFS_C1_SAVE_COUNT", "LFS_PIECE_LOWER",
@@ -797,6 +859,10 @@ def run(args):
         "charged_backing_bytes": max(
             (row["backing"]["allocated_bytes"] + row["metadata"]["allocated_bytes"]
              for row in samples), default=None),
+        "charged_backing_bytes_source": ("max over LFS_WRITE_SAMPLE allocated_bytes of the "
+                                         "backing and metadata hosts" if samples else None),
+        "charged_backing_bytes_reason": (None if samples else
+                                         "this command emitted no WRITE_SAMPLE checkpoint"),
         "quota_charge_bytes": driver.get("consumer_accounted_bytes") if driver else None,
         "cache": cache, "cache_contract": prepared["cache_contract"],
         "cache_status": cache["status"],
@@ -906,13 +972,15 @@ def campaign(args):
             folder = root / f"{arm}/{selection['order']:02d}-{selection['scenario_id']}"
             if folder.exists():
                 raise ValueError(f"attempt path already exists: {folder}")
-            folder.mkdir(parents=True)
+            folder.parent.mkdir(parents=True, exist_ok=True)
             command = [sys.executable, str(Path(__file__).resolve()), "run",
                        "--prepared", str(prepared_file), "--output", str(folder),
                        "--selection", selection["scenario_id"]]
             if selection["master"] == "retained":
                 command += ["--retained", str(args.retained)]
-            result = subprocess.run(command, cwd=OWNER, capture_output=True)
+            result = subprocess.run(command, cwd=OWNER, capture_output=True,
+                                    env={**os.environ, "LAYERFS_CHECKPOINT5_LOCK_HELD": "1"})
+            folder.mkdir(parents=True, exist_ok=True)
             (folder / "harness.stdout").write_bytes(result.stdout)
             (folder / "harness.stderr").write_bytes(result.stderr)
             receipt = json.loads((folder / "receipt.json").read_text()) \
@@ -981,7 +1049,9 @@ def main():
     p = sub.add_parser("run")
     p.add_argument("--prepared", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
-    p.add_argument("--selection", required=True, choices=[row["scenario_id"] for row in SELECTIONS])
+    p.add_argument("--selection", required=True,
+                   choices=[row["scenario_id"] for row in SELECTIONS]
+                   + [PREFLIGHT["scenario_id"]])
     p.add_argument("--retained", type=Path)
     p = sub.add_parser("campaign")
     p.add_argument("--control-prepared", required=True, type=Path)
@@ -995,9 +1065,14 @@ def main():
     if args.action == "self-check":
         self_check()
         return
-    lock = LOCK
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    with lock.open("a+b") as handle:
+    # The campaign parent holds the per-worktree measurement lock and passes
+    # that fact to its own child attempts; no other caller may skip it.
+    if os.environ.get("LAYERFS_CHECKPOINT5_LOCK_HELD") == "1":
+        {"oracle": oracle, "prepare": prepare, "retained": retained, "run": run,
+         "campaign": campaign, "report": report}[args.action](args)
+        return
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK.open("a+b") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         {"oracle": oracle, "prepare": prepare, "retained": retained, "run": run,
          "campaign": campaign, "report": report}[args.action](args)

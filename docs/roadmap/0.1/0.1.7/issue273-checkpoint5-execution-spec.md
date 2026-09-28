@@ -237,3 +237,28 @@ source lines: `core/benchmark/` is not product source, and
 `core/crates/layerfs-server/examples/` is an example binary outside product
 `src/`. Each commit records
 `Production LOC: <before> -> <after> (delta 0)` with the counting command.
+
+## Revision 1 (pre-sample): counter contract is arm-declared
+
+No checkpoint-5 sample existed when this revision was written. The v2 active
+backing retired the version-1 private ordered index, and with it the
+`LFS_EXTENT_SPLICE` extent-tree counter that the v1 attachment emitted. The
+counter contract is therefore declared **per arm** instead of being forced
+identical:
+
+- Arm-neutral and required from both arms: the `benchmark_shell` receipt, its
+  `projection_counts` write class, the writer's four `PROGRESS` quartiles, the
+  `LFS_WRITE_SAMPLE` class checkpoints declared in §3, `LFS_C1_EDIT_LOAD`,
+  `LFS_FILE_INPUT` and the `LFT1` telemetry.
+- Arm-declared: `LFS_EXTENT_SPLICE`/`LFS_EXTENT_EDGE`/`LFS_METADATA_OWNER`.
+  When an arm emits the extent counters they must be complete (one splice per
+  declared write, matching quartiles); when it does not, the row records
+  `extent_counters_emitted_by_this_arm=false` and the extent-bound statement is
+  reported as not measured for that arm rather than as zero.
+- A row is `INCOMPLETE` when a required arm-neutral counter is missing or
+  inconsistent, or when an emitted arm-declared counter is incomplete.
+
+The retained 4,097-record base is proved by the shared oracle (which re-derives
+arbitrary counts) and additionally by the arm's own frozen verifier as a plain
+old/new tree identity without pattern keys, because that frozen verifier
+hard-codes the 100-write pattern schedule. Both proofs are recorded.
