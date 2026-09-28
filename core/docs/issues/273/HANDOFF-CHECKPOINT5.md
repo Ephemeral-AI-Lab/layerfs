@@ -7,6 +7,18 @@
 > complete #273 first, then merge the main lane/#264; main-lane integration
 > does not block this lane. Existing checkpoint-4 receipts remain historical
 > v1 functional evidence; no checkpoint-5 speed sample has been taken.
+>
+> **Phase-4.5 progress update:** step 4.5.1 (private index v2 format and
+> selected resolver) is implemented and verified at product source
+> `91c9c4938`; the [phase-4.5 log](PHASE4.5-LOG.md) and its
+> [receipts](evidence/phase4.5/) record the scope, the 14 reissued route cases
+> and the nonpassing/unrun lines. Step 4.5.2 (hot cursor admission and
+> eligible tiny-WRITE publication) is **not started**, so no hot route exists
+> yet and this prompt's gates are unchanged. Continue with the
+> [phase-4.5 continuation handoff](HANDOFF-PHASE45-CONTINUATION.md) before
+> starting checkpoint 5; that prompt carries the current recipe, the derived
+> binding rules and the guardrails. Do not treat the 4.5.1 receipts as
+> checkpoint-5 samples and do not freeze a candidate until 4.5.2–4.5.5 close.
 
 Continue issue [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273)
 on draft [PR #274](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274),
