@@ -727,3 +727,12 @@ proposes competing WRITE/Commit architecture and amortized-cost models before
 further product changes. It retains iteration-012 raw receipts and all
 historical qualifications; no additional performance arm, product change,
 cache admission or release claim accompanies this documentation checkpoint.
+
+### Prospective scaling decision record (documentation only)
+
+The [source-pinned decision record](PROSPECTIVE-SCALING-DECISION.md) compares
+changed-closure WRITE admission, physical owner/page publication and alternate
+ordered Commit sources, with count/RAM/quota oracles, adversarial falsifiers,
+format compatibility prerequisites and existing admission blockers. This is
+**not** iteration 013: no product, harness, registered arm, Docker volume or
+historical evidence changed; iter-012 remains the newest sampled candidate.
