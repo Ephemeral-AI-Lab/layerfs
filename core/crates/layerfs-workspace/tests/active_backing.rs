@@ -1472,4 +1472,390 @@ mod linux {
         drop(index);
         f.clean();
     }
+    fn hot_file(length: u64) -> HotInode {
+        HotInode {
+            revision: 1,
+            generation: 1,
+            length,
+            kind: NodeKind::File,
+            fresh: length == 0,
+            storage: u8::from(length > 0),
+            mode: 0o644,
+            seconds: 0,
+            nanos: 0,
+            links: 1,
+            base: [7; 32],
+            metadata: [8; 32],
+            inline: if length > 0 {
+                [Some(Extent::base(0, length)), None, None, None]
+            } else {
+                [None; 4]
+            },
+        }
+    }
+
+    fn directory_epochs(f: &Fixture) -> [u64; 64] {
+        let path = fs::read_dir(&*f.directory.path)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.unwrap();
+                entry
+                    .file_name()
+                    .to_str()
+                    .filter(|name| name.starts_with("a-hot-v2-"))
+                    .map(|_| entry.path())
+            })
+            .max_by_key(|path| {
+                let bytes = fs::read(path).unwrap();
+                u64::from_be_bytes(bytes[68..76].try_into().unwrap())
+            })
+            .unwrap();
+        let bytes = fs::read(path).unwrap();
+        assert_eq!(&bytes[..8], b"LFSAHOT2");
+        assert_eq!(bytes.len(), 4096);
+        assert_eq!(&bytes[132..136], &[0; 4]);
+        std::array::from_fn(|slot| {
+            let at = 136 + slot * 32;
+            u64::from_be_bytes(bytes[at..at + 8].try_into().unwrap())
+        })
+    }
+
+    #[test]
+    fn hot_eof_base_zero_and_shared_frontiers_have_bounded_publication() {
+        let f = Fixture::new(32 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let mut selected = [hot_file(0), hot_file(8194), hot_file(0)];
+        selected[2] = active
+            .resize_file(3, selected[2], 8194)
+            .unwrap()
+            .inode
+            .unwrap();
+        let mut oracle = [
+            Vec::new(),
+            (0..8194).map(|at| (at % 251) as u8).collect::<Vec<_>>(),
+            vec![0; 8194],
+        ];
+        let mut ordinary = 0;
+        let mut ordinary_max = 0;
+        for write in 0..4096usize {
+            for file in 0..3 {
+                let inode = file as u64 + 1;
+                let offset = if file == 0 {
+                    selected[file].length
+                } else {
+                    (write * 2) as u64
+                };
+                let byte = b'B' + (write % 24) as u8;
+                let before = active.status().unwrap().store;
+                let result = active
+                    .write_tiny_file(inode, selected[file], offset, &[byte])
+                    .unwrap();
+                assert!(result.cleanup_error.is_none());
+                selected[file] = result.inode.unwrap();
+                let after = active.status().unwrap().store;
+                if after.hot_writes > before.hot_writes && after.hot_carries == before.hot_carries {
+                    assert_eq!(
+                        after.index_seeks, before.index_seeks,
+                        "ordinary root seek at {file}/{write}"
+                    );
+                    assert_eq!(after.index_fetches, before.index_fetches);
+                    assert_eq!(after.pack_fetches, before.pack_fetches);
+                    assert_eq!(after.pack_page_writes - before.pack_page_writes, 1);
+                    assert_eq!(
+                        after.directory_page_writes - before.directory_page_writes,
+                        1
+                    );
+                    let pages = after.index_page_writes - before.index_page_writes + 1;
+                    assert!(pages <= if file == 0 { 6 } else { 7 });
+                    assert!(after.retirement_inspections - before.retirement_inspections <= pages);
+                    ordinary += 1;
+                    ordinary_max = ordinary_max.max(pages);
+                }
+                if file == 0 {
+                    oracle[file].push(byte);
+                } else {
+                    oracle[file][offset as usize] = byte;
+                }
+            }
+        }
+        let status = active.status().unwrap();
+        assert!(
+            ordinary > 10000,
+            "hot support profile must actually admit: {ordinary}"
+        );
+        assert!(status.store.hot_carries > 0);
+        assert!(
+            status.store.hot_admissions < 32,
+            "rollover is not a cold admission"
+        );
+        assert!(
+            status.hot_nodes <= 64
+                && status.hot_cursors <= 8
+                && status.hot_reserved_bytes <= 1 << 20
+        );
+        assert!(status.store.minimum_leaf_split_bytes.unwrap() >= 1196);
+        assert!(status.store.minimum_branch_split_bytes.unwrap() >= 1693);
+        for (file, expected) in oracle.iter().enumerate() {
+            let mut actual = vec![0; expected.len()];
+            active
+                .read_file(
+                    file as u64 + 1,
+                    0,
+                    &mut actual,
+                    None,
+                    |root, source, output| {
+                        assert_eq!(root, [7; 32]);
+                        assert!(source + output.len() as u64 <= 8194);
+                        for (at, byte) in output.iter_mut().enumerate() {
+                            *byte = ((source + at as u64) % 251) as u8;
+                        }
+                        Ok(())
+                    },
+                    |_, _, _| unreachable!(),
+                )
+                .unwrap();
+            assert_eq!(&actual, expected);
+        }
+        assert_eq!(status.store.allocated_bytes, f.physical());
+        for entry in fs::read_dir(&*f.directory.path).unwrap() {
+            assert_eq!(entry.unwrap().metadata().unwrap().blocks() * 512, 4096);
+        }
+        println!("ACTIVE_HOT ordinary={ordinary} max_candidate_pages={ordinary_max} hot_writes={} admissions={} carries={} seeks={} visits={} index_writes={} directory_writes={} pack_writes={} leaf_min={:?} branch_min={:?} physical_bytes={} reserved_hot_bytes={}", status.store.hot_writes, status.store.hot_admissions, status.store.hot_carries, status.store.index_seeks, status.store.index_node_visits, status.store.index_page_writes, status.store.directory_page_writes, status.store.pack_page_writes, status.store.minimum_leaf_split_bytes, status.store.minimum_branch_split_bytes, f.physical(), status.hot_reserved_bytes);
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn hot_eviction_epoch_reuse_and_frozen_directory_keep_exact_bytes() {
+        let f = Fixture::new(16 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let mut first = hot_file(0);
+        for offset in 0..300 {
+            first = active
+                .write_tiny_file(1, first, offset, b"x")
+                .unwrap()
+                .inode
+                .unwrap();
+        }
+        for inode in 2..34 {
+            let mut selected = hot_file(0);
+            for offset in 0..4 {
+                selected = active
+                    .write_tiny_file(inode, selected, offset, &[inode as u8])
+                    .unwrap()
+                    .inode
+                    .unwrap();
+            }
+        }
+        let old = active.pin_view().unwrap();
+        let epochs = directory_epochs(&f);
+        for inode in 34..66 {
+            let mut selected = hot_file(0);
+            for offset in 0..4 {
+                selected = active
+                    .write_tiny_file(inode, selected, offset, &[inode as u8])
+                    .unwrap()
+                    .inode
+                    .unwrap();
+            }
+        }
+        let newer = directory_epochs(&f);
+        println!("ACTIVE_EPOCH before={epochs:?} after={newer:?}");
+        assert!(epochs
+            .iter()
+            .zip(newer)
+            .any(|(old, new)| *old > 0 && new > *old));
+        let status = active.status().unwrap();
+        assert_eq!(status.hot_cursors, 8);
+        assert!(status.store.hot_normalizations > 0);
+        let mut bytes = vec![0; 300];
+        active
+            .read_file(
+                1,
+                0,
+                &mut bytes,
+                Some(&old),
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(bytes, vec![b'x'; 300]);
+        let mut other = [0; 4];
+        active
+            .read_file(
+                2,
+                0,
+                &mut other,
+                Some(&old),
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(other, [2; 4]);
+        active
+            .read_file(
+                26,
+                0,
+                &mut other,
+                Some(&old),
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(other, [26; 4]);
+        active
+            .read_file(
+                1,
+                0,
+                &mut bytes,
+                None,
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(bytes, vec![b'x'; 300]);
+        old.release().unwrap();
+        assert_eq!(active.status().unwrap().store.allocated_bytes, f.physical());
+        assert_eq!(active.status().unwrap().retired_index_pages, 0);
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
+
+    #[test]
+    fn selecting_cohorts_only_visit_the_releasing_pin_in_both_orders() {
+        for newest_first in [false, true] {
+            let f = Fixture::new(16 << 20);
+            let active = ActiveBacking::new(
+                f.directory.clone(),
+                MetadataHost::new(f.payloads.clone()).unwrap(),
+            )
+            .unwrap();
+            let mut selected = hot_file(0);
+            for offset in 0..300 {
+                selected = active
+                    .write_tiny_file(1, selected, offset, b"a")
+                    .unwrap()
+                    .inode
+                    .unwrap();
+            }
+            let first = active.pin_view().unwrap();
+            for offset in 300..305 {
+                selected = active
+                    .write_tiny_file(1, selected, offset, b"b")
+                    .unwrap()
+                    .inode
+                    .unwrap();
+            }
+            let second = active.pin_view().unwrap();
+            for offset in 305..400 {
+                let before = active.status().unwrap();
+                selected = active
+                    .write_tiny_file(1, selected, offset, b"c")
+                    .unwrap()
+                    .inode
+                    .unwrap();
+                let after = active.status().unwrap();
+                let created = after.store.index_page_writes - before.store.index_page_writes + 1;
+                assert!(
+                    after.store.retirement_inspections - before.store.retirement_inspections
+                        <= created,
+                    "unrelated retired sweep"
+                );
+            }
+            let before = active.status().unwrap();
+            assert!(before.retired_index_pages > 0 && before.retired_pack_pages > 0);
+            let (release, remaining) = if newest_first {
+                (second, first)
+            } else {
+                (first, second)
+            };
+            release.release().unwrap();
+            let mut bytes = vec![0; if newest_first { 300 } else { 305 }];
+            active
+                .read_file(
+                    1,
+                    0,
+                    &mut bytes,
+                    Some(&remaining),
+                    |_, _, _| unreachable!(),
+                    |_, _, _| unreachable!(),
+                )
+                .unwrap();
+            assert_eq!(&bytes[..300], vec![b'a'; 300]);
+            if !newest_first {
+                assert_eq!(&bytes[300..], b"bbbbb");
+            }
+            remaining.release().unwrap();
+            let after = active.status().unwrap();
+            assert_eq!(after.retired_index_pages, 0);
+            assert_eq!(after.retired_pack_pages, 0);
+            assert_eq!(after.store.allocated_bytes, f.physical());
+            active.close_clean().unwrap();
+            drop(active);
+            f.clean();
+        }
+    }
+
+    #[test]
+    fn hot_budget_refusal_keeps_revision_bytes_and_allocation_exact() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let mut selected = hot_file(0);
+        for offset in 0..8 {
+            selected = active
+                .write_tiny_file(1, selected, offset, b"x")
+                .unwrap()
+                .inode
+                .unwrap();
+        }
+        let before = active.status().unwrap();
+        let revision = active.generation_revision().unwrap();
+        let held = f
+            .payloads
+            .budget
+            .reserve((8 << 20) - f.payloads.budget.used() - 1024)
+            .unwrap();
+        assert!(matches!(
+            active.write_tiny_file(1, selected, 8, b"Y"),
+            Err(WorkspaceError::Capacity)
+        ));
+        assert_eq!(active.generation_revision().unwrap(), revision);
+        assert_eq!(
+            active.status().unwrap().store.allocated_bytes,
+            before.store.allocated_bytes
+        );
+        assert_eq!(f.physical(), before.store.allocated_bytes);
+        drop(held);
+        let mut bytes = [0; 8];
+        active
+            .read_file(
+                1,
+                0,
+                &mut bytes,
+                None,
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(&bytes, b"xxxxxxxx");
+        let result = active.write_tiny_file(1, selected, 8, b"Z").unwrap();
+        assert_eq!(result.revision, revision.1 + 1);
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
 }

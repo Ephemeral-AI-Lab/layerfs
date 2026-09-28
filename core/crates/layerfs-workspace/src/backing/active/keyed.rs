@@ -107,12 +107,13 @@ pub struct Cell {
 
 /// One branch cell: the exclusive upper key of the child's partition, empty
 /// only for a final child that inherits its parent's bound, plus its target.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Child {
     pub fence: Vec<u8>,
     pub target: Target,
 }
 
+#[derive(Clone)]
 pub enum Node {
     Leaf(Vec<Cell>),
     Branch(Vec<Child>),

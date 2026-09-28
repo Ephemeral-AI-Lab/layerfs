@@ -5,7 +5,7 @@ use super::{
     write::{FileMutation, Publication},
 };
 use crate::{
-    backing::active::{dirty_key, inode_key, Extent, HotInode},
+    backing::active::{Extent, HotInode},
     *,
 };
 use layerfs_bridge::contract::{Source, MAX_FILE};
@@ -44,9 +44,9 @@ impl Workspace {
             .map(|reserved| reserved.validate(&state, original.serial))
             .transpose()?;
         let attr = state.node(original.serial)?.attr;
-        let stored = active.get(&inode_key(original.serial))?;
+        let (stored, already_dirty) = active.file_facts(original.serial)?;
         let selected = match stored {
-            Some(value) => HotInode::parse(&value)?,
+            Some(value) => value,
             None => HotInode {
                 revision: state.revision.max(1),
                 generation: state.generation,
@@ -70,9 +70,6 @@ impl Workspace {
         if selected.kind != NodeKind::File || selected.length != attr.size {
             return Err(WorkspaceError::Io);
         }
-        let already_dirty = active
-            .get(&dirty_key(state.generation, original.serial))?
-            .is_some();
         let (accepted, requested) = match mutation {
             FileMutation::Attributes {
                 request, handle, ..
@@ -127,14 +124,14 @@ impl Workspace {
             state.directory_bytes,
         )?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-        let (revision, cleanup_error) = match mutation {
+        let (revision, cleanup_error, updated) = match mutation {
             FileMutation::Attributes { .. } => {
                 let result = active.set_attributes_file(
                     original.serial,
                     selected,
                     requested.ok_or(WorkspaceError::Io)?,
                 )?;
-                (result.revision, result.cleanup_error)
+                (result.revision, result.cleanup_error, result.inode)
             }
             FileMutation::Write {
                 offset,
@@ -160,11 +157,11 @@ impl Workspace {
                         done += read;
                     }
                     let result = active.write_tiny_file(original.serial, selected, at, &bytes)?;
-                    (result.revision, result.cleanup_error)
+                    (result.revision, result.cleanup_error, result.inode)
                 } else {
                     let result =
                         active.write_payload_file(original.serial, selected, at, replacement)?;
-                    (result.revision, result.cleanup_error)
+                    (result.revision, result.cleanup_error, result.inode)
                 }
             }
         };
@@ -175,11 +172,7 @@ impl Workspace {
         if revision != next {
             return Err(WorkspaceError::Io);
         }
-        let updated = HotInode::parse(
-            &active
-                .get(&inode_key(original.serial))?
-                .ok_or(WorkspaceError::Io)?,
-        )?;
+        let updated = updated.ok_or(WorkspaceError::Io)?;
         let attributes = updated.attributes(attr)?;
         let receipt = MutationReceipt {
             incarnation: self.inner.incarnation,
@@ -201,11 +194,7 @@ impl Workspace {
                 .as_ref()
                 .and_then(|projection| projection.delivery.clone())
         };
-        for node in &mut state.nodes {
-            if node.attr.serial == original.serial {
-                node.attr = attributes;
-            }
-        }
+        state.node_mut(original.serial)?.attr = attributes;
         state.revision = revision;
         if !already_dirty {
             state.dirty_inodes += 1;

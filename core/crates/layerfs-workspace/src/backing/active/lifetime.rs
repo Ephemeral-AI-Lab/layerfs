@@ -65,7 +65,6 @@ impl ActiveBacking {
     pub fn maintain_until(&self, deadline: std::time::Instant) -> Result<(), WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         self.index.maintain()?;
-        reclaim::maintain_pack(&self.store, &self.index, &mut state.retired)?;
         self.maintain_large(&mut state)?;
         drop(state);
         self.payloads.maintain(deadline)
@@ -83,6 +82,17 @@ impl ActiveBacking {
             return Err(WorkspaceError::Busy);
         }
         let expected = updates.len();
+        let _clone_charge = self.store.budget().reserve(
+            updates
+                .iter()
+                .try_fold(0usize, |bytes, (key, value)| {
+                    bytes
+                        .checked_add(128 + key.len() + value.as_ref().map_or(0, Vec::len))
+                        .ok_or(WorkspaceError::Capacity)
+                })?
+                .checked_mul(2)
+                .ok_or(WorkspaceError::Capacity)?,
+        )?;
         let mut updates: BTreeMap<_, _> = updates.iter().cloned().collect();
         if updates.len() != expected {
             return Err(WorkspaceError::InvalidInput);
@@ -102,10 +112,11 @@ impl ActiveBacking {
             next,
             usize::MAX,
         )?;
-        let scratch_bytes = updates
-            .len()
-            .checked_mul(128)
-            .ok_or(WorkspaceError::Capacity);
+        let scratch_bytes = updates.iter().try_fold(0usize, |bytes, (key, value)| {
+            bytes
+                .checked_add(64 + key.len() + value.as_ref().map_or(0, Vec::len))
+                .ok_or(WorkspaceError::Capacity)
+        });
         let _scratch = match scratch_bytes.and_then(|bytes| self.store.budget().reserve(bytes)) {
             Ok(scratch) => scratch,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
@@ -118,13 +129,18 @@ impl ActiveBacking {
             Ok(candidate) => candidate,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };
+        if let Err(error) = state.retired.reserve(dead.len() + plan.retired_len()) {
+            let candidate_error = candidate.abort().err();
+            let plan_error = plan.abort().err();
+            return Err(candidate_error.or(plan_error).unwrap_or(error));
+        }
         let revision = match candidate.publish() {
             Ok(revision) => revision,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };
         let compacted = plan.finish();
         Self::record_retired_large(&mut state, None, dead_large, revision);
-        let mut cleanup_error = None;
+        let mut cleanup_error = self.index.maintain().err();
         for (logical, page) in dead
             .into_iter()
             .map(|page| {
@@ -143,19 +159,13 @@ impl ActiveBacking {
                     cleanup_error.get_or_insert(error);
                 }
             }
-            let State {
-                retired,
-                retired_charge,
-                ..
-            } = &mut *state;
-            if let Err(error) = reclaim::retire_pack(
-                &self.store,
-                &self.index,
-                retired,
-                retired_charge,
-                page,
-                revision,
-            ) {
+            if let Err(error) =
+                state
+                    .retired
+                    .retire(&self.store, page, revision, |birth, retire| {
+                        self.index.selecting_revision(birth, retire)
+                    })
+            {
                 cleanup_error.get_or_insert(error);
             }
         }
@@ -166,6 +176,7 @@ impl ActiveBacking {
             length: 0,
             revision,
             cleanup_error,
+            inode: None,
         })
     }
 }

@@ -27,6 +27,7 @@ struct Entry {
     ready: bool,
     pins: usize,
     unlinked: bool,
+    birth: u64,
 }
 
 struct State {
@@ -53,6 +54,32 @@ pub struct StoreStatus {
     pub index_fetches: u64,
     pub pack_page_writes: u64,
     pub index_page_writes: u64,
+    pub directory_page_writes: u64,
+    pub index_seeks: u64,
+    pub index_node_visits: u64,
+    pub index_cache_hits: u64,
+    pub hot_writes: u64,
+    pub hot_admissions: u64,
+    pub hot_cursor_admissions: u64,
+    pub hot_carries: u64,
+    pub hot_normalizations: u64,
+    pub retirement_inspections: u64,
+    pub minimum_leaf_split_bytes: Option<u64>,
+    pub minimum_branch_split_bytes: Option<u64>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Counter {
+    DirectoryWrite,
+    Seek,
+    Visit,
+    CacheHit,
+    HotWrite,
+    Admission,
+    Carry,
+    Normalization,
+    Retirement,
+    CursorAdmission,
 }
 
 /// One page per verified private file permits exact block refunds. The host
@@ -65,12 +92,32 @@ pub struct PageStore {
     index_fetches: AtomicU64,
     pack_page_writes: AtomicU64,
     index_page_writes: AtomicU64,
+    counters: [AtomicU64; 10],
+    split_minimum: [AtomicU64; 2],
     _charge: Charge,
 }
 
 pub struct PagePin {
     store: Arc<PageStore>,
     reference: PageRef,
+}
+
+pub(super) struct PageReservation {
+    store: Arc<PageStore>,
+    remaining: usize,
+}
+
+impl Drop for PageReservation {
+    fn drop(&mut self) {
+        if self
+            .store
+            .host
+            .release(0, (self.remaining * PAGE_BYTES) as u64)
+            .is_err()
+        {
+            self.store.stop();
+        }
+    }
 }
 
 impl Drop for PagePin {
@@ -114,6 +161,19 @@ fn failure(
 }
 
 impl PageStore {
+    pub(super) fn reserve_pages(
+        self: &Arc<Self>,
+        pages: usize,
+    ) -> Result<PageReservation, WorkspaceError> {
+        let bytes = pages
+            .checked_mul(PAGE_BYTES)
+            .ok_or(WorkspaceError::Capacity)?;
+        self.host.reserve(bytes as u64)?;
+        Ok(PageReservation {
+            store: self.clone(),
+            remaining: pages,
+        })
+    }
     pub fn new(
         directory: Arc<Directory>,
         host: Arc<MetadataHost>,
@@ -139,6 +199,8 @@ impl PageStore {
             index_fetches: AtomicU64::new(0),
             pack_page_writes: AtomicU64::new(0),
             index_page_writes: AtomicU64::new(0),
+            counters: std::array::from_fn(|_| AtomicU64::new(0)),
+            split_minimum: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             _charge: budget.reserve(1024)?,
         }))
     }
@@ -149,6 +211,27 @@ impl PageStore {
 
     pub fn budget(&self) -> Arc<crate::backing::budget::Budget> {
         self.host.payloads.budget.clone()
+    }
+
+    pub(super) fn count(&self, counter: Counter, count: u64) {
+        self.counters[counter as usize].fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub(super) fn split(&self, level: u8, minimum: usize) {
+        self.split_minimum[usize::from(level > 0)].fetch_min(minimum as u64, Ordering::Relaxed);
+    }
+
+    /// Physical birth is allocation custody, unchanged by Hot/Cold conversion.
+    pub(super) fn birth(&self, reference: PageRef) -> Result<u64, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let entry = state
+            .entries
+            .get(&reference)
+            .ok_or(WorkspaceError::NotFound)?;
+        if !entry.ready {
+            return Err(WorkspaceError::Io);
+        }
+        Ok(entry.birth)
     }
 
     pub(super) fn remaining_quota(&self) -> Result<u64, WorkspaceError> {
@@ -201,6 +284,18 @@ impl PageStore {
         records: u16,
         body: &[u8],
     ) -> Result<(PageRef, Page), WorkspaceError> {
+        self.create_from(kind, generation, revision, records, body, None)
+    }
+
+    pub(super) fn create_from(
+        &self,
+        kind: Kind,
+        generation: u64,
+        revision: u64,
+        records: u16,
+        body: &[u8],
+        reservation: Option<&mut PageReservation>,
+    ) -> Result<(PageRef, Page), WorkspaceError> {
         let _scratch = self
             .host
             .payloads
@@ -225,7 +320,14 @@ impl PageStore {
             body,
         )?;
         let directory = self.directory.file()?;
-        self.host.reserve(PAGE_BYTES as u64)?;
+        if let Some(reservation) = reservation {
+            if !std::ptr::eq(self, Arc::as_ptr(&reservation.store)) || reservation.remaining == 0 {
+                return Err(WorkspaceError::Capacity);
+            }
+            reservation.remaining -= 1;
+        } else {
+            self.host.reserve(PAGE_BYTES as u64)?;
+        }
         {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let Some(bytes) = state
@@ -251,6 +353,7 @@ impl PageStore {
                     ready: false,
                     pins: 0,
                     unlinked: false,
+                    birth: revision,
                 },
             );
         }
@@ -402,6 +505,9 @@ impl PageStore {
             Kind::IndexLeaf | Kind::IndexBranch | Kind::HotDirectory => &self.index_page_writes,
         }
         .fetch_add(1, Ordering::Relaxed);
+        if kind == Kind::HotDirectory {
+            self.count(Counter::DirectoryWrite, 1);
+        }
         Ok((reference, page))
     }
 
@@ -527,6 +633,10 @@ impl PageStore {
 
     pub fn status(&self) -> Result<StoreStatus, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let minimum = |at: usize| {
+            let value = self.split_minimum[at].load(Ordering::Relaxed);
+            (value != u64::MAX).then_some(value)
+        };
         Ok(StoreStatus {
             pages: state.entries.len(),
             pack_pages: state
@@ -553,6 +663,22 @@ impl PageStore {
             index_fetches: self.index_fetches.load(Ordering::Relaxed),
             pack_page_writes: self.pack_page_writes.load(Ordering::Relaxed),
             index_page_writes: self.index_page_writes.load(Ordering::Relaxed),
+            directory_page_writes: self.counters[Counter::DirectoryWrite as usize]
+                .load(Ordering::Relaxed),
+            index_seeks: self.counters[Counter::Seek as usize].load(Ordering::Relaxed),
+            index_node_visits: self.counters[Counter::Visit as usize].load(Ordering::Relaxed),
+            index_cache_hits: self.counters[Counter::CacheHit as usize].load(Ordering::Relaxed),
+            hot_writes: self.counters[Counter::HotWrite as usize].load(Ordering::Relaxed),
+            hot_admissions: self.counters[Counter::Admission as usize].load(Ordering::Relaxed),
+            hot_cursor_admissions: self.counters[Counter::CursorAdmission as usize]
+                .load(Ordering::Relaxed),
+            hot_carries: self.counters[Counter::Carry as usize].load(Ordering::Relaxed),
+            hot_normalizations: self.counters[Counter::Normalization as usize]
+                .load(Ordering::Relaxed),
+            retirement_inspections: self.counters[Counter::Retirement as usize]
+                .load(Ordering::Relaxed),
+            minimum_leaf_split_bytes: minimum(0),
+            minimum_branch_split_bytes: minimum(1),
         })
     }
 

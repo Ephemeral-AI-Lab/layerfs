@@ -1,10 +1,11 @@
 //! Selected v2 resolution: exact floor, search and scans through tagged
 //! targets, fixed fences and one optional fixed-slot directory.
 use super::{
+    hot_cursor::{cached, Cache},
     index::{IndexEntry, Selection},
     keyed::{Node, Target, MAX_LEVEL},
     page::{Kind, PageRef},
-    pages::PageStore,
+    pages::{Counter, PageStore},
 };
 use crate::WorkspaceError;
 
@@ -14,6 +15,8 @@ pub(super) struct Resolver<'a> {
     store: &'a PageStore,
     selection: &'a Selection,
     seen: u64,
+    cache: Option<&'a Cache>,
+    scratch: Option<crate::backing::budget::Charge>,
 }
 
 impl<'a> Resolver<'a> {
@@ -22,7 +25,15 @@ impl<'a> Resolver<'a> {
             store,
             selection,
             seen: 0,
+            cache: None,
+            scratch: None,
         }
+    }
+
+    pub(super) fn cached(store: &'a PageStore, selection: &'a Selection, cache: &'a Cache) -> Self {
+        let mut resolver = Self::new(store, selection);
+        resolver.cache = Some(cache);
+        resolver
     }
 
     fn expected_kind(level: u8) -> Result<Kind, WorkspaceError> {
@@ -49,6 +60,10 @@ impl<'a> Resolver<'a> {
     /// absent, superseded or kind-mismatched slot refuses instead of falling
     /// back to another physical page.
     pub(super) fn node(&mut self, target: Target, level: u8) -> Result<Node, WorkspaceError> {
+        if self.scratch.is_none() {
+            self.scratch = Some(self.store.budget().reserve(64 * 1024)?);
+        }
+        self.store.count(Counter::Visit, 1);
         let kind = Self::expected_kind(level)?;
         if target.tag == super::keyed::TAG_COLD {
             return self.read(target.cold_page()?, kind);
@@ -68,6 +83,13 @@ impl<'a> Resolver<'a> {
             return Err(WorkspaceError::Io);
         }
         self.seen |= bit;
+        if let Some(node) = self
+            .cache
+            .and_then(|cache| cached(cache, &directory.value, target))
+        {
+            self.store.count(Counter::CacheHit, 1);
+            return Ok(node.node.clone());
+        }
         self.read(entry.page, kind)
     }
 
@@ -80,6 +102,7 @@ impl<'a> Resolver<'a> {
     }
 
     pub(super) fn get(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
+        self.store.count(Counter::Seek, 1);
         let Some(mut target) = self.selection.root else {
             return Ok(None);
         };
@@ -127,6 +150,7 @@ impl<'a> Resolver<'a> {
     }
 
     pub(super) fn floor(&mut self, key: &[u8]) -> Result<Option<IndexEntry>, WorkspaceError> {
+        self.store.count(Counter::Seek, 1);
         let Some(root) = self.selection.root else {
             return Ok(None);
         };
@@ -171,6 +195,7 @@ impl<'a> Resolver<'a> {
         upper: &[u8],
         limit: usize,
     ) -> Result<Vec<IndexEntry>, WorkspaceError> {
+        self.store.count(Counter::Seek, 1);
         if lower >= upper || limit == 0 || limit > SCAN_LIMIT {
             return Err(WorkspaceError::InvalidInput);
         }

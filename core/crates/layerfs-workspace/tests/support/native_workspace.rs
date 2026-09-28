@@ -92,6 +92,7 @@ pub enum Gate {
     CompositeBefore,
     CompositeCompletionFailure,
     AttributesAfterCommit,
+    Continuity,
 }
 #[derive(Default)]
 pub struct Observations {
@@ -166,7 +167,12 @@ impl Native {
             }
             first
         };
-        if first_save && matches!(self.gate, Gate::Delivery | Gate::CompositeCompletionFailure) {
+        if first_save
+            && matches!(
+                self.gate,
+                Gate::Delivery | Gate::CompositeCompletionFailure | Gate::Continuity
+            )
+        {
             let observations = self.observations.lock().unwrap();
             let (_state, timed) = self
                 .changed
@@ -281,7 +287,7 @@ impl Native {
                         println!("COMMIT_BACKING_LIMIT_APPLIED");
                     }
                     drop(observations);
-                    if self.gate == Gate::CommitReply {
+                    if matches!(self.gate, Gate::CommitReply | Gate::Continuity) {
                         let mut observations = self.observations.lock().unwrap();
                         observations.commit_entered = true;
                         self.changed.notify_all();

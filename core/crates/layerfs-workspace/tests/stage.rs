@@ -1603,4 +1603,392 @@ mod linux {
         check("reserved-stage-progress-with-ordinary-disk-quota-occupied");
         stage_retained(&f, selector);
     }
+    fn writable(f: &Fixture, serial: u64) -> HandleId {
+        f.workspace
+            .open_file(
+                serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_hot_publication() {
+        let f = Fixture::new_fresh(Gate::None);
+        let file = f.lookup(b"data.bin");
+        let other = f.lookup(b"other.bin");
+        let alias = f.lookup(b"alias");
+        let Response::History(old_branch) = f.branch() else {
+            panic!("old branch")
+        };
+        let HistoryResult::BranchSnapshot(old_branch) = *old_branch else {
+            panic!("old snapshot")
+        };
+        let old_content = attr(f.native.attributes(old_branch.effective_root, b"data.bin")).1;
+        assert_eq!(alias.serial, file.serial);
+        let held = writable(&f, file.serial);
+        let inherited = writable(&f, other.serial);
+        let mut first_oracle = f.read(held, 0, file.size as usize);
+        let old_bytes = first_oracle.clone();
+        let mut second_oracle = f.read(inherited, 0, other.size as usize);
+        let mut ordinary = 0;
+        let before = f.workspace.backing_status().unwrap();
+        for index in 0..512usize {
+            for (handle, offset, byte) in [
+                (held, file.size + index as u64, b'B' + (index % 24) as u8),
+                (inherited, (index * 2) as u64, b'Z' - (index % 24) as u8),
+            ] {
+                let old = f.workspace.backing_status().unwrap();
+                f.workspace
+                    .write_file(handle, offset, &f.own(&[byte]), deadline())
+                    .unwrap();
+                let new = f.workspace.backing_status().unwrap();
+                if new.active_hot_writes > old.active_hot_writes
+                    && new.active_hot_carries == old.active_hot_carries
+                {
+                    assert_eq!(new.active_index_seeks, old.active_index_seeks);
+                    assert_eq!(new.active_index_fetches, old.active_index_fetches);
+                    assert!(new.active_index_page_writes - old.active_index_page_writes + 1 <= 7);
+                    ordinary += 1;
+                }
+            }
+            first_oracle.push(b'B' + (index % 24) as u8);
+            second_oracle[index * 2] = b'Z' - (index % 24) as u8;
+        }
+        let after = f.workspace.backing_status().unwrap();
+        assert!(ordinary > 980);
+        assert!(after.active_hot_admissions - before.active_hot_admissions < 16);
+        assert!(
+            after.active_hot_nodes <= 64
+                && after.active_hot_cursors <= 8
+                && after.active_hot_reserved_bytes <= 1 << 20
+        );
+        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        let alias_handle = writable(&f, alias.serial);
+        assert_eq!(f.read(alias_handle, 0, first_oracle.len()), first_oracle);
+        f.workspace.release(alias_handle).unwrap();
+        let private = std::path::PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap());
+        assert!(!private_files_with_prefix(&private, "a-hot-v2").is_empty());
+        assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
+        println!("STAGE_HOT ordinary={ordinary} hot_writes={} admissions={} carries={} seeks={} visits={} index_writes={} directory_writes={} pack_writes={} retirement_inspections={} legacy_routine_scans={} legacy_lookup_scans={} hot_reserved_bytes={} physical_bytes={}", after.active_hot_writes - before.active_hot_writes, after.active_hot_admissions - before.active_hot_admissions, after.active_hot_carries - before.active_hot_carries, after.active_index_seeks - before.active_index_seeks, after.active_index_node_visits - before.active_index_node_visits, after.active_index_page_writes - before.active_index_page_writes, after.active_directory_page_writes - before.active_directory_page_writes, after.active_pack_page_writes - before.active_pack_page_writes, after.active_retirement_inspections - before.active_retirement_inspections, after.routine_scans - before.routine_scans, after.lookup_scans - before.lookup_scans, after.active_hot_reserved_bytes, physical_private_files(&private).0);
+        check("active-hot-publication-counts-and-alias-byte-oracle");
+        let staged = f.workspace.stage(deadline()).unwrap();
+        let saved = attr(
+            f.native
+                .attributes(staged.stage().candidate_root, b"data.bin"),
+        );
+        assert_eq!(f.native.bytes(saved.1, 0, first_oracle.len()), first_oracle);
+        f.workspace
+            .write_file(held, first_oracle.len() as u64, &f.own(b"G"), deadline())
+            .unwrap();
+        first_oracle.push(b'G');
+        let (unrelated, unheld) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"g2-hot",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        for offset in 0..4 {
+            f.workspace
+                .write_file(unheld, offset, &f.own(b"u"), deadline())
+                .unwrap();
+        }
+        f.workspace.commit_staged(&staged, deadline()).unwrap();
+        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(
+            f.native.bytes(saved.1, 0, first_oracle.len() - 1),
+            &first_oracle[..first_oracle.len() - 1]
+        );
+        let before_unrelated = f.workspace.backing_status().unwrap();
+        f.workspace
+            .write_file(unheld, 4, &f.own(b"u"), deadline())
+            .unwrap();
+        let after_unrelated = f.workspace.backing_status().unwrap();
+        assert_eq!(
+            after_unrelated.active_hot_writes,
+            before_unrelated.active_hot_writes + 1
+        );
+        assert_eq!(
+            after_unrelated.active_index_seeks,
+            before_unrelated.active_index_seeks
+        );
+        assert_eq!(
+            after_unrelated.active_hot_normalizations,
+            before_unrelated.active_hot_normalizations
+        );
+        for index in 0..64 {
+            f.workspace
+                .write_file(
+                    held,
+                    first_oracle.len() as u64,
+                    &f.own(&[b'c' + (index % 10) as u8]),
+                    deadline(),
+                )
+                .unwrap();
+            first_oracle.push(b'c' + (index % 10) as u8);
+        }
+        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        assert_eq!(f.workspace.getattr(unrelated.serial).unwrap().size, 5);
+        check("active-hot-g1-g2-and-post-commit-continuation");
+        f.workspace
+            .write_file(held, 5, &f.own(&[b'Z'; 129]), deadline())
+            .unwrap();
+        first_oracle[5..134].fill(b'Z');
+        f.workspace.set_len(file.serial, 200, deadline()).unwrap();
+        first_oracle.truncate(200);
+        f.workspace.set_len(file.serial, 260, deadline()).unwrap();
+        first_oracle.resize(260, 0);
+        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        f.workspace
+            .rename(
+                f.workspace.root().serial,
+                b"data.bin",
+                f.workspace.root().serial,
+                b"moved-hot",
+                RenameFlags::default(),
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .unlink(f.workspace.root().serial, b"alias", deadline())
+            .unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        assert_eq!(f.read(held, 0, first_oracle.len()), first_oracle);
+        let (_, orphan) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"orphan-hot",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        for offset in 0..8 {
+            f.workspace
+                .write_file(orphan, offset, &f.own(b"o"), deadline())
+                .unwrap();
+        }
+        f.workspace
+            .unlink(f.workspace.root().serial, b"orphan-hot", deadline())
+            .unwrap();
+        f.workspace
+            .write_file(orphan, 8, &f.own(b"!"), deadline())
+            .unwrap();
+        assert_eq!(f.read(orphan, 0, 9), b"oooooooo!");
+        f.workspace.release(orphan).unwrap();
+        f.workspace.release(held).unwrap();
+        f.workspace.release(inherited).unwrap();
+        f.workspace.release(unheld).unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"moved-hot"));
+        assert_eq!(f.native.bytes(saved.1, 0, first_oracle.len()), first_oracle);
+        let other_saved = attr(f.native.attributes(branch.effective_root, b"other.bin"));
+        assert_eq!(
+            f.native.bytes(other_saved.1, 0, second_oracle.len()),
+            second_oracle
+        );
+        assert_eq!(f.native.bytes(old_content, 0, old_bytes.len()), old_bytes);
+        assert_eq!(
+            physical_private_files(&private).0,
+            f.workspace.backing_status().unwrap().allocated_bytes
+        );
+        f.workspace.close_clean().unwrap();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-hot-exact-blocks-and-clean-close");
+    }
+
+    #[test]
+    #[ignore = "child process for the mounted Commit continuity proof"]
+    fn stage_hot_child() {
+        use std::{
+            io::BufRead,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc,
+            },
+        };
+        let path = std::env::var("LAYERFS_HOT_CHILD_PATH").unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        let inode = file.metadata().unwrap().ino();
+        let pid = std::process::id();
+        let stop = Arc::new(AtomicBool::new(false));
+        let child_stop = stop.clone();
+        let beat = std::thread::spawn(move || {
+            let mut ticks = 0u64;
+            while !child_stop.load(Ordering::Acquire) {
+                println!("CHILD HEARTBEAT {pid} {inode} {ticks}");
+                std::io::stdout().flush().unwrap();
+                ticks += 1;
+                std::thread::park_timeout(Duration::from_millis(20));
+            }
+        });
+        println!("CHILD READY {pid} {inode}");
+        std::io::stdout().flush().unwrap();
+        for command in std::io::stdin().lock().lines() {
+            let command = command.unwrap();
+            if command == "q" {
+                break;
+            }
+            let (tag, byte) = command.split_once(' ').unwrap();
+            file.write_all(&[byte.parse::<u8>().unwrap()]).unwrap();
+            assert_eq!(file.metadata().unwrap().ino(), inode);
+            println!(
+                "CHILD ACK {pid} {inode} {tag} {}",
+                file.metadata().unwrap().len()
+            );
+            std::io::stdout().flush().unwrap();
+        }
+        stop.store(true, Ordering::Release);
+        beat.thread().unpark();
+        beat.join().unwrap();
+        let mut bytes = [0; 5];
+        file.read_exact_at(&mut bytes, file.metadata().unwrap().len() - 5)
+            .unwrap();
+        assert_eq!(&bytes, b"BCDEF");
+        println!("CHILD CLOSED {pid} {inode}");
+        std::io::stdout().flush().unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
+    fn stage_active_hot_continuity() {
+        use std::{
+            io::{BufRead, BufReader},
+            process::{Command, Stdio},
+        };
+        let f = Fixture::new(Gate::Continuity);
+        let original = f.lookup(b"data.bin");
+        let mut mount = layerfs_fuse::mount_writable(&f.workspace, deadline()).unwrap();
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+                "--exact",
+                "linux::stage_hot_child",
+            ])
+            .env(
+                "LAYERFS_HOT_CHILD_PATH",
+                f.workspace.mount_path().join("data.bin"),
+            )
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let output = child.stdout.take().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let reading = std::thread::spawn(move || {
+            for line in BufReader::new(output).lines() {
+                tx.send(line.unwrap()).unwrap();
+            }
+        });
+        let await_line = |wanted: &str| -> String {
+            loop {
+                let line = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                if let Some(at) = line.find("CHILD ") {
+                    println!("STAGE_PROCESS {}", &line[at..]);
+                }
+                if line.contains(wanted) {
+                    return line;
+                }
+            }
+        };
+        let ready = await_line("CHILD READY ");
+        assert!(ready.contains(&format!("{pid} {}", original.serial)));
+        let mut input = child.stdin.take().unwrap();
+        writeln!(input, "before1 66").unwrap();
+        input.flush().unwrap();
+        await_line("before1 ");
+        writeln!(input, "before2 67").unwrap();
+        input.flush().unwrap();
+        await_line("before2 ");
+        let workspace = f.workspace.clone();
+        let committing = std::thread::spawn(move || workspace.commit(deadline()));
+        f.native.wait_entered();
+        await_line("CHILD HEARTBEAT ");
+        writeln!(input, "during-save 68").unwrap();
+        input.flush().unwrap();
+        await_line("during-save ");
+        assert_eq!(f.workspace.status().unwrap().generation, 2);
+        f.native.release();
+        f.native.wait_commit();
+        await_line("CHILD HEARTBEAT ");
+        writeln!(input, "during-c5 69").unwrap();
+        input.flush().unwrap();
+        await_line("during-c5 ");
+        f.native.release_commit();
+        let committed = committing.join().unwrap().unwrap();
+        let root = match committed.outcome {
+            CommitOutcomeWire::Committed(commit) => commit.root,
+            CommitOutcomeWire::UpToDate { root, .. } => root,
+        };
+        let captured = attr(f.native.attributes(root, b"data.bin"));
+        assert_eq!(f.native.bytes(captured.1, original.size, 2), b"BC");
+        check("active-mounted-process-g1-save-c5-and-g2-progress");
+        writeln!(input, "after-commit 70").unwrap();
+        input.flush().unwrap();
+        await_line("after-commit ");
+        writeln!(input, "q").unwrap();
+        input.flush().unwrap();
+        drop(input);
+        await_line("CHILD CLOSED ");
+        assert!(child.wait().unwrap().success());
+        reading.join().unwrap();
+        assert_eq!(
+            std::fs::read(f.workspace.mount_path().join("data.bin")).unwrap()
+                [original.size as usize..],
+            *b"BCDEF"
+        );
+        mount.unmount(deadline()).unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"data.bin"));
+        let alias = attr(f.native.attributes(branch.effective_root, b"alias"));
+        assert_eq!(saved, alias);
+        assert_eq!(f.native.bytes(saved.1, original.size, 5), b"BCDEF");
+        f.workspace.close_clean().unwrap();
+        check("active-mounted-same-process-handle-post-commit-and-refund");
+    }
 }

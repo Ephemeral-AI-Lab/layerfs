@@ -2,7 +2,9 @@
 mod compaction;
 mod extents;
 mod generation;
+mod hot_cursor;
 mod hot_directory;
+mod hot_path;
 mod index;
 mod keyed;
 mod lifetime;
@@ -13,6 +15,7 @@ mod reader;
 mod reclaim;
 mod records;
 mod resolve;
+mod retirement;
 mod splice;
 
 pub use extents::{Extent, ExtentKind, ExtentPlan};

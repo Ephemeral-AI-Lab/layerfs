@@ -297,7 +297,9 @@ impl Workspace {
             .ok_or(WorkspaceError::Unsupported)?;
         let captured = submission.capture()?;
         if captured.active.is_some() {
-            return super::active::reconcile(self, submission, attempt, outcome, deadline);
+            return super::active_reconcile::reconcile(
+                self, submission, attempt, outcome, deadline,
+            );
         }
         let (head, canonical) = match outcome {
             CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),

@@ -68,6 +68,8 @@ pub(super) struct CompactionPlan {
     new_pages: Vec<PageRef>,
     source_pages: Vec<(u64, PageRef)>,
     charge: Charge,
+    updates_charge: Charge,
+    updates_bytes: usize,
     finished: bool,
 }
 
@@ -80,15 +82,29 @@ impl Drop for CompactionPlan {
 }
 
 impl CompactionPlan {
+    pub(super) fn retired_len(&self) -> usize {
+        self.source_pages.len()
+    }
     fn new(store: Arc<PageStore>) -> Result<Self, WorkspaceError> {
         let charge = store.budget().reserve(0)?;
+        let updates_charge = store.budget().reserve(0)?;
         Ok(Self {
             store,
             new_pages: Vec::new(),
             source_pages: Vec::new(),
             charge,
+            updates_charge,
+            updates_bytes: 0,
             finished: false,
         })
+    }
+
+    fn reserve_updates(&mut self, bytes: usize) -> Result<(), WorkspaceError> {
+        self.updates_bytes = self
+            .updates_bytes
+            .checked_add(bytes)
+            .ok_or(WorkspaceError::Capacity)?;
+        self.updates_charge.resize(self.updates_bytes)
     }
 
     pub(super) fn abort(mut self) -> Result<(), WorkspaceError> {
@@ -133,6 +149,7 @@ impl CompactionPlan {
             self.store
                 .create(Kind::Pack, generation, revision, dest.records, &dest.body)?;
         self.new_pages.push(physical);
+        self.reserve_updates(256)?;
         if updates
             .insert(locator_key(dest.logical), Some(locator_value(physical)))
             .is_some()
@@ -323,6 +340,12 @@ pub(super) fn plan(
         }
         partial.sort_unstable_by_key(|(_, bytes)| *bytes);
         let mut paired = BTreeSet::new();
+        let _paired_charge = store.budget().reserve(
+            partial
+                .len()
+                .checked_mul(96)
+                .ok_or(WorkspaceError::Capacity)?,
+        )?;
         let mut at = 0;
         while at + 1 < partial.len() {
             if partial[at].1 + partial[at + 1].1 > BODY_BYTES {
@@ -381,6 +404,7 @@ pub(super) fn plan(
                 let dest = destination.as_mut().ok_or(WorkspaceError::Io)?;
                 let ordinal = dest.append(record)?;
                 while at < refs.len() && refs[at].ordinal == record.slot.ordinal {
+                    planned.reserve_updates(512)?;
                     relocate_reference(index, updates, &refs[at], logical, dest.logical, ordinal)?;
                     at += 1;
                 }
@@ -388,6 +412,7 @@ pub(super) fn plan(
             if at != refs.len() {
                 return Err(WorkspaceError::Io);
             }
+            planned.reserve_updates(256)?;
             updates.insert(locator, None);
             planned.source(logical, physical)?;
         }

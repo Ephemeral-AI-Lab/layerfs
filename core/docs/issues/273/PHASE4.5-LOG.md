@@ -162,3 +162,75 @@ make no implementation claim.
    `Index::maintain` with cohorts keyed by that revision is a contained change
    and is required before the per-WRITE retirement term in spec §9 can be
    claimed.
+
+## Steps 4.5.2 / 4.5.3 — bounded hot publication and affected lifetime work
+
+This product revision continues `91c9c4938`; the evidence follow-up pins its
+exact commit. Checkpoint 5 remains **NOT_RUN**. Public route receipts are
+reissued only after this product revision is committed.
+
+Implemented:
+
+- Charged selected node copies, at most eight inode cursors / 64 Hot slots /
+  1 MiB resident reservations. I/D facts and acknowledged inode attributes
+  flow through the filesystem wrappers; one indexed Node update replaces
+  the resident-node scan. Shared P/R bindings follow the live pack tail.
+- EOF and advancing Base/Zero writes retain exact gaps/suffix/source offsets.
+  A binding checks the selected root and every ancestor epoch/content version;
+  its own leaf version is deliberately not a validity condition. Existing
+  I/D/P keys must remain present and insertion keys must stay in [lower,fence).
+- One merged leaf candidate per changed slot, a matching pack and directory,
+  and one revision. Carries use recorded parent slots. Branch terminal cells
+  inherit the parent upper bound, including after right-side deletion; byte
+  balancing counts the actual encoded terminal body. Page staging checks
+  kind/level and Hot child levels before exposing a candidate.
+- Admission and necessary normalization share the generic mutation, with
+  no second publication or candidate-error fallback. Closed siblings are Cold;
+  shared Hot closure stays selected. Normalization preserves a child's physical
+  birth/charge, and reassignment increments incarnation slot high water.
+- Complete quota reservations precede eligible staging: ordinary 6/7 files,
+  split-only <=98, restricted merged boundary <=227. Optional cold admission
+  refuses at a slot/byte/quota bound and leaves the generic route available.
+- Index/directory/pack retirement selects the latest pin in [birth,retire).
+  An unpinned owner gets its exact release attempt in the triggering mutation;
+  final pin release visits only its cohort. Failed release remains charged
+  custody. Birth comes from PageStore custody rather than a page reread.
+- Frozen G1 reconcile scans/saved facts are prepared off the state gate and
+  rechecked against the live inode revision. Intervening G2 extents survive.
+  Prepared rows, cumulative maps/ordered vectors and compaction/reconcile
+  clones are precharged. Upload still has charged O(E_f) extent scratch;
+  affected installation and legacy/payload maintenance remain real work.
+
+Focused backing checks at the final product implementation (not speed rows):
+12,288 interleaved EOF/Base/Zero writes, 12,285 hot writes, 11,316 ordinary
+noncarry rows, maximum 6 new active candidate files on those ordinary rows,
+1 physical path admission, 1,003 carries, 100 total boundary seeks,
+370,820 node visits, 59,629 index writes (including 12,288 directory writes),
+12,288 pack writes. Ordinary rows assert zero root seeks/index/pack fetches;
+leaf/branch split minima were 1,815 / 1,951 B (limits 1,196 / 1,693).
+The three-file final physical sum was 4,755,456 B, with 234,840 B hot resident
+reservations; this is not the one-file 3 MiB selection or an RSS claim.
+Both selecting-pin release orders pass without unrelated retirement sweeps.
+The corrected eviction proof primes 32 files, pins that composite view, then
+adds 32 files; slot 6 advances epoch 4 -> 8 while the old view keeps its bytes.
+Host Budget refusal preserves revision, acknowledged bytes and allocation.
+
+Retained implementation failures, never relabelled:
+
+1. The first Clippy check reported the explicit `emit` range parameters as
+   8/7 arguments; a local lint annotation retained the concrete inputs.
+2. Linux backing attempt 1: 26 PASS / 4 FAIL, 13.122 s complete wall. The
+   read-only page diagnostic exposed stale root bindings and a finite root
+   terminal fence after right-side deletion. Fixed in the shared binding and
+   branch codec/grouping paths; the original failed files/logs remain evidence.
+3. Linux backing attempt 2: 29 PASS / 1 FAIL, 34.321 s complete wall. The
+   epoch fixture's original slots remained shared, so its selected before/after
+   pair did not witness reassignment. Its directory already showed epoch 4
+   in a later slot. The focused initial fixture correction also failed (0.766 s).
+   A prospective 32-file prime then 32-file eviction establishes the pair and
+   passes in 1.079 s. No performance arm was rerun or selected from these tests.
+
+The functional source still requires its source-pinned public proof/evidence
+follow-up and owner review before checkpoint 5. No performance sample,
+release admission, full CPU O(1), constant-RAM Commit or main-lane #264
+integration is claimed here.

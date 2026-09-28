@@ -1,20 +1,10 @@
 use super::{
     generation::{locator_key, parse_locator},
     index::Index,
-    page::{Kind, PageRef},
-    pages::PageStore,
+    page::PageRef,
 };
-use crate::{backing::budget::Charge, WorkspaceError};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    mem::size_of,
-};
-
-pub(super) struct RetiredPack {
-    pub page: PageRef,
-    pub birth: u64,
-    pub retired: u64,
-}
+use crate::WorkspaceError;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// A locator is removed in the same index publication only when no final
 /// inverse reference to its logical page remains. Mixed pages wait for the
@@ -105,62 +95,4 @@ pub(super) fn prune_dead_payloads(
             Err(error) => Some(Err(error)),
         })
         .collect()
-}
-
-pub(super) fn retire_pack(
-    store: &PageStore,
-    index: &Index,
-    retired: &mut Vec<RetiredPack>,
-    charge: &mut Charge,
-    page: PageRef,
-    revision: u64,
-) -> Result<(), WorkspaceError> {
-    let birth = store.read(page, Kind::Pack)?.revision();
-    if !index.frozen_between(birth, revision)? {
-        match store.release(page) {
-            Ok(_) => return Ok(()),
-            Err(WorkspaceError::Busy) => {}
-            Err(error) => return Err(error),
-        }
-    }
-    let needed = retired
-        .len()
-        .checked_add(1)
-        .and_then(|n| n.checked_mul(size_of::<RetiredPack>()))
-        .ok_or(WorkspaceError::Capacity)?;
-    let charged = (needed * 2).max(retired.capacity() * size_of::<RetiredPack>());
-    charge.resize(charged)?;
-    retired
-        .try_reserve_exact(1)
-        .map_err(|_| WorkspaceError::Capacity)?;
-    charge.resize(charged.max(retired.capacity() * size_of::<RetiredPack>()))?;
-    retired.push(RetiredPack {
-        page,
-        birth,
-        retired: revision,
-    });
-    Ok(())
-}
-
-pub(super) fn maintain_pack(
-    store: &PageStore,
-    index: &Index,
-    retired: &mut Vec<RetiredPack>,
-) -> Result<(), WorkspaceError> {
-    let mut at = 0;
-    while at < retired.len() {
-        let item = &retired[at];
-        if index.frozen_between(item.birth, item.retired)? {
-            at += 1;
-            continue;
-        }
-        match store.release(item.page) {
-            Ok(_) => {
-                retired.swap_remove(at);
-            }
-            Err(WorkspaceError::Busy) => at += 1,
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(())
 }

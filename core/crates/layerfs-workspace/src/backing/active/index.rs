@@ -5,17 +5,18 @@
 //! pack and Workspace state. A hot target names a directory slot rather than a
 //! physical page, so replacing a referenced node leaves ancestors unchanged.
 use super::{
-    hot_directory::{Directory, DIRECTORY_BODY, DIRECTORY_RECORDS},
+    hot_cursor::{BoundUpdates, Cache, Cursor, Seed, CURSORS, DESCRIPTOR_BYTES},
+    hot_directory::{Directory, DIRECTORY_RECORDS},
     keyed::{Target, HOT_SLOTS, MAX_LEVEL},
     page::{Kind, PageRef},
-    pages::PageStore,
+    pages::{PageReservation, PageStore},
     resolve::Resolver,
+    retirement::Retirement,
     splice::{Mutation, Update},
 };
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::{
     collections::BTreeMap,
-    mem::size_of,
     sync::{Arc, Mutex},
 };
 
@@ -23,12 +24,6 @@ const MAX_CAPTURES: usize = 32;
 const MAX_PINNED_REVISIONS: usize = MAX_CAPTURES + 128;
 const STATE_BYTES: usize = 8192;
 pub type IndexEntry = (Vec<u8>, Vec<u8>);
-
-struct Retired {
-    page: PageRef,
-    birth: u64,
-    retired: u64,
-}
 
 /// One charged selected directory copy. Its charge lives exactly as long as
 /// the copy, so a frozen view keeps resolving while an old directory is pinned
@@ -56,16 +51,19 @@ impl Selection {
     }
 }
 
-struct State {
-    selection: Selection,
-    generation: u64,
+pub(super) struct State {
+    pub(super) selection: Selection,
+    pub(super) generation: u64,
     revision: u64,
     pending: bool,
     stopped: bool,
     captured: usize,
     frozen: BTreeMap<u64, usize>,
-    retired: Vec<Retired>,
-    retired_charge: Charge,
+    pub(super) retired: Retirement,
+    cleanup_error: Option<WorkspaceError>,
+    pub(super) cache: Cache,
+    pub(super) cursors: Vec<Cursor>,
+    pub(super) pack_bindings: Vec<(Vec<u8>, super::hot_cursor::Binding)>,
     slot_epochs: [u64; HOT_SLOTS],
 }
 
@@ -73,8 +71,8 @@ struct State {
 /// versions; the current selection changes only after the caller publishes its
 /// matching pack and Workspace state tuple.
 pub struct Index {
-    store: Arc<PageStore>,
-    state: Mutex<State>,
+    pub(super) store: Arc<PageStore>,
+    pub(super) state: Mutex<State>,
     _charge: Charge,
 }
 
@@ -89,6 +87,9 @@ pub struct IndexCandidate {
     created: Vec<PageRef>,
     replaced: Vec<PageRef>,
     slot_epochs: [u64; HOT_SLOTS],
+    cache: Cache,
+    cursors: Vec<Cursor>,
+    pack_bindings: Vec<(Vec<u8>, super::hot_cursor::Binding)>,
     _scratch: Charge,
     finished: bool,
 }
@@ -133,6 +134,19 @@ impl Drop for IndexSnapshot {
 }
 
 impl Index {
+    pub(super) fn hot_status(&self) -> Result<(usize, usize, usize, usize), WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok((
+            state
+                .selection
+                .directory
+                .as_ref()
+                .map_or(0, |directory| directory.value.occupied()),
+            state.cursors.len(),
+            super::hot_cursor::resident(&state.cache),
+            state.retired.len(),
+        ))
+    }
     pub fn new(store: Arc<PageStore>) -> Result<Arc<Self>, WorkspaceError> {
         let budget = store.budget();
         Ok(Arc::new(Self {
@@ -145,11 +159,14 @@ impl Index {
                 stopped: false,
                 captured: 0,
                 frozen: BTreeMap::new(),
-                retired: Vec::new(),
-                retired_charge: budget.reserve(0)?,
+                retired: Retirement::new(&budget)?,
+                cleanup_error: None,
+                cache: std::array::from_fn(|_| None),
+                cursors: Vec::new(),
+                pack_bindings: Vec::new(),
                 slot_epochs: [0; HOT_SLOTS],
             }),
-            _charge: budget.reserve(STATE_BYTES + MAX_PINNED_REVISIONS * 128)?,
+            _charge: budget.reserve(STATE_BYTES + MAX_PINNED_REVISIONS * 128 + DESCRIPTOR_BYTES)?,
         }))
     }
 
@@ -167,6 +184,28 @@ impl Index {
         Ok(state.frozen.range(birth..retired).next().is_some())
     }
 
+    pub(super) fn selecting_revision(
+        &self,
+        birth: u64,
+        retired: u64,
+    ) -> Result<Option<u64>, WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(state
+            .frozen
+            .range(birth..retired)
+            .next_back()
+            .map(|(revision, _)| *revision))
+    }
+
+    pub(super) fn pin_exists(&self, revision: u64) -> Result<bool, WorkspaceError> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .frozen
+            .contains_key(&revision))
+    }
+
     pub fn frozen_count(&self) -> Result<usize, WorkspaceError> {
         Ok(self
             .state
@@ -178,12 +217,12 @@ impl Index {
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        Resolver::new(&self.store, &state.selection).get(key)
+        Resolver::cached(&self.store, &state.selection, &state.cache).get(key)
     }
 
     pub fn floor(&self, key: &[u8]) -> Result<Option<IndexEntry>, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-        Resolver::new(&self.store, &state.selection).floor(key)
+        Resolver::cached(&self.store, &state.selection, &state.cache).floor(key)
     }
 
     pub fn scan(
@@ -194,7 +233,8 @@ impl Index {
     ) -> Result<ScanPage, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let charge = self.store.budget().reserve(64 * 1024 + limit * 1024)?;
-        let entries = Resolver::new(&self.store, &state.selection).scan(lower, upper, limit)?;
+        let entries = Resolver::cached(&self.store, &state.selection, &state.cache)
+            .scan(lower, upper, limit)?;
         Ok(ScanPage {
             entries,
             _charge: charge,
@@ -205,6 +245,16 @@ impl Index {
     /// candidate selection. A clean Commit may publish an empty update to
     /// advance its revision.
     pub fn prepare(self: &Arc<Self>, updates: &[Update]) -> Result<IndexCandidate, WorkspaceError> {
+        self.prepare_file(updates, None, None, None)
+    }
+
+    pub(super) fn prepare_file(
+        self: &Arc<Self>,
+        updates: &[Update],
+        seed: Option<Seed>,
+        direct: Option<BoundUpdates>,
+        reservation: Option<PageReservation>,
+    ) -> Result<IndexCandidate, WorkspaceError> {
         if updates.windows(2).any(|pair| pair[0].0 >= pair[1].0)
             || updates.iter().any(|(key, value)| {
                 key.is_empty()
@@ -218,7 +268,7 @@ impl Index {
         }
         let mut scratch = self.store.budget().reserve(128 * 1024)?;
         self.maintain()?;
-        let (selection, generation, revision, epochs) = {
+        let (selection, generation, revision, epochs, cache, mut cursors, mut pack_bindings) = {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             if state.pending || state.stopped {
                 return Err(WorkspaceError::Busy);
@@ -233,10 +283,28 @@ impl Index {
                 state.generation,
                 state.revision,
                 state.slot_epochs,
+                state.cache.clone(),
+                state.cursors.clone(),
+                state.pack_bindings.clone(),
             )
         };
         let next = revision + 1;
-        let mut mutation = Mutation::new(&selection, epochs, self.store.budget().reserve(0)?)?;
+        let prior_cursor = seed
+            .as_ref()
+            .and_then(|seed| cursors.iter().find(|cursor| cursor.inode == seed.inode))
+            .cloned();
+        cursors.retain(|cursor| {
+            !updates
+                .iter()
+                .any(|(key, _)| key.as_slice() == super::records::inode_key(cursor.inode))
+        });
+        if seed.is_some() && cursors.len() == CURSORS {
+            cursors.remove(0);
+        }
+        let mut mutation =
+            Mutation::new(&selection, epochs, self.store.budget().reserve(0)?, cache)?;
+        let allow_cold = seed.is_some() && reservation.is_some();
+        mutation.reservation = reservation;
         let staged = (|| {
             let budget = updates
                 .iter()
@@ -246,16 +314,45 @@ impl Index {
                         .ok_or(WorkspaceError::Capacity)
                 })?;
             scratch.resize(budget)?;
-            let mut children = mutation.change(
-                &self.store,
-                &selection,
-                selection.root,
-                selection.height,
-                updates,
-                &[],
-                generation,
-                next,
-            )?;
+            let mut keys: Vec<_> = cursors
+                .iter()
+                .flat_map(|cursor| cursor.bindings.iter())
+                .filter(|(_, binding)| {
+                    !matches!(
+                        binding.role,
+                        super::hot_cursor::Role::Locator | super::hot_cursor::Role::Inverse
+                    )
+                })
+                .map(|(key, _)| key.clone())
+                .collect();
+            if let Some(seed) = &seed {
+                keys.extend(seed.keys().into_iter().map(|(key, _)| key));
+            } else {
+                keys.extend(pack_bindings.iter().map(|(key, _)| key.clone()));
+            }
+            keys.sort();
+            keys.dedup();
+            mutation.want(&keys);
+            let mut children = if let Some(groups) = &direct {
+                let children =
+                    mutation.direct(&self.store, &selection, generation, next, groups)?;
+                self.store.count(super::pages::Counter::HotWrite, 1);
+                children
+            } else {
+                self.store.count(super::pages::Counter::Seek, 1);
+                mutation.admit(&self.store, &selection, &keys, allow_cold)?;
+                mutation.change(
+                    &self.store,
+                    &selection,
+                    selection.root,
+                    selection.height,
+                    updates,
+                    &[],
+                    &[],
+                    generation,
+                    next,
+                )?
+            };
             let mut level = selection.height;
             let (root, height) = if children.is_empty() {
                 (None, 0)
@@ -268,20 +365,22 @@ impl Index {
                     }
                     level += 1;
                     let nodes = Mutation::branch_groups(children, &[])?;
-                    children = mutation.emit(&self.store, generation, next, level, None, nodes)?;
+                    children =
+                        mutation.emit(&self.store, generation, next, level, None, nodes, &[])?;
                     if children.len() == 1 {
                         break (Some(children[0].target), level);
                     }
                 }
             };
-            let directory = if mutation.directory_changed {
+            let directory = if mutation.directory_changed && mutation.directory.occupied() > 0 {
                 let body = mutation.directory.encode()?;
-                let (page, stored) = self.store.create_verified(
+                let (page, stored) = self.store.create_from(
                     Kind::HotDirectory,
                     generation,
                     next,
                     DIRECTORY_RECORDS,
                     &body,
+                    mutation.reservation.as_mut(),
                 )?;
                 mutation.created.push(page);
                 let value = Directory::decode(&stored, self.store.incarnation(), page)?;
@@ -291,11 +390,91 @@ impl Index {
                 Some(Arc::new(SelectedDirectory {
                     page,
                     value,
-                    _charge: self.store.budget().reserve(DIRECTORY_BODY)?,
+                    _charge: self.store.budget().reserve(
+                        std::mem::size_of::<SelectedDirectory>() + 2 * std::mem::size_of::<usize>(),
+                    )?,
                 }))
             } else {
                 None
             };
+            let selected = Selection {
+                root,
+                height,
+                directory: if mutation.directory_changed {
+                    directory.clone()
+                } else {
+                    selection.directory.clone()
+                },
+            };
+            for cursor in &mut cursors {
+                let refreshed = cursor
+                    .bindings
+                    .iter()
+                    .map(|(key, binding)| {
+                        let present = matches!(
+                            binding.role,
+                            super::hot_cursor::Role::Inode
+                                | super::hot_cursor::Role::Dirty
+                                | super::hot_cursor::Role::Locator
+                        );
+                        Some((
+                            key.clone(),
+                            binding.refresh(
+                                &self.store,
+                                &selected,
+                                &mutation.directory,
+                                &mutation.cache,
+                                key,
+                                present,
+                                binding.role,
+                            )?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>();
+                if let Some(bindings) = refreshed {
+                    cursor.bindings = bindings;
+                }
+            }
+            if let Some(seed) = &seed {
+                if let Some(mut cursor) = seed.cursor(
+                    &self.store,
+                    &selected,
+                    &mutation.directory,
+                    &mutation.cache,
+                    prior_cursor.as_ref(),
+                    &pack_bindings,
+                ) {
+                    if direct.is_none() {
+                        self.store.count(super::pages::Counter::CursorAdmission, 1);
+                    }
+                    pack_bindings = cursor
+                        .bindings
+                        .iter()
+                        .filter(|(_, binding)| {
+                            matches!(
+                                binding.role,
+                                super::hot_cursor::Role::Locator | super::hot_cursor::Role::Inverse
+                            )
+                        })
+                        .cloned()
+                        .collect();
+                    cursor.bindings.retain(|(_, binding)| {
+                        !matches!(
+                            binding.role,
+                            super::hot_cursor::Role::Locator | super::hot_cursor::Role::Inverse
+                        )
+                    });
+                    if cursors.len() == CURSORS {
+                        cursors.remove(0);
+                    }
+                    cursors.push(cursor);
+                }
+            }
+            let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            state.retired.reserve(
+                mutation.replaced.len()
+                    + usize::from(mutation.directory_changed && selection.directory.is_some()),
+            )?;
             Ok::<_, WorkspaceError>((root, height, directory))
         })();
         let (root, height, directory) = match staged {
@@ -326,6 +505,9 @@ impl Index {
             created: mutation.created,
             replaced: mutation.replaced,
             slot_epochs: mutation.slot_epochs,
+            cache: mutation.cache,
+            cursors,
+            pack_bindings,
             _scratch: scratch,
             finished: false,
         })
@@ -373,31 +555,11 @@ impl Index {
     }
 
     pub fn maintain(&self) -> Result<u64, WorkspaceError> {
-        let mut released = 0;
-        loop {
-            let selected = {
-                let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                let at = state.retired.iter().position(|item| {
-                    state
-                        .frozen
-                        .range(item.birth..item.retired)
-                        .next()
-                        .is_none()
-                });
-                at.map(|at| state.retired.swap_remove(at))
-            };
-            let Some(item) = selected else { break };
-            match self.store.release(item.page) {
-                Ok(bytes) => released += bytes,
-                Err(error) => {
-                    let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
-                    state.retired.push(item);
-                    state.stopped = true;
-                    return Err(error);
-                }
-            }
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        match state.cleanup_error.take() {
+            Some(error) => Err(error),
+            None => Ok(0),
         }
-        Ok(released)
     }
 }
 
@@ -433,31 +595,6 @@ impl IndexCandidate {
                 replaced.push(old.page);
             }
         }
-        let mut retire = Vec::with_capacity(replaced.len());
-        for page in replaced {
-            let stored = self.index.store.read(page, self.index.store.kind(page)?)?;
-            retire.push(Retired {
-                page,
-                birth: stored.revision(),
-                retired: next,
-            });
-        }
-        let growth = state
-            .retired
-            .len()
-            .checked_add(retire.len())
-            .and_then(|entries| entries.checked_mul(size_of::<Retired>()))
-            .and_then(|bytes| bytes.checked_mul(2))
-            .ok_or(WorkspaceError::Capacity)?;
-        let required = growth.max(state.retired.capacity() * size_of::<Retired>());
-        state.retired_charge.resize(required)?;
-        state
-            .retired
-            .try_reserve_exact(retire.len())
-            .map_err(|_| WorkspaceError::Capacity)?;
-        let actual = state.retired.capacity() * size_of::<Retired>();
-        state.retired_charge.resize(actual.max(required))?;
-        state.retired.extend(retire);
         let directory = if self.directory_changed {
             self.directory.take()
         } else {
@@ -469,14 +606,34 @@ impl IndexCandidate {
             height: self.height,
         };
         state.slot_epochs = self.slot_epochs;
+        state.cache = std::mem::replace(&mut self.cache, std::array::from_fn(|_| None));
+        state.cursors = std::mem::take(&mut self.cursors);
+        state.pack_bindings = std::mem::take(&mut self.pack_bindings);
         state.revision = next;
         state.pending = false;
         self.finished = true;
+        for page in replaced {
+            let State {
+                retired, frozen, ..
+            } = &mut *state;
+            if let Err(error) = retired.retire(&self.index.store, page, next, |birth, retire| {
+                Ok(frozen
+                    .range(birth..retire)
+                    .next_back()
+                    .map(|(revision, _)| *revision))
+            }) {
+                state.cleanup_error.get_or_insert(error);
+                state.stopped = true;
+            }
+        }
         Ok(next)
     }
 }
 
 impl IndexSnapshot {
+    pub(super) fn revision(&self) -> u64 {
+        self.revision
+    }
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, WorkspaceError> {
         Resolver::new(&self.index.store, &self.selection).get(key)
     }
@@ -517,6 +674,21 @@ impl IndexSnapshot {
         *count -= 1;
         if *count == 0 {
             state.frozen.remove(&self.revision);
+            let State {
+                retired, frozen, ..
+            } = &mut *state;
+            if let Err(error) =
+                retired.release_selector(&self.index.store, self.revision, |birth, retire| {
+                    Ok(frozen
+                        .range(birth..retire)
+                        .next_back()
+                        .map(|(revision, _)| *revision))
+                })
+            {
+                state.stopped = true;
+                self.released = true;
+                return Err(error);
+            }
         }
         if self.captured {
             state.captured -= 1;

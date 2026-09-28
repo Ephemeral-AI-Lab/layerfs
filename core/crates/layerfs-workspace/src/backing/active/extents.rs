@@ -242,7 +242,7 @@ impl Extent {
         }
     }
 
-    fn cut(mut self, start: u64, end: u64) -> Result<Self, WorkspaceError> {
+    pub(super) fn cut(mut self, start: u64, end: u64) -> Result<Self, WorkspaceError> {
         if start < self.start || end > self.end || start >= end {
             return Err(WorkspaceError::Io);
         }

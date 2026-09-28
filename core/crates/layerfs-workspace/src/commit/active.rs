@@ -7,16 +7,15 @@ use crate::{
         },
         budget::Charge,
     },
-    commit::completion::CommitAttempt,
     overlay::snapshot::{Captured, SavedInode, Submission},
     runtime::state::OperationGuard,
     *,
 };
 use layerfs_bridge::contract::{
-    put_directory_identity, put_directory_row, put_rooted_identity, put_stream_tag,
-    CommitOutcomeWire, Inspect, Operation, PreparedChanges, PreparedTotals, Response, Root, Source,
-    ROLE_DIRECTORY_DECLARATION, ROLE_DIRECTORY_PATCH, ROLE_EXISTING_FILE, ROLE_EXISTING_SYMLINK,
-    ROLE_FRESH_FILE, ROLE_FRESH_SYMLINK,
+    put_directory_identity, put_directory_row, put_rooted_identity, put_stream_tag, Inspect,
+    Operation, PreparedChanges, PreparedTotals, Response, Root, Source, ROLE_DIRECTORY_DECLARATION,
+    ROLE_DIRECTORY_PATCH, ROLE_EXISTING_FILE, ROLE_EXISTING_SYMLINK, ROLE_FRESH_FILE,
+    ROLE_FRESH_SYMLINK,
 };
 use std::{
     collections::BTreeMap,
@@ -226,7 +225,7 @@ impl Source for ActiveUpload {
 
 type DirtyRows = Vec<(u64, HotInode)>;
 
-fn scan_dirty(
+pub(super) fn scan_dirty(
     workspace: &Workspace,
     captured: &Captured,
     view: &ActiveSnapshot,
@@ -267,7 +266,7 @@ fn scan_dirty(
     Ok((rows, charge))
 }
 
-fn scan_extents(
+pub(super) fn scan_extents(
     workspace: &Workspace,
     view: &ActiveSnapshot,
     serial: u64,
@@ -772,168 +771,4 @@ fn save_metadata(
         .status
         .saved_metadata += 1;
     Ok(metadata)
-}
-
-pub(super) fn reconcile(
-    workspace: &Workspace,
-    submission: &Submission,
-    attempt: &CommitAttempt,
-    outcome: &CommitOutcomeWire,
-    deadline: Instant,
-) -> Result<u64, WorkspaceError> {
-    crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-    let captured = submission.capture()?;
-    let view = captured.active_view()?;
-    let (dirty, _dirty_charge) = scan_dirty(workspace, captured, &view)?;
-    drop(view);
-    let (head, canonical) = match outcome {
-        CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
-        CommitOutcomeWire::UpToDate { head, root } => (*head, *root),
-    };
-    let next = match attempt.next.lock().map_err(|_| WorkspaceError::Io)?.take() {
-        Some(mut next) => {
-            next.snapshot.branch.head_commit = head;
-            next.snapshot.head_root = head.map(|_| canonical);
-            next.snapshot.effective_root = canonical;
-            next
-        }
-        None => CommitAttempt::successor(workspace, submission, head, canonical)?,
-    };
-    let next = Arc::new(next);
-    let active = workspace
-        .inner
-        .active
-        .as_ref()
-        .ok_or(WorkspaceError::Unsupported)?;
-    let mut state = workspace.state()?;
-    workspace.available(&state)?;
-    if state.base != captured.context.effective_root
-        || state
-            .branch
-            .as_ref()
-            .is_none_or(|branch| !Arc::ptr_eq(branch, &captured.context))
-        || state.generation != captured.generation + 1
-        || state
-            .submission
-            .as_ref()
-            .is_none_or(|held| !std::ptr::eq(held.as_ref(), submission))
-        || active.generation_revision()? != (state.generation, state.revision)
-    {
-        return Err(WorkspaceError::Io);
-    }
-    let revision = state
-        .revision
-        .checked_add(1)
-        .ok_or(WorkspaceError::Capacity)?;
-    let baseline = state
-        .baseline
-        .checked_add(1)
-        .ok_or(WorkspaceError::Capacity)?;
-    let mut updates = BTreeMap::new();
-    let mut node_updates = Vec::new();
-    let current_view = active.pin_view()?;
-    for (serial, original) in &dirty {
-        updates.insert(dirty_key(captured.generation, *serial).to_vec(), None);
-        let current = active.get(&inode_key(*serial))?.ok_or(WorkspaceError::Io)?;
-        let mut current = HotInode::parse(&current)?;
-        if current.kind != original.kind {
-            return Err(WorkspaceError::Io);
-        }
-        if current.revision == original.revision && current.kind == NodeKind::File {
-            let (extents, _charge) = scan_extents(workspace, &current_view, *serial, current)?;
-            for extent in extents {
-                if current.storage == 2 {
-                    updates.insert(Extent::key(*serial, extent.start).to_vec(), None);
-                }
-                if let Some(key) = extent.inverse_key(*serial) {
-                    updates.insert(key, None);
-                }
-            }
-            current.storage = u8::from(current.length > 0);
-            current.inline = if current.length > 0 {
-                [Some(Extent::base(0, current.length)), None, None, None]
-            } else {
-                [None; 4]
-            };
-        }
-        if original.kind != NodeKind::Directory {
-            let host = workspace
-                .host
-                .metadata
-                .as_ref()
-                .ok_or(WorkspaceError::Unsupported)?;
-            let mut lease = host.payloads.window(1, 3)?;
-            let cell = captured
-                .root
-                .arena
-                .find(
-                    submission.result_ref()?,
-                    &crate::backing::metadata_pages::result_key(*serial),
-                    lease.window.as_mut().ok_or(WorkspaceError::Io)?,
-                    deadline,
-                )?
-                .ok_or(WorkspaceError::Io)?;
-            let saved = cell.value();
-            if saved.len() != 80
-                || u64::from_be_bytes(saved[..8].try_into().map_err(|_| WorkspaceError::Io)?)
-                    != original.revision
-                || u64::from_be_bytes(saved[8..16].try_into().map_err(|_| WorkspaceError::Io)?)
-                    != original.length
-            {
-                return Err(WorkspaceError::Io);
-            }
-            let content: Root = saved[16..48].try_into().map_err(|_| WorkspaceError::Io)?;
-            let metadata: Root = saved[48..80].try_into().map_err(|_| WorkspaceError::Io)?;
-            current.base = content;
-            current.metadata = metadata;
-            node_updates.push((*serial, *original, content, metadata));
-        } else {
-            node_updates.push((*serial, *original, [0; 32], [0; 32]));
-        }
-        current.fresh = false;
-        current.generation = state.generation;
-        current.revision = revision;
-        updates.insert(inode_key(*serial).to_vec(), Some(current.value()?.to_vec()));
-    }
-    drop(current_view);
-    let mut status = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
-    let publication = active.publish_reconcile(&updates.into_iter().collect::<Vec<_>>())?;
-    let published = publication.revision;
-    if published != revision {
-        return Err(WorkspaceError::Io);
-    }
-    let old_branch = state.branch.replace(next);
-    state.base = canonical;
-    state.baseline = baseline;
-    state.revision = revision;
-    for (serial, original, content, metadata) in node_updates {
-        if let Ok(node) = state.node_mut(serial) {
-            node.original.size = original.length;
-            node.original.mode = original.mode;
-            node.original.mtime_seconds = original.seconds;
-            node.original.mtime_nanoseconds = original.nanos;
-            node.original.references = u64::from(original.links);
-            if original.kind != NodeKind::Directory {
-                node.content = content;
-                node.metadata = metadata;
-            }
-            node.baseline = baseline;
-        }
-    }
-    let accepted = &submission
-        .state
-        .lock()
-        .map_err(|_| WorkspaceError::Io)?
-        .declared;
-    state.declared.retain(|serial| !accepted.contains(serial));
-    status.installed_revision = Some(revision);
-    drop(state);
-    drop(status);
-    drop(old_branch);
-    captured.release_active()?;
-    active.maintain_until(deadline)?;
-    if let Some(error) = publication.cleanup_error {
-        return Err(error);
-    }
-    Ok(revision)
 }

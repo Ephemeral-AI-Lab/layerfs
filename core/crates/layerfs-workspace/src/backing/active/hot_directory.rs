@@ -133,7 +133,7 @@ impl Directory {
         if body.len() != DIRECTORY_BODY
             || page.records() != DIRECTORY_RECORDS
             || u16::from_be_bytes([body[0], body[1]]) as usize != HOT_SLOTS
-            || body[6..PREFIX_BYTES].iter().any(|byte| *byte != 0)
+            || body[4..PREFIX_BYTES].iter().any(|byte| *byte != 0)
         {
             return Err(WorkspaceError::Io);
         }

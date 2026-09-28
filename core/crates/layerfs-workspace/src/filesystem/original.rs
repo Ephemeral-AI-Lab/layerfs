@@ -33,14 +33,10 @@ impl Workspace {
                     .active
                     .as_ref()
                     .ok_or(WorkspaceError::Unsupported)?;
-                let (content, metadata) =
-                    match active.get(&crate::backing::active::inode_key(serial))? {
-                        Some(value) => {
-                            let inode = crate::backing::active::HotInode::parse(&value)?;
-                            (inode.base, inode.metadata)
-                        }
-                        None => (node.content, node.metadata),
-                    };
+                let (content, metadata) = match active.file_facts(serial)?.0 {
+                    Some(inode) => (inode.base, inode.metadata),
+                    None => (node.content, node.metadata),
+                };
                 return Ok((node.attr, content, metadata, state.baseline));
             }
             if node.baseline == state.baseline {

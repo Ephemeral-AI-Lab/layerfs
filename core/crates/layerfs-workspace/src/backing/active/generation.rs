@@ -1,12 +1,14 @@
 use super::{
     compaction,
     extents::{Extent, ExtentKind, ExtentPlan},
+    hot_cursor::Seed,
     index::{Index, IndexSnapshot, ScanPage},
     pack::{PackedSlot, TinyPack},
     page::PageRef,
     pages::{PageStore, StoreStatus},
-    reclaim::{self, RetiredPack},
+    reclaim,
     records::{dirty_key, inode_key, HotInode},
+    retirement::Retirement,
 };
 use crate::{
     backing::{
@@ -22,12 +24,10 @@ use std::{
     collections::BTreeMap,
     mem::size_of,
     sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 pub(super) struct State {
-    pub(super) retired: Vec<RetiredPack>,
-    pub(super) retired_charge: Charge,
+    pub(super) retired: Retirement,
     pub(super) large: BTreeMap<u64, LargeOwner>,
     pub(super) retired_large: BTreeMap<u64, u64>,
     pub(super) retired_large_charge: Charge,
@@ -69,6 +69,7 @@ pub struct ActiveWrite {
     /// Publication succeeded; cleanup failure remains owned and stops further
     /// admission until the caller handles it. It cannot change accepted bytes.
     pub cleanup_error: Option<WorkspaceError>,
+    pub inode: Option<HotInode>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +77,7 @@ pub struct ActivePublication {
     pub length: u64,
     pub revision: u64,
     pub cleanup_error: Option<WorkspaceError>,
+    pub inode: Option<HotInode>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +87,10 @@ pub struct ActiveStatus {
     pub retired_payloads: usize,
     pub stopped: bool,
     pub closed: bool,
+    pub hot_nodes: usize,
+    pub hot_cursors: usize,
+    pub hot_reserved_bytes: usize,
+    pub retired_index_pages: usize,
 }
 
 pub(super) fn locator_key(logical: u64) -> Vec<u8> {
@@ -123,8 +129,7 @@ impl ActiveBacking {
             pack,
             index,
             state: Mutex::new(State {
-                retired: Vec::new(),
-                retired_charge: budget.reserve(0)?,
+                retired: Retirement::new(&budget)?,
                 large: BTreeMap::new(),
                 retired_large: BTreeMap::new(),
                 retired_large_charge: budget.reserve(0)?,
@@ -137,12 +142,18 @@ impl ActiveBacking {
 
     pub fn status(&self) -> Result<ActiveStatus, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let (hot_nodes, hot_cursors, hot_reserved_bytes, retired_index_pages) =
+            self.index.hot_status()?;
         Ok(ActiveStatus {
             store: self.store.status()?,
             retired_pack_pages: state.retired.len(),
             retired_payloads: state.retired_large.len(),
             stopped: state.stopped,
             closed: state.closed,
+            hot_nodes,
+            hot_cursors,
+            hot_reserved_bytes,
+            retired_index_pages,
         })
     }
 
@@ -358,6 +369,9 @@ impl ActiveBacking {
         offset: u64,
         data: &[u8],
     ) -> Result<ActiveWrite, WorkspaceError> {
+        if let Some(write) = self.try_hot_file(inode, original, offset, data)? {
+            return Ok(write);
+        }
         self.write_with(
             inode,
             original.length,
@@ -378,25 +392,13 @@ impl ActiveBacking {
         length: u64,
     ) -> Result<KeyUpdates, WorkspaceError> {
         let key = inode_key(inode);
-        let mut selected = match self.index.get(&key)? {
-            Some(value) => HotInode::parse(&value)?,
-            None => original,
-        };
+        let selected = self.index.file_facts(inode)?.0.unwrap_or(original);
         if !matches!(selected.kind, NodeKind::File | NodeKind::Symlink)
             || selected.length != original.length
         {
             return Err(WorkspaceError::InvalidInput);
         }
-        selected.length = length;
-        selected.generation = generation;
-        selected.revision = revision;
-        selected.storage = 2;
-        selected.inline = [None; 4];
-        let time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| WorkspaceError::Io)?;
-        selected.seconds = i64::try_from(time.as_secs()).map_err(|_| WorkspaceError::Capacity)?;
-        selected.nanos = time.subsec_nanos();
+        let selected = super::hot_path::updated(selected, generation, revision, length)?;
         Ok(vec![
             (key.to_vec(), Some(selected.value()?.to_vec())),
             (dirty_key(generation, inode).to_vec(), Some(vec![1])),
@@ -567,6 +569,12 @@ impl ActiveBacking {
         live_payload: Option<u64>,
     ) -> Result<ActivePublication, WorkspaceError> {
         let length = planned.length;
+        let inode = extra
+            .iter()
+            .find(|(key, _)| key.first() == Some(&b'I'))
+            .and_then(|(_, value)| value.as_deref())
+            .map(HotInode::parse)
+            .transpose()?;
         let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
         for (key, value) in extra {
             if updates.insert(key, value).is_some() {
@@ -598,6 +606,9 @@ impl ActiveBacking {
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
+        if let Err(error) = state.retired.reserve(dead.len() + plan.retired_len()) {
+            return Err(plan.abort().err().unwrap_or(error));
+        }
         let candidate = match self.index.prepare(&update_vec) {
             Ok(candidate) => candidate,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
@@ -611,7 +622,7 @@ impl ActiveBacking {
             state.large.insert(owner.payload.record.id, owner);
         }
         Self::record_retired_large(state, live_payload, dead_large, published_revision);
-        let mut cleanup_error = None;
+        let mut cleanup_error = self.index.maintain().err();
         for (logical, page) in dead
             .into_iter()
             .map(|page| {
@@ -630,19 +641,13 @@ impl ActiveBacking {
                     cleanup_error.get_or_insert(error);
                 }
             }
-            let State {
-                retired,
-                retired_charge,
-                ..
-            } = &mut *state;
-            if let Err(error) = reclaim::retire_pack(
-                &self.store,
-                &self.index,
-                retired,
-                retired_charge,
-                page,
-                published_revision,
-            ) {
+            if let Err(error) =
+                state
+                    .retired
+                    .retire(&self.store, page, published_revision, |birth, retire| {
+                        self.index.selecting_revision(birth, retire)
+                    })
+            {
                 cleanup_error.get_or_insert(error);
             }
         }
@@ -653,6 +658,7 @@ impl ActiveBacking {
             length,
             revision: published_revision,
             cleanup_error,
+            inode,
         })
     }
 
@@ -674,30 +680,42 @@ impl ActiveBacking {
         let revision = prior_revision
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
-        let prepared = self
-            .pack
-            .prepare(inode, generation, revision, offset, data)?;
-        let slot = prepared.slot();
-        let planned = match ExtentPlan::tiny(&self.index, inode, old_length, slot) {
-            Ok(plan) => plan,
-            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
-        };
+        let (slot, rewritten) =
+            self.pack
+                .preview(inode, generation, revision, offset, data.len())?;
+        let planned = ExtentPlan::tiny(&self.index, inode, old_length, slot)?;
         let length = planned.length;
-        let extra = match extra(generation, revision, length) {
-            Ok(extra) => extra,
-            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
-        };
+        let extra = extra(generation, revision, length)?;
         let mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>> = planned.updates.into_iter().collect();
-        let (logical, physical) = prepared.locator();
-        updates.insert(locator_key(logical), Some(locator_value(physical)));
+        let logical = slot.logical_page;
+        updates.insert(
+            locator_key(logical),
+            Some(locator_value(PageRef { id: 1, epoch: 1 })),
+        );
         for (key, value) in extra {
             if updates.insert(key, value).is_some() {
-                return Err(prepared
-                    .abort()
-                    .err()
-                    .unwrap_or(WorkspaceError::InvalidInput));
+                return Err(WorkspaceError::InvalidInput);
             }
         }
+        let ordered: Vec<_> = updates
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        let mut reservation = self.index.boundary_reservation(&ordered)?;
+        state.retired.reserve(usize::from(rewritten.is_some()))?;
+        let prepared = self.pack.prepare_from(
+            inode,
+            generation,
+            revision,
+            offset,
+            data,
+            reservation.as_mut(),
+        )?;
+        if prepared.slot() != slot {
+            return Err(prepared.abort().err().unwrap_or(WorkspaceError::Io));
+        }
+        let (_, physical) = prepared.locator();
+        updates.insert(locator_key(logical), Some(locator_value(physical)));
         let dead = match reclaim::prune_dead(&self.index, &mut updates, None) {
             Ok(dead) => dead,
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
@@ -722,7 +740,45 @@ impl ActiveBacking {
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
         };
         let updates: Vec<_> = updates.into_iter().collect();
-        let candidate = match self.index.prepare(&updates) {
+        let published_inode = updates
+            .iter()
+            .find(|(key, _)| key.as_slice() == inode_key(inode))
+            .and_then(|(_, value)| value.as_deref())
+            .map(HotInode::parse)
+            .transpose()?;
+        let seed = published_inode.map(|selected| {
+            let frontier = offset + data.len() as u64;
+            let source = updates
+                .iter()
+                .filter_map(|(key, value)| {
+                    value
+                        .as_ref()
+                        .and_then(|value| Extent::parse(key, value, inode).ok())
+                })
+                .find(|extent| {
+                    extent.start == frontier
+                        && matches!(extent.kind, ExtentKind::Base | ExtentKind::Zero)
+                });
+            Seed {
+                inode,
+                selected,
+                frontier,
+                source,
+                locator: locator_key(logical),
+                inverse: Extent::packed(offset, slot)
+                    .expect("validated packed slot")
+                    .inverse_key(inode)
+                    .expect("packed inverse"),
+            }
+        });
+        if let Err(error) = state.retired.reserve(
+            dead.len() + plan.retired_len() + usize::from(prepared.retired_physical().is_some()),
+        ) {
+            let plan_error = plan.abort().err();
+            let slot_error = prepared.abort().err();
+            return Err(plan_error.or(slot_error).unwrap_or(error));
+        }
+        let candidate = match self.index.prepare_file(&updates, seed, None, reservation) {
             Ok(candidate) => candidate,
             Err(error) => {
                 let plan_error = plan.abort().err();
@@ -741,25 +797,22 @@ impl ActiveBacking {
         let compacted = plan.finish();
         let rewritten = prepared.retired_physical();
         let mut cleanup_error = prepared.publish().err();
+        if let Err(error) = self.index.maintain() {
+            cleanup_error.get_or_insert(error);
+        }
         Self::record_retired_large(&mut state, None, dead_large, published_revision);
         for page in rewritten
             .into_iter()
             .chain(dead.into_iter())
             .chain(compacted.into_iter().map(|(_, page)| page))
         {
-            let State {
-                retired,
-                retired_charge,
-                ..
-            } = &mut *state;
-            if let Err(error) = reclaim::retire_pack(
-                &self.store,
-                &self.index,
-                retired,
-                retired_charge,
-                page,
-                published_revision,
-            ) {
+            if let Err(error) =
+                state
+                    .retired
+                    .retire(&self.store, page, published_revision, |birth, retire| {
+                        self.index.selecting_revision(birth, retire)
+                    })
+            {
                 cleanup_error.get_or_insert(error);
             }
         }
@@ -771,6 +824,7 @@ impl ActiveBacking {
             length,
             revision: published_revision,
             cleanup_error,
+            inode: published_inode,
         })
     }
 
@@ -822,16 +876,14 @@ impl ActiveBacking {
             return Err(WorkspaceError::Io);
         }
         self.index.maintain()?;
-        reclaim::maintain_pack(&self.store, &self.index, &mut state.retired)?;
-        if !state.retired.is_empty() {
+        if state.retired.len() != 0 {
             return Err(WorkspaceError::Busy);
         }
         self.store.close()?;
         state.large.clear();
         state.retired_large.clear();
         state.retired_large_charge.resize(0)?;
-        state.retired = Vec::new();
-        state.retired_charge.resize(0)?;
+        state.retired.clear()?;
         state.closed = true;
         Ok(())
     }
@@ -856,13 +908,25 @@ impl ActiveSnapshot {
 
     fn release_inner(&mut self) -> Result<(), WorkspaceError> {
         let mut state = self.active.state.lock().map_err(|_| WorkspaceError::Io)?;
+        let revision = self
+            .index
+            .as_ref()
+            .ok_or(WorkspaceError::Closed)?
+            .revision();
         let result = self
             .index
             .take()
             .ok_or(WorkspaceError::Closed)?
             .release()
             .and_then(|()| {
-                reclaim::maintain_pack(&self.active.store, &self.active.index, &mut state.retired)
+                if !self.active.index.pin_exists(revision)? {
+                    state.retired.release_selector(
+                        &self.active.store,
+                        revision,
+                        |birth, retire| self.active.index.selecting_revision(birth, retire),
+                    )?;
+                }
+                Ok(())
             });
         if result.is_err() {
             state.stopped = true;

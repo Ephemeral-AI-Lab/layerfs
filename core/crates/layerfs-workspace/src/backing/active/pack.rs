@@ -1,5 +1,5 @@
 use super::page::{Kind, PageRef, BODY_BYTES};
-use super::pages::PageStore;
+use super::pages::{PageReservation, PageStore};
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::sync::{Arc, Mutex};
 
@@ -75,6 +75,43 @@ impl Drop for PreparedSlot {
 }
 
 impl TinyPack {
+    /// Chooses the route before candidate allocation. Active mutation
+    /// serialization keeps these shared-tail facts valid through prepare.
+    pub(super) fn preview(
+        &self,
+        inode: u64,
+        generation: u64,
+        revision: u64,
+        offset: u64,
+        length: usize,
+    ) -> Result<(PackedSlot, Option<PageRef>), WorkspaceError> {
+        if inode == 0 || generation == 0 || revision == 0 || length == 0 || length > TINY_LIMIT {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.pending.is_some() {
+            return Err(WorkspaceError::Busy);
+        }
+        let fits = !state.sealed && state.body.len() + RECORD_HEADER + length <= BODY_BYTES;
+        let rewritten = if fits { state.tail } else { None };
+        let logical_page = if rewritten.is_some() {
+            state.logical_page
+        } else {
+            state.next_logical
+        };
+        Ok((
+            PackedSlot {
+                logical_page,
+                ordinal: if fits { state.records } else { 0 },
+                inode,
+                generation,
+                revision,
+                offset,
+                length: length as u16,
+            },
+            rewritten,
+        ))
+    }
     pub(super) fn reserve_logical(&self) -> Result<u64, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped {
@@ -179,6 +216,18 @@ impl TinyPack {
         offset: u64,
         data: &[u8],
     ) -> Result<PreparedSlot, WorkspaceError> {
+        self.prepare_from(inode, generation, revision, offset, data, None)
+    }
+
+    pub(super) fn prepare_from(
+        self: &Arc<Self>,
+        inode: u64,
+        generation: u64,
+        revision: u64,
+        offset: u64,
+        data: &[u8],
+        reservation: Option<&mut PageReservation>,
+    ) -> Result<PreparedSlot, WorkspaceError> {
         if inode == 0
             || generation == 0
             || revision == 0
@@ -203,6 +252,7 @@ impl TinyPack {
                 .ok_or(WorkspaceError::Capacity)?;
             selected
         };
+        let charge = self.store.budget().reserve(BODY_BYTES)?;
         let mut body = Vec::with_capacity(BODY_BYTES);
         if fits {
             body.extend_from_slice(&state.body);
@@ -217,10 +267,17 @@ impl TinyPack {
         body.extend_from_slice(&ordinal.to_be_bytes());
         body.extend_from_slice(&[0; 4]);
         body.extend_from_slice(data);
-        let charge = self.store.budget().reserve(BODY_BYTES)?;
         let candidate = self
             .store
-            .create(Kind::Pack, generation, revision, ordinal + 1, &body)?;
+            .create_from(
+                Kind::Pack,
+                generation,
+                revision,
+                ordinal + 1,
+                &body,
+                reservation,
+            )?
+            .0;
         state.pending = Some(Pending {
             candidate,
             rewritten,

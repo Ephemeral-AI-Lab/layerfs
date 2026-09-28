@@ -1,15 +1,13 @@
 # #273 active backing storage and captured Commit
 
-> Source pin: this revision follows checkpoint-4 source `38bcf9912` and the
-> phase-4.5.0 proposal source `941613f65`. It describes the phase-4.5.1 private
-> index **v2** resolver committed with this revision. LocalEdit Workspaces
-> select the active owner and lower captured views through the public Service.
-> This document has no latency or release claim. The
-> prospective [format and evaluation contract](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
-> and the [phase 4.5 proposal](../../../issues/273/PHASE4.5-IMPLEMENTATION-SPEC.md)
-> state the target behavior and remaining proof gates; where the two disagree
-> about selected private bytes, the phase-4.5 v2 grammar governs new
-> attachments.
+> **Status:** Source description; no latency, RSS/cgroup or release claim.
+> This revision builds on the phase-4.5.1 product source `91c9c4938` and
+> implements the bounded hot publication and lifetime changes described below.
+> The [phase-4.5 log](../../../issues/273/PHASE4.5-LOG.md) pins their actual
+> product/proof identities. The [implementation specification](../../../issues/273/PHASE4.5-IMPLEMENTATION-SPEC.md)
+> governs new private v2 attachments; the [v1 record](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
+> retains historical index receipts and the unchanged v1 pack grammar.
+> Checkpoint 5 remains **NOT_RUN**, pending the owner's frozen-candidate review.
 
 `backing/active/page.rs` encodes versioned 4 KiB pack/index pages with the
 Workspace incarnation, page ID and epoch, generation/revision, used length,
@@ -37,39 +35,77 @@ plus fixed inode, namespace and generation-dirty keys. The same pooled index
 holds these records beside extent, inverse-reference and locator records; no
 tiny file gets its own root page. The `N|parent|name` key omits a length
 prefix so names sort in the same byte order as canonical directory listings
-and existing continuation cookies. `backing/active/index.rs` stages
-copy-on-write index pages and publishes one current root. During a large
-update it releases intermediate candidate pages as soon as a later staged
-version replaces them; only the final candidate pages and original replaced
-pages remain owned for publication. Its scratch grows under the Host memory
-budget rather than a fixed update-count ceiling. A capture pins a root/revision
-in constant index-state work and advances the generation; a read view pins
-the same current root without advancing it. Capture advances the index revision
-with the Workspace revision while keeping the old root pinned. Retired index and pack pages are held by
-pins whose revisions fall between each page's birth and retirement revisions.
-The 32 capture limit and 128 possible directory-handle pins are charged in
-the index owner. Captures require explicit release; a dropped read view
-releases its pin and retains a stop/error state if cleanup fails. `backing/active/resolve.rs` resolves every selected get, floor and scan through
-tagged targets: a cold target is read only when its stored kind matches the
-expected node kind, and a hot target must be selected by that view's directory
-with the requested reuse epoch, kind and level, or resolution refuses rather
-than falling back to another page. Fences replace child maxima, so `floor`
-descends the matching partition and then the maximum of the preceding nonempty
-partition, and every selected branch child stays nonempty. `backing/active/splice.rs`
-stages the generic v2 mutation: leaves and branches split at the encoded
-midpoint so each half of an overflowing node keeps at least
-`BODY_BYTES/2 - max_cell` bytes, a hot node keeps its slot and reuse epoch when
-it is replaced, and its replacements stay hot so no cold edge can conceal a
-current hot target. `backing/active/index.rs` selects one root plus one optional
-directory copy and installs both in one publication. The generic index does
-**not** yet supply the specialized hot-right-edge update; no route admits a hot
-cursor or selects a non-empty directory yet, and the directory grammar and
-resolution path are implemented and unit-covered only. That admission,
-the balanced-carry proofs and the eligible tiny-WRITE publication are
-phase-4.5.2/4.5.3 work. A
-replacement walks affected extents in bounded 128-row index pages; its
-working overlap set grows only within the Host memory budget. A 300-extent
-overwrite tests an update exceeding the former 512-key batch ceiling.
+and existing continuation cookies.
+
+`backing/active/hot_cursor.rs` retains at most eight inode/generation
+frontiers and 64 authenticated decoded index nodes. The resident reservation
+cap is 1 MiB, including descriptors, directory and shared pack allowances;
+old/candidate copies and operation scratch remain charged separately against
+the configured Host Budget. An inode cursor retains I/D membership, its EOF
+or Base/Zero source frontier, lower/exclusive fences and ancestor
+(slot, reuse epoch, physical content version) bindings. P/R bindings belong
+to the shared live tail. Another file changing a shared leaf does not
+invalidate the binding merely by replacing that leaf; every ancestor version
+must still match and existing I/D/P keys must remain present. Insertions must
+stay inside the bound partition. Frozen views resolve their own directory
+and physical pages, never a live cached target.
+
+`backing/active/hot_path.rs` chooses eligible 1..128-byte EOF or advancing
+Base/Zero edits before physical allocation. It retains exact gaps, suffixes
+and source offsets. Each changed leaf receives one merged candidate; a
+replacement through the same HotRef leaves its ancestors unchanged. Shared
+P/R rollover is an insertion through the existing bindings, rather than a
+new cold root seek for every logical pack page. Overflow propagates through
+recorded parent slots. Balanced leaf/branch groups keep at least
+1,196/1,693 body bytes in the normal overflow case. The advancing group
+retains the old slot/epoch where possible, and closed siblings are Cold
+unless another current cursor or Hot descendant needs them. Ordinary EOF
+and inherited edits reserve at most 6/7 active files, split events at most
+98, and the restricted merged admission/normalization route at most 227.
+These are candidate bounds, not total physical occupancy or RSS bounds.
+
+`backing/active/splice.rs` preflights the admission path union and current
+users under the fixed slot/byte bounds. Quota, slot or optional-cache
+admission refusal keeps the generic v2 route in the same publication.
+Normalization converts only unused closure, stopping at shared ancestors;
+admission, representation changes and keyed mutation share one reached-node
+traversal and physical staging. Changing Hot to Cold keeps the child physical
+page and its original birth interval. Each slot has a charged incarnation
+high-water reuse epoch; a reused slot increments it and older frozen
+directories continue naming their old pair. Epoch or height overflow refuses.
+Arbitrary overlap, Payload and other general mutations retain the indexed
+splice and its actual affected-work cost.
+
+`backing/active/index.rs` installs one root/height/directory selection and
+revision. `hot_directory.rs` validates all four prefix-reserved bytes; its
+charged copy includes the actual Rust table/Arc storage. `pages.rs` carries
+physical birth facts in custody, so publication does not reread old pages to
+recover them. `retirement.rs` routes retired index/directory/pack owners to
+the latest selecting revision in their [birth, retire) interval. Unpinned
+owners receive one exact unlink/refund attempt before the triggering WRITE
+returns. The final pin release visits only its cohort, reassigning remaining
+selectors or releasing; failed release remains explicit charged custody.
+Ordinary WRITE does not sweep unrelated retired owners. Growing payload and
+legacy maintenance remain separate work and counters.
+
+The filesystem wrappers reuse validated selected inode/dirty facts and the
+inode returned by publication. `active_file.rs` updates one resident Node
+through `node_index`, replacing the all-Node scan. There is one revision per
+ordinary WRITE, followed by the existing checked projection notification.
+Notification failure retains its published receipt; candidate failure does
+not damage acknowledged bytes and never retries through another algorithm.
+
+A capture pins the complete root/directory/pack selection, advances live
+generation and seals the shared tail. It does not drain hot closure.
+`commit/active_reconcile.rs` prepares frozen G1 extents and saved facts off
+the Workspace state gate. Under the gate it rechecks the live inode revision;
+matching G1 applies its prepared deletion patch, while intervening G2 keeps
+its extents. Prepared rows, cumulative update maps, ordered vectors and
+reconcile/compaction clones are precharged before allocation. Installation
+still pays its actual affected-index work under the gate. Upload retains
+charged O(E_f) final extent scratch; it is not a streaming or constant-RAM
+Commit claim. Unrelated cursors survive and affected files can readmit after
+saved-base installation without a backing reset or process barrier.
 
 `backing/active/pack.rs` writes tiny records into a Workspace-shared logical
 tail. A slot uses a stable logical page ID and ordinal. A candidate physical

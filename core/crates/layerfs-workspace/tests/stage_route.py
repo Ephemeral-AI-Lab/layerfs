@@ -33,6 +33,8 @@ sys.path.insert(0, str(ROOT / 'core/benchmark/fs-bench-pro-storage-content/share
 import isolation
 
 CASES = {
+    'active_hot_publication': ['active-hot-publication-counts-and-alias-byte-oracle', 'active-hot-g1-g2-and-post-commit-continuation', 'active-hot-exact-blocks-and-clean-close'],
+    'active_hot_continuity': ['active-mounted-process-g1-save-c5-and-g2-progress', 'active-mounted-same-process-handle-post-commit-and-refund'],
     'active_generation': ['active-g1-staged-bytes-and-g2-live-bytes', 'active-g1-g2-commits-and-final-bytes'],
     'active_close': ['active-fresh-name-and-file-commit', 'active-committed-clean-close'],
     'active_namespace': ['active-fresh-directory-link-and-symlink-commit', 'active-successor-rename-and-unlink-commit'],
@@ -63,6 +65,8 @@ CASES = {
     'metadata_denied': ['known-metadata-denial-retains-saved-file-G-and-D1'],
 }
 REQUIREMENTS = {
+    'active_hot_publication': ['S-02', 'S-03', 'S-17', 'B-26', 'B-28'],
+    'active_hot_continuity': ['S-02', 'S-03', 'H-01', 'H-02'],
     'active_generation': ['S-02', 'S-03', 'H-01', 'H-02'],
     'active_close': ['S-17', 'B-26', 'B-28'],
     'active_namespace': ['S-17', 'B-26', 'B-28'],
@@ -343,7 +347,7 @@ def execute(args, report, started):
             if f'{TEST_MARKER} {check["id"]} PASS' in text: check['status'] = 'PASS'
         report['observations'] = []
         for line in text.splitlines():
-            for marker in ('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'STAGE_ALLOCATION ', 'STAGE_PHASE ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
+            for marker in ('STAGE_HOT ', 'STAGE_PROCESS ', 'STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'STAGE_ALLOCATION ', 'STAGE_PHASE ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
                 if marker in line:
                     report['observations'].append(line[line.index(marker):]); break
         if proxy:
