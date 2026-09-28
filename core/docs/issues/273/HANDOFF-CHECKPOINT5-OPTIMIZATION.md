@@ -1,9 +1,20 @@
 # #273 checkpoint 5 optimization handoff
 
-> **Status:** Dated planning checkpoint; not release evidence or a product
-> contract. This is an owner-authorized implementation and testing task,
-> written against `073f374300ad2f4acf2b0ab1818ad9cae4f55fba`. No optimization
-> has been implemented by this handoff and no new benchmark sample was taken.
+> **Status:** Dated planning checkpoint; not release evidence or a product contract.
+>
+> **Continuation update after `c113656b470998d0268e2170aaef0f501751d485`:**
+> The original status and step-by-step plan below are a dated historical
+> handoff, **not** the current implementation state. Read
+> [§10](#10-current-continuation-mandate-all-nine-matrix-cells) and the
+> [optimization log](CHECKPOINT5-OPTIMIZATION-LOG.md) first. The original
+> baseline and historical receipts remain unchanged and unqualified. This
+> documentation update does not change product source, rerun a performance
+> arm, qualify checkpoint 5 or modify the draft PR's disposition.
+
+> **Historical original handoff status:** This owner-authorized implementation
+> task was written against `073f374300ad2f4acf2b0ab1818ad9cae4f55fba`.
+> At that earlier checkpoint no optimization had been implemented and no new
+> benchmark sample had been taken; §10 now supersedes those starting facts.
 
 ## 1. Execute the work; use an iterative cycle
 
@@ -475,3 +486,188 @@ Final handoff: exact final identities; changes per cause; per-iteration tests,
 mechanism counts, timing and resource results; every nonpassing/unrun item;
 remaining necessary complexity terms; reproducible commands; production LOC per
 commit; and whether numeric comparison and checkpoint-5 completion qualified.
+
+## 10. Current continuation mandate: all nine matrix cells
+
+The owner's **new instruction** is to continue the fix → targeted tests →
+retained result → synthesis cycle, concentrating on time complexity and
+removing *every avoidable quadratic factor*, until **append, dispersed and
+repeated at 100, 512 and 4,097 writes** each have convincing source-bound
+scaling, correctness, resource and matched numeric evidence. Do not pause at
+another audit, at one passing small tier, at a reduced pack-load count, or at
+one timing result. Follow the existing §§6–9 custody and no-resampling rules.
+O(n) necessary input/output, one immutable acknowledgement per WRITE and
+canonical construction cannot magically become O(log n); target O(log n)
+**for unrelated lookups/scans** where the ordered index permits it, not for
+reading/writing n required bytes or n affected records. Never drop identity,
+authentication, charge, old pinned bytes or deadline/worker limits to make an
+asymptotic claim. A finite 3×3 proves only its declared schedules, not every
+possible permutation.
+
+### 10.1 Resume from these identities and records, not the original start
+
+| Item | Current fact at this continuation checkpoint |
+| --- | --- |
+| Assigned branch/worktree | `codex/issue273-active-head`, `/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs` |
+| Pushed source before this **docs-only** update | `c113656b470998d0268e2170aaef0f501751d485` (tree `23263461208eafe8a268f57f9507f69436964d84`) |
+| Last changed product/harness/spec source | `adbee51588d9f6efd35cab3ebb3919f5083fa6b9` (atomic, charged source telemetry and prospective attempt-v5 parser) |
+| Frozen baseline product (unchanged) | `48b51e874a41b3e1e6c6661e145316df8b408f07` |
+| Production LOC at last commit | Core **67,639**; reference **65,417**; combined **133,056**. Recompute for every new commit. |
+| Full iteration and failures ledger | [optimization log](CHECKPOINT5-OPTIMIZATION-LOG.md), iterations 001–007 |
+| Corrected registered 10 MiB causal counts | [iter-008 results](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/RESULTS.json) and raw [checksums](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/SHA256SUMS) |
+| Old interleaved observations (never promote) | [iter-007 results](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/RESULTS-before.json) |
+| Current code entrypoints | [bounded Commit grouping](../../../crates/layerfs-workspace/src/commit/active_source.rs), [upload](../../../crates/layerfs-workspace/src/commit/active.rs), [reader](../../../crates/layerfs-workspace/src/backing/active/reader.rs), [shared reconcile](../../../crates/layerfs-workspace/src/backing/active/reclaim.rs), [runner](../../../benchmark/fs-bench-pro/checkpoint5_273.py) |
+
+Verify actual HEAD, worktree/PR status, owned binaries/volumes and running
+Cargo/Docker jobs before further edits. This branch was pushed; do not edit the
+other owner's baseline worktree or run another Cargo owner in this worktree.
+The prior prompt's “no optimization implemented” text, old CLI templates,
+`retained` preparer and old receipt schemas are historical: do **not** execute
+them as the current contract. The runner now has `run --diagnostic` (verifiers
+`SKIPPED`, admission false), `attempt-v5`, `report-v2` and `campaign-v2`. It
+has **no** generic `--setup clone` or `--perf-fast`. `retained` now refuses
+false live-journal preparation; clean/one-edit rows 10/11 record `NOT_RUN`.
+The protected 10 MiB master, 8,194-byte gate master and old/updated candidate
+binary/image archives exist already: reuse by matching seals, not mutated
+sample directories or cache warmth.
+
+### 10.2 What is fixed, and what is emphatically *not* fixed
+
+- The R/L inverse-reference liveness check changed from full-patch searches
+  O(P·M) to bounded BTreeMap prefix queries O(P log M + R), plus the required
+  paged selected-index scan (including beyond 128 entries). The 4,097-write
+  deletion-shape operand had 640,614 old whole-map checks. This is after
+  SaveFile; it does **not** eliminate Commit's earlier source/construction.
+- Host input SHA/size validation now precedes *all* evictions and final
+  whole-input residency checks. The prospective common observer handles
+  one-write progress, public clean `UpToDate`, explicit C1 zero provenance,
+  malformed/interleaved telemetry and unqualified ratios. O_DIRECT is a
+  requested private data-cache bypass in both arms, **not** complete
+  metadata/VM/backend/device/host-cache proof.
+- Fixed charged Commit grouping currently covers at most **256 references**
+  and **32 KiB replacement bytes per window**; the reader retains one pack
+  and authenticates exact G1 locator/slot/inode/generation/revision/offset.
+  Production-captured 10 MiB dispersed pack loads were **2 / 14 / 827** at
+  100 / 512 / 4,097 writes, matching that implementation's *source model*.
+  Old one-pack model predictions **41 / 512 / 4,097** are not a sampled
+  frozen-baseline product. The previous 100/4,097 source log was bisected by
+  LFT1 and remains INCOMPLETE; changed-source iter-008 rows are complete.
+- Tiny FUSE <=128-byte inputs now take a pre-acknowledgement Budget-charged
+  copy through the ordinary projection permit instead of temporary `p-*`
+  create/read/release. A newly published, physically verified hot Node is
+  retained without an extra decode. Per-page authenticated write **and**
+  readback, immutable page versions, and all other ordinary custody remain.
+- Public ext4 functional tests passed: exact Linux `active_backing` 32/32,
+  charged mounted tiny input at 100/512/4,097 callbacks, 100/512/4,097
+  dispersed source tests, G1/G2 mounted process continuation, plus a real
+  **live/pinned 4,097-record state in one Workspace**. That clean Commit read
+  0 packs/6 index pages; one edit read 1 pack/33 index pages, while 52 old
+  packs remained retained. These are functional/count proofs, **not** the
+  public SDK retained performance fixture, which currently cannot pin an old
+  journal across sequential Exec/Commit without prohibited leases or new SDK
+  capability.
+
+**Open source-locality scaling defect:** pack loads per accepted dispersed
+WRITE in the registered 10 MiB cases are **0.020 / 0.0273 / 0.2019**. At
+4,097 writes, 17 windows revisit the growing set of 52 packs **827 times**;
+512→4,097 grows by 8× writes but 59× pack loads. For pack cardinality P that
+grows with W and a fixed K-reference window, the intervening range can behave
+like Θ((W/K)·P), i.e. *practically quadratic* until P approaches the fixed
+window bound. “827 rather than 4,097” is **not** the stopping condition. The
+hypothetical 1,024-reference window predicts 2/7/209 at these three counts,
+but is **not** implemented, frozen or measured, and may still revisit packs.
+Do not simply size a cache/window/spool to the 4,097 schedule or quietly
+raise <=8 resident pack pages, <=64 index nodes, <=8 cursors, 64 slots, 1 MiB
+hot bytes or the 8 MiB default Budget.
+
+WRITE results also need separate treatment: candidate registered dispersed
+Exec took **0.116 / 0.999 / 8.673 s** and Commit **0.026 / 0.053 / 0.739 s**.
+The 100-write complete command **2.685 s** exceeded 512's **1.897 s** because
+its *unattributed outside-phase* term was **2.069 s** versus **0.371 s**;
+mount/Exec/Commit/cleanup were each shorter at 100. Diagnose from retained
+receipts or a **labelled cause-count instrument**, not a new unchanged-arm
+performance sample or a guessed warm-cache/noise story. At 4,097 public
+append WRITEs, the production profile still counted 20,780 active page
+creations, **85,114,880 write bytes and the same immediate readback bytes**.
+An earlier profile attributed 1,731.537 ms direct write and 861.366 ms
+readback of a 5,450.864 ms public write loop. The remaining work is not
+proved avoidable just because it is expensive; source-bound page-version and
+canonical construction floors must be separated from unnecessary duplicate
+publication or per-old-record admission/normalization.
+
+### 10.3 Next concrete optimization cycle (keep all nine cells in view)
+
+1. **First** trace all callers of the source reader, selected index, upload
+   abstraction and source telemetry. State a prospective complexity oracle
+   for 100/512/4,097 across **all three** registered schedules, not just
+   dispersed. Distinguish final replacement references N, distinct packs P,
+   #windows and physical loaded/decoded records; count index seeks/reads and
+   source wall per SaveFile. Reconcile actual 2/14/827 and 0/1 old pins against
+   the formula. Identify any *avoidable* repeated packs crossing windows.
+2. Implement the smallest **fixed reference-and-byte charged** locality fix
+   supported by ordered SaveFile output. A justified, sealed 1,024-reference
+   hypothesis can be evaluated, but it is not an arbitrary success threshold:
+   prove its byte cap and old+new allocation overlap against actual Budget;
+   preserve <=8 pages, exact selection/large-record streaming, atomic refusal
+   and no file-sized spool. If full-file pack-once would require unbounded
+   scatter or a changed C1/C2 upload protocol, derive and document that lower
+   bound rather than claiming O(P). Look for a better bounded algorithm or
+   data representation **without** changing protocol/canonical identity to
+   hide a regression. Do not reduce an O(n) necessary stream to a fictional
+   O(log n); do replace an unrelated linear lookup with a bounded/logarithmic
+   query where possible.
+3. After each actual product change: smallest public external regression,
+   affected host/Linux ext4/mounted guards, architecture document, exact
+   first-parent/staged/committed LOC, commit, **one** prospective labelled
+   count diagnostic per changed case/arm/identity, fresh `iter-NNN` evidence,
+   before/after operands and formula, synthesis, next cause. Expand coverage
+   to append/dispersed/repeated × 100/512/4,097, G1/G2 pins, boundary logical
+   IDs, shared payloads, quota/refund and continuation. The current generic
+   dispersed route showed at 100/512/4,097 writes: seeks **1,519/7,699/61,327**
+   (~15 per write), admissions **38/425/3,973**, normalizations
+   **38/425/4,785**, index writes **390/2,866/27,780**. Its old same-inode
+   cursor, bounded 64-slot closure, height change and working-set eviction
+   need a **source-bound** account; avoid removing future hot eligibility to
+   make the random schedule look good. Check append/repeated and quick controls
+   for a newly exposed whole-prefix or large constant factor, then fix it.
+4. Stabilize only when **each of the nine** has a retained functional and
+   prospective count/resource result at the frozen source; compare phase-local
+   counts *per WRITE, replacement reference and affected identity* at all
+   three tiers, and show that changes in height, carries, pins and cache
+   working set account for residual growth. A much smaller but still
+   avoidably accelerating load/read/CPU curve **fails**. Do not infer an
+   exponent or a noise distribution from one wall per tier. The target is a
+   convincing, reviewable reduction of *avoidably* bad full-path work in
+   **all** nine cells, not an invented universal 10×, constant-RAM Commit
+   or merely passing a timeout.
+5. Then perform the matched control comparison and independent verification
+   with identical corrected common harness/example source in an **owned**
+   baseline comparison worktree rooted at the frozen control. That baseline
+   lacks `checkpoint5_273.py`; copying just a runner without checking all
+   linked workload/driver/seal inputs is not a matched arm. Never edit the
+   existing other owner's baseline checkout. Keep registered command, 15/25 s
+   limits, worker count 1, row-major control→candidate order, cache contract,
+   verifier and binary/image seals. The original source-product seal must be
+   proved unchanged. Retain every timeout, FAIL, INCOMPLETE, INELIGIBLE and
+   NOT_RUN. Baseline old 4,097 timeout has **no completed Exec/Commit** to
+   use as denominator. The 12-row final matrix still includes blocked quick
+   controls; do **not** revive the closed Store as a live journal. Without a
+   compliant public SDK pin/contract, report an exact external blocker and
+   **do not** claim checkpoint-5 completion or fabricate ratios.
+
+The previous prompt's §§6–9 checks, specimen integrity, release discipline,
+LOC accounting, append-only receipt policy and final handoff fields continue
+to apply. The current **corrected** runner shape for a causal diagnostic is:
+
+```sh
+python3 core/benchmark/fs-bench-pro/checkpoint5_273.py run --diagnostic \
+  --prepared NEW_PREPARED_JSON \
+  --selection issue273-dispersed-512-10m-v1 --output NEW_OUTPUT
+```
+
+Its `SKIPPED` verifier and cache/runtime qualification are explicit. This is
+*not* the final independently verified comparison. Reuse the [iter-008
+candidate seals](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/RESULTS.json)
+for reference, but a changed product/harness needs new prospective artifacts;
+never replay an old sample, repair an interleaved receipt or rerun the same
+unchanged arm to improve its number.
