@@ -533,38 +533,53 @@ fn run_body<'b>(
 /// declared-new parent can be in that state - an existing directory that is not
 /// rebound keeps the record it already has.
 fn unreachable_parents(input: &dyn PreparedRows) -> ContentResult<BTreeMap<u64, ()>> {
-    let mut bound: BTreeMap<u64, ()> = BTreeMap::new();
     let limit = usize::try_from(input.resources().ordering_bytes / 1024).unwrap_or(usize::MAX);
-    let mut rows = input.directories()?;
-    while let Some(update) = rows.next_row()? {
-        for (_, binding) in &update.changes {
-            if let Some(child) = binding {
-                bound.insert(*child, ());
-                if bound.len() > limit {
-                    return Err(ContentError::ObjectLimitExceeded {
-                        limit,
-                        actual: bound.len(),
-                    });
-                }
-            }
-        }
-    }
-    drop(rows);
-    let mut dead = BTreeMap::new();
+    let root = input.root_serial();
+    // The retained membership is the targeted set itself: one entry per
+    // declared-new parent other than the root, because only such a parent can
+    // end the operation with no binding at all. Each entry is charged to the
+    // ordering ceiling as the scratch it is; unrelated child bindings are never
+    // retained, so a wide directory does not multiply this charge.
+    let mut parents: BTreeMap<u64, bool> = BTreeMap::new();
     let mut rows = input.directories()?;
     while let Some(update) = rows.next_row()? {
         let parent = update.parent;
-        if parent == input.root_serial() || bound.contains_key(&parent) {
+        if parent == root || parents.contains_key(&parent) {
             continue;
         }
         if !input.is_new(parent)? {
             continue;
         }
-        // An empty binding list is the "keep the bindings you have" form, and a
-        // directory this operation allocates has none to keep.
-        dead.insert(parent, ());
+        parents.insert(parent, false);
+        if parents.len() > limit {
+            return Err(ContentError::ObjectLimitExceeded {
+                limit,
+                actual: parents.len(),
+            });
+        }
     }
-    Ok(dead)
+    drop(rows);
+    // One binding pass marks the retained parents some row binds. The join
+    // holds no second set: a child outside the targeted set costs one map
+    // probe and nothing more, so the charge above is the whole working set.
+    // An empty binding list is the "keep the bindings you have" form, and a
+    // directory this operation allocates has none to keep.
+    let mut rows = input.directories()?;
+    while let Some(update) = rows.next_row()? {
+        for (_, binding) in &update.changes {
+            if let Some(child) = binding {
+                if let Some(bound) = parents.get_mut(child) {
+                    *bound = true;
+                }
+            }
+        }
+    }
+    drop(rows);
+    Ok(parents
+        .into_iter()
+        .filter(|(_, bound)| !*bound)
+        .map(|(parent, _)| (parent, ()))
+        .collect())
 }
 
 fn register_values(

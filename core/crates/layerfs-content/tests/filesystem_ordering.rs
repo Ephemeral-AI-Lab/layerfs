@@ -1001,6 +1001,109 @@ fn a_fresh_build_charges_its_count_array_to_the_ordering_ceiling() {
     assert_eq!(count_role(&sink, ObjectRole::FilesystemRoot), 0);
 }
 
+/// One fresh build with `parents` declared-new directories, each binding one
+/// file, so the parent membership the walk retains is exactly `parents` entries
+/// wide while the binding join sees twice that many child bindings.
+fn wide_parent_arm(
+    parents: usize,
+    resources: FilesystemResources,
+) -> (
+    layerfs_content::ContentResult<layerfs_content::filesystem::FilesystemResult>,
+    TreeStore,
+) {
+    let directory_serials = (2..2 + parents as u64).collect::<Vec<_>>();
+    let file_serials = (2 + parents as u64..2 + 2 * parents as u64).collect::<Vec<_>>();
+    let mut directories = vec![DirectoryUpdate {
+        parent: 1,
+        changes: directory_serials
+            .iter()
+            .enumerate()
+            .map(|(index, serial)| (name(&format!("d{index:04}")), Some(*serial)))
+            .collect(),
+    }];
+    directories.extend(
+        directory_serials
+            .iter()
+            .zip(file_serials.iter())
+            .map(|(parent, file)| DirectoryUpdate {
+                parent: *parent,
+                changes: vec![(name("f"), Some(*file))],
+            }),
+    );
+    let inodes = std::iter::once(InodeUpdate {
+        serial: 1,
+        value: directory(),
+    })
+    .chain(directory_serials.iter().map(|serial| InodeUpdate {
+        serial: *serial,
+        value: directory(),
+    }))
+    .chain(file_serials.iter().map(|serial| InodeUpdate {
+        serial: *serial,
+        value: regular("ordering/wide-parent"),
+    }))
+    .collect::<Vec<_>>();
+    let mut new_inodes = vec![1_u64];
+    new_inodes.extend(directory_serials.iter().copied());
+    new_inodes.extend(file_serials.iter().copied());
+    new_inodes.sort_unstable();
+    let input = FilesystemInput {
+        base: None,
+        scope: layerfs_content::filesystem::scope_for_seed([0x63; 32]),
+        root_serial: 1,
+        directories: &directories,
+        inodes: &inodes,
+        new_inodes: &new_inodes,
+        resources,
+    };
+    let reader = TreeStore::new();
+    let mut sink = TreeStore::new();
+    let temp = TempDir::new("ordering-wide-parent");
+    let mut backing = RecordingBacking::new(temp.path());
+    let result = {
+        let mut objects = FilesystemObjects::new(&reader, &mut sink);
+        build_filesystem(&mut objects, &input, Some(&mut backing))
+    };
+    (result, sink)
+}
+
+#[test]
+fn the_parent_membership_charges_parents_not_bindings() {
+    const PARENTS: usize = 6;
+    const LIMIT: usize = PARENTS - 1;
+    // One ordering kilobyte per retained parent holds the set exactly, even
+    // though the same operation joins twice as many child bindings against it.
+    let (inside, _) = wide_parent_arm(
+        PARENTS,
+        FilesystemResources {
+            ordering_bytes: (PARENTS * 1024) as u64,
+            maximum_pending_records: 1,
+            ..resources()
+        },
+    );
+    assert!(
+        inside.is_ok(),
+        "the declared parent membership fits exactly: {inside:?}"
+    );
+    // One parent less of ceiling refuses the set before any root exists.
+    let (outside, sink) = wide_parent_arm(
+        PARENTS,
+        FilesystemResources {
+            ordering_bytes: ((PARENTS - 1) * 1024) as u64,
+            maximum_pending_records: 1,
+            ..resources()
+        },
+    );
+    assert!(matches!(
+        outside,
+        Err(ContentError::ObjectLimitExceeded {
+            limit: LIMIT,
+            actual: PARENTS
+        })
+    ));
+    assert_eq!(count_role(&sink, ObjectRole::FilesystemRoot), 0);
+}
+
 #[test]
 fn a_high_pending_ceiling_runs_spill_free_to_the_byte_bound() {
     // The pending ceiling's spill-free bound is the ordering ceiling divided by the
