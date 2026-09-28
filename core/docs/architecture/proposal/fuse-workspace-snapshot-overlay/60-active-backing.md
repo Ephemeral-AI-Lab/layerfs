@@ -259,6 +259,15 @@ release prunes entries when their resident Node retires, and checked clean
 close drops the memo. This is a bounded resident cache, not a second
 namespace publisher or a new canonical path format.
 
+**Known active FileSave custody (same commit as this paragraph; first parent
+`c6875bb5c`):** an active Stage now installs a `SavedInode` with the known
+canonical content root and `metadata: None` immediately after FileSave and
+*before* issuing the fallible portable metadata save. Denied or unknown
+metadata responses retain that root with the correct `MetadataSave` phase;
+a verified metadata response fills the pending metadata root before local
+completion persistence and its `LocalBookkeeping` phase. No guess-based retry,
+canonical deletion or backing sync was added.
+
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured

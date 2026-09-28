@@ -618,9 +618,9 @@ pub(super) fn prepare<'a>(
                 root
             }
         };
-        submission.phase(StagePhase::MetadataSave, Some(*serial))?;
-        let metadata = save_metadata(workspace, submission, *inode, deadline, first_remote)?;
-        saved.insert(*serial, (content, metadata));
+        // FileSave is known complete even if the following metadata call is
+        // denied or loses its reply. Keep its canonical root in charged
+        // submission custody before making another fallible remote call.
         submission
             .state
             .lock()
@@ -630,8 +630,19 @@ pub(super) fn prepare<'a>(
             revision: inode.revision,
             length: inode.length,
             content,
-            metadata: Some(metadata),
+            metadata: None,
         });
+        submission.phase(StagePhase::MetadataSave, Some(*serial))?;
+        let metadata = save_metadata(workspace, submission, *inode, deadline, first_remote)?;
+        saved.insert(*serial, (content, metadata));
+        submission
+            .state
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .pending
+            .as_mut()
+            .ok_or(WorkspaceError::Io)?
+            .metadata = Some(metadata);
         // Remote metadata is known saved. A failure persisting the local
         // completion belongs to local bookkeeping, not MetadataSave.
         submission.phase(StagePhase::LocalBookkeeping, Some(*serial))?;
