@@ -1070,6 +1070,14 @@ mod linux {
     fn stage_active_generic_profile() {
         source_grouping(4097, 1024, true);
     }
+    #[test]
+    #[ignore = "diagnostic only: requires stage_route.py and a live native service"]
+    fn stage_active_generic_profile_8192() {
+        // Extended diagnostic tier, not a registered selection or speed arm.
+        // Covers the 4,097 -> 8,192 height/eviction transition with unique
+        // offsets, full independent bytes and exact close custody.
+        source_grouping(8192, 2048, true);
+    }
 
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
