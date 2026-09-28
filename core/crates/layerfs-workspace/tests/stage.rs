@@ -1675,7 +1675,13 @@ mod linux {
         let after = f.workspace.backing_status().unwrap();
         let hot = after.active_hot_writes - before.active_hot_writes;
         let carries = after.active_hot_carries - before.active_hot_carries;
-        assert!(hot >= 1022, "bounded hot support: {hot}");
+        let admissions = after.active_hot_cursor_admissions - before.active_hot_cursor_admissions;
+        assert_eq!(admissions, 2);
+        assert_eq!(
+            hot + admissions + 1,
+            1024,
+            "one empty root plus two admitted inodes"
+        );
         assert!(ordinary > 0 && ordinary + carries >= hot);
         assert!(after.active_hot_admissions - before.active_hot_admissions < 16);
         assert!(
