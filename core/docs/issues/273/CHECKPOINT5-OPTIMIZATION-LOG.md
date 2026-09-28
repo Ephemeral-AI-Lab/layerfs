@@ -351,3 +351,92 @@
   RSS/cgroup, private metadata/VM/backend/device/host cache proof, and
   SDK retained live-journal controls remain NOT_RUN/INELIGIBLE as applicable.
   No universal constant-RAM/CPU or 10x claim. The attached PR remains draft.
+
+## Iteration 009 — bounded source-window increase and amortized extent growth
+
+- Product/harness/spec commit `686d002fa889f016cac3eb491b5712229e511360`
+  (tree `ae48b2e1eb3c118b7b375e7929a40c08a4b4b08f`), first parent
+  `4968cc9d31127c04e442899f98f4bd09e27f5292`. Source-reference
+  cap 256 -> 1,024; byte cap remains 32,768, one resident decoded pack.
+  The charged two reference/order vectors increase by at most
+  `768 * (size_of::<Reference>() + size_of::<usize>())` (30,720 bytes on
+  the 64-bit build), reserved before allocation. The existing full-file
+  extents/descriptors are still charged O(E_f); paged extent collection now
+  doubles charged capacity instead of requesting exact expansion on each
+  128-entry page. The scan remains selected-G1, with no cache/format, worker,
+  stream-order, page authentication or deadline change. Telemetry is v2;
+  the parser rejects old v1 lines rather than reinterpreting old receipts.
+- Production LOC: Core **67,639 -> 67,649 (+10)**; reference
+  **65,417 -> 65,417 (+0)**; combined **133,056 -> 133,066 (+10)**.
+  `python3 tools/production_loc.py --json --root <HEAD snapshot>` versus
+  `<staged-tree snapshot>`; committed tree confirmed against the staged tree.
+  Host workspace release tests PASS, workspace all-target clippy PASS, fmt
+  PASS, product-boundary PASS, core tools 9/9 PASS, harness 14/14 PASS,
+  runner self-check PASS; aarch64 release zigbuild PASS after adding the
+  installed Zig directory to PATH (initial PATH-only invocation FAILED to
+  locate `zig`; this environmental failure is not erased). Exact Linux
+  `active_backing-f325d5782a2161dc` on a new owned ext4 volume:
+  **32/32 PASS**, `TMPDIR=/work LAYERFS_ACTIVE_TEST_ROOT=/work`, serial
+  execution; volume removed after output retention. Three new public stage
+  selections `active_source_grouping_100`, `active_source_grouping`, and
+  `active_source_grouping_4097` PASS full-byte/Commit/refund with exactly
+  2/7/209 pack reads; their 4,097-read bound is now 300, rejecting the old
+  560-read functional source. Stage output is **functional**, not a measured
+  performance arm.
+- Exactly one new committed-identity candidate causal diagnostic per cell,
+  with independent writable clone, final host input residency zero and one
+  complete atomic production source row. Each row is **INELIGIBLE**, each
+  verifier **SKIPPED**, no matched control. Times include observation cost;
+  do not compare their single walls with another source as a speed ratio.
+  Figures below are actual pack loads / windows / decoded records /
+  locator index reads / complete command seconds:
+
+  | Schedule | 100 | 512 | 4,097 |
+  | --- | --- | --- | --- |
+  | Append | 2 / 1 / 100 / 4 / 1.591 | 7 / 1 / 512 / 14 / 1.613 | 52 / 5 / 4,097 / 156 / 6.055 |
+  | Dispersed | 2 / 1 / 100 / 4 / 0.993 | 7 / 1 / 512 / 14 / 2.000 | 209 / 5 / 16,468 / 627 / 10.867 |
+  | Repeated | 1 / 1 / 20 / 1 / 1.006 | 1 / 1 / 32 / 1 / 1.612 | 1 / 1 / 17 / 1 / 6.379 |
+
+  Accepted FUSE WRITE counts match 100/512/4,097 for each pattern. Packed
+  final replacement references were 100/512/4,097 (append and dispersed)
+  and 1/1/1 (repeated). Thus loads/reference at 4,097 are 52/4097 append,
+  209/4097 dispersed and 1/1 repeated; do not divide repeated source
+  work by historical overwritten records. Source fill time for dispersed
+  4,097 is 74.181 ms; Commit phase 0.591 s; Exec 9.403 s (different
+  phases). C1 nodes read for dispersed 100/512/4,097 are
+  2,028/10,532/84,982 (~20.3/20.6/20.7 per WRITE); append 4/4/4;
+  repeated 17/17/17, explicit emitted provenance, not a missing-zero.
+  Repeated decoded records 20/32/17 reflect the final *pack's* occupancy,
+  not a 4,097-record source read. Append 4,097 distinct packs/windows 56
+  but physical loads 52: the single page can remain cached across window
+  boundaries. Each row has Budget charge/backing, cache checks, phase walls,
+  resource status and binary/image/workload seals in the raw receipts and
+  `iter-009/RESULTS.json`; cgroup domain remains unavailable/PARTIAL.
+- Changed-source count comparison with iter-008, **not a numeric speed pair**:
+  dispersed 100 2 -> 2, 512 14 -> 7, 4,097 **827 -> 209** loads;
+  `827/209 = 3.957` fewer physical pack loads at 4,097, decoded records
+  65,530 -> 16,468 (`65530/16468 = 3.980`). Read identities and
+  authenticated bytes are unchanged; cross-window revisits still exist.
+  General per-file bound is `loads <= sum(distinct packs in each bounded
+  window) <= N packed references`; this is **not** O(P) total loads for
+  arbitrary pack permutations. The old 256-window receipt is unchanged.
+- Reproduce from this commit (PATH includes `/opt/homebrew/bin` and
+  `/usr/local/bin`): `checkpoint5_273.py oracle --repo "$PWD" --output
+  benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-009/oracle`;
+  `prepare --arm candidate --repo "$PWD" --oracle .../iter-009/oracle/oracle.json
+  --output .../iter-009/prepared-candidate`; for each cell,
+  `run --diagnostic --prepared .../iter-009/prepared-candidate/prepared.json
+  --selection issue273-<pattern>-<count>-10m-v1 --output .../iter-009/<pattern>-<count>`.
+  Actual exact argv, source/tool/binary/image hashes, phase and complete
+  walls, cleanup, cache evidence, stdout/stderr, result and checksum manifest
+  are retained under `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-009/`.
+- **NOT_RUN / INELIGIBLE**: all nine independent verifiers SKIPPED; matched
+  control arms NOT_RUN; live/pinned SDK clean and one-edit controls NOT_RUN
+  (the public SDK has no same-Workspace journal pin across the required
+  sequential commands); five independent registered selections NOT_RUN;
+  private metadata/VM/backend/device/host-cache and phase-local cgroup
+  proof incomplete. No qualified speed or checkpoint-5 completion.
+  Next: inspect further per-row amortization risks (including exact-reserving
+  directory-binding rows), run targeted public custody cases, then rebuild
+  prospective identities for any changed code. The stronger source count
+  alone does not settle WRITE publication or final admission.

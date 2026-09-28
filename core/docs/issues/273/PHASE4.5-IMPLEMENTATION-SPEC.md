@@ -798,3 +798,18 @@ pack-once scatter would need storage for out-of-order replacement bytes (or
 a change to the ordered SaveFile protocol); it is not silently introduced.
 Remaining repeated reads across windows require further source-bound evidence
 and cannot be declared resolved by this amendment alone.
+
+### Checkpoint-5 directory-binding row allocation amendment (prospective)
+
+The captured directory binding scanner previously requested one exact Vec
+slot per row while scanning in 128-entry selected-index pages. That permits
+O(D²) cumulative prefix relocation in a directory with D affected bindings,
+even though reading D selected rows, copying D required names and producing
+D C1 entries are necessary O(D) costs. Reserve geometric capacity before
+allocation, charging row capacity **and** accumulated name bytes against the
+same Budget; actual Vec capacity remains charged after allocation. This
+does not scan a different directory, bypass names/identities, raise hot cache
+limits or move preparation out of Commit. With D=128, at most five charged
+capacity expansions (8/16/32/64/128) replace up to 128 one-slot reserve
+requests. The allocator may grow in place in either version; the worst-case
+prefix-copy bound, not a measured allocator speedup, is what changes.

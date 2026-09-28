@@ -378,11 +378,26 @@ fn directory_rows(
             name_bytes = name_bytes
                 .checked_add(key.len() - 9)
                 .ok_or(WorkspaceError::Capacity)?;
+            let slot_bytes = std::mem::size_of::<(Vec<u8>, Option<u64>)>();
+            if rows.len() == rows.capacity() {
+                // Exact-reserving one slot per binding can copy every earlier
+                // row on each page. Grow a charged capacity geometrically.
+                let target = rows.capacity().max(4).saturating_mul(2);
+                charge.resize(
+                    target
+                        .checked_mul(slot_bytes)
+                        .and_then(|bytes| bytes.checked_add(name_bytes))
+                        .ok_or(WorkspaceError::Capacity)?,
+                )?;
+                rows.try_reserve_exact(target - rows.len())
+                    .map_err(|_| WorkspaceError::Capacity)?;
+            }
             charge.resize(
-                (rows.len() + 1) * std::mem::size_of::<(Vec<u8>, Option<u64>)>() + name_bytes,
+                rows.capacity()
+                    .checked_mul(slot_bytes)
+                    .and_then(|bytes| bytes.checked_add(name_bytes))
+                    .ok_or(WorkspaceError::Capacity)?,
             )?;
-            rows.try_reserve_exact(1)
-                .map_err(|_| WorkspaceError::Capacity)?;
             rows.push((
                 key[9..].to_vec(),
                 (!record.tombstone).then_some(record.serial),
