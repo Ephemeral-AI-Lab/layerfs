@@ -220,3 +220,53 @@
   Next cause: count generic-route admission and normalization turnover on
   dispersed WRITE and distinguish necessary source carries and physical
   publication from avoidable revalidation.
+
+## Iteration 006 — generic changed-closure and live quick controls
+
+- Product stays `9c286b02c7b7a38aaca8f8d36f72e700c44ba754`; test-only source
+  `478f4cd54babcd8084c60b2242ec63c6ce59aa2b` (4,097) and
+  `845473c4161f219326d2aa1adf4d4142d5d88990` (100/512). No unchanged
+  performance arm was resampled. Full-byte / clean-close public functional
+  oracles PASS at each tier; exact binary/image/fixture seals, route receipts,
+  stdout/stderr, counts and complete walls are in `iter-006/RESULTS.json`.
+- Dispersed 100/512/4,097 writes on an 8,194-byte file: hot writes 0/0/0;
+  admissions 38/425/3,973; normalizations 38/425/4,785; seeks
+  1,519/7,699/61,327 (15.19/15.04/14.97 per accepted WRITE); index reads
+  239/2,561/28,470 (2.39/5.00/6.95 per WRITE); index writes
+  390/2,866/27,780 (3.90/5.60/6.78 per WRITE); pack writes exactly
+  100/512/4,097. Admission/normalization of the *same changed inode's*
+  replaced hot cursor and up to 64 bound slots is visible, but no
+  growing unrelated-retained-prefix walk: seeks/WRITE do not rise across
+  tiers. Index reads/writes per WRITE rise with changed working-set,
+  selected height and cache eviction; they are not explained as a
+  universal O(1) factor. Source ties obsolete bindings to the superseded
+  same-inode frontier; it still probes for prospective hot continuation
+  rather than falsely granting random edits frontier status. Fixing that
+  probe without losing eligible follow-on writes needs an explicit
+  verified replacement admission policy, not a benchmark-schedule branch.
+  Actual pack loads under the 256-reference Commit window remain 2/14/560
+  for these independently run functional rows. No speed ratio is claimed.
+- Separately, `active_quick_controls` PASS with a real pinned, live
+  4,097-record private state in **one** Workspace. Clean Commit read 0 pack
+  pages and 6 index pages, phase wall 7.649 ms; one-edit Commit read 1 pack
+  and 33 index pages, wall 23.063 ms, while 52 older pack pages remained
+  retained and clean-close exactly refunded them. Whole functional command
+  including preparation was 6.915 s; no prep moved outside it to fit.
+  This public Workspace proof does not turn a Store reattached by the SDK
+  checkpoint runner into a live journal. Its selections 10/11 remain NOT_RUN.
+- The common checkpoint harness now refuses the invalid retained preparer,
+  records those blockers in their original row slots, emits no ratio from
+  unqualified pairs and accepts explicit complete C1 zero only with emitted
+  fields. Its attempt/report/campaign versions advance prospectively;
+  historical receipts stay untouched. Test/docs-only commit `845473c`:
+  Core 67,602 -> 67,602; reference 65,417 -> 65,417; combined
+  133,019 -> 133,019 (delta +0); method `tools/production_loc.py`
+  on first-parent and staged/committed snapshots. C1 observer tests 13
+  PASS, cargo clippy/fmt and Linux stage build PASS.
+- QUALIFICATION: `performance_claim=false`, cache claim null, complete
+  functional route walls 1.123/2.212/11.739 s plus quick control 6.915 s.
+  Neither wall makes a matched latency claim; no phase RSS/cgroup reset,
+  host/backend private-cache proof or all five independent selection
+  coverage yet. Continue the remaining correctness/space and matched
+  runnable rows; report SDK retained contract blocker without fabricating
+  a pinned state or lengthening its 15 s limit.

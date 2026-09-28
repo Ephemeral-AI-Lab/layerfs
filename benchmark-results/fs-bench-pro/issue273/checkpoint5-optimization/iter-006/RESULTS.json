@@ -1,0 +1,182 @@
+{
+  "admission_eligible": false,
+  "cache_claim": null,
+  "candidate_product_source": "9c286b02c7b7a38aaca8f8d36f72e700c44ba754",
+  "gaps": [
+    "cgroup/process cache proof NOT_RUN",
+    "matched baseline NOT_RUN",
+    "SDK retained control NOT_RUN due missing public pin"
+  ],
+  "interpretation": "seeks/write ~15 stable; index fetches/write grow 2.39,5.00,6.95 with working set; admission and normalization visit only changed same-inode cursor keys plus 64 hot slots; no evidence of whole retained-prefix scan; no speed exponent from one wall sample",
+  "mode": "labelled public functional phase/count diagnostic; not mounted checkpoint performance",
+  "nonpassing": [],
+  "performance_claim": false,
+  "quick_controls": {
+    "checks": [
+      {
+        "id": "active-clean-commit-skips-retained-old-journal",
+        "status": "PASS"
+      },
+      {
+        "id": "active-one-edit-commit-skips-retained-old-journal",
+        "status": "PASS"
+      },
+      {
+        "id": "active-quick-controls-refund-and-clean-close",
+        "status": "PASS"
+      }
+    ],
+    "meaning": "real live pinned old journal in same public Workspace, not SDK retained fixture",
+    "phase_lines": [
+      "test linux::stage_active_quick_controls ... STAGE_PHASE case=clean_control commit_wall_ns=7648750 pack_fetches=0 index_fetches=6 retained_pack_pages=52 cache_claim=none",
+      "STAGE_PHASE case=one_edit_control commit_wall_ns=23063209 pack_fetches=1 index_fetches=33 retained_pack_pages=52 cache_claim=none"
+    ],
+    "source": "478f4cd54babcd8084c60b2242ec63c6ce59aa2b",
+    "status": "PASS",
+    "wall_s": 6.914708291
+  },
+  "rows": [
+    {
+      "checks": [
+        {
+          "id": "active-source-grouped-100-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-100-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "counts": {
+        "actual_merge_ns": 0,
+        "admissions": 38,
+        "cache_decode_ns": 607040,
+        "create_identity_ns": 3835091,
+        "direct_write_ns": 39773004,
+        "fit_merge_ns": 0,
+        "hot": 0,
+        "index_fetches": 239,
+        "index_writes": 390,
+        "normalizations": 38,
+        "pack_writes": 100,
+        "preallocate_ns": 2786329,
+        "readback_auth_ns": 8609965,
+        "readback_io_ns": 24325209,
+        "release_ns": 3752090,
+        "seeks": 1519,
+        "writes": 100
+      },
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "functional_complete_wall_s": 1.122814583,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "per_accepted_write": {
+        "admissions": 0.38,
+        "hot": 0.0,
+        "index_fetches": 2.39,
+        "index_writes": 3.9,
+        "normalizations": 0.38,
+        "pack_writes": 1.0,
+        "seeks": 15.19
+      },
+      "source": "845473c4161f219326d2aa1adf4d4142d5d88990",
+      "status": "PASS",
+      "test_binary_sha256": "2d2c69fb3a8344468ea11ec38dc28f57aff1cf7b00dfab718f0c9ab5288ddb97",
+      "writes": 100
+    },
+    {
+      "checks": [
+        {
+          "id": "active-source-grouped-512-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-512-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "counts": {
+        "actual_merge_ns": 0,
+        "admissions": 425,
+        "cache_decode_ns": 7320339,
+        "create_identity_ns": 25568413,
+        "direct_write_ns": 385037969,
+        "fit_merge_ns": 0,
+        "hot": 0,
+        "index_fetches": 2561,
+        "index_writes": 2866,
+        "normalizations": 425,
+        "pack_writes": 512,
+        "preallocate_ns": 50350860,
+        "readback_auth_ns": 60173657,
+        "readback_io_ns": 157883286,
+        "release_ns": 29303820,
+        "seeks": 7699,
+        "writes": 512
+      },
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "functional_complete_wall_s": 2.2115180420000002,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "per_accepted_write": {
+        "admissions": 0.830078125,
+        "hot": 0.0,
+        "index_fetches": 5.001953125,
+        "index_writes": 5.59765625,
+        "normalizations": 0.830078125,
+        "pack_writes": 1.0,
+        "seeks": 15.037109375
+      },
+      "source": "845473c4161f219326d2aa1adf4d4142d5d88990",
+      "status": "PASS",
+      "test_binary_sha256": "2d2c69fb3a8344468ea11ec38dc28f57aff1cf7b00dfab718f0c9ab5288ddb97",
+      "writes": 512
+    },
+    {
+      "checks": [
+        {
+          "id": "active-source-grouped-4097-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-4097-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "counts": {
+        "actual_merge_ns": 0,
+        "admissions": 3973,
+        "cache_decode_ns": 80861891,
+        "create_identity_ns": 247191262,
+        "direct_write_ns": 2883707437,
+        "fit_merge_ns": 0,
+        "hot": 0,
+        "index_fetches": 28470,
+        "index_writes": 27780,
+        "normalizations": 4785,
+        "pack_writes": 4097,
+        "preallocate_ns": 583983246,
+        "readback_auth_ns": 561999266,
+        "readback_io_ns": 1466299197,
+        "release_ns": 288497064,
+        "seeks": 61327,
+        "writes": 4097
+      },
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "functional_complete_wall_s": 11.738817082999999,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "per_accepted_write": {
+        "admissions": 0.9697339516719551,
+        "hot": 0.0,
+        "index_fetches": 6.94898706370515,
+        "index_writes": 6.780571149621674,
+        "normalizations": 1.1679277520136686,
+        "pack_writes": 1.0,
+        "seeks": 14.96875762753234
+      },
+      "source": "478f4cd54babcd8084c60b2242ec63c6ce59aa2b",
+      "status": "PASS",
+      "test_binary_sha256": "03d1443903768e394bdc6774d0bbb0a537e4946ac3396a6b06a9ea480ed7559b",
+      "writes": 4097
+    }
+  ],
+  "schema": "issue273-optimization-iter006-generic-and-quick-v1"
+}

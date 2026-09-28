@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_generic_profile_512 ... GENERIC_WRITE_CAUSE writes=512 hot=0 admissions=425 normalizations=425 seeks=7699 index_fetches=2561 index_writes=2866 pack_writes=512 fit_merge_ns=0 actual_merge_ns=0 cache_decode_ns=7320339 create_identity_ns=25568413 preallocate_ns=50350860 direct_write_ns=385037969 readback_io_ns=157883286 readback_auth_ns=60173657 release_ns=29303820
+SOURCE_GROUPING case=dispersed512 commit_wall_ns=53499750 pack_reads=14 index_seeks=65 ref_limit=256 byte_limit=32768
+STAGE_CHECK active-source-grouped-512-count-and-full-bytes PASS
+STAGE_CHECK active-source-grouped-512-clean-close-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 1.27s
+
