@@ -102,3 +102,63 @@ unchanged scope/exclusions from the checkpoint-3-5 ledger.
 
 This evidence commit is documentation and receipt storage only: production LOC
 delta 0.
+
+## Step 4.5.2 — source-derived implementation constraints (not implemented)
+
+Recorded while implementing 4.5.1, from the same stable source. These are
+read-only source findings for the next session; they change no product byte and
+make no implementation claim.
+
+1. **One index revision per ordinary WRITE is enforced by the caller.**
+   `filesystem/active_file.rs::publish_active_file_mutation` rejects any
+   publication whose revision is not the Workspace's next revision, so hot
+   admission, selective normalization and the mutation must be merged into one
+   candidate publication, exactly as spec §8.1 requires. A separate admission
+   publication, or admitting only after the mutation returns, would fail that
+   check; admission that cannot fit must fall back to the generic route in the
+   same revision rather than publish twice.
+2. **A retained hot binding needs a local validity rule, and the obvious
+   predecessor check is not sufficient.** After a leaf split at fence `K0`, the
+   left node keeps slot `s` (spec §4.3: replacing a logical node retains its
+   HotRef epoch) and the right node takes a new slot. A binding for key `K`
+   whose recorded predecessor stayed left passes a predecessor-only check even
+   when `K >= K0`, which would insert `K` into the wrong node and break parent
+   routing. The safe local rules are: (a) an *update* binding is valid only
+   while its key is still present in the retained leaf; (b) an *insertion*
+   binding whose recorded successor cell is still present is valid when the
+   recorded immediate predecessor is still the cell immediately before `K`'s
+   insertion point; (c) an insertion binding with **no** successor cell in the
+   leaf (the append-at-right-edge case, and the split case above) is valid only
+   while the retained slot's content version is unchanged. A charged per-slot
+   content version in the incarnation state, bumped on every slot replacement
+   and updated by the cursor's own publication, makes (c) cheap; without it a
+   split can move the advancing frontier to a right sibling while leaving the
+   predecessor behind.
+3. **Heating the whole root-to-leaf path costs up to `h` slots per key.** Spec
+   §4.3 requires every ancestor of a current hot node to be hot, so admission
+   rewrites each path node (the leaf itself can be selected in place because
+   its page is unchanged, but each ancestor's child cell must change from cold
+   to hot, which rewrites that ancestor). At the eight-level ceiling, one
+   inode's I/E/P/R paths can consume roughly 32 slots before shared-path
+   savings, so a 64-slot directory supports about two maximum-height files.
+   Admission must therefore be best-effort and compute its full affected path
+   union before allocating; refusal falls back to the generic route and must
+   never enlarge a declared bound.
+4. **Slot reuse requires normalizing the parent edge first.** A directory slot
+   cannot be repointed to a different logical node while any selected parent
+   cell still names its old `(slot, epoch)`: resolution would refuse and the
+   tree would become unreadable. Eviction therefore cannot simply reassign a
+   slot; it must first make the parent's cell cold (spec §6.2), which is the
+   normalization pass. A bounded "normalize the hot nodes no live cursor
+   retains, then clear the directory" publication frees the whole table at once
+   and is amortized against admissions; it must also preserve the physical
+   page's birth/current interval, because writing `Cold(selected physical
+   child)` is not a retirement.
+5. **Selecting-pin cohorts can decide enqueue-versus-release in `O(log G)`.**
+   `Index::frozen_between(birth, retire)` already answers "does any frozen
+   revision select this page" from the `frozen` map, so publication can release
+   an unpinned owner immediately or enqueue it under the *latest* selecting
+   revision without scanning the retired vector. Replacing the `O(J)` scan in
+   `Index::maintain` with cohorts keyed by that revision is a contained change
+   and is required before the per-WRITE retirement term in spec §9 can be
+   claimed.
