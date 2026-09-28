@@ -39,7 +39,9 @@ CASES = {
     'active_close': ['active-fresh-name-and-file-commit', 'active-committed-clean-close'],
     'active_namespace': ['active-fresh-directory-link-and-symlink-commit', 'active-successor-rename-and-unlink-commit'],
     'active_mounted': ['active-mounted-fuse-write-unmount', 'active-mounted-public-commit-bytes'],
-    'active_tiny_input': ['active-mounted-tiny-input-exact-callbacks-and-bytes', 'active-mounted-tiny-input-public-commit-and-refund'],
+    'active_tiny_input_100': ['active-mounted-tiny-input-100-exact-callbacks-and-bytes', 'active-mounted-tiny-input-100-public-commit-and-refund'],
+    'active_tiny_input': ['active-mounted-tiny-input-512-exact-callbacks-and-bytes', 'active-mounted-tiny-input-512-public-commit-and-refund'],
+    'active_tiny_input_4097': ['active-mounted-tiny-input-4097-exact-callbacks-and-bytes', 'active-mounted-tiny-input-4097-public-commit-and-refund'],
     'active_many_file': ['active-128-files-shared-pack-before-commit', 'active-128-files-commit-and-byte-oracle', 'active-128-files-exact-clean-close'],
     'active_repeated': ['active-4097-repeated-public-backing', 'active-4097-repeated-commit-and-byte-oracle', 'active-4097-repeated-exact-clean-close'],
     'active_retained32': ['active-32-retained-generations-and-old-new-oracle', 'active-32-pins-release-exact-blocks', 'active-32-generations-exact-clean-close'],
@@ -76,7 +78,9 @@ REQUIREMENTS = {
     'active_close': ['S-17', 'B-26', 'B-28'],
     'active_namespace': ['S-17', 'B-26', 'B-28'],
     'active_mounted': ['S-02', 'S-17', 'H-01'],
+    'active_tiny_input_100': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
     'active_tiny_input': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
+    'active_tiny_input_4097': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
     'active_many_file': ['S-17', 'B-26', 'B-28'],
     'active_repeated': ['S-17', 'B-26', 'B-28'],
     'active_retained32': ['S-17', 'B-26', 'B-28'],
@@ -288,9 +292,12 @@ def execute(args, report, started):
         if args.case.startswith('active_source_grouping'):
             invocation[invocation.index(name):invocation.index(name)] = [
                 '-e', 'LAYERFS_COMPLEXITY_DIAGNOSTIC=1']
-        if args.case == 'active_tiny_input':
+        if args.case.startswith('active_tiny_input'):
+            interval = {'active_tiny_input_100': 25,
+                        'active_tiny_input': 128,
+                        'active_tiny_input_4097': 1024}[args.case]
             invocation[invocation.index(name):invocation.index(name)] = [
-                '-e', 'LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL=128']
+                '-e', f'LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}']
         if args.case in LIMIT_CASES:
             binary_at = invocation.index(name) + 1
             invocation[binary_at:binary_at] = ['sh', '-c', 'trap "" XFSZ; exec "$@"', 'sh']
@@ -422,7 +429,7 @@ def main():
         if args.case == 'active_cleanup_failure':
             report['commit_deadline_seconds'] = None
             report['not_run'].append('Workspace Commit/reconcile')
-        if args.case not in ('active_mounted', 'active_hot_continuity', 'active_tiny_input'):
+        if args.case not in ('active_mounted', 'active_hot_continuity', 'active_tiny_input', 'active_tiny_input_100', 'active_tiny_input_4097'):
             report['not_run'].append('mounted writes')
         if args.case != 'active_hot_continuity':
             report['not_run'].append('mounted process spanning SaveFile/C5')

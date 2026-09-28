@@ -261,9 +261,7 @@ mod linux {
         assert_eq!(f.native.bytes(saved.1, 0, 7), b"mounted");
         check("active-mounted-public-commit-bytes");
     }
-    #[test]
-    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
-    fn stage_active_tiny_input() {
+    fn tiny_input(count: usize) {
         // One POSIX syscall per byte, no proprietary Workspace write route.
         let f = Fixture::new_fresh(Gate::None);
         let (file, handle) = f
@@ -297,7 +295,7 @@ mod linux {
             .append(true)
             .open(&path)
             .unwrap();
-        for index in 0..512usize {
+        for index in 0..count {
             let mut input = [b'B' + (index % 24) as u8];
             writer.write_all(&input).unwrap();
             expected.push(input[0]);
@@ -313,16 +311,18 @@ mod linux {
             .projection_calls
             .into_iter()
             .find_map(|(name, count)| (name == "write").then_some(count));
-        assert_eq!(callbacks, Some(512));
+        assert_eq!(callbacks, Some(count as u64));
         let after = f.workspace.backing_status().unwrap();
         assert_eq!(after.payloads, before.payloads);
-        println!("TINY_INPUT writes=512 callbacks={} pack_writes={} index_writes={} payloads_before={} payloads_after={} allocated_before={} allocated_after={}",
+        println!("TINY_INPUT writes={count} callbacks={} pack_writes={} index_writes={} payloads_before={} payloads_after={} allocated_before={} allocated_after={}",
             callbacks.unwrap(),
             after.active_pack_page_writes - before.active_pack_page_writes,
             after.active_index_page_writes - before.active_index_page_writes,
             before.payloads, after.payloads, before.allocated_bytes, after.allocated_bytes);
         mount.unmount(deadline()).unwrap();
-        check("active-mounted-tiny-input-exact-callbacks-and-bytes");
+        check(&format!(
+            "active-mounted-tiny-input-{count}-exact-callbacks-and-bytes"
+        ));
         f.workspace.commit(deadline()).unwrap();
         let Response::History(result) = f.branch() else {
             panic!("branch result")
@@ -336,7 +336,26 @@ mod linux {
         let private =
             std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
         assert_eq!(physical_private_files(&private), (0, 0));
-        check("active-mounted-tiny-input-public-commit-and-refund");
+        check(&format!(
+            "active-mounted-tiny-input-{count}-public-commit-and-refund"
+        ));
+    }
+    #[test]
+    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
+    fn stage_active_tiny_input_100() {
+        tiny_input(100);
+    }
+
+    #[test]
+    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
+    fn stage_active_tiny_input() {
+        tiny_input(512);
+    }
+
+    #[test]
+    #[ignore = "requires privileged stage_route.py with /dev/fuse"]
+    fn stage_active_tiny_input_4097() {
+        tiny_input(4097);
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
