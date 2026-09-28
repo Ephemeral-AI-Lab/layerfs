@@ -226,8 +226,14 @@ checkpoint.
 - Process memory: `LFT1` resource events, `scope=process-shared`,
   `sampled_max_rss` (e.g. 32.7 MB for the driver in the #1 control run). These
   are process-shared samples, not phase peaks, and are not used as a bound.
-- Host quota charge and refunds: `consumer_accounted_bytes` is recorded per row;
-  every row's cleanup is `PASS` (`unmount_ok` and `sandbox_delete_ok` true).
+- Host quota charge and refunds: `consumer_accounted_bytes` is recorded per row.
+  Twenty-one of twenty-four rows report `cleanup_status=PASS` (`unmount_ok` and
+  `sandbox_delete_ok` both true). The three control FAIL-by-timeout rows could
+  not report either acknowledgement because the harness killed the driver at
+  the limit, so product cleanup is **unproven** for `control/03`, `control/06`
+  and `control/12`; `docker ps -a --filter name=shell243-` shows zero remaining
+  containers, so no owned or foreign container was left behind, but that is an
+  environment observation and not a product cleanup receipt.
 - Physical Store/history clone bytes: recorded per row
   (`clone_physical_bytes`, e.g. 999,424 B).
 - Watchdog: every route execution stayed under its 60-second cap; no route row
