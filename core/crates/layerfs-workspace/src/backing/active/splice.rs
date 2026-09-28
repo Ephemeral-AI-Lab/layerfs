@@ -353,7 +353,7 @@ impl Mutation {
     fn page(
         &mut self,
         store: &PageStore,
-        node: &Node,
+        node: Node,
         generation: u64,
         revision: u64,
         level: u8,
@@ -362,7 +362,7 @@ impl Mutation {
         if node.kind() != level_kind(level)? {
             return Err(WorkspaceError::Io);
         }
-        if let Node::Branch(children) = node {
+        if let Node::Branch(children) = &node {
             for child in children {
                 let kind = level_kind(level.checked_sub(1).ok_or(WorkspaceError::Io)?)?;
                 if child.target.tag == TAG_HOT {
@@ -383,8 +383,9 @@ impl Mutation {
         let body = node.encode()?;
         drop(encode_time);
         self.reserve(1, body.len())?;
+        let kind = node.kind();
         let (reference, stored) = store.create_from(
-            node.kind(),
+            kind,
             generation,
             revision,
             node.len() as u16,
@@ -400,11 +401,17 @@ impl Mutation {
                         epoch,
                         page: reference,
                         level,
-                        kind: node.kind(),
+                        kind,
                     },
                 )?;
                 self.directory_changed = true;
-                self.cache[slot] = Some(Cached::decode(store, reference, &stored)?);
+                self.cache[slot] = Some(Cached::prepared(
+                    store,
+                    reference,
+                    &stored,
+                    node,
+                    body.len(),
+                )?);
                 if resident(&self.cache) > RESIDENT_BYTES {
                     return Err(WorkspaceError::Capacity);
                 }
@@ -468,7 +475,7 @@ impl Mutation {
             self.cache[slot] = None;
             self.directory_changed = true;
         }
-        for (position, (node, fence)) in nodes.iter().enumerate() {
+        for (position, (node, fence)) in nodes.into_iter().enumerate() {
             let keep = if needed[position] {
                 if keep_at == Some(position) && hot.is_some() {
                     hot
@@ -479,7 +486,7 @@ impl Mutation {
                 None
             };
             children.push(Child {
-                fence: fence.clone(),
+                fence,
                 target: self.page(store, node, generation, revision, level, keep)?,
             });
         }

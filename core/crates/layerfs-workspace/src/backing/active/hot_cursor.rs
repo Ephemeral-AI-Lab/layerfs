@@ -29,6 +29,30 @@ pub(super) struct Cached {
 }
 
 impl Cached {
+    /// The same prepared Node whose encoded body was used to create this
+    /// authenticated private page. `create_from` verifies its exact on-disk
+    /// readback before returning; do not allocate and decode its cells again.
+    pub(super) fn prepared(
+        store: &PageStore,
+        page: PageRef,
+        stored: &Page,
+        node: Node,
+        encoded_bytes: usize,
+    ) -> Result<Arc<Self>, WorkspaceError> {
+        if store.kind(page)? != node.kind() || stored.records() as usize != node.len() {
+            return Err(WorkspaceError::Io);
+        }
+        let bytes =
+            PAGE_BYTES + encoded_bytes * 2 + stored.records() as usize * 64 + size_of::<Self>();
+        let charge = store.budget().reserve(bytes)?;
+        Ok(Arc::new(Self {
+            page,
+            node,
+            bytes,
+            _charge: charge,
+        }))
+    }
+
     pub(super) fn decode(
         store: &PageStore,
         page: PageRef,

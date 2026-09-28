@@ -1,0 +1,57 @@
+{
+  "admission_eligible": false,
+  "cache_claim": null,
+  "checks": [
+    {
+      "id": "active-page-profile-4097-full-byte-oracle",
+      "status": "PASS"
+    },
+    {
+      "id": "active-page-profile-4097-clean-close-refund",
+      "status": "PASS"
+    }
+  ],
+  "commit": "fb53ac28cbcdc4c14ab4424f5beaa202987e3ff4",
+  "derived": {
+    "active_creations": 20780,
+    "cache_decode_fraction_of_exec": 0.040706763814549775,
+    "direct_plus_readback_fraction_of_exec": 0.4756866177502473,
+    "direct_plus_readback_ns": 2592902903,
+    "page_bytes": 4096,
+    "source_derived_readback_bytes": 85114880,
+    "source_derived_write_bytes": 85114880,
+    "sum_disjoint_cause_ns": 4255005437,
+    "unattributed_ns": 1195858233
+  },
+  "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+  "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "limits": {
+    "budget_bytes": 8388608,
+    "complete_functional_route_seconds": 60,
+    "stage_commit_deadline_seconds": 10,
+    "writes": 4097
+  },
+  "mode": "functional public-stage causal diagnostic, not registered mounted case",
+  "performance_claim": false,
+  "qualification": "counter/phase wall include instrumentation; no matched cold baseline or cgroup domain; status PASS correctness but INELIGIBLE performance",
+  "raw": {
+    "actual_merge_ns": 46863544,
+    "backing_bytes_after": 1155072,
+    "backing_bytes_before": 12288,
+    "cache_decode_ns": 221887020,
+    "create_identity_ns": 147665457,
+    "direct_write_ns": 1731536724,
+    "exec_ns": 5450863670,
+    "fit_merge_ns": 57439279,
+    "index_writes": 16683,
+    "node_encode_ns": 10809771,
+    "pack_writes": 4097,
+    "page_encode_ns": 317183740,
+    "preallocate_ns": 337630249,
+    "readback_auth_ns": 359256650,
+    "readback_io_ns": 861366179,
+    "release_ns": 163366824
+  },
+  "schema": "issue273-optimization-iter003-publication-cause-v1",
+  "test_binary_sha256": "ee31b60df3b6310dbe80a560fb37864c2c26a0b58669edb395b369a3fa6ccf1d"
+}

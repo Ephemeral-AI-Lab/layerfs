@@ -729,3 +729,17 @@ Counters run in the actual product, including their overhead in the measured
 phase, on both successful and failed paths. Physical publication is still
 immutable per selected incarnation; no readback or authentication is removed.
 No format or worker limit is changed by observing these causes.
+
+### Checkpoint-5 prepared hot-node reuse
+
+Once `Mutation::emit` has encoded a Node and PageStore `create_from` has
+verified its authenticated, byte-identical physical readback, retaining a hot
+node no longer allocates and decodes another independent `Node` from those
+same bytes. The existing selected-slot kind, record-count, epoch and revision
+checks still govern publication and later reads still authenticate the page.
+The retained prepared Node is charged at least as conservatively as the old
+cache allocation, including overlap with the mutation's temporary owned Node
+and the underlying stored/verified Page. Cold reads and admission of an
+existing page continue to use full decode/identity verification. This avoids
+one duplicate decode of a newly published hot node; it is not an authorization
+to omit page readback or to reuse a node after another incarnation is selected.

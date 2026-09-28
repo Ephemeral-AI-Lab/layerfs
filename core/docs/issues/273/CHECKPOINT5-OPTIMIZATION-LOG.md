@@ -106,3 +106,46 @@
   speed ratio. NEXT: split WRITE's dominant publication region into actual
   physical, merge/codec, retirement and temp-input costs; use that split to
   remove demonstrably avoidable work, not authentication or quota custody.
+
+## Iteration 003 — measure the inner WRITE publication cost, choose CPU reuse
+
+- Product `fb53ac28cbcdc4c14ab4424f5beaa202987e3ff4`, first parent
+  `51c1838a334e285d489e0987205e2405c2621102`. Functional public
+  `active_page_profile` route on an independently prepared 8,194-byte
+  `publication` file: 4,097 append WRITE acknowledgements, explicit Commit,
+  complete byte oracle and clean-close refund PASS. Source/image/binary/fixture
+  seals and exact raw route stdout/stderr are retained under `iter-003`.
+  Status: functional PASS, cache claim null, performance/admission INELIGIBLE;
+  no baseline arm, no hard RSS/cgroup or matched timer.
+- Phase-local operation operands: 4,097 pack + 16,683 index page writes =
+  20,780 immutable 4 KiB creations, so 85,114,880 requested write bytes and
+  the same mandatory immediate authenticated readback bytes (83,120 KiB
+  each). The public write loop took 5,450.864 ms with the counters active.
+  Measured disjoint inner regions, including their instrumentation overhead:
+  fit merge 57.439 ms; actual selected merge 46.864 ms; node encode
+  10.810 ms; hot cache decode 221.887 ms; page framing 317.184 ms;
+  create/stat identity 147.665 ms; allocation/accounting 337.630 ms;
+  direct write 1,731.537 ms; direct readback 861.366 ms; authenticated
+  comparison 359.257 ms; retirement release/unlink 163.367 ms. Sum
+  4,255.005 ms; unassigned 1,195.858 ms (temp acquisition/reading,
+  other mutable work and timer scopes, not presumed idle time). Direct
+  write+readback = 2,592.903 ms / 5,450.864 ms = 47.57% of this WRITE loop.
+  Old recorded campaign's 5.075 s publication was on different identities;
+  it is not a speed comparator for these numbers.
+- Hypothesis: reuse the already encoded Node after the PageStore has read back,
+  authenticated and byte-compared its physical page instead of allocating and
+  decoding that same Node again. Cache decode has a 221.887 ms *optimistic*
+  loop-wide ceiling, 4.07% of observed write-loop wall, not a guaranteed gain.
+  Page physical write/readback remain required by the v2 custody contract.
+  No format change, unpinning, narrowed budget or weakened authentication is
+  justified by the profile. Next iteration tests prepared-node reuse and
+  separately addresses avoidable tiny-input file round trips. Preallocated
+  physical free slots require a new compatible design/custody proof before
+  collection; no undocumented reuse was attempted here.
+- Production LOC for `fb53ac28c`: Core 67,378 -> 67,479 (+101);
+  reference 65,417 -> 65,417; combined 132,795 -> 132,896 (+101),
+  first-parent versus staged/committed source by `tools/production_loc.py`.
+  Workspace host release PASS (17 host tests); clippy/fmt/boundary/tools/
+  harness PASS; aarch64 zigbuild PASS. Public stage route complete wall
+  8.958 s under its 60 s functional limit; this is **not** the registered
+  15/25-second mounted performance case.
