@@ -338,6 +338,23 @@ def splice_curve(stderr, expected_samples):
             "expected_classes": list(expected_samples), "complete": complete}
 
 
+def c1_observation(extent):
+    """Zero is available only from a complete emitted C1 source observation."""
+    c1 = extent.get("c1_edit", [])
+    inputs = extent.get("file_input", [])
+    required = (("v", "draft_nodes_read", "nodes_read", "stored_nodes_read"),
+                ("v", "edits", "record_lookups", "record_reads",
+                 "replacement_bytes_read", "replacement_reads"))
+    valid = (len(c1) == len(inputs) == 1
+             and all(isinstance(row, dict) and row.get("v") == 1
+                     and all(type(row.get(key)) is int and row[key] >= 0 for key in keys)
+                     for row, keys in zip((c1[0], inputs[0]), required))
+             and inputs[0].get("spool_resident") in ("true", "false"))
+    return {"complete": bool(valid), "provenance": "emitted_v1" if valid else
+            "missing_or_malformed_or_interleaved", "c1_work": (
+                c1[0]["nodes_read"] if valid else None)}
+
+
 def cache_files(paths):
     """Validate every input before eviction; after final mincore never read input."""
     residency = Residency()
@@ -704,7 +721,7 @@ def run(args):
                          Path(master["path"]) / "history.sqlite",
                          master["store_sha256"], master["history_sha256"], output)
     retained_reproof = None
-    if selection["master"] == "retained":
+    if selection["master"] == "retained" and not args.diagnostic:
         reproof_case = output / "case.retained-reproof"
         case_spec(reproof_case, {**case_fields(master, selection, "true"),
                                  "expected_failure": "1"})
@@ -790,13 +807,8 @@ def run(args):
     if extent_present and selection["count"]:
         extent_complete = bool(splices["complete"]
                                and splices["total_splices"] == selection["count"])
-    # Explicit zero is valid only with emitted, parsed provenance. Absent or
-    # malformed telemetry is not a synthetic zero for a clean Commit.
-    c1_rows = extent.get("c1_edit", [])
-    file_rows = extent.get("file_input", [])
-    c1_complete = (len(c1_rows) == len(file_rows) == 1
-                   and all(isinstance(row, dict) and row.get("v") == 1
-                           for row in c1_rows + file_rows))
+    c1 = c1_observation(extent)
+    c1_complete = c1["complete"]
     fusecount_ok = (int(counts.get("write", -1)) == selection["writes"]) if driver else False
     progress_ok = bool(selection["count"] == 0 or (checkpoints and
                        [row["writes"] for row in checkpoints] ==
@@ -823,7 +835,7 @@ def run(args):
     else:
         status = "INELIGIBLE"
     receipt = {
-        "schema": "issue273-checkpoint5-attempt-v3",
+        "schema": "issue273-checkpoint5-attempt-v4",
         "family_id": "workspace_mounted_checkpoint", "arm": prepared["arm"],
         "registered_selection": selection["order"] != 0,
         "scenario_id": selection["scenario_id"], "scenario_version": 1,
@@ -869,7 +881,8 @@ def run(args):
         "extent_counters_emitted_by_this_arm": extent_present,
         "extent_counts_complete": extent_complete,
         "c1_counters_complete": c1_complete,
-        "c1_counter_provenance": ("emitted_v1" if c1_complete else "missing_or_malformed"),
+        "c1_counter_provenance": c1["provenance"],
+        "c1_work_observed": c1["c1_work"],
         "writer_progress_ok": progress_ok,
         "fuse_write_count_ok": fusecount_ok, "counts_ok": counts_ok,
         "instrumentation_complete": instrumentation,
@@ -901,7 +914,8 @@ def run(args):
         "verification": verification,
         "verification_status": verification["oracle"]["status"],
         "cleanup_status": "PASS" if cleanup else "FAIL",
-        "functional_status": "PASS" if functional else "FAIL",
+        "functional_status": ("UNVERIFIED" if args.diagnostic and functional else
+                              "PASS" if functional else "FAIL"),
         "resource_status": "PARTIAL",
         "custody_status": "PASS", "row_status": status,
         "performance_status": "INELIGIBLE",

@@ -180,3 +180,43 @@
   temporary-file create/read/release, previously bounded in retained evidence
   at 723 ms acquisition for 4,097 append writes; keep that work in the timed
   WRITE and preserve ordinary projection custody.
+
+## Iteration 005 — remove the temporary tiny FUSE input owner
+
+- Product `9c286b02c7b7a38aaca8f8d36f72e700c44ba754` and test-only tier
+  expansions `3c5e7976571b410fded14328cc31f5b7970e9e82` (512) and
+  `609045ed1e7cc54a9b246b54ed52f50f9d7cc903` (100/4,097).
+  Through the ordinary public projected permit, each <=128-byte callback
+  makes a Budget-charged copy before mutation or reply and does not create,
+  read or unlink a `p-*` temporary input file. The acquired-copy charge is
+  included in publication time, not hidden in setup or after acknowledgement.
+  Large-input and local OwnedPayload routes retain their original custody.
+  The charged copy shares EOF/append, handle, revision, deadline, notification
+  and failed/unknown-result checks with the previous mutation route.
+- Three *functional* mounted ext4 routes (not registered 10 MiB performance
+  rows) use an independently prepared 8,194-byte file and 100/512/4,097
+  one-byte POSIX append syscalls. All public FUSE callbacks were observed
+  exactly (100/512/4,097), full bytes, C5 Commit, mounted unmount/process
+  continuity and clean-close block refund PASS; no temporary input owners
+  remained. Cumulative FUSE acquisition at all four sampled checkpoints was
+  **0 ns** per case; their charged copy and all page work remain in the
+  publication timer. At sampled W=4,096 on the 4,097 case: publication
+  4,841,970,187 ns, pack writes 4,097 after W=4,097, index writes 16,678;
+  this is an observer result with instrumentation overhead, **not** a matched
+  speed gain against any earlier timed source. Functional route complete wall
+  1.136/1.730/8.437 s at 100/512/4,097, each under its separate 60 s
+  functional bound. The mounted `active_mounted` and process-spanning
+  `active_hot_continuity` routes and the exact Linux `active_backing` 32/32
+  also PASS at the product identity. Counts, phase-local samples, raw stdout,
+  exact product/test/image/fixture SHA seals and individual failure statuses
+  are retained under `iter-005/RESULTS.json` and `SHA256SUMS`.
+- Limitations: prior retained 723.286 ms acquisition on campaign-3 append was
+  from a different unqualified identity and **not** an admissible speed
+  denominator. No cached/uncached or cgroup phase claim. Production LOC for
+  `9c286b02c`: Core 67,506 -> 67,602 (+96), reference 65,417 -> 65,417,
+  combined 132,923 -> 133,019 (+96). Test-only commits `3c5e79765` and
+  `609045ed1`: all production totals unchanged (delta 0). All commits used
+  `tools/production_loc.py` on first-parent versus staged/committed trees.
+  Next cause: count generic-route admission and normalization turnover on
+  dispersed WRITE and distinguish necessary source carries and physical
+  publication from avoidable revalidation.

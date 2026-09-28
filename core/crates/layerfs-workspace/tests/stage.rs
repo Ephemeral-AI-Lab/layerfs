@@ -933,7 +933,7 @@ mod linux {
         assert_eq!(physical_private_files(&private), (0, 0));
         check("active-4096-separated-exact-clean-close");
     }
-    fn source_grouping(count: u64, max_reads: u64) {
+    fn source_grouping(count: u64, max_reads: u64, profile: bool) {
         // Nonadjacent edits, emitted in file order but packed in write order.
         // An index lookup/pack load per edit fails the count oracle even if
         // elapsed wall happens to be low. This remains a public Workspace test.
@@ -975,6 +975,7 @@ mod linux {
                 deadline(),
             )
             .unwrap();
+        let before_write = profile.then(|| f.workspace.backing_status().unwrap());
         let mut positions = std::collections::BTreeSet::new();
         for i in 0..count {
             let offset = (104729 + i * 2654435761) % expected.len() as u64;
@@ -984,6 +985,27 @@ mod linux {
                 .write_file(handle, offset, &f.own(&[byte]), deadline())
                 .unwrap();
             expected[offset as usize] = byte;
+        }
+        if let Some(before) = before_write {
+            let after = f.workspace.backing_status().unwrap();
+            let diff = |old: u64, new: u64| new.checked_sub(old).unwrap();
+            println!("GENERIC_WRITE_CAUSE writes={count} hot={} admissions={} normalizations={} seeks={} index_fetches={} index_writes={} pack_writes={} fit_merge_ns={} actual_merge_ns={} cache_decode_ns={} create_identity_ns={} preallocate_ns={} direct_write_ns={} readback_io_ns={} readback_auth_ns={} release_ns={}",
+                diff(before.active_hot_writes, after.active_hot_writes),
+                diff(before.active_hot_admissions, after.active_hot_admissions),
+                diff(before.active_hot_normalizations, after.active_hot_normalizations),
+                diff(before.active_index_seeks, after.active_index_seeks),
+                diff(before.active_index_fetches, after.active_index_fetches),
+                diff(before.active_index_page_writes, after.active_index_page_writes),
+                diff(before.active_pack_page_writes, after.active_pack_page_writes),
+                diff(before.active_fit_merge_ns, after.active_fit_merge_ns),
+                diff(before.active_actual_merge_ns, after.active_actual_merge_ns),
+                diff(before.active_cache_decode_ns, after.active_cache_decode_ns),
+                diff(before.active_page_create_identity_ns, after.active_page_create_identity_ns),
+                diff(before.active_page_preallocate_ns, after.active_page_preallocate_ns),
+                diff(before.active_page_direct_write_ns, after.active_page_direct_write_ns),
+                diff(before.active_page_readback_io_ns, after.active_page_readback_io_ns),
+                diff(before.active_page_readback_auth_ns, after.active_page_readback_auth_ns),
+                diff(before.active_page_release_ns, after.active_page_release_ns));
         }
         f.workspace.release(handle).unwrap();
         f.workspace.forget(file.serial, 1, ReferenceScope::Local);
@@ -1016,20 +1038,26 @@ mod linux {
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_source_grouping_100() {
-        source_grouping(100, 8);
+        source_grouping(100, 8, false);
     }
 
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_source_grouping() {
-        source_grouping(512, 32);
+        source_grouping(512, 32, false);
     }
 
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_source_grouping_4097() {
-        source_grouping(4097, 1024);
+        source_grouping(4097, 1024, false);
     }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_generic_profile() {
+        source_grouping(4097, 1024, true);
+    }
+
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_page_profile() {

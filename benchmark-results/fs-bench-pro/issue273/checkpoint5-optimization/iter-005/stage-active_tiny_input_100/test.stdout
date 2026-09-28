@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_active_tiny_input_100 ... TINY_INPUT writes=100 callbacks=100 pack_writes=100 index_writes=262 payloads_before=0 payloads_after=0 allocated_before=12288 allocated_after=45056
+STAGE_CHECK active-mounted-tiny-input-100-exact-callbacks-and-bytes PASS
+STAGE_CHECK active-mounted-tiny-input-100-public-commit-and-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 34 filtered out; finished in 0.26s
+

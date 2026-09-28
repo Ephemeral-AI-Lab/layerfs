@@ -48,6 +48,20 @@ class Ordering(unittest.TestCase):
             self.assertIn("final_check_ns", result)
             self.assertLessEqual(result["launch_gap_ns"], 1_000_000_000)
 
+    def test_c1_explicit_zero_is_not_missing_or_interleaved(self):
+        valid = {"c1_edit": [{"v": 1, "nodes_read": 0,
+                             "draft_nodes_read": 0, "stored_nodes_read": 0}],
+                 "file_input": [{"v": 1, "edits": 0, "record_lookups": 0,
+                                 "record_reads": 0, "replacement_bytes_read": 0,
+                                 "replacement_reads": 0, "spool_resident": "false"}]}
+        self.assertEqual(checkpoint.c1_observation(valid)["c1_work"], 0)
+        self.assertTrue(checkpoint.c1_observation(valid)["complete"])
+        for invalid in ({}, {"c1_edit": valid["c1_edit"]},
+                        {**valid, "c1_edit": valid["c1_edit"] * 2},
+                        {**valid, "file_input": [{"v": 1, "edits": 0}]}):
+            self.assertFalse(checkpoint.c1_observation(invalid)["complete"])
+            self.assertIsNone(checkpoint.c1_observation(invalid)["c1_work"])
+
     def test_single_write_has_only_one_reachable_checkpoint(self):
         self.assertEqual(progress({"exec_stdout_hex": b"PROGRESS\t1\t12\n".hex()}, 1),
                          [{"writes": 1, "writer_elapsed_ns": 12}])

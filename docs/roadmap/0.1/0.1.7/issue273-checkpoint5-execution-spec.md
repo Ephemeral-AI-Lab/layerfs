@@ -279,3 +279,17 @@ verifiers, records `SKIPPED`, and can never be used for admission. Ordinary
 `run` still invokes both applicable verifiers. These changes do not alter the
 registered workload/limits; retained-control construction still requires a
 live private journal, so existing retained fixture rows cannot be promoted.
+
+### Prospective C1 observer v4 correction
+
+`attempt-v4` accepts literal zero C1 work only from one complete emitted v1
+C1 edit-load row and one complete emitted v1 file-input row with all required
+nonnegative fields. A missing, malformed or interleaved row is
+`INCOMPLETE`/`missing_or_malformed_or_interleaved`, not an inferred zero even
+when the public Commit returns `UpToDate`. This correction applies to both
+arms through the common harness and is not a retrospective revision of any
+`attempt-v2/v3` receipt. The old retained controls remain invalid because
+their committed-and-reattached Store cannot produce a live pinned private
+journal in the same Workspace through the current SDK mount/Exec/Commit-only
+interface. They must use a prospectively distinct scenario or remain
+`NOT_RUN/INELIGIBLE` rather than being promoted.
