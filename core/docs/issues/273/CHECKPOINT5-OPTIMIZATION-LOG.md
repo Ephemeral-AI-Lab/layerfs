@@ -440,3 +440,100 @@
   directory-binding rows), run targeted public custody cases, then rebuild
   prospective identities for any changed code. The stronger source count
   alone does not settle WRITE publication or final admission.
+
+## Iteration 010 — remove captured directory-row prefix relocation
+
+- Commit `14da22d48c20de169c9224903d02eda18975d1a7` (tree
+  `6a3b02c5d35566b276560c4415aaf64d2a65b22e`), parent
+  `686d002fa889f016cac3eb491b5712229e511360`. Captured
+  `directory_rows` previously asked for *one exact Vec slot per binding*;
+  if each request relocates, the 128-file control copies up to
+  `0+1+...+127 = 8,128` prior row descriptors. The new 8/16/32/64/128
+  precharged capacities require at most five growth requests, copying at
+  most `0+8+16+32+64 = 120` old row descriptors if each relocates.
+  This is a source-derived worst-case **allocation operand**, not a runtime
+  byte counter or a latency gain. Name bytes/selected-index pages and each
+  actual C1 binding remain O(D) required work; Budget charge precedes
+  allocation, including new capacity and names. Selected G1, identities,
+  quota refusal and clean-close custody are unchanged. Source locality from
+  iteration 009 is unchanged. No new worker, format or hot cache capacity.
+- Production LOC (exact first parent/staged/committed snapshots via
+  `python3 tools/production_loc.py --json --root <snapshot>`): Core
+  **67,649 -> 67,662 (+13)**; reference **65,417 -> 65,417 (+0)**;
+  combined **133,066 -> 133,079 (+13)**. This commit also records the
+  prior iteration-009 log. Host workspace release tests PASS; workspace
+  all-target clippy/fmt, product boundary, tools 9/9, harness 14/14,
+  self-check and aarch64 zigbuild PASS. Exact aarch64 Linux `active_backing`
+  on owned serial ext4 Docker volume: **32/32 PASS**, volume removed.
+  New committed-identity functional public routes PASS: 128 files with
+  shared packs, exact committed byte/mode/refund; quota refusal; G1/G2
+  generation bytes; 32 retained generations/pins/refund; mutation
+  compaction; real live/pinned 4,097-record clean and one-edit controls
+  (one Workspace). They are stage proofs, **not** the missing public SDK
+  retained performance controls, not a 3-sequential-100-write Exec proof.
+- One registered candidate attempt per nine matrix selections at the new
+  committed source, with **no** same-identity performance resample. All
+  nine independently verified oracle `PASS`, byte/function/cleanup `PASS`,
+  production source-row parser `PASS`, final host whole-input residency 0,
+  callback count exact, C1 telemetry complete, 15/25 s complete limit met.
+  The common frozen arm verifier returned PASS at 100 and NOT_APPLICABLE
+  (it hard-codes 100) at 512/4,097. All nine row statuses nevertheless
+  **INELIGIBLE**, not a matched numeric or cache/resource admission:
+
+  | Schedule | 100: loads/refs/windows; Exec/Commit/complete s | 512: loads/refs/windows; Exec/Commit/complete s | 4,097: loads/refs/windows; Exec/Commit/complete s |
+  | --- | --- | --- | --- |
+  | Append | 2/100/1; 0.092/0.019/2.585 | 7/512/1; 0.618/0.029/1.489 | 52/4097/5; 4.713/0.131/5.845 |
+  | Dispersed | 2/100/1; 0.136/0.027/0.991 | 7/512/1; 1.025/0.059/2.124 | 209/4097/5; 9.362/0.645/10.920 |
+  | Repeated | 1/1/1; 0.144/0.029/0.968 | 1/1/1; 0.698/0.029/1.579 | 1/1/1; 5.719/0.030/6.668 |
+
+  For append/dispersed final references grow with accepted WRITEs; for
+  repeated the final file has one replacement regardless of historical
+  WRITEs. Dispersed 4,097 still requires 209 loads/627 locator index reads,
+  16,468 decoded records, 73.035 ms source fill and 2,834,432 bytes
+  sampled charged backing. 100/512 dispersed have 2/7 loads and 4/14
+  index reads; repeated 1/1/1 loads and 1/1/1 index reads. Across all
+  cases, index reads/loads follow selected height (2 at 100/512, 3 at
+  4,097 dispersed) and the necessary pack/window model. C1 nodes/read for
+  dispersed are ~20.3/20.6/20.7 per accepted WRITE; append 4, repeated
+  17 per SaveFile. Per-WRITE immutable acknowledgement and canonical
+  construction remain necessary and charged; no global O(P) locality or
+  constant-RAM Commit is claimed. The O(E_f) descriptor/extent vectors
+  remain charged. Stage source-window 2/7/209 full-byte results from
+  iteration 009 continue to identify the bounded mechanism; the current
+  verified matrix is the only new sample at this committed identity.
+- The additional #248 4,097-write gate was attempted **once** at this
+  identity: public byte/function/cleanup PASS, independent oracle and arm
+  verifier PASS, complete 6.084 s (25 s bound), pack loads 52, but
+  `row_status=INCOMPLETE`: **no `LFS_C1_EDIT_LOAD` record**. The full-file
+  streamed construction emits `LFS_FILE_INPUT` and a complete
+  `LFS_FILE_STREAM_CAUSE`; neither proves explicit zero C1 mapping reads
+  when the C1 observer line is absent. No fabricated zero and no rerun of
+  this unchanged gate arm. The fixed baseline product likewise lacks an
+  explicit zero on that source route; repairing common observer provenance
+  without changing frozen baseline product remains unresolved.
+- Clean Commit and one-edit public SDK controls are **NOT_RUN** with
+  retained `blocker.json` in original slots: a committed/reattached Store
+  cannot preserve a *live private pinned* 4,097-record journal in the same
+  Workspace through the public sequential SDK contract. The above public
+  Workspace quick-control stage proves bytes/counts, not this performance
+  fixture. Exact three sequential 100-write Execs before Commit and the
+  full mutations selection remain NOT_RUN (stage G1/G2/mutation subsets
+  are not substitutes). Matched baseline comparison NOT_RUN; private
+  metadata/VM/backend/device/host-cache and phase-local cgroup domains
+  remain unsupported/PARTIAL. The observed 100-write outside-phase
+  difference is not a speed claim or a permission to resample.
+- Reproduction from commit `14da22d48`: use the `oracle`, `prepare --arm
+  candidate`, `run --prepared ... --selection issue273-<pattern>-<count>-10m-v1`
+  commands in the runner with each new output path, one sample/selection;
+  `run` (without `--diagnostic`) ran the independent verifier here. Exact
+  commands, stdout/stderr, 9 attempts, gate, two NOT_RUN blockers, stage
+  receipts, binary/image/source/harness/workload/spec SHA seals, per-phase
+  Budget/backing/cache counters and the 263-file checksum manifest are in
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-010/RESULTS.json`
+  and `SHA256SUMS`. Candidate source/hash and its comparison with iteration
+  009 are *not* a qualified matched speed comparison. Next work needs a
+  source-bound public observer for #248 zero C1, a real SDK pin contract
+  for retained controls or a documented external ruling, matched control
+  in an owned checkout, phase-local resource/cache proof, exact multi-Exec
+  and mutation coverage, and separate WRITE publication amplification
+  analysis. **Checkpoint 5 is not complete.**
