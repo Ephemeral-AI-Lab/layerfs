@@ -1216,7 +1216,17 @@ mod linux {
         };
         let saved = attr(f.native.attributes(committed.root, b"grouped"));
         assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
-        assert_eq!(f.read(held, 0, expected.len()), expected);
+        // A single full private READ hit the unchanged 10 s per-operation
+        // deadline at this deliberately larger control. Verify *all* bytes
+        // with independently bounded 1 KiB public READs instead: no warmer,
+        // longer deadline, changed WRITE schedule or partial-byte oracle.
+        for offset in (0..expected.len()).step_by(1024) {
+            let end = (offset + 1024).min(expected.len());
+            assert_eq!(
+                f.read(held, offset as u64, end - offset),
+                expected[offset..end]
+            );
+        }
         assert_eq!(f.native.observations.lock().unwrap().commits.len(), 2);
         check("active-known-budget-c5-retains-full-g1-and-live-bytes");
         // No canonical retry: one new same-Workspace G2 WRITE must succeed
