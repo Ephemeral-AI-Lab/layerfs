@@ -550,7 +550,7 @@ impl Index {
         {
             let c = mutation.page_causes;
             eprintln!(
-                "LFS_INDEX_PAGE_CAUSE v=1 generation={} revision={} update_keys={} selected_height={} new_height={} captured={} frozen_revisions={} direct={} changed_leaf={} changed_parent={} direct_leaf={} direct_parent={} admission_no_key={} normalization_no_key={} connection_no_key={} height_pages={} index_pages={} directory_pages={} created_total={} replaced={} hot_before={} hot_after={}",
+                "LFS_INDEX_PAGE_CAUSE v=2 generation={} revision={} update_keys={} selected_height={} new_height={} captured={} frozen_revisions={} direct={} changed_leaf={} changed_parent={} direct_leaf={} direct_parent={} admission_no_key={} normalization_no_key={} connection_no_key={} height_pages={} index_pages={} directory_pages={} created_total={} replaced={} hot_before={} hot_after={} generic_split_events={} generic_split_pages={} direct_carries={}",
                 generation, next, updates.len(), selection.height, height, captured, frozen,
                 direct.is_some(), c[PageCause::ChangedLeaf as usize],
                 c[PageCause::ChangedParent as usize], c[PageCause::DirectLeaf as usize],
@@ -561,6 +561,7 @@ impl Index {
                 mutation.created.len(), mutation.replaced.len(),
                 selection.directory.as_ref().map_or(0, |d| d.value.occupied()),
                 mutation.directory.occupied(),
+                mutation.generic_splits, mutation.generic_split_pages, mutation.direct_carries,
             );
         }
         Ok(IndexCandidate {

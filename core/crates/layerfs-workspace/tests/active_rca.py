@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 
 PREFIX = 'LFS_INDEX_PAGE_CAUSE v=1 '
+PREFIX_V2 = 'LFS_INDEX_PAGE_CAUSE v=2 '
+EXTRA = {'generic_split_events', 'generic_split_pages', 'direct_carries'}
 FIELDS = {'generation', 'revision', 'update_keys', 'selected_height', 'new_height',
           'captured', 'frozen_revisions', 'direct', 'changed_leaf', 'changed_parent',
           'direct_leaf', 'direct_parent', 'admission_no_key', 'normalization_no_key',
@@ -21,14 +23,16 @@ ROLES = {'changed_leaf', 'changed_parent', 'direct_leaf', 'direct_parent',
 def parse_rows(text):
     rows = []
     for line in text.splitlines():
-        if not line.startswith(PREFIX):
+        prefix = PREFIX_V2 if line.startswith(PREFIX_V2) else PREFIX
+        if not line.startswith(prefix):
             if line.startswith('LFS_INDEX_PAGE_CAUSE '):
                 raise ValueError('unknown page-cause version')
             continue
+        expected = FIELDS | (EXTRA if prefix == PREFIX_V2 else set())
         parts = {}
-        for piece in line[len(PREFIX):].split():
+        for piece in line[len(prefix):].split():
             key, separator, value = piece.partition('=')
-            if not separator or key in parts or key not in FIELDS:
+            if not separator or key in parts or key not in expected:
                 raise ValueError('duplicate/unknown/missing page-cause field')
             if key == 'direct':
                 if value not in ('true', 'false'):
@@ -38,8 +42,12 @@ def parse_rows(text):
                 parts[key] = int(value)
             else:
                 raise ValueError('bad numeric page-cause field')
-        if parts.keys() != FIELDS:
-            raise ValueError(f'incomplete page-cause line: {FIELDS-parts.keys()}')
+        if parts.keys() != expected:
+            raise ValueError(f'incomplete page-cause line: {expected-parts.keys()}')
+        if (prefix == PREFIX_V2 and
+                (parts['generic_split_pages'] < 2*parts['generic_split_events'] or
+                 (not parts['direct'] and parts['direct_carries']))):
+            raise ValueError('invalid split/carry witness')
         if (sum(parts[role] for role in ROLES) != parts['index_pages'] or
                 parts['created_total'] != parts['index_pages'] + parts['directory_pages'] or
                 parts['selected_height'] > 7 or parts['new_height'] > 7 or
@@ -68,7 +76,12 @@ def summarize(stderr, stdout, expected, generation=2):
                       r'index_fetches=(\d+) index_writes=(\d+) pack_writes=(\d+)', stdout)
     if not cause or int(cause[1]) != expected:
         raise ValueError('missing public WRITE sample')
-    totals = {name: sum(row[name] for row in rows) for name in ROLES | {'index_pages', 'directory_pages'}}
+    counted = ROLES | {'index_pages', 'directory_pages'}
+    if all('generic_split_events' in row for row in rows):
+        counted |= EXTRA
+    elif any('generic_split_events' in row for row in rows):
+        raise ValueError('mixed observer versions')
+    totals = {name: sum(row[name] for row in rows) for name in counted}
     # StoreStatus.index_page_writes counts HotDirectory too; the disjoint
     # page-cause buckets intentionally classify only leaf/branch versions.
     if (totals['index_pages'] + totals['directory_pages'] != int(cause[5]) or

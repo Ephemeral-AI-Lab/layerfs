@@ -18,6 +18,15 @@ class ActiveRcaTest(unittest.TestCase):
         self.assertEqual(result['totals']['normalization_no_key'], 1)
         self.assertEqual(result['first_revision'], 11)
 
+    def test_v2_splits_separate_from_page_roles(self):
+        row = ROW.replace('v=1', 'v=2') + (' generic_split_events=1 '
+                    'generic_split_pages=2 direct_carries=0')
+        parsed = parse_rows(row)[0]
+        self.assertEqual(parsed['generic_split_pages'], 2)
+        self.assertEqual(summarize(row, CAUSE, 1)['totals']['generic_split_events'], 1)
+        with self.assertRaisesRegex(ValueError, 'split/carry'):
+            parse_rows(row.replace('generic_split_pages=2', 'generic_split_pages=1'))
+
     def test_missing_not_zero_and_wrong_total(self):
         with self.assertRaisesRegex(ValueError, 'distinct prepared'):
             summarize('', CAUSE, 1)

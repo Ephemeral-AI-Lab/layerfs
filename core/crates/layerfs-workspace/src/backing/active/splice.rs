@@ -152,6 +152,9 @@ pub(super) struct Mutation {
     pub(super) replaced: Vec<PageRef>,
     pub(super) charge: Charge,
     pub(super) page_causes: [u64; PageCause::COUNT],
+    pub(super) generic_splits: u64,
+    pub(super) generic_split_pages: u64,
+    pub(super) direct_carries: u64,
     pub(super) cache: Cache,
     admitted: BTreeMap<PageRef, (usize, u64)>,
     loaded: BTreeMap<PageRef, Arc<Cached>>,
@@ -180,6 +183,9 @@ impl Mutation {
             replaced: Vec::new(),
             charge,
             page_causes: [0; PageCause::COUNT],
+            generic_splits: 0,
+            generic_split_pages: 0,
+            direct_carries: 0,
             cache,
             admitted: BTreeMap::new(),
             loaded: BTreeMap::new(),
@@ -473,6 +479,10 @@ impl Mutation {
         }
         let mut children = Vec::with_capacity(nodes.len());
         if nodes.len() > 1 {
+            if !matches!(cause, PageCause::DirectLeaf | PageCause::DirectParent) {
+                self.generic_splits += 1;
+                self.generic_split_pages += nodes.len() as u64;
+            }
             store.split(
                 level,
                 nodes
@@ -668,6 +678,7 @@ impl Mutation {
                 continue;
             }
             store.count(Counter::Carry, 1);
+            self.direct_carries += 1;
             let mut lower = Vec::new();
             let mut fence = Vec::new();
             let mut parent = None;
@@ -741,6 +752,7 @@ impl Mutation {
                 continue;
             }
             store.count(Counter::Carry, 1);
+            self.direct_carries += 1;
             if let Some(parent) = parent {
                 pending
                     .entry(*parent)

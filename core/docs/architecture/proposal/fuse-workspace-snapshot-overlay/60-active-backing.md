@@ -412,3 +412,57 @@ The observer formats at most one line per mutation, stores only fixed
 counters per mutation, and changes no page encoding, Budget/hot limits,
 acknowledgement ordering, compaction decision, worker or cache policy. Its
 wall includes observer overhead and is not a matched speed sample.
+
+### #273 map-to-vector charge transfer and generic split witness (implementation)
+
+C5's patch retains an ordinary sorted `BTreeMap` with one `128 + key.len()
++ value.len()` Budget allowance per original entry. Its ordered index input
+is a `Vec<(Vec<u8>, Option<Vec<u8>>)>`. Prior to this change, `into_iter()`
+exhausted and deallocated the map **nodes**, but the map's entire charge
+persisted while the ordered tuples and index scratch were also charged. At
+the 8,192 diagnostic, the redundant old-node allowance was
+`16,388 * 128 = 2,097,664` bytes. This amendment transfers ownership of
+**only those freed nodes' allowance**; no selected page, revision, canonical
+root, G1/G2 payload or pin is rewritten.
+
+Before moving anything, C5 reserves the requested `len * size_of::<Update>()`
+ordered-Vec charge, uses fallible `try_reserve_exact(len)` and adjusts that
+charge to the Vec's **actual retained capacity**; an allocator over-allocation
+that cannot be charged fails before draining the map. Then `extend` consumes
+every BTreeMap entry. Its key and optional value Vec buffers move unchanged;
+their actual *capacities*, with checked arithmetic, replace the old map
+node+logical-byte allowance only **after** the nodes are gone. The previously
+precharged ordered Vec retains the tuple headers. The index's separately
+charged scratch still covers its mutation/recursive temporary allowance.
+A failed precharge, allocation or resize aborts the compaction candidate,
+leaves the index unpublished and returns `Capacity`; C5 still owns any known
+canonical result. No after-ACK work, spill, new worker, pin reset, quota
+change or fsync is involved. Success may retire G1 only after final selectors
+end; surviving G2, metadata, old readers and unknown owners remain charged.
+The `map_transferred` refusal diagnostic reports original map charge, actual
+key/value/ordered capacities and the post-transfer Budget checkpoint.
+
+`Mutation::emit` additionally records **generic split events** (`nodes.len()>1`)
+and the total new index pages emitted by those split groups, independent of
+its disjoint page-creation causes. Direct-route carries are counted at the
+existing two `Counter::Carry` sites. The per-revision diagnostic is v2;
+v1 receipts keep their original parser and source identities. A split-group
+page can also be changed-key or normalization-only, so the new split counts
+must **not** be summed into the page-creation total.
+
+**No normalized page is skipped by this change.** In the existing v2 grammar
+`Mutation::change` returns the previous target when there is neither an
+update nor heating, or when its reconstructed branch children equal the old
+children. For an emitted no-key branch it has observed `merged != original`:
+at least one authenticated child target/fence relation changed. Substituting
+the old page without an alternate target/epoch mapping would leave the new
+selection's parent referring to the wrong target (or to a cleared/reused hot
+slot), even though an old frozen selection must still resolve its old page.
+`emit` validates each new child kind/slot epoch and encodes the new fences;
+the old snapshot retains its own selected root and directory, and retirement
+waits for selecting revisions. This proves **why simply omitting those pages
+is invalid under the current grammar**, not equivalence of a proposed
+replacement algorithm. No normalized-page removal is considered safe until
+a separately specified target/fence/epoch/old-pin equivalence and public
+failure-custody oracle exist. The generic split count and pinned controls
+are necessary observations, not such a replacement proof.

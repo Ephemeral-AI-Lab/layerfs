@@ -98,7 +98,7 @@ impl ActiveBacking {
     pub(crate) fn publish_reconcile_map(
         &self,
         mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-        _updates_charge: Charge,
+        mut updates_charge: Charge,
     ) -> Result<ActivePublication, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
@@ -121,20 +121,70 @@ impl ActiveBacking {
             usize::MAX,
         )?;
         let budget_after_plan = self.store.budget().used();
+        // Pre-admit the ordered tuple allocation while the map nodes still
+        // exist. try_reserve_exact is fallible, and the allocator may return
+        // greater capacity: transfer that *actual* tuple capacity before
+        // moving any keys or releasing their old map-node charge.
         let scratch_bytes = updates
             .len()
-            .checked_mul(std::mem::size_of::<(Vec<u8>, Option<Vec<u8>>)>())
-            .ok_or(WorkspaceError::Capacity);
-        let _scratch = match scratch_bytes.and_then(|bytes| self.store.budget().reserve(bytes)) {
-            Ok(scratch) => scratch,
+            .checked_mul(std::mem::size_of::<(Vec<u8>, Option<Vec<u8>>)>());
+        let ordered_result = (|| -> Result<_, WorkspaceError> {
+            let mut ordered_scratch = self
+                .store
+                .budget()
+                .reserve(scratch_bytes.ok_or(WorkspaceError::Capacity)?)?;
+            let mut ordered = Vec::new();
+            ordered
+                .try_reserve_exact(updates.len())
+                .map_err(|_| WorkspaceError::Capacity)?;
+            ordered_scratch.resize(
+                ordered
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<(Vec<u8>, Option<Vec<u8>>)>())
+                    .ok_or(WorkspaceError::Capacity)?,
+            )?;
+            let map_charge_before = updates_charge.bytes();
+            // This exhausts IntoIter. All BTreeMap *nodes* have been freed;
+            // every key/value Vec buffer was moved, not cloned or released.
+            ordered.extend(updates);
+            let (key_capacity, value_capacity) = ordered.iter().try_fold(
+                (0usize, 0usize),
+                |(keys, values), (key, value)| -> Result<_, WorkspaceError> {
+                    Ok((
+                        keys.checked_add(key.capacity())
+                            .ok_or(WorkspaceError::Capacity)?,
+                        values
+                            .checked_add(value.as_ref().map_or(0, Vec::capacity))
+                            .ok_or(WorkspaceError::Capacity)?,
+                    ))
+                },
+            )?;
+            updates_charge.resize(
+                key_capacity
+                    .checked_add(value_capacity)
+                    .ok_or(WorkspaceError::Capacity)?,
+            )?;
+            if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "LFS_C5_CHARGE v=1 phase=map_transferred updates={} original_map_charge={} key_capacity={} value_capacity={} ordered_capacity={} ordered_charge={} buffers_charge={} budget_after_transfer={}",
+                    ordered.len(), map_charge_before, key_capacity, value_capacity,
+                    ordered.capacity(), ordered_scratch.bytes(), updates_charge.bytes(),
+                    self.store.budget().used(),
+                );
+            }
+            Ok((ordered, ordered_scratch))
+        })();
+        let (ordered, ordered_scratch) = match ordered_result {
+            Ok(ordered) => ordered,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };
-        let ordered: Vec<_> = updates.into_iter().collect();
         if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref() == Some(std::ffi::OsStr::new("1"))
         {
             eprintln!(
                 "LFS_C5_CHARGE v=1 phase=index_prepare updates={} updates_charge={} ordered_scratch={} budget_before_plan={} budget_after_plan={} budget_before_index={} compaction_sources={}",
-                ordered.len(), _updates_charge.bytes(), _scratch.bytes(),
+                ordered.len(), updates_charge.bytes(), ordered_scratch.bytes(),
                 budget_before_plan, budget_after_plan, self.store.budget().used(), plan.retired_len(),
             );
         }

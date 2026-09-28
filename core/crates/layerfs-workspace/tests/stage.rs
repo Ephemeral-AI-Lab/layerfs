@@ -1080,6 +1080,99 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "separate explicit low-Budget refusal control; stage_route.py and live service"]
+    fn stage_active_transfer_refusal() {
+        // Refusal-only control, NOT the unchanged 8 MiB / 8,192 workload.
+        // The lower test Budget preserves room for 512 ordinary WRITE ACKs
+        // and SaveFile but refuses a later charged C5 index candidate.
+        const REFUSAL_BUDGET: usize = 2_550_000;
+        let f = Fixture::fresh_with_refusal_budget(Gate::None, REFUSAL_BUDGET);
+        let (created, handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"grouped",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        let mut expected = vec![b'A'; 8194];
+        f.workspace
+            .write_file(handle, 0, &f.own(&expected), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(created.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let file = f.lookup(b"grouped");
+        let held = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        for i in 0..512u64 {
+            let offset = (104729 + i * 2654435761) % expected.len() as u64;
+            let byte = b'B' + (i % 24) as u8;
+            f.workspace
+                .write_file(held, offset, &f.own(&[byte]), deadline())
+                .unwrap();
+            expected[offset as usize] = byte;
+        }
+        let before = f.workspace.backing_status().unwrap();
+        let WorkspaceError::Commit(failure) = f.workspace.commit(deadline()).unwrap_err() else {
+            panic!("expected known canonical success with local Budget refusal");
+        };
+        assert_eq!(
+            failure.disposition,
+            CommitFailureDisposition::KnownCommitLocalFailure
+        );
+        assert_eq!(failure.phase, CommitPhase::Reconcile);
+        assert!(matches!(failure.cause, WorkspaceError::Capacity));
+        assert!(failure.installed_revision.is_none());
+        let Some(CommitOutcomeWire::Committed(committed)) = &failure.known_outcome else {
+            panic!("remote canonical Commit not known");
+        };
+        let saved = attr(f.native.attributes(committed.root, b"grouped"));
+        for offset in [0usize, 8193, (104729u64 % 8194) as usize] {
+            assert_eq!(f.read(held, offset as u64, 1), expected[offset..offset + 1]);
+            assert_eq!(
+                f.native.bytes(saved.1, offset as u64, 1),
+                expected[offset..offset + 1]
+            );
+        }
+        check("active-transfer-refusal-known-remote-and-live-bytes");
+        // Continuing G2 accepts an unrelated edit without reissuing the known
+        // canonical Commit. The new private byte must not alter saved G1.
+        f.workspace
+            .write_file(held, 8193, &f.own(b"Z"), deadline())
+            .unwrap();
+        assert_eq!(f.read(held, 8193, 1), b"Z");
+        assert_eq!(f.native.bytes(saved.1, 8193, 1), expected[8193..8194]);
+        let after = f.workspace.backing_status().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
+        assert!(after.allocated_bytes > 0 && before.allocated_bytes > 0);
+        println!("STAGE_MAP_TRANSFER_FAILURE explicit_budget={} before_allocated={} after_allocated={} canonical_known=true local_installed=false next_g2_write=true", REFUSAL_BUDGET, before.allocated_bytes, after.allocated_bytes);
+        check("active-transfer-refusal-g2-and-charge-retained");
+        // The known failed attempt is deliberately not retried or clean-closed.
+    }
+
+    #[test]
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_changed_closure_probe() {
         // Functional/count diagnostic only: one continuing inode changes from
