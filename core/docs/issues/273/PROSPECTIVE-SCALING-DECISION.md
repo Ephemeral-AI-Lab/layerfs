@@ -398,3 +398,94 @@ with exact quota/Budget custody and a continuing G2 process, may we state
 capability remains unresolved, retain NOT_RUN/INCOMPLETE/INELIGIBLE and
 report the achieved scoped improvement, not universal 2x, 10x,
 constant-RAM or release eligibility.
+
+## 8. Subsequent experimental decision (product telemetry `6ea57701b`, extended test `91aca43f5`)
+
+The prospective §§1–7 above were written before either change; their sample
+identity remains iter-012. This section records **new count experiments, not
+new registered performance arms**, from [iteration 013](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-013/RESULTS.json)
+and its [raw checksum manifest](../../../../benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-013/SHA256SUMS).
+The production `representation_only_pages` counter counts index pages emitted
+while a recursive generic index mutation has **no key updates** in that
+subtree. It is a subset of index page writes, includes failed staging, does
+not count a directory page or changed-key path, and is **not** a removable-page
+counter. Public stage runs are functional/count diagnostics with
+`performance_claim=false` and `cache_claim=null`; their instrumented walls
+are not numeric speed comparisons.
+
+| Public stage route | Accepted WRITEs | Seeks / WRITE | Index pages / WRITE | Representation-only / index pages | Other evidence |
+| --- | ---: | ---: | ---: | ---: | --- |
+| dispersed generic 100 | 100 | 15.19 | 3.90 | 0 / 390 | Full bytes, Commit and clean close PASS |
+| dispersed generic 512 | 512 | 15.04 | 5.60 | 0 / 2,866 | Full bytes, Commit and clean close PASS |
+| dispersed generic 4,097 | 4,097 | 14.97 | 6.78 | 810 / 27,780 (2.9%) | Full bytes, Commit and clean close PASS |
+| **extended diagnostic** dispersed generic 8,192 | 8,192 | 14.00 | 7.58 | 3,154 / 62,117 (5.1%) | **FAIL** after accepted WRITEs: canonical Commit observed, local C5 reconciliation `Capacity`; final byte/clean-close checks **NOT_RUN** |
+| same inode, 48 overwrites at one offset then 48 alternating offsets (following 32 eligible appends) | 48 + 48 | 438/48 and 439/48 | 144/48 and 144/48 | 0 / 144 in each | Full private/committed bytes and clean close PASS; 48 directory + 48 pack versions in each group |
+
+The extended tier is an explicitly *nonregistered* diagnostic, not a replacement
+for 4,097 or a passing workload. `8192` uses distinct permuted positions in
+an 8,194-byte file; `gcd(2654435761,8194)=1`. Its WRITE counts end before the
+failing Commit. This failure is **not** attributed definitively to a specific
+allocation: `commit/active_reconcile.rs::prepare` constructs O(E_f) selected
+extent/deletion lists, its charged update map coexists with source/selected
+state, and `publish_reconcile_map` precharges scratch/compaction on the default
+8 MiB Budget. The precise failing reservation was not instrumented. Neither
+repeat the same diagnostic to improve its status nor label its locally failed
+Commit a complete byte/space proof. It exposes a separate C5 memory-headroom
+question above the registered tier, not an observed quadratic public WRITE.
+Raw stderr, the known-local failure and inspected/removed **owned** container
+and volume are retained in iter-013; removal is not a clean Workspace refund.
+
+### Source-bound WRITE result and revised choice
+
+For these one-byte tiny public WRITE schedules (with bounded per-WRITE changed
+coverage), `ExtentPlan::replace` uses `floor` and a bounded range scan of
+*affected* extents, not the file's historic W. At a one-byte point it reaches
+at most the overlapping extent(s) and boundary pieces. `reclaim::live_refs`
+uses bounded-prefix patch queries; the selected inverse scan sees actual
+references of the touched pack/payload, not unrelated packs. In
+`generation.rs::write_with`, `compaction::plan(..., max_sources=1)` **cannot
+enter** its full-P pressure scan (`pressure` requires `max_sources > 1`). A
+logical pack has a fixed 4 KiB body; tiny records are <=128 bytes and a
+one-byte pack has <=80 records. The generic index copies <=8 cursors, checks
+<=64 hot slots and only reached paths plus their normalized ancestors; the
+index height is capped by `MAX_LEVEL=7`. Its branch/leaf scans operate on
+fixed 4 KiB pages. `PageStore` page/owner registry and the frozen-pin map use
+ordered lookups (`O(log A)` and `O(log(G+1))`); ordinary retirement checks
+newly replaced owners, and a final pin release separately visits its actual
+cohort. At most 32 captures and 160 pinned revision keys are admitted.
+
+Consequently the *source-level count* for these accepted point WRITEs is
+`O(W * (log(A+1) + H*(affected_key_paths + U) + page_bytes*new_pages))`,
+plus explicit affected inverse references, bounded pack/slot work, input,
+notifier and owner syscalls. Here `H<=7`, `U<=64` hot slots per mutation,
+fixed 4 KiB pages and constant-size one-byte overlap keep the non-registry
+terms bounded per WRITE **unless** pressure/refusal or a separately charged
+pin-release event changes the operation. This is not an assertion of
+constant elapsed time, universal O(1) WRITE across arbitrary-length writes,
+constant-RAM Commit, or an unconditional bound for payload/namespace paths.
+Nor does it establish that every index page is necessary. The count evidence
+is consistent with the bound: seeks per accepted dispersed WRITE do **not**
+rise from 100 to 8,192 (15.19, 15.04, 14.97, 14.00), while index page versions
+per WRITE and representation-only versions rise. Avoidable local churn is a
+*bounded per-WRITE amplification*, not the claimed historical-W sweep. No
+unbounded quadratic WRITE factor was found in these covered schedules.
+
+**Architecture direction:** retain the v2 authenticated changed-closure index,
+immutable checked acknowledgement, fixed hot caps and generic ordered path.
+Do *not* implement a wider LRU, unproved preallocated/free-slot v3, or Commit
+pack rewrite to "eliminate quadratic WRITE". Design A remains a narrow
+**conditional** follow-up: validate every extra no-key subtree/old cursor
+against actual affected closure, slots, fences, epochs and pins; only skip a
+representation rewrite when its old selected target can provably remain
+referenced, with identical future hot eligibility and old-G1 bytes. Even
+eliminating **all** 810 representation-only pages at 4,097 would affect only
+2.9% of index page versions, and would not remove one mandatory pack version
+per ACK or the required page I/O. For latency architecture B should compare
+measured direct write/readback (2.796/1.441 s in the separate 4,097 stage
+profile) against create/preallocation/release and *first* prove a checked
+compatible v2/v3 owner grammar; no slot reuse or saved-wall claim is selected.
+The higher-priority newly exposed issue for an extended scope is C5's
+charged O(E_f) reconciliation capacity at 8,192, **not** quadratic WRITE.
+There is no permission to change the registered workload/Budget or to call
+iter-013 a new numeric comparison. Iter-012 nine cells retain INELIGIBLE,
+#248 C1-zero remains INCOMPLETE and SDK pinned controls NOT_RUN.

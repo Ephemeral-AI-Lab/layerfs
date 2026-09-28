@@ -736,3 +736,70 @@ ordered Commit sources, with count/RAM/quota oracles, adversarial falsifiers,
 format compatibility prerequisites and existing admission blockers. This is
 **not** iteration 013: no product, harness, registered arm, Docker volume or
 historical evidence changed; iter-012 remains the newest sampled candidate.
+
+## Iteration 013 — generic WRITE representation count; extended C5 refusal
+
+- Production telemetry / external test / architecture commit
+  `6ea57701b910f3b1e64add84a77de3cdae15b1b4` (tree
+  `6b86ddf888e5064d6e6dff930d466d5a9b7959a2`), first parent
+  `e80d3cd288672f708f92fcb0dc0ebc7342802889`: counts only pages
+  emitted from generic subtrees with no key updates. It changes no selected
+  bytes, page format, Budget, hot slots, worker, cache policy or admission
+  algorithm. Count is a lower-bound witness of representation-only page
+  creation, **not** proof a page is safely avoidable. Production LOC by
+  `python3 tools/production_loc.py --json --root <exact first-parent and
+  staged/committed git archive snapshots>`: Core **67,719 -> 67,732 (+13)**,
+  reference **65,417 -> 65,417 (+0)**, combined **133,136 -> 133,149 (+13)**.
+  Architecture counter description co-committed. Extended *test-only* tier
+  commit `91aca43f54627fe26100cc020042a9c5377ba1e4`, tree
+  `51a4332630ca1e25ae3d00efed97bcdfc1f33cfa`, parent `6ea57701b`:
+  Core **67,732 -> 67,732 (+0)**, reference **65,417 -> 65,417 (+0)**,
+  combined **133,149 -> 133,149 (+0)**, same snapshot counter.
+- Affected locked release Workspace and FUSE host tests PASS (macOS Linux
+  gated tests are not host coverage), all-target warning-denying Clippy,
+  fmt, boundary guard (350 files), tools 9/9 and Python route syntax PASS.
+  Exact aarch64 release Linux `active_backing-f325d5782a2161dc` on an
+  **owned ext4** volume with `TMPDIR=LAYERFS_ACTIVE_TEST_ROOT=/work`, serial
+  tests **32/32 PASS**; volume removed. First combined host `--bins
+  --example public_key` build was rejected because the example belongs to
+  another package; retained CLI failure was corrected by a normal locked
+  `--bins` build. No unchanged performance arm was resampled.
+- New committed-identity public Workspace stage tests have
+  `performance_claim=false`, `cache_claim=null`: changed-closure one-offset
+  and alternating 48-WRITE groups both create exactly 144 index versions,
+  48 directory and 48 pack pages, **0** representation-only pages and 0
+  normalizations; full private and committed bytes and exact clean-close
+  PASS. Dispersed 100/512/4,097 public source/count tests PASS full bytes,
+  cleanup and Commit: seeks **1,519/7,699/61,327** (15.19/15.04/14.97
+  per WRITE), index writes **390/2,866/27,780**, representation-only index
+  pages **0/0/810**, and normalizations **38/425/4,785**. Hot/G1-G2
+  continuation, 32 retained generations/refund and quota refusal separately
+  PASS. These tests reuse a protected closed functional fixture by verified
+  independent byte copy; no cold-cache, whole-command speed, phase-cgroup or
+  matched control claim.
+- Deliberate **nonregistered** 8,192-WRITE public diagnostic at test-only
+  source `91aca43f5`: all 8,192 WRITEs acknowledged; source captured seeks
+  **114,714** (14.00/WRITE), 62,117 index versions (7.58/WRITE), 3,154
+  representation-only versions (5.1% of index), 8,192 pack writes, 11,206
+  normalizations. Its SaveFile source line reports 8,192 final refs, 8
+  windows, 824 pack loads and 2,472 index reads. **FAIL**: after a known
+  canonical Commit result, local C5 reconcile returned `Capacity` on default
+  Budget; final byte oracle, Workspace clean close and refund **NOT_RUN**.
+  Exact failing allocation uninstrumented; O(E_f) reconcile patch/selected
+  descriptors and concurrent charged scratch are plausible sources, not a
+  proven diagnosis. Do not resample the same changed identity, enlarge
+  Budget, or reclassify this as a passing 8,192 selection. Raw service/test
+  stderr, failed result, retained Docker inspect/logs and explicit cleanup
+  of **only its owned** container/volume are preserved.
+- Raw public receipts, full commands, test-binary and fixture SHA seals,
+  failure/cleanup evidence, guard/build logs, derivation script, nine unchanged
+  iter-012 row statuses and the SHA manifest are in
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-013/`.
+  [Decision record §8](PROSPECTIVE-SCALING-DECISION.md#8-subsequent-experimental-decision-product-telemetry-6ea57701b-extended-test-91aca43f5)
+  states the restricted source bound and design choice: no demonstrated
+  unbounded quadratic point-WRITE sweep; extra no-key rewrites are bounded
+  locality/eviction costs, not obviously removable. Keep v2, investigate
+  authenticated unchanged closure only if the counts justify it. The extended
+  C5 memory-headroom failure is a separate open issue. Numeric matched
+  comparison, full cache/cgroup proof and other missing selections retain
+  their previous INELIGIBLE/INCOMPLETE/NOT_RUN statuses; PR #274 stays draft.
