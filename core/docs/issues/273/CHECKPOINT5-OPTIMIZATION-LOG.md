@@ -309,3 +309,45 @@
   Iter-007 raw attempts, cache evidence, seals and checksums are retained
   below the same artifact root. New correction verification and exact LOC
   are appended after the prospective identity is frozen.
+
+### Iteration 007 correction frozen and verified (new source identity)
+
+- Product/harness/contract commit `adbee51588d9f6efd35cab3ebb3919f5083fa6b9`;
+  Core production LOC 67,602 -> 67,639 (+37), reference 65,417 unchanged,
+  combined 133,019 -> 133,056 (+37), first parent versus staged/committed
+  snapshots by `python3 tools/production_loc.py --json --root <snapshot>`.
+  Prepared a **new** immutable candidate binary/image identity from the same
+  closed protected masters; no mutated sample or warmed reader was reused.
+- One prospective labelled candidate-only registered-10-MiB causal attempt
+  at each dispersed tier, all with strict anchored v1 source telemetry:
+
+  | Writes | Old source one-page miss model | New distinct-pack/window model | Actual pack loads | Locator seeks / index reads | Records decoded | Complete command wall |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 100 | 41 | 2 | **2** | 2 / 4 | 100 | 2.685 s |
+  | 512 | 512 | 14 | **14** | 14 / 28 | 1,024 | 1.897 s |
+  | 4,097 | 4,097 | 827 | **827** | 827 / 2,481 | 65,530 | 10.217 s |
+
+  Every row had one production `LFS_ACTIVE_SOURCE` line, parser `PASS`,
+  final host Store/history residency zero, final-check-to-launch gaps
+  4,792/4,917/5,666 ns, full driver COMPLETE, C1 counters complete and
+  independent verifiers **SKIPPED** as declared. Row status INELIGIBLE;
+  no qualified control arm or numeric speed comparison. Physical requested
+  whole-pack read bytes from the 4,097 row's 827 loads are
+  `827*4096=3,387,392`, not measured device traffic. The 4,097 model
+  improvement is `4,097/827=4.95x` fewer *pack loads*, not a latency ratio.
+  Locator index reads and decoded records stay charged and observed.
+- Host workspace release PASS (17 executed tests), all-target clippy/fmt,
+  product boundary and core-tools 9/9 PASS; harness 14/14 PASS; release
+  aarch64 zigbuild PASS. Exact Linux `active_backing-f325d5782a2161dc`
+  on an owned ext4 volume, `TMPDIR=/work`, `LAYERFS_ACTIVE_TEST_ROOT=/work`,
+  `--test-threads=1`: 32/32 PASS; public functional stage
+  `active_generic_profile`: full-byte/refund PASS. All raw receipts, source
+  code/artifact/fixture/image hashes, phase/complete times, test output,
+  unsupported-domain statuses and checksum manifest live in `iter-008/`.
+- Old iter-007 corrupted rows remain INCOMPLETE and cannot be relabelled.
+  The correction validates the planned source mechanism but **not** a
+  qualified matched speedup or release gate. Runnable control arms, the
+  independent verifier, additional registered proof selections, phase-local
+  RSS/cgroup, private metadata/VM/backend/device/host cache proof, and
+  SDK retained live-journal controls remain NOT_RUN/INELIGIBLE as applicable.
+  No universal constant-RAM/CPU or 10x claim. The attached PR remains draft.

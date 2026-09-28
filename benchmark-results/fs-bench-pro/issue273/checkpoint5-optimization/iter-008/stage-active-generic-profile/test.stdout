@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_generic_profile ... GENERIC_WRITE_CAUSE writes=4097 hot=0 admissions=3973 normalizations=4785 seeks=61327 index_fetches=28470 index_writes=27780 pack_writes=4097 fit_merge_ns=0 actual_merge_ns=0 cache_decode_ns=80657977 create_identity_ns=239104241 preallocate_ns=573623756 direct_write_ns=3069058298 readback_io_ns=1468697847 readback_auth_ns=559655468 release_ns=285473650
+SOURCE_GROUPING case=dispersed4097 commit_wall_ns=362349000 pack_reads=560 index_seeks=854 ref_limit=256 byte_limit=32768
+STAGE_CHECK active-source-grouped-4097-count-and-full-bytes PASS
+STAGE_CHECK active-source-grouped-4097-clean-close-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 37 filtered out; finished in 10.83s
+
