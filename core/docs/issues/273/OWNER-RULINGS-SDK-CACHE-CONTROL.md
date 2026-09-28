@@ -110,6 +110,9 @@ above record the earlier state; this addendum does not amend past receipts.
   SDK/Bridge contract and full G1/G2/32-pin/cancel/custody proof. No waiver
   was chosen. No API is specified or implemented merely by this decision;
   clean and one-edit registered controls remain **NOT_RUN**.
+  The owner subsequently confirmed the desired historical SDK surface is
+  read-only for contents/namespace: the [handoff API-design appendix](HANDOFF-PREINTEGRATION.md#appendix--prospective-public-read-only-sdk-view-contract-2026-09-28)
+  lists proposed signatures and module ownership, **not** approved code.
 - **§2:** pursue a verified common private-cache and phase-local cgroup
   capability before any future matched campaign. It is not currently
   available/proved; old control **NOT_RUN**, all nine candidate numbers

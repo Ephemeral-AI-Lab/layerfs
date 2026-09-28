@@ -11,6 +11,9 @@
 > publish a numeric speed result, modify another owner's receipts, raise a
 > budget, or claim release readiness. The [order-1 source/evidence publication](PREINTEGRATION-ORDER1-SOURCE-AND-EVIDENCE.md)
 > is the detailed evidence baseline, not a new benchmark receipt.
+> **Later owner direction:** see the [optimization-first work-plan addendum](PREINTEGRATION-REVIEW-20260928.md#4-owner-direction-pursue-substantive-optimization-not-the-easy-waiver)
+> and the prospective read-only SDK-view contract in the appendix below.
+> Those additions do not re-pin the original evidence or authorize a merge.
 
 ## Assignment and hard stop
 
@@ -359,3 +362,128 @@ command and cleanup, open owner ruling, and next action. Finish with:
 Do not merge a draft PR or declare a release merely because #265/#266/#270/
 #271/#273 issues were closed. **Owner review and explicit merge authorization
 remain necessary.**
+
+## Appendix — prospective public read-only SDK view contract (2026-09-28)
+
+> **Design gate:** proposal for owner/API review, not an implemented SDK
+> API, approved Rust signature, released contract or benchmark amendment.
+> The owner accepted work-plan option 1A and clarified that historical
+> private-view reads through the SDK are a desired *product* capability.
+> Existing `WorkspaceApi::{mount,exec,commit,status,unmount}` is sufficient
+> for ordinary live operations, but does not expose an old private selected
+> journal after Commit. The registered clean/one-edit controls remain
+> **NOT_RUN**. Obtain API/Bridge and failure-contract review before writing
+> product code; do not treat this appendix as integration authorization.
+
+### Proposed behavior and read-only boundary
+
+One bounded, non-cloneable opaque `WorkspaceViewLease` pins the *current*
+selected G1 view on the same attached Workspace before ordinary `commit`.
+The lease selects the private root, hot directory with slot epochs, pack
+watermark, namespace/canonical base and relevant owners. Commit may advance
+G2; live `exec`/Commit and running processes continue. All view lookup,
+listing, read and readlink operations are **read-only for contents and
+namespace** and must resolve through that exact old selection, never by
+switching to the latest view, remounting a committed Store or returning an
+unrelated serial. The old view cannot mutate or Commit. Acquiring/releasing
+the lease *does* change charged pin/retirement bookkeeping; final release
+may unlink verified retired physical pages and refund only verified charge.
+Release failure/unknown outcome retains custody and is not silently retried.
+No automatic rollback, process pause, mount restart, whole-Workspace drain,
+canonical format change or test-only API is permitted.
+
+The names below are **proposed** for design review. Public values must carry
+opaque, unforgeable Workspace/incarnation/selected-view bindings; a
+`WorkspaceViewEntry` obtained from one lease cannot be used with another.
+Root and returned entries carry selected serial/kind/attributes without
+exposing private physical page IDs. File I/O and lists are bounded, and
+invalid names, forged/stale entries, wrong kind, exhausted 32-pin admission,
+quota/Budget refusal and deadlines fail before publication or with typed
+retained custody as appropriate. Prefer component-relative identity lookup
+for compatibility with #264; old canonical heads and held/detached identity
+rules must be tested against the exact future combined tree.
+
+| Proposed Rust SDK signature | Output and semantics |
+| --- | --- |
+| `WorkspaceApi::pin_view(&self, id: &WorkspaceId) -> Result<WorkspaceViewLease, WorkspaceError>` | One read-only, charged current-view selection, bound to the live Workspace/incarnation and generation/revision. Do not advance G2 or force Commit merely by pinning. |
+| `WorkspaceViewLease::root(&self) -> WorkspaceViewEntry` | Local accessor for the pinned root identity/attributes; no extra remote call. |
+| `WorkspaceApi::view_lookup(&self, view: &WorkspaceViewLease, parent: &WorkspaceViewEntry, name: &[u8]) -> Result<WorkspaceViewEntry, WorkspaceError>` | One component of G1's *selected* namespace; checks parent attachment/identity and binds the returned entry to this lease. |
+| `WorkspaceApi::view_list(&self, view: &WorkspaceViewLease, dir: &WorkspaceViewEntry, after: Option<&[u8]>, max_entries: usize) -> Result<WorkspaceViewDirectoryPage, WorkspaceError>` | Bounded entries and continuation, all from one selected G1 revision; no live-G2 pagination splice. |
+| `WorkspaceApi::view_read(&self, view: &WorkspaceViewLease, file: &WorkspaceViewEntry, offset: u64, max_bytes: usize) -> Result<WorkspaceViewRead, WorkspaceError>` | Bounded selected G1 bytes plus EOF/identity information; charge response buffers and authenticate private pages. |
+| `WorkspaceApi::view_readlink(&self, view: &WorkspaceViewLease, link: &WorkspaceViewEntry) -> Result<Vec<u8>, WorkspaceError>` | Exact selected G1 symlink target bytes. |
+| `WorkspaceApi::view_status(&self, view: &WorkspaceViewLease) -> Result<WorkspaceViewStatus, WorkspaceError>` | Read-only selection/custody observation for diagnosing uncertain release, **not** a pin or numeric admission proof. |
+| `WorkspaceApi::release_view(&self, view: &mut WorkspaceViewLease) -> Result<WorkspaceViewRelease, WorkspaceError>` | One checked release; distinguish verified release, retained failure and unknown outcome without dropping physical ownership or refunding on a guess. |
+
+`WorkspaceViewRead`, `WorkspaceViewDirectoryPage`,
+`WorkspaceViewStatus`, `WorkspaceViewRelease` and `WorkspaceViewEntry`
+are proposed typed values, not existing exports. `Drop` is not a verified
+remote release. Explicit unmount must fail closed while an active or
+unknown-outcome selector still owns pages, or use a separately reviewed
+checked cancellation protocol. Do not expose raw page IDs, mutate through
+view methods, or introduce an uncharged output cache.
+
+**Proposed call order** (also a falsifier): Mount and Exec the 4,097 writes;
+`pin_view` while that private G1 is still live; run the **existing**
+`commit`; read/list G1 by lease while G2 advances and separately verify G2
+through the live Workspace; release the lease with checked ownership; then
+unmount. Source already contains an internal
+`ActiveBacking::pin_view` (`backing/active/generation.rs:853-869`), but its
+`tail()`/`pin_current()` selection, separate captured Commit pin,
+namespace-base identity and C5 release interaction need a **new proof**.
+A naive SDK call can also block behind the daemon's current control-slot
+lock during an in-flight Commit; do not promise concurrent SDK view reads
+inside C1 without an admission/locking design and proof. Sequential SDK
+view reads across Commit and same-process G2 continuation are separate
+requirements. If the proposed pin-before-Commit ordering cannot satisfy
+them, revise the contract *before* implementation, not the old receipt.
+
+### Proposed implementation ownership and verification
+
+Paths marked `NEW` are a prospective responsibility map, **not** existing
+files or authorization to scaffold empty modules. Keep every production
+file <1,000 physical lines and `lib.rs`/`mod.rs` <=200, declaration and
+reexport only. Extend existing typed validation/authentication rather than
+adding a dependency or test-only product surface.
+
+```text
+core/crates/layerfs-api/core/src/
+  workspace_view.rs                     NEW: public opaque view/entry/result types
+  workspace.rs, lib.rs                  existing: typed errors, thin reexports
+core/crates/layerfs-api/sdk/src/
+  workspace_view.rs                     NEW: WorkspaceApi view methods
+  lib.rs                                existing: thin declarations/reexports
+core/crates/layerfs-bridge/src/contract/
+  workspace_view.rs                     NEW: bounded view requests/results
+  request.rs, outcome.rs,
+  workspace_request.rs, mod.rs          existing: authenticated variants and validation
+core/crates/layerfs-bridge/src/adapters/native/protocol/
+  workspace_view.rs                     NEW: checked native codec
+core/crates/layerfs-daemon/src/
+  control_view.rs                       NEW: authorized view dispatch
+  control.rs, lifecycle.rs              existing: control-slot and close ownership
+core/crates/layerfs-workspace/src/
+  runtime/view_leases.rs                NEW: charged lease registry/custody
+  filesystem/view_reads.rs              NEW: old namespace/file resolution
+  backing/active/lease.rs               NEW: selected active pin/release binding
+core/crates/layerfs-api/sdk/tests/workspace_view.rs        NEW external SDK route
+core/crates/layerfs-bridge/tests/workspace_view.rs         NEW wire/refusal route
+core/crates/layerfs-workspace/tests/view_lease.rs          NEW G1/G2/custody route
+```
+
+Require independent public byte/identity oracles, G1/G2, held and detached
+handles, alias/orphan, v1/v2 old-reader compatibility or explicit refusal,
+≤32-pin acceptance/refusal,
+quota/Budget, notification/cancellation/unknown outcome, C1 success then
+local C5 failure, and verified final-pin unlink/refund. Pin and release
+must not leak physical lifetime or block G2 edits. Update the affected
+active-backing and SDK/control architecture descriptions in the *same
+commit* as implementation, with the true source pin and per-commit
+production LOC.
+
+Adding lease operations to the registered control route changes its public
+call topology, harness and possibly timing boundary. Amend the *future*
+scenario/contract prospectively with new identities and common source seals
+before measuring anything; do not relabel an old fixture, claim that the
+current `retained` harness already exercises this API, treat preparation
+outside timing as cold cache, or repeat an unchanged arm. The owner's 2A
+private-cache/phase-cgroup capability is still separate and unproved.

@@ -296,3 +296,25 @@ functional gate have run here. **NO MERGE / NO NUMERIC ADMISSION** remains
 the current disposition pending those gates; earlier #276 owner-choice
 requests are answered as *direction to pursue 1A/2A*, not as evidence that
 §1/§2 admission succeeded.
+
+## 5. Handoff addendum: proposed SDK lease API is read-only, not yet approved
+
+The owner confirmed that historical private-view **reads** through the
+public SDK are acceptable as a genuine product capability, and asked for
+explicit signatures and module ownership. The [preintegration handoff's
+SDK-view appendix](HANDOFF-PREINTEGRATION.md#appendix--prospective-public-read-only-sdk-view-contract-2026-09-28)
+records a *proposed*, unimplemented `pin_view`/`view_lookup`/`view_list`/
+`view_read`/`view_readlink`/`view_status`/`release_view` API and separate
+first-party product, wire, daemon and external-test responsibilities.
+`WorkspaceApi::{mount,exec,commit,status,unmount}` stays the normal
+live-Workspace interface. A view has **no write/Commit operation**;
+acquisition and final release do charge/retire ownership, and can refuse
+under fixed quotas/Budget. Internal `ActiveBacking::pin_view` is not an
+SDK/Bridge contract or proof of pin-before-Commit/C5 coexistence.
+
+These names, signatures and file locations are an **API design proposal**
+for review before coding, not an owner-approved final Rust contract or a
+permission to sample the two registered SDK controls. The clean/one-edit
+selections stay NOT_RUN, numerical rows INELIGIBLE, prior broad FAILs
+unchanged, and combined source NOT_BUILT. No new performance campaign or
+PR integration is authorized by this addendum.
