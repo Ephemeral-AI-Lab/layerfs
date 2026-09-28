@@ -6,12 +6,16 @@
 mod project;
 mod sandbox;
 mod workspace;
+mod workspace_view;
 pub use layerfs_api_core::{
     Branch, DeleteError, Error, ExecResult, Mount, Project, SandboxId, SandboxInfo, SandboxStatus,
-    WorkspaceError, WorkspaceId, WorkspaceStatus,
+    WorkspaceError, WorkspaceId, WorkspaceStatus, WorkspaceViewDirectoryPage, WorkspaceViewEntry,
+    WorkspaceViewKind, WorkspaceViewLease, WorkspaceViewRead, WorkspaceViewRelease,
+    WorkspaceViewStatus,
 };
 pub use layerfs_bridge::contract::{CommitOutcomeWire, WorkspaceCommitReportWire};
 pub use layerfs_server::{HistoryMode, Server, ServerConfig};
 pub use project::{ProjectApi, BRANCH_BODY_BYTES};
 pub use sandbox::SandboxApi;
 pub use workspace::WorkspaceApi;
+pub use workspace_view::{WORKSPACE_VIEW_LIST_ENTRIES, WORKSPACE_VIEW_READ_BYTES};

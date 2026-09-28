@@ -25,10 +25,14 @@ pub mod sequence {
 }
 pub use backing::reader::PayloadReader;
 pub use commit_types::*;
+pub use filesystem::view_reads::{
+    ViewEntryData, ViewLeaseInfo, ViewLeaseStatus, ViewListPage, ViewReadData, ViewRelease,
+};
 pub use layerfs_bridge::contract::Code as ServiceCode;
 pub use overlay::pieces::{Piece, PieceKind};
 pub use runtime::coherence::{ProjectionMutationPermit, ProjectionReplyPermit};
 pub use runtime::host::WorkspaceHost;
 pub use runtime::lifecycle::MountLease;
 pub use runtime::state::Workspace;
+pub use runtime::view_leases::{MAXIMUM_VIEW_LEASES, VIEW_LEASE_BYTES};
 pub use types::*;

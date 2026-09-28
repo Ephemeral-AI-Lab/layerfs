@@ -3,6 +3,7 @@
 mod config;
 mod control;
 mod control_commit;
+mod control_view;
 mod execution;
 mod headless;
 mod lifecycle;

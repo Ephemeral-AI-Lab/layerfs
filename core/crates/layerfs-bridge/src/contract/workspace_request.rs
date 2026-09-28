@@ -1,5 +1,8 @@
 //! Admission checks for the daemon-only control request family.
-use super::{control::check_workspace_identity, history::tag, *};
+use super::{
+    control::check_workspace_identity, history::tag, workspace_view::check_view_name,
+    workspace_view::check_view_token, *,
+};
 
 pub(crate) fn validate(request: &Request) -> Result<(), Failure> {
     let maximum = match &request.operation {
@@ -10,7 +13,8 @@ pub(crate) fn validate(request: &Request) -> Result<(), Failure> {
         Operation::WorkspaceCommit { .. } => WORKSPACE_COMMIT_MAX_MS,
         Operation::WorkspaceOpen { .. } => WORKSPACE_OPEN_MAX_MS,
         Operation::WorkspaceExec { .. } => WORKSPACE_EXEC_MAX_MS,
-        _ => WORKSPACE_STATUS_MAX_MS,
+        Operation::WorkspaceReleaseView { .. } => WORKSPACE_RELEASE_VIEW_MAX_MS,
+        _ => WORKSPACE_VIEW_MAX_MS,
     };
     if request.store != 0
         || request.generation != 0
@@ -54,6 +58,40 @@ pub(crate) fn validate(request: &Request) -> Result<(), Failure> {
             workspace,
             incarnation,
             ..
+        }
+        | Operation::WorkspacePinView {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceViewLookup {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewList {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewRead {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewReadlink {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewStatus {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceReleaseView {
+            workspace,
+            incarnation,
+            ..
         } => (workspace, incarnation),
         _ => return Err(Code::InvalidInput.into()),
     };
@@ -83,6 +121,38 @@ pub(crate) fn validate(request: &Request) -> Result<(), Failure> {
             {
                 return Err(Code::InvalidInput.into());
             }
+        }
+        Operation::WorkspacePinView { .. } => {}
+        Operation::WorkspaceViewLookup { view, name, .. } => {
+            check_view_token(view)?;
+            check_view_name(name)?;
+        }
+        Operation::WorkspaceViewList {
+            view,
+            after,
+            entries,
+            ..
+        } => {
+            check_view_token(view)?;
+            if *entries == 0 || *entries as usize > VIEW_LIST_ENTRIES {
+                return Err(Code::InvalidInput.into());
+            }
+            if let Some(after) = after {
+                if after.len() > VIEW_NAME_BYTES || after.contains(&0) {
+                    return Err(Code::InvalidInput.into());
+                }
+            }
+        }
+        Operation::WorkspaceViewRead { view, bytes, .. } => {
+            check_view_token(view)?;
+            if *bytes as usize > VIEW_READ_BYTES {
+                return Err(Code::InvalidInput.into());
+            }
+        }
+        Operation::WorkspaceViewReadlink { view, .. }
+        | Operation::WorkspaceViewStatus { view, .. }
+        | Operation::WorkspaceReleaseView { view, .. } => {
+            check_view_token(view)?;
         }
         _ => {}
     }

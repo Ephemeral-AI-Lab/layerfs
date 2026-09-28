@@ -431,6 +431,94 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
             hello.validate().is_ok() && bytes == 0
         }
         (
+            Operation::WorkspacePinView {
+                workspace,
+                incarnation,
+            },
+            Response::WorkspaceViewLease(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (Operation::WorkspaceViewLookup { .. }, Response::WorkspaceViewEntry(result)) => {
+            result.validate().is_ok() && bytes == 0
+        }
+        (
+            Operation::WorkspaceViewList {
+                workspace,
+                incarnation,
+                view,
+                ..
+            },
+            Response::WorkspaceViewList(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.view == *view
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceViewRead {
+                workspace,
+                incarnation,
+                view,
+                ..
+            },
+            Response::WorkspaceViewRead(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.view == *view
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceViewReadlink {
+                workspace,
+                incarnation,
+                view,
+                ..
+            },
+            Response::WorkspaceViewReadlink(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.view == *view
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceViewStatus {
+                workspace,
+                incarnation,
+                view,
+            },
+            Response::WorkspaceViewStatus(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.view == *view
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
+            Operation::WorkspaceReleaseView {
+                workspace,
+                incarnation,
+                view,
+            },
+            Response::WorkspaceViewRelease(result),
+        ) => {
+            result.workspace == *workspace
+                && result.incarnation == *incarnation
+                && result.view == *view
+                && result.validate().is_ok()
+                && bytes == 0
+        }
+        (
             Operation::WorkspaceOpen {
                 workspace,
                 incarnation,

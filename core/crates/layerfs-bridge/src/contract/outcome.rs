@@ -133,6 +133,20 @@ pub enum Response {
         inserted: u64,
         reused: u64,
     },
+    /// The pinned lease one `WorkspacePinView` returned.
+    WorkspaceViewLease(Box<super::WorkspaceViewLeaseWire>),
+    /// One entry a pinned view resolved.
+    WorkspaceViewEntry(super::WorkspaceViewEntryWire),
+    /// One bounded listing page from one selected view revision.
+    WorkspaceViewList(Box<super::WorkspaceViewListWire>),
+    /// Bounded pinned bytes with end-of-file and pinned size.
+    WorkspaceViewRead(Box<super::WorkspaceViewReadWire>),
+    /// Exact pinned symlink target bytes.
+    WorkspaceViewReadlink(Box<super::WorkspaceViewReadlinkWire>),
+    /// Read-only custody observation of one held lease.
+    WorkspaceViewStatus(Box<super::WorkspaceViewStatusWire>),
+    /// The checked lease release terminal: retained custody is not a release.
+    WorkspaceViewRelease(Box<super::WorkspaceViewReleaseWire>),
     /// Fresh portable attribute tree, with no base or namespace publication.
     MetadataConstructed {
         kind: u8,

@@ -538,6 +538,7 @@ impl WorkspaceHost {
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
                 stopping: AtomicBool::new(false),
+                view_leases: crate::runtime::view_leases::ViewLeases::new(&self.inner.budget)?,
                 _charge: charge,
                 state: Mutex::new(State {
                     base,

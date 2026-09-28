@@ -241,6 +241,13 @@ pub(crate) fn dispatch(
         | Operation::WorkspaceMount { .. }
         | Operation::WorkspaceOpen { .. }
         | Operation::WorkspaceExec { .. }
+        | Operation::WorkspacePinView { .. }
+        | Operation::WorkspaceViewLookup { .. }
+        | Operation::WorkspaceViewList { .. }
+        | Operation::WorkspaceViewRead { .. }
+        | Operation::WorkspaceViewReadlink { .. }
+        | Operation::WorkspaceViewStatus { .. }
+        | Operation::WorkspaceReleaseView { .. }
         | Operation::SandboxHello => Err(Code::Unsupported.into()),
         Operation::HistoryQuery(query) => {
             end_input(input)?;

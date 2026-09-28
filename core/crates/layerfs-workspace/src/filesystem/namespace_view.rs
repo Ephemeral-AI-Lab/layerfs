@@ -25,6 +25,25 @@ pub(crate) struct PinnedDirectoryPath {
     pub parent: u64,
     _charge: Charge,
 }
+impl View {
+    /// Takes the pinned active snapshot out and releases it through the
+    /// checked retirement path. A non-active view has no pin to release.
+    /// A shared snapshot (which the registry never creates) is restored and
+    /// reported Busy rather than dropped with its pin still held.
+    pub(crate) fn release_active(&mut self) -> Result<(), WorkspaceError> {
+        match self.active.take() {
+            Some(snapshot) => match Arc::try_unwrap(snapshot) {
+                Ok(exclusive) => exclusive.release(),
+                Err(shared) => {
+                    self.active = Some(shared);
+                    Err(WorkspaceError::Busy)
+                }
+            },
+            None => Ok(()),
+        }
+    }
+}
+
 impl PinnedDirectoryPath {
     pub fn new(
         path: &[u8],

@@ -7,6 +7,22 @@
 > skips the row's remainder. The Bridge propagates an I/O error from the final
 > trailing-byte read instead of treating it as EOF. The wire format is unchanged.
 
+> **View-lease correction (SDK read-only views):** the changes committed with
+> this paragraph add the public read-only `WorkspaceViewLease` capability:
+> `WorkspaceApi::{pin_view, view_lookup, view_list, view_read, view_readlink,
+> view_status, release_view}` over seven daemon control operations (opcodes
+> 21-27, one shared view-authority grant bit), a native wire codec, and a
+> charged Workspace lease registry bounded to 32 held leases. A lease pins the
+> current selected view through `ActiveBacking::pin_view` (no generation
+> advance) and resolves lookups, listings, reads and readlinks through that
+> exact pinned selection; acquiring and releasing it holds and retires charged
+> pins, and the checked release runs the retirement selector with retained
+> custody on failure. View operations take the same daemon control slot as
+> every other control operation, so a view call during an in-flight Commit
+> answers Busy; sequential reads across a finished Commit are the supported
+> order. The contract is recorded in
+> [`SDK-VIEW-LEASE-CONTRACT-20260928.md`](../issues/273/SDK-VIEW-LEASE-CONTRACT-20260928.md).
+
 > **Status:** Current general guide.
 
 This describes the issue #192 implementation candidate for v0.1.7; it is not a

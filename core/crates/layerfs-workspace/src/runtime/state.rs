@@ -37,6 +37,7 @@ pub(crate) struct Inner {
     pub directory: Option<Arc<crate::backing::directory::Directory>>,
     pub stopping: AtomicBool,
     pub state: Mutex<State>,
+    pub view_leases: crate::runtime::view_leases::ViewLeases,
     pub _charge: Charge,
 }
 pub(crate) struct State {

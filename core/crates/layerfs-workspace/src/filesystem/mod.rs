@@ -20,4 +20,5 @@ mod remove;
 pub(crate) mod rename;
 mod resize;
 mod symlink;
+pub mod view_reads;
 mod write;

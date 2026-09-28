@@ -911,6 +911,15 @@ impl ActiveSnapshot {
             .scan(lower, upper, limit)
     }
 
+    /// The pinned revision this snapshot selected.
+    pub fn revision(&self) -> Result<u64, WorkspaceError> {
+        Ok(self
+            .index
+            .as_ref()
+            .ok_or(WorkspaceError::Closed)?
+            .revision())
+    }
+
     fn release_inner(&mut self) -> Result<(), WorkspaceError> {
         let mut state = self.active.state.lock().map_err(|_| WorkspaceError::Io)?;
         let revision = self

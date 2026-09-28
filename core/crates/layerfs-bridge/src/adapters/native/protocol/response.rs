@@ -23,6 +23,15 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::MetadataConstructed { .. } => {
             Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_RESULT_BYTES)
         }
+        Response::WorkspaceViewLease(_) => Encoder::bounded(WORKSPACE_VIEW_LEASE_RESULT_BYTES),
+        Response::WorkspaceViewEntry(_) => Encoder::bounded(WORKSPACE_VIEW_LEASE_RESULT_BYTES),
+        Response::WorkspaceViewList(_) => Encoder::bounded(WORKSPACE_VIEW_LIST_RESULT_BYTES),
+        Response::WorkspaceViewRead(_) => Encoder::bounded(WORKSPACE_VIEW_READ_RESULT_BYTES),
+        Response::WorkspaceViewReadlink(_) => {
+            Encoder::bounded(WORKSPACE_VIEW_READLINK_RESULT_BYTES)
+        }
+        Response::WorkspaceViewStatus(_) => Encoder::bounded(WORKSPACE_VIEW_STATUS_RESULT_BYTES),
+        Response::WorkspaceViewRelease(_) => Encoder::bounded(WORKSPACE_VIEW_RELEASE_RESULT_BYTES),
         _ => Encoder::default(),
     };
     match r {
@@ -129,6 +138,34 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         Response::WorkspaceExec(result) => {
             e.u8(21)?;
             put_exec(&mut e, result)?;
+        }
+        Response::WorkspaceViewLease(result) => {
+            e.u8(22)?;
+            super::workspace_view::put_lease(&mut e, result)?;
+        }
+        Response::WorkspaceViewEntry(result) => {
+            e.u8(23)?;
+            super::workspace_view::put_entry(&mut e, result)?;
+        }
+        Response::WorkspaceViewList(result) => {
+            e.u8(24)?;
+            super::workspace_view::put_list(&mut e, result)?;
+        }
+        Response::WorkspaceViewRead(result) => {
+            e.u8(25)?;
+            super::workspace_view::put_read(&mut e, result)?;
+        }
+        Response::WorkspaceViewReadlink(result) => {
+            e.u8(26)?;
+            super::workspace_view::put_readlink(&mut e, result)?;
+        }
+        Response::WorkspaceViewStatus(result) => {
+            e.u8(27)?;
+            super::workspace_view::put_status(&mut e, result)?;
+        }
+        Response::WorkspaceViewRelease(result) => {
+            e.u8(28)?;
+            super::workspace_view::put_release(&mut e, result)?;
         }
         Response::WorkspaceUnmount(result)
         | Response::WorkspaceCloseClean(result)
@@ -662,6 +699,17 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             instance: d.root()?,
         }),
         21 => Response::WorkspaceExec(Box::new(take_exec(&mut d)?)),
+        22 => Response::WorkspaceViewLease(Box::new(super::workspace_view::take_lease(&mut d)?)),
+        23 => Response::WorkspaceViewEntry(super::workspace_view::take_entry(&mut d)?),
+        24 => Response::WorkspaceViewList(Box::new(super::workspace_view::take_list(&mut d)?)),
+        25 => Response::WorkspaceViewRead(Box::new(super::workspace_view::take_read(&mut d)?)),
+        26 => {
+            Response::WorkspaceViewReadlink(Box::new(super::workspace_view::take_readlink(&mut d)?))
+        }
+        27 => Response::WorkspaceViewStatus(Box::new(super::workspace_view::take_status(&mut d)?)),
+        28 => {
+            Response::WorkspaceViewRelease(Box::new(super::workspace_view::take_release(&mut d)?))
+        }
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;

@@ -5,8 +5,11 @@ use super::{
     HISTORY_PROFILE, LAYER_BYTES, MAX_PREPARED_STREAM_BYTES, NAME_MAX_BYTES, PAGE_RECORDS,
     QUERY_OPCODE, SANDBOX_HELLO_OPCODE, STACK_BYTES, UPDATE_PORTABLE_METADATA_OPCODE,
     WORKSPACE_ATTACH_OPCODE, WORKSPACE_CLOSE_CLEAN_OPCODE, WORKSPACE_COMMIT_OPCODE,
-    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE, WORKSPACE_STATUS_OPCODE,
-    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE,
+    WORKSPACE_EXEC_OPCODE, WORKSPACE_MOUNT_OPCODE, WORKSPACE_OPEN_OPCODE,
+    WORKSPACE_PIN_VIEW_OPCODE, WORKSPACE_RELEASE_VIEW_OPCODE, WORKSPACE_STATUS_OPCODE,
+    WORKSPACE_STATUS_PROFILE, WORKSPACE_UNMOUNT_OPCODE, WORKSPACE_VIEW_LIST_OPCODE,
+    WORKSPACE_VIEW_LOOKUP_OPCODE, WORKSPACE_VIEW_READLINK_OPCODE, WORKSPACE_VIEW_READ_OPCODE,
+    WORKSPACE_VIEW_STATUS_OPCODE,
 };
 pub const FRAME_BYTES: usize = 16384;
 pub const METADATA_BYTES: usize = 32768;
@@ -149,6 +152,57 @@ pub enum Operation {
         mtime_seconds: i64,
         mtime_nanoseconds: u32,
     },
+    /// Pins the current selected view of the attached Workspace as one
+    /// charged read-only lease. Neither contents nor namespace change.
+    WorkspacePinView {
+        workspace: Vec<u8>,
+        incarnation: Root,
+    },
+    /// Resolves one name component through one held pinned view.
+    WorkspaceViewLookup {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+        parent: u64,
+        name: Vec<u8>,
+    },
+    /// One bounded listing page through one held pinned view.
+    WorkspaceViewList {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+        directory: u64,
+        after: Option<Vec<u8>>,
+        entries: u16,
+    },
+    /// Bounded pinned bytes through one held pinned view.
+    WorkspaceViewRead {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+        file: u64,
+        offset: u64,
+        bytes: u32,
+    },
+    /// Exact pinned symlink target through one held pinned view.
+    WorkspaceViewReadlink {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+        link: u64,
+    },
+    /// Read-only custody observation of one held pinned view.
+    WorkspaceViewStatus {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+    },
+    /// The checked release of one held pinned view.
+    WorkspaceReleaseView {
+        workspace: Vec<u8>,
+        incarnation: Root,
+        view: Vec<u8>,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Inspect {
@@ -212,6 +266,13 @@ impl Operation {
             Self::WorkspaceExec { .. } => WORKSPACE_EXEC_OPCODE,
             Self::UpdatePortableMetadata { .. } => UPDATE_PORTABLE_METADATA_OPCODE,
             Self::ConstructPortableMetadata { .. } => CONSTRUCT_PORTABLE_METADATA_OPCODE,
+            Self::WorkspacePinView { .. } => WORKSPACE_PIN_VIEW_OPCODE,
+            Self::WorkspaceViewLookup { .. } => WORKSPACE_VIEW_LOOKUP_OPCODE,
+            Self::WorkspaceViewList { .. } => WORKSPACE_VIEW_LIST_OPCODE,
+            Self::WorkspaceViewRead { .. } => WORKSPACE_VIEW_READ_OPCODE,
+            Self::WorkspaceViewReadlink { .. } => WORKSPACE_VIEW_READLINK_OPCODE,
+            Self::WorkspaceViewStatus { .. } => WORKSPACE_VIEW_STATUS_OPCODE,
+            Self::WorkspaceReleaseView { .. } => WORKSPACE_RELEASE_VIEW_OPCODE,
         }
     }
     pub const fn label(&self) -> &'static str {
@@ -233,6 +294,13 @@ impl Operation {
             Self::WorkspaceExec { .. } => "WorkspaceExec",
             Self::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
             Self::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
+            Self::WorkspacePinView { .. } => "WorkspacePinView",
+            Self::WorkspaceViewLookup { .. } => "WorkspaceViewLookup",
+            Self::WorkspaceViewList { .. } => "WorkspaceViewList",
+            Self::WorkspaceViewRead { .. } => "WorkspaceViewRead",
+            Self::WorkspaceViewReadlink { .. } => "WorkspaceViewReadlink",
+            Self::WorkspaceViewStatus { .. } => "WorkspaceViewStatus",
+            Self::WorkspaceReleaseView { .. } => "WorkspaceReleaseView",
         }
     }
     /// True for an operation that changes neither stored nor daemon lifecycle state.
@@ -242,7 +310,12 @@ impl Operation {
             | Self::Inspect { .. }
             | Self::HistoryQuery(_)
             | Self::WorkspaceStatus { .. }
-            | Self::SandboxHello => true,
+            | Self::SandboxHello
+            | Self::WorkspaceViewLookup { .. }
+            | Self::WorkspaceViewList { .. }
+            | Self::WorkspaceViewRead { .. }
+            | Self::WorkspaceViewReadlink { .. }
+            | Self::WorkspaceViewStatus { .. } => true,
             Self::SaveFile { .. }
             | Self::ConstructSymlink { .. }
             | Self::UpdatePortableMetadata { .. }
@@ -254,7 +327,11 @@ impl Operation {
             | Self::WorkspaceCommit { .. }
             | Self::WorkspaceOpen { .. }
             | Self::WorkspaceExec { .. }
-            | Self::HistoryCommand(_) => false,
+            | Self::HistoryCommand(_)
+            // Pinning and releasing hold and retire charged pins; they are not
+            // read-only even though every view read is.
+            | Self::WorkspacePinView { .. }
+            | Self::WorkspaceReleaseView { .. } => false,
         }
     }
 
@@ -288,7 +365,14 @@ impl Operation {
                 | HistoryCommand::AddLayer { .. }
                 | HistoryCommand::DiscardStage { .. }
                 | HistoryCommand::ReserveInodes { .. },
-            ) => false,
+            )
+            | Self::WorkspacePinView { .. }
+            | Self::WorkspaceViewLookup { .. }
+            | Self::WorkspaceViewList { .. }
+            | Self::WorkspaceViewRead { .. }
+            | Self::WorkspaceViewReadlink { .. }
+            | Self::WorkspaceViewStatus { .. }
+            | Self::WorkspaceReleaseView { .. } => false,
         }
     }
 
@@ -325,7 +409,14 @@ impl Operation {
                 HistoryCommand::ImportNativeDirectory { .. }
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
-            ) => false,
+            )
+            | Self::WorkspacePinView { .. }
+            | Self::WorkspaceViewLookup { .. }
+            | Self::WorkspaceViewList { .. }
+            | Self::WorkspaceViewRead { .. }
+            | Self::WorkspaceViewReadlink { .. }
+            | Self::WorkspaceViewStatus { .. }
+            | Self::WorkspaceReleaseView { .. } => false,
         }
     }
 
@@ -362,7 +453,14 @@ impl Request {
             | Operation::WorkspaceCloseClean { .. }
             | Operation::WorkspaceMount { .. }
             | Operation::WorkspaceAttach { .. }
-            | Operation::WorkspaceCommit { .. } => WORKSPACE_STATUS_PROFILE,
+            | Operation::WorkspaceCommit { .. }
+            | Operation::WorkspacePinView { .. }
+            | Operation::WorkspaceViewLookup { .. }
+            | Operation::WorkspaceViewList { .. }
+            | Operation::WorkspaceViewRead { .. }
+            | Operation::WorkspaceViewReadlink { .. }
+            | Operation::WorkspaceViewStatus { .. }
+            | Operation::WorkspaceReleaseView { .. } => WORKSPACE_STATUS_PROFILE,
             Operation::SandboxHello
             | Operation::WorkspaceOpen { .. }
             | Operation::WorkspaceExec { .. } => WORKSPACE_STATUS_PROFILE,
@@ -427,7 +525,14 @@ impl Request {
             | Operation::WorkspaceAttach { .. }
             | Operation::WorkspaceCommit { .. }
             | Operation::WorkspaceOpen { .. }
-            | Operation::WorkspaceExec { .. } => super::workspace_request::validate(self)?,
+            | Operation::WorkspaceExec { .. }
+            | Operation::WorkspacePinView { .. }
+            | Operation::WorkspaceViewLookup { .. }
+            | Operation::WorkspaceViewList { .. }
+            | Operation::WorkspaceViewRead { .. }
+            | Operation::WorkspaceViewReadlink { .. }
+            | Operation::WorkspaceViewStatus { .. }
+            | Operation::WorkspaceReleaseView { .. } => super::workspace_request::validate(self)?,
             Operation::ReadFile { start, end, .. } => {
                 if start > end || end - start > self.response_bytes {
                     return Err(invalid());

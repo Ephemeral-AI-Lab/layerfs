@@ -12,3 +12,4 @@ mod control;
 mod execution;
 mod prepared;
 mod workspace_commit;
+mod workspace_view;
