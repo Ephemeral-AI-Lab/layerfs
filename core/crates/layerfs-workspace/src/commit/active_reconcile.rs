@@ -114,7 +114,9 @@ pub(super) fn reconcile(
 ) -> Result<u64, WorkspaceError> {
     crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
     let captured = submission.capture()?;
-    let (rows, _rows_charge) = prepare(workspace, captured, submission, deadline)?;
+    let prep_budget_before = workspace.host.budget.used();
+    let (rows, rows_charge) = prepare(workspace, captured, submission, deadline)?;
+    let prep_budget_after = workspace.host.budget.used();
     let bytes = rows.iter().try_fold(0usize, |bytes, row| {
         row.deletions.iter().try_fold(
             bytes
@@ -128,6 +130,16 @@ pub(super) fn reconcile(
         )
     })?;
     let updates_charge = workspace.host.budget.reserve(bytes)?;
+    if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref() == Some(std::ffi::OsStr::new("1")) {
+        eprintln!(
+            "LFS_C5_CHARGE v=1 phase=prepared dirty_rows={} deletion_keys={} deletion_key_bytes={} rows_charge={} deletion_charge={} updates_charge={} budget_before={} budget_after_prepare={} budget_after_updates={}",
+            rows.len(), rows.iter().map(|row| row.deletions.len()).sum::<usize>(),
+            rows.iter().flat_map(|row| &row.deletions).map(Vec::len).sum::<usize>(),
+            rows_charge.bytes(), rows.iter().map(|row| row._charge.bytes()).sum::<usize>(),
+            updates_charge.bytes(), prep_budget_before, prep_budget_after,
+            workspace.host.budget.used(),
+        );
+    }
     let (head, canonical) = match outcome {
         CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
         CommitOutcomeWire::UpToDate { head, root } => (*head, *root),

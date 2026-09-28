@@ -110,6 +110,7 @@ impl ActiveBacking {
         let tail = self.pack.tail()?;
         let (generation, prior) = self.index.generation_revision()?;
         let next = prior.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+        let budget_before_plan = self.store.budget().used();
         let plan = compaction::plan(
             self.store.clone(),
             &self.pack,
@@ -119,6 +120,7 @@ impl ActiveBacking {
             next,
             usize::MAX,
         )?;
+        let budget_after_plan = self.store.budget().used();
         let scratch_bytes = updates
             .len()
             .checked_mul(std::mem::size_of::<(Vec<u8>, Option<Vec<u8>>)>())
@@ -128,6 +130,14 @@ impl ActiveBacking {
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };
         let ordered: Vec<_> = updates.into_iter().collect();
+        if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref() == Some(std::ffi::OsStr::new("1"))
+        {
+            eprintln!(
+                "LFS_C5_CHARGE v=1 phase=index_prepare updates={} updates_charge={} ordered_scratch={} budget_before_plan={} budget_after_plan={} budget_before_index={} compaction_sources={}",
+                ordered.len(), _updates_charge.bytes(), _scratch.bytes(),
+                budget_before_plan, budget_after_plan, self.store.budget().used(), plan.retired_len(),
+            );
+        }
         let candidate = match self.index.prepare(&ordered) {
             Ok(candidate) => candidate,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),

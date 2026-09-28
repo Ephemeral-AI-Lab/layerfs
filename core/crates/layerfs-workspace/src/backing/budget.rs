@@ -53,6 +53,10 @@ impl Drop for Charge {
     }
 }
 impl Charge {
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
     /// Adjusts a reservation to the capacity the allocator actually retained.
     #[track_caller]
     pub fn resize(&mut self, bytes: usize) -> Result<(), WorkspaceError> {

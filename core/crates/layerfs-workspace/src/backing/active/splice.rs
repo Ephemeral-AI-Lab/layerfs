@@ -126,6 +126,23 @@ fn balance<T>(
     Ok(groups)
 }
 
+/// Disjoint creation causes, not proof that a selected page can be omitted.
+#[derive(Clone, Copy)]
+pub(super) enum PageCause {
+    DirectLeaf,
+    DirectParent,
+    ChangedLeaf,
+    ChangedParent,
+    AdmitNoKey,
+    NormalizeNoKey,
+    ConnectNoKey,
+    Height,
+}
+
+impl PageCause {
+    pub(super) const COUNT: usize = 8;
+}
+
 /// One staged mutation: the selected directory copy plus every page it staged.
 pub(super) struct Mutation {
     pub(super) directory: Directory,
@@ -134,6 +151,7 @@ pub(super) struct Mutation {
     pub(super) created: Vec<PageRef>,
     pub(super) replaced: Vec<PageRef>,
     pub(super) charge: Charge,
+    pub(super) page_causes: [u64; PageCause::COUNT],
     pub(super) cache: Cache,
     admitted: BTreeMap<PageRef, (usize, u64)>,
     loaded: BTreeMap<PageRef, Arc<Cached>>,
@@ -161,6 +179,7 @@ impl Mutation {
             created: Vec::new(),
             replaced: Vec::new(),
             charge,
+            page_causes: [0; PageCause::COUNT],
             cache,
             admitted: BTreeMap::new(),
             loaded: BTreeMap::new(),
@@ -431,6 +450,7 @@ impl Mutation {
         at: Option<Target>,
         nodes: Vec<(Node, Vec<u8>)>,
         lower: &[u8],
+        cause: PageCause,
     ) -> Result<Vec<Child>, WorkspaceError> {
         let hot = match at {
             Some(target) if target.tag == TAG_HOT => {
@@ -485,10 +505,9 @@ impl Mutation {
             } else {
                 None
             };
-            children.push(Child {
-                fence,
-                target: self.page(store, node, generation, revision, level, keep)?,
-            });
+            let target = self.page(store, node, generation, revision, level, keep)?;
+            self.page_causes[cause as usize] += 1;
+            children.push(Child { fence, target });
         }
         Ok(children)
     }
@@ -642,6 +661,7 @@ impl Mutation {
                 Some(target),
                 nodes,
                 &binding.lower,
+                PageCause::DirectLeaf,
             )?;
             self.replaced.push(entry.page);
             if children.len() == 1 && children[0].target == target {
@@ -714,6 +734,7 @@ impl Mutation {
                 Some(target),
                 nodes,
                 lower,
+                PageCause::DirectParent,
             )?;
             self.replaced.push(entry.page);
             if replacement.len() == 1 && replacement[0].target == target {
@@ -784,7 +805,16 @@ impl Mutation {
                     .collect(),
                 upper,
             )?;
-            return self.emit(store, generation, revision, level, None, nodes, lower);
+            return self.emit(
+                store,
+                generation,
+                revision,
+                level,
+                None,
+                nodes,
+                lower,
+                PageCause::ChangedLeaf,
+            );
         };
         let previous = self.previous(target, level)?;
         let selected = self.load(store, selection, target, level)?;
@@ -859,6 +889,19 @@ impl Mutation {
         };
         let _ = kind;
         let before_pages = self.created.len();
+        let cause = if !updates.is_empty() {
+            if level == 0 {
+                PageCause::ChangedLeaf
+            } else {
+                PageCause::ChangedParent
+            }
+        } else if target.tag != TAG_HOT && self.admitted.contains_key(&previous) {
+            PageCause::AdmitNoKey
+        } else if target.tag == TAG_HOT && self.normalize & (1 << target.hot_slot()?) != 0 {
+            PageCause::NormalizeNoKey
+        } else {
+            PageCause::ConnectNoKey
+        };
         let children = self.emit(
             store,
             generation,
@@ -867,6 +910,7 @@ impl Mutation {
             Some(target),
             nodes,
             lower,
+            cause,
         )?;
         if updates.is_empty() {
             store.count(

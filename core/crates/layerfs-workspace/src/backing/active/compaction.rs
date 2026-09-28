@@ -70,6 +70,7 @@ pub(super) struct CompactionPlan {
     charge: Charge,
     updates_charge: Charge,
     updates_bytes: usize,
+    attempted_pages: usize,
     finished: bool,
 }
 
@@ -95,6 +96,7 @@ impl CompactionPlan {
             charge,
             updates_charge,
             updates_bytes: 0,
+            attempted_pages: 0,
             finished: false,
         })
     }
@@ -145,6 +147,10 @@ impl CompactionPlan {
         self.new_pages
             .try_reserve_exact(1)
             .map_err(|_| WorkspaceError::Capacity)?;
+        self.attempted_pages = self
+            .attempted_pages
+            .checked_add(1)
+            .ok_or(WorkspaceError::Capacity)?;
         let physical =
             self.store
                 .create(Kind::Pack, generation, revision, dest.records, &dest.body)?;
@@ -260,6 +266,21 @@ pub(super) fn plan(
     max_sources: usize,
 ) -> Result<CompactionPlan, WorkspaceError> {
     let mut planned = CompactionPlan::new(store.clone())?;
+    // One bounded per-plan causal record: the pressure scan is not a physical
+    // reservation. Do not confuse these pack reads with SaveFile source loads.
+    let mut branch = "unreached";
+    let mut pressure_estimate = 0u64;
+    let mut remaining = None;
+    let mut touched_logicals = 0usize;
+    let mut all_logicals = 0usize;
+    let mut scan_calls = 0usize;
+    let mut scanned_locators = 0usize;
+    let mut pressure_pack_reads = 0usize;
+    let mut source_pack_reads = 0usize;
+    let mut partial_count = 0usize;
+    let mut paired_count = 0usize;
+    let budget_before = store.budget().used();
+    let initial_updates = updates.len();
     let result = (|| -> Result<(), WorkspaceError> {
         let mut logicals = BTreeSet::new();
         let mut logicals_charge = store.budget().reserve(
@@ -276,6 +297,7 @@ pub(super) fn plan(
             }
         }
         logicals_charge.resize(logicals.len() * 96)?;
+        touched_logicals = logicals.len();
         // A Commit with little admission headroom can pool previously mixed
         // sealed pages as well as pages touched by this generation.
         let reserve = updates
@@ -283,13 +305,22 @@ pub(super) fn plan(
             .checked_add(32)
             .and_then(|pages| pages.checked_mul(PAGE_BYTES))
             .ok_or(WorkspaceError::Capacity)? as u64;
-        let pressure = max_sources > 1 && store.remaining_quota()? < reserve;
+        pressure_estimate = reserve;
+        remaining = if max_sources > 1 {
+            Some(store.remaining_quota()?)
+        } else {
+            None
+        };
+        let pressure = remaining.is_some_and(|headroom| headroom < reserve);
+        branch = if pressure { "pressure" } else { "touched_only" };
         let mut partial = Vec::new();
         let mut partial_charge = store.budget().reserve(0)?;
         if pressure {
             let mut lower = vec![b'P'];
             loop {
+                scan_calls += 1;
                 let page = index.scan(&lower, b"Q", 128)?;
+                scanned_locators += page.entries().len();
                 for (key, value) in page.entries() {
                     if key.len() != 9 {
                         return Err(WorkspaceError::Io);
@@ -313,6 +344,7 @@ pub(super) fn plan(
                     if !pack.sealed(logical, physical)? {
                         continue;
                     }
+                    pressure_pack_reads += 1;
                     let records = pack.records(logical, physical)?;
                     let (refs, _charge) = live_refs(index, updates, logical)?;
                     if refs.is_empty() {
@@ -338,6 +370,7 @@ pub(super) fn plan(
                 lower.push(0);
             }
         }
+        partial_count = partial.len();
         partial.sort_unstable_by_key(|(_, bytes)| *bytes);
         let mut paired = BTreeSet::new();
         let _paired_charge = store.budget().reserve(
@@ -355,6 +388,8 @@ pub(super) fn plan(
             paired.insert(partial[at + 1].0);
             at += 2;
         }
+        paired_count = paired.len();
+        all_logicals = logicals.len();
         let mut destination: Option<Destination> = None;
         for logical in logicals {
             if planned.source_pages.len() == max_sources {
@@ -371,6 +406,7 @@ pub(super) fn plan(
             if !pack.sealed(logical, physical)? {
                 continue;
             }
+            source_pack_reads += 1;
             let records = pack.records(logical, physical)?;
             let (refs, _refs_charge) = live_refs(index, updates, logical)?;
             if refs.is_empty() {
@@ -421,6 +457,20 @@ pub(super) fn plan(
         }
         Ok(())
     })();
+    if max_sources > 1
+        && std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref() == Some(std::ffi::OsStr::new("1"))
+    {
+        eprintln!(
+            "LFS_C5_COMPACTION v=1 status={} branch={} initial_updates={} final_updates={} estimate={} remaining={} touched_logicals={} all_logicals={} scan_calls={} scanned_locators={} pressure_pack_reads={} source_pack_reads={} partial={} paired={} physical_pack_attempts={} physical_pack_created={} sources_selected={} budget_before={} budget_after={}",
+            if result.is_ok() { "planned" } else { "aborted" }, branch,
+            initial_updates, updates.len(), pressure_estimate,
+            remaining.map_or("NA".to_owned(), |n| n.to_string()),
+            touched_logicals, all_logicals, scan_calls, scanned_locators,
+            pressure_pack_reads, source_pack_reads, partial_count, paired_count,
+            planned.attempted_pages, planned.new_pages.len(), planned.source_pages.len(),
+            budget_before, store.budget().used(),
+        );
+    }
     match result {
         Ok(()) => Ok(planned),
         Err(error) => Err(planned.abort().err().unwrap_or(error)),

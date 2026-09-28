@@ -12,7 +12,7 @@ use super::{
     pages::{PageReservation, PageStore},
     resolve::Resolver,
     retirement::Retirement,
-    splice::{Mutation, Update},
+    splice::{Mutation, PageCause, Update},
 };
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::{
@@ -268,7 +268,17 @@ impl Index {
         }
         let mut scratch = self.store.budget().reserve(128 * 1024)?;
         self.maintain()?;
-        let (selection, generation, revision, epochs, cache, mut cursors, mut pack_bindings) = {
+        let (
+            selection,
+            generation,
+            revision,
+            epochs,
+            cache,
+            mut cursors,
+            mut pack_bindings,
+            captured,
+            frozen,
+        ) = {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             if state.pending || state.stopped {
                 return Err(WorkspaceError::Busy);
@@ -286,6 +296,8 @@ impl Index {
                 state.cache.clone(),
                 state.cursors.clone(),
                 state.pack_bindings.clone(),
+                state.captured,
+                state.frozen.len(),
             )
         };
         let next = revision + 1;
@@ -313,6 +325,18 @@ impl Index {
                         .checked_add(128 + key.len() + value.as_ref().map_or(0, Vec::len))
                         .ok_or(WorkspaceError::Capacity)
                 })?;
+            if updates.len() > 128
+                && std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                    == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "LFS_INDEX_SCRATCH v=1 generation={} revision={} updates={} key_bytes={} value_bytes={} scratch_prior={} scratch_target={} budget_used={} captures={} frozen_revisions={}",
+                    generation, next, updates.len(),
+                    updates.iter().map(|(key, _)| key.len()).sum::<usize>(),
+                    updates.iter().map(|(_, value)| value.as_ref().map_or(0, Vec::len)).sum::<usize>(),
+                    scratch.bytes(), budget, self.store.budget().used(), captured, frozen,
+                );
+            }
             scratch.resize(budget)?;
             let mut keys: Vec<_> = cursors
                 .iter()
@@ -365,8 +389,16 @@ impl Index {
                     }
                     level += 1;
                     let nodes = Mutation::branch_groups(children, &[])?;
-                    children =
-                        mutation.emit(&self.store, generation, next, level, None, nodes, &[])?;
+                    children = mutation.emit(
+                        &self.store,
+                        generation,
+                        next,
+                        level,
+                        None,
+                        nodes,
+                        &[],
+                        PageCause::Height,
+                    )?;
                     if children.len() == 1 {
                         break (Some(children[0].target), level);
                     }
@@ -514,6 +546,23 @@ impl Index {
                 return Err(cleanup.unwrap_or(error));
             }
         };
+        if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref() == Some(std::ffi::OsStr::new("1"))
+        {
+            let c = mutation.page_causes;
+            eprintln!(
+                "LFS_INDEX_PAGE_CAUSE v=1 generation={} revision={} update_keys={} selected_height={} new_height={} captured={} frozen_revisions={} direct={} changed_leaf={} changed_parent={} direct_leaf={} direct_parent={} admission_no_key={} normalization_no_key={} connection_no_key={} height_pages={} index_pages={} directory_pages={} created_total={} replaced={} hot_before={} hot_after={}",
+                generation, next, updates.len(), selection.height, height, captured, frozen,
+                direct.is_some(), c[PageCause::ChangedLeaf as usize],
+                c[PageCause::ChangedParent as usize], c[PageCause::DirectLeaf as usize],
+                c[PageCause::DirectParent as usize], c[PageCause::AdmitNoKey as usize],
+                c[PageCause::NormalizeNoKey as usize], c[PageCause::ConnectNoKey as usize],
+                c[PageCause::Height as usize], c.iter().sum::<u64>(),
+                u64::from(mutation.directory_changed && directory.is_some()),
+                mutation.created.len(), mutation.replaced.len(),
+                selection.directory.as_ref().map_or(0, |d| d.value.occupied()),
+                mutation.directory.occupied(),
+            );
+        }
         Ok(IndexCandidate {
             index: self.clone(),
             expected_revision: revision,

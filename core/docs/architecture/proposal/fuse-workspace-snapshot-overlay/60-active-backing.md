@@ -360,3 +360,50 @@ alone neither proves an avoidable C5 allocation nor accounts for the rising
 no-key WRITE representation pages at 100/512/4,097 and 8,192; those require
 separate phase-local closure, carry, slot, eviction and pin classification
 before any algorithm or limit change.
+
+### #273 C5 owner overlap, pressure scan, WRITE page-cause observer (RCA identity)
+
+Opt-in `LFS_CAPACITY_DIAGNOSTIC=1` now emits causal summaries in addition to
+refusal-only lines. The `LFS_C5_CHARGE` prepared line measures row and deletion
+charges retained alongside the selected G1 and mutable G2; it also records
+Budget used before preparation, after preparation and after the charged update
+map. The index-prepare line measures the already-held update-map charge,
+ordered-vector scratch charge and Budget used before/after compaction. These
+are **simultaneous charged owners**, not necessarily allocator live bytes;
+Budget also covers other Workspace/C1/C2/metadata owners. Do not sum whole
+Budget checkpoints as independent allocations. A failed `Charge::resize` line
+reports the requested *increment*; `LFS_INDEX_SCRATCH` records its old and
+full target charge, update count and key/value lengths. Dropping a charge or
+using a deferred uncharged patch to pass a tier would not satisfy the memory
+contract. Post-unwind physical/used numbers remain separate from peak.
+
+`LFS_C5_COMPACTION` distinguishes the **quota headroom estimate** from
+pressure-branch P locator entries and scan calls, `pack.records` reads on the
+pressure pass, subsequent source-page reads, partial/paired counts, and
+attempted/successful **4 KiB pack-page creations** in the compaction plan.
+These are attempts through product `PageStore`, not a global filesystem
+allocation total; C5 index/metadata physical requests, live selected backing
+and physical `st_blocks` require their own oracles. The pressure pass may
+read unrelated P locators even when it creates zero physical pack pages. Its
+read counters are neither SaveFile pack loads nor attempted physical pages.
+
+`LFS_INDEX_PAGE_CAUSE` emits one bounded summary for each *prepared* index
+mutation: selected revision/generation, selected/new height, capture/frozen
+counts, directory occupancy and new index pages, with eight **disjoint**
+creation-source buckets. `changed_leaf` and `changed_parent` have actual
+updates in the recursive subtree; `direct_leaf` and `direct_parent` arise
+from direct hot propagation; `admission_no_key` creates a generic no-key
+node from a cold target admitted to a hot slot; `normalization_no_key` starts
+at a selected hot node marked for normalization/eviction; `connection_no_key`
+is the residual no-key recursive connection; `height_pages` arise from root
+height growth. Each successfully emitted index page is counted once; hot
+slot creation and normalizations may overlap these creation causes and are
+separate event counters. `connection_no_key` is **not** a proven removable
+page: changed child target, fence, epoch and selected pin obligations remain.
+The record is emitted *before* publication and thus includes candidates that
+could subsequently fail; an external observer must pair revision/byte
+acknowledgements and Commit outcome, never infer that `prepared=accepted`.
+The observer formats at most one line per mutation, stores only fixed
+counters per mutation, and changes no page encoding, Budget/hot limits,
+acknowledgement ordering, compaction decision, worker or cache policy. Its
+wall includes observer overhead and is not a matched speed sample.
