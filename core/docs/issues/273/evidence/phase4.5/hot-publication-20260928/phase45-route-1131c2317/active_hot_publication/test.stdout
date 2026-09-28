@@ -1,0 +1,13 @@
+
+running 1 test
+test linux::stage_active_hot_publication ... STAGE_HOT ordinary=949 hot_writes=1021 admissions=1 carries=73 seeks=74 visits=29770 index_writes=4114 directory_writes=1023 pack_writes=1024 retirement_inspections=5049 legacy_routine_scans=1023 legacy_lookup_scans=0 hot_reserved_bytes=160086 physical_bytes=368640
+STAGE_CHECK active-hot-publication-counts-and-alias-byte-oracle PASS
+FAILED
+
+failures:
+
+failures:
+    linux::stage_active_hot_publication
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 27 filtered out; finished in 2.02s
+

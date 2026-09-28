@@ -1,0 +1,28 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "layerfs-issue273-pack-4c627b64f55e-runner",
+    "-v",
+    "layerfs-issue273-pack-4c627b64f55e:/work",
+    "-v",
+    "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/active_backing-f325d5782a2161dc:/tests/runner:ro",
+    "-e",
+    "TMPDIR=/work",
+    "-e",
+    "LAYERFS_ACTIVE_TEST_ROOT=/work",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "/tests/runner",
+    "--test-threads=1",
+    "--nocapture"
+  ],
+  "binary_sha256": "d0a603fe5b043b1e4487955157fc7d8e8331acc1296465551b7b8a3e9b3fbb76",
+  "dirty_source": true,
+  "performance_claim": false,
+  "cache_claim": null,
+  "hard_budget_seconds": 60
+}

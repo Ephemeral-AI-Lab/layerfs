@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_payload_refund ... STAGE_CHECK active-large-payload-owned-before-commit PASS
+STAGE_ALLOCATION case=payload_refund before_files=1 after_files=0
+STAGE_CHECK active-large-payload-refund-and-byte-oracle PASS
+STAGE_CHECK active-large-payload-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 0.04s
+

@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_active_source_grouping_4097 ... SOURCE_GROUPING case=dispersed4097 commit_wall_ns=352563208 pack_reads=560 index_seeks=854 ref_limit=256 byte_limit=32768
+STAGE_CHECK active-source-grouped-4097-count-and-full-bytes PASS
+STAGE_CHECK active-source-grouped-4097-clean-close-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 11.06s
+

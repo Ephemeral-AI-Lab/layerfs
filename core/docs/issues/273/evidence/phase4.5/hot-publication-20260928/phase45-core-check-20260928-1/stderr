@@ -1,0 +1,13 @@
+
+thread 'linux::hot_eof_base_zero_and_shared_frontiers_have_bounded_publication' panicked at crates/layerfs-workspace/tests/active_backing.rs:1556:22:
+called `Result::unwrap()` on an `Err` value: Io
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'linux::hot_eviction_epoch_reuse_and_frozen_directory_keep_exact_bytes' panicked at crates/layerfs-workspace/tests/active_backing.rs:1645:18:
+called `Result::unwrap()` on an `Err` value: Io
+
+thread 'linux::large_overwrite_crosses_index_pages_and_keeps_pack_tail_valid' panicked at crates/layerfs-workspace/tests/active_backing.rs:1039:56:
+called `Result::unwrap()` on an `Err` value: Io
+
+thread 'linux::selecting_cohorts_only_visit_the_releasing_pin_in_both_orders' panicked at crates/layerfs-workspace/tests/active_backing.rs:1713:22:
+called `Result::unwrap()` on an `Err` value: Io

@@ -1,0 +1,385 @@
+{
+  "source": "4ae36ad3a9c70b32b66c8280ac9496e9f1e345a9",
+  "registered_cases": [
+    "active_cleanup_failure",
+    "active_repeated",
+    "active_separated4096",
+    "active_generation",
+    "active_many_file",
+    "active_mounted",
+    "active_split_slot",
+    "active_retained32",
+    "active_mixed_compact",
+    "active_mutation_compact",
+    "active_quota_refusal",
+    "active_quick_controls",
+    "active_namespace",
+    "active_close",
+    "active_payload_refund",
+    "active_hot_publication",
+    "active_hot_continuity"
+  ],
+  "environment": {
+    "LAYERFS_PROOF_PROFILE": "release",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "commands": [
+    {
+      "case": "active_cleanup_failure",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_cleanup_failure",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_cleanup_failure"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 0.9586669169948436,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.8782189580379054
+    },
+    {
+      "case": "active_repeated",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_repeated",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_repeated"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 6.061226916033775,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 5.981887334026396
+    },
+    {
+      "case": "active_separated4096",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_separated4096",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_separated4096"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 6.526922999997623,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 6.446846083039418
+    },
+    {
+      "case": "active_generation",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_generation",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_generation"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.010416583972983,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.9281026249518618
+    },
+    {
+      "case": "active_many_file",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_many_file",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_many_file"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 4.256073499971535,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 4.175877665984444
+    },
+    {
+      "case": "active_mounted",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_mounted",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_mounted"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.013028416025918,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.9325799169600941
+    },
+    {
+      "case": "active_split_slot",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_split_slot",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_split_slot"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.0167177920229733,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.9352254159748554
+    },
+    {
+      "case": "active_retained32",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_retained32",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_retained32"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.5755822090432048,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 1.4967096670297906
+    },
+    {
+      "case": "active_mixed_compact",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_mixed_compact",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_mixed_compact"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 3.6035767080029473,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 3.5239848750061356
+    },
+    {
+      "case": "active_mutation_compact",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_mutation_compact",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_mutation_compact"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 3.486620709009003,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 3.4091708750347607
+    },
+    {
+      "case": "active_quota_refusal",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_quota_refusal",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_quota_refusal"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 0.9876571669592522,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.9066724999574944
+    },
+    {
+      "case": "active_quick_controls",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_quick_controls",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_quick_controls"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 6.611552917049266,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 6.532895667012781
+    },
+    {
+      "case": "active_namespace",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_namespace",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_namespace"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.026977417001035,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.94532200001413
+    },
+    {
+      "case": "active_close",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_close",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_close"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.0142335839918815,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.9350099580478854
+    },
+    {
+      "case": "active_payload_refund",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_payload_refund",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_payload_refund"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 0.9775106669985689,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 0.8975128330057487
+    },
+    {
+      "case": "active_hot_publication",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_hot_publication",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_hot_publication"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 3.451954582997132,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 3.3721344580408186
+    },
+    {
+      "case": "active_hot_continuity",
+      "command": [
+        "python3",
+        "core/crates/layerfs-workspace/tests/stage_route.py",
+        "--fixture",
+        "core/target/issue273/checkpoint3-prepared-v1/result.json",
+        "--binaries",
+        "core/target/release",
+        "--test-binary",
+        "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4",
+        "--case",
+        "active_hot_continuity",
+        "--output",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-route-4ae36ad3a/active_hot_continuity"
+      ],
+      "exit_code": 0,
+      "supervisor_wall_seconds": 1.1143912079860456,
+      "status": "PASS",
+      "receipt_command_wall_seconds": 1.0313011669786647
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+
+thread 'linux::stage_active_hot_publication' panicked at crates/layerfs-workspace/tests/stage.rs:1747:9:
+assertion `left == right` failed
+  left: 1024
+ right: 1025
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

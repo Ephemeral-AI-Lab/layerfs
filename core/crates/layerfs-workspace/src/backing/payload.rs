@@ -425,6 +425,14 @@ impl PayloadHost {
             .and_then(|used| used.checked_add(bytes))
             .is_none_or(|used| used > self.quota)
         {
+            if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "LFS_CAPACITY_REFUSAL v=1 domain=physical operation=payload_acquire site=backing/payload.rs allocated={} reserved={} request={} limit={}",
+                    state.allocated, state.reserved, bytes, self.quota
+                );
+            }
             return Err(bare_failure(
                 BackingPhase::Acquire,
                 io::ErrorKind::StorageFull,
@@ -754,6 +762,45 @@ impl Workspace {
             .map_or(Ok(0), |host| host.page_reads())?;
         if let Some(host) = &self.host.metadata {
             (status.ledger_reads, status.ledger_writes) = host.ledger_io()?;
+        }
+        if let Some(active) = &self.inner.active {
+            let selected = active.status()?;
+            status.active_pack_fetches = selected.store.pack_fetches;
+            status.active_index_fetches = selected.store.index_fetches;
+            status.active_pack_page_writes = selected.store.pack_page_writes;
+            status.active_index_page_writes = selected.store.index_page_writes;
+            status.active_page_encode_ns = selected.store.page_encode_ns;
+            status.active_page_create_identity_ns = selected.store.page_create_identity_ns;
+            status.active_page_preallocate_ns = selected.store.page_preallocate_ns;
+            status.active_page_direct_write_ns = selected.store.page_direct_write_ns;
+            status.active_page_readback_io_ns = selected.store.page_readback_io_ns;
+            status.active_page_readback_auth_ns = selected.store.page_readback_auth_ns;
+            status.active_page_release_ns = selected.store.page_release_ns;
+            status.active_fit_merge_ns = selected.store.fit_merge_ns;
+            status.active_actual_merge_ns = selected.store.actual_merge_ns;
+            status.active_node_encode_ns = selected.store.node_encode_ns;
+            status.active_cache_decode_ns = selected.store.cache_decode_ns;
+            status.active_directory_page_writes = selected.store.directory_page_writes;
+            status.active_index_seeks = selected.store.index_seeks;
+            status.active_index_node_visits = selected.store.index_node_visits;
+            status.active_index_cache_hits = selected.store.index_cache_hits;
+            status.active_hot_writes = selected.store.hot_writes;
+            status.active_hot_admissions = selected.store.hot_admissions;
+            status.active_hot_cursor_admissions = selected.store.hot_cursor_admissions;
+            status.active_hot_carries = selected.store.hot_carries;
+            status.active_hot_normalizations = selected.store.hot_normalizations;
+            status.active_representation_only_pages = selected.store.representation_only_pages;
+            status.active_retirement_inspections = selected.store.retirement_inspections;
+            status.active_hot_nodes = selected.hot_nodes;
+            status.active_hot_cursors = selected.hot_cursors;
+            status.active_hot_reserved_bytes = selected.hot_reserved_bytes;
+            status.active_retired_index_pages = selected.retired_index_pages;
+            status.active_minimum_leaf_split_bytes = selected.store.minimum_leaf_split_bytes;
+            status.active_minimum_branch_split_bytes = selected.store.minimum_branch_split_bytes;
+            status.active_pack_pages = selected.store.pack_pages;
+            status.active_index_pages = selected.store.index_pages;
+            status.active_retired_pack_pages = selected.retired_pack_pages;
+            status.active_retired_payloads = selected.retired_payloads;
         }
         self.host.exec.snapshot(&mut status);
         Ok(status)

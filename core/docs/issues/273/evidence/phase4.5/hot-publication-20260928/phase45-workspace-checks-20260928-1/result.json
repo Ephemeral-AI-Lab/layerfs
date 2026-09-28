@@ -1,0 +1,97 @@
+[
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "test",
+      "--release",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--offline",
+      "-p",
+      "layerfs-workspace"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 35.50954850000562
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "clippy",
+      "--release",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--offline",
+      "--workspace",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 6.04861808399437
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "fmt",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 2.23063354101032
+  },
+  {
+    "command": [
+      "python3",
+      "core/tools/check_product_boundary.py"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 0.1481681250152178
+  },
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "core/tools",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 0.18304929201258346
+  },
+  {
+    "command": [
+      "cargo",
+      "+1.85.1",
+      "build",
+      "--release",
+      "--manifest-path",
+      "core/Cargo.toml",
+      "--locked",
+      "--offline",
+      "-p",
+      "layerfs-server",
+      "-p",
+      "layerfs-daemon",
+      "-p",
+      "layerfs-bridge",
+      "--features",
+      "layerfs-bridge/native",
+      "--example",
+      "public_key"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 0.16020479099825025
+  }
+]

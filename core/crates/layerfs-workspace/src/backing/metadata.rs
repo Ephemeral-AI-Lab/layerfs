@@ -252,6 +252,7 @@ impl MetadataHost {
         arenas.push(arena.clone());
         Ok(arena)
     }
+    #[track_caller]
     pub fn reserve(&self, bytes: u64) -> Result<(), WorkspaceError> {
         let mut s = self.payloads.state.lock().map_err(|_| WorkspaceError::Io)?;
         if s.stopped {
@@ -262,6 +263,15 @@ impl MetadataHost {
             .and_then(|n| n.checked_add(bytes))
             .is_none_or(|n| n > self.payloads.quota)
         {
+            if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                let caller = std::panic::Location::caller();
+                eprintln!(
+                    "LFS_CAPACITY_REFUSAL v=1 domain=physical operation=metadata_reserve site={}:{} allocated={} reserved={} request={} limit={}",
+                    caller.file(), caller.line(), s.allocated, s.reserved, bytes, self.payloads.quota
+                );
+            }
             return Err(bare_failure(
                 BackingPhase::Allocate,
                 std::io::ErrorKind::StorageFull,

@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "layerfs-stage-b89d11fc60944786"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-b89d11fc60944786\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-stage-b89d11fc60944786-data"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-b89d11fc60944786-data\n",
+      "stderr": ""
+    }
+  ]
+}

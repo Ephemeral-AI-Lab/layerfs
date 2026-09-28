@@ -1,0 +1,28 @@
+{
+  "source_head": "81793239df4d73a3cd4f9a837633b1c88d800c19",
+  "dirty_source": true,
+  "binary_sha256": "b38a2a92353d565cedc70354b2b8c6770153e16f76d0c7790235e021226baef9",
+  "image_id": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "-v",
+    "layerfs-issue273-hot-b1ec0fd11b56:/work",
+    "-v",
+    "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/active_backing-f325d5782a2161dc:/tests/runner:ro",
+    "-e",
+    "TMPDIR=/work",
+    "-e",
+    "LAYERFS_ACTIVE_TEST_ROOT=/work",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "/tests/runner",
+    "--test-threads=1",
+    "--nocapture"
+  ],
+  "performance_claim": false,
+  "cache_claim": null,
+  "owned_volume": "layerfs-issue273-hot-b1ec0fd11b56"
+}

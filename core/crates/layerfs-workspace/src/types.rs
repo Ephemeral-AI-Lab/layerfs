@@ -192,6 +192,13 @@ pub enum WorkspaceError {
     Stage(Arc<StageFailure>),
     Commit(Arc<CommitFailure>),
     Coherence(CoherenceFailure),
+    /// The active index selected this mutation before backing cleanup failed.
+    /// The receipt and any returned handle prevent ambiguous replay.
+    Published {
+        receipt: MutationReceipt,
+        published_handle: Option<HandleId>,
+        cause: Box<WorkspaceError>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,6 +250,47 @@ pub struct BackingStatus {
     /// its path, so this does not grow with the frames one frozen transfer is
     /// replayed in.
     pub metadata_reads: u64,
+    /// Successful authenticated 4 KiB active-page fetches and writes, not a
+    /// claim about OS cache residency or the full transfer byte count.
+    pub active_pack_fetches: u64,
+    pub active_index_fetches: u64,
+    pub active_pack_page_writes: u64,
+    pub active_index_page_writes: u64,
+    /// Cumulative, non-overlapping inner active publication regions (nanoseconds).
+    /// This is product work and instrumentation overhead remains in the phase.
+    pub active_page_encode_ns: u64,
+    pub active_page_create_identity_ns: u64,
+    pub active_page_preallocate_ns: u64,
+    pub active_page_direct_write_ns: u64,
+    pub active_page_readback_io_ns: u64,
+    pub active_page_readback_auth_ns: u64,
+    pub active_page_release_ns: u64,
+    pub active_fit_merge_ns: u64,
+    pub active_actual_merge_ns: u64,
+    pub active_node_encode_ns: u64,
+    pub active_cache_decode_ns: u64,
+    pub active_directory_page_writes: u64,
+    pub active_index_seeks: u64,
+    pub active_index_node_visits: u64,
+    pub active_index_cache_hits: u64,
+    pub active_hot_writes: u64,
+    pub active_hot_admissions: u64,
+    pub active_hot_cursor_admissions: u64,
+    pub active_hot_carries: u64,
+    pub active_hot_normalizations: u64,
+    /// Index page versions induced by representation-only subtree changes.
+    pub active_representation_only_pages: u64,
+    pub active_retirement_inspections: u64,
+    pub active_hot_nodes: usize,
+    pub active_hot_cursors: usize,
+    pub active_hot_reserved_bytes: usize,
+    pub active_retired_index_pages: usize,
+    pub active_minimum_leaf_split_bytes: Option<u64>,
+    pub active_minimum_branch_split_bytes: Option<u64>,
+    pub active_pack_pages: usize,
+    pub active_index_pages: usize,
+    pub active_retired_pack_pages: usize,
+    pub active_retired_payloads: usize,
     /// Ownership-ledger 4 KiB reads and writes, including COW publication and
     /// reclamation. These are separate from metadata page reads.
     pub ledger_reads: u64,

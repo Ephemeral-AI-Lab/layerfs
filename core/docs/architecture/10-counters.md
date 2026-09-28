@@ -406,3 +406,47 @@ draft page. They sum to `nodes_read` on a successful edit, and the C1 edit path
 emits them once as `LFS_C1_EDIT_LOAD` when complexity diagnostics are enabled.
 This separates Store **requests** from draft work. It does not report SQLite
 page reads, physical device I/O or every call served by the page memo.
+
+### 15.10 #273 representation-only active index versions
+
+Source baseline: `e80d3cd288672f708f92fcb0dc0ebc7342802889`; description
+and implementation are co-committed in the subsequent #273 instrumentation commit.
+
+`BackingStatus.active_representation_only_pages` is a cumulative production
+count of index pages emitted by generic `Mutation::change` while its local
+ordered update slice is empty. An unchanged subtree may still need a new
+parent page to reconnect a newly admitted or evicted hot/cold target; the
+counter is a *subset* of `active_index_page_writes`, not another page or an
+assertion that its work can be removed. It includes failed staged attempts,
+just as the existing creation counters do; compare phase-local differences
+only for successful public WRITEs with exact callback and cleanup proofs.
+Hot directory versions, explicitly changed-key paths, and page readbacks
+remain in their existing counters and are not added to this field. A value of
+zero cannot prove absence of extra work on changed paths. The external
+changed-closure diagnostic tests repeated and alternating generic WRITEs
+against full live/committed bytes and clean-close physical custody. No
+format, selected identity, eviction rule, timing boundary or benchmark
+admission contract changes with this telemetry.
+
+### #273 C1 edit-node zero provenance on every successful SaveFile route
+
+The diagnostic `LFS_C1_EDIT_LOAD v=1` counts C1 *edit-tree* stored/draft
+mapping-node loads, not Workspace extent records, FileInput spool records, C1
+whole-file payload assembly or metadata reads. `apply_edits` returns a checked
+`ConstructedFile` on whole-file, unchanged and chunked branches. The diagnostic
+now observes those **returned** `EditCounters` once outside the route-specific
+body: a whole-file early return cannot be mistaken for a missing zero, and
+chunked retains its actual node counts without duplicate emission. For a
+base-less `SaveFile`, the service invokes `construct_stream` rather than
+`apply_edits`; after checking its length, it emits a zero **only** if its
+returned construction reports `nodes_read=0`, otherwise it emits an explicit
+unparsable incomplete marker. The one-worker server emits no trace on a
+failed or timed-out construction. This is production telemetry for real public
+routes, not a test hook or assertion that missing counters are zero. The
+existing independent `LFS_FILE_INPUT` record covers Workspace final-extent
+reads; `LFS_C1_SAVE_COUNT` covers C1 construction work. These quantities are
+never substituted for each other. Neither canonical bytes, Store format,
+publication, resource admission nor timers are changed, and printing adds
+observer wall. Old receipts lacking this line remain INCOMPLETE; the frozen
+#271 product is unmodified, so no matched speed claim follows from this
+candidate-only telemetry.

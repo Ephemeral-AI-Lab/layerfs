@@ -1,0 +1,18 @@
+{
+  "source_head": "f83a186dd7eb37c519f3b1506aca16ba6b91713a",
+  "staged_tree": "4d8b36e1bba7bcac6cdca1918963bcff2e1a3969",
+  "dirty_source": true,
+  "performance_claim": false,
+  "cache_claim": null,
+  "image_id": "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+  "owned_volume": "layerfs-issue273-transfer-33c72cbf7743",
+  "armv8_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "binaries": {
+    "active_backing-f325d5782a2161dc": "cb1391de45669fd2acf61096f20f938a20fa9c29dc6665b0c258f14e99c9e131",
+    "readable-dd0f356b43c03bb3": "6fa45ba1e99703653bd5a3d672a71b31505820079bd85d8bfe05560f62d282b1",
+    "keyed_tree-c2cba34196e86822": "1de8191df7214ff33a4b57ae20c97c5ee63b39e581e3d97a1c75f74b8db85196",
+    "attachment-953a7dec2121aafa": "49e3ff398612f129eedc611a12c42e8d43afa6f63a101ee9c9f3c0e09852ae2e",
+    "backing_ownership-9814894f008879bf": "1261bd9b4c4f5503731f25a67235da778a233708c66bb45c2bdae6f48ba7c5ed",
+    "pieces_sequence-9adc298e1564ba90": "3fd032e7625bf7245423f6c3241a511509e934e490299effd1a2b911c49a5b56"
+  }
+}

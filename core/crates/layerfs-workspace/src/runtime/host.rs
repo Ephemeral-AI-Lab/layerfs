@@ -515,12 +515,25 @@ impl WorkspaceHost {
             } else {
                 None
             };
+            resources.active = if options.access == WorkspaceAccess::LocalEdit {
+                Some(crate::backing::active::ActiveBacking::new(
+                    directory.clone().ok_or(WorkspaceError::Unsupported)?,
+                    self.inner
+                        .metadata
+                        .as_ref()
+                        .cloned()
+                        .ok_or(WorkspaceError::Unsupported)?,
+                )?)
+            } else {
+                None
+            };
             let inner = Arc::new(Inner {
                 id: options.id.clone(),
                 incarnation: options.incarnation,
                 store: options.store,
                 access: options.access,
                 arena: resources.arena.clone(),
+                active: resources.active.clone(),
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
@@ -534,6 +547,9 @@ impl WorkspaceHost {
                     node_index,
                     node_index_charge,
                     overlay: None,
+                    active_origins: crate::filesystem::active_view::ActiveOrigins::empty(
+                        &self.inner.budget,
+                    )?,
                     completion: None,
                     submission: None,
                     generation: 1,

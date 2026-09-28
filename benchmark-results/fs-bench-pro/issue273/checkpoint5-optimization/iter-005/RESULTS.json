@@ -1,0 +1,200 @@
+{
+  "admission_eligible": false,
+  "cache_claim": null,
+  "candidate_product_source": "9c286b02c7b7a38aaca8f8d36f72e700c44ba754",
+  "gaps": [
+    "no qualified matched cache/resource comparison",
+    "retained SDK controls lack live pinned journal",
+    "no cgroup phase reset or device/host cache proof"
+  ],
+  "label": "independent public mounted functional count diagnostic; 8194-byte seed, not registered 10MiB performance arm",
+  "other_proofs": [
+    "active_mounted PASS",
+    "active_hot_continuity PASS",
+    "active_backing 32/32 PASS"
+  ],
+  "performance_claim": false,
+  "rows": [
+    {
+      "checks": [
+        {
+          "id": "active-mounted-tiny-input-100-exact-callbacks-and-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-mounted-tiny-input-100-public-commit-and-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_s": 1.136398292,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "limits": {
+        "hard_complete_functional_route_seconds": 60,
+        "production_budget_bytes": 8388608,
+        "reference_callbacks": 100
+      },
+      "raw_counts": {
+        "allocated_after": 45056,
+        "allocated_before": 12288,
+        "callbacks": 100,
+        "index_writes": 262,
+        "pack_writes": 100,
+        "payloads_after": 0,
+        "payloads_before": 0,
+        "writes": 100
+      },
+      "samples": [
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 37303542,
+          "version": 3,
+          "writes": 25
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 62269835,
+          "version": 3,
+          "writes": 50
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 85965960,
+          "version": 3,
+          "writes": 75
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 106273670,
+          "version": 3,
+          "writes": 100
+        }
+      ],
+      "source": "609045ed1e7cc54a9b246b54ed52f50f9d7cc903",
+      "status": "PASS",
+      "test_binary_sha256": "bc4804ea49e00e0952ea910a7eb0a76d96e69434426fe959c956daf8cc858b77",
+      "writes": 100
+    },
+    {
+      "checks": [
+        {
+          "id": "active-mounted-tiny-input-exact-callbacks-and-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-mounted-tiny-input-public-commit-and-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_s": 1.730283084,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "limits": {
+        "hard_complete_functional_route_seconds": 60,
+        "production_budget_bytes": 8388608,
+        "reference_callbacks": 512
+      },
+      "raw_counts": {
+        "allocated_after": 155648,
+        "allocated_before": 12288,
+        "callbacks": 512,
+        "index_writes": 1945,
+        "pack_writes": 512,
+        "payloads_after": 0,
+        "payloads_before": 0,
+        "writes": 512
+      },
+      "samples": [
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 88955162,
+          "version": 3,
+          "writes": 128
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 221779750,
+          "version": 3,
+          "writes": 256
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 374433749,
+          "version": 3,
+          "writes": 384
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 528575792,
+          "version": 3,
+          "writes": 512
+        }
+      ],
+      "source": "3c5e7976571b410fded14328cc31f5b7970e9e82",
+      "status": "PASS",
+      "test_binary_sha256": "dbeab42612606b1ffc386b8db554d67049daa1571420a6769b4cfae6c43aa41f",
+      "writes": 512
+    },
+    {
+      "checks": [
+        {
+          "id": "active-mounted-tiny-input-4097-exact-callbacks-and-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-mounted-tiny-input-4097-public-commit-and-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_s": 8.436696,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "limits": {
+        "hard_complete_functional_route_seconds": 60,
+        "production_budget_bytes": 8388608,
+        "reference_callbacks": 4097
+      },
+      "raw_counts": {
+        "allocated_after": 1155072,
+        "allocated_before": 12288,
+        "callbacks": 4097,
+        "index_writes": 16678,
+        "pack_writes": 4097,
+        "payloads_after": 0,
+        "payloads_before": 0,
+        "writes": 4097
+      },
+      "samples": [
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 1246501166,
+          "version": 3,
+          "writes": 1024
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 2373487864,
+          "version": 3,
+          "writes": 2048
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 3531196853,
+          "version": 3,
+          "writes": 3072
+        },
+        {
+          "acquisition_ns": 0,
+          "publication_ns": 4841970187,
+          "version": 3,
+          "writes": 4096
+        }
+      ],
+      "source": "609045ed1e7cc54a9b246b54ed52f50f9d7cc903",
+      "status": "PASS",
+      "test_binary_sha256": "bc4804ea49e00e0952ea910a7eb0a76d96e69434426fe959c956daf8cc858b77",
+      "writes": 4097
+    }
+  ],
+  "schema": "issue273-optimization-iter005-tiny-input-v1"
+}

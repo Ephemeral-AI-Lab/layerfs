@@ -1,0 +1,154 @@
+{
+  "admission_eligible": false,
+  "bounds": {
+    "budget_bytes": 8388608,
+    "bytes_per_window": 32768,
+    "index_nodes": 64,
+    "references_per_window": 256,
+    "resident_decoded_pack_pages": 1
+  },
+  "cache_claim": null,
+  "candidate_product_commit": "cc9ce918c077e319d5848f3e67ff64d56a60f5bd",
+  "cause": "captured Commit SaveFile packed-source order thrashing",
+  "expanded_test_commit": "51c1838a334e285d489e0987205e2405c2621102",
+  "method": "single labelled public functional run per count; production source counters and phase-local backing status; this 8194-byte stage fixture is NOT the registered 10MiB workload",
+  "performance_claim": false,
+  "previous_comparison": "models from same stage schedule, not sampled baseline product; do not claim latency speedup",
+  "resource": "cgroup/process phase RSS not collected; nonpassing resource proof remains INCOMPLETE",
+  "rows": [
+    {
+      "actual": {
+        "byte_limit": 32768,
+        "complete": "true",
+        "copied_bytes": 100,
+        "decoded_bytes": 4900,
+        "decoded_records": 100,
+        "distinct_packs": 2,
+        "fill_ns": 645125,
+        "index_reads": 4,
+        "index_seeks": 2,
+        "locator_lookups": 2,
+        "locator_ns": 443916,
+        "pack_hits": 98,
+        "pack_loads": 2,
+        "pack_ns": 172708,
+        "ref_limit": 256,
+        "references": 100,
+        "windows": 1
+      },
+      "checks": [
+        {
+          "id": "active-source-grouped-100-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-100-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_seconds": 1.1798440829999999,
+      "count": 100,
+      "fixture_bytes": 8194,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "grouped_distinct_model": 2,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "model_formula": "sum(window distinct pack IDs); logical pack predicted from source 80 records/page",
+      "old_one_page_miss_model": 14,
+      "phase_commit_wall_ns": 26614000,
+      "stage_source": "51c1838a334e285d489e0987205e2405c2621102",
+      "status": "PASS",
+      "test_binary_sha256": "6db0c49358105937dc75a56818486a2445844b43db72f9e95620661ba8d6bbb7",
+      "test_source_sha256": "7193a6481db98fe11182c0c3b815956ac004dac08414fadc372c9bdf58acb8ba"
+    },
+    {
+      "actual": {
+        "byte_limit": 32768,
+        "complete": "true",
+        "copied_bytes": 512,
+        "decoded_bytes": 50176,
+        "decoded_records": 1024,
+        "distinct_packs": 14,
+        "fill_ns": 3934292,
+        "index_reads": 28,
+        "index_seeks": 14,
+        "locator_lookups": 14,
+        "locator_ns": 2586086,
+        "pack_hits": 498,
+        "pack_loads": 14,
+        "pack_ns": 1300419,
+        "ref_limit": 256,
+        "references": 512,
+        "windows": 2
+      },
+      "checks": [
+        {
+          "id": "active-source-grouped-512-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_seconds": 4.480224292,
+      "count": 512,
+      "fixture_bytes": 8194,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "grouped_distinct_model": 14,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "model_formula": "sum(window distinct pack IDs); logical pack predicted from source 80 records/page",
+      "old_one_page_miss_model": 430,
+      "phase_commit_wall_ns": null,
+      "stage_source": "cc9ce918c077e319d5848f3e67ff64d56a60f5bd",
+      "status": "PASS",
+      "test_binary_sha256": "c06a57d33894ae979df279f3b85fa9583ee95a1fc1f65d6e73187cf0357241d4",
+      "test_source_sha256": "50e64c394c20867b38eaa196653e8fa04d2829cb26abfd28ea399d5294eb7b52"
+    },
+    {
+      "actual": {
+        "byte_limit": 32768,
+        "complete": "true",
+        "copied_bytes": 4097,
+        "decoded_bytes": 2170504,
+        "decoded_records": 44296,
+        "distinct_packs": 560,
+        "fill_ns": 188403667,
+        "index_reads": 1680,
+        "index_seeks": 560,
+        "locator_lookups": 560,
+        "locator_ns": 137549456,
+        "pack_hits": 3537,
+        "pack_loads": 560,
+        "pack_ns": 49938825,
+        "ref_limit": 256,
+        "references": 4097,
+        "windows": 17
+      },
+      "checks": [
+        {
+          "id": "active-source-grouped-4097-count-and-full-bytes",
+          "status": "PASS"
+        },
+        {
+          "id": "active-source-grouped-4097-clean-close-refund",
+          "status": "PASS"
+        }
+      ],
+      "complete_functional_wall_seconds": 12.006481833,
+      "count": 4097,
+      "fixture_bytes": 8194,
+      "fixture_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+      "grouped_distinct_model": 560,
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "model_formula": "sum(window distinct pack IDs); logical pack predicted from source 80 records/page",
+      "old_one_page_miss_model": 4097,
+      "phase_commit_wall_ns": 352563208,
+      "stage_source": "51c1838a334e285d489e0987205e2405c2621102",
+      "status": "PASS",
+      "test_binary_sha256": "6db0c49358105937dc75a56818486a2445844b43db72f9e95620661ba8d6bbb7",
+      "test_source_sha256": "7193a6481db98fe11182c0c3b815956ac004dac08414fadc372c9bdf58acb8ba"
+    }
+  ],
+  "schema": "issue273-optimization-iter002-count-diagnostic-v1",
+  "verifier": "public Workspace full-byte and refund stage tests; mounted/independent benchmark verifier NOT_RUN"
+}

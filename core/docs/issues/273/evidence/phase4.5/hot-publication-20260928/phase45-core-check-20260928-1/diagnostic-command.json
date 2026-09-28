@@ -1,0 +1,11 @@
+[
+  "docker",
+  "run",
+  "--rm",
+  "-v",
+  "layerfs-issue273-hot-3e5de6512a3e:/work:ro",
+  "rust:1.85.1-bookworm",
+  "python3",
+  "-c",
+  "import pathlib,struct,json\nreports=[]\nfor folder in pathlib.Path(\"/work\").glob(\"active-*/private-backing/workspace\"):\n pages=[]\n for p in folder.glob(\"a-*\"):\n  b=p.read_bytes();kind=struct.unpack(\">H\",b[10:12])[0]\n  entry={\"name\":p.name,\"kind\":kind,\"revision\":struct.unpack(\">Q\",b[68:76])[0],\"used\":struct.unpack(\">H\",b[76:78])[0],\"records\":struct.unpack(\">H\",b[78:80])[0]}\n  if kind==4: entry[\"slots\"]=[{\"slot\":s,\"epoch\":struct.unpack(\">Q\",b[136+s*32:144+s*32])[0],\"page\":struct.unpack(\">Q\",b[144+s*32:152+s*32])[0],\"level\":b[160+s*32],\"kind\":b[161+s*32]} for s in range(64) if any(b[136+s*32:144+s*32])]\n  if kind==3:\n   at=128;cells=[]\n   for i in range(entry[\"records\"]):\n    n=struct.unpack(\">H\",b[at:at+2])[0];at+=2;fence=b[at:at+n].hex();at+=n;tag=b[at];first,epoch=struct.unpack(\">QQ\",b[at+1:at+17]);at+=17;cells.append({\"fence\":fence,\"tag\":tag,\"first\":first,\"epoch\":epoch})\n   entry[\"children\"]=cells\n  pages.append(entry)\n reports.append({\"folder\":str(folder),\"pages\":pages})\nprint(json.dumps(reports,indent=2))\n"
+]

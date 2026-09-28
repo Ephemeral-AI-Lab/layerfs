@@ -1,0 +1,115 @@
+{
+  "status": "FROZEN_FUNCTIONAL_CANDIDATE_PENDING_OWNER_REVIEW",
+  "recorded_at_utc": "2026-09-28T03:48:47.322287+00:00",
+  "source": "4ae36ad3a9c70b32b66c8280ac9496e9f1e345a9",
+  "tree": "2292ca5b49d1bd4fdf080929f667cf961566fc35",
+  "last_product_change": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+  "product_inputs_sha256": "3837ddf432e2026a45a9218244ebbd6b08a4eac391462f706069e07b1546cefd",
+  "driver_sha256": "012150f0e4cba7f9d0a662aa8ef5833356293bc782f9f2b3efdf8a71348a1799",
+  "test_source_sha256": "2b9914ccb3d22250dbcf1f613680fad2f028509d5d880bae8aae0fec446c354c",
+  "helper_source_sha256": "9a40541b1b4b8e325b79e20a657e48a9cee7b8cb8afde4fb26acf01132f7d518",
+  "test_binary_sha256": "458bf6701ee256c1fd628c48f71f792f07dcedba1991a053269c80a5a9aa7d13",
+  "native_binaries_sha256": {
+    "layerfs-server": "95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530",
+    "layerfs-daemon": "7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68",
+    "examples/public_key": "6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9"
+  },
+  "runtime_image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "fixture_reuse": {
+    "receipt": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/checkpoint3-prepared-v1/result.json",
+    "receipt_sha256": "46dda1824619dedbba61ff5c71b63b16f6150ca9609adbb4c05fcd283786bcb9",
+    "closed_store_sha256": "f0f9422d118b82ea67c4b7eaa579111c123c8d03448c03f15155dda1026b8cd0",
+    "clone_method": "independent-byte-copy",
+    "history": "fresh live producer; no restarted write authority",
+    "cache_claim": null
+  },
+  "build_inputs": {
+    "cargo_lock_sha256": "09b880a18e1c221ba830908467f0985b0419ae0bf3c80c90ede7f7c5178272d6",
+    "aarch64_config_path": ".cargo/config.toml",
+    "aarch64_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "aarch64_config": "# Repository build profile for the aarch64 AEAD path.\n#\n# This file sits at the repository root, not under `core/`, because cargo\n# discovers `.cargo/config.toml` by walking up from the **current working\n# directory**. The repository's prescribed commands run from this root with\n# `--manifest-path core/Cargo.toml`, which never looks inside `core/.cargo/`, so\n# the flags used to be silently absent from exactly the builds that matter.\n# It is scoped by target cfg, so x86_64 and every other target are untouched.\n#\n# Why these flags exist at all: the native transport negotiates AES-GCM wherever\n# its backend can be accelerated (`aes`/`polyval`/`ghash` gate their ARMv8\n# backends on the `aes_armv8`/`polyval_armv8` cfgs, which only a global flag can\n# set, and the AES/PMULL instructions additionally need the target features).\n# On `aarch64-apple-darwin` the `aes` and `sha2` target features are already the\n# target's defaults, so the two cfgs are the half a host build would miss; on\n# `aarch64-unknown-linux-musl` the baseline declares only `neon`, so the codegen\n# flags are needed there too. Hence all four, everywhere.\n#\n# Measured consequence of losing them (same source, same machine, same protocol):\n# 214 MiB/s against 802 MiB/s on one stream, 425 against 1556 MiB/s on two.\n# `core/crates/layerfs-bridge` now refuses to compile for aarch64 without this\n# profile instead of silently negotiating the ChaCha20-Poly1305 fallback.\n#\n# These are the crates' own documented cfg knobs plus the ARMv8 target features,\n# not patches. An explicit RUSTFLAGS environment variable overrides this table, so\n# a scripted or container build that sets RUSTFLAGS must repeat these flags.\n#\n# The reference workspace under `crates/` has no `aes`/`polyval`/`ghash` in its\n# lockfile, so these flags change nothing for it.\n[target.'cfg(target_arch = \"aarch64\")']\nrustflags = [\n    \"--cfg\", \"aes_armv8\",\n    \"--cfg\", \"polyval_armv8\",\n    \"--cfg\", \"chacha20_force_neon\",\n    \"-C\", \"target-feature=+aes,+sha2\",\n]\n# `rustdoc` inherits neither the flags above nor a `rustdocflags` table in a\n# cfg-formed target (verified on cargo 1.85.1: the rustdoc command line carries\n# neither), so the bridge's build-time refusal exempts documentation builds\n# (`not(doc)`) in the crate itself. A doc build produces no binary, and every\n# build that does still requires this profile.\n",
+    "rustflags_environment": {
+      "RUSTFLAGS": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS": null
+    },
+    "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+    "cargo": "cargo 1.85.1 (d73d2caf9 2024-12-31)\nrelease: 1.85.1\ncommit-hash: d73d2caf9e41a39daf2a8d6ce60ec80bf354d2a7\ncommit-date: 2024-12-31\nhost: aarch64-apple-darwin\nlibgit2: 1.8.1 (sys:0.19.0 vendored)\nlibcurl: 8.7.1 (sys:0.4.74+curl-8.9.0 system ssl:(SecureTransport) LibreSSL/3.3.6)\nssl: OpenSSL 1.1.1w  11 Sep 2023\nos: Mac OS 26.4.1 [64-bit]\n",
+    "profile": "release",
+    "locked": true,
+    "offline": true,
+    "build_mode": "incremental in this worktree core/target; existing read-only Docker images reused",
+    "features_native_host": [
+      "layerfs-bridge/native"
+    ],
+    "linux_tests_target": "aarch64-unknown-linux-musl"
+  },
+  "build_input_identity_sha256": "7f0dbabd7440db385061f1ca4643fc8472c62f4ef738f5b4c9b552e35415c6d7",
+  "artifacts": [
+    {
+      "name": "layerfs-server",
+      "sha256": "95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530",
+      "archive": "core/target/issue273/binary-archive/95b6d54c0c16bab0da66fbfa8653c1f99d2374db75435a6dd3b31f6095b5b530/layerfs-server",
+      "origin": "core/target/release/layerfs-server"
+    },
+    {
+      "name": "layerfs-daemon",
+      "sha256": "7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68",
+      "archive": "core/target/issue273/binary-archive/7f2dc0d23a26d38b4dc126fac484c5fe806e1a71113d2fcf012fe0b01b418d68/layerfs-daemon",
+      "origin": "core/target/release/layerfs-daemon"
+    },
+    {
+      "name": "public_key",
+      "sha256": "6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9",
+      "archive": "core/target/issue273/binary-archive/6fd0ab8c49bbba8a2b5de8c48f6f73940016450a2776ab48f497d93272a4efd9/public_key",
+      "origin": "core/target/release/examples/public_key"
+    },
+    {
+      "name": "stage-a8c0e2b3ec9929a4",
+      "sha256": "458bf6701ee256c1fd628c48f71f792f07dcedba1991a053269c80a5a9aa7d13",
+      "archive": "core/target/issue273/binary-archive/458bf6701ee256c1fd628c48f71f792f07dcedba1991a053269c80a5a9aa7d13/stage-a8c0e2b3ec9929a4",
+      "origin": "core/target/aarch64-unknown-linux-musl/release/deps/stage-a8c0e2b3ec9929a4"
+    },
+    {
+      "name": "active_backing-f325d5782a2161dc",
+      "sha256": "cb1391de45669fd2acf61096f20f938a20fa9c29dc6665b0c258f14e99c9e131",
+      "archive": "core/target/issue273/binary-archive/cb1391de45669fd2acf61096f20f938a20fa9c29dc6665b0c258f14e99c9e131/active_backing-f325d5782a2161dc",
+      "origin": "core/target/aarch64-unknown-linux-musl/release/deps/active_backing-f325d5782a2161dc"
+    }
+  ],
+  "registered_functional_cases": [
+    "active_cleanup_failure",
+    "active_close",
+    "active_generation",
+    "active_hot_continuity",
+    "active_hot_publication",
+    "active_many_file",
+    "active_mixed_compact",
+    "active_mounted",
+    "active_mutation_compact",
+    "active_namespace",
+    "active_payload_refund",
+    "active_quick_controls",
+    "active_quota_refusal",
+    "active_repeated",
+    "active_retained32",
+    "active_separated4096",
+    "active_split_slot"
+  ],
+  "functional_cases_passed": 17,
+  "functional_checks_passed": 42,
+  "cache_claim": null,
+  "performance_claim": false,
+  "benchmark_samples": 0,
+  "release_admission": false,
+  "checkpoint_5": "NOT_RUN; owner review required before sampling",
+  "construction_workers": 1,
+  "not_run": [
+    "checkpoint-5 3x3 matched cache-qualified matrix and additional registered performance/resource selections",
+    "hard RSS/cgroup bound",
+    "full Core C1 test command (historical two filesystem_ordering failures retained)",
+    "two ignored mounted-only readable tests",
+    "concurrent SDK Exec admission",
+    "#264 mounted namespace integration"
+  ]
+}

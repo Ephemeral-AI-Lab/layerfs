@@ -92,6 +92,7 @@ pub enum Gate {
     CompositeBefore,
     CompositeCompletionFailure,
     AttributesAfterCommit,
+    Continuity,
 }
 #[derive(Default)]
 pub struct Observations {
@@ -166,7 +167,12 @@ impl Native {
             }
             first
         };
-        if first_save && matches!(self.gate, Gate::Delivery | Gate::CompositeCompletionFailure) {
+        if first_save
+            && matches!(
+                self.gate,
+                Gate::Delivery | Gate::CompositeCompletionFailure | Gate::Continuity
+            )
+        {
             let observations = self.observations.lock().unwrap();
             let (_state, timed) = self
                 .changed
@@ -281,7 +287,7 @@ impl Native {
                         println!("COMMIT_BACKING_LIMIT_APPLIED");
                     }
                     drop(observations);
-                    if self.gate == Gate::CommitReply {
+                    if matches!(self.gate, Gate::CommitReply | Gate::Continuity) {
                         let mut observations = self.observations.lock().unwrap();
                         observations.commit_entered = true;
                         self.changed.notify_all();
@@ -504,13 +510,26 @@ impl Fixture {
     pub fn new(gate: Gate) -> Self {
         Self::with_quota(gate, 64 * 1024 * 1024)
     }
+    pub fn new_fresh(gate: Gate) -> Self {
+        Self::with_native(Native::new_fresh(gate), 64 * 1024 * 1024)
+    }
     pub fn with_quota(gate: Gate, quota: u64) -> Self {
-        let native = Native::new(gate);
+        Self::with_native(Native::new(gate), quota)
+    }
+    /// A separate refusal oracle only; the 64 MiB / default 8 MiB Stage
+    /// profile and its registered 8,192 attempt are never modified.
+    pub fn fresh_with_refusal_budget(gate: Gate, budget_bytes: usize) -> Self {
+        Self::with_native_budget(Native::new_fresh(gate), 64 * 1024 * 1024, budget_bytes)
+    }
+    fn with_native(native: Arc<Native>, quota: u64) -> Self {
+        Self::with_native_budget(native, quota, DEFAULT_MEMORY_BUDGET_BYTES)
+    }
+    fn with_native_budget(native: Arc<Native>, quota: u64, memory_budget_bytes: usize) -> Self {
         let host = WorkspaceHost::new(
             WorkspaceConfig {
                 root: PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()),
                 max_count: 3,
-                memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+                memory_budget_bytes,
                 disk_budget_bytes: Some(quota),
             },
             native.delivery(),
@@ -559,7 +578,15 @@ impl Fixture {
         assert!(start <= end && end <= file.size);
         let handle = self
             .workspace
-            .open(file.serial, ReferenceScope::Local)
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
             .unwrap();
         let removed = end - start;
         let inserted = bytes.len() as u64;
@@ -661,10 +688,10 @@ impl Fixture {
             if let Operation::HistoryCommand(HistoryCommand::StageChanges(prepared)) = operation {
                 // The rows are the body this request declared, so what a proxied
                 // request states is its exact declaration: no directory row, one
-                // typed identity per saved file, all of them fresh.
+                // typed existing identity per saved file.
                 assert_eq!(prepared.totals.directories, 0);
                 assert_eq!(prepared.totals.identities, files as u64);
-                assert_eq!(prepared.totals.fresh, files as u64);
+                assert_eq!(prepared.totals.fresh, 0);
                 assert_eq!(prepared.totals.rooted_identities().unwrap(), files as u64);
             }
         }

@@ -33,6 +33,39 @@ sys.path.insert(0, str(ROOT / 'core/benchmark/fs-bench-pro-storage-content/share
 import isolation
 
 CASES = {
+    'active_hot_publication': ['active-hot-publication-counts-and-alias-byte-oracle', 'active-hot-g1-g2-and-post-commit-continuation', 'active-hot-exact-blocks-and-clean-close'],
+    'active_hot_continuity': ['active-mounted-process-g1-save-c5-and-g2-progress', 'active-mounted-same-process-handle-post-commit-and-refund'],
+    'active_generation': ['active-g1-staged-bytes-and-g2-live-bytes', 'active-g1-g2-commits-and-final-bytes'],
+    'active_close': ['active-fresh-name-and-file-commit', 'active-committed-clean-close'],
+    'active_namespace': ['active-fresh-directory-link-and-symlink-commit', 'active-successor-rename-and-unlink-commit'],
+    'active_mounted': ['active-mounted-fuse-write-unmount', 'active-mounted-public-commit-bytes'],
+    'active_tiny_input_100': ['active-mounted-tiny-input-100-exact-callbacks-and-bytes', 'active-mounted-tiny-input-100-public-commit-and-refund'],
+    'active_tiny_input': ['active-mounted-tiny-input-512-exact-callbacks-and-bytes', 'active-mounted-tiny-input-512-public-commit-and-refund'],
+    'active_tiny_input_4097': ['active-mounted-tiny-input-4097-exact-callbacks-and-bytes', 'active-mounted-tiny-input-4097-public-commit-and-refund'],
+    'active_many_file': ['active-128-files-shared-pack-before-commit', 'active-128-files-commit-and-byte-oracle', 'active-128-files-exact-clean-close'],
+    'active_repeated': ['active-4097-repeated-public-backing', 'active-4097-repeated-commit-and-byte-oracle', 'active-4097-repeated-exact-clean-close'],
+    'active_retained32': ['active-32-retained-generations-and-old-new-oracle', 'active-32-pins-release-exact-blocks', 'active-32-generations-exact-clean-close'],
+    'active_mixed_compact': ['active-mixed-two-pages-compact-to-one-destination', 'active-mixed-g1-g2-bytes-and-refund', 'active-mixed-exact-clean-close'],
+    'active_mutation_compact': ['active-mutation-compacts-mixed-sealed-page', 'active-mutation-compaction-commit-and-close'],
+    'active_payload_refund': ['active-large-payload-owned-before-commit', 'active-large-payload-refund-and-byte-oracle', 'active-large-payload-exact-clean-close'],
+    'active_quota_refusal': ['active-quota-refusal-keeps-acknowledged-bytes-and-charge', 'active-quota-refusal-exact-clean-close'],
+    'active_source_grouping_100': ['active-source-grouped-100-count-and-full-bytes', 'active-source-grouped-100-clean-close-refund'],
+    'active_source_grouping': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
+    'active_source_grouping_4097': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
+    'active_generic_profile_100': ['active-source-grouped-100-count-and-full-bytes', 'active-source-grouped-100-clean-close-refund'],
+    'active_generic_profile_512': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
+    'active_generic_profile': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
+    'active_generic_profile_4197': ['active-source-grouped-4197-count-and-full-bytes', 'active-source-grouped-4197-clean-close-refund'],
+    'active_generic_profile_8192': ['active-source-grouped-8192-count-and-full-bytes', 'active-source-grouped-8192-clean-close-refund'],
+    'active_known_budget_g2': ['active-known-budget-c5-retains-full-g1-and-live-bytes', 'active-known-budget-c5-continues-g2-without-canonical-retry'],
+    'active_known_c5_g2': ['active-known-c5-failure-keeps-canonical-g1', 'active-known-c5-physical-failure-stops-g2-and-retains-charge'],
+    'active_transfer_refusal': ['active-transfer-refusal-known-remote-and-live-bytes', 'active-transfer-refusal-g2-bounded-and-charge-retained'],
+    'active_page_profile': ['active-page-profile-4097-full-byte-oracle', 'active-page-profile-4097-clean-close-refund'],
+    'active_changed_closure_probe': ['active-changed-closure-private-byte-and-count-oracle', 'active-changed-closure-commit-and-clean-close'],
+    'active_separated4096': ['active-4096-separated-full-private-backing-bound', 'active-4096-separated-commit-and-full-byte-oracle', 'active-4096-separated-exact-clean-close'],
+    'active_cleanup_failure': ['active-postpublication-cleanup-failure-keeps-receipt-and-new-bytes', 'active-failed-cleanup-retains-charged-custody'],
+    'active_split_slot': ['active-split-packed-slot-final-byte-oracle', 'active-split-packed-slot-clean-close'],
+    'active_quick_controls': ['active-clean-commit-skips-retained-old-journal', 'active-one-edit-commit-skips-retained-old-journal', 'active-quick-controls-refund-and-clean-close'],
     'headroom': ['reserved-stage-progress-with-ordinary-disk-quota-occupied', 'exact-stage-and-retained-submission'],
     'metadata_only': ['metadata-only-stage-preserves-root-without-file-save', 'exact-stage-and-retained-submission'],
     'completion_failure': ['known-file-save-survives-native-completion-publication-failure'],
@@ -48,6 +81,39 @@ CASES = {
     'metadata_denied': ['known-metadata-denial-retains-saved-file-G-and-D1'],
 }
 REQUIREMENTS = {
+    'active_hot_publication': ['S-02', 'S-03', 'S-17', 'B-26', 'B-28'],
+    'active_hot_continuity': ['S-02', 'S-03', 'H-01', 'H-02'],
+    'active_generation': ['S-02', 'S-03', 'H-01', 'H-02'],
+    'active_close': ['S-17', 'B-26', 'B-28'],
+    'active_namespace': ['S-17', 'B-26', 'B-28'],
+    'active_mounted': ['S-02', 'S-17', 'H-01'],
+    'active_tiny_input_100': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
+    'active_tiny_input': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
+    'active_tiny_input_4097': ['S-02', 'S-17', 'H-01', 'B-26', 'B-28'],
+    'active_many_file': ['S-17', 'B-26', 'B-28'],
+    'active_repeated': ['S-17', 'B-26', 'B-28'],
+    'active_retained32': ['S-17', 'B-26', 'B-28'],
+    'active_mixed_compact': ['S-17', 'B-26', 'B-28'],
+    'active_mutation_compact': ['S-17', 'B-26', 'B-28'],
+    'active_payload_refund': ['S-17', 'B-26', 'B-28'],
+    'active_quota_refusal': ['S-15', 'B-26', 'B-28'],
+    'active_source_grouping_100': ['S-17', 'B-26', 'B-28'],
+    'active_source_grouping': ['S-17', 'B-26', 'B-28'],
+    'active_source_grouping_4097': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_100': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_512': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_4197': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_8192': ['S-17', 'B-26', 'B-28'],
+    'active_known_budget_g2': ['S-15', 'S-17', 'B-26', 'B-28'],
+    'active_known_c5_g2': ['S-15', 'S-17', 'B-26', 'B-28'],
+    'active_transfer_refusal': ['S-15', 'S-17', 'B-26', 'B-28'],
+    'active_page_profile': ['S-17', 'B-26', 'B-28'],
+    'active_changed_closure_probe': ['S-17', 'B-26', 'B-28'],
+    'active_separated4096': ['S-17', 'B-26', 'B-28'],
+    'active_cleanup_failure': ['S-15', 'B-26', 'B-28'],
+    'active_split_slot': ['S-17', 'B-26', 'B-28'],
+    'active_quick_controls': ['S-17', 'B-26', 'B-28'],
     'headroom': ['B-26', 'H-01'],
     'metadata_only': ['H-01', 'B-28'],
     'completion_failure': ['B-20', 'B-26', 'H-07', 'S-15'],
@@ -67,7 +133,7 @@ TEST_PREFIX = 'stage_'
 TEST_MARKER = 'STAGE_CHECK'
 MODE = 'functional-workspace-stage'
 REQUIREMENT_SCOPE = 'stage-only subsets; no full Pair 1 completion'
-LIMIT_CASES = ('completion_failure',)
+LIMIT_CASES = ('completion_failure', 'active_known_c5_g2')
 DENIED_COMMIT_CASE = None
 PROXY_CASE = None
 DATA_MODES = {}
@@ -202,6 +268,7 @@ def execute(args, report, started):
     denied_key = os.urandom(32).hex() if args.case == DENIED_COMMIT_CASE else None
     grant = 127 if args.case == 'metadata_denied' else 255
     env = os.environ.copy()
+    report['capacity_diagnostic'] = env.get('LFS_CAPACITY_DIAGNOSTIC') == '1'
     env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=f'1,{client_public},{int(time.time())+3600},{grant}',
                LAYERFS_STORE=str(service_dir / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0', LAYERFS_TELEMETRY='off',
                LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
@@ -241,6 +308,18 @@ def execute(args, report, started):
                       f'linux::{TEST_PREFIX}{args.case}', '--exact']
         if caller:
             invocation[3:3] = ['--user', caller]
+        if report['capacity_diagnostic']:
+            invocation[invocation.index(name):invocation.index(name)] = [
+                '-e', 'LFS_CAPACITY_DIAGNOSTIC=1']
+        if args.case.startswith('active_source_grouping') or args.case.startswith('active_generic_profile'):
+            invocation[invocation.index(name):invocation.index(name)] = [
+                '-e', 'LAYERFS_COMPLEXITY_DIAGNOSTIC=1']
+        if args.case.startswith('active_tiny_input'):
+            interval = {'active_tiny_input_100': 25,
+                        'active_tiny_input': 128,
+                        'active_tiny_input_4097': 1024}[args.case]
+            invocation[invocation.index(name):invocation.index(name)] = [
+                '-e', f'LAYERFS_FUSE_WRITE_SAMPLE_INTERVAL={interval}']
         if args.case in LIMIT_CASES:
             binary_at = invocation.index(name) + 1
             invocation[binary_at:binary_at] = ['sh', '-c', 'trap "" XFSZ; exec "$@"', 'sh']
@@ -313,7 +392,7 @@ def execute(args, report, started):
             if f'{TEST_MARKER} {check["id"]} PASS' in text: check['status'] = 'PASS'
         report['observations'] = []
         for line in text.splitlines():
-            for marker in ('STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
+            for marker in ('STAGE_HOT ', 'STAGE_PROCESS ', 'STAGE_RESOURCE ', 'STAGE_FAILURE ', 'STAGE_HEADROOM ', 'STAGE_ALLOCATION ', 'STAGE_PHASE ', 'COMMIT_RESOURCE ', 'COMMIT_FAILURE ', 'COMMIT_HEADROOM ', 'COMMIT_CYCLES ', 'COMMIT_LATER_OBSERVATION '):
                 if marker in line:
                     report['observations'].append(line[line.index(marker):]); break
         if proxy:
@@ -365,6 +444,20 @@ def main():
               'hard_budget_seconds': 60, 'stage_deadline_seconds': 25 if args.case == 'frontier' else 10,
               'commit_deadline_seconds': (25 if args.case == 'frontier' else 10) if MODE in ('functional-workspace-composite-commit', 'functional-workspace-resize', 'functional-workspace-write') else (10 if MODE in ('functional-workspace-commit-staged', 'functional-workspace-maintenance', 'functional-mounted-sdk-coherence', 'functional-mounted-write', 'functional-mounted-resize', 'functional-native-mount-failure') else None), 'performance_claim': False, 'cache_claim': None,
               'not_run': NOT_RUN}
+    if args.case.startswith('active_'):
+        report.update(requirement_scope='public active-backing WRITE, Commit/reconcile and registered custody subsets',
+                      commit_deadline_seconds=25 if args.case in ('active_separated4096', 'active_quick_controls') else 10,
+                      not_run=['checkpoint 5 and matched performance arms', 'concurrent SDK Exec admission', 'hard RSS/cgroup bound'])
+        if args.case == 'active_transfer_refusal':
+            report['memory_budget_bytes'] = 2_650_000
+            report['not_run'].append('known failed Workspace clean close and 8 MiB product-profile support')
+        if args.case == 'active_cleanup_failure':
+            report['commit_deadline_seconds'] = None
+            report['not_run'].append('Workspace Commit/reconcile')
+        if args.case not in ('active_mounted', 'active_hot_continuity', 'active_tiny_input', 'active_tiny_input_100', 'active_tiny_input_4097'):
+            report['not_run'].append('mounted writes')
+        if args.case != 'active_hot_continuity':
+            report['not_run'].append('mounted process spanning SaveFile/C5')
     started = time.monotonic()
     def expired(_signal, _frame):
         raise TimeoutError('complete functional selection exceeded 60 seconds')

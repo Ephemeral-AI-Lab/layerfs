@@ -1,0 +1,4 @@
+
+thread 'linux::stage_active_cleanup_failure' panicked at crates/layerfs-workspace/tests/stage.rs:874:14:
+called `Result::unwrap_err()` on an `Ok` value: MutationReceipt { incarnation: [31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31], generation: 1, inode: 2, revision: 2, accepted_bytes: 1 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

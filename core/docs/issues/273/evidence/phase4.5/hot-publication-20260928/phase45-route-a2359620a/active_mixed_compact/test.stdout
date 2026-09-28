@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::stage_active_mixed_compact ... STAGE_PHASE case=mixed128 commit_staged_wall_ns=115119375 pack_fetches=2 index_fetches=917 pack_page_writes=1 index_page_writes=32 cache_claim=none
+STAGE_ALLOCATION case=mixed128 before_bytes=237568 middle_bytes=176128 before_pack_pages=3 middle_pack_pages=2
+STAGE_CHECK active-mixed-two-pages-compact-to-one-destination PASS
+STAGE_CHECK active-mixed-g1-g2-bytes-and-refund PASS
+STAGE_CHECK active-mixed-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 2.56s
+

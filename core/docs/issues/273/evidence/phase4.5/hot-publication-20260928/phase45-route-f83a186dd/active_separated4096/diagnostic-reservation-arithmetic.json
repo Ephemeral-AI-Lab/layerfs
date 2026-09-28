@@ -1,0 +1,17 @@
+{
+  "label": "source-derived diagnostic; no repeated arm",
+  "source": "f83a186dd",
+  "extents": 8192,
+  "inverse_keys": 4096,
+  "parts": {
+    "prepared_deletions": 1572864,
+    "updates_map": 1823418,
+    "outer_ordered_vector": 589920,
+    "publisher_clones": 3646836,
+    "inner_ordered_clone": 1036858,
+    "index_scratch": 1954490
+  },
+  "sum_before_unrelated_residents": 10624386,
+  "budget": 8388608,
+  "no_commit_replay": true
+}

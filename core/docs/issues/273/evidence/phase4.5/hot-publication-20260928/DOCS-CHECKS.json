@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "raw_byte_copies": 430,
+  "frozen_executables": 5,
+  "local_links": 71,
+  "fences": "balanced",
+  "json": "parsed",
+  "checksum_files": 435,
+  "scope": "docs/artifact verification only; product checks unchanged",
+  "method": "Raw manifest entries checked against original bytes and SHA-256; frozen executable hashes checked; 71 local links and code fences checked; JSON parsed. This is documentation/artifact validation, not a measurement.",
+  "staged_whitespace": {
+    "authored_docs_json_checksums": "PASS",
+    "raw_logs": "byte-identical originals retained",
+    "expected_runner_eof_blank_lines": 58,
+    "other_whitespace_findings": 0
+  }
+}

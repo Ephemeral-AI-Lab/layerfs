@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_many_file ... STAGE_CHECK active-128-files-shared-pack-before-commit PASS
+STAGE_ALLOCATION case=128 before_bytes=163840 after_bytes=151552 before_pack_pages=2 after_pack_pages=0
+STAGE_CHECK active-128-files-commit-and-byte-oracle PASS
+STAGE_CHECK active-128-files-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 3.20s
+

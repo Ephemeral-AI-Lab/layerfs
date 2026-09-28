@@ -1,0 +1,14 @@
+   Compiling layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-api/sdk)
+    Finished `release` profile [optimized] target(s) in 0.34s
+     Running unittests examples/benchmark_init.rs (core/target/release/examples/benchmark_init-41fdcf33768590f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/benchmark_shell.rs (core/target/release/examples/benchmark_shell-78698031e3d9c302)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

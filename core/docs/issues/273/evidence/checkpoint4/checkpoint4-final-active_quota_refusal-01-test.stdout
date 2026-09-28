@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_active_quota_refusal ... STAGE_ALLOCATION case=quota_refusal full_bytes=2097152 remaining_bytes=0 refusal=Backing(BackingFailure { phase: Allocate, payload: 0, declared_bytes: 0, completed_bytes: 0, created_segments: 0, allocated_bytes: 0, reserved_bytes: 0, cleanup_failed: false, accounting_complete: true, kind: StorageFull })
+STAGE_CHECK active-quota-refusal-keeps-acknowledged-bytes-and-charge PASS
+STAGE_CHECK active-quota-refusal-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 0.04s
+

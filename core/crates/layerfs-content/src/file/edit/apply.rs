@@ -44,7 +44,7 @@ pub fn apply_edits(
     scope: TimingScope<'_>,
 ) -> ContentResult<ConstructedFile> {
     policy.validated()?;
-    scope.run(|edit| {
+    let constructed = scope.run(|edit| {
         let view = FileView::open(reader, request.root, edit.child("edit.base"))?;
         if view.logical_len() != request.edits.base_len() {
             return Err(ContentError::InvalidEdit {
@@ -139,7 +139,18 @@ pub fn apply_edits(
                 None => stream_combined(capacities, &view, &request, consumer, edit),
             },
         }
-    })
+    })?;
+    // All successful routes, including unchanged and whole-file early
+    // returns, report their *edit-node* reads. The returned counters, not
+    // absence of the chunked-route emitter, prove an explicit zero.
+    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+        let counters = constructed.counters;
+        eprintln!(
+            "LFS_C1_EDIT_LOAD v=1 nodes_read={} stored_nodes_read={} draft_nodes_read={}",
+            counters.nodes_read, counters.stored_nodes_read, counters.draft_nodes_read,
+        );
+    }
+    Ok(constructed)
 }
 
 /// Assembles the whole result into `out`, from retained ranges and replacements,
@@ -357,12 +368,6 @@ fn replace_chunked(
     // then the file state that opens it. Nothing the edit discarded is emitted.
     let root = edit.child("edit.finish").run(|_| objects.finish(summary))?;
     let counters = objects.counters();
-    if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
-        eprintln!(
-            "LFS_C1_EDIT_LOAD v=1 nodes_read={} stored_nodes_read={} draft_nodes_read={}",
-            counters.nodes_read, counters.stored_nodes_read, counters.draft_nodes_read,
-        );
-    }
     Ok(ConstructedFile {
         root,
         logical_len: result_len,

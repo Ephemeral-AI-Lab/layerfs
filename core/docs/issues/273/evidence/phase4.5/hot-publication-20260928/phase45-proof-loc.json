@@ -1,0 +1,84 @@
+{
+  "parent": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+  "staged_tree": "423f544a1a74a832630b109147013d9682c25db1",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "git archive exact snapshot crates core/crates; python3 tools/production_loc.py --root snapshot --json",
+  "before": {
+    "combined": 132537,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-273-loc-28k79x6f/before",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 437,
+          "layerfs-bridge": 5785,
+          "layerfs-content": 13418,
+          "layerfs-daemon": 1897,
+          "layerfs-fuse": 1550,
+          "layerfs-history": 2657,
+          "layerfs-sandbox": 1102,
+          "layerfs-server": 3733,
+          "layerfs-storage": 8521,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 25763
+        },
+        "files": 349,
+        "lines": 67120
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  },
+  "after": {
+    "combined": 132537,
+    "root": "/private/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-273-loc-28k79x6f/after",
+    "scopes": {
+      "core": {
+        "crates": {
+          "layerfs-api": 437,
+          "layerfs-bridge": 5785,
+          "layerfs-content": 13418,
+          "layerfs-daemon": 1897,
+          "layerfs-fuse": 1550,
+          "layerfs-history": 2657,
+          "layerfs-sandbox": 1102,
+          "layerfs-server": 3733,
+          "layerfs-storage": 8521,
+          "layerfs-telemetry": 2257,
+          "layerfs-workspace": 25763
+        },
+        "files": 349,
+        "lines": 67120
+      },
+      "reference": {
+        "crates": {
+          "layerfs-cli": 1142,
+          "layerfs-content": 15701,
+          "layerfs-daemon": 3233,
+          "layerfs-fuse": 10986,
+          "layerfs-layerstack-store": 18376,
+          "layerfs-materialization": 358,
+          "layerfs-monitor": 414,
+          "layerfs-sdk": 979,
+          "layerfs-workspace": 11776,
+          "layerfs-workspace-core": 2452
+        },
+        "files": 193,
+        "lines": 65417
+      }
+    }
+  }
+}

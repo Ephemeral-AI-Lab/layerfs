@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_mixed_compact ... STAGE_ALLOCATION case=mixed128 before_bytes=245760 middle_bytes=167936 before_pack_pages=3 middle_pack_pages=2
+STAGE_CHECK active-mixed-two-pages-compact-to-one-destination PASS
+STAGE_CHECK active-mixed-g1-g2-bytes-and-refund PASS
+STAGE_CHECK active-mixed-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 3.56s
+

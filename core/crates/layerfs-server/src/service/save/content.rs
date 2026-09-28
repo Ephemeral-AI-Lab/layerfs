@@ -107,6 +107,17 @@ pub fn mutate(
                     return Err(Code::InvalidInput.into());
                 }
                 if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                    // A base-less SaveFile uses construct_stream, not C1's
+                    // edit-node loader. Only its completed, checked zero-read
+                    // construction can witness an explicit edit-load zero.
+                    // A nonzero stream read is deliberately unparsable as zero.
+                    if base.is_none() {
+                        if f.counters.nodes_read == 0 {
+                            eprintln!("LFS_C1_EDIT_LOAD v=1 nodes_read=0 stored_nodes_read=0 draft_nodes_read=0");
+                        } else {
+                            eprintln!("LFS_C1_EDIT_LOAD v=1 status=INCOMPLETE_NONZERO_STREAM_READ");
+                        }
+                    }
                     eprintln!(
                         "LFS_C1_SAVE_COUNT v=1 replacement_bytes={} spool_resident={} nodes_read={} nodes_created={} payloads_created={} payload_bytes={} peak_deferred_bytes={}",
                         file_input.replacement_bytes(),

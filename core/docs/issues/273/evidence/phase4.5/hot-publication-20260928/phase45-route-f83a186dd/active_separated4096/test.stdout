@@ -1,0 +1,12 @@
+
+running 1 test
+test linux::stage_active_separated4096 ... STAGE_CHECK active-4096-separated-full-private-backing-bound PASS
+FAILED
+
+failures:
+
+failures:
+    linux::stage_active_separated4096
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 27 filtered out; finished in 5.45s
+

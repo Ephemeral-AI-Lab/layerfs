@@ -1,0 +1,4 @@
+
+thread 'linux::stage_semantics' panicked at crates/layerfs-workspace/tests/stage.rs:251:14:
+called `Result::unwrap()` on an `Err` value: BadHandle
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,4 @@
+
+thread 'linux::stage_active_hot_publication' panicked at crates/layerfs-workspace/tests/stage.rs:1830:40:
+called `Result::unwrap()` on an `Err` value: Commit(CommitFailure { generation: 2, phase: CompositeCommit, disposition: KnownBeforeCommit, cause: Service(Failure { code: InvalidInput, unknown: false, cleanup: None, history: None }), stage: None, observed_stage: None, known_outcome: None, observed_outcome: None, installed_revision: None })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -31,6 +31,7 @@ pub(crate) struct Inner {
     pub store: u32,
     pub access: WorkspaceAccess,
     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
+    pub active: Option<Arc<crate::backing::active::ActiveBacking>>,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
     pub directory: Option<Arc<crate::backing::directory::Directory>>,
@@ -46,6 +47,7 @@ pub(crate) struct State {
     pub node_index: BTreeMap<u64, usize>,
     pub node_index_charge: Charge,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
+    pub active_origins: Arc<crate::filesystem::active_view::ActiveOrigins>,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,
@@ -267,7 +269,10 @@ impl State {
         }
         Ok(())
     }
-    #[expect(clippy::too_many_arguments, reason = "frontier counters mirror the published metadata fields")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "frontier counters mirror the published metadata fields"
+    )]
     pub fn frontier_bytes(
         &self,
         host: &Arc<Host>,

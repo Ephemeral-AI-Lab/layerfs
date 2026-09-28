@@ -1,0 +1,11 @@
+
+running 1 test
+test linux::stage_lowering ... FAILED
+
+failures:
+
+failures:
+    linux::stage_lowering
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.03s
+

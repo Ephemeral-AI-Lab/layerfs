@@ -1,0 +1,27 @@
+{
+  "files": {
+    "history.sqlite": {
+      "bytes": 86016,
+      "final_pages": 6,
+      "pages": 6,
+      "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-4097/history.sqlite",
+      "resident_after_invalidate": 0,
+      "resident_on_recheck": 0,
+      "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+    },
+    "store.sqlite": {
+      "bytes": 626688,
+      "final_pages": 39,
+      "pages": 39,
+      "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-4097/store.sqlite",
+      "resident_after_invalidate": 0,
+      "resident_on_recheck": 0,
+      "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+    }
+  },
+  "final_check_ns": 305574652804791,
+  "launch_gap_limit_ns": 1000000000,
+  "launch_gap_ns": 3375,
+  "method": "darwin-shared-mmap-invalidate-mincore-v2",
+  "status": "PASS"
+}

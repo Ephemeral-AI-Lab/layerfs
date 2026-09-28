@@ -1,5 +1,9 @@
 # FUSE, Workspace, snapshot overlay and Commit integration
 
+The [#273 active-backing storage foundation](60-active-backing.md) describes
+the new, unselected pack/index modules against their implementation commit.
+The mounted Workspace and performance claims remain open.
+
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Implementation planning baseline finalized 2026-09-21. The design is informed by reviewed main
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`; the v0.1.6 comparison uses release

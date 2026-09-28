@@ -467,8 +467,9 @@ def prepare_reuse(output, previous_file, selection):
 def progress(driver, count):
     output = bytes.fromhex(driver["exec_stdout_hex"]).decode("ascii")
     rows = [line.split("\t") for line in output.splitlines()]
-    expected_counts = [count // 4, count // 2, count * 3 // 4, count]
-    if len(rows) != 4 or any(len(row) != 3 or row[0] != "PROGRESS"
+    expected_counts = ([1] if count == 1 else
+                       [count // 4, count // 2, count * 3 // 4, count])
+    if len(rows) != len(expected_counts) or any(len(row) != 3 or row[0] != "PROGRESS"
                               for row in rows):
         raise ValueError(f"unexpected progress: {output!r}")
     parsed = [{"writes": int(row[1]), "writer_elapsed_ns": int(row[2])} for row in rows]
@@ -487,8 +488,8 @@ def backing_samples(stderr):
         r"metadata=Ok\(MetadataStatus \{ (.*?) \}\)"
         r"(?: acquisition_ns=(\d+) publication_ns=(\d+))?")
     for line in stderr.decode(errors="replace").splitlines():
-        found = pattern.search(line)
-        if found:
+        found = pattern.fullmatch(line)
+        if found and (int(found[1]) < 3 or found[6] is not None):
             def fields(value):
                 return {key: int(raw) if raw.isdigit() else raw
                         for key, raw in (part.split(": ", 1)
@@ -555,8 +556,8 @@ def causal_diagnostics(stderr, samples):
         errors.append("causal 512-WRITE checkpoints incomplete")
     previous = {}
     for row in samples:
-        if row["version"] != 3:
-            errors.append(f"WRITE {row['write_class']}: expected LFS_WRITE_SAMPLE v=3")
+        if row["version"] not in (3, 4):
+            errors.append(f"WRITE {row['write_class']}: expected LFS_WRITE_SAMPLE v=3 or v=4")
         for scope, names in (("backing", CAUSE_BACKING), ("metadata", CAUSE_METADATA)):
             fields = row[scope]
             if fields.get("operator_diagnostics_enabled") != "true":

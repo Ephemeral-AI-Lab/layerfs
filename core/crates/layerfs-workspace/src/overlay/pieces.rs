@@ -91,25 +91,6 @@ pub struct Inode {
     pub edits: u16,
 }
 impl Inode {
-    pub fn initial(attr: NodeAttributes, base: Root, metadata: Root) -> Self {
-        Self {
-            captured: false,
-            fresh: false,
-            symlink: attr.kind == NodeKind::Symlink,
-            revision: 0,
-            length: attr.size,
-            base_length: attr.size,
-            base,
-            metadata,
-            pieces: PageRef::NULL,
-            generation: 1,
-            mode: attr.mode,
-            seconds: attr.mtime_seconds,
-            nanos: attr.mtime_nanoseconds,
-            replacement: 0,
-            edits: 0,
-        }
-    }
     pub fn value(self) -> [u8; 160] {
         let mut b = [0; 160];
         b[24] = u8::from(self.captured);

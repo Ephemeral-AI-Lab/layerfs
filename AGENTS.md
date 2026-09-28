@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> **Status:** Current repository-wide agent rules.
+
 Repo-wide rules for coding agents working in `layerfs`. This file routes; it does
 not replace the normative documents below, and where they disagree with this page,
 they win.
@@ -244,6 +246,33 @@ exploratory performance-only default below; see
   `sync_data`/`sync_all` on Workspace backing, and memory hints are hints.
 - Documentation states measured facts, limits and open rulings; roadmap READMEs
   link to the ledger rather than paraphrasing numbers.
+
+### Workspace private backing and running processes
+
+- **Workspace private backing stays incremental throughout an attachment,
+  both before and after Commit.** Mutations, capture, snapshot, Stage, Commit
+  reconciliation and reclamation operate on changed records, reached index
+  paths and the owners whose references actually changed. Preserve sharing of
+  untouched content and metadata. Do not materialize or rebuild the whole
+  Workspace, copy up an inherited subtree, replay historical writes, or reset
+  private backing at an Exec or Commit boundary. Necessary changed-file
+  canonical construction and independent verification retain their own explicit
+  work; neither permits an unrelated Workspace-wide rewrite.
+- **Running processes remain able to execute while Workspace operations
+  proceed.** Do not introduce process suspension/freezing, an Exec-completion
+  or drain barrier, whole-Workspace quiescence, restart, or unmount/remount as
+  a prerequisite for capture, snapshot, Stage, Commit or backing maintenance.
+  Keep the existing ordered mutation/publication boundary; account for work
+  under its lock and do bulk transfer and unrelated reclamation outside it.
+  Explicit shutdown or cancellation follows its authorized lifecycle, and is
+  not a Commit implementation technique.
+- Capture selects and pins one complete G1 view and lets successor G2 edits
+  continue. Commit reads that selected view; successful reconciliation applies
+  the captured changed set while preserving G2 edits, held file/directory
+  handles, selected reader views and known/unknown-outcome custody. Cache
+  eviction and format changes obey the same incremental and process-continuity
+  rules. Prove these properties through the ordinary public route before
+  claiming a backing change is complete.
 
 ### Production LOC comparison for every commit
 

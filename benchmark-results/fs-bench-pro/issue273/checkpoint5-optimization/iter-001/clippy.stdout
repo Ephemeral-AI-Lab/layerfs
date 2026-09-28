@@ -1,0 +1,6 @@
+    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace)
+    Checking layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-server)
+    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-api/sdk)
+    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-fuse)
+    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-daemon)
+    Finished `release` profile [optimized] target(s) in 5.29s

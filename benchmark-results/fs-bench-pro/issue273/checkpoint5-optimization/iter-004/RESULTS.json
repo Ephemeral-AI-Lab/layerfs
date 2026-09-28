@@ -1,0 +1,76 @@
+{
+  "admission_eligible": false,
+  "cache_claim": null,
+  "case": "active_page_profile append4097 8194-byte seed (not registered mounted performance case)",
+  "derived": {
+    "cache_decode_ns_removed": 221872728,
+    "new_cache_decode_ns_per_index_page": 0.8566804531559072,
+    "old_cache_decode_ns_per_index_page": 13300.18701672361,
+    "physical_creations_unchanged": 20780,
+    "wall_ns_difference_not_admission": 288181960
+  },
+  "identical_fixture_sha256": true,
+  "limitations": [
+    "not a qualified performance sample; do not claim speed ratio",
+    "no process/cgroup/reset/cache proof",
+    "registered 10MiB schedules and matched baseline NOT_RUN"
+  ],
+  "mode": "public functional count-driven causal diagnostic",
+  "new_raw": {
+    "actual_merge_ns": 51964571,
+    "backing_bytes_after": 1155072,
+    "backing_bytes_before": 12288,
+    "cache_decode_ns": 14292,
+    "create_identity_ns": 145372109,
+    "direct_write_ns": 1671235595,
+    "exec_ns": 5162681710,
+    "fit_merge_ns": 59581912,
+    "index_writes": 16683,
+    "node_encode_ns": 11230110,
+    "pack_writes": 4097,
+    "page_encode_ns": 317648934,
+    "preallocate_ns": 352507796,
+    "readback_auth_ns": 358972430,
+    "readback_io_ns": 965444260,
+    "release_ns": 164567279
+  },
+  "new_source": "c561576dc23715711980448dcd6138f2507a0901",
+  "old_raw": {
+    "actual_merge_ns": 46863544,
+    "backing_bytes_after": 1155072,
+    "backing_bytes_before": 12288,
+    "cache_decode_ns": 221887020,
+    "create_identity_ns": 147665457,
+    "direct_write_ns": 1731536724,
+    "exec_ns": 5450863670,
+    "fit_merge_ns": 57439279,
+    "index_writes": 16683,
+    "node_encode_ns": 10809771,
+    "pack_writes": 4097,
+    "page_encode_ns": 317183740,
+    "preallocate_ns": 337630249,
+    "readback_auth_ns": 359256650,
+    "readback_io_ns": 861366179,
+    "release_ns": 163366824
+  },
+  "old_source": "fb53ac28cbcdc4c14ab4424f5beaa202987e3ff4",
+  "performance_claim": false,
+  "schema": "issue273-optimization-iter004-cpu-reuse-v1",
+  "test": {
+    "functional_checks": [
+      {
+        "id": "active-page-profile-4097-full-byte-oracle",
+        "status": "PASS"
+      },
+      {
+        "id": "active-page-profile-4097-clean-close-refund",
+        "status": "PASS"
+      }
+    ],
+    "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "linux_active_backing": "32/32 PASS",
+    "stage_complete_wall_s": 8.593030708,
+    "stage_status": "PASS",
+    "test_binary_sha256": "727f9b98fc5441dba9edff53a9c09fb56d6059c947b4adfe13f2304d5ae3f972"
+  }
+}

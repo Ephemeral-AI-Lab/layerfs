@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "layerfs-stage-59e993849c264546"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-59e993849c264546\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-stage-59e993849c264546-data"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-59e993849c264546-data\n",
+      "stderr": ""
+    }
+  ],
+  "scope": "owned failed functional row; receipt unchanged"
+}

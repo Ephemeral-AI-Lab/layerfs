@@ -1,0 +1,9 @@
+
+running 1 test
+test linux::stage_active_source_grouping_100 ... SOURCE_GROUPING case=dispersed100 commit_wall_ns=26614000 pack_reads=2 index_seeks=24 ref_limit=256 byte_limit=32768
+STAGE_CHECK active-source-grouped-100-count-and-full-bytes PASS
+STAGE_CHECK active-source-grouped-100-clean-close-refund PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 30 filtered out; finished in 0.22s
+

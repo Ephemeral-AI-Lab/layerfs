@@ -1,0 +1,49 @@
+
+running 36 tests
+test a_cursor_seeks_and_reads_only_the_path_it_needs ... ok
+test a_cursor_seeks_into_the_middle_child_of_a_multi_leaf_branch ... ok
+test a_first_edit_folds_into_one_implicit_base_read ... ok
+test a_first_edit_inside_an_implicit_base_retains_both_sides ... ok
+test a_fold_that_collapses_a_whole_branch_keeps_every_path_one_depth ... ok
+test a_fold_that_removes_a_whole_branch_drops_its_level ... ok
+test a_full_4_gib_sequence_round_trips_at_the_exact_file_boundary ... ok
+test a_refused_splice_leaves_the_published_sequence_unchanged ... ok
+test a_shared_subtree_is_not_rewritten ... ok
+test a_shared_subtree_records_the_unknown_count_and_the_exact_total ... ok
+test an_append_to_a_multi_leaf_sequence_merges_into_its_last_leaf ... ok
+test an_empty_sequence_after_a_full_shrink_takes_a_whole_rewrite ... ok
+test an_implicit_base_append_past_eof_fills_the_gap ... ok
+test an_implicit_base_longer_than_one_extent_folds_into_split_parts ... ok
+test an_implicit_base_replacement_beyond_the_base_is_refused ... ok
+test an_implicit_base_truncate_and_extension_are_exact ... ok
+test an_insert_splits_a_full_non_root_branch_at_its_own_level ... ok
+test an_insertion_at_a_leaf_boundary_lands_in_the_preceding_leaf ... ok
+test an_insertion_shifts_the_base_tail_and_the_next_edit_still_splices ... ok
+test an_unchanged_old_generation_stays_readable_after_a_splice ... ok
+test appends_at_the_end_and_extends_with_zeros ... ok
+test covers_a_hole_and_a_position_past_the_end ... ok
+test dispersed_100_extent_page_occupancy_diagnostic ... ISSUE265_EXTENT_SHAPE writes=25 leaves=1 branches=0 root_height=0 min=51 max=51 occupancy=[51]
+ISSUE265_EXTENT_SHAPE writes=50 leaves=1 branches=0 root_height=0 min=101 max=101 occupancy=[101]
+ISSUE265_EXTENT_SHAPE writes=75 leaves=2 branches=1 root_height=1 min=75 max=76 occupancy=[76, 75]
+ISSUE265_EXTENT_SHAPE writes=100 leaves=2 branches=1 root_height=1 min=98 max=103 occupancy=[98, 103]
+ok
+test every_extent_count_at_a_page_boundary_stays_height_uniform ... ok
+test final_runs_at_1024_are_admitted ... ok
+test four_thousand_and_ninety_seven_separated_runs_read_and_splice_by_path ... PIECES_SCALE runs=4097 splice_reads=3 splice_writes=3
+ok
+test older_full_branch_remains_readable_and_repackages_on_edit ... ok
+test one_cursor_walk_never_holds_the_whole_sequence ... ok
+test one_walk_advances_without_rereading_the_path_above_each_leaf ... PIECES_CURSOR leaves=529 level=2 pages=547 reads=1075
+PIECES_CURSOR half=32768 extents=32768 reads=539
+ok
+test overwrites_inside_one_extent_without_touching_its_neighbours ... ok
+test reads_a_sequence_in_order_with_derived_starts ... ok
+test refuses_a_page_that_does_not_declare_the_length_indexed_format ... ok
+test refuses_a_replacement_beyond_the_base_or_past_max_file ... ok
+test sixty_five_thousand_separated_runs_stay_bounded_and_path_local ... PIECES_SCALE runs=65536 leaves=529 splice_reads=3 splice_writes=3
+ok
+test splits_an_extent_larger_than_a_leaf_into_page_sized_parts ... ok
+test the_33_leaf_transition_keeps_every_branch_non_singleton ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+

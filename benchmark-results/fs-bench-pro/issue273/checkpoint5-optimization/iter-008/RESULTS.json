@@ -1,0 +1,326 @@
+{
+  "admission_eligible": false,
+  "cache_claim": "host source cold check PASS, private/runtime/backend/device/host cache proof incomplete",
+  "identity": "adbee51588d9f6efd35cab3ebb3919f5083fa6b9",
+  "linux_backing": "32/32 PASS, exact aarch64 release binary on owned ext4 Docker volume; TMPDIR=/work; LAYERFS_ACTIVE_TEST_ROOT=/work; --test-threads=1",
+  "nonpassing": [
+    "iter-007 100 and 4097 source counts INCOMPLETE_INTERLEAVED remain unchanged",
+    "new independent verifier SKIPPED for each causal diagnostic",
+    "required control matched arm NOT_RUN",
+    "retained clean/one-edit SDK controls NOT_RUN due no public same-Workspace live pin",
+    "private/cache VM/device/host and phase RSS/cgroup reset incomplete"
+  ],
+  "performance_claim": false,
+  "reproduction": [
+    "python3 core/benchmark/fs-bench-pro/checkpoint5_273.py oracle --repo \"$PWD\" --output benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/oracle",
+    "python3 core/benchmark/fs-bench-pro/checkpoint5_273.py prepare --arm candidate --repo \"$PWD\" --oracle benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/oracle/oracle.json --output benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate",
+    "python3 core/benchmark/fs-bench-pro/checkpoint5_273.py run --diagnostic --prepared benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/prepared.json --selection issue273-dispersed-100-10m-v1 --output benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100",
+    "python3 core/benchmark/fs-bench-pro/checkpoint5_273.py run --diagnostic --prepared benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/prepared.json --selection issue273-dispersed-512-10m-v1 --output benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512",
+    "python3 core/benchmark/fs-bench-pro/checkpoint5_273.py run --diagnostic --prepared benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/prepared.json --selection issue273-dispersed-4097-10m-v1 --output benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097"
+  ],
+  "rows": [
+    {
+      "c1_counters_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 306067369796333,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 4792,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/binary-archive/ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-100/history.sqlite",
+        "sha256:3827e639dcd94e034f4ec746cd219f1cc851de4a7210eb12968bfd0bca104153"
+      ],
+      "complete_command_limit_s": 15,
+      "complete_command_wall_ns": 2684665625,
+      "functional_status": "UNVERIFIED",
+      "harness_seal": "3e1ffeb90c73fe5fe7aaf3f389f9b5c1963239f06b84db7020e5ff71809fce56",
+      "image_id": "sha256:3827e639dcd94e034f4ec746cd219f1cc851de4a7210eb12968bfd0bca104153",
+      "pack_source": {
+        "counts": {
+          "copied_bytes": 100,
+          "decoded_bytes": 4900,
+          "decoded_records": 100,
+          "distinct_packs": 2,
+          "fill_ns": 586666,
+          "index_reads": 4,
+          "index_seeks": 2,
+          "locator_lookups": 2,
+          "locator_ns": 408251,
+          "pack_hits": 98,
+          "pack_loads": 2,
+          "pack_ns": 165625,
+          "references": 100,
+          "windows": 1
+        },
+        "line_count": 1,
+        "reason": "complete emitted production v1 row",
+        "status": "PASS"
+      },
+      "phase_ns": {
+        "cleanup": 453646834,
+        "commit": 26119792,
+        "exec": 115970792,
+        "mount": 20280125
+      },
+      "product_source_seal": "b5dfdf06d3ebeaf8ab4f019279af059bf58f367c62daf824a73cd6f5a4ca31e2",
+      "row_status": "INELIGIBLE",
+      "sample_count": 1,
+      "shell_binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "source_bounds": {
+        "byte_limit": 32768,
+        "ref_limit": 256,
+        "source_read_model_group_window_misses": 2,
+        "source_read_model_old_one_page_misses": 41
+      },
+      "source_commit": "adbee51588d9f6efd35cab3ebb3919f5083fa6b9",
+      "source_tree": "e7493bf96f115d6427fd7209d1dff5efcd404b36",
+      "spec_sha256": "732f181bc7282798d17d075ae15739d897860c85f36b670d573a7f2a1099dc31",
+      "verification": {
+        "arm": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        },
+        "oracle": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        }
+      },
+      "workload_seal": "58cf96bde09f4fa76e95811a6ba45d522fff7c2ede018cafb95e605f79f7115c",
+      "writes": 100
+    },
+    {
+      "c1_counters_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 306070588816291,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 4917,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/binary-archive/ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-512/history.sqlite",
+        "sha256:799f1029aefecbbcd8e619fbe5f31e5770b9eea45658e8c467b5681c11040dee"
+      ],
+      "complete_command_limit_s": 15,
+      "complete_command_wall_ns": 1897229542,
+      "functional_status": "UNVERIFIED",
+      "harness_seal": "3e1ffeb90c73fe5fe7aaf3f389f9b5c1963239f06b84db7020e5ff71809fce56",
+      "image_id": "sha256:799f1029aefecbbcd8e619fbe5f31e5770b9eea45658e8c467b5681c11040dee",
+      "pack_source": {
+        "counts": {
+          "copied_bytes": 512,
+          "decoded_bytes": 50176,
+          "decoded_records": 1024,
+          "distinct_packs": 14,
+          "fill_ns": 3213875,
+          "index_reads": 28,
+          "index_seeks": 14,
+          "locator_lookups": 14,
+          "locator_ns": 2183958,
+          "pack_hits": 498,
+          "pack_loads": 14,
+          "pack_ns": 996874,
+          "references": 512,
+          "windows": 2
+        },
+        "line_count": 1,
+        "reason": "complete emitted production v1 row",
+        "status": "PASS"
+      },
+      "phase_ns": {
+        "cleanup": 455852125,
+        "commit": 52514416,
+        "exec": 998919333,
+        "mount": 19012208
+      },
+      "product_source_seal": "b5dfdf06d3ebeaf8ab4f019279af059bf58f367c62daf824a73cd6f5a4ca31e2",
+      "row_status": "INELIGIBLE",
+      "sample_count": 1,
+      "shell_binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "source_bounds": {
+        "byte_limit": 32768,
+        "ref_limit": 256,
+        "source_read_model_group_window_misses": 14,
+        "source_read_model_old_one_page_misses": 512
+      },
+      "source_commit": "adbee51588d9f6efd35cab3ebb3919f5083fa6b9",
+      "source_tree": "e7493bf96f115d6427fd7209d1dff5efcd404b36",
+      "spec_sha256": "732f181bc7282798d17d075ae15739d897860c85f36b670d573a7f2a1099dc31",
+      "verification": {
+        "arm": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        },
+        "oracle": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        }
+      },
+      "workload_seal": "58cf96bde09f4fa76e95811a6ba45d522fff7c2ede018cafb95e605f79f7115c",
+      "writes": 512
+    },
+    {
+      "c1_counters_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 306073016483000,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 5666,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "command": [
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/prepared-candidate/binary-archive/ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238/benchmark_shell",
+        "run",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097/case.before",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097/store.sqlite",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-008/dispersed-4097/history.sqlite",
+        "sha256:9182875200a0885f5538ead3e7e70cd7791abf9802171239f4d25b775c4574bd"
+      ],
+      "complete_command_limit_s": 25,
+      "complete_command_wall_ns": 10217155084,
+      "functional_status": "UNVERIFIED",
+      "harness_seal": "3e1ffeb90c73fe5fe7aaf3f389f9b5c1963239f06b84db7020e5ff71809fce56",
+      "image_id": "sha256:9182875200a0885f5538ead3e7e70cd7791abf9802171239f4d25b775c4574bd",
+      "pack_source": {
+        "counts": {
+          "copied_bytes": 4097,
+          "decoded_bytes": 3210970,
+          "decoded_records": 65530,
+          "distinct_packs": 827,
+          "fill_ns": 289386831,
+          "index_reads": 2481,
+          "index_seeks": 827,
+          "locator_lookups": 827,
+          "locator_ns": 215484627,
+          "pack_hits": 3270,
+          "pack_loads": 827,
+          "pack_ns": 72450465,
+          "references": 4097,
+          "windows": 17
+        },
+        "line_count": 1,
+        "reason": "complete emitted production v1 row",
+        "status": "PASS"
+      },
+      "phase_ns": {
+        "cleanup": 493076000,
+        "commit": 739254792,
+        "exec": 8673262542,
+        "mount": 19935708
+      },
+      "product_source_seal": "b5dfdf06d3ebeaf8ab4f019279af059bf58f367c62daf824a73cd6f5a4ca31e2",
+      "row_status": "INELIGIBLE",
+      "sample_count": 1,
+      "shell_binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "source_bounds": {
+        "byte_limit": 32768,
+        "ref_limit": 256,
+        "source_read_model_group_window_misses": 827,
+        "source_read_model_old_one_page_misses": 4097
+      },
+      "source_commit": "adbee51588d9f6efd35cab3ebb3919f5083fa6b9",
+      "source_tree": "e7493bf96f115d6427fd7209d1dff5efcd404b36",
+      "spec_sha256": "732f181bc7282798d17d075ae15739d897860c85f36b670d573a7f2a1099dc31",
+      "verification": {
+        "arm": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        },
+        "oracle": {
+          "reason": "labelled causal diagnostic",
+          "status": "SKIPPED"
+        }
+      },
+      "workload_seal": "58cf96bde09f4fa76e95811a6ba45d522fff7c2ede018cafb95e605f79f7115c",
+      "writes": 4097
+    }
+  ],
+  "schema": "issue273-optimization-iter008-atomic-causal-v1",
+  "stage": {
+    "binary_sha256": "135669c9f9492ef0d266444d72915b8463d9541cacd4c97361fea1d3309b4bb1",
+    "checks": [
+      {
+        "id": "active-source-grouped-4097-count-and-full-bytes",
+        "status": "PASS"
+      },
+      {
+        "id": "active-source-grouped-4097-clean-close-refund",
+        "status": "PASS"
+      }
+    ],
+    "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+    "status": "PASS",
+    "wall_seconds": 13.899238542
+  },
+  "status": "COUNT_DIAGNOSTIC_PASS__ADMISSION_INELIGIBLE"
+}

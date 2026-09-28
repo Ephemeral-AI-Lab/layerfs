@@ -1,0 +1,6 @@
+{
+  "exit_code": 101,
+  "wall_seconds": 34.321138124971185,
+  "cleanup": "RETAINED_FOR_DIAGNOSIS",
+  "owned_volume": "layerfs-issue273-hot-b1ec0fd11b56"
+}
