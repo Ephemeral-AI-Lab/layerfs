@@ -1,3 +1,4 @@
+//! Authenticated 4,096-byte private pages for the active backing.
 use crate::WorkspaceError;
 use sha2::{Digest, Sha256};
 
@@ -17,14 +18,29 @@ pub enum Kind {
     Pack = 1,
     IndexLeaf = 2,
     IndexBranch = 3,
+    HotDirectory = 4,
 }
 
 impl Kind {
     fn magic(self) -> &'static [u8; 8] {
         match self {
             Self::Pack => b"LFSAPAK1",
-            Self::IndexLeaf | Self::IndexBranch => b"LFSAIDX1",
+            Self::IndexLeaf | Self::IndexBranch => b"LFSAIDX2",
+            Self::HotDirectory => b"LFSAHOT2",
         }
+    }
+
+    fn version(self) -> u16 {
+        match self {
+            Self::Pack => 1,
+            Self::IndexLeaf | Self::IndexBranch | Self::HotDirectory => 2,
+        }
+    }
+
+    /// Index-forest pages share one locator kind check; the directory is a
+    /// selector for targets rather than an indexed node.
+    pub fn indexed(self) -> bool {
+        matches!(self, Self::IndexLeaf | Self::IndexBranch)
     }
 }
 
@@ -54,7 +70,7 @@ impl Page {
         }
         let mut bytes = [0; PAGE_BYTES];
         bytes[..8].copy_from_slice(kind.magic());
-        bytes[8..10].copy_from_slice(&1u16.to_be_bytes());
+        bytes[8..10].copy_from_slice(&kind.version().to_be_bytes());
         bytes[10..12].copy_from_slice(&(kind as u16).to_be_bytes());
         bytes[12..44].copy_from_slice(&incarnation);
         bytes[44..52].copy_from_slice(&reference.id.to_be_bytes());
@@ -79,7 +95,7 @@ impl Page {
         let used = u16::from_be_bytes([bytes[76], bytes[77]]) as usize;
         let records = u16::from_be_bytes([bytes[78], bytes[79]]);
         if bytes[..8] != kind.magic()[..]
-            || bytes[8..10] != 1u16.to_be_bytes()
+            || bytes[8..10] != kind.version().to_be_bytes()
             || bytes[10..12] != (kind as u16).to_be_bytes()
             || bytes[12..44] != incarnation
             || bytes[44..52] != reference.id.to_be_bytes()

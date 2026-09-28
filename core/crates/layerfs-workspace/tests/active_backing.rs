@@ -17,6 +17,57 @@ fn page_v1_checks_identity_and_all_bytes() {
 }
 
 #[test]
+fn index_and_directory_pages_use_the_v2_framing() {
+    let reference = PageRef { id: 3, epoch: 1 };
+    for (kind, magic, kind_byte) in [
+        (Kind::IndexLeaf, b"LFSAIDX2", 2u16),
+        (Kind::IndexBranch, b"LFSAIDX2", 3),
+        (Kind::HotDirectory, b"LFSAHOT2", 4),
+    ] {
+        let page = Page::new(kind, [4; 32], reference, 2, 9, 1, b"body").unwrap();
+        assert_eq!(&page.bytes[..8], magic);
+        assert_eq!(u16::from_be_bytes([page.bytes[8], page.bytes[9]]), 2);
+        assert_eq!(
+            u16::from_be_bytes([page.bytes[10], page.bytes[11]]),
+            kind_byte
+        );
+        assert_eq!(page.verify(kind, [4; 32], reference).unwrap(), b"body");
+        assert!(page.verify(Kind::Pack, [4; 32], reference).is_err());
+    }
+    let directory = Page::new(
+        Kind::HotDirectory,
+        [4; 32],
+        reference,
+        2,
+        9,
+        64,
+        &[0u8; 2056],
+    )
+    .unwrap();
+    assert_eq!(directory.records(), 64);
+    assert_eq!(
+        directory
+            .verify(Kind::HotDirectory, [4; 32], reference)
+            .unwrap()
+            .len(),
+        2056
+    );
+    // A directory body is fixed at 8 + 64*32 bytes; one byte less is refused
+    // by the page framing, and a wrong record count is not a valid table.
+    assert!(Page::new(
+        Kind::HotDirectory,
+        [4; 32],
+        reference,
+        2,
+        9,
+        64,
+        &[0u8; 2055],
+    )
+    .is_ok());
+    assert!(Page::new(Kind::HotDirectory, [4; 32], reference, 2, 9, 64, &[]).is_err());
+}
+
+#[test]
 fn namespace_keys_follow_canonical_name_order() {
     let mut keys = [b"z".as_slice(), b"aa", b"a"].map(|name| namespace_key(7, name).unwrap());
     keys.sort();

@@ -39,6 +39,19 @@
 > allocator. No mounted v1 page or candidate sample exists; this amendment
 > precedes the corresponding product code.
 
+> **Implemented v2 amendment, 2026-09-28:** Phase 4.5.1 replaces the private
+> ordered index for **new attachments** with the v2 grammar in the
+> [phase 4.5 proposal](PHASE4.5-IMPLEMENTATION-SPEC.md) §4.2: index magic
+> `LFSAIDX2` at version 2, fixed fences with tagged child targets, and the
+> fixed `LFSAHOT2` 64-slot directory. The v1 pack record, the `LFSAPAK1`
+> version-1 pack page, every C1/C2/Bridge format, leaf key/value meanings and
+> the 416-byte inode and 16-byte namespace values are unchanged. No running
+> attachment changes format, no old incarnation is adopted or migrated, and no
+> v1 receipt is relabelled. The v1 page/name grammar below therefore describes
+> the retired current-attachment index only; it remains the historical record
+> for older receipts and for pack pages, which v2 keeps. This notice is
+> prospective format authority, not a measurement or a speed claim.
+
 ## Boundary and identity
 
 One attached Workspace incarnation owns one active tuple: `(incarnation,

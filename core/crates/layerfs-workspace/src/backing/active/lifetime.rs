@@ -114,7 +114,7 @@ impl ActiveBacking {
             .iter()
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
-        let candidate = match self.index.prepare_bulk(&ordered) {
+        let candidate = match self.index.prepare(&ordered) {
             Ok(candidate) => candidate,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };

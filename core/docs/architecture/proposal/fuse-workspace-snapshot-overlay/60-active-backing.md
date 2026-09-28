@@ -1,18 +1,37 @@
 # #273 active backing storage and captured Commit
 
-> Source pin: this revision follows checkpoint-4 source `38bcf9912` and
-> describes the checkpoint-4 source committed with this revision. LocalEdit Workspaces
+> Source pin: this revision follows checkpoint-4 source `38bcf9912` and the
+> phase-4.5.0 proposal source `941613f65`. It describes the phase-4.5.1 private
+> index **v2** resolver committed with this revision. LocalEdit Workspaces
 > select the active owner and lower captured views through the public Service.
 > This document has no latency or release claim. The
 > prospective [format and evaluation contract](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
-> states the target behavior and remaining proof gates.
+> and the [phase 4.5 proposal](../../../issues/273/PHASE4.5-IMPLEMENTATION-SPEC.md)
+> state the target behavior and remaining proof gates; where the two disagree
+> about selected private bytes, the phase-4.5 v2 grammar governs new
+> attachments.
 
 `backing/active/page.rs` encodes versioned 4 KiB pack/index pages with the
 Workspace incarnation, page ID and epoch, generation/revision, used length,
 record count and whole-page SHA-256. Decode checks the expected physical
-identity and zero tail before returning body bytes. `backing/active/keyed.rs`
-encodes sorted leaf and branch records; the final branch child also carries
-its maximum key. `backing/active/records.rs` encodes 416-byte inode values
+identity and zero tail before returning body bytes. A new attachment selects
+private index **v2**: index magic `LFSAIDX2` at version 2 for leaves and
+branches, a fixed 64-slot `LFSAHOT2` directory, and unchanged `LFSAPAK1`
+version-1 pack records. `PageStore::create_verified` returns the page it wrote
+and verified in place, so a selector decodes exactly the bytes a later reader
+sees. `backing/active/keyed.rs` encodes sorted leaf records unchanged
+(`key_len:u16, value_len:u16, key, value`) and v2 branch records as
+`fence_len:u16, fence, target`; the largest leaf cell is 788 bytes and the
+largest branch cell 291. A fence is the child's exclusive upper key and only
+the final child may inherit its parent's bound with a zero-length fence, so a
+replaced leaf leaves every ancestor record byte-identical. A 17-byte target is
+`tag:u8, first:u64, epoch:u64`: tag 0 names a physical page ID and epoch, tag 1
+names one directory slot and reuse epoch, and any other tag is rejected.
+`backing/active/hot_directory.rs` encodes the selected 64-slot table
+(`slot_count:u16, active_count:u16, reserved:u32` plus 32-byte entries of reuse
+epoch, physical page reference, level and kind), rejects non-zero vacant or
+reserved bytes, requires level 0 exactly for leaves and levels 1..7 exactly for
+branches, and validates occupancy before exposing any entry. `backing/active/records.rs` encodes 416-byte inode values
 with four optional inline extents and 16-byte namespace bindings/tombstones,
 plus fixed inode, namespace and generation-dirty keys. The same pooled index
 holds these records beside extent, inverse-reference and locator records; no
@@ -30,8 +49,24 @@ with the Workspace revision while keeping the old root pinned. Retired index and
 pins whose revisions fall between each page's birth and retirement revisions.
 The 32 capture limit and 128 possible directory-handle pins are charged in
 the index owner. Captures require explicit release; a dropped read view
-releases its pin and retains a stop/error state if cleanup fails. The generic
-index does **not** yet supply the specialized hot-right-edge update. A
+releases its pin and retains a stop/error state if cleanup fails. `backing/active/resolve.rs` resolves every selected get, floor and scan through
+tagged targets: a cold target is read only when its stored kind matches the
+expected node kind, and a hot target must be selected by that view's directory
+with the requested reuse epoch, kind and level, or resolution refuses rather
+than falling back to another page. Fences replace child maxima, so `floor`
+descends the matching partition and then the maximum of the preceding nonempty
+partition, and every selected branch child stays nonempty. `backing/active/splice.rs`
+stages the generic v2 mutation: leaves and branches split at the encoded
+midpoint so each half of an overflowing node keeps at least
+`BODY_BYTES/2 - max_cell` bytes, a hot node keeps its slot and reuse epoch when
+it is replaced, and its replacements stay hot so no cold edge can conceal a
+current hot target. `backing/active/index.rs` selects one root plus one optional
+directory copy and installs both in one publication. The generic index does
+**not** yet supply the specialized hot-right-edge update; no route admits a hot
+cursor or selects a non-empty directory yet, and the directory grammar and
+resolution path are implemented and unit-covered only. That admission,
+the balanced-carry proofs and the eligible tiny-WRITE publication are
+phase-4.5.2/4.5.3 work. A
 replacement walks affected extents in bounded 128-row index pages; its
 working overlap set grows only within the Host memory budget. A 300-extent
 overwrite tests an update exceeding the former 512-key batch ceiling.

@@ -84,10 +84,10 @@ impl Drop for PagePin {
 }
 
 fn name(kind: Kind, reference: PageRef) -> String {
-    let prefix = if kind == Kind::Pack {
-        "a-pack-v1"
-    } else {
-        "a-index-v1"
+    let prefix = match kind {
+        Kind::Pack => "a-pack-v1",
+        Kind::IndexLeaf | Kind::IndexBranch => "a-index-v2",
+        Kind::HotDirectory => "a-hot-v2",
     };
     format!("{prefix}-{:016x}-{:016x}", reference.id, reference.epoch)
 }
@@ -186,6 +186,21 @@ impl PageStore {
         records: u16,
         body: &[u8],
     ) -> Result<PageRef, WorkspaceError> {
+        Ok(self
+            .create_verified(kind, generation, revision, records, body)?
+            .0)
+    }
+
+    /// Creation returns the authenticated page it wrote and verified in place,
+    /// so a selector can decode exactly the bytes a later reader would see.
+    pub(super) fn create_verified(
+        &self,
+        kind: Kind,
+        generation: u64,
+        revision: u64,
+        records: u16,
+        body: &[u8],
+    ) -> Result<(PageRef, Page), WorkspaceError> {
         let _scratch = self
             .host
             .payloads
@@ -384,10 +399,10 @@ impl PageStore {
             .ready = true;
         match kind {
             Kind::Pack => &self.pack_page_writes,
-            Kind::IndexLeaf | Kind::IndexBranch => &self.index_page_writes,
+            Kind::IndexLeaf | Kind::IndexBranch | Kind::HotDirectory => &self.index_page_writes,
         }
         .fetch_add(1, Ordering::Relaxed);
-        Ok(reference)
+        Ok((reference, page))
     }
 
     pub fn read(&self, reference: PageRef, kind: Kind) -> Result<Page, WorkspaceError> {
@@ -417,7 +432,7 @@ impl PageStore {
         page.verify(kind, self.directory.incarnation, reference)?;
         match kind {
             Kind::Pack => &self.pack_fetches,
-            Kind::IndexLeaf | Kind::IndexBranch => &self.index_fetches,
+            Kind::IndexLeaf | Kind::IndexBranch | Kind::HotDirectory => &self.index_fetches,
         }
         .fetch_add(1, Ordering::Relaxed);
         Ok(page)

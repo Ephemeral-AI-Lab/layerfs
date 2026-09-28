@@ -2,6 +2,7 @@
 mod compaction;
 mod extents;
 mod generation;
+mod hot_directory;
 mod index;
 mod keyed;
 mod lifetime;
@@ -11,6 +12,8 @@ mod pages;
 mod reader;
 mod reclaim;
 mod records;
+mod resolve;
+mod splice;
 
 pub use extents::{Extent, ExtentKind, ExtentPlan};
 pub use generation::{ActiveBacking, ActivePublication, ActiveSnapshot, ActiveStatus, ActiveWrite};
