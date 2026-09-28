@@ -1054,6 +1054,18 @@ mod linux {
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_generic_profile_100() {
+        source_grouping(100, 8, true);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_generic_profile_512() {
+        source_grouping(512, 32, true);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_generic_profile() {
         source_grouping(4097, 1024, true);
     }

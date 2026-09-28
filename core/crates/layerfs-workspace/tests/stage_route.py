@@ -52,6 +52,8 @@ CASES = {
     'active_source_grouping_100': ['active-source-grouped-100-count-and-full-bytes', 'active-source-grouped-100-clean-close-refund'],
     'active_source_grouping': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
     'active_source_grouping_4097': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
+    'active_generic_profile_100': ['active-source-grouped-100-count-and-full-bytes', 'active-source-grouped-100-clean-close-refund'],
+    'active_generic_profile_512': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
     'active_generic_profile': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
     'active_page_profile': ['active-page-profile-4097-full-byte-oracle', 'active-page-profile-4097-clean-close-refund'],
     'active_separated4096': ['active-4096-separated-full-private-backing-bound', 'active-4096-separated-commit-and-full-byte-oracle', 'active-4096-separated-exact-clean-close'],
@@ -92,6 +94,8 @@ REQUIREMENTS = {
     'active_source_grouping_100': ['S-17', 'B-26', 'B-28'],
     'active_source_grouping': ['S-17', 'B-26', 'B-28'],
     'active_source_grouping_4097': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_100': ['S-17', 'B-26', 'B-28'],
+    'active_generic_profile_512': ['S-17', 'B-26', 'B-28'],
     'active_generic_profile': ['S-17', 'B-26', 'B-28'],
     'active_page_profile': ['S-17', 'B-26', 'B-28'],
     'active_separated4096': ['S-17', 'B-26', 'B-28'],
@@ -291,7 +295,7 @@ def execute(args, report, started):
                       f'linux::{TEST_PREFIX}{args.case}', '--exact']
         if caller:
             invocation[3:3] = ['--user', caller]
-        if args.case.startswith('active_source_grouping') or args.case == 'active_generic_profile':
+        if args.case.startswith('active_source_grouping') or args.case.startswith('active_generic_profile'):
             invocation[invocation.index(name):invocation.index(name)] = [
                 '-e', 'LAYERFS_COMPLEXITY_DIAGNOSTIC=1']
         if args.case.startswith('active_tiny_input'):

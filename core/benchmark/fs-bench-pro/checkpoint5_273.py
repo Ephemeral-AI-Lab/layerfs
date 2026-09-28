@@ -616,81 +616,9 @@ def prepare(args):
 
 
 def retained(args):
-    output = args.output.resolve()
-    output.mkdir(parents=True, exist_ok=False)
-    prepared = json.loads(args.prepared.read_text())
-    release_check(prepared, args.prepared, output)
-    master = prepared["masters"]["patterns"]
-    clone = clone_master(Path(master["path"]) / "store.sqlite",
-                         Path(master["path"]) / "history.sqlite",
-                         master["store_sha256"], master["history_sha256"], output)
-    selection = {"scenario_id": "issue273-retained-base-preparation",
-                 "pattern": "dispersed", "count": 4097, "separated_count": None}
-    case = output / "case.prepare"
-    case_spec(case, case_fields(master, selection, RETAINED_COMMAND))
-    env = arm_env(prepared)
-    image_id = image_for(prepared, MATRIX_INTERVAL[4097])
-    command = [prepared["binaries"]["benchmark_shell"]["path"], "run", str(case),
-               clone["store"], clone["history"], image_id]
-    cache, measured = run_cold_measured(
-        [clone["store"], clone["history"]], command, 25, env, output)
-    (output / "cache.json").write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
-    try:
-        driver = one_receipt((output / "driver.stdout").read_bytes())
-    except (ValueError, json.JSONDecodeError):
-        driver = None
-    if not driver or driver.get("status") != "COMPLETE" or not driver.get("head_commit"):
-        raise RuntimeError("retained base preparation did not complete; retained output")
-    verify_case = output / "case.verify"
-    case_spec(verify_case, {**case_fields(master, selection, RETAINED_COMMAND),
-                            "expected_head_commit": driver["head_commit"]})
-    check = verifier(prepared["binaries"]["verify_checkpoint5"]["path"], verify_case,
-                     clone["store"], clone["history"],
-                     args.prepared.parent / "old.tsv",
-                     args.prepared.parent / "retained-old.tsv", env, output,
-                     "retained-oracle")
-    if check["status"] != "PASS":
-        raise RuntimeError("retained base failed the independent oracle")
-    # The frozen arm verifier hard-codes the 100-write schedule, so it re-proves
-    # the retained base as a plain old/new tree identity without pattern keys.
-    tree_case = output / "case.retained-tree"
-    plain = {key: value for key, value in case_fields(
-        master, {"scenario_id": "issue273-retained-base-tree",
-                 "pattern": None, "count": 0, "separated_count": None}, RETAINED_COMMAND).items()}
-    case_spec(tree_case, {**plain, "expected_head_commit": driver["head_commit"]})
-    tree_check = verifier(prepared["binaries"]["verify_shell"]["path"], tree_case,
-                          clone["store"], clone["history"],
-                          args.prepared.parent / "old.tsv",
-                          args.prepared.parent / "retained-old.tsv", env, output,
-                          "retained-tree")
-    if tree_check["status"] != "PASS":
-        raise RuntimeError("retained base failed the arm's own tree verifier")
-    retained_master = output / "master"
-    retained_master.mkdir()
-    for file in ("store.sqlite", "history.sqlite"):
-        shutil.copyfile(output / file, retained_master / file)
-        (retained_master / file).chmod(0o444)
-    record = {"schema": "issue273-checkpoint5-retained-v2",
-              "prepared": str(args.prepared), "source": prepared["source"],
-              "command": command, "shell_command": RETAINED_COMMAND,
-              "complete_command_wall_ns": measured["complete_command_wall_ns"],
-              "limit_s": 25, "cache": cache, "driver": driver,
-              "oracle": check, "arm_verifier": tree_check,
-              "head_commit": driver["head_commit"],
-              **{key: master[key] for key in ("project_id", "genesis_layer", "genesis_root",
-                                              "genesis_root_serial", "branch_id")},
-              "base_old_commit": master["old_commit"],
-              "store_sha256": digest(retained_master / "store.sqlite"),
-              "history_sha256": digest(retained_master / "history.sqlite"),
-              "path": str(retained_master),
-              "manifests": {"old": prepared["manifests"]["old"],
-                            "retained-old": prepared["manifests"]["retained-old"],
-                            "retained-one-edit": prepared["manifests"]["retained-one-edit"]},
-              "prepared_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
-    json_file(output / "retained.json", record)
-    print(json.dumps({"retained": str(output / "retained.json"),
-                      "wall_ns": measured["complete_command_wall_ns"],
-                      "head_commit": driver["head_commit"]}))
+    raise ValueError("retained-v1/v2 closed Store cannot pin a live private "
+                     "4,097-record journal in the same Workspace through "
+                     "the public SDK; no retained performance preparation is valid")
 
 
 def run(args):
@@ -699,6 +627,17 @@ def run(args):
     prepared = json.loads(args.prepared.read_text())
     identity = release_check(prepared, args.prepared, output)
     selection = BY_ID.get(args.selection) or PREFLIGHT
+    if selection["master"] == "retained":
+        json_file(output / "blocker.json", {
+            "schema": "issue273-retained-unsupported-v1", "row_status": "NOT_RUN",
+            "admission_eligible": False, "scenario_id": selection["scenario_id"],
+            "source": identity,
+            "reason": "a committed-and-reattached Store is not a live pinned 4097-record "
+                      "journal in the same Workspace; the SDK offers no public pin "
+                      "across sequential Exec/Commit without a command lease"})
+        print(json.dumps({"scenario_id": selection["scenario_id"],
+                          "row_status": "NOT_RUN", "blocker": str(output / "blocker.json")}))
+        return
     if args.selection == PREFLIGHT["scenario_id"] and "preflight" not in str(output):
         raise ValueError("the harness pre-flight must use an output path that names it")
     env = arm_env(prepared)
@@ -908,8 +847,9 @@ def run(args):
         "cache": cache, "cache_contract": prepared["cache_contract"],
         "cache_status": cache["status"],
         "commit_cache_status": "INELIGIBLE",
-        "commit_cache_reason": "private backing pages read by Commit are those written by this "
-                               "same command's Exec; the container page cache is not invalidated",
+        "commit_cache_reason": "Linux private files request O_DIRECT in both arms; this is "
+                               "source evidence of requested data-cache bypass, not runtime, "
+                               "metadata, VM, backend, device or host-cache proof",
         "retained_reproof": retained_reproof,
         "verification": verification,
         "verification_status": verification["oracle"]["status"],
@@ -953,6 +893,16 @@ def space_metrics(receipt):
     }
 
 
+def numeric_pair_eligible(control, candidate, left, right):
+    """A visible pair is not a speed ratio without two admitted cache proofs."""
+    return bool(left is not None and right is not None and left > 0 and right > 0
+                and control and candidate
+                and control.get("row_status") == candidate.get("row_status") == "PASS"
+                and control.get("numeric_admission") is True
+                and candidate.get("numeric_admission") is True
+                and control.get("cache_status") == candidate.get("cache_status") == "PASS")
+
+
 def report(args):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -964,6 +914,7 @@ def report(args):
             "arm": receipt["arm"], "order": receipt["selection_order"],
             "scenario_id": receipt["scenario_id"], "receipt": str(receipt_file),
             "row_status": receipt["row_status"],
+            "numeric_admission": receipt.get("admission_eligible") is True,
             "functional_status": receipt["functional_status"],
             "oracle_status": receipt["verification"]["oracle"]["status"],
             "arm_verifier_status": receipt["verification"]["arm"]["status"],
@@ -1009,29 +960,22 @@ def report(args):
         for field, name in metrics:
             left = control.get(field) if control else None
             right = candidate.get(field) if candidate else None
-            paired = bool(left and right and control["row_status"] != "FAIL"
-                          and candidate["row_status"] != "FAIL")
-            eligible = paired and (name == "exec" or name == "charged_backing")
+            paired = left is not None and right is not None
+            eligible = numeric_pair_eligible(control, candidate, left, right)
             entry[name] = {
                 "control": left, "candidate": right,
-                "ratio_control_over_candidate": round(left / right, 6) if paired else None,
+                "ratio_control_over_candidate": round(left / right, 6) if eligible else None,
                 "paired": paired,
-                "numeric_eligibility": "INELIGIBLE",
-                "reason": ("the Commit phase and the complete command contain private-backing "
-                           "pages written by the same command's Exec; the container cache "
-                           "cannot be invalidated between the two product calls"
-                           if name in ("commit", "complete_command") else
-                           "both arms are cache-invalidated on the host source and the "
-                           "declared container state is identical by construction, but no "
-                           "cache-qualified speedup is claimed without a matched pair and a "
-                           "row status other than FAIL")
-                if paired else "no matched pair of non-FAIL rows",
+                "numeric_eligibility": "ELIGIBLE" if eligible else "INELIGIBLE",
+                "reason": ("matched cache-qualified PASS rows" if eligible else
+                           "missing matched cache-qualified PASS rows; O_DIRECT request is "
+                           "not a complete private/runtime/host cache-state proof"),
             }
         pairs.append(entry)
     route = None
     if args.route:
         route = json.loads(args.route.read_text())
-    document = {"schema": "issue273-checkpoint5-report-v1", "rows": rows, "pairs": pairs,
+    document = {"schema": "issue273-checkpoint5-report-v2", "rows": rows, "pairs": pairs,
                 "registered_selections": [row["scenario_id"] for row in SELECTIONS],
                 "route_evidence": route,
                 "report_generator_sha256": digest(Path(__file__)),
@@ -1071,6 +1015,22 @@ def campaign(args):
             if folder.exists():
                 raise ValueError(f"attempt path already exists: {folder}")
             folder.parent.mkdir(parents=True, exist_ok=True)
+            if selection["master"] == "retained":
+                folder.mkdir()
+                json_file(folder / "blocker.json", {
+                    "schema": "issue273-retained-unsupported-v1", "row_status": "NOT_RUN",
+                    "arm": arm, "scenario_id": selection["scenario_id"],
+                    "reason": "SDK mount/Exec/Commit cannot preserve a live pinned "
+                              "4097-record private journal across this control; closed "
+                              "Store reattachment is not equivalent"})
+                (folder / "SHA256SUMS").write_text(
+                    f"{digest(folder / 'blocker.json')}  blocker.json\n")
+                campaign_rows.append({"arm": arm, "order": selection["order"],
+                                      "scenario_id": selection["scenario_id"],
+                                      "row_status": "NOT_RUN", "harness_exit_code": None,
+                                      "blocker": str(folder / "blocker.json")})
+                print(json.dumps(campaign_rows[-1]), flush=True)
+                continue
             command = [sys.executable, str(Path(__file__).resolve()), "run",
                        "--prepared", str(prepared_file), "--output", str(folder),
                        "--selection", selection["scenario_id"]]
@@ -1092,7 +1052,7 @@ def campaign(args):
                                   "row_status": receipt["row_status"] if receipt else "NOT_RUN",
                                   "harness_exit_code": result.returncode})
             print(json.dumps(campaign_rows[-1]), flush=True)
-    json_file(root / "campaign.json", {"schema": "issue273-checkpoint5-campaign-v1",
+    json_file(root / "campaign.json", {"schema": "issue273-checkpoint5-campaign-v2",
                                        "rows": campaign_rows,
                                        "control_source": control["source"],
                                        "candidate_source": candidate["source"]})
@@ -1155,7 +1115,8 @@ def main():
     p = sub.add_parser("campaign")
     p.add_argument("--control-prepared", required=True, type=Path)
     p.add_argument("--candidate-prepared", required=True, type=Path)
-    p.add_argument("--retained", required=True, type=Path)
+    p.add_argument("--retained", type=Path,
+                   help="archived parameter; invalid live-journal controls are NOT_RUN")
     p.add_argument("--output", required=True, type=Path)
     p = sub.add_parser("report")
     p.add_argument("--root", required=True, type=Path)

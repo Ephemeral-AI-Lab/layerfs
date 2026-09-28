@@ -293,3 +293,19 @@ their committed-and-reattached Store cannot produce a live pinned private
 journal in the same Workspace through the current SDK mount/Exec/Commit-only
 interface. They must use a prospectively distinct scenario or remain
 `NOT_RUN/INELIGIBLE` rather than being promoted.
+
+### Prospective invalid-control and report-v2 handling
+
+Do **not** run selections 10/11 against the old committed-and-reattached
+`retained-v1/v2` fixture. The public SDK exposes mount, sequential Exec,
+Commit, status and unmount, but no pin/lease capable of keeping a live private
+journal across the preparation Commit in the same Workspace. Background or
+concurrent Exec/command leases are outside #273. `retained` now refuses, and
+`run`/`campaign` retain a `NOT_RUN` blocker receipt for these selections
+without acquiring or timing a false control; the optional campaign `--retained`
+argument is historical only. They still occupy registered row slots with the
+same 15-second limits, and need a separately authorized v2 control design to
+become runnable. `report-v2` emits a ratio only for two admitted, matched,
+cache-qualified `PASS` rows; retained campaign-3 and earlier reports remain
+unchanged. O_DIRECT is a requested private data-cache bypass in both arms,
+not categorical proof that private/VM/backend/host caches are cold or equal.

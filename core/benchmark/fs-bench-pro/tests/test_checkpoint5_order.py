@@ -62,6 +62,15 @@ class Ordering(unittest.TestCase):
             self.assertFalse(checkpoint.c1_observation(invalid)["complete"])
             self.assertIsNone(checkpoint.c1_observation(invalid)["c1_work"])
 
+    def test_unqualified_pair_has_no_numeric_ratio(self):
+        row = {"row_status": "INELIGIBLE", "cache_status": "PASS",
+               "numeric_admission": False}
+        self.assertFalse(checkpoint.numeric_pair_eligible(row, row, 100, 10))
+        self.assertFalse(checkpoint.numeric_pair_eligible(None, row, 100, 10))
+        admitted = {**row, "row_status": "PASS", "numeric_admission": True}
+        self.assertTrue(checkpoint.numeric_pair_eligible(admitted, admitted, 100, 10))
+        self.assertFalse(checkpoint.numeric_pair_eligible(admitted, admitted, 0, 10))
+
     def test_single_write_has_only_one_reachable_checkpoint(self):
         self.assertEqual(progress({"exec_stdout_hex": b"PROGRESS\t1\t12\n".hex()}, 1),
                          [{"writes": 1, "writer_elapsed_ns": 12}])
