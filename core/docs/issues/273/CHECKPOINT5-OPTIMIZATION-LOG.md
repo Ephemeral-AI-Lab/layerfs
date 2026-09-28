@@ -803,3 +803,24 @@ historical evidence changed; iter-012 remains the newest sampled candidate.
   C5 memory-headroom failure is a separate open issue. Numeric matched
   comparison, full cache/cgroup proof and other missing selections retain
   their previous INELIGIBLE/INCOMPLETE/NOT_RUN statuses; PR #274 stays draft.
+
+### Post-013 clarification and four-step owner handoff (documentation only)
+
+The [iterative four-step handoff](HANDOFF-POST-ITER013-FOUR-STEP-LOOP.md)
+responds to the owner's quota/Commit and registered scaling questions.
+The **64 MiB** disk quota came from the external Stage fixture, not a product
+numeric default. C5's ≥64.125 MiB `(updates.len()+32)*4096` operand is a
+**pressure heuristic, not allocated/reserved backing**; it necessarily
+selects the pressure scan at 8,192 but does **not** identify the eventual
+`Capacity` refusal domain or site. The separate **8 MiB** RAM Budget is still
+fixed. Correct incremental Commit unlinks/refunds G1 after final-owner/pin
+release, while retaining live G2, metadata and old pinned bytes; no wholesale
+quota reset is permitted. The 8,192 remote canonical Commit is known but
+local reconcile failed, so no byte/clean-close refund proof exists there.
+The registered 100/512/4,097 dispersed Exec/pages/normalization acceleration
+still requires causal explanation; 810→3,154 no-key-subtree versions from
+4,097→8,192 look near-quadratic *locally* without proving a global W² route
+or that those selected ancestor pages are removable. Earlier source-bound
+wording must not be read as declaring the generic WRITE factor closed. No
+new product change, performance arm, qualified matched result or case status
+accompanies this handoff.

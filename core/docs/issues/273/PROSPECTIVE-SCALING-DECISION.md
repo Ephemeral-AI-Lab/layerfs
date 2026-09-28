@@ -489,3 +489,20 @@ charged O(E_f) reconciliation capacity at 8,192, **not** quadratic WRITE.
 There is no permission to change the registered workload/Budget or to call
 iter-013 a new numeric comparison. Iter-012 nine cells retain INELIGIBLE,
 #248 C1-zero remains INCOMPLETE and SDK pinned controls NOT_RUN.
+
+### Subsequent qualification (four-step owner handoff)
+
+The [post-013 loop](HANDOFF-POST-ITER013-FOUR-STEP-LOOP.md) supersedes any
+reading of §8 as declaring WRITE scaling closed or 8,192's Capacity to be
+proved RAM/physical quota exhaustion. `3,154/810 ≈ 3.89` no-key index page
+versions for `8,192/4,097 ≈ 2` WRITEs are a **finite near-quadratic local
+signature** even though source hot slots and height have fixed caps. Its
+avoidability and relationship to the registered 100→512→4,097 acceleration
+remain OPEN. The C5 pressure estimate ≥64.125 MiB at 8,192 exceeds the
+**test fixture's** 64 MiB disk quota and selects the pressure branch; it is
+neither a physical allocation nor the named failed reservation. The default
+8 MiB RAM Budget is independent. Successful incremental Commit refunds
+checked G1 blocks only after final pins, and retains G2/metadata/old readers;
+8,192 had a known remote Commit but failed local reconcile, with refund and
+final-byte oracle NOT_RUN. Instrument the actual refusal before selecting an
+algorithm or changing any limit.
