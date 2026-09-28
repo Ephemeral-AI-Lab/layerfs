@@ -1110,3 +1110,136 @@ an owner profile ruling. The derivation script's first attempt misspelled a
 raw field, **FAIL** in the local evidence; its corrected arithmetic and all
 raw public attempts are hashed in iter-015. No additional Stage attempt was
 run for this addendum and no historical failure was replaced.
+
+## Iteration 016 — charged map-node transfer; extended default-budget lifecycle PASS
+
+- **Source-bound algorithm and failure proof:** product/architecture/test commit
+  `ee4032e2dd389003cdb37ee781e3937d6b656a24`, first parent
+  `f9b6847a14c57da70a6e0d414f3d236c7c4d9838`. C5 precharges the
+  ordered tuple request against the *still-live* `BTreeMap`, uses fallible
+  `try_reserve_exact`, then charges the Vec's **actual capacity** before
+  draining the map. Only **after** all old BTreeMap nodes are consumed does
+  it retain the *actual moved key/value buffer capacities* in the old map
+  `Charge`. The ordered tuple charge and existing index scratch remain;
+  no selected G1 page, live G2 extent, pin, backing format, quota, Budget
+  limit or canonical Commit identity changes. Every fallible precharge,
+  over-capacity adjustment and buffer-charge resize still aborts the
+  compaction candidate and leaves the index unpublished; the known canonical
+  outcome remains owned. The [architecture source description](../../architecture/proposal/fuse-workspace-snapshot-overlay/60-active-backing.md)
+  and exact bound are co-committed. Generic split events/new split-group
+  pages and direct carries now have separate optional per-revision **v2**
+  counters, overlapping—not added to—the existing disjoint page roles.
+  No normalized page was removed.
+- Exact first-parent/staged/committed `python3 tools/production_loc.py --json
+  --root <git archive snapshot>`: Core **67,965 -> 68,022 (+57)**,
+  reference **65,417 -> 65,417 (+0)**, combined **133,382 -> 133,439
+  (+57)**. The explicit *test-only* refusal-control correction
+  `c70af60b176f41068caf97ae0fb1554f4486ea66` (parent `ee4032e2d`)
+  and later test-only assertion correction
+  `784a337e8c50d1ec0a4053b296bfcb0a1a964d84` (parent `c70af60b1`)
+  each have Core **68,022 -> 68,022 (+0)**, reference **65,417 ->
+  65,417 (+0)**, combined **133,439 -> 133,439 (+0)** under the same
+  counter and first-parent/staged scope. They are *different test identities*
+  but the product-input seal is unchanged.
+- One new product-identity **nonregistered** public 8,192 dispersed
+  count/functional diagnostic with **unchanged** 8 MiB product Budget and
+  64 MiB fixture disk quota: **PASS** all 8,192 accepted WRITEs, SaveFile,
+  known canonical Commit, **installed local C5**, full **8,194-byte**
+  independent remote byte oracle and exact Workspace clean-close physical
+  refund. Eight bounded SaveFile windows still use 824 pack loads; the C5
+  pressure pass still scans 103 P locators in two index scans, with **zero**
+  pressure pack-record reads and **zero** compaction pack-page creation
+  attempts. The changed charge does not hide those counts. Instrumented
+  functional command wall **25.804 s** is **not** a registered performance
+  sample or a 25-second speed PASS. The old iter-013/014/015 default-budget
+  FAIL receipts retain their original source identities and status; this is
+  a **new product identity**, not an unchanged rerun or historical repair.
+- Actual C5 charge transfer and proposed index scratch boundary (bytes):
+
+  | Public dispersed WRITEs | Old patch-map charge | Actual moved key+value capacities | Actual ordered Vec capacity (entries) | Budget after transfer | With full index scratch | Remaining below 8 MiB |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 100 | 45,343 | 6,577 | 305 | 1,999,955 | 2,176,644 | 6,211,964 |
+  | 512 | 228,683 | 31,754 | 1,546 | 2,264,855 | 2,625,569 | 5,763,039 |
+  | 4,097 | 1,801,823 | 248,243 | 12,193 | 4,427,555 | 6,367,574 | 2,021,034 |
+  | **8,192 diagnostic** | 2,458,588 | **361,851** | 16,491 | **4,824,052** | **7,427,823** | **960,785** |
+
+  At 8,192, the measured old-to-moved charge release is **2,096,737
+  bytes**, 927 fewer than the earlier 2,097,664-byte *node-only*
+  estimate because the **actual** key capacities include compaction/reclaim
+  additions. The existing index scratch is still **2,603,771**; the
+  current transfer actually admits it, completes staging and publishes.
+  These are charged-owner checkpoints, not a measured allocator RSS peak.
+  No global quota reset occurs; G1 owners refund after final pins, while
+  G2, metadata and old readers remain charged until their own release.
+- New-source public 100/512/4,097 dispersed tests each PASS full bytes,
+  Commit and clean-close. The per-WRITE disjoint roles remain those in
+  iter-015, with **0/0/810/3,154** no-key normalization pages and
+  **390/2,866/27,780/62,117** total index+directory page writes at
+  100/512/4,097/8,192. Distinct generic split **events** are now
+  **5/42/285/375**, producing **10/84/570/750** split-group pages;
+  the latter **overlap** changed-key/normalization roles and must not be
+  added to page totals. All covered dispersed WRITEs use the generic
+  route and record **zero direct carries**, but direct/hot public controls
+  separately show carries and PASS old/new bytes. Every dispersed WRITE
+  records `captured=frozen_revisions=0`; C5 retains its selected pin.
+  Hot/G1-G2 continuity, 32 retained generations/refund, changed closure,
+  hot publication, quota refusal and no-pin quick controls PASS on the
+  changed product. These functional controls are not real same-Workspace
+  SDK pinned-journal performance controls.
+- **Separate failure-custody control; every nonpassing attempt retained.**
+  An explicit *test-only*, nonregistered 2,550,000-byte Budget first
+  refused a hot-cursor **ordinary WRITE** around revision 93, **before**
+  canonical Commit: **FAIL**, no post-known claim. After a test-only
+  profile change to 2,650,000 bytes (never used for the default-budget
+  8,192 case), all 512 WRITEs and remote canonical Commit succeeded;
+  local C5 then refused `Capacity` at `active/splice.rs` with
+  `installed_revision=None`. Full-byte checks of **three declared offsets**
+  in the continuing Workspace and known remote root PASS, but a subsequent
+  attempted G2 WRITE also refused `Capacity`: second test attempt **FAIL**
+  against its stronger progress assertion, not a hidden G2 success. The
+  final *assertion-only* test identity keeps the same 2,650,000-byte
+  workload and explicitly checks this bounded **G2 refusal**, unchanged
+  local revision/bytes, known remote bytes, retained physical charge and
+  **no blind canonical retry**: both scoped controls PASS. They do **not**
+  prove a *successful* new G2 mutation after a known local failure, full
+  final byte oracle for this low-budget control, or a clean Workspace close;
+  those are **NOT_RUN**. Both failed controls' owned containers/volumes
+  were inspected/logged and removed separately; that Docker cleanup is
+  not Workspace close. Fixed 8 MiB extended support is evidenced by the
+  distinct successful 8,192 control, never by changing this refusal
+  control's Budget.
+- **Normalized ancestor boundary:** the v2 `change` route only emits an
+  update-free branch after reconstructing **different** child targets/
+  fences; `emit` checks kind/slot epochs, while a frozen selection retains
+  its old root/directory until its selectors release. Substituting the
+  old page into the **new** selected view without a new mapping would lose
+  changed-child resolution or resolve a cleared/reused hot epoch. This is
+  a source proof that a *naive skip* is invalid in today's grammar, **not**
+  a fence/epoch/old-pin equivalence proof for a new bypass algorithm.
+  No bypass was attempted; that proof remains **INCOMPLETE** before any
+  future removal. Finite source counts cannot establish universal WRITE
+  scaling or a numeric speed ratio.
+- Verified locked release host Workspace+FUSE tests, warning-denying
+  all-target Clippy/fmt, product boundary 350 files, tools 9/9, parser
+  5/5, exact aarch64 release Linux active-backing **32/32** on owned ext4
+  with `TMPDIR=LAYERFS_ACTIVE_TEST_ROOT=/work`, one thread and owned
+  volume removed. The Linux Stage binary is rebuilt for each changed
+  external test identity, while product binary/seal stays fixed after
+  `ee4032e2d`. Every run uses protected closed fixture copies, one worker,
+  `performance_claim=false`, `cache_claim=null`. No unchanged-arm speed
+  resample or frozen-control comparison was taken. The append-only local
+  gitignored `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-016/`
+  retains `RESULTS.json`, per-WRITE causal rows, prior FAIL receipts,
+  commands, hashes, failed owned Docker inspections and own-directory
+  `SHA256SUMS`; it has **no GitHub raw-evidence URL**.
+- Numeric matched control, nine registered mounted selections at this
+  product/harness identity, exact three-sequential-Exec/mutation selections,
+  #248 explicit C1-zero provenance, same-Workspace SDK pinned controls and
+  independent cache/phase-cgroup evidence remain **NOT_RUN/INCOMPLETE/
+  INELIGIBLE**. Extended 8,192 success is a scoped functional result,
+  not checkpoint-5 admission or permission to close #273/merge draft PR
+  #274. Next falsifiers: successful G2 edit after a known local refusal
+  with sufficient admitted headroom; true allocator/phase-local peak;
+  generic no-key bypass equivalence (if ever proposed); other registered
+  append/repeated patterns and matched frozen control under eligible
+  cache/cgroup identities.
