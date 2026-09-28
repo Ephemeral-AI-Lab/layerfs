@@ -102,7 +102,11 @@ generation and seals the shared tail. It does not drain hot closure.
 the Workspace state gate. Under the gate it rechecks the live inode revision;
 matching G1 applies its prepared deletion patch, while intervening G2 keeps
 its extents. Prepared rows, cumulative update maps, ordered vectors and
-reconcile/compaction clones are precharged before allocation. Installation
+compaction clones are precharged before allocation. C5 transfers its charged
+map into the backing publisher, which moves keys/values into the sorted
+candidate; it does not retain successive complete patch clones. Touched
+logical-ID sets, returned owner vectors and added P deletions keep their
+reservations through publication. Installation
 still pays its actual affected-index work under the gate. Upload retains
 charged O(E_f) final extent scratch; it is not a streaming or constant-RAM
 Commit claim. Unrelated cursors survive and affected files can readmit after

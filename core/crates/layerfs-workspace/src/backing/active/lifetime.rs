@@ -4,7 +4,7 @@ use super::{
     generation::{ActiveBacking, ActivePublication, State},
     reclaim,
 };
-use crate::WorkspaceError;
+use crate::{backing::budget::Charge, WorkspaceError};
 use std::collections::BTreeMap;
 
 impl ActiveBacking {
@@ -77,28 +77,35 @@ impl ActiveBacking {
         &self,
         updates: &[(Vec<u8>, Option<Vec<u8>>)],
     ) -> Result<ActivePublication, WorkspaceError> {
+        let expected = updates.len();
+        let charge = self.store.budget().reserve(updates.iter().try_fold(
+            0usize,
+            |bytes, (key, value)| {
+                bytes
+                    .checked_add(128 + key.len() + value.as_ref().map_or(0, Vec::len))
+                    .ok_or(WorkspaceError::Capacity)
+            },
+        )?)?;
+        let updates: BTreeMap<_, _> = updates.iter().cloned().collect();
+        if updates.len() != expected {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.publish_reconcile_map(updates, charge)
+    }
+
+    /// Transfer C5's already charged patch; keys are moved into the sorted
+    /// candidate instead of keeping several complete patch clones resident.
+    pub(crate) fn publish_reconcile_map(
+        &self,
+        mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+        _updates_charge: Charge,
+    ) -> Result<ActivePublication, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
         }
-        let expected = updates.len();
-        let _clone_charge = self.store.budget().reserve(
-            updates
-                .iter()
-                .try_fold(0usize, |bytes, (key, value)| {
-                    bytes
-                        .checked_add(128 + key.len() + value.as_ref().map_or(0, Vec::len))
-                        .ok_or(WorkspaceError::Capacity)
-                })?
-                .checked_mul(2)
-                .ok_or(WorkspaceError::Capacity)?,
-        )?;
-        let mut updates: BTreeMap<_, _> = updates.iter().cloned().collect();
-        if updates.len() != expected {
-            return Err(WorkspaceError::InvalidInput);
-        }
-        let dead = reclaim::prune_dead(&self.index, &mut updates, None)?;
-        let dead_large = reclaim::prune_dead_payloads(&self.index, &updates)?;
+        let (dead, _dead_charge) = reclaim::prune_dead(&self.index, &mut updates, None)?;
+        let (dead_large, _dead_large_charge) = reclaim::prune_dead_payloads(&self.index, &updates)?;
         self.reserve_retired_large(&mut state, dead_large.len())?;
         let tail = self.pack.tail()?;
         let (generation, prior) = self.index.generation_revision()?;
@@ -112,19 +119,15 @@ impl ActiveBacking {
             next,
             usize::MAX,
         )?;
-        let scratch_bytes = updates.iter().try_fold(0usize, |bytes, (key, value)| {
-            bytes
-                .checked_add(64 + key.len() + value.as_ref().map_or(0, Vec::len))
-                .ok_or(WorkspaceError::Capacity)
-        });
+        let scratch_bytes = updates
+            .len()
+            .checked_mul(std::mem::size_of::<(Vec<u8>, Option<Vec<u8>>)>())
+            .ok_or(WorkspaceError::Capacity);
         let _scratch = match scratch_bytes.and_then(|bytes| self.store.budget().reserve(bytes)) {
             Ok(scratch) => scratch,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),
         };
-        let ordered: Vec<_> = updates
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
+        let ordered: Vec<_> = updates.into_iter().collect();
         let candidate = match self.index.prepare(&ordered) {
             Ok(candidate) => candidate,
             Err(error) => return Err(plan.abort().err().unwrap_or(error)),

@@ -127,17 +127,7 @@ pub(super) fn reconcile(
             },
         )
     })?;
-    let _updates_charge = workspace.host.budget.reserve(bytes)?;
-    let entries = rows.iter().try_fold(0usize, |count, row| {
-        count
-            .checked_add(row.deletions.len() + 2)
-            .ok_or(WorkspaceError::Capacity)
-    })?;
-    let _ordered_charge = workspace.host.budget.reserve(
-        entries
-            .checked_mul(size_of::<(Vec<u8>, Option<Vec<u8>>)>())
-            .ok_or(WorkspaceError::Capacity)?,
-    )?;
+    let updates_charge = workspace.host.budget.reserve(bytes)?;
     let (head, canonical) = match outcome {
         CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
         CommitOutcomeWire::UpToDate { head, root } => (*head, *root),
@@ -217,7 +207,7 @@ pub(super) fn reconcile(
         );
     }
     let mut status = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
-    let publication = active.publish_reconcile(&updates.into_iter().collect::<Vec<_>>())?;
+    let publication = active.publish_reconcile_map(updates, updates_charge)?;
     if publication.revision != revision {
         return Err(WorkspaceError::Io);
     }

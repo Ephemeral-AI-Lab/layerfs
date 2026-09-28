@@ -234,3 +234,24 @@ The functional source still requires its source-pinned public proof/evidence
 follow-up and owner review before checkpoint 5. No performance sample,
 release admission, full CPU O(1), constant-RAM Commit or main-lane #264
 integration is claimed here.
+
+### Public regression found after the hot proofs
+
+At `f83a186dd`, both added public hot cases passed, and the first reissued
+original case (`active_repeated`) passed. `active_separated4096` then passed
+its one-file 3 MiB private-backing check but failed C5 with `Capacity`, after
+C1 had already committed. Its failed receipt and runtime are retained until
+recorded cleanup; that Commit outcome must never be resent.
+
+The source-derived reservation diagnostic counts 8,192 E deletions and
+4,096 R deletions in this declared alternating-write case. Before unrelated
+resident allocations, the prepared deletion keys, update map, outer ordered
+vector, two publisher clones, inner ordered clone and index scratch reserved
+10,624,386 B against the unchanged 8 MiB Budget. This is a reservation/duplicate
+ownership defect, not permission to grow the Budget or shrink the case.
+The fix transfers the already charged C5 map into the publisher and moves its
+keys/values into one sorted candidate, while keeping old/new map-vector
+capacity charged. Shared prune paths now precharge touched logical-ID sets,
+returned owner vectors and P-key additions through publication. A focused
+ordinary-API reconcile Budget-refusal test preserves the selected revision,
+bytes and physical charge without allocating candidate pages.

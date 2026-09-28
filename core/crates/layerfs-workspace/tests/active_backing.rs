@@ -1909,4 +1909,62 @@ mod linux {
         drop(active);
         f.clean();
     }
+
+    #[test]
+    fn reconcile_budget_refusal_keeps_the_acknowledged_selection() {
+        let f = Fixture::new(3 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let mut selected = hot_file(0);
+        for offset in 0..8 {
+            selected = active
+                .write_tiny_file(1, selected, offset, b"x")
+                .unwrap()
+                .inode
+                .unwrap();
+        }
+        let before = active.status().unwrap();
+        let revision = active.generation_revision().unwrap();
+        let updates = [(
+            inode_key(1).to_vec(),
+            Some(selected.value().unwrap().to_vec()),
+        )];
+        let held = f
+            .payloads
+            .budget
+            .reserve((8 << 20) - f.payloads.budget.used() - 1024)
+            .unwrap();
+        assert!(matches!(
+            active.publish_reconcile(&updates),
+            Err(WorkspaceError::Capacity)
+        ));
+        assert_eq!(active.generation_revision().unwrap(), revision);
+        let after = active.status().unwrap();
+        assert_eq!(
+            after.store.index_page_writes,
+            before.store.index_page_writes
+        );
+        assert_eq!(after.store.pack_page_writes, before.store.pack_page_writes);
+        assert_eq!(after.store.allocated_bytes, before.store.allocated_bytes);
+        assert_eq!(f.physical(), before.store.allocated_bytes);
+        drop(held);
+        let mut bytes = [0; 8];
+        active
+            .read_file(
+                1,
+                0,
+                &mut bytes,
+                None,
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(&bytes, b"xxxxxxxx");
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
 }

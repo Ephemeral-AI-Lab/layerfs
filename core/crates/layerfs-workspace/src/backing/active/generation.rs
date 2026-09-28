@@ -586,8 +586,8 @@ impl ActiveBacking {
             Some((logical, physical)) if !self.pack.sealed(logical, physical)? => Some(logical),
             _ => None,
         };
-        let dead = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
-        let dead_large = reclaim::prune_dead_payloads(&self.index, &updates)?;
+        let (dead, _dead_charge) = reclaim::prune_dead(&self.index, &mut updates, retained_tail)?;
+        let (dead_large, _dead_large_charge) = reclaim::prune_dead_payloads(&self.index, &updates)?;
         self.reserve_retired_large(state, dead_large.len())?;
         let (generation, prior_revision) = self.index.generation_revision()?;
         let revision = prior_revision
@@ -716,14 +716,15 @@ impl ActiveBacking {
         }
         let (_, physical) = prepared.locator();
         updates.insert(locator_key(logical), Some(locator_value(physical)));
-        let dead = match reclaim::prune_dead(&self.index, &mut updates, None) {
+        let (dead, _dead_charge) = match reclaim::prune_dead(&self.index, &mut updates, None) {
             Ok(dead) => dead,
             Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
         };
-        let dead_large = match reclaim::prune_dead_payloads(&self.index, &updates) {
-            Ok(dead) => dead,
-            Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
-        };
+        let (dead_large, _dead_large_charge) =
+            match reclaim::prune_dead_payloads(&self.index, &updates) {
+                Ok(dead) => dead,
+                Err(error) => return Err(prepared.abort().err().unwrap_or(error)),
+            };
         if let Err(error) = self.reserve_retired_large(&mut state, dead_large.len()) {
             return Err(prepared.abort().err().unwrap_or(error));
         }
