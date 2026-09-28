@@ -435,6 +435,26 @@ impl Index {
                     cursor.bindings = bindings;
                 }
             }
+            if seed.is_none() {
+                pack_bindings = pack_bindings
+                    .iter()
+                    .map(|(key, binding)| {
+                        Some((
+                            key.clone(),
+                            binding.refresh(
+                                &self.store,
+                                &selected,
+                                &mutation.directory,
+                                &mutation.cache,
+                                key,
+                                binding.role == super::hot_cursor::Role::Locator,
+                                binding.role,
+                            )?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .unwrap_or_default();
+            }
             if let Some(seed) = &seed {
                 if let Some(mut cursor) = seed.cursor(
                     &self.store,

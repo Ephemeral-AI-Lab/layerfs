@@ -1858,4 +1858,55 @@ mod linux {
         drop(active);
         f.clean();
     }
+    #[test]
+    fn generic_reconcile_keeps_unrelated_shared_pack_bindings() {
+        let f = Fixture::new(16 << 20);
+        let active = ActiveBacking::new(
+            f.directory.clone(),
+            MetadataHost::new(f.payloads.clone()).unwrap(),
+        )
+        .unwrap();
+        let mut old = hot_file(0);
+        for offset in 0..300 {
+            old = active
+                .write_tiny_file(1, old, offset, b"x")
+                .unwrap()
+                .inode
+                .unwrap();
+        }
+        let mut live = hot_file(0);
+        for offset in 0..4 {
+            live = active
+                .write_tiny_file(2, live, offset, b"y")
+                .unwrap()
+                .inode
+                .unwrap();
+        }
+        active.resize_file(1, old, 0).unwrap();
+        let before = active.status().unwrap().store;
+        live = active
+            .write_tiny_file(2, live, 4, b"z")
+            .unwrap()
+            .inode
+            .unwrap();
+        let after = active.status().unwrap().store;
+        assert_eq!(after.hot_writes, before.hot_writes + 1);
+        assert_eq!(after.index_seeks, before.index_seeks);
+        assert_eq!(live.length, 5);
+        let mut bytes = [0; 5];
+        active
+            .read_file(
+                2,
+                0,
+                &mut bytes,
+                None,
+                |_, _, _| unreachable!(),
+                |_, _, _| unreachable!(),
+            )
+            .unwrap();
+        assert_eq!(&bytes, b"yyyyz");
+        active.close_clean().unwrap();
+        drop(active);
+        f.clean();
+    }
 }

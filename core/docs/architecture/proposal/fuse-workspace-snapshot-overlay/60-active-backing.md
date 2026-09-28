@@ -44,7 +44,8 @@ old/candidate copies and operation scratch remain charged separately against
 the configured Host Budget. An inode cursor retains I/D membership, its EOF
 or Base/Zero source frontier, lower/exclusive fences and ancestor
 (slot, reuse epoch, physical content version) bindings. P/R bindings belong
-to the shared live tail. Another file changing a shared leaf does not
+to the shared live tail. Generic publication, including reconcile, refreshes
+their affected ancestor bindings even when it has no tiny-WRITE seed. Another file changing a shared leaf does not
 invalidate the binding merely by replacing that leaf; every ancestor version
 must still match and existing I/D/P keys must remain present. Insertions must
 stay inside the bound partition. Frozen views resolve their own directory
