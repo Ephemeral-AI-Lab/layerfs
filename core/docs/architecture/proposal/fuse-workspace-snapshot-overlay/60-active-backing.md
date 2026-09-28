@@ -239,6 +239,14 @@ refuses that forgotten serial with `NotFound`; a held descendant may still
 resolve through its internal ancestor. This separates caller visibility from
 charged retention and does not weaken the detached-parent mutation refusal.
 
+**Active completion phase correction (same commit as this paragraph; first
+parent `e97a544f5`):** after an active SaveFile and a successful portable
+metadata save, the captured `SavedInode` has both canonical roots. Before the
+fallible local completion persistence call, the submission now advances to
+`StagePhase::LocalBookkeeping`. A definite local publication failure reports
+that phase and retains the known saved roots; a denied or unknown metadata save
+still reports `StagePhase::MetadataSave`. No retry or backing sync was added.
+
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured

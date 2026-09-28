@@ -632,6 +632,9 @@ pub(super) fn prepare<'a>(
             content,
             metadata: Some(metadata),
         });
+        // Remote metadata is known saved. A failure persisting the local
+        // completion belongs to local bookkeeping, not MetadataSave.
+        submission.phase(StagePhase::LocalBookkeeping, Some(*serial))?;
         workspace.persist_saved(submission, deadline)?;
     }
     let mut bytes = Vec::new();
