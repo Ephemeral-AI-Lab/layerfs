@@ -474,7 +474,7 @@ def main():
         for path in (args.output, args.fixture, args.test_binary, route.BIN): space.assert_owned(path, 'functional proof input/output')
         report['resource_isolation'] = space.as_fields() | {'artifact_root': str(args.output.parent),
             'run_output': str(args.output), 'build_target': str(ROOT / 'core/target'),
-            'linux_build_target': str(ROOT / 'core/target-linux'),
+            'linux_build_target': str(args.test_binary.parents[2]),
             'shared_read_only': [str(args.fixture), str(args.test_binary)],
             'observation': 'process snapshot before public test; no quiet-host assertion'}
         with space.lock_path.open('a') as lock:
