@@ -1080,6 +1080,71 @@ mod linux {
     }
 
     #[test]
+    #[ignore = "requires stage_route.py, live service, and owned Linux file-size refusal"]
+    fn stage_active_known_c5_g2() {
+        // Separate full-default-Budget failure oracle. The public remote
+        // Commit succeeds, then the external test fixture's file-size limit
+        // refuses C5 private publication. Restore it before testing G2.
+        let f = Fixture::new(Gate::CommitCompletionFailure);
+        let file = f.lookup(b"data.bin");
+        let held = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        f.workspace
+            .write_file(held, 10, &f.own(b"G1G1"), deadline())
+            .unwrap();
+        let before = f.workspace.backing_status().unwrap();
+        let restore = RestoreFileLimit;
+        let failed = f.workspace.commit(deadline());
+        drop(restore);
+        let WorkspaceError::Commit(failure) = failed.unwrap_err() else {
+            panic!("known remote Commit and local C5 failure expected")
+        };
+        assert_eq!(
+            failure.disposition,
+            CommitFailureDisposition::KnownCommitLocalFailure
+        );
+        assert_eq!(failure.phase, CommitPhase::Reconcile);
+        assert!(matches!(failure.cause, WorkspaceError::Backing(_)));
+        assert!(failure.installed_revision.is_none());
+        let Some(CommitOutcomeWire::Committed(committed)) = &failure.known_outcome else {
+            panic!("canonical outcome must be retained")
+        };
+        let saved = attr(f.native.attributes(committed.root, b"data.bin"));
+        assert_eq!(f.native.bytes(saved.1, 10, 4), b"G1G1");
+        assert_eq!(f.read(held, 10, 4), b"G1G1");
+        assert_eq!(f.native.observations.lock().unwrap().commits.len(), 1);
+        check("active-known-c5-failure-keeps-canonical-g1");
+        // There is no blind remote retry. This is a *new G2 WRITE* in the
+        // same attached Workspace after local C5 failure, with ordinary 8 MiB
+        // Budget admission and exactly the same open handle.
+        f.workspace
+            .write_file(held, 10, &f.own(b"G2G2"), deadline())
+            .unwrap();
+        assert_eq!(f.read(held, 10, 4), b"G2G2");
+        assert_eq!(f.native.bytes(saved.1, 10, 4), b"G1G1");
+        assert_eq!(f.native.observations.lock().unwrap().commits.len(), 1);
+        let after = f.workspace.backing_status().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
+        assert!(before.allocated_bytes > 0 && after.allocated_bytes > 0);
+        assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
+        println!("STAGE_KNOWN_C5_G2 budget_bytes={} g1=G1G1 g2=G2G2 known_commits=1 before_allocated={} after_allocated={} cleanup=retained", DEFAULT_MEMORY_BUDGET_BYTES, before.allocated_bytes, after.allocated_bytes);
+        check("active-known-c5-failure-g2-edit-and-charge");
+        // Known attempt remains retained: no clean-close or refund claim.
+    }
+
+    #[test]
     #[ignore = "separate explicit low-Budget refusal control; stage_route.py and live service"]
     fn stage_active_transfer_refusal() {
         // Refusal-only control, NOT the unchanged 8 MiB / 8,192 workload.

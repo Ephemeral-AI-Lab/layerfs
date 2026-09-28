@@ -56,6 +56,7 @@ CASES = {
     'active_generic_profile_512': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
     'active_generic_profile': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
     'active_generic_profile_8192': ['active-source-grouped-8192-count-and-full-bytes', 'active-source-grouped-8192-clean-close-refund'],
+    'active_known_c5_g2': ['active-known-c5-failure-keeps-canonical-g1', 'active-known-c5-failure-g2-edit-and-charge'],
     'active_transfer_refusal': ['active-transfer-refusal-known-remote-and-live-bytes', 'active-transfer-refusal-g2-bounded-and-charge-retained'],
     'active_page_profile': ['active-page-profile-4097-full-byte-oracle', 'active-page-profile-4097-clean-close-refund'],
     'active_changed_closure_probe': ['active-changed-closure-private-byte-and-count-oracle', 'active-changed-closure-commit-and-clean-close'],
@@ -101,6 +102,7 @@ REQUIREMENTS = {
     'active_generic_profile_512': ['S-17', 'B-26', 'B-28'],
     'active_generic_profile': ['S-17', 'B-26', 'B-28'],
     'active_generic_profile_8192': ['S-17', 'B-26', 'B-28'],
+    'active_known_c5_g2': ['S-15', 'S-17', 'B-26', 'B-28'],
     'active_transfer_refusal': ['S-15', 'S-17', 'B-26', 'B-28'],
     'active_page_profile': ['S-17', 'B-26', 'B-28'],
     'active_changed_closure_probe': ['S-17', 'B-26', 'B-28'],
@@ -127,7 +129,7 @@ TEST_PREFIX = 'stage_'
 TEST_MARKER = 'STAGE_CHECK'
 MODE = 'functional-workspace-stage'
 REQUIREMENT_SCOPE = 'stage-only subsets; no full Pair 1 completion'
-LIMIT_CASES = ('completion_failure',)
+LIMIT_CASES = ('completion_failure', 'active_known_c5_g2')
 DENIED_COMMIT_CASE = None
 PROXY_CASE = None
 DATA_MODES = {}
