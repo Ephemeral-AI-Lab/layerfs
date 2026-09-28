@@ -262,3 +262,20 @@ The retained 4,097-record base is proved by the shared oracle (which re-derives
 arbitrary counts) and additionally by the arm's own frozen verifier as a plain
 old/new tree identity without pattern keys, because that frozen verifier
 hard-codes the 100-write pattern schedule. Both proofs are recorded.
+
+## Prospective optimization correction (new identities; prior receipts unchanged)
+
+The original `darwin-shared-mmap-invalidate-mincore-v1` procedure hashed each
+input *after* its eviction and whole-input check, faulting it back in. New
+attempt-v3/prepared-v2 receipts use `darwin-shared-mmap-invalidate-mincore-v2`:
+validate the SHA-256 and size of **every** cloned input first; evict **every**
+input next; perform the final whole-input residency checks next; then launch
+without reading any input between that last check and launch. Record both
+per-file hash/size/residency and the final-check-to-launch gap (at most 1 s).
+The prior procedure and its receipts retain their historical, unqualified status.
+Neither this host check nor private Linux O_DIRECT by itself proves the entire
+Commit cache domain. A labelled `run --diagnostic` skips the separately bounded
+verifiers, records `SKIPPED`, and can never be used for admission. Ordinary
+`run` still invokes both applicable verifiers. These changes do not alter the
+registered workload/limits; retained-control construction still requires a
+live private journal, so existing retained fixture rows cannot be promoted.

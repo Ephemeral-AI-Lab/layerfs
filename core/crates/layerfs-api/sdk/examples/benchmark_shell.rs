@@ -215,9 +215,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let operation_ns = start.elapsed().as_nanos();
     runtime.publish(diagnostic);
     let (mut status, mut detail, mut head_commit) = ("COMPLETE", String::new(), String::new());
+    let mut commit_outcome = "NONE";
     match outcome {
         Ok(Some(report)) => match report.outcome {
-            CommitOutcomeWire::Committed(record) => head_commit = hex(&record.commit),
+            CommitOutcomeWire::Committed(record) => {
+                commit_outcome = "Committed";
+                head_commit = hex(&record.commit);
+            }
+            CommitOutcomeWire::UpToDate {
+                head: Some(head), ..
+            } => {
+                commit_outcome = "UpToDate";
+                head_commit = hex(&head);
+            }
             other => {
                 status = "FAIL";
                 detail = format!("commit outcome {other:?}");
@@ -265,7 +275,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_or("null".to_owned(), |status| {
             status.consumer_accounted_bytes.to_string()
         });
-    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"mount_ns\":{mount_ns},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"exec_stdout_hex\":{:?},\"exec_stderr_hex\":{:?},\"projection_counts\":{:?},\"upstream_calls\":{upstream},\"consumer_accounted_bytes\":{charged},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
+    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"commit_outcome\":{commit_outcome:?},\"mount_ns\":{mount_ns},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"exec_stdout_hex\":{:?},\"exec_stderr_hex\":{:?},\"projection_counts\":{:?},\"upstream_calls\":{upstream},\"consumer_accounted_bytes\":{charged},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, exec_stdout, exec_stderr, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
         format!("{:?}", capture.error));

@@ -339,25 +339,32 @@ def splice_curve(stderr, expected_samples):
 
 
 def cache_files(paths):
-    """Darwin mmap/msync invalidation plus whole-input residency evidence."""
+    """Validate every input before eviction; after final mincore never read input."""
     residency = Residency()
-    evidence = {"method": "darwin-shared-mmap-invalidate-mincore-v1", "files": {}}
+    evidence = {"method": "darwin-shared-mmap-invalidate-mincore-v2", "files": {}}
+    # A buffered digest faults the input into cache: finish *all* digests first.
     for path in paths:
-        size = Path(path).stat().st_size
-        descriptor = os.open(path, os.O_RDONLY)
+        path = Path(path)
+        evidence["files"][path.name] = {
+            "path": str(path), "sha256": digest(path), "bytes": path.stat().st_size}
+    for row in evidence["files"].values():
+        descriptor = os.open(row["path"], os.O_RDONLY)
         try:
-            pages, resident = residency.check(descriptor, size, evict=True)
-            _, remaining = residency.check(descriptor, size)
+            pages, resident = residency.check(descriptor, row["bytes"], evict=True)
+            row.update(pages=pages, resident_after_invalidate=resident)
         finally:
             os.close(descriptor)
-        evidence["files"][Path(path).name] = {
-            "path": str(path), "sha256": digest(path), "bytes": size,
-            "pages": pages, "resident_after_invalidate": resident,
-            "resident_on_recheck": remaining}
+    for row in evidence["files"].values():
+        descriptor = os.open(row["path"], os.O_RDONLY)
+        try:
+            pages, remaining = residency.check(descriptor, row["bytes"])
+            row.update(final_pages=pages, resident_on_recheck=remaining)
+        finally:
+            os.close(descriptor)
     evidence["status"] = "PASS" if all(
         row["resident_after_invalidate"] == 0 and row["resident_on_recheck"] == 0
         for row in evidence["files"].values()) else "FAIL"
-    evidence["invalidated_ns"] = time.monotonic_ns()
+    evidence["final_check_ns"] = time.monotonic_ns()
     return evidence
 
 
@@ -422,6 +429,17 @@ def run_measured(command, limit_s, env, output):
             "timeout": timed_out}
 
 
+def run_cold_measured(paths, command, limit_s, env, output):
+    """No input identity reads between final whole-input check and launch."""
+    cache = cache_files(paths)
+    measured = run_measured(command, limit_s, env, output)
+    cache["launch_gap_ns"] = measured["started_ns"] - cache["final_check_ns"]
+    cache["launch_gap_limit_ns"] = 1_000_000_000
+    if cache["launch_gap_ns"] > cache["launch_gap_limit_ns"]:
+        cache["status"] = "FAIL"
+    return cache, measured
+
+
 def clone_master(store_source, history_source, store_sha, history_sha, output):
     clone = {}
     for name, source, expected in (("store", store_source, store_sha),
@@ -453,6 +471,8 @@ def arm_env(prepared):
 
 
 def release_check(prepared, prepared_file, output):
+    if prepared.get("schema") != "issue273-checkpoint5-prepared-v2":
+        raise ValueError("unsupported checkpoint5 prepared/cache contract")
     identity = arm_identity(Path(prepared["arm_repo"]))
     require_clean(identity)
     for key in ("source_commit", "source_tree", "product_seal", "harness_seal"):
@@ -556,7 +576,7 @@ def prepare(args):
             raise RuntimeError(f"{name} master rejected by this arm's verifier")
     images = build_images(context, output, {row["interval"] for row in SELECTIONS},
                           paths["layerfs-daemon"])
-    prepared = {"schema": "issue273-checkpoint5-prepared-v1", "arm": args.arm,
+    prepared = {"schema": "issue273-checkpoint5-prepared-v2", "arm": args.arm,
                 "arm_repo": str(repo), "source": identity, "spec_sha256": digest(SPEC),
                 "writer_source_sha256": digest(WRITER), "oracle_source_sha256": digest(ORACLE_SOURCE),
                 "writer_binary_sha256": digest(oracle), "oracle": oracle_record,
@@ -567,7 +587,8 @@ def prepare(args):
                 "builds": builds, "writer_build_wall_ns": writer_wall,
                 "master_reproof": reproof,
                 "clone_method": "shutil.copyfile independent writable byte copy",
-                "cache_contract": "darwin-shared-mmap-invalidate-mincore-v1 host source "
+                "cache_contract": "darwin-shared-mmap-invalidate-mincore-v2 all digests before eviction, "
+                                  "all evictions before final whole-input checks; host source "
                                   "invalidation; container private backing is not invalidated "
                                   "between Exec and Commit",
                 "build_mode": "locked Cargo release, worktree-local target; zig cc -O3 static writer",
@@ -594,8 +615,8 @@ def retained(args):
     image_id = image_for(prepared, MATRIX_INTERVAL[4097])
     command = [prepared["binaries"]["benchmark_shell"]["path"], "run", str(case),
                clone["store"], clone["history"], image_id]
-    cache = cache_files([clone["store"], clone["history"]])
-    measured = run_measured(command, 25, env, output)
+    cache, measured = run_cold_measured(
+        [clone["store"], clone["history"]], command, 25, env, output)
     (output / "cache.json").write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
     try:
         driver = one_receipt((output / "driver.stdout").read_bytes())
@@ -632,7 +653,7 @@ def retained(args):
     for file in ("store.sqlite", "history.sqlite"):
         shutil.copyfile(output / file, retained_master / file)
         (retained_master / file).chmod(0o444)
-    record = {"schema": "issue273-checkpoint5-retained-v1",
+    record = {"schema": "issue273-checkpoint5-retained-v2",
               "prepared": str(args.prepared), "source": prepared["source"],
               "command": command, "shell_command": RETAINED_COMMAND,
               "complete_command_wall_ns": measured["complete_command_wall_ns"],
@@ -699,13 +720,8 @@ def run(args):
     image_id = image_for(prepared, selection["interval"])
     command = [prepared["binaries"]["benchmark_shell"]["path"], "run", str(case),
                clone["store"], clone["history"], image_id]
-    cache = cache_files([clone["store"], clone["history"]])
-    measured = run_measured(command, selection["limit_s"], env, output)
-    launch_gap = measured["started_ns"] - cache["invalidated_ns"]
-    cache["launch_gap_ns"] = launch_gap
-    cache["launch_gap_limit_ns"] = 1_000_000_000
-    if launch_gap > cache["launch_gap_limit_ns"]:
-        cache["status"] = "FAIL"
+    cache, measured = run_cold_measured(
+        [clone["store"], clone["history"]], command, selection["limit_s"], env, output)
     (output / "cache.json").write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
     stdout = (output / "driver.stdout").read_bytes()
     stderr = (output / "driver.stderr").read_bytes()
@@ -726,7 +742,7 @@ def run(args):
     except (ValueError, KeyError, UnicodeDecodeError) as error:
         checkpoints, progress_error = None, str(error)
     verification = {"oracle": {"status": "NOT_RUN"}, "arm": {"status": "NOT_RUN"}}
-    if driver and driver.get("head_commit"):
+    if driver and driver.get("head_commit") and not args.diagnostic:
         verify_case = output / "case.verify"
         fields = {**case_fields(master, selection, selection["command"]),
                   "expected_head_commit": driver["head_commit"]}
@@ -755,6 +771,9 @@ def run(args):
             verification["arm"] = {
                 "status": "NOT_APPLICABLE",
                 "reason": "the frozen arm verifier hard-codes the 100-write pattern schedule"}
+    elif args.diagnostic:
+        verification = {"oracle": {"status": "SKIPPED", "reason": "labelled causal diagnostic"},
+                        "arm": {"status": "SKIPPED", "reason": "labelled causal diagnostic"}}
     else:
         verification["oracle"] = {"status": "NOT_RUN",
                                   "reason": "the driver produced no head Commit"}
@@ -771,18 +790,24 @@ def run(args):
     if extent_present and selection["count"]:
         extent_complete = bool(splices["complete"]
                                and splices["total_splices"] == selection["count"])
-    c1_complete = bool(len(extent.get("c1_edit", [])) == 1
-                       and len(extent.get("file_input", [])) == 1)
+    # Explicit zero is valid only with emitted, parsed provenance. Absent or
+    # malformed telemetry is not a synthetic zero for a clean Commit.
+    c1_rows = extent.get("c1_edit", [])
+    file_rows = extent.get("file_input", [])
+    c1_complete = (len(c1_rows) == len(file_rows) == 1
+                   and all(isinstance(row, dict) and row.get("v") == 1
+                           for row in c1_rows + file_rows))
     fusecount_ok = (int(counts.get("write", -1)) == selection["writes"]) if driver else False
     progress_ok = bool(selection["count"] == 0 or (checkpoints and
                        [row["writes"] for row in checkpoints] ==
-                       [selection["count"] // 4, selection["count"] // 2,
-                        selection["count"] * 3 // 4, selection["count"]]))
+                       ([1] if selection["count"] == 1 else [selection["count"] // 4,
+                        selection["count"] // 2, selection["count"] * 3 // 4,
+                        selection["count"]])))
     verified = (verification["oracle"]["status"] == "PASS"
                 and verification["arm"]["status"] in ("PASS", "NOT_APPLICABLE"))
     functional = bool(driver and driver.get("status") == "COMPLETE"
                       and driver.get("commit_called") and not measured["timeout"]
-                      and measured["exit_code"] == 0 and verified and cleanup)
+                      and measured["exit_code"] == 0 and (verified or args.diagnostic) and cleanup)
     limit_met = measured["complete_command_wall_ns"] <= selection["limit_s"] * 1_000_000_000
     counts_ok = fusecount_ok and progress_ok
     instrumentation = bool(driver and fusecount_ok and progress_ok and phases and c1_complete
@@ -798,10 +823,11 @@ def run(args):
     else:
         status = "INELIGIBLE"
     receipt = {
-        "schema": "issue273-checkpoint5-attempt-v2",
+        "schema": "issue273-checkpoint5-attempt-v3",
         "family_id": "workspace_mounted_checkpoint", "arm": prepared["arm"],
         "registered_selection": selection["order"] != 0,
-        "scenario_id": selection["scenario_id"], "scenario_version": 1, "mode": "performance",
+        "scenario_id": selection["scenario_id"], "scenario_version": 1,
+        "mode": "causal_diagnostic" if args.diagnostic else "performance",
         "selection_order": selection["order"], "sample_count": 1,
         "admission_eligible": False,
         "operation_contract_id": "issue273-mounted-checkpoint-v1",
@@ -842,7 +868,9 @@ def run(args):
         "extent_splice_lines": splice_lines, "extent_splice_curve": splices,
         "extent_counters_emitted_by_this_arm": extent_present,
         "extent_counts_complete": extent_complete,
-        "c1_counters_complete": c1_complete, "writer_progress_ok": progress_ok,
+        "c1_counters_complete": c1_complete,
+        "c1_counter_provenance": ("emitted_v1" if c1_complete else "missing_or_malformed"),
+        "writer_progress_ok": progress_ok,
         "fuse_write_count_ok": fusecount_ok, "counts_ok": counts_ok,
         "instrumentation_complete": instrumentation,
         "complexity_lines": [line for line in stderr.decode(errors="replace").splitlines()
@@ -1109,6 +1137,7 @@ def main():
                    choices=[row["scenario_id"] for row in SELECTIONS]
                    + [PREFLIGHT["scenario_id"]])
     p.add_argument("--retained", type=Path)
+    p.add_argument("--diagnostic", action="store_true", help="skip independent verifiers; never admission eligible")
     p = sub.add_parser("campaign")
     p.add_argument("--control-prepared", required=True, type=Path)
     p.add_argument("--candidate-prepared", required=True, type=Path)

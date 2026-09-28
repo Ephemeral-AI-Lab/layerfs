@@ -17,17 +17,17 @@ fn live_refs(
     logical: u64,
 ) -> Result<bool, WorkspaceError> {
     let prefix = [vec![tag], logical.to_be_bytes().to_vec()].concat();
-    if updates
-        .iter()
-        .any(|(key, value)| key.starts_with(&prefix) && value.is_some())
-    {
-        return Ok(true);
-    }
     let upper = if logical == u64::MAX {
         vec![tag + 1]
     } else {
         [vec![tag], (logical + 1).to_be_bytes().to_vec()].concat()
     };
+    if updates
+        .range(prefix.clone()..upper.clone())
+        .any(|(_, value)| value.is_some())
+    {
+        return Ok(true);
+    }
     let mut lower = prefix;
     loop {
         let current = index.scan(&lower, &upper, 128)?;

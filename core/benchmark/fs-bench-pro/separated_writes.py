@@ -467,8 +467,9 @@ def prepare_reuse(output, previous_file, selection):
 def progress(driver, count):
     output = bytes.fromhex(driver["exec_stdout_hex"]).decode("ascii")
     rows = [line.split("\t") for line in output.splitlines()]
-    expected_counts = [count // 4, count // 2, count * 3 // 4, count]
-    if len(rows) != 4 or any(len(row) != 3 or row[0] != "PROGRESS"
+    expected_counts = ([1] if count == 1 else
+                       [count // 4, count // 2, count * 3 // 4, count])
+    if len(rows) != len(expected_counts) or any(len(row) != 3 or row[0] != "PROGRESS"
                               for row in rows):
         raise ValueError(f"unexpected progress: {output!r}")
     parsed = [{"writes": int(row[1]), "writer_elapsed_ns": int(row[2])} for row in rows]

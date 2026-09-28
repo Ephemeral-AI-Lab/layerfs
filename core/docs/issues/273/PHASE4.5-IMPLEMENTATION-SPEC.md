@@ -674,3 +674,15 @@ their lane resolves them; no CI/preflight claim. Keep one construction worker
 except Init, cache/deadline policy, ARMv8 build inputs, no-sync/no-retry rules.
 No performance sample is part of this specification. Use the
 [checkpoint-5 handoff](HANDOFF-CHECKPOINT5.md) after this lane's 4.5 gates close.
+
+### Checkpoint-5 reconcile patch lookup (prospective optimization)
+
+`prune_dead` and `prune_dead_payloads` share the inverse-reference liveness
+check. For each touched R/L logical page, probe only the bounded prefix range
+of the ordered patch map instead of searching every unrelated update. Preserve
+the exclusive `tag + 1` bound for logical `u64::MAX` and the subsequent paged
+selected-index scan (including references beyond the first 128). This changes
+patch lookup from O(P*M) to O(P log M + R) for P touched logicals, M patch
+entries and R matching patch entries examined; selected-index lookup and
+retained owners still have their own charged costs. It occurs after SaveFile;
+it does not eliminate or accelerate the earlier source processing by itself.
