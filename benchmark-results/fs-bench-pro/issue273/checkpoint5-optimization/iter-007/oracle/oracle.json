@@ -1,0 +1,33 @@
+{
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/oracle/binary-archive/837df9a26eb73cdf3b0fa00326e0e02b6da624eab504349f2871680aaae214d1/verify_checkpoint5",
+    "sha256": "837df9a26eb73cdf3b0fa00326e0e02b6da624eab504349f2871680aaae214d1"
+  },
+  "builds": {
+    "verify_checkpoint5": {
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "build",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "-p",
+        "layerfs-server",
+        "--example",
+        "verify_checkpoint5"
+      ],
+      "exit_code": 0,
+      "status": "PASS",
+      "wall_ns": 154719666
+    }
+  },
+  "oracle_source_sha256": "104896177223d12828319ac5ca219cbfbbebb2c7ae5bc9ee1fbc99d70b8222c8",
+  "product_source_seal": "fcfe14b63135345a7f7729aa55dee9159fda0ad14f5613af0763c421d8fcc9d2",
+  "repo": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs",
+  "role": "one binary, built once, reused byte-identically by both source arms",
+  "schema": "issue273-checkpoint5-oracle-v1",
+  "source_commit": "00553ef496389c361b7387d1cc07c2ae11a3b041",
+  "source_tree": "d3a4a79eed5399bfb35ef0c470b289c35b019608"
+}

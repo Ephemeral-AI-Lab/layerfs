@@ -355,6 +355,40 @@ def c1_observation(extent):
                 c1[0]["nodes_read"] if valid else None)}
 
 
+PACK_SOURCE = re.compile(
+    r"LFS_ACTIVE_SOURCE v=1 complete=(true|false) "
+    r"windows=(\d+) references=(\d+) distinct_packs=(\d+) fill_ns=(\d+) "
+    r"pack_loads=(\d+) pack_hits=(\d+) locator_lookups=(\d+) "
+    r"index_reads=(\d+) index_seeks=(\d+) locator_ns=(\d+) pack_ns=(\d+) "
+    r"decoded_records=(\d+) decoded_bytes=(\d+) copied_bytes=(\d+) "
+    r"ref_limit=256 byte_limit=32768")
+PACK_SOURCE_KEYS = ("windows", "references", "distinct_packs", "fill_ns", "pack_loads",
+                    "pack_hits", "locator_lookups", "index_reads", "index_seeks",
+                    "locator_ns", "pack_ns", "decoded_records", "decoded_bytes",
+                    "copied_bytes")
+
+
+def source_observation(stderr):
+    """Refuse missing, interleaved or partial source counters, not a zero."""
+    lines = [line for line in stderr.decode(errors="replace").splitlines()
+             if line.startswith("LFS_ACTIVE_SOURCE ")]
+    if len(lines) != 1:
+        return {"status": "INCOMPLETE", "reason": "expected exactly one source row",
+                "line_count": len(lines), "counts": None}
+    match = PACK_SOURCE.fullmatch(lines[0])
+    if not match or match[1] != "true":
+        return {"status": "INCOMPLETE", "reason": "malformed/interleaved/incomplete row",
+                "line_count": 1, "counts": None}
+    counts = dict(zip(PACK_SOURCE_KEYS, map(int, match.groups()[1:])))
+    if (counts["pack_loads"] > counts["distinct_packs"]
+            or counts["pack_loads"] + counts["pack_hits"] != counts["references"]
+            or counts["references"] < counts["windows"]):
+        return {"status": "INCOMPLETE", "reason": "inconsistent phase counters",
+                "line_count": 1, "counts": None}
+    return {"status": "PASS", "reason": "complete emitted production v1 row",
+            "line_count": 1, "counts": counts}
+
+
 def cache_files(paths):
     """Validate every input before eviction; after final mincore never read input."""
     residency = Residency()
@@ -688,6 +722,7 @@ def run(args):
     counts = dict(item.split("=", 1) for item in driver["projection_counts"].split(",")
                   if "=" in item) if driver else {}
     samples = backing_samples(stderr)
+    pack_source = source_observation(stderr)
     try:
         extent = extent_diagnostics(stderr)
     except (ValueError, KeyError) as error:
@@ -765,6 +800,9 @@ def run(args):
                            and (extent_complete in (True, None)))
     if not functional:
         status = "FAIL"
+    elif args.diagnostic and prepared["arm"] == "candidate" and selection["count"] > 0 \
+            and pack_source["status"] != "PASS":
+        status = "INCOMPLETE"
     elif not limit_met:
         status = "FAIL"
     elif not instrumentation:
@@ -774,7 +812,7 @@ def run(args):
     else:
         status = "INELIGIBLE"
     receipt = {
-        "schema": "issue273-checkpoint5-attempt-v4",
+        "schema": "issue273-checkpoint5-attempt-v5",
         "family_id": "workspace_mounted_checkpoint", "arm": prepared["arm"],
         "registered_selection": selection["order"] != 0,
         "scenario_id": selection["scenario_id"], "scenario_version": 1,
@@ -814,6 +852,9 @@ def run(args):
         "public_api_call_count": 4, "mount_orchestration_status": "PASS" if driver else "UNKNOWN",
         "writer_progress": checkpoints, "writer_progress_error": progress_error,
         "backing_samples": samples, "backing_sample_counts_expected": expected_samples,
+        "pack_source": pack_source,
+        "pack_source_availability": ("production_candidate_v1" if prepared["arm"] ==
+                                     "candidate" else "baseline_not_instrumented"),
         "phase_samples_complete": phases,
         "extent_diagnostics": extent,
         "extent_splice_lines": splice_lines, "extent_splice_curve": splices,

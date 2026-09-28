@@ -1,0 +1,139 @@
+{
+  "admission_eligible": false,
+  "do_not_resample": "unchanged source/harness identity and output path cannot be repeated to obtain a complete row",
+  "mode": "labelled causal count diagnostic, verifier SKIPPED",
+  "observation": "daemon LFT1 output bisects 100/4097 product source-count rows, 512 row intact; retain all three raw receipts",
+  "performance_claim": false,
+  "rows": [
+    {
+      "binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "c1_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-100/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-100/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 305500980407791,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 3125,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "case": "issue273-dispersed-100-10m-v1",
+      "complete_command_wall_ns": 1663321917,
+      "driver_status": "COMPLETE",
+      "image_id": "sha256:c34541b581cd97e9eebabb023c1550507377a80a51804e903aae8e36994c0077",
+      "schema": "issue273-checkpoint5-attempt-v4",
+      "source": "00553ef496389c361b7387d1cc07c2ae11a3b041",
+      "source_count_status": "INCOMPLETE_INTERLEAVED",
+      "source_counts": null,
+      "verifier_status": "SKIPPED",
+      "writes": 100
+    },
+    {
+      "binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "c1_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-512/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-512/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 305572064923500,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 3541,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "case": "issue273-dispersed-512-10m-v1",
+      "complete_command_wall_ns": 2022536834,
+      "driver_status": "COMPLETE",
+      "image_id": "sha256:a1f87228d2908b02209d6ed554646fbce93dae1322f55125fb2840093a893fb4",
+      "schema": "issue273-checkpoint5-attempt-v4",
+      "source": "00553ef496389c361b7387d1cc07c2ae11a3b041",
+      "source_count_status": "PASS",
+      "source_counts": {
+        "decoded_records": 1024,
+        "distinct_packs": 14,
+        "index_reads": 28,
+        "pack_loads": 14,
+        "references": 512
+      },
+      "verifier_status": "SKIPPED",
+      "writes": 512
+    },
+    {
+      "binary_sha256": "ad65c901d922543cb48af20e472e53017053e6d81b983ec85b292e4a8c857238",
+      "c1_complete": true,
+      "cache": {
+        "files": {
+          "history.sqlite": {
+            "bytes": 86016,
+            "final_pages": 6,
+            "pages": 6,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-4097/history.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "55a02d7da0c35b084b721706354dcaf6e30aee3f824ad32543cf2e108dbdfd19"
+          },
+          "store.sqlite": {
+            "bytes": 626688,
+            "final_pages": 39,
+            "pages": 39,
+            "path": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-007/dispersed-4097/store.sqlite",
+            "resident_after_invalidate": 0,
+            "resident_on_recheck": 0,
+            "sha256": "20ea70dc9509e1819b11667bf97ab2a5ab3bd2b5d628d0a48f4c4fa6876691be"
+          }
+        },
+        "final_check_ns": 305574652804791,
+        "launch_gap_limit_ns": 1000000000,
+        "launch_gap_ns": 3375,
+        "method": "darwin-shared-mmap-invalidate-mincore-v2",
+        "status": "PASS"
+      },
+      "case": "issue273-dispersed-4097-10m-v1",
+      "complete_command_wall_ns": 10688934125,
+      "driver_status": "COMPLETE",
+      "image_id": "sha256:640139786f937ae8db248237eedff55c2e1e335cbcf609c2e949dad3f0bbbc04",
+      "schema": "issue273-checkpoint5-attempt-v4",
+      "source": "00553ef496389c361b7387d1cc07c2ae11a3b041",
+      "source_count_status": "INCOMPLETE_INTERLEAVED",
+      "source_counts": null,
+      "verifier_status": "SKIPPED",
+      "writes": 4097
+    }
+  ],
+  "schema": "issue273-optimization-iter007-pre-correction-v1"
+}

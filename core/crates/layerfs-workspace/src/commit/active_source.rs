@@ -6,7 +6,7 @@ use crate::{
     },
     WorkspaceError,
 };
-use std::{mem::size_of, sync::Arc, time::Instant};
+use std::{fmt, mem::size_of, sync::Arc, time::Instant};
 
 // Both limits apply to required replacement references, not file length or
 // unrelated records. Only one decoded pack page remains in the reader.
@@ -160,6 +160,38 @@ impl Prefetch {
         if within + output.len() == reference.length {
             self.next += 1;
         }
+        Ok(())
+    }
+}
+
+/// One precharged stack record keeps process/daemon stderr framing atomic.
+/// The logger's independent LFT1 writer must never bisect count fields.
+pub(super) const SOURCE_LINE_BYTES: usize = 1024;
+
+pub(super) struct SourceLine {
+    bytes: [u8; SOURCE_LINE_BYTES],
+    len: usize,
+}
+
+impl SourceLine {
+    pub(super) fn new() -> Self {
+        Self {
+            bytes: [0; SOURCE_LINE_BYTES],
+            len: 0,
+        }
+    }
+
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+}
+
+impl fmt::Write for SourceLine {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        let end = self.len.checked_add(value.len()).ok_or(fmt::Error)?;
+        let target = self.bytes.get_mut(self.len..end).ok_or(fmt::Error)?;
+        target.copy_from_slice(value.as_bytes());
+        self.len = end;
         Ok(())
     }
 }

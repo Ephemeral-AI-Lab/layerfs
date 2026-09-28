@@ -62,6 +62,20 @@ class Ordering(unittest.TestCase):
             self.assertFalse(checkpoint.c1_observation(invalid)["complete"])
             self.assertIsNone(checkpoint.c1_observation(invalid)["c1_work"])
 
+    def test_source_row_is_complete_or_explicitly_incomplete(self):
+        raw = (b"LFS_ACTIVE_SOURCE v=1 complete=true windows=1 references=2 "
+               b"distinct_packs=2 fill_ns=4 pack_loads=2 pack_hits=0 "
+               b"locator_lookups=2 index_reads=4 index_seeks=2 locator_ns=3 "
+               b"pack_ns=2 decoded_records=80 decoded_bytes=4000 copied_bytes=2 "
+               b"ref_limit=256 byte_limit=32768\n")
+        result = checkpoint.source_observation(raw)
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["counts"]["pack_loads"], 2)
+        for damaged in (b"", raw + raw, raw.replace(b"pack_hits=0", b"pack_hits=5"),
+                        raw.replace(b"decoded_records", b"LFT1 {}decoded_records")):
+            self.assertEqual(checkpoint.source_observation(damaged)["status"], "INCOMPLETE")
+            self.assertIsNone(checkpoint.source_observation(damaged)["counts"])
+
     def test_unqualified_pair_has_no_numeric_ratio(self):
         row = {"row_status": "INELIGIBLE", "cache_status": "PASS",
                "numeric_admission": False}

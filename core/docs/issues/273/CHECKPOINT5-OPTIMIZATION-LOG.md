@@ -270,3 +270,42 @@
   coverage yet. Continue the remaining correctness/space and matched
   runnable rows; report SDK retained contract blocker without fabricating
   a pinned state or lengthening its 15 s limit.
+
+## Iteration 007 — registered 10 MiB source diagnostic and atomic telemetry repair
+
+- Committed candidate `00553ef49...` (product source still `9c286b02c...`,
+  harness `845473c41...`) prepared once using frozen closed 10 MiB/8,194-byte
+  masters, locked incremental release host/aarch64 artifacts and three sealed
+  images. `oracle` and `prepare` wrote fresh worktree-local artifacts under
+  `iter-007/`; Darwin cold positive control detected 32 warm pages and 0
+  resident pages after invalidation. One **labelled, unverified causal**
+  candidate diagnostic per registered dispersed 10 MiB tier 100/512/4,097:
+  all three complete commands finished within 15/15/25 s, at
+  1.663/2.023/10.689 s, host store/history final whole-input residency 0,
+  final-check-to-launch gaps 3,125/3,541/3,375 ns, public driver COMPLETE,
+  C1 counters present and independent verifiers explicitly SKIPPED. These
+  are not matched numeric speed samples or release admission.
+- The 512 count row is complete: two 256-reference windows, 14 distinct
+  logical packs and **14 actual** pack loads, 28 index reads, 1,024 decoded
+  records. At 100 and 4,097 the production `LFS_ACTIVE_SOURCE` line was
+  bisected by an independent LFT1 line (the 100 line even contains
+  `decoded_bytes=4900LFT1`); full anchored source-count ingestion is
+  `INCOMPLETE_INTERLEAVED` for both, not the favorable partial-prefix 2/827
+  prediction or a measured zero. Raw receipts remain intact; no arm was
+  resampled at this unchanged identity. Source model still predicts
+  2/14/827 loads for this registered schedule, subject to the changed-candidate
+  count diagnostic.
+- Corrective product work builds a bounded 1,024-byte precharged stack
+  observation and emits it in one short write, rather than multiple
+  fragmentary `eprintln` writes. The common prospective attempt-v5 harness
+  requires exactly one anchored, internally consistent complete production
+  line. Missing, malformed, overflowed or interleaved lines explicitly
+  mark candidate source diagnostics INCOMPLETE; baseline product has no such
+  telemetry and its absence is not zero. Source-code reader, grouping and
+  WRITE algorithms do not otherwise change in this correction. New product
+  and harness identities must be committed before any new diagnostic.
+- Old-source complete-command walls and O_DIRECT requests are **not** a
+  cache/VM/backend/device proof, and no phase speed ratio is permitted.
+  Iter-007 raw attempts, cache evidence, seals and checksums are retained
+  below the same artifact root. New correction verification and exact LOC
+  are appended after the prospective identity is frozen.

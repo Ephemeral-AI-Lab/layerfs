@@ -309,3 +309,20 @@ become runnable. `report-v2` emits a ratio only for two admitted, matched,
 cache-qualified `PASS` rows; retained campaign-3 and earlier reports remain
 unchanged. O_DIRECT is a requested private data-cache bypass in both arms,
 not categorical proof that private/VM/backend/host caches are cold or equal.
+
+### Prospective source-count v5 ingestion after a labelled causal diagnostic
+
+The new `LFS_ACTIVE_SOURCE v=1` product observation is candidate-only source
+telemetry, not a zero-valued baseline counter. The archived first registered
+10 MiB dispersed diagnostic at the earlier identity had an LFT1 record
+bisect its count line at 100 and 4,097 writes (512 was intact). Those raw
+attempts remain intact and source-count `INCOMPLETE`; do not extract a
+favorable prefix or repeat the unchanged arm. The prospective product now
+precharges a fixed 1,024-byte record and emits it in one short write; the
+common `attempt-v5` harness accepts only one entire anchored, internally
+consistent completed row. Malformed, interleaved, missing and overflowed rows
+are explicitly `INCOMPLETE` for labelled candidate source diagnostics. Baseline
+absence is `baseline_not_instrumented`, not zero or comparable pack loads.
+Any new causal sample must pin the changed product, harness, spec and artifact
+identities and include instrumentation time; it cannot rehabilitate earlier
+attempt-v4 rows.

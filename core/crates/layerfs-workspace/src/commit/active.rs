@@ -1,5 +1,5 @@
 //! Lower one pinned active index revision into the existing SaveFile and C5 stream.
-use super::active_source::Prefetch;
+use super::active_source::{Prefetch, SourceLine, SOURCE_LINE_BYTES};
 use crate::{
     backing::{
         active::{
@@ -20,7 +20,8 @@ use layerfs_bridge::contract::{
 };
 use std::{
     collections::BTreeMap,
-    io,
+    fmt::Write as _,
+    io::{self, Write as _},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -51,6 +52,7 @@ struct ActiveUpload {
     view: Arc<ActiveSnapshot>,
     pack_reader: ActivePackReader,
     prefetch: Option<Prefetch>,
+    diagnostic: bool,
     serial: u64,
     descriptors: Vec<u8>,
     extents: Vec<Extent>,
@@ -85,10 +87,12 @@ impl ActiveUpload {
                 .extend_from_slice(&if kind == 0 { extent.source_offset } else { 0 }.to_be_bytes());
             descriptors.extend_from_slice(&(extent.end - extent.start).to_be_bytes());
         }
+        let diagnostic = std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some();
         charge.resize(
             descriptors.capacity()
                 + extents.capacity() * std::mem::size_of::<Extent>()
-                + std::mem::size_of::<ActivePackReader>(),
+                + std::mem::size_of::<ActivePackReader>()
+                + if diagnostic { SOURCE_LINE_BYTES } else { 0 },
         )?;
         let active = workspace
             .inner
@@ -110,6 +114,7 @@ impl ActiveUpload {
             view,
             pack_reader,
             prefetch,
+            diagnostic,
             serial,
             descriptors,
             extents,
@@ -516,19 +521,28 @@ pub(super) fn prepare<'a>(
                     deadline,
                 );
                 drop(remote);
-                if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                if upload.diagnostic {
                     let stats = upload.pack_reader.stats();
                     let (windows, references, distinct_packs, fill_ns) = upload
                         .prefetch
                         .as_ref()
                         .map_or((0, 0, 0, 0), Prefetch::counts);
-                    eprintln!(
+                    let mut line = SourceLine::new();
+                    if writeln!(
+                        &mut line,
                         "LFS_ACTIVE_SOURCE v=1 complete={} windows={} references={} distinct_packs={} fill_ns={} pack_loads={} pack_hits={} locator_lookups={} index_reads={} index_seeks={} locator_ns={} pack_ns={} decoded_records={} decoded_bytes={} copied_bytes={} ref_limit=256 byte_limit=32768",
                         upload.complete(), windows, references, distinct_packs, fill_ns,
                         stats.loads, stats.hits, stats.locator_lookups, stats.index_reads,
                         stats.index_seeks, stats.locator_ns, stats.pack_ns,
                         stats.decoded_records, stats.decoded_bytes, stats.copied_bytes
-                    );
+                    ).is_err() {
+                        let _ = io::stderr().lock().write_all(
+                            b"LFS_ACTIVE_SOURCE v=1 status=INCOMPLETE_OVERFLOW\n");
+                    } else {
+                        // One sub-PIPE_BUF write, not a sequence of formatting
+                        // writes that can be bisected by concurrent LFT1 output.
+                        let _ = io::stderr().lock().write_all(line.bytes());
+                    }
                 }
                 if let Some(error) = upload.failure.take() {
                     submission

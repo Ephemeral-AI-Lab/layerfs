@@ -759,3 +759,14 @@ callback's publication timer includes acquisition/copy/charge for this path,
 and its acquisition timer is zero because it acquired no temporary file; no
 work moves before Exec or after acknowledgement. This avoids the temporary
 input round trip, not the authenticated active-page write/readback workload.
+
+### Checkpoint-5 source diagnostic framing
+
+The bounded SaveFile source observation is assembled into a 1,024-byte
+Budget-charged stack record before remote SaveFile, then emitted as one short
+stderr write. Previously multiple writes from `eprintln` could be bisected
+by an LFT1 log line, leaving an apparently valid prefix and an unparseable
+suffix. A full/anchored production observation is required for the external
+causal diagnostic; an interleaved, absent or overflowed line is explicitly
+INCOMPLETE and never counted as zero. This charges telemetry overhead within
+the same phase and does not warm any source path.
