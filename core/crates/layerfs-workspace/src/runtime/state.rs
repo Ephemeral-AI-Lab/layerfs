@@ -18,6 +18,9 @@ pub(crate) const HANDLE_LIMIT: usize = 128;
 /// Two ordered indexes and their nodes, including the fixed 255-byte name.
 pub(crate) const COOKIE_ENTRY_BYTES: usize = 2 * std::mem::size_of::<Cookie>() + 192;
 pub(crate) const PATH_BYTES: usize = 4096;
+// At most 256 components, each no more than 255 bytes plus a separator.
+// Only active, identity-relative paths may exceed the canonical 4096 bytes.
+pub(crate) const ACTIVE_PATH_BYTES: usize = 256 * 256;
 pub(crate) const CALL_SCRATCH: usize = 128 * 1024;
 
 #[derive(Clone)]
@@ -48,6 +51,7 @@ pub(crate) struct State {
     pub node_index: BTreeMap<u64, usize>,
     pub node_index_charge: Charge,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
+    pub is_active: bool,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,
@@ -114,7 +118,10 @@ pub(crate) struct Node {
     pub content: Root,
     pub path: [u8; PATH_BYTES],
     pub path_len: usize,
+    pub extended_path: Option<NodePath>,
     pub parent: u64,
+    pub attached: bool,
+    pub ancestor_mark: bool,
     pub lookups: u64,
     pub projection_lookups: u64,
     pub handles: usize,
@@ -154,6 +161,43 @@ pub(crate) struct OperationGuard {
     pub _charge: Charge,
 }
 
+/// Charged path prepared before an active publication; dropping it on refusal
+/// releases the complete temporary reservation.
+pub(crate) struct NodePath {
+    pub bytes: Vec<u8>,
+    _charge: Charge,
+}
+impl NodePath {
+    pub fn new(
+        path: &[u8],
+        budget: &Arc<crate::backing::budget::Budget>,
+    ) -> Result<Self, WorkspaceError> {
+        Self::from_parts(path, &[], budget)
+    }
+    pub fn from_parts(
+        prefix: &[u8],
+        suffix: &[u8],
+        budget: &Arc<crate::backing::budget::Budget>,
+    ) -> Result<Self, WorkspaceError> {
+        let len = prefix
+            .len()
+            .checked_add(suffix.len())
+            .ok_or(WorkspaceError::Capacity)?;
+        if len > ACTIVE_PATH_BYTES {
+            return Err(WorkspaceError::Capacity);
+        }
+        let mut charge = budget.reserve(len)?;
+        let mut bytes = crate::backing::metadata_index::vector(len)?;
+        bytes.extend_from_slice(prefix);
+        bytes.extend_from_slice(suffix);
+        charge.resize(bytes.capacity())?;
+        Ok(Self {
+            bytes,
+            _charge: charge,
+        })
+    }
+}
+
 impl Node {
     pub fn new(
         attr: NodeAttributes,
@@ -172,15 +216,40 @@ impl Node {
             content,
             path: stored,
             path_len: path.len(),
+            extended_path: None,
             parent,
+            attached: true,
+            ancestor_mark: false,
             lookups: 0,
             projection_lookups: 0,
             handles: 0,
             names: 1,
         }
     }
+    pub fn with_path(
+        attr: NodeAttributes,
+        content: Root,
+        metadata: Root,
+        parent: u64,
+        path: NodePath,
+    ) -> Self {
+        let mut node = Self::new(attr, content, metadata, &[], parent);
+        node.install_path(path);
+        node
+    }
+    pub fn install_path(&mut self, path: NodePath) {
+        self.path_len = path.bytes.len();
+        if self.path_len <= PATH_BYTES {
+            self.path[..self.path_len].copy_from_slice(&path.bytes);
+            self.extended_path = None;
+        } else {
+            self.extended_path = Some(path);
+        }
+    }
     pub fn path(&self) -> &[u8] {
-        &self.path[..self.path_len]
+        self.extended_path
+            .as_ref()
+            .map_or_else(|| &self.path[..self.path_len], |extended| &extended.bytes)
     }
     pub fn references(&mut self, scope: ReferenceScope) -> &mut u64 {
         match scope {
@@ -398,12 +467,43 @@ impl State {
         self.unbound.contains(&serial)
     }
     pub fn collect(&mut self, root: u64) {
+        // An active child pins its complete resident ancestor closure even if
+        // the client forgot those ancestors. Mark in the already-charged Node
+        // table, without allocating an uncharged temporary graph.
+        if self.is_active {
+            for node in &mut self.nodes {
+                node.ancestor_mark = node.attr.serial == root
+                    || node.lookups > 0
+                    || node.projection_lookups > 0
+                    || node.handles > 0;
+            }
+            for index in 0..self.nodes.len() {
+                if !self.nodes[index].ancestor_mark {
+                    continue;
+                }
+                let mut parent = self.nodes[index].parent;
+                for _ in 0..256 {
+                    let Some(&at) = self.node_index.get(&parent) else {
+                        break;
+                    };
+                    if self.nodes[at].ancestor_mark {
+                        break;
+                    }
+                    self.nodes[at].ancestor_mark = true;
+                    parent = self.nodes[at].parent;
+                }
+            }
+        }
         self.nodes.retain(|node| {
-            node.attr.serial == root
+            node.ancestor_mark
+                || node.attr.serial == root
                 || node.lookups > 0
                 || node.projection_lookups > 0
                 || node.handles > 0
         });
+        for node in &mut self.nodes {
+            node.ancestor_mark = false;
+        }
         self.node_index.clear();
         for (index, node) in self.nodes.iter().enumerate() {
             self.node_index.insert(node.attr.serial, index);

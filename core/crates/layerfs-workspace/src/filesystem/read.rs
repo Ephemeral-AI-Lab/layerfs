@@ -22,11 +22,8 @@ impl Workspace {
             return Err(WorkspaceError::Capacity);
         }
         let deadline = Self::callback_deadline(deadline);
-        let _path_charge = self
-            .host
-            .budget
-            .reserve(crate::runtime::state::PATH_BYTES)?;
-        let (attr, mut content, root, base, baseline, path, path_len, stale, active) = {
+        let mut _path_charge = self.host.budget.reserve(0)?;
+        let (attr, mut content, root, base, baseline, path, stale, active) = {
             let state = self.state()?;
             self.available(&state)?;
             let handle = state.handle(handle, false)?;
@@ -34,14 +31,16 @@ impl Workspace {
                 return Err(WorkspaceError::BadHandle);
             }
             let node = state.node(handle.serial)?;
+            _path_charge.resize(node.path_len)?;
+            let mut selected_path = crate::backing::metadata_index::vector(node.path_len)?;
+            selected_path.extend_from_slice(node.path());
             (
                 node.attr,
                 node.content,
                 state.overlay.clone(),
                 state.base,
                 state.baseline,
-                node.path,
-                node.path_len,
+                selected_path,
                 node.baseline != state.baseline,
                 if self.inner.active.is_some() {
                     let backing = self
@@ -136,15 +135,15 @@ impl Workspace {
             } else {
                 operation.remote()?;
                 if stale {
-                    let mut selected_path = crate::backing::metadata_index::vector(path_len)?;
-                    selected_path.extend_from_slice(&path[..path_len]);
+                    let query = if self.inner.active.is_some() {
+                        Inspect::InodeAttributes {
+                            serial: attr.serial,
+                        }
+                    } else {
+                        Inspect::Attributes { path }
+                    };
                     let response = self.call(
-                        Operation::Inspect {
-                            root: base,
-                            query: Inspect::Attributes {
-                                path: selected_path,
-                            },
-                        },
+                        Operation::Inspect { root: base, query },
                         0,
                         &mut std::io::sink(),
                         deadline,

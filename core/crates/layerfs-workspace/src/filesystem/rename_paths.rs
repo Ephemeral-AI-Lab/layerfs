@@ -1,7 +1,7 @@
 //! Validate a directory move's live paths before publishing its single root.
-use super::{namespace::child_path, namespace_view::View};
+use super::{namespace::child_path_active, namespace_view::View};
 use crate::{
-    runtime::state::{OperationGuard, State, PATH_BYTES},
+    runtime::state::{OperationGuard, State, ACTIVE_PATH_BYTES},
     NodeKind, Workspace, WorkspaceError,
 };
 use std::time::Instant;
@@ -22,7 +22,7 @@ fn projected(path: &[u8], old: &[u8], new: &[u8]) -> Result<(), WorkspaceError> 
     let components = usize::from(!new.is_empty())
         + new.iter().filter(|byte| **byte == b'/').count()
         + suffix.iter().filter(|byte| **byte == b'/').count();
-    if length > PATH_BYTES || components > 256 {
+    if length > ACTIVE_PATH_BYTES || components > 256 {
         return Err(WorkspaceError::Capacity);
     }
     Ok(())
@@ -55,9 +55,11 @@ impl Workspace {
         drop(state);
         let old_depth = old.iter().filter(|byte| **byte == b'/').count();
         let new_depth = new.iter().filter(|byte| **byte == b'/').count();
-        if new.len() > old.len() || new_depth > old_depth {
-            // ponytail: growth walks the inherited subtree to prove path bounds;
-            // a canonical max-relative-path summary can replace this if it is hot.
+        if new_depth > old_depth {
+            // Only an increased depth can force an otherwise unresident
+            // descendant past the component bound. Canonical base paths are
+            // at most 4096 bytes, so same-depth length growth is below the
+            // charged active locator ceiling without a subtree walk.
             self.scan_rename_descendants(operation, view, serial, old, (old, new), deadline)?;
         }
         Ok(())
@@ -80,7 +82,7 @@ impl Workspace {
             let Some((name, expected)) = page.pop() else {
                 break;
             };
-            let child = child_path(path, &name)?;
+            let child = child_path_active(path, &name)?;
             projected(&child, paths.0, paths.1)?;
             let resolved = self.resolve_child(operation, view, serial, path, &name, deadline)?;
             if resolved.attr.serial != expected {

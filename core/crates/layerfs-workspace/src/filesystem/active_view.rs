@@ -1,7 +1,7 @@
 //! Name resolution and bounded listing against one pinned active revision.
 use super::{
     namespace::attributes,
-    namespace::child_path,
+    namespace::child_path_active,
     namespace_view::{Resolved, View},
 };
 use crate::{
@@ -124,7 +124,7 @@ impl Workspace {
         // The base is keyed by immutable inode identity. A moved directory has
         // no canonical path at its new name, but its serial still owns children.
         // Keep local path validation for resident-node bookkeeping only.
-        child_path(path, name)?;
+        child_path_active(path, name)?;
         if let Some(value) = active.get(&namespace_key(parent, name)?)? {
             let binding = NamespaceRecord::parse(&value)?;
             if binding.tombstone {
@@ -257,7 +257,7 @@ impl Workspace {
                         if name.as_slice() <= prior {
                             return Err(WorkspaceError::InvalidInput);
                         }
-                        child_path(path, name)?;
+                        child_path_active(path, name)?;
                         prior = name;
                     }
                     canonical = entries;

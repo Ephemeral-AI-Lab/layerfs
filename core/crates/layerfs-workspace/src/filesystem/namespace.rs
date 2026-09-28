@@ -50,6 +50,19 @@ pub(crate) fn attributes(
     ))
 }
 pub(crate) fn child_path(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, WorkspaceError> {
+    child_path_with_limit(parent, name, PATH_BYTES)
+}
+/// Active backing resolves inherited names by inode identity, not by this
+/// materialized locator. Bound the latter by its component count and charge.
+pub(crate) fn child_path_active(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, WorkspaceError> {
+    let bytes = child_path_with_limit(parent, name, crate::runtime::state::ACTIVE_PATH_BYTES)?;
+    Ok(bytes)
+}
+fn child_path_with_limit(
+    parent: &[u8],
+    name: &[u8],
+    limit: usize,
+) -> Result<Vec<u8>, WorkspaceError> {
     if name.is_empty()
         || name.len() > 255
         || name == b"."
@@ -59,17 +72,18 @@ pub(crate) fn child_path(parent: &[u8], name: &[u8]) -> Result<Vec<u8>, Workspac
     {
         return Err(WorkspaceError::InvalidInput);
     }
-    let total = parent.len() + usize::from(!parent.is_empty()) + name.len();
-    if total > PATH_BYTES
+    let total = parent
+        .len()
+        .checked_add(usize::from(!parent.is_empty()))
+        .and_then(|n| n.checked_add(name.len()))
+        .ok_or(WorkspaceError::Capacity)?;
+    if total > limit
         || parent.iter().filter(|byte| **byte == b'/').count() + usize::from(!parent.is_empty())
             >= 256
     {
         return Err(WorkspaceError::Capacity);
     }
-    let mut result = Vec::new();
-    result
-        .try_reserve_exact(total)
-        .map_err(|_| WorkspaceError::Capacity)?;
+    let mut result = crate::backing::metadata_index::vector(total)?;
     result.extend_from_slice(parent);
     if !parent.is_empty() {
         result.push(b'/');
@@ -114,6 +128,9 @@ impl Workspace {
             if parent.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if self.inner.active.is_some() && !parent.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(parent.attr, self.inner.root.uid, 1)?;
             (
                 parent.path().to_vec(),
@@ -123,7 +140,11 @@ impl Workspace {
             )
         };
         let resolved = self.resolve_child(&mut operation, &view, parent, &path, name, deadline)?;
-        let path = child_path(&path, name)?;
+        let path = if self.inner.active.is_some() {
+            child_path_active(&path, name)?
+        } else {
+            child_path(&path, name)?
+        };
         let mut state = self.state()?;
         if state.revision != revision || state.baseline != baseline {
             return Err(WorkspaceError::Busy);
@@ -179,7 +200,12 @@ impl Workspace {
             *references = references.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         } else {
             state.reserve_nodes()?;
-            let mut node = Node::new(original, content, metadata, path, parent);
+            let mut node = if self.inner.active.is_some() {
+                let prepared = crate::runtime::state::NodePath::new(path, &self.host.budget)?;
+                Node::with_path(original, content, metadata, parent, prepared)
+            } else {
+                Node::new(original, content, metadata, path, parent)
+            };
             node.attr = attr;
             node.baseline = if canonical { baseline } else { 0 };
             // A newly resolved identity starts from the live namespace link

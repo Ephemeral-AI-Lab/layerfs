@@ -205,6 +205,31 @@ materialized descendant exceeds 4,096 bytes still refuses. The identity
 queries repair the fallback but do **not** prove #264's deep-path union.
 This amendment is source description, not a merged or release-qualified result.
 
+**Subsequent union repair (same commit as this paragraph; first parent
+`f54bbb123`):** the active, inode-relative selected view can materialize a
+locator longer than 4,096 bytes, up to **65,536 bytes / 256 components**.
+The legacy/canonical `child_path` remains capped at 4,096 bytes. An active
+Node keeps its 4,096-byte inline path and holds an additional charged
+`NodePath` only for an extended locator. All resident renamed paths, their
+charges and the scratch index are prepared *before* the single active index
+publication; a refusal drops the preparation without changing the namespace.
+Growth in component depth still walks never-resident inherited descendants
+against the component bound; same-depth length growth no longer walks the
+subtree merely to enforce a removed canonical-path dependency. A final
+canonical Commit is still subject to C1's independent 4,096-byte path bound:
+this describes reachable active names, not a newly admitted canonical path.
+
+For active views, forgotten directory ancestors remain in the already-charged
+Node table while a descendant has a lookup/handle reference. Marking their
+parent closure uses the table itself; final forget/release reclaims it. A
+removed or replaced directory is detached and refuses new lookup/mutation even
+if an old handle can still list its pinned names. An old directory handle pins
+the view of names but reports the directory's live `..` after a move. No
+retired RootOwner mutation route was restored. One successful active rename
+publishes one revision and one 4-KiB metadata page without holding RootOwner
+completion escrow. A later Commit may hold its *own* canonical root reservation
+until checked clean close, where the corresponding slots/bytes/pages refund.
+
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured

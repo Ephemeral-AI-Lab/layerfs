@@ -42,7 +42,16 @@ impl Workspace {
             let view = found.view.ok_or(WorkspaceError::Io)?;
             let (path, parent) = view.directory_path.as_ref().map_or_else(
                 || (node.path().to_vec(), node.parent),
-                |pinned| (pinned.path().to_vec(), pinned.parent),
+                |pinned| {
+                    (
+                        pinned.path().to_vec(),
+                        if view.active.is_some() {
+                            node.parent
+                        } else {
+                            pinned.parent
+                        },
+                    )
+                },
             );
             (path, node.attr.serial, parent, dots, after, view)
         };

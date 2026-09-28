@@ -1,7 +1,7 @@
 //! Active unlink and directory removal publication.
 use super::{
     active_names::{hot, now},
-    namespace::{check_access, child_path},
+    namespace::{check_access, child_path_active},
 };
 use crate::{
     backing::active::{dirty_key, inode_key, namespace_key, HotInode, NamespaceRecord},
@@ -36,8 +36,11 @@ impl Workspace {
             if node.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if !node.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(node.attr, self.inner.root.uid, 3)?;
-            child_path(node.path(), name)?;
+            child_path_active(node.path(), name)?;
             (
                 self.selected_view(&state)?,
                 node.path().to_vec(),
@@ -65,7 +68,7 @@ impl Workspace {
             if child.serial == self.inner.root.serial {
                 return Err(WorkspaceError::Unsupported);
             }
-            let path = child_path(&path, name)?;
+            let path = child_path_active(&path, name)?;
             if !self
                 .list_view(
                     &mut operation,
@@ -208,6 +211,9 @@ impl Workspace {
         state.nodes[parent_index].attr.mtime_seconds = seconds;
         state.nodes[parent_index].attr.mtime_nanoseconds = nanos;
         if let Ok(node) = state.node_mut(child.serial) {
+            if directory {
+                node.attached = false;
+            }
             if child.kind == NodeKind::File {
                 node.names = node.names.saturating_sub(1);
                 node.attr.references = node.names as u64;

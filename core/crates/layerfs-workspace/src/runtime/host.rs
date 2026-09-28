@@ -548,6 +548,7 @@ impl WorkspaceHost {
                     node_index,
                     node_index_charge,
                     overlay: None,
+                    is_active: resources.active.is_some(),
                     completion: None,
                     submission: None,
                     generation: 1,

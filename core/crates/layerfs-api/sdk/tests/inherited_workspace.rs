@@ -804,7 +804,9 @@ fn growing_rename_refuses_private_budget_before_publication() {
     baseline.lookup(packages.serial, b"old");
     baseline.lookup(packages.serial, b"new");
     let baseline_bytes = baseline.workspace.backing_status().unwrap().allocated_bytes;
-    let quota = baseline_bytes + 8192;
+    // An active rename publishes at least one 4096-byte metadata page;
+    // one byte below that page is a prospective prepublication disk limit.
+    let quota = baseline_bytes + 4095;
     drop(baseline);
     let f = Fixture::with_layout_quota(0, false, quota);
     let root = f.workspace.root().serial;
@@ -812,6 +814,7 @@ fn growing_rename_refuses_private_budget_before_publication() {
     let old = f.lookup(packages.serial, b"old");
     let new = f.lookup(packages.serial, b"new");
     let revision = f.workspace.status().unwrap().revision;
+    let old_bytes = f.workspace.backing_status().unwrap().allocated_bytes;
     let error = f
         .workspace
         .rename(
@@ -828,6 +831,10 @@ fn growing_rename_refuses_private_budget_before_publication() {
         "{error:?}"
     );
     assert_eq!(f.workspace.status().unwrap().revision, revision);
+    assert_eq!(
+        f.workspace.backing_status().unwrap().allocated_bytes,
+        old_bytes
+    );
     assert!(f
         .workspace
         .lookup(
@@ -843,18 +850,16 @@ fn growing_rename_refuses_private_budget_before_publication() {
         f.workspace.forget(serial, 1, ReferenceScope::Local);
     }
     f.workspace.close_clean().unwrap();
-    println!("RENAME_BUDGET baseline_backing_bytes={baseline_bytes} quota_bytes={quota} extra_bytes=8192 refusal=atomic cleanup=PASS");
+    println!("RENAME_BUDGET baseline_backing_bytes={baseline_bytes} quota_bytes={quota} extra_bytes=4095 refusal=atomic cleanup=PASS");
 }
 
 #[test]
 fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
-    // The rename's publication seals its candidate exactly once: the sealed
-    // candidate owns no pending cleanup, and its slot credits and reservations
-    // return to the values the workspace held before the rename began. A
-    // duplicate fallible seal could reject the prepared rename after the first
-    // already published, so this pins the one-attempt shape from the public
-    // surface: identical reserved slots and bytes before and after, a complete
-    // accounting, and a clean close with no retained custody.
+    // The active rename publishes one index revision and one physical page;
+    // unlike the retired RootOwner mutation route, it holds no completion
+    // escrow. Commit constructs separately owned canonical roots, whose slots
+    // and reservations remain live until the checked clean close. Pin the
+    // one-attempt publication and exact final refund at the real owner boundary.
     let f = Fixture::new();
     let root = f.workspace.root().serial;
     let packages = f.lookup(root, b"packages");
@@ -862,6 +867,8 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
     let new = f.lookup(packages.serial, b"new");
     let subtree = f.lookup(old.serial, b"subtree");
     let before = f.workspace.metadata_status().unwrap();
+    let before_active = f.workspace.backing_status().unwrap();
+    let before_revision = f.workspace.status().unwrap().revision;
     f.workspace
         .rename(
             old.serial,
@@ -872,6 +879,12 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
             deadline(),
         )
         .unwrap();
+    assert_eq!(f.workspace.status().unwrap().revision, before_revision + 1);
+    assert_eq!(
+        f.workspace.backing_status().unwrap().allocated_bytes,
+        before_active.allocated_bytes + 4096,
+        "one active metadata page is published, with no duplicate seal"
+    );
     assert_eq!(f.lookup(new.serial, b"subtree").serial, subtree.serial);
     let sealed = f.workspace.metadata_status().unwrap();
     assert_eq!(
@@ -879,9 +892,8 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
         "the sealed candidate refunds its slots exactly once: {before:?} -> {sealed:?}"
     );
     assert_eq!(
-        sealed.reserved_bytes,
-        layerfs_workspace::backing::metadata::ESCROW,
-        "a rename that needs a completion retains exactly its escrow reservation"
+        sealed.reserved_bytes, before.reserved_bytes,
+        "the active publication holds no RootOwner completion escrow"
     );
     assert!(
         sealed.accounting_complete,
@@ -889,14 +901,11 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
     );
     f.commit();
     let completed = f.workspace.metadata_status().unwrap();
-    assert_eq!(
-        completed.reserved_bytes, before.reserved_bytes,
-        "the completed rename releases its escrow exactly once: {before:?} -> {completed:?}"
+    assert!(
+        completed.roots > before.roots && completed.reserved_bytes > before.reserved_bytes,
+        "Commit now owns canonical root reservations until clean close: {completed:?}"
     );
-    assert_eq!(
-        completed.reserved_slots, before.reserved_slots,
-        "no slot credit was released twice across the completion"
-    );
+    assert!(completed.accounting_complete);
     // The moved directory carries both lookup references it acquired (once
     // before the rename, once when the moved name was resolved afterwards).
     for (serial, count) in [
@@ -908,12 +917,28 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
         f.workspace.forget(serial, count, ReferenceScope::Local);
     }
     f.workspace.close_clean().unwrap();
+    let released = f.workspace.metadata_status().unwrap();
+    assert_eq!(
+        released.reserved_slots, before.reserved_slots,
+        "verified close refunds canonical slot custody exactly once"
+    );
+    assert_eq!(
+        released.reserved_bytes, before.reserved_bytes,
+        "verified close refunds canonical byte custody exactly once"
+    );
+    assert_eq!(
+        released.allocated_bytes, before.allocated_bytes,
+        "verified close releases canonical physical pages"
+    );
+    assert!(released.accounting_complete);
     println!(
-        "RENAME_SEAL once=PASS refund_slots={}->{} escrow={} ->{} cleanup=PASS",
+        "RENAME_SEAL once=PASS refund_slots={}->{}->{} reserve={} ->{}->{} cleanup=PASS",
         before.reserved_slots,
-        sealed.reserved_slots,
-        layerfs_workspace::backing::metadata::ESCROW,
-        completed.reserved_bytes
+        completed.reserved_slots,
+        released.reserved_slots,
+        before.reserved_bytes,
+        completed.reserved_bytes,
+        released.reserved_bytes
     );
 }
 

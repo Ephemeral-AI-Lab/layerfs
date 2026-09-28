@@ -2,7 +2,7 @@
 use super::{
     active_names::{hot, now},
     create::Creation,
-    namespace::{check_access, child_path},
+    namespace::{check_access, child_path_active},
 };
 use crate::{
     backing::active::{dirty_key, inode_key, namespace_key, HotInode, NamespaceRecord},
@@ -52,8 +52,11 @@ impl Workspace {
             if node.attr.kind != NodeKind::Directory {
                 return Err(WorkspaceError::NotDirectory);
             }
+            if !node.attached {
+                return Err(WorkspaceError::NotFound);
+            }
             check_access(node.attr, self.inner.root.uid, 3)?;
-            child_path(node.path(), name)?;
+            child_path_active(node.path(), name)?;
             (
                 self.selected_view(&state)?,
                 node.path().to_vec(),
@@ -71,7 +74,7 @@ impl Workspace {
             Ok(resolved) => {
                 if let Creation::File { options, .. } = creation {
                     if !options.exclusive {
-                        let child = child_path(&path, name)?;
+                        let child = child_path_active(&path, name)?;
                         let serial = resolved.attr.serial;
                         {
                             let mut state = self.state()?;
@@ -227,6 +230,15 @@ impl Workspace {
         } else {
             None
         };
+        let child = child_path_active(&path, name)?;
+        let prepared_path = if link_target.is_none() {
+            Some(crate::runtime::state::NodePath::new(
+                &child,
+                &self.host.budget,
+            )?)
+        } else {
+            None
+        };
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let (seconds, nanos) = now()?;
         let target_size = match creation {
@@ -329,7 +341,6 @@ impl Workspace {
         if published != next {
             return Err(WorkspaceError::Io);
         }
-        let child = child_path(&path, name)?;
         let receipt = MutationReceipt {
             incarnation: self.inner.incarnation,
             generation,
@@ -357,7 +368,13 @@ impl Workspace {
             child_attr.references = node.names as u64;
             state.linked(serial);
         } else {
-            let mut node = Node::new(child_attr, [0; 32], [0; 32], &child, parent);
+            let mut node = Node::with_path(
+                child_attr,
+                [0; 32],
+                [0; 32],
+                parent,
+                prepared_path.ok_or(WorkspaceError::Io)?,
+            );
             node.baseline = 0;
             *node.references(reference) = 1;
             node.handles = usize::from(open.is_some());

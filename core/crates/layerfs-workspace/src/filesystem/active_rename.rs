@@ -1,7 +1,7 @@
 //! Active atomic rename publication.
 use super::{
     active_names::{hot, now},
-    namespace::{check_access, child_path},
+    namespace::{check_access, child_path_active},
     rename::RenameRequest,
 };
 use crate::{
@@ -39,10 +39,13 @@ impl Workspace {
                 if node.attr.kind != NodeKind::Directory {
                     return Err(WorkspaceError::NotDirectory);
                 }
+                if !node.attached {
+                    return Err(WorkspaceError::NotFound);
+                }
                 check_access(node.attr, self.inner.root.uid, 3)?;
             }
-            child_path(a.path(), source)?;
-            child_path(b.path(), destination)?;
+            child_path_active(a.path(), source)?;
+            child_path_active(b.path(), destination)?;
             (
                 self.selected_view(&state)?,
                 a.path().to_vec(),
@@ -95,7 +98,7 @@ impl Workspace {
                 if moved.attr.kind != NodeKind::Directory {
                     return Err(WorkspaceError::IsDirectory);
                 }
-                let path = child_path(&destination_parent_path, destination)?;
+                let path = child_path_active(&destination_parent_path, destination)?;
                 if !self
                     .list_view(
                         &mut operation,
@@ -113,8 +116,8 @@ impl Workspace {
                 return Err(WorkspaceError::NotDirectory);
             }
         }
-        let old_path = child_path(&source_parent_path, source)?;
-        let new_path = child_path(&destination_parent_path, destination)?;
+        let old_path = child_path_active(&source_parent_path, source)?;
+        let new_path = child_path_active(&destination_parent_path, destination)?;
         if moved.attr.kind == NodeKind::Directory
             && (destination_parent_path == old_path
                 || destination_parent_path.starts_with(&[old_path.as_slice(), b"/"].concat()))
@@ -248,6 +251,39 @@ impl Workspace {
                 deadline,
             )?;
             state = self.state()?;
+            if state.baseline != baseline
+                || state.revision != revision
+                || state.generation != generation
+            {
+                return Err(WorkspaceError::Busy);
+            }
+        }
+        // Prepare every resident replacement path and its charge before the
+        // single publication. A failed reservation cannot leave a half-moved
+        // namespace or an uncharged extended locator.
+        let _paths_charge = self.host.budget.reserve(
+            state
+                .nodes
+                .len()
+                .checked_mul(std::mem::size_of::<(usize, crate::runtime::state::NodePath)>())
+                .ok_or(WorkspaceError::Capacity)?,
+        )?;
+        let mut moved_paths = crate::backing::metadata_index::vector(state.nodes.len())?;
+        for (index, node) in state.nodes.iter().enumerate() {
+            if node.path() == old_path.as_slice()
+                || (moved.attr.kind == NodeKind::Directory
+                    && node
+                        .path()
+                        .strip_prefix(old_path.as_slice())
+                        .is_some_and(|suffix| suffix.first() == Some(&b'/')))
+            {
+                let path = crate::runtime::state::NodePath::from_parts(
+                    &new_path,
+                    &node.path()[old_path.len()..],
+                    &self.host.budget,
+                )?;
+                moved_paths.push((index, path));
+            }
         }
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let (seconds, nanos) = now()?;
@@ -378,25 +414,18 @@ impl Workspace {
             node.attr.mtime_seconds = seconds;
             node.attr.mtime_nanoseconds = nanos;
         }
-        for node in &mut state.nodes {
+        for (index, path) in moved_paths {
+            let node = &mut state.nodes[index];
             if node.path() == old_path.as_slice() {
                 node.parent = destination_parent;
             }
-            if node.path() == old_path.as_slice()
-                || (moved.attr.kind == NodeKind::Directory
-                    && node
-                        .path()
-                        .starts_with(&[old_path.as_slice(), b"/"].concat()))
-            {
-                let suffix = node.path()[old_path.len()..].to_vec();
-                let mut replacement = new_path.clone();
-                replacement.extend_from_slice(&suffix);
-                node.path[..replacement.len()].copy_from_slice(&replacement);
-                node.path_len = replacement.len();
-            }
+            node.install_path(path);
         }
         if let Some(found) = &replaced {
             if let Ok(node) = state.node_mut(found.attr.serial) {
+                if found.attr.kind == NodeKind::Directory {
+                    node.attached = false;
+                }
                 if found.attr.kind == NodeKind::File {
                     node.names = node.names.saturating_sub(1);
                     node.attr.references = node.names as u64;

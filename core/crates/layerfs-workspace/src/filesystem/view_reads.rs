@@ -5,7 +5,7 @@
 //! selection. The reads never mutate contents or namespace; the lease registry
 //! is the charged pin/retirement bookkeeping that keeps the pinned revision
 //! alive, and its release runs the checked retirement selector exactly once.
-use super::namespace::child_path;
+use super::namespace::child_path_active;
 use crate::{backing::active::inode_key, runtime::view_leases::VIEW_LEASE_BYTES, *};
 use layerfs_bridge::contract::{Operation, Response, Source, SYMLINK_TARGET_BYTES};
 use std::{io::Cursor, time::Instant};
@@ -145,7 +145,7 @@ impl Workspace {
                 deadline,
             )
         })?;
-        let path = child_path(&directory.path, name)?;
+        let path = child_path_active(&directory.path, name)?;
         let entry = crate::runtime::view_leases::HeldEntry {
             path,
             kind: resolved.original.kind,
