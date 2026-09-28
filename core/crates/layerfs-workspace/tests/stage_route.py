@@ -56,7 +56,7 @@ CASES = {
     'active_generic_profile_512': ['active-source-grouped-512-count-and-full-bytes', 'active-source-grouped-512-clean-close-refund'],
     'active_generic_profile': ['active-source-grouped-4097-count-and-full-bytes', 'active-source-grouped-4097-clean-close-refund'],
     'active_generic_profile_8192': ['active-source-grouped-8192-count-and-full-bytes', 'active-source-grouped-8192-clean-close-refund'],
-    'active_transfer_refusal': ['active-transfer-refusal-known-remote-and-live-bytes', 'active-transfer-refusal-g2-and-charge-retained'],
+    'active_transfer_refusal': ['active-transfer-refusal-known-remote-and-live-bytes', 'active-transfer-refusal-g2-bounded-and-charge-retained'],
     'active_page_profile': ['active-page-profile-4097-full-byte-oracle', 'active-page-profile-4097-clean-close-refund'],
     'active_changed_closure_probe': ['active-changed-closure-private-byte-and-count-oracle', 'active-changed-closure-commit-and-clean-close'],
     'active_separated4096': ['active-4096-separated-full-private-backing-bound', 'active-4096-separated-commit-and-full-byte-oracle', 'active-4096-separated-exact-clean-close'],

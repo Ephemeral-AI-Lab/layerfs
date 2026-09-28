@@ -1155,20 +1155,26 @@ mod linux {
             );
         }
         check("active-transfer-refusal-known-remote-and-live-bytes");
-        // Continuing G2 accepts an unrelated edit without reissuing the known
-        // canonical Commit. The new private byte must not alter saved G1.
-        f.workspace
+        // With this explicitly reduced Budget, the continuing G2 process
+        // answers reads but a NEW write may be refused for lack of headroom.
+        // Such a refusal must not publish partial G2 bytes, reset quota, or
+        // reissue the already known canonical Commit.
+        let previous_revision = f.workspace.status().unwrap().revision;
+        let refused = f
+            .workspace
             .write_file(held, 8193, &f.own(b"Z"), deadline())
-            .unwrap();
-        assert_eq!(f.read(held, 8193, 1), b"Z");
+            .unwrap_err();
+        assert!(matches!(refused, WorkspaceError::Capacity));
+        assert_eq!(f.workspace.status().unwrap().revision, previous_revision);
+        assert_eq!(f.read(held, 8193, 1), expected[8193..8194]);
         assert_eq!(f.native.bytes(saved.1, 8193, 1), expected[8193..8194]);
         let after = f.workspace.backing_status().unwrap();
         let private =
             std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
         assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
         assert!(after.allocated_bytes > 0 && before.allocated_bytes > 0);
-        println!("STAGE_MAP_TRANSFER_FAILURE explicit_budget={} before_allocated={} after_allocated={} canonical_known=true local_installed=false next_g2_write=true", REFUSAL_BUDGET, before.allocated_bytes, after.allocated_bytes);
-        check("active-transfer-refusal-g2-and-charge-retained");
+        println!("STAGE_MAP_TRANSFER_FAILURE explicit_budget={} before_allocated={} after_allocated={} canonical_known=true local_installed=false next_g2_write=Capacity", REFUSAL_BUDGET, before.allocated_bytes, after.allocated_bytes);
+        check("active-transfer-refusal-g2-bounded-and-charge-retained");
         // The known failed attempt is deliberately not retried or clean-closed.
     }
 
