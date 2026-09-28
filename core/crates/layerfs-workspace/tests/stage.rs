@@ -1124,13 +1124,15 @@ mod linux {
         assert_eq!(f.read(held, 10, 4), b"G1G1");
         assert_eq!(f.native.observations.lock().unwrap().commits.len(), 1);
         check("active-known-c5-failure-keeps-canonical-g1");
-        // There is no blind remote retry. This is a *new G2 WRITE* in the
-        // same attached Workspace after local C5 failure, with ordinary 8 MiB
-        // Budget admission and exactly the same open handle.
-        f.workspace
-            .write_file(held, 10, &f.own(b"G2G2"), deadline())
-            .unwrap();
-        assert_eq!(f.read(held, 10, 4), b"G2G2");
+        // A partially allocated page encountered a real backing I/O fault;
+        // PageStore is deliberately stopped and cannot accept a new write.
+        // This is a custody *counterexample*, not a recoverable Budget case.
+        assert_eq!(
+            f.workspace
+                .write_file(held, 10, &f.own(b"G2G2"), deadline()),
+            Err(WorkspaceError::Busy)
+        );
+        assert_eq!(f.read(held, 10, 4), b"G1G1");
         assert_eq!(f.native.bytes(saved.1, 10, 4), b"G1G1");
         assert_eq!(f.native.observations.lock().unwrap().commits.len(), 1);
         let after = f.workspace.backing_status().unwrap();
@@ -1139,9 +1141,101 @@ mod linux {
         assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
         assert!(before.allocated_bytes > 0 && after.allocated_bytes > 0);
         assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
-        println!("STAGE_KNOWN_C5_G2 budget_bytes={} g1=G1G1 g2=G2G2 known_commits=1 before_allocated={} after_allocated={} cleanup=retained", DEFAULT_MEMORY_BUDGET_BYTES, before.allocated_bytes, after.allocated_bytes);
-        check("active-known-c5-failure-g2-edit-and-charge");
+        println!("STAGE_KNOWN_C5_G2 budget_bytes={} g1=G1G1 g2_write=Busy backing_stopped=true known_commits=1 before_allocated={} after_allocated={} cleanup=retained", DEFAULT_MEMORY_BUDGET_BYTES, before.allocated_bytes, after.allocated_bytes);
+        check("active-known-c5-physical-failure-stops-g2-and-retains-charge");
         // Known attempt remains retained: no clean-close or refund claim.
+    }
+
+    #[test]
+    #[ignore = "nonregistered 10,240-WRITE default-Budget failure-custody diagnostic"]
+    fn stage_active_known_budget_g2() {
+        // New refusal-only scope beyond the successful 8,192 diagnostic:
+        // retain the 8 MiB product Budget and 64 MiB fixture quota. A
+        // recoverable C5 Capacity (rather than a backing I/O fault) must
+        // leave the continuing G2 Workspace able to make progress.
+        const WRITES: u64 = 10_240;
+        let f = Fixture::new_fresh(Gate::None);
+        let (created, first) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"grouped",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        let mut expected = vec![b'A'; 20_480];
+        f.workspace
+            .write_file(first, 0, &f.own(&expected), deadline())
+            .unwrap();
+        f.workspace.release(first).unwrap();
+        f.workspace.forget(created.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let file = f.lookup(b"grouped");
+        let held = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        for i in 0..WRITES {
+            let offset = (104729 + i * 2654435761) % expected.len() as u64;
+            let byte = b'B' + (i % 24) as u8;
+            f.workspace
+                .write_file(held, offset, &f.own(&[byte]), deadline())
+                .unwrap();
+            expected[offset as usize] = byte;
+        }
+        let before = f.workspace.backing_status().unwrap();
+        let WorkspaceError::Commit(failure) = f.workspace.commit(deadline()).unwrap_err() else {
+            panic!("expected recoverable known-remote C5 Budget failure")
+        };
+        assert_eq!(
+            failure.disposition,
+            CommitFailureDisposition::KnownCommitLocalFailure
+        );
+        assert_eq!(failure.phase, CommitPhase::Reconcile);
+        assert!(matches!(failure.cause, WorkspaceError::Capacity));
+        assert!(failure.installed_revision.is_none());
+        let Some(CommitOutcomeWire::Committed(committed)) = &failure.known_outcome else {
+            panic!("remote canonical result not retained")
+        };
+        let saved = attr(f.native.attributes(committed.root, b"grouped"));
+        assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
+        assert_eq!(f.read(held, 0, expected.len()), expected);
+        assert_eq!(f.native.observations.lock().unwrap().commits.len(), 2);
+        check("active-known-budget-c5-retains-full-g1-and-live-bytes");
+        // No canonical retry: one new same-Workspace G2 WRITE must succeed
+        // after the C5 scratch/patch charges unwind.
+        f.workspace
+            .write_file(held, 0, &f.own(b"Z"), deadline())
+            .unwrap();
+        assert_eq!(f.read(held, 0, 1), b"Z");
+        assert_eq!(f.native.bytes(saved.1, 0, 1), expected[..1]);
+        assert_eq!(f.native.observations.lock().unwrap().commits.len(), 2);
+        let after = f.workspace.backing_status().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private).0, after.allocated_bytes);
+        assert!(before.allocated_bytes > 0 && after.allocated_bytes > 0);
+        assert_eq!(f.workspace.close_clean(), Err(WorkspaceError::Busy));
+        println!("STAGE_KNOWN_BUDGET_G2 writes={WRITES} budget_bytes={} canonical_commits=2 c5_installed=false next_g2_write=PASS before_allocated={} after_allocated={} cleanup=retained", DEFAULT_MEMORY_BUDGET_BYTES, before.allocated_bytes, after.allocated_bytes);
+        check("active-known-budget-c5-continues-g2-without-canonical-retry");
+        // Failed/known owners remain charged; exact clean-close is NOT_RUN.
     }
 
     #[test]
