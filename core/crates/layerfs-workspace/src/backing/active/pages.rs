@@ -631,6 +631,13 @@ impl PageStore {
         Ok(charged)
     }
 
+    pub(crate) fn source_counts(&self) -> (u64, u64) {
+        (
+            self.index_fetches.load(Ordering::Relaxed),
+            self.counters[Counter::Seek as usize].load(Ordering::Relaxed),
+        )
+    }
+
     pub fn status(&self) -> Result<StoreStatus, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let minimum = |at: usize| {

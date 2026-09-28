@@ -140,6 +140,10 @@ impl ActiveBacking {
         }))
     }
 
+    pub(crate) fn source_counts(&self) -> (u64, u64) {
+        self.store.source_counts()
+    }
+
     pub fn status(&self) -> Result<ActiveStatus, WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let (hot_nodes, hot_cursors, hot_reserved_bytes, retired_index_pages) =

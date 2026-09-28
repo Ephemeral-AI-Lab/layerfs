@@ -686,3 +686,32 @@ patch lookup from O(P*M) to O(P log M + R) for P touched logicals, M patch
 entries and R matching patch entries examined; selected-index lookup and
 retained owners still have their own charged costs. It occurs after SaveFile;
 it does not eliminate or accelerate the earlier source processing by itself.
+
+### Checkpoint-5 packed replacement locality (prospective implementation)
+
+For one captured G1 file SaveFile, final extents are in file-offset order,
+while tiny packs are in mutation order. A single-page upload reader therefore
+reloads the same pack for separated or dispersed edits. The source now reserves
+at most 256 required Packed references and 32,768 scattered replacement bytes
+per upload before making a remote SaveFile call. It visits only the declared
+extents, sorts this fixed window by logical page, resolves each locator from
+that upload's captured index, reads one pack at a time through the existing
+identity-validating reader, scatters only required bytes, and emits them in
+original stream order. Windows may cross Base/Zero/Payload descriptors; those
+retain the original non-packed stream paths and large-record behavior. The
+single-page reader (not an enlarged LRU) holds at most one decoded pack; the
+additional reference/index/scatter vector capacities are charged against the
+same configured Workspace Budget, including any old/new pack overlap.
+
+A window's load upper bound is its number of distinct required logical packs,
+not one load per output-order extent. Across windows the same logical pack may
+load again. With a 256-reference limit, pure schedule arithmetic for the
+registered 100/512/4,097 dispersed positions predicts 2/14/827 loads rather
+than the old one-page-reader prediction 41/512/4,097; these are **hypotheses**
+about the exact source schedule, not runtime observations or latency claims.
+Existing whole-file descriptor and extent vectors remain O(E_f), are already
+charged, and are not made constant-RAM by this source-locality optimization.
+Source counters report complete flag, window/reference/distinct-pack counts,
+actual page loads/hits, locator lookups and index reads/seeks, decoded records
+and bytes, and source read/copy time for each SaveFile under the production
+complexity diagnostic. Their diagnostic overhead is inside the observed phase.

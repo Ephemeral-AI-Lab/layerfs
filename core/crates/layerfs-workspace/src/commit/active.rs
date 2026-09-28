@@ -1,4 +1,5 @@
 //! Lower one pinned active index revision into the existing SaveFile and C5 stream.
+use super::active_source::Prefetch;
 use crate::{
     backing::{
         active::{
@@ -49,6 +50,7 @@ struct ActiveUpload {
     workspace: Workspace,
     view: Arc<ActiveSnapshot>,
     pack_reader: ActivePackReader,
+    prefetch: Option<Prefetch>,
     serial: u64,
     descriptors: Vec<u8>,
     extents: Vec<Extent>,
@@ -94,11 +96,20 @@ impl ActiveUpload {
             .as_ref()
             .cloned()
             .ok_or(WorkspaceError::Unsupported)?;
+        let prefetch = if extents
+            .iter()
+            .any(|extent| extent.kind == ExtentKind::Packed)
+        {
+            Some(Prefetch::new(&workspace.host.budget)?)
+        } else {
+            None
+        };
         let pack_reader = ActivePackReader::new(active, view.clone());
         Ok(Self {
             workspace,
             view,
             pack_reader,
+            prefetch,
             serial,
             descriptors,
             extents,
@@ -154,11 +165,13 @@ impl ActiveUpload {
                 take
             }
             ExtentKind::Packed => {
-                self.pack_reader.read(
+                self.prefetch.as_mut().ok_or(WorkspaceError::Io)?.read(
                     self.serial,
-                    extent,
-                    extent.start + self.offset,
+                    &self.extents,
+                    self.extent_at,
+                    self.offset,
                     &mut out[..take],
+                    &mut self.pack_reader,
                 )?;
                 take
             }
@@ -503,6 +516,20 @@ pub(super) fn prepare<'a>(
                     deadline,
                 );
                 drop(remote);
+                if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+                    let stats = upload.pack_reader.stats();
+                    let (windows, references, distinct_packs, fill_ns) = upload
+                        .prefetch
+                        .as_ref()
+                        .map_or((0, 0, 0, 0), Prefetch::counts);
+                    eprintln!(
+                        "LFS_ACTIVE_SOURCE v=1 complete={} windows={} references={} distinct_packs={} fill_ns={} pack_loads={} pack_hits={} locator_lookups={} index_reads={} index_seeks={} locator_ns={} pack_ns={} decoded_records={} decoded_bytes={} copied_bytes={} ref_limit=256 byte_limit=32768",
+                        upload.complete(), windows, references, distinct_packs, fill_ns,
+                        stats.loads, stats.hits, stats.locator_lookups, stats.index_reads,
+                        stats.index_seeks, stats.locator_ns, stats.pack_ns,
+                        stats.decoded_records, stats.decoded_bytes, stats.copied_bytes
+                    );
+                }
                 if let Some(error) = upload.failure.take() {
                     submission
                         .state

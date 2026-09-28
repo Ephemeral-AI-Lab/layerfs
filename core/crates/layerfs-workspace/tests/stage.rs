@@ -839,6 +839,84 @@ mod linux {
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_source_grouping() {
+        // 512 nonadjacent edits, emitted in file order but packed in write order.
+        // An index lookup/pack load per edit fails the count oracle even if
+        // elapsed wall happens to be low. This remains a public Workspace test.
+        let f = Fixture::new_fresh(Gate::None);
+        let (file, handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"grouped",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        let mut expected = vec![b'A'; 8194];
+        f.workspace
+            .write_file(handle, 0, &f.own(&expected), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let file = f.lookup(b"grouped");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let mut positions = std::collections::BTreeSet::new();
+        for i in 0..512u64 {
+            let offset = (104729 + i * 2654435761) % expected.len() as u64;
+            assert!(positions.insert(offset));
+            let byte = b'B' + (i % 24) as u8;
+            f.workspace
+                .write_file(handle, offset, &f.own(&[byte]), deadline())
+                .unwrap();
+            expected[offset as usize] = byte;
+        }
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        let before = f.workspace.backing_status().unwrap();
+        f.workspace.commit(deadline()).unwrap();
+        let after = f.workspace.backing_status().unwrap();
+        let reads = after.active_pack_fetches - before.active_pack_fetches;
+        let seeks = after.active_index_seeks - before.active_index_seeks;
+        assert!(reads > 0 && reads <= 32, "pack reads: {reads}");
+        println!("SOURCE_GROUPING case=dispersed512 pack_reads={reads} index_seeks={seeks} ref_limit=256 byte_limit=32768");
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"grouped"));
+        assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
+        check("active-source-grouped-512-count-and-full-bytes");
+        f.workspace.close_clean().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-source-grouped-clean-close-refund");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_cleanup_failure() {
         let f = Fixture::new(Gate::None);
         let file = f.lookup(b"data.bin");
