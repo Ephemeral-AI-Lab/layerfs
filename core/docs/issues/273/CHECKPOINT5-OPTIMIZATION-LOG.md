@@ -936,3 +936,136 @@ post-known-Commit final bytes, continuation or clean-close refund. The
 corrected local `iter-014/RESULTS.json` and its own-directory `SHA256SUMS`
 include these distinct source-head rows and all earlier FAIL evidence;
 no GitHub URL is claimed for the gitignored raw records.
+
+## Iteration 015 — four-tier C5/WRITE causal RCA (no algorithm or bound change)
+
+- Prospective product **observer-only** commit
+  `512742de6d84e9c3ebb299964b405c766bf7dca8` (first parent
+  `99008d31c0726f03c5c385ccb94760bad9316049`): charged C5 owner
+  checkpoints, pressure P-scan/pack-read/physical-pack-attempt separation,
+  and one disjoint leaf/branch/direct/no-key/root-height page-cause record
+  per **prepared** index revision, with selected height, hot occupancy and
+  capture/frozen-revision counts. The [active backing architecture](../../architecture/proposal/fuse-workspace-snapshot-overlay/60-active-backing.md)
+  describes counters in this **same product commit**. Production LOC from
+  identical first-parent/staged/committed `python3 tools/production_loc.py
+  --json --root <git archive snapshot>`: Core **67,802 -> 67,965 (+163)**,
+  reference **65,417 -> 65,417 (+0)**, combined **133,219 -> 133,382
+  (+163)**. No limit, format, allocation algorithm or canonical route changed.
+  The follow-up external parser/docs correction `0d7f4127b` (first parent
+  `512742de6`) changes production LOC **133,382 -> 133,382 (0)**,
+  Core **67,965 -> 67,965 (0)**, reference **65,417 -> 65,417 (0)**.
+  The first parsed 100-WRITE diagnostic remains on disk: the parser initially
+  included one *pinned prior C5* generation-2 candidate and forgot that
+  `StoreStatus.index_page_writes` includes **HotDirectory** pages; the
+  correction excluded that pre-WRITE revision and added directory pages to
+  its cross-check. **No unchanged Stage attempt was resampled.** A prepared
+  page is not an ACK; the external observer checks the contiguous WRITE
+  revisions against the public count/byte oracle before drawing a count
+  conclusion.
+- Exact release host Workspace+FUSE tests PASS, all-target warning-denying
+  Clippy/fmt PASS, product boundary 350 files, tools 9/9, parser 4/4.
+  Exact aarch64 release `active_backing` **32/32 PASS** on an owned ext4
+  volume with `TMPDIR=LAYERFS_ACTIVE_TEST_ROOT=/work` and one test thread;
+  volume removed. New-source single public Stage dispersed 100/512/4,097
+  each PASS Commit, full bytes and clean-close refund; changed-closure,
+  hot-publication, G1/G2 hot continuity, 32-pin retirement/refund, quota
+  refusal and 4,097-record quick controls also PASS. All runs have
+  `performance_claim=false`, `cache_claim=null`, 8 MiB Budget, unmodified
+  quota, one worker and protected independent fixture copies; their
+  instrumented walls are **not** speed samples.
+- **C5 simultaneous charged owners**, in bytes, at the last public Commit
+  of each tier. `before` retains selected G1, mutable G2 and other Host
+  owners, *not* an independently measured allocator peak. The row/deletion,
+  map and ordered charges overlap this baseline and one another. The last
+  column is Budget used before index prepare **plus its full proposed index
+  scratch** (128 KiB already charged before the additional resize); a PASS
+  at 100/512/4,097 does not imply this is the later candidate peak.
+
+  | Dispersed WRITEs | Budget before C5 | Rows + deletion charge | Update-map charge | Ordered scratch | Before index | Full index scratch | Proposed charged total |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 100 | 1,939,200 | 448 + 38,592 | 45,343 | 14,640 | 2,038,721 | 176,689 | 2,215,410 |
+  | 512 | 1,959,902 | 448 + 196,800 | 228,683 | 74,208 | 2,461,784 | 360,714 | 2,822,498 |
+  | 4,097 | 2,036,588 | 448 + 1,544,064 | 1,801,823 | 585,264 | 5,981,135 | 1,940,019 | 7,921,154 |
+  | **8,192 diagnostic** | 2,071,290 | 448 + 1,573,248 | 2,458,588 | 791,568 | 6,920,789 | 2,603,771 | **9,524,560 FAIL** |
+
+  At 8,192, the 16,386 deletion keys retain 1,573,248 charged bytes;
+  there are 16,491 ordered updates. `128 KiB + 128*16,491 + 361,435
+  key bytes + 416 value bytes = 2,603,771` index scratch. Budget used
+  **7,051,861** with the initial 128 KiB charged; the requested additional
+  **2,472,699** exceeds the **8,388,608** limit by **1,135,952**. This is
+  an intentionally charged *scratch bound*, not proof of simultaneous RAM
+  allocation or permission to remove the charge. `Mutation::change`
+  traverses borrowed sorted updates but still stages cloned leaf/branch
+  cells, pages, cursor bindings and split groups; proving exact overlapping
+  RAM for every path (including an empty selected root and failures) is the
+  next falsifier before narrowing this bound or streaming the patch.
+- **C5 physical versus pressure:** at 100/512/4,097, the heuristic
+  `(updates+32)*4096` is **1,380,352 / 6,463,488 / 50,073,600** bytes,
+  below observed remaining physical headroom **66,797,568 / 66,625,536 /
+  65,441,792**, so no pressure P pass. At 8,192 it is **67,678,208**,
+  above **64,864,256** remaining; pressure scans **103** P locators in **2**
+  paginated index scans. All 103 were already in the touched logical set;
+  it makes **0 `pack.records` reads**, selects **0** relocation source packs
+  and makes **0** compaction pack-page physical creation attempts. No
+  unrelated pack read or physical compaction allocation caused this
+  particular denial. The separate SaveFile's **824 pack loads** are not
+  pressure reads. This does **not** disprove a future pressure-scan cost for
+  other cases or prove a peak physical charge: the inspected failed Docker
+  backing again has 484 files and `st_blocks*512 = 1,982,464` *after*
+  unwind, with **262,144** Host reserved. It is not Workspace clean close.
+  The index scratch fails before candidate/index physical publication;
+  known canonical remote Commit remains in custody and local
+  `installed_revision=None`. 8,192 final bytes, continuation and refund
+  **NOT_RUN**; this raw FAIL is retained alongside iter-013/014.
+- **Every public dispersed WRITE revision was counted once**, including
+  root-height/capture/slot occupancy; the extra pinned prior-base C5
+  candidate was excluded. All accepted WRITE revisions have
+  `(captured,frozen_revisions)=(0,0)`; the later C5 index-preparation records
+  `(1,1)`. Categories are **causes of creating staged pages**, not a proof
+  of mandatory or removable parent pages:
+
+  | WRITEs | Changed-key leaf | Changed-subtree parent | Root-height pages | Hot-normalization no-key | Hot admission / residual no-key connection | Directory pages | Total index+directory |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 100 | 230 | 59 | 1 | 0 | 0 / 0 | 100 | 390 |
+  | 512 | 1,882 | 471 | 1 | 0 | 0 / 0 | 512 | 2,866 |
+  | 4,097 | 16,425 | 6,446 | 2 | 810 | 0 / 0 | 4,097 | 27,780 |
+  | **8,192 diagnostic** | 35,465 | 15,304 | 2 | 3,154 | 0 / 0 | 8,192 | 62,117 |
+
+  All four dispersed groups use the **generic** path (`direct=false`), so
+  the direct hot-carry class is zero; generic split/carry *events* are not
+  separately counted by this observer and remain **INCOMPLETE**. Height
+  rises only at WRITE **16** (0->1) and **1,416** (1->2). No-key versions
+  first appear at WRITE **2,659**, exactly **one per affected WRITE**;
+  8,192's first 4,097 WRITE-role records match the shorter tier
+  byte-for-byte. The 1,024-WRITE no-key increments after the threshold are
+  **223, 586, 586, 586, 586, 587** (last short prefix boundary accounted
+  separately in raw `RCA.json`), rather than an ever-rising per-WRITE
+  count: the finite 810->3,154 near-quadratic-looking ratio crosses a
+  **turnover threshold**, not evidence of global unbounded W². The hot
+  occupancy peaks **4/5/8/10**, well below 64 slots; the no-key class is
+  a hot node marked for normalization by the generic path, not a proven
+  global-slot-capacity eviction. At 4,097 no-key WRITE occupancy
+  transitions are **8->7 on 412**, **8->8 on 398**; same-occupancy may
+  clear and re-admit a slot, and selected fences/epochs/pins still need a
+  necessity proof before skipping any page. Direct/hot functional controls
+  separately PASS with zero no-key pages; they are not the registered
+  append/repeated mounted performance arms.
+- **Next falsifier / honest admission:** identify why hot normalization
+  chooses a no-key ancestor at the 2,659 threshold, including generic split
+  count and exact fence/slot/epoch/pin equivalence, before choosing C;
+  account the allocator-live and Budget peak *after* successful index
+  staging at 4,097 and prove an appropriately charged narrower scratch or
+  a streaming candidate before choosing A/B. If required old+new owners
+  cannot fit fixed 8 MiB, retain explicit refusal and ask an owner profile
+  ruling rather than changing the quota. No WRITE/Commit algorithm patch
+  was proved by this RCA. Append/repeated three-tier per-WRITE roles,
+  registered nine-cell changed-identity performance, same-Workspace SDK
+  pinned controls, #248 explicit C1-zero, private cache/phase-local cgroup,
+  control comparison and general scalability/speed admission remain
+  **NOT_RUN/INCOMPLETE/INELIGIBLE**. PR #274 stays draft; #273 stays open.
+- Raw `RCA.json`, `RESULTS.json`, a per-WRITE `write-causes.json` for every
+  dispersed tier, preregistration, exact commands, independent seals,
+  retained first-parser FAIL, failed 8,192 receipt, owned failed-container
+  inspection/removal and checksum manifest are **local gitignored** files
+  at `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-015/`.
+  Verify `SHA256SUMS` *from its directory*. No GitHub raw-evidence URL exists.
