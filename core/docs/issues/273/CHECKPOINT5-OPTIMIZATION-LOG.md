@@ -915,3 +915,24 @@ accompanies this handoff.
   exact three-Exec/mutations and frozen matched control are **NOT_RUN**;
   private cache/phase-cgroup admission is **INELIGIBLE/NOT_RUN**. No numeric
   comparison, release gate, universal scaling bound, merge or issue closure.
+
+### Iteration 014 supplementary public functional counts (same product, later docs HEAD)
+
+After committing the first iteration-014 ledger entry (`ba808dfc4`; **docs
+only**), six additional one-per-case public Stage diagnostics used the
+unchanged `94ce9dec5` product/test binaries and fixture, with `capacity_diagnostic=true`,
+independent closed-fixture copies, `performance_claim=false` and
+`cache_claim=null`. Their driver records correctly name the later docs HEAD
+rather than relabelling the earlier 8,192 attempt. Dispersed 100/512/4,097
+all PASS full bytes, Commit and clean-close; WRITE counters respectively:
+seeks **1,519/7,699/61,327**, index page writes **390/2,866/27,780**,
+representation-only **0/0/810**, normalizations **38/425/4,785**,
+pack writes **100/512/4,097**. These repeat the source counts from a
+*changed telemetry identity*, not a matched or eligible speed resample;
+per-page role/fence/eviction/pin classification is still **INCOMPLETE**.
+Hot-publication, G1/G2 hot continuity and 32-retained-generation/refund
+public routes also PASS under this product. None proves the failed 8,192
+post-known-Commit final bytes, continuation or clean-close refund. The
+corrected local `iter-014/RESULTS.json` and its own-directory `SHA256SUMS`
+include these distinct source-head rows and all earlier FAIL evidence;
+no GitHub URL is claimed for the gitignored raw records.
