@@ -976,17 +976,27 @@ mod linux {
             )
             .unwrap();
         let before_write = profile.then(|| f.workspace.backing_status().unwrap());
+        let write_loop_started = Instant::now();
+        let mut write_calls_ns = 0u128;
         let mut positions = std::collections::BTreeSet::new();
         for i in 0..count {
             let offset = (104729 + i * 2654435761) % expected.len() as u64;
             assert!(positions.insert(offset));
             let byte = b'B' + (i % 24) as u8;
+            let source = f.own(&[byte]);
+            let write_started = Instant::now();
             f.workspace
-                .write_file(handle, offset, &f.own(&[byte]), deadline())
+                .write_file(handle, offset, &source, deadline())
                 .unwrap();
+            write_calls_ns += write_started.elapsed().as_nanos();
             expected[offset as usize] = byte;
         }
+        let write_loop_ns = write_loop_started.elapsed().as_nanos();
         if let Some(before) = before_write {
+            // Untimed status/byte oracle and later Commit follow this point.
+            // This is observer-laden functional diagnosis, not qualified
+            // mounted Exec timing or cache-matched speed admission.
+            println!("GENERIC_WRITE_PHASE v=1 writes={count} loop_wall_ns={write_loop_ns} write_calls_wall_ns={write_calls_ns} input_ownership_in_loop=true cache_claim=none performance_claim=false");
             let after = f.workspace.backing_status().unwrap();
             let diff = |old: u64, new: u64| new.checked_sub(old).unwrap();
             println!("GENERIC_WRITE_CAUSE writes={count} hot={} admissions={} normalizations={} representation_only_pages={} seeks={} index_fetches={} index_writes={} pack_writes={} fit_merge_ns={} actual_merge_ns={} cache_decode_ns={} create_identity_ns={} preallocate_ns={} direct_write_ns={} readback_io_ns={} readback_auth_ns={} release_ns={}",
@@ -1069,6 +1079,13 @@ mod linux {
     #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_generic_profile() {
         source_grouping(4097, 1024, true);
+    }
+    #[test]
+    #[ignore = "nonregistered exact user-requested 4197 diagnostic; live native service"]
+    fn stage_active_generic_profile_4197() {
+        // Same 8,194-byte base and first 4,097 permuted edits; 100 additional
+        // distinct offsets. Not a changed registered selection or timer gate.
+        source_grouping(4197, 1024, true);
     }
     #[test]
     #[ignore = "diagnostic only: requires stage_route.py and a live native service"]

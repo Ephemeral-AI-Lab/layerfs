@@ -1463,3 +1463,51 @@ run for this addendum and no historical failure was replaced.
   unchanged. PR #274 stays draft and #273 open; owner capability/ruling
   and the unrelated test red are the next falsifiers before any matched
   numeric comparison or release consideration.
+
+## Iteration 019 prospective — public WRITE-loop diagnostic, **not** a qualified speed arm
+
+> **Registered comparison unchanged:** the checkpoint-5 tier is **4,097**, not
+> the owner's literal **4,197**. This prospective external-only diagnostic
+> covers **both** 4,097 and 4,197, then 8,192, each *once* at one new
+> test/harness identity. It does not amend the registered 12 selections or
+> promote any historical 8,192 or 4,097 wall. No outcome has been observed
+> or selected when this paragraph was written.
+
+The only changed source is the external public Stage test/route. For each
+nonregistered diagnostic it prepares an independent writable copy of the
+same protected closed functional master, creates the same 8,194-byte file,
+then executes the first N distinct, one-byte dispersed offsets with one
+attached Workspace and one worker. It brackets the **entire WRITE loop**
+with a monotonic clock: `loop_wall_ns` includes public input ownership,
+each `Workspace::write_file` call, its ACK, and the one-byte external oracle
+update. `write_calls_wall_ns` separately sums the public `write_file` calls;
+it excludes input acquisition and must not be substituted for the complete
+operation. Both end before the later Status count, SaveFile, Commit,
+independent complete-byte oracle, clean Workspace close and Docker cleanup.
+The existing production `GENERIC_WRITE_CAUSE` counts, exact full bytes,
+G1/G2 old-reader/charge checks, 8 MiB Budget, 64 MiB fixture quota,
+10-second individual calls, 60-second **functional** Stage command and
+new 4,197 case's source grouping bound remain unchanged. Instrumented wall
+includes observer/host scheduling overhead.
+
+**Predeclared order:** 4,097 → 4,197 → 8,192. The independent fixture copy
+is setup reuse, **not** cache equivalence. This Docker Desktop host failed
+phase-local `memory.peak` reset and has no matching private cache/VM/backend/
+device/host proof; each row has `performance_claim=false`, `cache_claim=null`,
+`admission_eligible=false`. A ratio of the three raw observed loop walls is
+only a labelled **INELIGIBLE descriptive quotient**. It cannot establish a
+speed law, a 25-second registered performance PASS or matched control
+advantage. Do not repeat an unchanged case for stability or best-of.
+
+**Count falsifiers preregistered from iter-015/016:** 4,097/8,192 expected
+WRITE index+directory versions **27,780/62,117**, no-key hot-normalization
+versions **810/3,154**, generic split events **285/375**, accepted WRITEs
+4,097/8,192, and SaveFile pack loads **209/824**; 4,197 is a distinct
+nonregistered prefix with no assumed zero and every page/pack count is
+observed anew. The selected index height is at most 2 here, with at most
+one no-key page per affected WRITE in archived data. Report any missing
+count INCOMPLETE, any refused WRITE or failed byte/clean-close as FAIL.
+The source-count question is whether pages/WRITE and normalized pages/WRITE
+continue to plateau through 4,197 and 8,192; raw wall is insufficient to
+assign a physical I/O or private cache cause. No limit/window/worker is
+raised, no frozen #271 arm is sampled, and draft PR #274/#273 remain open.
