@@ -719,3 +719,11 @@ item; the nine verified but INELIGIBLE candidate rows cannot close the
   remaining generic hot-turnover/physical publication amplification and
   private cache/cgroup domains. Do not rerun the unchanged rows to select
   a more favorable wall.
+
+### Research-first continuation checkpoint (documentation only)
+
+The next agent's [final scaling research handoff](HANDOFF-FINAL-SCALING-RESEARCH.md)
+proposes competing WRITE/Commit architecture and amortized-cost models before
+further product changes. It retains iteration-012 raw receipts and all
+historical qualifications; no additional performance arm, product change,
+cache admission or release claim accompanies this documentation checkpoint.
