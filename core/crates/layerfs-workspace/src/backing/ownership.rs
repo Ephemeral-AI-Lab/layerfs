@@ -843,6 +843,7 @@ impl RootOwner {
                 .map_err(|error| self.failure(BackingPhase::Write, error.kind()))?;
             drop(file);
             clock(deadline).map_err(|error| self.failure(BackingPhase::Create, error.kind()))?;
+            self.arena.writes.fetch_add(1, Ordering::Relaxed);
             Ok(identity)
         })();
         if result.is_err() {

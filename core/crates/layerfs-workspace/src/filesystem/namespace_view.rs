@@ -135,7 +135,7 @@ impl Workspace {
         if view.active.is_some() {
             return self.resolve_child_active(operation, view, parent, path, name, deadline);
         }
-        let path = child_path(path, name)?;
+        child_path(path, name)?;
         let mut base = Some(view.base);
         let mut binding = None;
         let mut local = None;

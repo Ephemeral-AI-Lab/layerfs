@@ -49,6 +49,9 @@ pub struct Arena {
     /// since it was created. It shows whether a walk re-reads a path it already
     /// holds, and it never gates a read.
     pub reads: AtomicU64,
+    /// Ordinary product telemetry: how many immutable metadata pages this
+    /// arena has created since it was created.
+    pub writes: AtomicU64,
     pub ledger_reads: AtomicU64,
     pub ledger_writes: AtomicU64,
     pub(crate) telemetry: ArenaTelemetry,
@@ -189,6 +192,14 @@ impl MetadataHost {
         }
     }
     /// Metadata pages every arena of this host has read, as product telemetry.
+    /// Immutable metadata page files this host created.
+    pub fn page_writes(&self) -> Result<u64, WorkspaceError> {
+        let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(arenas
+            .iter()
+            .map(|arena| arena.writes.load(Ordering::Relaxed))
+            .sum())
+    }
     pub fn page_reads(&self) -> Result<u64, WorkspaceError> {
         let arenas = self.arenas.lock().map_err(|_| WorkspaceError::Io)?;
         Ok(arenas
@@ -223,6 +234,7 @@ impl MetadataHost {
             directory,
             host: Arc::downgrade(self),
             reads: AtomicU64::new(0),
+            writes: AtomicU64::new(0),
             ledger_reads: AtomicU64::new(0),
             ledger_writes: AtomicU64::new(0),
             telemetry: ArenaTelemetry::default(),

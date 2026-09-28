@@ -39,23 +39,6 @@ pub(super) fn check_cached(state: &State, old: &[u8], new: &[u8]) -> Result<(), 
     Ok(())
 }
 
-/// Every cached path was checked while holding the final state lock.
-pub(super) fn publish(state: &mut State, old: &[u8], new: &[u8], destination_parent: u64) {
-    for node in &mut state.nodes {
-        if !within(node.path(), old) {
-            continue;
-        }
-        let suffix_len = node.path_len - old.len();
-        let end = new.len() + suffix_len;
-        node.path.copy_within(old.len()..node.path_len, new.len());
-        node.path[..new.len()].copy_from_slice(new);
-        node.path_len = end;
-        if suffix_len == 0 {
-            node.parent = destination_parent;
-        }
-    }
-}
-
 impl Workspace {
     pub(super) fn preflight_rename_paths(
         &self,

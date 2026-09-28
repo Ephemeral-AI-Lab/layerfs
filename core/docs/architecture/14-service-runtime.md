@@ -1,5 +1,24 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#264 Phase 4.5B, source in this commit after `6115dfcd2`:** Native Inspect
+> subtag 8 reads a canonical symlink by serial. Mounted namespace operations
+> use parent serial and one component; stale file reads and symlink targets use
+> inode identity. Resident Nodes keep a charged component name and a parent
+> serial. Directory rename changes its two parent deltas and the moved resident
+> edge, without scanning inherited descendants or rewriting resident subtree
+> paths. C1 Commit's base alias and effective cycle scans are unchanged.
+> A held directory handle lists the view selected at open. Its `..` entry uses
+> the resident Node's current parent after a live move; after detachment it
+> retains the last parent for read-only handle traversal. A detached serial is
+> refused as a live lookup or mutation parent.
+
+> **#264 Phase 4.5A, source in this commit from `ef3a31048`:** A pinned live
+> directory retains its resident ancestor chain through collection. Removed or
+> replaced held directories become detached and cannot authorize live namespace
+> operations. Rename checks attached ancestors by serial without a fixed depth
+> refusal, including under its final publication lock. Mounted paths and the
+> inherited-descendant growth scan remain in this intermediate slice.
+
 > **#258 identity Inspect extension:** The source in the same commit as this
 > paragraph adds native Inspect subtags 5–7 for child attributes by parent
 > serial, attributes by inode serial, and bounded directory listing by serial.

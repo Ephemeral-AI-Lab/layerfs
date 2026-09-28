@@ -2,6 +2,10 @@
 
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 
+Implementation and focused proof are recorded in
+[the Phase 4.5 implementation checkpoint](PHASE4_5_IMPLEMENTATION.md). The
+forecasts below remain the dated preimplementation plan.
+
 Research baseline: `885b0e105` on `codex/issue258-phase4`, whose [Phase 4
 record](PHASE4_INHERITED_RENAME.md) describes implemented behavior. This is a
 proposal tracked by [#264](https://github.com/Ephemeral-AI-Lab/layerfs/issues/264),
@@ -77,7 +81,7 @@ streamed from components rather than retained on every resident Node.
 
 The current [Node](../../../crates/layerfs-workspace/src/runtime/state.rs)
 stores `[u8; 4096]` plus `path_len`; [rename path
-preflight](../../../crates/layerfs-workspace/src/filesystem/rename_paths.rs)
+preflight](https://github.com/Ephemeral-AI-Lab/layerfs/blob/ef3a31048/core/crates/layerfs-workspace/src/filesystem/rename_paths.rs)
 scans inherited descendants when the destination prefix grows, and rewrites
 resident paths before publication. `NODE_LIMIT = 256` is the **allocation
 chunk**, not a resident-node count cap; [state

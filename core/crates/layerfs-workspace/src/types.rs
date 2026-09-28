@@ -291,6 +291,8 @@ pub struct BackingStatus {
     pub active_index_pages: usize,
     pub active_retired_pack_pages: usize,
     pub active_retired_payloads: usize,
+    /// Immutable metadata page files created by this host.
+    pub metadata_writes: u64,
     /// Ownership-ledger 4 KiB reads and writes, including COW publication and
     /// reclamation. These are separate from metadata page reads.
     pub ledger_reads: u64,

@@ -232,6 +232,10 @@ pub enum Inspect {
     InodeAttributes {
         serial: u64,
     },
+    /// Canonical symlink target by stable inode identity.
+    InodeReadlink {
+        serial: u64,
+    },
     /// A directory in an immutable canonical root, regardless of its path.
     InodeList {
         serial: u64,
@@ -581,7 +585,9 @@ impl Request {
                     check_serial(*parent)?;
                     check_inspect_name(name)?;
                 }
-                Inspect::InodeAttributes { serial } => check_serial(*serial)?,
+                Inspect::InodeAttributes { serial } | Inspect::InodeReadlink { serial } => {
+                    check_serial(*serial)?
+                }
                 Inspect::InodeList {
                     serial,
                     after,

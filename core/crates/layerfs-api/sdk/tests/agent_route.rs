@@ -348,6 +348,220 @@ fn sdk_only_lifecycle_edit_commit_readback_history_conflict_and_cleanup() {
 }
 
 #[test]
+fn sdk_exec_reaches_inherited_descendant_beyond_4096_then_commits() {
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-phase45-exec-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    let deep = "d".repeat(250);
+    let leaf_component = "e".repeat(210);
+    std::fs::create_dir_all(source.join("dst")).unwrap();
+    std::fs::create_dir_all(source.join("src/subtree")).unwrap();
+    std::fs::write(source.join("src/subtree/shallow"), b"old").unwrap();
+    let mut leaf_dir = source.join("src/subtree");
+    for _ in 0..4 {
+        leaf_dir.push(&leaf_component);
+    }
+    std::fs::create_dir_all(&leaf_dir).unwrap();
+    std::fs::write(leaf_dir.join("leaf"), b"deep-base").unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"phase45-deep-exec".to_vec(),
+        incarnation: 1,
+        cursor_key: [45; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+        failures: Vec::new(),
+        diagnostics: None,
+    };
+    let project = ProjectApi::new(&server)
+        .init("phase45-deep-exec", &source)
+        .unwrap();
+    let branch = ProjectApi::new(&server)
+        .fork(&project, [47; 16], "main")
+        .unwrap();
+    let sandbox = create(&mut cleanup, &image, "phase45-deep-exec").unwrap();
+    let workspaces = WorkspaceApi::new(&owner);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    let command = format!(
+        "start=$PWD; d={deep}; e={leaf_component}; cd dst || exit; i=0; while [ $i -lt 13 ]; do mkdir \"$d\" || exit; cd \"$d\" || exit; i=$((i+1)); done; mv \"$start/src/subtree\" subtree || exit; cd subtree || exit; exec 4<. || exit; i=0; while [ $i -lt 4 ]; do exec 3<. || exit; cd \"/proc/self/fd/3/$e\" || exit; i=$((i+1)); done; test \"$(cat leaf)\" = deep-base || exit; cd /proc/self/fd/4 || exit; printf new > shallow.next && mv -f shallow.next shallow"
+    );
+    assert!("dst".len() + 13 * 251 + "/subtree".len() + 4 * 211 + "/leaf".len() > 4096);
+    let edit = workspaces.exec(&mount.id, &command).unwrap();
+    assert_eq!(edit.exit_status, Some(0), "{:?}", edit.stderr);
+    let CommitOutcomeWire::Committed(after) = workspaces.commit(&mount.id).unwrap().outcome else {
+        panic!("move commit")
+    };
+    let inspect = |root, query| {
+        server
+            .service()
+            .handle(
+                &server.peer().unwrap(),
+                &Request {
+                    id: 11,
+                    generation: 1,
+                    store: server.store(),
+                    profile: 1,
+                    deadline_ms: 10000,
+                    response_bytes: 16384,
+                    operation: Operation::Inspect { root, query },
+                },
+                &mut std::io::empty(),
+                &mut std::io::sink(),
+            )
+            .0
+    };
+    let child = |root, parent, name: &[u8]| {
+        let Response::Attributes { serial, .. } = inspect(
+            root,
+            Inspect::ChildAttributes {
+                parent,
+                name: name.to_vec(),
+            },
+        )
+        .unwrap() else {
+            panic!("child attributes")
+        };
+        serial
+    };
+    let old = child(
+        project.root,
+        child(project.root, project.root_serial, b"src"),
+        b"subtree",
+    );
+    let mut before_leaf = old;
+    for _ in 0..4 {
+        before_leaf = child(project.root, before_leaf, leaf_component.as_bytes());
+    }
+    before_leaf = child(project.root, before_leaf, b"leaf");
+    let mut moved = child(after.root, project.root_serial, b"dst");
+    for _ in 0..13 {
+        moved = child(after.root, moved, deep.as_bytes());
+    }
+    moved = child(after.root, moved, b"subtree");
+    assert_eq!(moved, old);
+    let mut after_leaf = moved;
+    for _ in 0..4 {
+        after_leaf = child(after.root, after_leaf, leaf_component.as_bytes());
+    }
+    after_leaf = child(after.root, after_leaf, b"leaf");
+    assert_eq!(after_leaf, before_leaf);
+    let before_attr = inspect(
+        project.root,
+        Inspect::InodeAttributes {
+            serial: before_leaf,
+        },
+    )
+    .unwrap();
+    let after_attr = inspect(after.root, Inspect::InodeAttributes { serial: after_leaf }).unwrap();
+    let (
+        Response::Attributes {
+            content: before_content,
+            mode: before_mode,
+            ..
+        },
+        Response::Attributes {
+            content: after_content,
+            mode: after_mode,
+            ..
+        },
+    ) = (before_attr, after_attr)
+    else {
+        panic!("leaf attributes")
+    };
+    assert_eq!((after_content, after_mode), (before_content, before_mode));
+    for content in [before_content, after_content] {
+        let mut bytes = Vec::new();
+        let (response, _) = server.service().handle(
+            &server.peer().unwrap(),
+            &Request {
+                id: 13,
+                generation: 1,
+                store: server.store(),
+                profile: 1,
+                deadline_ms: 10000,
+                response_bytes: 9,
+                operation: Operation::ReadFile {
+                    root: content,
+                    start: 0,
+                    end: 9,
+                },
+            },
+            &mut std::io::empty(),
+            &mut bytes,
+        );
+        assert_eq!(response.unwrap(), Response::Read { length: 9 });
+        assert_eq!(bytes, b"deep-base");
+    }
+    assert!(inspect(
+        after.root,
+        Inspect::ChildAttributes {
+            parent: child(after.root, project.root_serial, b"src"),
+            name: b"subtree".to_vec(),
+        }
+    )
+    .is_err());
+    assert!(inspect(
+        after.root,
+        Inspect::ChildAttributes {
+            parent: moved,
+            name: b"shallow.next".to_vec(),
+        }
+    )
+    .is_err());
+    let replacement = child(after.root, moved, b"shallow");
+    let Response::Attributes { content, size, .. } = inspect(
+        after.root,
+        Inspect::InodeAttributes {
+            serial: replacement,
+        },
+    )
+    .unwrap() else {
+        panic!("replacement")
+    };
+    let mut output = Vec::new();
+    let (response, _) = server.service().handle(
+        &server.peer().unwrap(),
+        &Request {
+            id: 12,
+            generation: 1,
+            store: server.store(),
+            profile: 1,
+            deadline_ms: 10000,
+            response_bytes: size,
+            operation: Operation::ReadFile {
+                root: content,
+                start: 0,
+                end: size,
+            },
+        },
+        &mut std::io::empty(),
+        &mut output,
+    );
+    assert_eq!(response.unwrap(), Response::Read { length: size });
+    assert_eq!(output, b"new");
+    workspaces.unmount(&mount.id).unwrap();
+    delete(&mut cleanup, sandbox);
+    server.shutdown();
+    assert!(cleanup.failures.is_empty());
+}
+
+#[test]
 fn sdk_exec_moves_inherited_directory_and_commits_complete_tree() {
     let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
         return;
