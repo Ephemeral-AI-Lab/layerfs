@@ -1243,3 +1243,119 @@ run for this addendum and no historical failure was replaced.
   generic no-key bypass equivalence (if ever proposed); other registered
   append/repeated patterns and matched frozen control under eligible
   cache/cgroup identities.
+
+## Iteration 017 — recoverable known-C5 failure admits a new G2 WRITE; nine public matrix cells
+
+- **Source/status:** no product, quota, Budget, format, Workload, limit or
+  page-removal algorithm change from iteration 016's `ee4032e2d` product.
+  Three append-only *external-test-only* identities:
+  `80dae1db092aa6f8c72ce2173c541afe4f15ef9b` (parent
+  `1ec0e18d8`), `89b2caa9afff14503a0cf153811c7fce15064922`
+  (parent `80dae1db0`) and `de25a10a48cde146d7ee1f25374c126b71b3b3f2`
+  (parent `89b2caa9a`). Each has identical first-parent/staged/committed
+  `python3 tools/production_loc.py --json --root <git archive snapshot>`:
+  Core **68,022 -> 68,022 (+0)**, reference **65,417 -> 65,417 (+0)**,
+  combined **133,439 -> 133,439 (+0)**. The later checkpoint harness is
+  byte-identical for all nine rows, source HEAD `de25a10a4`, product seal
+  pinned separately from test-binary seal. These test identities do not
+  retroactively repair iteration-016's independent low-Budget or 8,192
+  receipts.
+- **Failure-custody hypotheses competed publicly, each attempt retained.**
+  At the fixed **8 MiB** Budget/64 MiB fixture disk quota, external
+  `Gate::CommitCompletionFailure` let the canonical Commit succeed, then a
+  Linux file-size limit refused a physical C5 backing page. The first
+  public Stage attempt `active_known_c5_g2` **FAIL** its proposed new G2
+  WRITE: `PageStore::create_from` stops after the allocation error because
+  physical ownership can be ambiguous; restoring the OS limit does **not**
+  make the stopped backing safely writable. It nevertheless observes a
+  *known* remote Commit, `installed_revision=None`, and preserved old/
+  canonical bytes; its inspected failed owned Docker resources were
+  removed after retaining logs. The corrected test-only oracle on the
+  same physical-fault workload has two scoped PASS checks: new G2 WRITE
+  explicitly returns `Busy`, old bytes persist, failed owners stay
+  charged and no canonical retry occurs. **No G2-progress claim** is
+  made for physical failure. Allowing writes on a stopped backing solely
+  to satisfy this gate would violate custody.
+- **Recoverable memory-Capacity route at the *unchanged default* Budget.**
+  A separately preregistered **nonregistered** 10,240-WRITE public Stage
+  control into a 20,480-byte file accepted all WRITEs; after one **known
+  remote canonical Commit**, local `active_reconcile.rs:132` refused a
+  **3,641,243-byte** update-map request with Budget already **4,825,906**:
+  required **8,467,149 > 8,388,608 by 78,541 bytes**. No local C5
+  installation (`installed_revision=None`); after unwind Budget
+  **2,106,546**, Host allocated **2,867,200**, reserved **262,144**.
+  This refusal precedes index/owner publication and leaves the backing
+  operable; it is *not* an 8,192 regression or a disk-quota failure.
+  The first test identity **FAIL** because one 20,480-byte private READ
+  exceeded its unchanged 10-second per-call deadline *after* the known
+  canonical result. The corrected, prospectively recorded test-only
+  identity kept the exact 10,240 WRITEs, Budget, 60-second Stage command
+  bound and every READ's 10-second limit, instead verifying **all**
+  20,480 private bytes in contiguous 1,024-byte public READ calls. It
+  **PASSes** full independently checked remote G1 and old live bytes,
+  then **ACKs one new G2 WRITE on the same attached Workspace/open handle**.
+  New live byte `Z` differs from the **unchanged** committed G1 byte;
+  remote canonical Commit count remains exactly **two** (base + G1), with
+  no resend. Backing `st_blocks*512` matches shared Host allocated
+  charge after the new mutation. Complete functional command
+  **50.932 s < 60 s Stage limit**, not a registered 15/25-second
+  performance row; no warmup or numeric speed claim. The known failed
+  owner remains charged and `close_clean` is `Busy`: clean-close refund
+  **NOT_RUN** for this intentionally retained failure. This proves
+  **post-known-failure G2 mutation progress for recoverable Budget
+  Capacity**, not unconditional progress after every failed physical
+  owner. The raw first FAIL and physical-fault FAIL remain separate.
+- **One new changed-identity candidate attempt for each registered
+  append/dispersed/repeated × 100/512/4,097 mounted selection** (not an
+  unchanged-arm speed resample). All **nine** PASS full independent
+  byte oracles, correct WRITE counts, exactly four anchored WRITE samples,
+  known Commit, charged-resource and cleanup checks, each 15/25-second
+  complete bound. They are all **row_status=INELIGIBLE** for numeric
+  admission: no frozen control match, no runtime private container-cache/
+  VM/backend/device/host proof and no phase-local cgroup fields. Host
+  whole-input cache status PASS does not repair those other domains.
+  Commit SaveFile pack loads reproduce source-bound operands append
+  **2/7/52**, dispersed **2/7/209**, repeated **1/1/1**. New raw walls
+  are in local receipts *without* ratios or a speed claim; frozen
+  #271's censored 25-second rows are not phase denominators. Reused closed
+  #271 masters came by verified independent byte copies, with one worker,
+  exact release binaries/image seals, no mutated-sample or warm-input
+  reuse. No second performance attempt was taken in any changed arm.
+- **Remaining registered and admission receipts are explicit.** The
+  original `issue248-separated-4097-v1` gate on this changed source
+  has full-byte/cleanup/oracle PASS but `row_status=INCOMPLETE`:
+  `LFS_C1_EDIT_LOAD` is absent. `LFS_C1_SAVE_COUNT nodes_read=0` and
+  `LFS_FILE_INPUT` are distinct source observations, not proof the
+  missing edit-load equals zero. The clean/one-edit SDK selections each
+  emit a **NOT_RUN** blocker: no public same-Workspace live pinned
+  4,097-record journal across required sequential Exec/Commit (a
+  detached Store cannot substitute). A matched #271 control requires
+  a separate *owned* checkout with unchanged frozen product and common
+  observer plus identical independent cache/phase-cgroup capabilities;
+  under this assigned-worktree-only instruction it is **NOT_RUN**.
+  The current driver reports `container_cgroup_memory=None`, and
+  requested O_DIRECT is not a complete private cache/VM/backend/device/
+  host guarantee: private cache/cgroup numeric admission **INELIGIBLE**.
+  Exact three-sequential-Exec/full mutations remain **NOT_RUN**.
+  No 2×/10×, global scaling, numeric control or release claim; no
+  normalized ancestor removal, whose alternative fence/epoch/old-pin
+  equivalence remains **INCOMPLETE**. Draft PR #274 and open #273
+  stay untouched pending owner ruling on SDK pin and independent
+  cache/cgroup/control capability.
+- **Checks and local raw evidence:** final test-identity exact aarch64
+  release Linux Stage binary on owned ext4 PASSes both recovered-custody
+  checks, host locked release Workspace+FUSE tests and warning-denying
+  all-target Clippy/fmt PASS, product boundary 350 files, tools 9/9,
+  parser 5/5, checkpoint self-check and harness 6/6 PASS. The product
+  Linux `active_backing` **32/32** proof from iter-016 is reused only by
+  unchanged product seal, not replayed as a new attempt. The protected
+  oracle, prepare, nine candidate receipts, #248 INCOMPLETE, two SDK
+  blocker files, all Stage FAIL/PASS outputs, named Docker inspections,
+  phase/resource fields, exact commands, binary/image/fixture/source
+  seals and per-directory/outer SHA manifests are **gitignored local**
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-017/`.
+  Verify each manifest from its own directory. No GitHub raw-evidence URL
+  exists. The next agent must not resample this unchanged candidate or
+  reissue its known canonical Commit; pursue unsupported SDK capability/
+  owner ruling and matched private cache/cgroup control only under a
+  prospectively authorized independent identity, keeping PR draft.
