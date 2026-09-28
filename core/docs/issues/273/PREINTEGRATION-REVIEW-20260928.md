@@ -224,3 +224,75 @@ first-parent broad test result. Owning C1 lane must trace, repair or rule
 with correct charged storage and both tests, without enlarging the ceiling.
 The two FAILs and paired-parent NOT_RUN remain unchanged. #276 has no
 owner decision; integration remains NOT_BUILT.
+
+## 4. Owner direction: pursue substantive optimization, not the easy waiver
+
+> **Owner decision in the handoff conversation, 2026-09-28 UTC:** the owner
+> accepted the recommendation **1A / 2A / 3 yes / 4 yes**. This is
+> prospective work authorization and an explicitly bounded *functional-only*
+> integration scope, **not** an implemented SDK contract, proved cache
+> capability, corrected test, approved PR merge, speed result or release
+> admission. Sections 1–3 retain their original review-time statuses.
+> These are new source-planning instructions; the evidence at `8801b9c`,
+> frozen `4ae36ad3a` and reviewed `29fc5747d` is not relabelled.
+
+1. **SDK §1 — 1A: design and implement a real public same-Workspace G1
+   journal lease; no waiver selected.** First specify a product-supported
+   SDK/Bridge selected-view identity, acquisition and release, G1 old-reader
+   bytes, continuing G2 process/edit/Commit, at most 32 captures, charged
+   admission/refund, cancellation, deadlines and known/unknown canonical
+   custody. Review the proposed API/format/ownership contract before
+   implementing; do **not** fabricate a method name, use a detached Store or
+   introduce a test-only hook. Implement in a separately owned lane with
+   independent public byte/pin/refusal and cleanup proofs. Both registered
+   clean/one-edit controls remain **NOT_RUN** until a proved public lease and
+   frozen shared workload/harness actually allow those selections.
+2. **Numerics §2 — 2A: develop an independently verified *common* capability
+   before collecting any matched performance arm.** Declare and enforce
+   identical private container/VM/backend/device/host cache state and a
+   verifiable Exec/Commit-local cgroup memory scope for frozen #271 and the
+   candidate without editing frozen #271 product. Common observer/harness
+   changes require prospective seals; existing candidate rows are not
+   portable to a different identity. If the host cannot provide the
+   capability, stop and report it: frozen matched control **NOT_RUN** and
+   nine candidate numbers **INELIGIBLE** remain. Only when the capability,
+   owner-reviewed shared contract, all twelve registered selections and
+   exact row-major control→candidate one sample per case/arm can be met may
+   a *new* campaign be proposed. No warm-cache credit, 25-second censored
+   denominator, relaxed deadline/Budget or repeat of an unchanged arm.
+3. **Repairs — yes: separately owned worktrees are authorized for the C1
+   ordering-red diagnosis and #269's duplicate seal.** For C1, verify the
+   `unreachable_parents` hypothesis against the exact failing call route,
+   prefer charged targeted new-directory-parent membership/a checked join
+   over accumulating every unrelated binding, preserve cycle/replacement
+   semantics and old-reader behavior, and cover both formerly red cases.
+   Do not enlarge `ordering_bytes`, the test ceiling or timeout. A paired
+   first-parent broad run is still **NOT_RUN** until actually performed; do
+   not call the failure pre-existing by inspection alone. For #269, remove
+   or justify the second fallible seal with one-attempt refusal/custody and
+   verified refund checks. Changes require source-pinned tests, affected
+   architecture documentation and exact first-parent → committed production
+   LOC for every commit. No other owner's worktree, raw receipt, binary or
+   Docker resource may be modified. Both fixes remain **NOT_RUN** here.
+4. **Initial integration scope — yes: #256 many-file/package scale and #270
+   path-local C1 move-Commit are deferred, explicitly NOT_PROVED.** Do not
+   infer either from mounted rename or #273's one-file proof. Prioritize
+   #270 as a *separate* substantive namespace optimization after combined
+   functional proof: final-batch unique-parent/cycle and authenticated
+   owner-index/legacy old-reader design, actual page/file-save counts and
+   charged failure custody remain its own acceptance. Follow with realistic
+   many-file #256 workloads on their own changed source. Deferral is **not**
+   permission to assert release/package-scale admission.
+
+**Next decision boundary:** report repair and review dispositions plus
+actual lease/cache capability progress against then-current source. The owner
+may separately authorize *functional-only* integration even while SDK
+controls remain NOT_RUN and numerical rows INELIGIBLE; that would not be
+complete registry, numeric admission or release approval. No such explicit
+integration authorization exists yet, so do not build a combined tree or
+merge draft #269. The broad C1 red tests still
+**FAIL** in historical receipts; no new checks, matched control or combined
+functional gate have run here. **NO MERGE / NO NUMERIC ADMISSION** remains
+the current disposition pending those gates; earlier #276 owner-choice
+requests are answered as *direction to pursue 1A/2A*, not as evidence that
+§1/§2 admission succeeded.

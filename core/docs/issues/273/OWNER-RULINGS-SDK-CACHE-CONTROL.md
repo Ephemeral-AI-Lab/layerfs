@@ -1,7 +1,9 @@
 # #273 admission capability decisions still required
 
-> **Status:** Request for owner rulings, not an approval, SDK contract, release
-> waiver, matched speed result or authorization to edit the frozen #271 product.
+> **Status: Dated planning checkpoint; not release evidence or a product contract.**
+> Original owner-ruling request; §4 records the later prospective work-plan
+> choice, not a completed SDK contract, lease proof, release waiver, matched
+> speed result or authorization to edit frozen #271 product.
 > Source of the candidate C1 provenance: `8801b9c095b9975eaa81fc98c738df6ef9752710`.
 > Refer to the append-only [iteration ledger](CHECKPOINT5-OPTIMIZATION-LOG.md)
 > §§016–018 and the local gitignored iter-017/018 receipts. Do not publish a
@@ -95,3 +97,29 @@ claiming an all-tests or release PASS.
 
 No 2×/10×, release admission, merge or #273 closure follows. PR #274 remains
 draft pending explicit owner decisions and matched evidence.
+
+## 4. Owner direction received after the request (2026-09-28 UTC)
+
+The owner accepted the *optimization-first* recommendation in the handoff
+conversation: **1A / 2A / repairs yes / functional-only scope yes**. See the
+[dated preintegration review §4](PREINTEGRATION-REVIEW-20260928.md#4-owner-direction-pursue-substantive-optimization-not-the-easy-waiver)
+for precise scope, dependencies and stop conditions. The request paragraphs
+above record the earlier state; this addendum does not amend past receipts.
+
+- **§1:** pursue a real public same-Workspace G1 journal lease with reviewed
+  SDK/Bridge contract and full G1/G2/32-pin/cancel/custody proof. No waiver
+  was chosen. No API is specified or implemented merely by this decision;
+  clean and one-edit registered controls remain **NOT_RUN**.
+- **§2:** pursue a verified common private-cache and phase-local cgroup
+  capability before any future matched campaign. It is not currently
+  available/proved; old control **NOT_RUN**, all nine candidate numbers
+  **INELIGIBLE**. Stop if no common method can be independently verified.
+- **§3:** authorize C1 red-test diagnosis/repair and #269 duplicate-seal
+  correction or justification in **separate owned worktrees**, never by
+  increasing the ceiling. Old FAIL receipts and paired-parent NOT_RUN stand.
+- **Integration:** #256 package scale and #270 path-local C1 move-Commit
+  are deferred, explicitly **NOT_PROVED** for an initial functional-only
+  integration. #270 is prioritized as separate substantive follow-up once
+  combined functional correctness is proved. No draft PR merge, combined
+  tree, benchmark, release admission or test PASS was authorized by choosing
+  this work plan. Seek separate explicit integration authorization.
