@@ -837,10 +837,8 @@ mod linux {
         assert_eq!(physical_private_files(&private), (0, 0));
         check("active-4096-separated-exact-clean-close");
     }
-    #[test]
-    #[ignore = "requires stage_route.py and a live native service"]
-    fn stage_active_source_grouping() {
-        // 512 nonadjacent edits, emitted in file order but packed in write order.
+    fn source_grouping(count: u64, max_reads: u64) {
+        // Nonadjacent edits, emitted in file order but packed in write order.
         // An index lookup/pack load per edit fails the count oracle even if
         // elapsed wall happens to be low. This remains a public Workspace test.
         let f = Fixture::new_fresh(Gate::None);
@@ -882,7 +880,7 @@ mod linux {
             )
             .unwrap();
         let mut positions = std::collections::BTreeSet::new();
-        for i in 0..512u64 {
+        for i in 0..count {
             let offset = (104729 + i * 2654435761) % expected.len() as u64;
             assert!(positions.insert(offset));
             let byte = b'B' + (i % 24) as u8;
@@ -894,12 +892,14 @@ mod linux {
         f.workspace.release(handle).unwrap();
         f.workspace.forget(file.serial, 1, ReferenceScope::Local);
         let before = f.workspace.backing_status().unwrap();
+        let commit_started = Instant::now();
         f.workspace.commit(deadline()).unwrap();
+        let commit_wall_ns = commit_started.elapsed().as_nanos();
         let after = f.workspace.backing_status().unwrap();
         let reads = after.active_pack_fetches - before.active_pack_fetches;
         let seeks = after.active_index_seeks - before.active_index_seeks;
-        assert!(reads > 0 && reads <= 32, "pack reads: {reads}");
-        println!("SOURCE_GROUPING case=dispersed512 pack_reads={reads} index_seeks={seeks} ref_limit=256 byte_limit=32768");
+        assert!(reads > 0 && reads <= max_reads, "pack reads: {reads}");
+        println!("SOURCE_GROUPING case=dispersed{count} commit_wall_ns={commit_wall_ns} pack_reads={reads} index_seeks={seeks} ref_limit=256 byte_limit=32768");
         let Response::History(result) = f.branch() else {
             panic!("branch result")
         };
@@ -908,12 +908,31 @@ mod linux {
         };
         let saved = attr(f.native.attributes(branch.effective_root, b"grouped"));
         assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
-        check("active-source-grouped-512-count-and-full-bytes");
+        check(&format!(
+            "active-source-grouped-{count}-count-and-full-bytes"
+        ));
         f.workspace.close_clean().unwrap();
         let private =
             std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
         assert_eq!(physical_private_files(&private), (0, 0));
-        check("active-source-grouped-clean-close-refund");
+        check(&format!("active-source-grouped-{count}-clean-close-refund"));
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_source_grouping_100() {
+        source_grouping(100, 8);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_source_grouping() {
+        source_grouping(512, 32);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_source_grouping_4097() {
+        source_grouping(4097, 1024);
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
