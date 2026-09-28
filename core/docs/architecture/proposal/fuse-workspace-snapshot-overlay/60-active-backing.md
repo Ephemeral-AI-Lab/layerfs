@@ -1,10 +1,11 @@
 # #273 active backing storage and captured Commit
 
 > **Status:** Source description; no latency, RSS/cgroup or release claim.
-> This revision builds on the phase-4.5.1 product source `91c9c4938` and
-> implements the bounded hot publication and lifetime changes described below.
-> The [phase-4.5 log](../../../issues/273/PHASE4.5-LOG.md) pins their actual
-> product/proof identities. The [implementation specification](../../../issues/273/PHASE4.5-IMPLEMENTATION-SPEC.md)
+> Source pin: frozen functional candidate `4ae36ad3a`, last product change
+> `a2359620a`, building on the phase-4.5.1 format source `91c9c4938`.
+> The [phase-4.5 log](../../../issues/273/PHASE4.5-LOG.md) and
+> [frozen handoff](../../../issues/273/HANDOFF-PHASE45-FROZEN.md) record actual
+> proof scope and retained failures. The [implementation specification](../../../issues/273/PHASE4.5-IMPLEMENTATION-SPEC.md)
 > governs new private v2 attachments; the [v1 record](../../../issues/273/ACTIVE-FORMAT-AND-EVALUATION-v1.md)
 > retains historical index receipts and the unchanged v1 pack grammar.
 > Checkpoint 5 remains **NOT_RUN**, pending the owner's frozen-candidate review.

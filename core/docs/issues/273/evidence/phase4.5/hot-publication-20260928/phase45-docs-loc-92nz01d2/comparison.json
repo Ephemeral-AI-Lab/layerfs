@@ -1,0 +1,94 @@
+{
+  "parent": "79eca5ddd1b8d6eb1f84a53f5e2486a83bac0d27",
+  "staged_tree": "6a5c670e57978ff6ae6c123db6be88bcd643dd61",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "rows": [
+    {
+      "label": "before",
+      "ref": "79eca5ddd1b8d6eb1f84a53f5e2486a83bac0d27",
+      "count": {
+        "combined": 129965,
+        "root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-docs-loc-92nz01d2/before",
+        "scopes": {
+          "core": {
+            "crates": {
+              "layerfs-api": 437,
+              "layerfs-bridge": 5785,
+              "layerfs-content": 13418,
+              "layerfs-daemon": 1897,
+              "layerfs-fuse": 1550,
+              "layerfs-history": 2657,
+              "layerfs-sandbox": 1102,
+              "layerfs-server": 3733,
+              "layerfs-storage": 8521,
+              "layerfs-telemetry": 2257,
+              "layerfs-workspace": 23191
+            },
+            "files": 342,
+            "lines": 64548
+          },
+          "reference": {
+            "crates": {
+              "layerfs-cli": 1142,
+              "layerfs-content": 15701,
+              "layerfs-daemon": 3233,
+              "layerfs-fuse": 10986,
+              "layerfs-layerstack-store": 18376,
+              "layerfs-materialization": 358,
+              "layerfs-monitor": 414,
+              "layerfs-sdk": 979,
+              "layerfs-workspace": 11776,
+              "layerfs-workspace-core": 2452
+            },
+            "files": 193,
+            "lines": 65417
+          }
+        }
+      }
+    },
+    {
+      "label": "after",
+      "ref": "6a5c670e57978ff6ae6c123db6be88bcd643dd61",
+      "count": {
+        "combined": 129965,
+        "root": "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/issue273/phase45-docs-loc-92nz01d2/after",
+        "scopes": {
+          "core": {
+            "crates": {
+              "layerfs-api": 437,
+              "layerfs-bridge": 5785,
+              "layerfs-content": 13418,
+              "layerfs-daemon": 1897,
+              "layerfs-fuse": 1550,
+              "layerfs-history": 2657,
+              "layerfs-sandbox": 1102,
+              "layerfs-server": 3733,
+              "layerfs-storage": 8521,
+              "layerfs-telemetry": 2257,
+              "layerfs-workspace": 23191
+            },
+            "files": 342,
+            "lines": 64548
+          },
+          "reference": {
+            "crates": {
+              "layerfs-cli": 1142,
+              "layerfs-content": 15701,
+              "layerfs-daemon": 3233,
+              "layerfs-fuse": 10986,
+              "layerfs-layerstack-store": 18376,
+              "layerfs-materialization": 358,
+              "layerfs-monitor": 414,
+              "layerfs-sdk": 979,
+              "layerfs-workspace": 11776,
+              "layerfs-workspace-core": 2452
+            },
+            "files": 193,
+            "lines": 65417
+          }
+        }
+      }
+    }
+  ],
+  "method": "git archive exact snapshots crates core/crates; python3 tools/production_loc.py --root <snapshot> --json; unchanged Rust-aware source/SQL scope and legacy inline-test exclusion"
+}

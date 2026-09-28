@@ -266,3 +266,196 @@ puts a different identity at its registered path. The existing Published
 receipt/new-byte/Busy assertions remain, with an explicit failed-pack custody
 count. This corrects the injection to a real custody failure; it changes no
 product source, work bound, deadline or successful historical receipt.
+
+
+## Steps 4.5.4 / 4.5.5 — frozen functional candidate and retained evidence
+
+Frozen candidate/proof source `4ae36ad3a9c70b32b66c8280ac9496e9f1e345a9`,
+last product change `a2359620a7966314fbb2a96c98e8da958df72c6c`.
+The [frozen identity record](evidence/phase4.5/hot-publication-20260928/FROZEN-CANDIDATE.json)
+pins product inputs, root `.cargo/config.toml`, locked dependencies, release
+profile, driver/test/helper sources, executables, runtime image and fixture.
+The [archive catalog](evidence/phase4.5/hot-publication-20260928/README.md)
+retains byte-identical raw records and separate cleanup; no historical status
+or identity is rewritten. Later evidence/status changes are documentation only.
+
+| Step | Final state at this scope |
+| --- | --- |
+| 4.5.2 hot publication | DONE: charged EOF and advancing inherited Base/Zero frontiers, wrapper reuse and one composite publication |
+| 4.5.3 boundary/lifetime | DONE: byte-balanced carries, affected normalization, epoch reuse, selecting-pin cohorts and precharged G1/G2 reconcile |
+| 4.5.4 public proof | DONE: original 14 cases plus three focused custody/hot/continuity cases; 17/17 cases, 42/42 named checks PASS |
+| 4.5.5 handoff | DONE: architecture/status, raw evidence, per-commit LOC and frozen candidate; owner review is pending |
+| Checkpoint 5 | NOT_RUN: zero performance samples, no enforced cold-cache or release admission |
+
+### Final registered public functional set
+
+All rows below have `performance_claim=false` and `cache_claim=null`. Complete
+walls include fixture byte-copy/runtime/oracle/cleanup and are recorded for
+functional provenance only; they are not speed arms or latency gate results.
+Each case reuses the same closed prepared master, using an independent writable
+byte copy and fresh live history producer. No prepared master was regenerated.
+All rows use locked release executables, owned Linux ext4 in the same pinned
+`rust:1.85.1-bookworm` image, two CPUs and one construction worker. Source,
+product inputs, driver, test/helper source and test binary identities match
+across all 17 rows. The metadata-only scope correction names the Commit and
+mounted subsets actually executed; no deadline or case changed.
+
+| Case and receipt | Named checks | Complete functional command |
+| --- | ---: | ---: |
+| [`active_repeated`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_repeated/result.json) | 3/3 PASS | 5.982 s |
+| [`active_separated4096`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_separated4096/result.json) | 3/3 PASS | 6.447 s |
+| [`active_generation`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_generation/result.json) | 2/2 PASS | 0.928 s |
+| [`active_many_file`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_many_file/result.json) | 3/3 PASS | 4.176 s |
+| [`active_mounted`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_mounted/result.json) | 2/2 PASS | 0.933 s |
+| [`active_split_slot`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_split_slot/result.json) | 2/2 PASS | 0.935 s |
+| [`active_retained32`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_retained32/result.json) | 3/3 PASS | 1.497 s |
+| [`active_mixed_compact`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_mixed_compact/result.json) | 3/3 PASS | 3.524 s |
+| [`active_mutation_compact`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_mutation_compact/result.json) | 2/2 PASS | 3.409 s |
+| [`active_quota_refusal`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_quota_refusal/result.json) | 2/2 PASS | 0.907 s |
+| [`active_quick_controls`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_quick_controls/result.json) | 3/3 PASS | 6.533 s |
+| [`active_namespace`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_namespace/result.json) | 2/2 PASS | 0.945 s |
+| [`active_close`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_close/result.json) | 2/2 PASS | 0.935 s |
+| [`active_payload_refund`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_payload_refund/result.json) | 3/3 PASS | 0.898 s |
+| [`active_cleanup_failure`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_cleanup_failure/result.json) | 2/2 PASS | 0.878 s |
+| [`active_hot_publication`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_hot_publication/result.json) | 3/3 PASS | 3.372 s |
+| [`active_hot_continuity`](evidence/phase4.5/hot-publication-20260928/phase45-route-4ae36ad3a/active_hot_continuity/result.json) | 2/2 PASS | 1.031 s |
+
+The one-file separated row has 4,096 edits of the full 8,194-byte file;
+physical private files are 1,814,528 B before Commit and 24,576 B after,
+52 pack pages become zero, charge equals `st_blocks*512`, and the named clean
+close returns zero files. This is the design-space case, not #248's registered
+4,097-write performance gate. The 128-file row uses two shared pack pages
+before Commit and zero afterward. All byte oracles and named close assertions
+remain; the failed-cleanup row intentionally returns Busy while retaining its
+Published receipt, new bytes and failed-pack charge.
+
+The public hot count row keeps all 1,024 interleaved writes: one empty-root
+construction plus two cursor admissions plus 1,021 hot writes. Of these,
+949 ordinary noncarry publications assert no root seek or index/pack fetch;
+73 carry rows pay their boundary work. Totals: 29,770 node visits, 4,114 index
+writes including 1,023 directory writes, 1,024 pack writes, 5,049 retirement
+inspections, 1,023 separately counted legacy routine scans and zero legacy
+lookup scans. Current hot reservations are 160,086 B; physical files are
+368,640 B at the recorded point. These are counted mechanism facts, not a
+full CPU O(1), machine-RAM or performance statement.
+
+The full 326,300-byte inherited oracle is read in bounded public windows,
+without reducing the fixture. G1's native root and G2 live bytes remain exact;
+an unrelated G2 cursor immediately continues hot after C5 with no root seek
+or normalization, and the affected inode readmits before its continued
+sequence. Payload/overlap, truncate/Zero grow, aliases, rename/unlink/forget,
+held orphan bytes across two Commits and final canonical names/bytes pass.
+The mounted continuity row has one PID 37 / inode 2 through READY, heartbeat,
+BC before capture, D during SaveFile, E at the C5 result gate and F after
+Commit. Native G1 bytes end in BC; live G2 ends in BCDEF. There is no
+pause/restart/remount; unmount occurs only after the child exits.
+
+### Scoped checks and proof coverage
+
+The [final Host checks](evidence/phase4.5/hot-publication-20260928/phase45-transfer-workspace-checks-20260928-1/result.json)
+run the following exact commands from this worktree root, with
+`LAYERFS_CONSTRUCTION_WORKERS=1`:
+
+```sh
+cargo +1.85.1 test --release --manifest-path core/Cargo.toml --locked --offline -p layerfs-workspace
+cargo +1.85.1 clippy --release --manifest-path core/Cargo.toml --locked --offline --workspace --all-targets -- -D warnings
+cargo +1.85.1 fmt --manifest-path core/Cargo.toml --all -- --check
+python3 core/tools/check_product_boundary.py
+python3 -m unittest discover -s core/tools -p 'test_*.py'
+cargo +1.85.1 build --release --manifest-path core/Cargo.toml --locked --offline -p layerfs-server -p layerfs-daemon -p layerfs-bridge --bins --features layerfs-bridge/native --example public_key
+cargo +1.85.1 zigbuild --release --manifest-path core/Cargo.toml --locked --offline --target aarch64-unknown-linux-musl -p layerfs-workspace --tests
+```
+
+All PASS: Host Workspace, warning-denying Clippy/all targets, fmt, boundary
+349 production Rust/SQL files, 9 guard self-tests and both release builds.
+The [final Linux ext4 checks](evidence/phase4.5/hot-publication-20260928/phase45-core-transfer-20260928-1/result.json)
+are `active_backing` 32/32, readable 18 PASS/2 mounted-only ignored, keyed tree
+1, attachment 3, backing ownership 6 and pieces sequence 36 PASS. The backing
+suite's complete command wall is 34.970 s; this is a scoped correctness/count
+suite, not a benchmark sample or the independent checkpoint-5 speed verifier.
+Its recorded precommit staged product blobs match `a2359620a`; later source
+changes affect only external stage tests and documentation. The original
+dirty-source metadata remains unchanged. The final stage fixture change is
+separately compiled in locked release ARMv8 and format/diff checked.
+
+| Required mechanism | Ordinary-API or public proof |
+| --- | --- |
+| Growing EOF and inherited Base/Zero, shared nodes/tail, no ordinary root search or ancestor page write | `hot_eof_base_zero_and_shared_frontiers_have_bounded_publication`: 12,288 writes, 12,285 hot, 11,316 ordinary, max 6 new active files; public hot row counts wrappers/legacy separately |
+| Actual leaf/branch carry occupancy, promotion, gap/suffix offsets | Same backing case and existing overlap/read/truncate cases; min leaf 1,815 B / branch 1,951 B against 1,196 / 1,693 limits; full public inherited oracle |
+| Generic overlap/Payload/attrs/alias/namespace transition | backing overlap/large/metadata cases, readable attribute/notification cases and public hot/split/namespace/mounted cases |
+| Cursor ceiling, selective eviction, slot epoch reuse and frozen directory | `hot_eviction_epoch_reuse_and_frozen_directory_keep_exact_bytes`: 8 cursors, slot 6 epoch 4 → 8, old bytes intact; current hot node/reservation ceilings asserted |
+| Selecting-pin lifetime, both release orders and no unrelated retired sweep | `selecting_cohorts_only_visit_the_releasing_pin_in_both_orders`, capture/read-view and 32-generation cases; exact files/charge/refund assertions |
+| G1 SaveFile/C5 beside live G2 and post-Commit continuation | Both new public hot cases; independent old/new heads and same mounted PID/fd/inode |
+| Atomic quota/Budget refusal and candidate failure | backing quota/corrupt-tail/denied-write plus `hot_budget_refusal_keeps_revision_bytes_and_allocation_exact` and `reconcile_budget_refusal_keeps_the_acknowledged_selection`; public quota row |
+| Published notification/cleanup failure and custody | readable local notifier-failure test; public cleanup physical-identity conflict retains accepted receipt/new bytes/failed owner and refuses close |
+
+The Budget refusals hold genuine reservations while the live cache/descriptors
+remain resident. Old selection, revision and allocation stay intact; reconcile
+refusal stages no candidate page. No bound is enlarged and no unsupported
+source capability becomes a silent no-op. The 1 MiB figure is charged current
+hot reservations, not total heap/RSS/cgroup. Frozen directories, custody,
+resident Nodes and O(E_f) upload/patch scratch remain separately growing
+charged domains. Affected installation still executes under the state gate;
+legacy/input and large-payload maintenance are counted or qualified separately.
+
+### Retained nonpassing attempts
+
+All nine public FAIL receipts, three nonpassing backing/epoch attempts and the
+FileExt compile failure remain in the archive. Later manual cleanup records
+PASS for removal of only their owned containers/volumes; original FAIL and
+RETAINED_FOR_DIAGNOSIS fields are not changed. The first Clippy `emit` argument
+count diagnosis is recorded above/session-only, not invented as a raw file.
+
+| Public source / case | Passed markers before FAIL | Cause and resolution |
+| --- | ---: | --- |
+| `0513f8a1a` / hot publication | 0/3 | Whole-file READ exceeded 128 KiB; chunk full oracle, keep 326,300 B |
+| `788de441b` / hot publication | 0/3 | Unsupported ordinary >980 assumption ignored real carries; count ordinary/carry relation |
+| `83f69e50a` / hot publication | 0/3 | 1,021 hot writes excluded one empty-root construction; count construction/admissions explicitly |
+| `1131c2317` / hot publication | 1/3 | Unrelated cursor fell generic after C5; refresh shared P/R on generic publication without seed |
+| `998f256a0` / hot publication | 2/3 | Fresh unbound inode incorrectly declared to C1; retain private saved facts and omit unbound canonical introduction |
+| `998f256a0` / continuity | 1/2 | Explicit Local lookup still held at close; forget it |
+| `ea7007201` / hot publication | 2/3 | Remaining explicit Local lookups blocked close; forget all known lookup refs |
+| `f83a186dd` / separated4096 | 1/3 | Known C1 success, C5 duplicate-patch reservation Capacity; move charged map/keys, never replay Commit |
+| `a2359620a` / cleanup failure | 0/2 | Dead-body corruption was no longer a release fault; inject physical path identity conflict, keep all custody assertions |
+
+### Production LOC for every continuation commit
+
+The [exact comparison record](evidence/phase4.5/hot-publication-20260928/phase45-commits-loc.json)
+uses `tools/production_loc.py` SHA-256
+`c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`,
+`git archive` of exact first-parent/committed `crates core/crates` trees, and
+the same runtime Rust/SQL classification and inline-test exclusions. Identical
+complete production-input blobs share the exact counter result. All commit
+message comparisons were confirmed against the resulting commits. Reference
+is 65,417 throughout; no relocation, scope reduction or legacy retirement.
+
+| Commit | Core before → after | Combined before → after | Signed delta |
+| --- | ---: | ---: | ---: |
+| `0513f8a1a` | 65,136 → 67,120 | 130,553 → 132,537 | +1,984 |
+| `788de441b` | 67,120 → 67,120 | 132,537 → 132,537 | +0 |
+| `83f69e50a` | 67,120 → 67,120 | 132,537 → 132,537 | +0 |
+| `1131c2317` | 67,120 → 67,120 | 132,537 → 132,537 | +0 |
+| `998f256a0` | 67,120 → 67,140 | 132,537 → 132,557 | +20 |
+| `ea7007201` | 67,140 → 67,145 | 132,557 → 132,562 | +5 |
+| `f83a186dd` | 67,145 → 67,145 | 132,562 → 132,562 | +0 |
+| `a2359620a` | 67,145 → 67,158 | 132,562 → 132,575 | +13 |
+| `4ae36ad3a` | 67,158 → 67,158 | 132,575 → 132,575 | +0 |
+
+Continuation total: Core 65,136 → 67,158 (+2,022), reference 65,417 unchanged,
+combined 130,553 → 132,575 (+2,022). This evidence/status commit is docs only:
+production LOC 132,575 → 132,575 (delta 0), same Core/reference subtotals.
+
+Nonpassing/unrun qualification: the full Core C1 test command was not rerun;
+retain checkpoint 4's two `filesystem_ordering` failures (19 objects versus
+18) until their lane resolves them. Two mounted-only readable tests remain
+ignored. Concurrent SDK Exec and #264 namespace/ancestry integration are out
+of scope. Every checkpoint-5 matched performance/resource selection, cold
+cache admission, hard RSS/cgroup bound and release admission is NOT_RUN.
+Historical #248 FAIL and #271 cache-INELIGIBLE remain unchanged. No CI,
+preflight, latency PASS, 2× speed claim or constant-RAM Commit is claimed.
+
+The [frozen handoff](HANDOFF-PHASE45-FROZEN.md) supersedes the earlier
+continuation prompt. After owner review, the [checkpoint-5
+prompt](HANDOFF-CHECKPOINT5.md) retains the original registry, control,
+cache/workers/deadlines and one-sample policy. Main-lane integration does not
+block #273; complete #273 before that lane merges.

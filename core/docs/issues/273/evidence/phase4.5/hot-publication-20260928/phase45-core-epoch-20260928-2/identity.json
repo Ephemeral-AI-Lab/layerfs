@@ -1,0 +1,28 @@
+{
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "-v",
+    "layerfs-issue273-epoch-a65c3852c622:/work",
+    "-v",
+    "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/active_backing-f325d5782a2161dc:/tests/runner:ro",
+    "-e",
+    "TMPDIR=/work",
+    "-e",
+    "LAYERFS_ACTIVE_TEST_ROOT=/work",
+    "-e",
+    "LAYERFS_CONSTRUCTION_WORKERS=1",
+    "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+    "/tests/runner",
+    "--test-threads=1",
+    "--nocapture",
+    "--exact",
+    "linux::hot_eviction_epoch_reuse_and_frozen_directory_keep_exact_bytes"
+  ],
+  "binary_sha256": "7fa32a6189c4d844015a74313316f38d518109ea3d7060d5bdf8528a914fe19d",
+  "dirty_source": true,
+  "performance_claim": false,
+  "cache_claim": null,
+  "hard_budget_seconds": 60
+}

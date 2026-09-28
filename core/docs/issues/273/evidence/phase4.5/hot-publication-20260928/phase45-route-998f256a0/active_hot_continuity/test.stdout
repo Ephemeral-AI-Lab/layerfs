@@ -1,0 +1,22 @@
+
+running 1 test
+test linux::stage_active_hot_continuity ... STAGE_PROCESS CHILD READY 37 2
+STAGE_PROCESS CHILD HEARTBEAT 37 2 0
+STAGE_PROCESS CHILD ACK 37 2 before1 326301
+STAGE_PROCESS CHILD ACK 37 2 before2 326302
+STAGE_PROCESS CHILD HEARTBEAT 37 2 1
+STAGE_PROCESS CHILD ACK 37 2 during-save 326303
+STAGE_PROCESS CHILD HEARTBEAT 37 2 2
+STAGE_PROCESS CHILD ACK 37 2 during-c5 326304
+STAGE_CHECK active-mounted-process-g1-save-c5-and-g2-progress PASS
+STAGE_PROCESS CHILD ACK 37 2 after-commit 326305
+STAGE_PROCESS CHILD CLOSED 37 2
+FAILED
+
+failures:
+
+failures:
+    linux::stage_active_hot_continuity
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.17s
+

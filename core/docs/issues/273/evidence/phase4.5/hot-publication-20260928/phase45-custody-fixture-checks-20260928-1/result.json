@@ -1,0 +1,38 @@
+{
+  "commands": [
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.0818587910034694
+    },
+    {
+      "label": "stage-build",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "zigbuild",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-unknown-linux-musl",
+        "-p",
+        "layerfs-workspace",
+        "--test",
+        "stage"
+      ],
+      "exit_code": 101,
+      "wall_seconds": 1.060831082984805
+    }
+  ]
+}

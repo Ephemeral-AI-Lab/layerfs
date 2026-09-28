@@ -1,0 +1,10 @@
+
+running 1 test
+test linux::stage_active_retained32 ... STAGE_CHECK active-32-retained-generations-and-old-new-oracle PASS
+STAGE_ALLOCATION case=retained32 retained_bytes=405504 released_bytes=16384 retained_pack_pages=32 released_pack_pages=0
+STAGE_CHECK active-32-pins-release-exact-blocks PASS
+STAGE_CHECK active-32-generations-exact-clean-close PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.69s
+

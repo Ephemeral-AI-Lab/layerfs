@@ -1,0 +1,20 @@
+   Compiling layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace)
+error[E0599]: no method named `read_exact_at` found for struct `std::fs::File` in the current scope
+    --> crates/layerfs-workspace/tests/stage.rs:1921:14
+     |
+1921 |         file.read_exact_at(&mut bytes, file.metadata().unwrap().len() - 5)
+     |              ^^^^^^^^^^^^^
+    --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/std/src/os/unix/fs.rs:117:8
+     |
+     = note: the method is available for `std::fs::File` here
+     |
+     = help: items from traits can only be used if the trait is in scope
+help: there is a method `read_exact` with a similar name, but with different arguments
+    --> /rustc/4eb161250e340c8f48f66e2b929ef4a5bed7c181/library/std/src/io/mod.rs:974:5
+help: trait `FileExt` which provides `read_exact_at` is implemented but not in scope; perhaps you want to import it
+     |
+9    +     use std::os::unix::fs::FileExt;
+     |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `layerfs-workspace` (test "stage") due to 1 previous error

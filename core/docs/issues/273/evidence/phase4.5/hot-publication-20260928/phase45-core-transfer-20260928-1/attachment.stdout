@@ -1,0 +1,14 @@
+
+running 9 tests
+test active_attachment_is_observable_and_refuses_cleanup_without_holding_registry ... ok
+test exact_attachment_observation_preserves_the_existing_owner ... ok
+test linux::attachment_branch_capacity ... ignored, requires real Branch/source service; external adapter allocation contract subset
+test linux::attachment_cleanup_deadline ... ignored, requires real Branch/source service and thread-local seccomp deadline gate
+test linux::attachment_concurrent_cleanup ... ignored, requires real Branch/source service and thread-local seccomp user notification
+test linux::attachment_mount_substitution ... ignored, requires native mount-leaf stat deadline gate and retained ownership
+test linux::attachment_retained ... ignored, requires real Branch/source service, ext4 and thread-local syscall denial
+test linux::attachment_substitution ... ignored, requires real Branch/source service, ext4 and thread-local syscall denial
+test unacquired_failure_and_expired_admission_leave_no_attachment ... ok
+
+test result: ok. 3 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

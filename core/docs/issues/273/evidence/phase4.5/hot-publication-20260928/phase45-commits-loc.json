@@ -1,0 +1,253 @@
+{
+  "counter": "tools/production_loc.py",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "method": "git archive exact commit/first-parent crates core/crates; python3 tools/production_loc.py --root snapshot --json; identical full production-input blobs share the exact counter result",
+  "scope": "first-party runtime Rust/SQL, tests/docs/tooling and legacy inline tests excluded; reference/Core separate; no migration or retirement",
+  "commits": [
+    {
+      "commit": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+      "tree": "cdbad2ac0f8fdca117df3abde4103ced9f93f122",
+      "parent": "81793239df4d73a3cd4f9a837633b1c88d800c19",
+      "before": {
+        "counted_snapshot": "81793239df4d73a3cd4f9a837633b1c88d800c19",
+        "core": 65136,
+        "reference": 65417,
+        "combined": 130553,
+        "core_files": 345,
+        "reference_files": 193,
+        "exact_snapshot": "81793239df4d73a3cd4f9a837633b1c88d800c19",
+        "production_blob_fingerprint": "25fb4b5626009ac44fb6aa257d800a1120a4a7d6bb8afd0f80c626b0670548d1"
+      },
+      "after": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "delta": 1984,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "788de441b12641392ac126aabd84b7232a048124",
+      "tree": "423f544a1a74a832630b109147013d9682c25db1",
+      "parent": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+      "before": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "after": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "788de441b12641392ac126aabd84b7232a048124",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "delta": 0,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "83f69e50a0bc45b22dd41f95bc9f493fe14a6822",
+      "tree": "74ba156683edde386a058a82c17643508b92925c",
+      "parent": "788de441b12641392ac126aabd84b7232a048124",
+      "before": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "788de441b12641392ac126aabd84b7232a048124",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "after": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "83f69e50a0bc45b22dd41f95bc9f493fe14a6822",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "delta": 0,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "1131c2317806f064381b0e1a2353ce8a9ef85499",
+      "tree": "7b733c889bd9cd22b90d3f660bfe3e16a7edf1b2",
+      "parent": "83f69e50a0bc45b22dd41f95bc9f493fe14a6822",
+      "before": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "83f69e50a0bc45b22dd41f95bc9f493fe14a6822",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "after": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "1131c2317806f064381b0e1a2353ce8a9ef85499",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "delta": 0,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+      "tree": "e949d390120fce91f72d6a31caaf10c76d174354",
+      "parent": "1131c2317806f064381b0e1a2353ce8a9ef85499",
+      "before": {
+        "counted_snapshot": "0513f8a1a12be6221574e893485fb8b67c091d6e",
+        "core": 67120,
+        "reference": 65417,
+        "combined": 132537,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "1131c2317806f064381b0e1a2353ce8a9ef85499",
+        "production_blob_fingerprint": "9fc3c28def32bb16cd1c4e1c3bde7bdd15996e137c2a74a2bacfe50f80615563"
+      },
+      "after": {
+        "counted_snapshot": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+        "core": 67140,
+        "reference": 65417,
+        "combined": 132557,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+        "production_blob_fingerprint": "41464d1b8e502f9175b2b1c3314d8c97ac29459e0c7d0d04ea31f50741f2b493"
+      },
+      "delta": 20,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+      "tree": "0f17009f47feb74e00c719ba316456bba9362a64",
+      "parent": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+      "before": {
+        "counted_snapshot": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+        "core": 67140,
+        "reference": 65417,
+        "combined": 132557,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "998f256a07bd22f8816be558534ca2af8e6a7be3",
+        "production_blob_fingerprint": "41464d1b8e502f9175b2b1c3314d8c97ac29459e0c7d0d04ea31f50741f2b493"
+      },
+      "after": {
+        "counted_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "core": 67145,
+        "reference": 65417,
+        "combined": 132562,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "production_blob_fingerprint": "4829bab1f35f28f588b59e9861f8730594c622fdc848f0ecac1770c0fa68dd08"
+      },
+      "delta": 5,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "f83a186dd7eb37c519f3b1506aca16ba6b91713a",
+      "tree": "c82788504c3f74cb8c2dbeae04ee441979123f5f",
+      "parent": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+      "before": {
+        "counted_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "core": 67145,
+        "reference": 65417,
+        "combined": 132562,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "production_blob_fingerprint": "4829bab1f35f28f588b59e9861f8730594c622fdc848f0ecac1770c0fa68dd08"
+      },
+      "after": {
+        "counted_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "core": 67145,
+        "reference": 65417,
+        "combined": 132562,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "f83a186dd7eb37c519f3b1506aca16ba6b91713a",
+        "production_blob_fingerprint": "4829bab1f35f28f588b59e9861f8730594c622fdc848f0ecac1770c0fa68dd08"
+      },
+      "delta": 0,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+      "tree": "ec93c146bd7c418aaf7ee653c7e3d7d3620519b9",
+      "parent": "f83a186dd7eb37c519f3b1506aca16ba6b91713a",
+      "before": {
+        "counted_snapshot": "ea70072014edbd585d23abd43e78dd4db0f61b8b",
+        "core": 67145,
+        "reference": 65417,
+        "combined": 132562,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "f83a186dd7eb37c519f3b1506aca16ba6b91713a",
+        "production_blob_fingerprint": "4829bab1f35f28f588b59e9861f8730594c622fdc848f0ecac1770c0fa68dd08"
+      },
+      "after": {
+        "counted_snapshot": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+        "core": 67158,
+        "reference": 65417,
+        "combined": 132575,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+        "production_blob_fingerprint": "1cf7c12d26b3daf7d6a2cdbe93c09b329a1611bef3a733243c3bf884ac81552b"
+      },
+      "delta": 13,
+      "commit_message_matches": true
+    },
+    {
+      "commit": "4ae36ad3a9c70b32b66c8280ac9496e9f1e345a9",
+      "tree": "2292ca5b49d1bd4fdf080929f667cf961566fc35",
+      "parent": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+      "before": {
+        "counted_snapshot": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+        "core": 67158,
+        "reference": 65417,
+        "combined": 132575,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+        "production_blob_fingerprint": "1cf7c12d26b3daf7d6a2cdbe93c09b329a1611bef3a733243c3bf884ac81552b"
+      },
+      "after": {
+        "counted_snapshot": "a2359620a7966314fbb2a96c98e8da958df72c6c",
+        "core": 67158,
+        "reference": 65417,
+        "combined": 132575,
+        "core_files": 349,
+        "reference_files": 193,
+        "exact_snapshot": "4ae36ad3a9c70b32b66c8280ac9496e9f1e345a9",
+        "production_blob_fingerprint": "1cf7c12d26b3daf7d6a2cdbe93c09b329a1611bef3a733243c3bf884ac81552b"
+      },
+      "delta": 0,
+      "commit_message_matches": true
+    }
+  ],
+  "totals_from": "81793239df4d73a3cd4f9a837633b1c88d800c19",
+  "total_delta": 2022
+}

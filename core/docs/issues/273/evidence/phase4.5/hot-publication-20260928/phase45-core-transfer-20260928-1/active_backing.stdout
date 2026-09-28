@@ -1,0 +1,45 @@
+
+running 32 tests
+test index_and_directory_pages_use_the_v2_framing ... ok
+test large_payload_extent_has_checked_range_and_inverse_identity ... ok
+test linux::active_quota_refusal_does_not_publish_a_partial_write ... ok
+test linux::captured_tail_keeps_g1_and_g2_bytes ... ok
+test linux::corrupted_inactive_tail_aborts_without_changing_acknowledged_bytes ... ok
+test linux::denied_tail_write_keeps_prior_acknowledgement_and_charged_candidate ... ok
+test linux::file_write_publishes_inode_extent_and_dirty_together ... ok
+test linux::generic_reconcile_keeps_unrelated_shared_pack_bindings ... ok
+test linux::hot_budget_refusal_keeps_revision_bytes_and_allocation_exact ... ok
+test linux::hot_eof_base_zero_and_shared_frontiers_have_bounded_publication ... ACTIVE_HOT ordinary=11316 max_candidate_pages=6 hot_writes=12285 admissions=1 carries=1003 seeks=100 visits=370820 index_writes=59629 directory_writes=12288 pack_writes=12288 leaf_min=Some(1815) branch_min=Some(1951) physical_bytes=4755456 reserved_hot_bytes=234840
+ok
+test linux::hot_eviction_epoch_reuse_and_frozen_directory_keep_exact_bytes ... ACTIVE_EPOCH before=[1, 1, 1, 1, 1, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] after=[1, 1, 1, 1, 1, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+ok
+test linux::indexed_read_keeps_base_holes_and_frozen_packed_bytes ... ok
+test linux::large_overwrite_crosses_index_pages_and_keeps_pack_tail_valid ... ok
+test linux::large_payload_and_tiny_overlap_share_one_active_view ... ok
+test linux::metadata_first_touch_keeps_inherited_bytes_and_selected_mtime ... ok
+test linux::namespace_records_share_one_revision_and_freeze_with_dirty_state ... ok
+test linux::one_pack_is_shared_by_128_short_files ... ACTIVE_MANY files=128 pack_pages=2 allocated_bytes=36864 physical_bytes=36864
+ok
+test linux::one_tiny_write_may_replace_128_one_byte_extents ... ok
+test linux::overlapping_tiny_edits_append_and_hole_have_one_final_view ... ok
+test linux::pooled_inode_namespace_and_dirty_records_share_index_pages ... ok
+test linux::pooled_pages_capture_and_exact_refund ... ok
+test linux::quota_pressure_pools_partially_dead_sealed_pages ... ACTIVE_PRESSURE remaining_before=122880 pack_before=3 pack_after=2 moved_page_writes=1
+ACTIVE_PRESSURE slots_moved=68 references_changed=68 pack_blocks_refunded=4096
+ok
+test linux::quota_refusal_keeps_first_page ... ok
+test linux::read_view_pins_same_generation_revision_without_capture ... ok
+test linux::reconcile_budget_refusal_keeps_the_acknowledged_selection ... ok
+test linux::repeated_4097_reclaims_dead_sealed_pages ... ACTIVE_REPEAT allocated_bytes=8192 physical_bytes=8192 pages=2 retired=0
+ok
+test linux::selecting_cohorts_only_visit_the_releasing_pin_in_both_orders ... ok
+test linux::separated_4096_storage_stays_within_three_mib ... ACTIVE_SEPARATED writes=4096 allocated_bytes=1802240 physical_bytes=1802240 pages=440
+ok
+test linux::thirty_two_retained_generations_release_exact_blocks ... ACTIVE_RETAINED generations=32 allocated_bytes=262144 physical_bytes=262144 retired=31
+ok
+test linux::truncate_then_extend_zeroes_old_bytes_without_changing_frozen_view ... ok
+test namespace_keys_follow_canonical_name_order ... ok
+test page_v1_checks_identity_and_all_bytes ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.68s
+

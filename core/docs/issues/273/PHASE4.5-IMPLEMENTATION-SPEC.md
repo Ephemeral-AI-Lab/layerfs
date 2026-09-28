@@ -1,9 +1,17 @@
 # #273 phase 4.5: bounded hot WRITE publication
 
-> **Status:** Implementation proposal; target replacement Core; not an
-> implemented format, performance result or released contract.
+> **Status:** Implementation specification, prospectively adopted at
+> `941613f65`. Private index v2 is implemented at `91c9c4938`; hot publication
+> and lifetime work is implemented through `a2359620a`, with the frozen
+> functional candidate/proof source `4ae36ad3a`. The [append-only
+> log](PHASE4.5-LOG.md), [frozen handoff](HANDOFF-PHASE45-FROZEN.md) and
+> [identity record](evidence/phase4.5/hot-publication-20260928/FROZEN-CANDIDATE.json)
+> state the verified scope and retained failures. No performance result or
+> release admission is claimed. Checkpoint 5 remains **NOT_RUN** pending owner
+> review. This status update changes no registered case, control, cache rule
+> or bound below.
 
-Source reviewed: `79eca5ddd1b8d6eb1f84a53f5e2486a83bac0d27`; the last
+Original proposal source reviewed: `79eca5ddd1b8d6eb1f84a53f5e2486a83bac0d27`; the last
 checkpoint-4 product change is `05fca30fb46a616a6988a60d3532f4255c9b3cf8`.
 The before-#273 control remains
 `48b51e874a41b3e1e6c6661e145316df8b408f07`.
@@ -68,8 +76,10 @@ records these owner requirements:
    rules do not assert zero callback blocking or a hard bound on OS/native
    I/O latency. Explicit shutdown/cancellation keeps its authorized lifecycle.
 
-Current reconcile scans changed-file extents and prepares index work while
-holding the Workspace state lock. Its hold is not size-independent. Do not
+At the proposal's reviewed source, reconcile scanned changed-file extents and
+prepared index work while holding the Workspace state lock. The following
+requirements govern its replacement; the implemented source and remaining
+affected work are recorded in the log. Do not
 add a global cache flush or process barrier. Prepare frozen dirty rows, saved
 facts and extent-deletion descriptions outside the state gate where their
 selected identity permits it. Under the gate, recheck each live inode version:
@@ -78,7 +88,7 @@ extents. Account remaining affected-index preparation/installation honestly;
 do not describe it as constant-time. A known C5 result remains owned if local
 reconcile fails; never resend it or await quiet writers to resolve custody.
 
-## 3. Current architecture: why a leaf cursor is insufficient
+## 3. Proposal-reviewed architecture: why a leaf cursor is insufficient
 
 ```text
 ordinary mounted WRITE

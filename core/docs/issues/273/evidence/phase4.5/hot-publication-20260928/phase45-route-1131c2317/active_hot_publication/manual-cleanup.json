@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "scope": "owned functional-test container and volume after retained diagnostics; original receipt unchanged",
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "rm",
+        "-f",
+        "layerfs-stage-8c25d09e67704245"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-8c25d09e67704245\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "volume",
+        "rm",
+        "layerfs-stage-8c25d09e67704245-data"
+      ],
+      "exit_code": 0,
+      "stdout": "layerfs-stage-8c25d09e67704245-data\n",
+      "stderr": ""
+    }
+  ]
+}

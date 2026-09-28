@@ -1,24 +1,24 @@
 # Ready-to-use task prompt: #273 checkpoint 5
 
-> **Status:** Checkpoint 5 deferred until this side lane completes
-> [phase 4.5 hot backing](PHASE4.5-IMPLEMENTATION-SPEC.md) and its focused
-> public/count/custody proof. The [research audit](PHASE4.5-RESEARCH-AUDIT.md)
-> records source gaps. Freeze the candidate afterward. Owner merge order is
+> **Status:** Checkpoint 5 is **NOT_RUN**, awaiting the owner's review of
+> frozen functional candidate `4ae36ad3a` (last product change `a2359620a`).
+> [Phase 4.5 hot backing](PHASE4.5-IMPLEMENTATION-SPEC.md), its focused
+> public/count/custody proof and source freeze are recorded in the
+> [phase-4.5 log](PHASE4.5-LOG.md) and
+> [frozen handoff](HANDOFF-PHASE45-FROZEN.md). Owner merge order is
 > complete #273 first, then merge the main lane/#264; main-lane integration
 > does not block this lane. Existing checkpoint-4 receipts remain historical
 > v1 functional evidence; no checkpoint-5 speed sample has been taken.
 >
-> **Phase-4.5 progress update:** step 4.5.1 (private index v2 format and
-> selected resolver) is implemented and verified at product source
-> `91c9c4938`; the [phase-4.5 log](PHASE4.5-LOG.md) and its
-> [receipts](evidence/phase4.5/) record the scope, the 14 reissued route cases
-> and the nonpassing/unrun lines. Step 4.5.2 (hot cursor admission and
-> eligible tiny-WRITE publication) is **not started**, so no hot route exists
-> yet and this prompt's gates are unchanged. Continue with the
-> [phase-4.5 continuation handoff](HANDOFF-PHASE45-CONTINUATION.md) before
-> starting checkpoint 5; that prompt carries the current recipe, the derived
-> binding rules and the guardrails. Do not treat the 4.5.1 receipts as
-> checkpoint-5 samples and do not freeze a candidate until 4.5.2–4.5.5 close.
+> **Phase-4.5 progress update:** steps 4.5.1–4.5.5 are implemented and
+> functionally proved at the scope in the log: v2 selection, charged hot EOF
+> and Base/Zero frontiers, carries/normalization/epochs, selecting-pin
+> retirement, precharged G1/G2 reconcile, 32 backing tests and all 17 public
+> functional cases. The [identity record](evidence/phase4.5/hot-publication-20260928/FROZEN-CANDIDATE.json)
+> pins product/harness/test/binary/fixture/build inputs. Historical failures
+> remain failures. No checkpoint-5 sample or enforced cold-cache comparison
+> exists; this prompt's registry, control and gates are unchanged. Start the
+> next checkpoint only after owner review of this frozen candidate.
 
 Continue issue [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273)
 on draft [PR #274](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274),

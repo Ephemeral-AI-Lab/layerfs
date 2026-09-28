@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace/tests/stage_route.py", line 444, in <module>
+    if __name__ == '__main__': main()
+                               ~~~~^^
+  File "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace/tests/stage_route.py", line 434, in main
+    execute(args, report, started)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/crates/layerfs-workspace/tests/stage_route.py", line 359, in execute
+    assert child.returncode == 0 and all(check['status'] == 'PASS' for check in report['checks'])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

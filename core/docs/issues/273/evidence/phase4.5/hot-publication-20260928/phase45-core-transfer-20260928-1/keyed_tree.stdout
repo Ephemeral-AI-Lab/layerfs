@@ -1,0 +1,8 @@
+
+running 1 test
+test one_walk_reaches_each_leaf_once_and_one_delete_rewrites_one_path ... KEYED_WALK keys=160 leaves=2 reads=3
+KEYED_DELETE deleted=160 candidates=8
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

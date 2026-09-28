@@ -1,0 +1,129 @@
+{
+  "environment": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1"
+  },
+  "commands": [
+    {
+      "label": "workspace-test",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "test",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "-p",
+        "layerfs-workspace"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 17.370989124989137
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "clippy",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 5.557676624972373
+    },
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "fmt",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.1633491670363583
+    },
+    {
+      "label": "boundary",
+      "command": [
+        "python3",
+        "core/tools/check_product_boundary.py"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.15161070902831852
+    },
+    {
+      "label": "boundary-tests",
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "core/tools",
+        "-p",
+        "test_*.py"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.11386783298803493
+    },
+    {
+      "label": "native-build",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "build",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "-p",
+        "layerfs-server",
+        "-p",
+        "layerfs-daemon",
+        "-p",
+        "layerfs-bridge",
+        "--bins",
+        "--features",
+        "layerfs-bridge/native",
+        "--example",
+        "public_key"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 7.157063000020571
+    },
+    {
+      "label": "linux-build",
+      "command": [
+        "cargo",
+        "+1.85.1",
+        "zigbuild",
+        "--release",
+        "--manifest-path",
+        "core/Cargo.toml",
+        "--locked",
+        "--offline",
+        "--target",
+        "aarch64-unknown-linux-musl",
+        "-p",
+        "layerfs-workspace",
+        "--tests"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 17.412783915991895
+    }
+  ]
+}

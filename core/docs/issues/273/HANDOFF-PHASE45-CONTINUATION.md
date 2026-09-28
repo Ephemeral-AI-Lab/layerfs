@@ -1,5 +1,12 @@
 # #273 phase 4.5 continuation handoff (prompt for the next agent)
 
+> **Superseded continuation prompt:** The state below is historical. Steps
+> 4.5.2–4.5.5 now have a frozen functional candidate at `4ae36ad3a` (last
+> product change `a2359620a`). Use the [frozen handoff](HANDOFF-PHASE45-FROZEN.md)
+> and [append-only log](PHASE4.5-LOG.md) for current status. Do not restart
+> implementation from this prompt's "not started" table. Checkpoint 5 is
+> still **NOT_RUN**, awaiting the owner's frozen-candidate review.
+
 > **Read this first, then the authority documents.** This is a handoff prompt,
 > not a contract or a result. It records the state at source `dcbaf4884`
 > (product source `91c9c4938`) so the next session can continue phase 4.5

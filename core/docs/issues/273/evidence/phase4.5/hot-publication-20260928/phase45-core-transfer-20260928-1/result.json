@@ -1,0 +1,153 @@
+{
+  "commands": [
+    {
+      "label": "active_backing",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/active_backing-f325d5782a2161dc:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 34.970068374997936
+    },
+    {
+      "label": "readable",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/readable-dd0f356b43c03bb3:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.29154400003608316
+    },
+    {
+      "label": "keyed_tree",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/keyed_tree-c2cba34196e86822:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.42156912497011945
+    },
+    {
+      "label": "attachment",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/attachment-953a7dec2121aafa:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.23465920804301277
+    },
+    {
+      "label": "backing_ownership",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/backing_ownership-9814894f008879bf:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.5749225000035949
+    },
+    {
+      "label": "pieces_sequence",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        "layerfs-issue273-transfer-33c72cbf7743:/work",
+        "-v",
+        "/Users/yifanxu/.codex/worktrees/issue273-active-head/layerfs/core/target/aarch64-unknown-linux-musl/release/deps/pieces_sequence-9adc298e1564ba90:/tests/runner:ro",
+        "-e",
+        "TMPDIR=/work",
+        "-e",
+        "LAYERFS_ACTIVE_TEST_ROOT=/work",
+        "-e",
+        "LAYERFS_CONSTRUCTION_WORKERS=1",
+        "sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8",
+        "/tests/runner",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.7199845410068519
+    }
+  ],
+  "cleanup": {
+    "exit_code": 0,
+    "stdout": "layerfs-issue273-transfer-33c72cbf7743\n",
+    "stderr": ""
+  }
+}

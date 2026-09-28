@@ -1,0 +1,8 @@
+
+running 1 test
+test linux::stage_active_generation ... STAGE_CHECK active-g1-staged-bytes-and-g2-live-bytes PASS
+STAGE_CHECK active-g1-g2-commits-and-final-bytes PASS
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.08s
+
