@@ -1852,6 +1852,10 @@ mod linux {
             physical_private_files(&private).0,
             f.workspace.backing_status().unwrap().allocated_bytes
         );
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.forget(other.serial, 1, ReferenceScope::Local);
+        f.workspace
+            .forget(unrelated.serial, 1, ReferenceScope::Local);
         f.workspace.close_clean().unwrap();
         assert_eq!(physical_private_files(&private), (0, 0));
         check("active-hot-exact-blocks-and-clean-close");
