@@ -1673,7 +1673,10 @@ mod linux {
             second_oracle[index * 2] = b'Z' - (index % 24) as u8;
         }
         let after = f.workspace.backing_status().unwrap();
-        assert!(ordinary > 980);
+        let hot = after.active_hot_writes - before.active_hot_writes;
+        let carries = after.active_hot_carries - before.active_hot_carries;
+        assert!(hot >= 1022, "bounded hot support: {hot}");
+        assert!(ordinary > 0 && ordinary + carries >= hot);
         assert!(after.active_hot_admissions - before.active_hot_admissions < 16);
         assert!(
             after.active_hot_nodes <= 64
