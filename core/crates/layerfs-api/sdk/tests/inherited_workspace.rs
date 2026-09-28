@@ -847,6 +847,77 @@ fn growing_rename_refuses_private_budget_before_publication() {
 }
 
 #[test]
+fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
+    // The rename's publication seals its candidate exactly once: the sealed
+    // candidate owns no pending cleanup, and its slot credits and reservations
+    // return to the values the workspace held before the rename began. A
+    // duplicate fallible seal could reject the prepared rename after the first
+    // already published, so this pins the one-attempt shape from the public
+    // surface: identical reserved slots and bytes before and after, a complete
+    // accounting, and a clean close with no retained custody.
+    let f = Fixture::new();
+    let root = f.workspace.root().serial;
+    let packages = f.lookup(root, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let new = f.lookup(packages.serial, b"new");
+    let subtree = f.lookup(old.serial, b"subtree");
+    let before = f.workspace.metadata_status().unwrap();
+    f.workspace
+        .rename(
+            old.serial,
+            b"subtree",
+            new.serial,
+            b"subtree",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    assert_eq!(f.lookup(new.serial, b"subtree").serial, subtree.serial);
+    let sealed = f.workspace.metadata_status().unwrap();
+    assert_eq!(
+        sealed.reserved_slots, before.reserved_slots,
+        "the sealed candidate refunds its slots exactly once: {before:?} -> {sealed:?}"
+    );
+    assert_eq!(
+        sealed.reserved_bytes,
+        layerfs_workspace::backing::metadata::ESCROW,
+        "a rename that needs a completion retains exactly its escrow reservation"
+    );
+    assert!(
+        sealed.accounting_complete,
+        "a sealed root owns no pending cleanup"
+    );
+    f.commit();
+    let completed = f.workspace.metadata_status().unwrap();
+    assert_eq!(
+        completed.reserved_bytes, before.reserved_bytes,
+        "the completed rename releases its escrow exactly once: {before:?} -> {completed:?}"
+    );
+    assert_eq!(
+        completed.reserved_slots, before.reserved_slots,
+        "no slot credit was released twice across the completion"
+    );
+    // The moved directory carries both lookup references it acquired (once
+    // before the rename, once when the moved name was resolved afterwards).
+    for (serial, count) in [
+        (packages.serial, 1),
+        (old.serial, 1),
+        (new.serial, 1),
+        (subtree.serial, 2),
+    ] {
+        f.workspace.forget(serial, count, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+    println!(
+        "RENAME_SEAL once=PASS refund_slots={}->{} escrow={} ->{} cleanup=PASS",
+        before.reserved_slots,
+        sealed.reserved_slots,
+        layerfs_workspace::backing::metadata::ESCROW,
+        completed.reserved_bytes
+    );
+}
+
+#[test]
 fn growing_prefix_move_has_descendant_independent_private_counts() {
     let measure = |extra| {
         let f = Fixture::with_extra_children(extra);

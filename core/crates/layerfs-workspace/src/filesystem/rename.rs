@@ -514,7 +514,12 @@ impl Workspace {
             )?);
             root = candidate.update(root, cells, window, deadline)?;
         }
-        candidate.seal(root, window, deadline)?;
+        // One attempted seal: the candidate drains its temporary pages,
+        // custodies and queued cleanup once and refunds its reservations once.
+        // A second fallible pass over the same sealed candidate could reject an
+        // otherwise prepared rename - a closed host or a poisoned lock between
+        // the two calls fails the second while the first already published the
+        // root - without doing any work the first call left behind.
         candidate.seal(root, window, deadline)?;
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         let mut state = self.state()?;
