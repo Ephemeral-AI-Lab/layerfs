@@ -206,12 +206,15 @@ def bootstrap(service_dir, port, client_key, server_public, wide, data_mode=0o64
     daemon, _ = route.start_daemon(service_dir, port, client_key, server_public, 1, None)
     try:
         source = import_path(service_dir)
-        # The native/unknown SaveFile fault runs a 4 MiB in-place edit. Import
-        # a file at least that large for those cases; the default 326300-byte
-        # fixture would refuse in the test's own precondition before SaveFile.
-        assert data_bytes in (FIXTURE_BYTES, 4 * 1024 * 1024)
-        data = (bytes(range(251)) * ((data_bytes + 250) // 251))[:data_bytes]
-        (source / 'data.bin').write_bytes(data)
+        # The native/unknown SaveFile fault edits four MiB; lowering probes a
+        # distant 32-MiB base range. Import each case's real declared extent,
+        # not the 326300-byte default that refuses in the test's own oracle.
+        assert data_bytes in (FIXTURE_BYTES, 4 * 1024 * 1024, 64 * 1024 * 1024)
+        cycle = bytes(range(251)) * 263
+        with (source / 'data.bin').open('wb') as target:
+            for offset in range(0, data_bytes, 65536):
+                length = min(65536, data_bytes - offset)
+                target.write(cycle[offset % 251:offset % 251 + length])
         (source / 'other.bin').write_bytes(FIXTURE_PAYLOAD)
         if wide:
             for index in range(102):
@@ -293,7 +296,9 @@ def execute(args, report, started):
         report['fixture'] = bootstrap(
             service_dir, port, client_key, server_public,
             args.case == 'frontier', DATA_MODES.get(args.case, 0o644),
-            data_bytes=4 * 1024 * 1024 if args.case in ('native_save', 'unknown_save') else FIXTURE_BYTES)
+            data_bytes=(64 * 1024 * 1024 if args.case == 'lowering' else
+                        4 * 1024 * 1024 if args.case in ('native_save', 'unknown_save') else
+                        FIXTURE_BYTES))
         command(['docker', 'volume', 'create', volume]); made_volume = True
         command(['docker', 'run', '-d', '--privileged', '--cpus=2', '--name', name,
                  '--add-host', 'host.docker.internal:host-gateway',
