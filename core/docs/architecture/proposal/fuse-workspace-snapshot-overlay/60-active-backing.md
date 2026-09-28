@@ -230,6 +230,15 @@ publishes one revision and one 4-KiB metadata page without holding RootOwner
 completion escrow. A later Commit may hold its *own* canonical root reservation
 until checked clean close, where the corresponding slots/bytes/pages refund.
 
+**Mounted-namespace follow-up (same commit as this paragraph; first parent
+`543fa4e75`):** the charged resident ancestor closure remains available as
+an internal component-relative lookup locator after `forget`, but a node
+retained **only** by descendants (zero lookup, projection lookup and open-handle
+references) is not itself a public `getattr` lease. The public `getattr`
+refuses that forgotten serial with `NotFound`; a held descendant may still
+resolve through its internal ancestor. This separates caller visibility from
+charged retention and does not weaken the detached-parent mutation refusal.
+
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old
 keyed-root decoders and canonical/frozen-root readers remain for captured

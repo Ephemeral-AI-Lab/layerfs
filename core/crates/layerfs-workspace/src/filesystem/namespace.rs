@@ -219,7 +219,19 @@ impl Workspace {
     pub fn getattr(&self, serial: u64) -> Result<NodeAttributes, WorkspaceError> {
         let state = self.state()?;
         self.available(&state)?;
-        Ok(state.presented(state.node(serial)?.attr))
+        let node = state.node(serial)?;
+        // The active ancestry closure may retain a forgotten ancestor as an
+        // internal locator while its descendant has a handle. Retention is not
+        // a caller lookup: getattr on the forgotten serial still refuses.
+        if state.is_active
+            && serial != self.inner.root.serial
+            && node.lookups == 0
+            && node.projection_lookups == 0
+            && node.handles == 0
+        {
+            return Err(WorkspaceError::NotFound);
+        }
+        Ok(state.presented(node.attr))
     }
     pub fn forget(&self, serial: u64, count: u64, scope: ReferenceScope) {
         if let Ok(mut state) = self.state() {
