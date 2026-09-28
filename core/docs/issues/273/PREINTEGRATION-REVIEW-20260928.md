@@ -185,3 +185,17 @@ its self-tests and `git diff --check`, plus owned capable Linux native proofs.
 This reviewer has macOS arm64 and no Docker CLI in this shell; no owned ext4
 resource or combined executable was used. No binaries, other owners' receipts,
 Docker resources or working trees modified. No CI or retired preflight run.
+
+### Subsequent external publication (after the review snapshot)
+
+Using authenticated `gh`, the source-bound [#274 evidence summary](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274#issuecomment-5873088937)
+was posted, followed by an explicit [archive-link correction](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274#issuecomment-5873095626):
+the archive was committed *after* the `4ae36ad3a` functional-source
+commit, so the first comment's archive link at that SHA does not exist.
+The corrected link targets the archive at `0a932faaa`. The [#276 owner
+request](https://github.com/Ephemeral-AI-Lab/layerfs/issues/276#issuecomment-5873101805)
+asks for §1 same-Workspace lease or named waiver, §2 common cache/phase-cgroup
+capability or numerical ineligibility ruling, and §5 ownership/disposition
+of the two red tests. These are **requests, not owner approvals**. Neither
+comment changes a historical raw receipt, PR review state or combined-tree
+NOT_BUILT decision.
