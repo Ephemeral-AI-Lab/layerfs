@@ -1069,3 +1069,44 @@ no GitHub URL is claimed for the gitignored raw records.
   inspection/removal and checksum manifest are **local gitignored** files
   at `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-015/`.
   Verify `SHA256SUMS` *from its directory*. No GitHub raw-evidence URL exists.
+
+### Iteration 015 RCA addendum — source-proven *charged* map-node overlap
+
+The original C5 owner table above reports real **Budget charges**, not
+allocator-live memory. Further source audit of `lifetime.rs::publish_reconcile_map`
+identifies a specific avoidable *accounting overlap* after
+`updates.into_iter().collect::<Vec<_>>()`: every original `BTreeMap` node has
+been consumed/deallocated, while `_updates_charge` still retains its
+`128 bytes/entry` map-node allowance; separately `_scratch` now charges
+`48 bytes` per ordered `(Vec<u8>, Option<Vec<u8>>)` tuple. The keys/values
+were **moved**, not freed; their actual retained capacities, the ordered
+Vec's actual capacity, mutation staging and selected G1/G2 still require
+charging. This is not permission to drop `_updates_charge` wholesale or
+remove the index scratch estimate on a guess.
+
+For the observed last Commit in the four public dispersed tiers, initial
+map entries are exactly `deletion_keys+2` (one dirty key and one inode key).
+The archived charge matches
+`128*(deletion_keys+2) + deletion_key_bytes + 17 + 9 + 416`
+**exactly** at each tier:
+
+| WRITEs | Initial map entries | Map-node-only charge retained *after* move | Hypothetical proposed total after safely transferring just freed map-node allowance |
+| ---: | ---: | ---: | ---: |
+| 100 | 303 | 38,784 | 2,176,626 |
+| 512 | 1,539 | 196,992 | 2,625,506 |
+| 4,097 | 12,141 | 1,554,048 | 6,367,106 |
+| **8,192 diagnostic** | 16,388 | **2,097,664** | **7,426,896** |
+
+The last total is **961,712 below** the unchanged 8 MiB Budget *at the
+previous refusal boundary*, not a proof that subsequent candidate staging
+or owner cleanup succeeds. The old map node allocation has ended, so this
+is a narrower, source-backed version of design A: prospectively precharge
+and verify the **actual old+new Vec capacity** during conversion, retain the
+moved key/value buffer capacities and any separate compaction additions,
+then resize the map's charge only after old nodes have been consumed. Prove
+charged peak and post-canonical failure custody at every tier before an
+algorithm commit or new diagnostic. If it still cannot fit, refuse and seek
+an owner profile ruling. The derivation script's first attempt misspelled a
+raw field, **FAIL** in the local evidence; its corrected arithmetic and all
+raw public attempts are hashed in iter-015. No additional Stage attempt was
+run for this addendum and no historical failure was replaced.
