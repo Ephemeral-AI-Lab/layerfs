@@ -425,6 +425,14 @@ impl PayloadHost {
             .and_then(|used| used.checked_add(bytes))
             .is_none_or(|used| used > self.quota)
         {
+            if std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                eprintln!(
+                    "LFS_CAPACITY_REFUSAL v=1 domain=physical operation=payload_acquire site=backing/payload.rs allocated={} reserved={} request={} limit={}",
+                    state.allocated, state.reserved, bytes, self.quota
+                );
+            }
             return Err(bare_failure(
                 BackingPhase::Acquire,
                 io::ErrorKind::StorageFull,

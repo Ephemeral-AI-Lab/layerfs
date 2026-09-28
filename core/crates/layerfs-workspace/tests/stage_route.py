@@ -260,6 +260,7 @@ def execute(args, report, started):
     denied_key = os.urandom(32).hex() if args.case == DENIED_COMMIT_CASE else None
     grant = 127 if args.case == 'metadata_denied' else 255
     env = os.environ.copy()
+    report['capacity_diagnostic'] = env.get('LFS_CAPACITY_DIAGNOSTIC') == '1'
     env.update(LAYERFS_PRIVATE_KEY=server_key, LAYERFS_PEERS=f'1,{client_public},{int(time.time())+3600},{grant}',
                LAYERFS_STORE=str(service_dir / 'store.sqlite'), LAYERFS_LISTEN='0.0.0.0:0', LAYERFS_TELEMETRY='off',
                LAYERFS_HISTORY_CATALOG=str(service_dir / 'history.sqlite'), LAYERFS_HISTORY_CREATE='1',
@@ -299,6 +300,9 @@ def execute(args, report, started):
                       f'linux::{TEST_PREFIX}{args.case}', '--exact']
         if caller:
             invocation[3:3] = ['--user', caller]
+        if report['capacity_diagnostic']:
+            invocation[invocation.index(name):invocation.index(name)] = [
+                '-e', 'LFS_CAPACITY_DIAGNOSTIC=1']
         if args.case.startswith('active_source_grouping') or args.case.startswith('active_generic_profile'):
             invocation[invocation.index(name):invocation.index(name)] = [
                 '-e', 'LAYERFS_COMPLEXITY_DIAGNOSTIC=1']

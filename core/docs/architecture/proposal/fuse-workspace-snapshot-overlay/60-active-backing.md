@@ -322,3 +322,41 @@ allocation before Commit and 24,576 B afterward, below the prospective
 3 MiB checkpoint target. These runs do not enforce a cold cache and provide
 no eligible latency comparison. The public matrix, separate Commit controls,
 and #248 performance gate require the checkpoint-5 receipt set.
+
+### #273 C5 capacity observer (post-013 diagnostic source)
+
+`LFS_CAPACITY_DIAGNOSTIC=1` enables **refusal-only**, bounded production
+stderr records. `LFS_CAPACITY_REFUSAL v=1` identifies the actual failed
+`Budget::reserve` (including a `Charge::resize` caller) with attempted bytes,
+atomic observed used and the **8 MiB configured limit**, or the shared Host
+`metadata_reserve` / `payload_acquire` check with allocated, reserved, request
+and configured disk quota. The static Rust caller identifies the failing
+request, not necessarily its owning high-level operation. A `Capacity` from
+integer overflow, index height, allocator `try_reserve`, or some other site
+has **no** domain record; missing logs are *not* a zero or a physical proof.
+No refusal line is printed on accepted work; the opt-in records do not change
+admission. The parser in external tests requires a complete line with
+`used+request>limit` or `allocated+reserved+request>limit`.
+
+An active C5 error also emits a separately tagged **post-unwind** `LFS_C5_FAILURE_CONTEXT`:
+known canonical outcome, installed revision, Budget used, shared Host charge,
+active page count and pins. The latter values are sampled *after* scratch
+may have been dropped or candidate rollback completed; do not substitute
+these for the refusal-instant charge. If the canonical result is known but
+`installed_revision=None`, the operation cannot be retried blindly, and
+neither G1 refund nor G2 byte continuity is inferred from Docker cleanup.
+Telemetry has no file-format, C1/C2, owner-graph, admission or limit change.
+
+For a selected C5 patch with `D` deleted extent/inverse keys and `K` dirty
+rows, preparation retains charged `O(K+D)` rows/deletions concurrently with
+selected G1 and mutable G2. Reconcile then retains `O(D)` charged map and
+ordered patch scratch; compaction can retain `O(P)` logicals/partial/paired
+sets under pressure (P = scanned sealed pack locators), while the index
+candidate still owns new 4 KiB versions and the old selected pages until
+pins end. The heuristic `(updates.len()+32)*4096` selects the pressure branch,
+**not** a physical reservation. On a successful publication, dead G1 owners
+are only unlinked/refunded once their final selector/pins end. This observer
+alone neither proves an avoidable C5 allocation nor accounts for the rising
+no-key WRITE representation pages at 100/512/4,097 and 8,192; those require
+separate phase-local closure, carry, slot, eviction and pin classification
+before any algorithm or limit change.
