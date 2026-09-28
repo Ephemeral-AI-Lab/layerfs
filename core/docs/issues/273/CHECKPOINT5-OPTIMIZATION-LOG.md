@@ -1359,3 +1359,107 @@ run for this addendum and no historical failure was replaced.
   reissue its known canonical Commit; pursue unsupported SDK capability/
   owner ruling and matched private cache/cgroup control only under a
   prospectively authorized independent identity, keeping PR draft.
+
+## Iteration 018 — explicit C1-zero provenance; frozen control arranged, numeric admission blocked
+
+- **Prospective product telemetry:** `8801b9c095b9975eaa81fc98c738df6ef9752710`
+  (first parent `6f3cd00443ee092086e2ba19946a1ddb7cf64629`).
+  `layerfs-content::apply_edits` now prints its *returned* edit-tree node
+  counters once for every successful route, including the whole-file/no-op
+  early exits that previously returned without a record. Base-less
+  `SaveFile::construct_stream` prints an explicit zero only after checked
+  construction returned `nodes_read=0`; otherwise the source emits an
+  unparsable `INCOMPLETE` marker. `LFS_C1_EDIT_LOAD` is **edit-tree**
+  work, not `LFS_FILE_INPUT` Workspace-final extent records or
+  `LFS_C1_SAVE_COUNT` physical construction counts. The [counter
+  architecture](../../architecture/10-counters.md) was co-committed;
+  canonical C1/C2 bytes, selection, formats, Buffer/Budget/quota and
+  deadlines are unchanged. First-parent/staged/committed production LOC
+  under `python3 tools/production_loc.py --json --root <exact git archive
+  snapshot>`: Core **68,022 -> 68,031 (+9)**; reference **65,417 ->
+  65,417 (+0)**; combined **133,439 -> 133,448 (+9)**.
+- At the **new product identity**, one original `issue248-separated-4097-v1`
+  mounted public gate observation has full-byte/oracle/cleanup PASS,
+  accepted 4,097 WRITEs, complete deadline and anchored real product
+  `LFS_C1_EDIT_LOAD v=1 nodes_read=0 stored_nodes_read=0
+  draft_nodes_read=0`. The separately emitted `LFS_C1_SAVE_COUNT` reports
+  `nodes_read=0`; `LFS_FILE_INPUT` reports **16,389 record reads**.
+  Strict external parsing now records `C1_provenance=emitted_v1`,
+  `c1_work_observed=0`, `c1_counters_complete=true`; the previously
+  missing-zero gate is **resolved for this candidate identity**, not
+  retroactively repaired in iter-012/017. The gate's overall
+  `row_status=INELIGIBLE`, *not* numeric admission, for the independent
+  frozen-control/private-cache/phase-cgroup deficits.
+- A new sealed `prepare` on the same protected closed #271 masters reuses
+  the existing immutable shared oracle. One new candidate-only public
+  attempt per registered append/dispersed/repeated × 100/512/4,097
+  selection: **9/9** independent full-byte, oracle, four anchored WRITE
+  samples, Commit, cleanup, quota/Budget and 15/25-second complete limits
+  PASS; **9/9 numerically INELIGIBLE** without a matched eligible control.
+  Pack loads stay append **2/7/52**, dispersed **2/7/209**, repeated
+  **1/1/1**. Each row now has one complete real C1 edit-load record
+  (append **4/4/4**, dispersed **2,028/10,532/84,982**, repeated
+  **17/17/17** nodes read at 100/512/4,097). These are *candidate*
+  source counts, not a whole-WRITE speed law, a claim of zero for other
+  routes or an unchanged performance resample. Frozen #271 censored
+  25-second walls remain unusable as phase denominators. Full bytes do not
+  prove common private cache/cgroup provenance.
+- **Separate owned frozen control checkout prepared but NOT sampled:**
+  ignored `core/target/issue273/owned-frozen-271-control/` is detached
+  clean at original `48b51e874a41b3e1e6c6661e145316df8b408f07`, tree
+  `64d06dabba1a6d123d1002487c189809ded05cc0`; source/product seals
+  are recorded locally. The other owner's worktree and the frozen #271
+  product were **not** edited or used as a timer denominator. Only a
+  separately sealed common observer can be ported prospectively without
+  changing that product; a candidate-only C1 production observer does
+  **not** make a matched arm. No 12-row control sample was taken.
+- **Independent resource capability falsifier:** a new *owned*, untimed
+  Docker cgroup-v2 probe allocated and released 32 MiB shmem, then wrote
+  `0` to its apparently writable `memory.peak`. Although the write exited
+  `0`, `memory.peak` remained **36,163,584 bytes**, while post-reset
+  `memory.current` was **2,428,928**. This is lifetime peak, not a
+  proven phase-local peak. The candidate runner exports
+  `container_cgroup_memory=None` and cannot infer Exec/Commit cgroup
+  domains from it. Host whole-input invalidate/mincore PASS and Linux
+  O_DIRECT **requests** do not attest matching private container cache,
+  metadata, VM/backend/device or host cache. No cache warmup, surrogate
+  control timer or invalid cgroup reset was used. Numeric matched
+  control **NOT_RUN/INELIGIBLE** until independently verifiable common
+  capabilities are prospectively provided.
+- **SDK capability remains absent:** the public `WorkspaceApi` offers
+  mount/exec/commit/status/unmount only, not a live same-Workspace
+  pinned-journal lease across the two mandatory sequential SDK controls.
+  Both clean and one-edit rows emitted explicit `NOT_RUN` blockers;
+  detached Store and Workspace-only Stage proofs cannot replace them.
+  The separate [owner decision request](OWNER-RULINGS-SDK-CACHE-CONTROL.md)
+  asks for an approved lease/release/refund contract or a scoped waiver,
+  and for independent cache/phase-cgroup/matched-control capability or
+  an explicit ineligible ruling. **No ruling is presumed.** Exact
+  three-sequential-Exec and full mutations still **NOT_RUN**.
+- **All-tests release check is not green:** a broad host locked-release
+  `layerfs-content`/Server/Workspace/FUSE run **FAILS** two unrelated
+  `layerfs-content/tests/filesystem_ordering.rs` ordering-limit tests:
+  `a_fresh_build_charges_its_count_array_to_the_ordering_ceiling` and
+  `a_high_pending_ceiling_runs_spill_free_to_the_byte_bound`. These test
+  paths do not invoke the changed `apply_edits` observer; a paired
+  first-parent test run was **NOT_RUN**, so do not label their failure
+  proven pre-existing. Retain the red logs and request the owning lane
+  investigate; do not relax ceilings as a benchmark fix. Affected C1
+  edit-route tests and host Server/Workspace/FUSE suites PASS,
+  all-target warning-denying Clippy/fmt, product boundary 350 files and
+  tools 9/9 PASS. Exact aarch64 release Linux Stage/active-backing
+  compilation seal is unchanged because the C1 change is host-server
+  telemetry; prior Linux `active_backing` 32/32 ext4 proof remains
+  historical rather than replayed as a new sample. No release or speed
+  PASS follows from a targeted green subset.
+- Raw gate, all nine INELIGIBLE candidate rows, the two SDK `NOT_RUN`
+  blocker files, owned control tree/product seals, cgroup *failed reset*
+  stdout/stderr, broad red and targeted green test logs, exact commands,
+  immutable oracle/fixture/image/source identifiers and per-row/outer SHA
+  manifests are **gitignored local** files under
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-018/`.
+  Check each SHA manifest from its own directory; there is no GitHub raw
+  evidence URL. Iter-017 rows and old C1 INCOMPLETE receipt remain
+  unchanged. PR #274 stays draft and #273 open; owner capability/ruling
+  and the unrelated test red are the next falsifiers before any matched
+  numeric comparison or release consideration.
