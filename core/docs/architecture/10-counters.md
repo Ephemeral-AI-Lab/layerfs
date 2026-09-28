@@ -427,3 +427,26 @@ changed-closure diagnostic tests repeated and alternating generic WRITEs
 against full live/committed bytes and clean-close physical custody. No
 format, selected identity, eviction rule, timing boundary or benchmark
 admission contract changes with this telemetry.
+
+### #273 C1 edit-node zero provenance on every successful SaveFile route
+
+The diagnostic `LFS_C1_EDIT_LOAD v=1` counts C1 *edit-tree* stored/draft
+mapping-node loads, not Workspace extent records, FileInput spool records, C1
+whole-file payload assembly or metadata reads. `apply_edits` returns a checked
+`ConstructedFile` on whole-file, unchanged and chunked branches. The diagnostic
+now observes those **returned** `EditCounters` once outside the route-specific
+body: a whole-file early return cannot be mistaken for a missing zero, and
+chunked retains its actual node counts without duplicate emission. For a
+base-less `SaveFile`, the service invokes `construct_stream` rather than
+`apply_edits`; after checking its length, it emits a zero **only** if its
+returned construction reports `nodes_read=0`, otherwise it emits an explicit
+unparsable incomplete marker. The one-worker server emits no trace on a
+failed or timed-out construction. This is production telemetry for real public
+routes, not a test hook or assertion that missing counters are zero. The
+existing independent `LFS_FILE_INPUT` record covers Workspace final-extent
+reads; `LFS_C1_SAVE_COUNT` covers C1 construction work. These quantities are
+never substituted for each other. Neither canonical bytes, Store format,
+publication, resource admission nor timers are changed, and printing adds
+observer wall. Old receipts lacking this line remain INCOMPLETE; the frozen
+#271 product is unmodified, so no matched speed claim follows from this
+candidate-only telemetry.
