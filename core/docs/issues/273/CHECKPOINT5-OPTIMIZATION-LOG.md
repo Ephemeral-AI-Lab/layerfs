@@ -1585,3 +1585,53 @@ raised, no frozen #271 arm is sampled, and draft PR #274/#273 remain open.
   No GitHub raw-evidence URL is asserted. SDK pin/owner ruling, frozen
   matched control, private cache and phase-cgroup capabilities remain
   **NOT_RUN/INELIGIBLE**. PR #274 remains draft and #273 open.
+
+## Owner-directed scoped closure and **one** deferred issue (documentation only)
+
+> **Owner correction, 2026-09-28:** Close the development issues #265, #266,
+> #270, #271 and #273, but track *all* known limitations in **one** open issue
+> carrying the `deferred` tag, not several open deferred issues. This is an
+> issue-management decision, **not** an algorithm experiment, release waiver,
+> matched speed admission, or instruction to merge a draft PR.
+
+The candidate branch through `9e906331a2001bab13cc3d028e9eded10835cf87`
+was pushed to draft [PR #274](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274)
+before the owner-directed GitHub closures. GitHub confirms
+[#265](https://github.com/Ephemeral-AI-Lab/layerfs/issues/265),
+[#266](https://github.com/Ephemeral-AI-Lab/layerfs/issues/266),
+[#271](https://github.com/Ephemeral-AI-Lab/layerfs/issues/271) and
+[#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273) **CLOSED as
+scoped branch handoffs**, not merged/released product or numeric performance
+claims. [#270](https://github.com/Ephemeral-AI-Lab/layerfs/issues/270) was
+closed **deferred/superseded (`not planned` in the original issue)**; its
+seven unchecked path-local C1 directory-move Commit conditions were never
+claimed implemented. Draft PRs #262, #269, #272 and #274 remain unmerged;
+PR #274 remains draft.
+
+The **sole open deferred-tagged tracker for these limitations** is
+[#276](https://github.com/Ephemeral-AI-Lab/layerfs/issues/276), whose current
+body retains owner choices and exit conditions for SDK same-Workspace pin
+or explicit waiver, matched private cache/phase-cgroup/frozen-control
+capability, normalization and package-scale C5 limitations, #270's
+unimplemented C1 move-Commit acceptance, two red filesystem-ordering tests,
+and draft PR integration. Six initially created provisional split issues
+[#277](https://github.com/Ephemeral-AI-Lab/layerfs/issues/277)–
+[#282](https://github.com/Ephemeral-AI-Lab/layerfs/issues/282) are **CLOSED
+as superseded duplicates, not completed**; their historical bodies and
+closing comments redirect to the appropriate section of #276. A correcting
+comment was added to each original issue and draft PR #274; no GitHub issue
+history or raw experimental receipt was deleted or relabelled.
+
+C1 edit-load-zero at #248 is a changed-candidate functional proof, the nine
+candidate mounted rows are still numerically **INELIGIBLE**, SDK clean/
+one-edit pinned controls **NOT_RUN**, and matched private cache/phase-cgroup
+control **NOT_RUN/INELIGIBLE**. The broad Core ordering tests remain red
+in iteration 018. No owner SDK/cache waiver, merge, 2×/10×, package-scale,
+CI-green or release PASS is implied by these GitHub closures. The former
+iteration-019 raw diagnostic stays local/gitignored with its verified
+own-directory checksum manifest; no GitHub raw URL is published.
+
+This entry changes only documentation. Production LOC by
+`python3 tools/production_loc.py --json --root <exact first-parent/staged/
+committed git archive snapshot>`: Core **68,031 -> 68,031 (+0)**,
+reference **65,417 -> 65,417 (+0)**, combined **133,448 -> 133,448 (+0)**.
