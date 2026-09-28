@@ -143,3 +143,17 @@ registry's `issue273-multi-exec-v1`, three-generation
 need their named receipts; existing focused checkpoint-3/4 tests cover parts
 of those behaviors but are not those registered selections. No 2× claim,
 release admission, PR merge or issue closure follows from checkpoint 4.
+
+## Later owner direction: phase 4.5 before checkpoint 5
+
+On 2026-09-28 the owner requested a researched
+[phase 4.5 hot-backing implementation spec](PHASE4.5-IMPLEMENTATION-SPEC.md)
+before checkpoint 5, with the [three-subagent audit](PHASE4.5-RESEARCH-AUDIT.md).
+Scope is hot WRITE; concurrent Exec remains a compatibility constraint.
+Repository AGENTS.md now requires incremental private backing before and
+after Commit and continued running processes without pause/drain/remount.
+Fully complete #273, including checkpoint 5, before the main lane/#264 merges;
+its namespace/resource work is a later integration contract.
+This planning addition changes no checkpoint-4 result and takes no new
+performance sample. The [checkpoint-5 prompt](HANDOFF-CHECKPOINT5.md) now
+carries the phase 4.5 prerequisite.

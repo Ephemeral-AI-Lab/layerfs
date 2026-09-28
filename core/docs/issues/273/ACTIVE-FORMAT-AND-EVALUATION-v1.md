@@ -6,6 +6,14 @@
 > 4,097-WRITE gate remains a distinct, unchanged selection. The source baseline
 > is `48b51e874a41b3e1e6c6661e145316df8b408f07`.
 
+> **Later source audit / owner direction (2026-09-28):** The active route's
+> resident Nodes and dirty identities grow through Budget admission; the
+> 256-node/128-successor-dirty wording below is not enforced there as stated.
+> #264 owns the main lane's namespace/resource work and integrates after this
+> side lane completes. The [phase 4.5 proposal](PHASE4.5-IMPLEMENTATION-SPEC.md)
+> defines prospective v2 hot publication before checkpoint 5. This notice
+> changes no historical page grammar, receipt, registered case or limit.
+
 > **Preimplementation correction, 2026-09-27:** The direct physical slot
 > choice in checkpoint commit `d9f8ef615` would make each safe shared-tail
 > copy repoint every live extent on that page, including unrelated files.

@@ -1,5 +1,13 @@
 # Ready-to-use task prompt: #273 checkpoint 5
 
+> **Status:** Checkpoint 5 deferred until this side lane completes
+> [phase 4.5 hot backing](PHASE4.5-IMPLEMENTATION-SPEC.md) and its focused
+> public/count/custody proof. The [research audit](PHASE4.5-RESEARCH-AUDIT.md)
+> records source gaps. Freeze the candidate afterward. Owner merge order is
+> complete #273 first, then merge the main lane/#264; main-lane integration
+> does not block this lane. Existing checkpoint-4 receipts remain historical
+> v1 functional evidence; no checkpoint-5 speed sample has been taken.
+
 Continue issue [#273](https://github.com/Ephemeral-AI-Lab/layerfs/issues/273)
 on draft [PR #274](https://github.com/Ephemeral-AI-Lab/layerfs/pull/274),
 branch `codex/issue273-active-head`, in the existing isolated checkout
