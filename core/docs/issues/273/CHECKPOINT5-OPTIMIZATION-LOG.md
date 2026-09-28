@@ -537,3 +537,45 @@
   in an owned checkout, phase-local resource/cache proof, exact multi-Exec
   and mutation coverage, and separate WRITE publication amplification
   analysis. **Checkpoint 5 is not complete.**
+
+### Iteration 010: phase-local WRITE scaling from retained samples
+
+The final sampling checkpoint is WRITE **100/512/4,096** (not 4,097) in
+these three tiers; the last WRITE and Commit occur after the last 4,096
+sample. These are cumulative-from-command-start backing counters sampled
+*inside Exec*, not lifetime cgroup peaks or final Commit source reads. For
+each row below, columns are hot writes / admissions / normalizations /
+index seeks / index page writes / pack page writes / retirement inspections:
+
+| Schedule | At 100 | At 512 | At 4,096 |
+| --- | --- | --- | --- |
+| Append | 98 / 1 / 0 / 45 / 255 / 100 / 347 | 510 / 1 / 0 / 45 / 1,940 / 512 / 2,416 | 4,094 / 1 / 0 / 50 / 16,672 / 4,096 / 20,488 |
+| Dispersed | 5 / 27 / 27 / 1,443 / 373 / 100 / 461 | 5 / 396 / 398 / 7,623 / 2,827 / 512 / 3,295 | 5 / 3,936 / 4,330 / 61,389 / 26,392 / 4,096 / 30,142 |
+| Repeated | 0 / 0 / 0 / 1,601 / 100 / 100 / 198 | 0 / 0 / 0 / 8,203 / 512 / 512 / 1,022 | 0 / 0 / 0 / 65,637 / 4,096 / 4,096 / 8,190 |
+
+Index seeks per accepted WRITE are append 0.45/0.088/0.012,
+dispersed 14.43/14.89/14.99, repeated 16.01/16.02/16.02.
+The repeated route always changes one file-offset record but still performs
+~16 bounded selected-index seeks each WRITE; this is not evidence of a
+*new growing* unrelated-prefix search. Dispersed index writes per WRITE
+3.73/5.52/6.44 and retirement inspections per WRITE 4.61/6.44/7.36
+rise with selected height, changing closure and evicted working set;
+they must not be called an O(1) guarantee. Append index writes per WRITE
+2.55/3.79/4.07 coincide with 3/26/224 hot carries and a growing
+height; its independent pack and directory page writes remain one each
+per accepted acknowledgement. Repeated index/pack creations are one each
+per acknowledgement, with no hot eligibility falsely granted.
+
+At 4,096 append, 4,096 pack + 16,672 index = **20,768** new 4-KiB
+pages, requiring 85,065,728 source-requested direct write bytes and the
+same immediate authenticated readback bytes. Physical I/O is cumulative;
+retained allocation at that checkpoint was 1,146,880 bytes, a different
+domain. Direct write/readback CPU-inclusive scoped times are
+1,833.316/943.854 ms in the append row; dispersal's sampled index work
+and retired-owner closure are larger. These counters do **not** prove
+that every index page and one immutable version per affected owner is
+necessary, nor establish phase-local RSS/cgroup or host/device traffic.
+Avoidability of generic admission/normalization turnover and the remaining
+physical publication multiplication therefore remains a source-analysis
+item; the nine verified but INELIGIBLE candidate rows cannot close the
+§8/§10 no-bad-factor or numeric admission gates by themselves.
