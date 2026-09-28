@@ -371,3 +371,24 @@ quadratic full-patch prefix search in reconcile. It also identifies quick-row
 observer/retained-journal coverage gaps and arithmetic corrections to the
 derived slowness summary. See the research for exact source/receipt anchors,
 measured-region attribution, prediction limits and the next causal diagnostics.
+
+## 13. Owner-authorized optimization and iterative testing handoff
+
+The owner requested an implementation handoff that executes
+`optimize/fix -> run tests -> record result -> synthesize` until no bad scaling
+factor remains in the covered scope. The
+[optimization handoff](HANDOFF-CHECKPOINT5-OPTIMIZATION.md) records that explicit
+authorization, the measurement correction, the first product fix in
+`active/reclaim.rs`, bounded Commit source grouping, publication profiling and
+optimization, per-iteration evidence and final qualification criteria.
+
+Targeted tests after meaningful changes are authorized despite the local default
+against iterative verification. Unchanged-arm performance resampling,
+warm-cache credit, relaxed limits and historical receipt relabelling remain
+prohibited. The new task resumes product optimization; older frozen/NOT_RUN
+handoff task states are historical, not a reason to stop authorized work.
+
+This documentation update changes no product, runs no Cargo/Docker/product-test,
+harness-test or performance command, and preserves all archived samples and
+statuses. It was written against `073f374300ad2f4acf2b0ab1818ad9cae4f55fba`. The implementation,
+new tests/diagnostics and corrected matched collection remain for the next agent.
