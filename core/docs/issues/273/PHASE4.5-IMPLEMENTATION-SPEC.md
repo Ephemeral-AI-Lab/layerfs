@@ -813,3 +813,16 @@ limits or move preparation out of Commit. With D=128, at most five charged
 capacity expansions (8/16/32/64/128) replace up to 128 one-slot reserve
 requests. The allocator may grow in place in either version; the worst-case
 prefix-copy bound, not a measured allocator speedup, is what changes.
+
+### Checkpoint-5 geometric-growth overlap correction (prospective)
+
+The first geometric extent/row growth reserved the new vector's capacity but
+not the transient old + new capacity overlap during reallocation. Replace
+implicit Vec reallocation with a separate destination: reserve *old capacity
+plus destination capacity* before allocating, check and charge its actual
+capacity before moving any records, then drop the emptied old allocation and
+refund its capacity. Charge required name bytes once while both row descriptor
+vectors exist. This is a custody/refusal correction, not a measured speed
+improvement. Earlier iterations 009/010 remain count and functional evidence,
+**not** complete transient-memory/Budget proof. Publish any resource proof
+only from a new committed candidate and a separately retained result.

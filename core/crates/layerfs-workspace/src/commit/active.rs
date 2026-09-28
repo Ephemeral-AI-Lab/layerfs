@@ -317,13 +317,26 @@ pub(super) fn scan_extents(
                 // before allocating; never scan unrelated file extents again.
                 let target = needed.max(extents.capacity().saturating_mul(2));
                 charge.resize(
-                    target
-                        .checked_mul(std::mem::size_of::<Extent>())
+                    extents
+                        .capacity()
+                        .checked_add(target)
+                        .and_then(|slots| slots.checked_mul(std::mem::size_of::<Extent>()))
                         .ok_or(WorkspaceError::Capacity)?,
                 )?;
-                extents
-                    .try_reserve_exact(target - extents.len())
+                let mut next = Vec::new();
+                next.try_reserve_exact(target)
                     .map_err(|_| WorkspaceError::Capacity)?;
+                // Count the allocator's actual capacity while both buffers
+                // exist, before moving selected records or publishing them.
+                charge.resize(
+                    extents
+                        .capacity()
+                        .checked_add(next.capacity())
+                        .and_then(|slots| slots.checked_mul(std::mem::size_of::<Extent>()))
+                        .ok_or(WorkspaceError::Capacity)?,
+                )?;
+                next.append(&mut extents);
+                extents = next;
             }
             charge.resize(extents.capacity() * std::mem::size_of::<Extent>())?;
             for (key, value) in page.entries() {
@@ -384,13 +397,24 @@ fn directory_rows(
                 // row on each page. Grow a charged capacity geometrically.
                 let target = rows.capacity().max(4).saturating_mul(2);
                 charge.resize(
-                    target
-                        .checked_mul(slot_bytes)
+                    rows.capacity()
+                        .checked_add(target)
+                        .and_then(|slots| slots.checked_mul(slot_bytes))
                         .and_then(|bytes| bytes.checked_add(name_bytes))
                         .ok_or(WorkspaceError::Capacity)?,
                 )?;
-                rows.try_reserve_exact(target - rows.len())
+                let mut next = Vec::new();
+                next.try_reserve_exact(target)
                     .map_err(|_| WorkspaceError::Capacity)?;
+                charge.resize(
+                    rows.capacity()
+                        .checked_add(next.capacity())
+                        .and_then(|slots| slots.checked_mul(slot_bytes))
+                        .and_then(|bytes| bytes.checked_add(name_bytes))
+                        .ok_or(WorkspaceError::Capacity)?,
+                )?;
+                next.append(&mut rows);
+                rows = next;
             }
             charge.resize(
                 rows.capacity()
