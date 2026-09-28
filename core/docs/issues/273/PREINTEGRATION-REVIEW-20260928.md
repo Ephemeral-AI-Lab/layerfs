@@ -199,3 +199,28 @@ capability or numerical ineligibility ruling, and §5 ownership/disposition
 of the two red tests. These are **requests, not owner approvals**. Neither
 comment changes a historical raw receipt, PR review state or combined-tree
 NOT_BUILT decision.
+
+### Follow-up source diagnosis and owner-facing PR comments
+
+After rechecking the same live PR heads and open #276, posted a scoped
+[#269 change request](https://github.com/Ephemeral-AI-Lab/layerfs/pull/269#issuecomment-5873181294)
+for the duplicate seal and a [#263 dependency review comment](https://github.com/Ephemeral-AI-Lab/layerfs/pull/263#issuecomment-5873221907).
+These comments are not formal independent approvals or combined-tree results.
+
+Static analysis of the retained two C1 ordering failures identified a more
+specific candidate cause, sent to the [#276 owning-lane request](https://github.com/Ephemeral-AI-Lab/layerfs/issues/276#issuecomment-5873211761).
+At #274 `core/crates/layerfs-content/src/filesystem/update.rs:535-549`,
+`unreachable_parents` stores **every positive child binding** in `bound`
+and refuses when `bound.len() > ordering_bytes/1024`. The high-pending
+fixture's calibrated `ordering_bytes = 2*96*rows` can consequently hit
+`limit:18,actual:19` while its intended pending-row charge fits. The fresh
+count-array fixture uses only `102*16` ordering bytes; the same all-child
+check precedes the intended count-array check. Yet the function needs to
+identify only new directory *parents* left unbound (`update.rs:553-567`).
+This is a **source hypothesis**, not a fix, backtrace, paired parent run or
+new test outcome. `git blame` attributes that refusal to shared base
+`6af2c5c`; identical source at #272 and #274 does **not** prove a paired
+first-parent broad test result. Owning C1 lane must trace, repair or rule
+with correct charged storage and both tests, without enlarging the ceiling.
+The two FAILs and paired-parent NOT_RUN remain unchanged. #276 has no
+owner decision; integration remains NOT_BUILT.
