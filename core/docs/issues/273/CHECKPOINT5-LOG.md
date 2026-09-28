@@ -326,6 +326,16 @@ python3 core/crates/layerfs-workspace/tests/stage_route.py \
 9. Concurrent SDK Exec, multiple daemon mounts, deadline-free command lifetime
    and command leases belong to #249 and were not implemented or measured.
 
+## 10b. Reviewer-facing slowness report
+
+`CHECKPOINT5-SLOWNESS-REPORT.md` is a derived, reviewer-facing summary of this
+log that reports slowness in both directions: the three registered bound misses
+on the frozen control, the per-row metric directions, the five cells where the
+candidate is slower, a labelled derived diagnostic that separates attributed
+from unattributed lifecycle time, the four disqualifiers that prevent any
+qualified speed claim, and a claim-mapping table. It adds no sample and no new
+metric.
+
 ## 11. Production LOC
 
 Every commit in this checkpoint is harness, example or documentation only.
