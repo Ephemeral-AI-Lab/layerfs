@@ -824,3 +824,94 @@ or that those selected ancestor pages are removable. Earlier source-bound
 wording must not be read as declaring the generic WRITE factor closed. No
 new product change, performance arm, qualified matched result or case status
 accompanies this handoff.
+
+## Iteration 014 — refusal-instant domain pinned; no algorithm selected
+
+- First parent `9fce3e158ce69f5c36fb7cd4dd3ebd773dee9f7d`, product/observer,
+  Stage-forwarding, external-parser and architecture commit
+  `94ce9dec5247541d33602659ed1a77db0a4cd6f9` (tree
+  `8d3b207f0bdbfb59bf8f1744a129854f547c8cc6`). This is **opt-in
+  refusal-only telemetry**, not a fix, format change, workload change or new
+  registered performance sample. `LFS_CAPACITY_DIAGNOSTIC=1` prints the
+  failed request's Budget or shared physical Host domain, checked numbers and
+  Rust caller; C5's separate post-unwind snapshot identifies known outcome,
+  installed revision, physical charge, active revision/pages/pins. Absence of
+  a log is not zero; the latter snapshot is not the refusal-instant charge.
+  Strict external parser and active-quota-refusal public test separately
+  prove a physical denial: allocated **2,097,152**, reserved **0**, request
+  **4,096**, limit **2,097,152**, `active/pages.rs:383`; public bytes and
+  clean close PASS. No test quota or 8 MiB product Budget was changed.
+- One **new instrumentation identity**, nonregistered public Stage 8,192
+  diagnostic, `admission_eligible=false`, **FAIL**. All 8,192 WRITEs were
+  accepted; before Commit: 114,714 seeks, 62,117 index page writes,
+  3,154 no-key-subtree versions, 11,206 normalizations, 8,192 pack writes.
+  SaveFile emitted 8,192 refs, 8 windows, 824 pack loads, 2,472 index
+  reads. Canonical remote Commit **known**; local C5 returned `Capacity` and
+  `installed_revision=None`. The **actual refusal** is *memory Budget*
+  `active/index.rs:316` at `scratch.resize(budget)`: instantaneous observed
+  used **7,051,861** + additional request **2,472,699** = **9,524,560**,
+  above **8,388,608** by **1,135,952 bytes**. This is an additional
+  **charged scratch request**, not physical backing or proven resident RAM.
+  Reconciliation's `prepare_file` fails *before* index candidate publication;
+  `active_revision=8197` after unwind, no local C5 installation. The already
+  known remote Commit must not be resubmitted. G2 continuation after this
+  failure, final byte oracle, selected owner release, clean Workspace close
+  and refund remain **NOT_RUN**.
+- At the **post-unwind** snapshot, shared Host allocated **1,982,464**,
+  reserved **262,144**, disk quota **67,108,864**; active 482 pages,
+  `pinned_pages=0`, Budget used **2,070,893**. Inspected the **owned failed
+  container** before removal: 484 backing files, `st_blocks*512` totals
+  **1,982,464 bytes**. This is not the peak nor clean-close evidence.
+  The `(updates.len()+32)*4096 >= 67,239,936` heuristic ensures pressure
+  at this tier but is *not* the failing physical reservation. Pressure may
+  still scan unrelated pack locators; this receipt does not give separate
+  per-pack pressure reads versus attempted physical allocation.
+- **Decision at step 2:** no proved winner. `index::prepare_file` charges
+  `128 KiB + Σ(128+key.len()+value.len())` for candidate scratch on top of
+  selected G1, mutable G2, charged `O(E+R)` deletion/ordered vectors and
+  compaction pressure lists. Rough *pre-compaction* E+R scratch terms for
+  100/512/4,097/8,192 point edits are respectively
+  `128 KiB + ~300*W` = ~157/278/1,328/2,528 KiB; source changes and
+  compaction can add keys. The actual 8,192 request is **additional** to
+  an already charged 128 KiB. One cannot uncharge the scratch merely to
+  make the old test pass: `Mutation` retains keyed nodes, page versions,
+  cursors and cached pages; the simultaneous peak needs a distinct ownership
+  proof before streaming/chunking or pre-admission. Physical demand is
+  `allocated_old + reserved_old + 4096*new_pages`, not the pressure
+  estimate; no 100/512/4,097 simultaneous peak proof is yet recorded.
+  Option C (remove no-key parents) also lacks a fence/slot/epoch/pin
+  equivalence proof. No limit raised; no uncharged spool or patch selected.
+- Final-identity host locked release Workspace+FUSE tests PASS, warning-denying
+  all-target release Clippy/fmt PASS, product boundary 350 files, tools 9/9,
+  external parser 5/5. Exact aarch64 release Linux `active_backing` on **owned
+  ext4** with `TMPDIR=LAYERFS_ACTIVE_TEST_ROOT=/work`, serial, 32/32 PASS;
+  owned volume removed. The first host build attempt rejected an incorrect
+  optional-payload access and was fixed before committing; the first cross
+  build failed for Zig absent on PATH and was reissued using the installed
+  `/opt/homebrew/bin/zig`. Keep both logs. Initial external parser invocation
+  pointed at the service instead of the *Linux test* stderr and correctly
+  reported a missing domain; corrected parser output is retained, not an
+  invented zero. Stage public quota refusal PASS; extended 8,192 FAIL is
+  retained; only its inspected owned container/volume were then removed.
+- First-parent/staged/committed `python3 tools/production_loc.py --json
+  --root <git archive snapshot>`: Core **67,732 -> 67,802 (+70)**,
+  reference **65,417 -> 65,417 (+0)**, combined **133,149 -> 133,219
+  (+70)**. Raw source/test/fixture/binary seals, commands, failures,
+  diagnostics, observer logs, Docker inspection, quota arithmetic and own
+  directory `SHA256SUMS` are **local gitignored** files at
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-014/`;
+  they have **no GitHub raw-evidence URL**. Iter-012/013 receipts remain
+  unchanged and separately hashed.
+- **Next falsifier / step 1 again:** count the actual `index::prepare_file`
+  scratch constituents and simultaneous charged owners at each registered
+  100/512/4,097 tier, and distinguish pressure-scan pack reads from actual
+  physical attempts at 8,192; classify changed-key, necessary connection,
+  hot admission/eviction, carry/height and pinned index versions *per WRITE*.
+  Only then choose a charged reconciliation bound/streaming design (or seek an
+  owner supported-limit ruling) with same-commit architecture and custody
+  proof. The registered nine-cell frozen-identity evaluation at this new
+  telemetry identity is **NOT_RUN**; historical iter-012 nine verified rows
+  stay **INELIGIBLE**. #248 C1-zero is **INCOMPLETE**; same-Workspace SDK pin,
+  exact three-Exec/mutations and frozen matched control are **NOT_RUN**;
+  private cache/phase-cgroup admission is **INELIGIBLE/NOT_RUN**. No numeric
+  comparison, release gate, universal scaling bound, merge or issue closure.
