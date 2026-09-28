@@ -631,3 +631,91 @@ item; the nine verified but INELIGIBLE candidate rows cannot close the
   interleaved row is repaired. Preserve v3 accounting for baseline; no
   emission defect is permission to resample the unchanged arm. The #248
   missing-zero and SDK live-pin blockers are independent and remain open.
+
+## Iteration 012 — atomic public WRITE snapshots; frozen candidate count proof
+
+- Product/observer/harness/spec commit
+  `52878a58429a61fa40a17fc615b21f847aaacb3c` (tree
+  `ce59ca331084e3b3a2c183f13bc5bc42b81200e9`), parent
+  `2c4b0752c9557b15aacad0ac3f5d6ebcb4b763be`. Optional operator
+  `LFS_WRITE_SAMPLE v=4` is formatted into a fixed 4,096-byte FUSE
+  process-stack record, written in one sub-PIPE_BUF call; overflow yields
+  explicit INCOMPLETE. It is not a persistent Workspace cache or a claim
+  of Budget residency. The common external observer requires a complete
+  *anchored* line; v1/v2 historical self-checks and baseline v3 parsing
+  remain available, but fragmented/interleaved v3 is not reconstructed.
+  Product READ/WRITE/Commit, pack/cache/worker, pre-acknowledgement byte
+  ownership and independent verifier semantics do not change.
+- First-parent/staged/committed production LOC by
+  `python3 tools/production_loc.py --json --root <exact snapshot>`:
+  Core **67,684 -> 67,719 (+35)**; reference **65,417 -> 65,417 (+0)**;
+  combined **133,101 -> 133,136 (+35)**. Workspace and FUSE host release
+  tests PASS; all-target clippy/fmt, product boundary, tools 9/9, harness
+  15/15, checkpoint self-check and separated-writes self-check PASS;
+  exact release Linux cross build for workspace and FUSE PASS. Initial
+  two-`--tests` zigbuild invocation failed at CLI parsing and the first
+  shared self-check exposed v1/v2 parser regression; both attempts remain
+  on disk, were corrected *before committing*, and passing commands
+  covered the final source. Exact Linux `active_backing` 32/32 PASS in an
+  owned ext4 volume with serial execution, volume removed. Six new
+  committed-identity public stage routes PASS: mounted 100-callback
+  tiny inputs, same-process G1/G2 hot continuity, 4,097 dispersed source
+  grouping (209 reads), shared-pack 128 files, quota refusal, and real
+  live/pinned 4,097-record Workspace quick controls. This stage profile
+  has `performance_claim=false`, `cache_claim=null`.
+- One new registered candidate attempt per matrix cell (one per
+  case/arm/changed identity), all source counters complete, public full
+  bytes/cleanup PASS, independent oracle verifier PASS, exactly four
+  **v4** checkpoints including the final checkpoint, final host whole-input
+  residency zero, 100/512/4,097 accepted callbacks and 15/25-second
+  complete limits met. At 100 the frozen arm verifier PASS; at 512/4,097
+  it is NOT_APPLICABLE because it hardcodes the 100-write schedule, not a
+  silent PASS. Actual source pack loads per 100/512/4,097 are append
+  **2/7/52**, dispersed **2/7/209**, repeated **1/1/1**; 4,097 dispersed
+  has 5 bounded windows, 4,097 final references, 16,468 decoded records
+  and 627 selected locator index reads. All nine **row_status=INELIGIBLE**
+  despite functional PASS: no control match or complete private cache/
+  cgroup proof. Phase Exec/Commit/complete seconds, respectively:
+
+  | Schedule | 100 | 512 | 4,097 |
+  | --- | --- | --- | --- |
+  | Append | 0.086/0.023/0.920 | 0.596/0.028/1.404 | 4.671/0.129/5.696 |
+  | Dispersed | 0.124/0.026/0.994 | 1.019/0.051/1.921 | 9.308/0.504/10.666 |
+  | Repeated | 0.144/0.019/1.612 | 0.685/0.017/1.492 | 5.188/0.022/6.013 |
+
+  The repeated-100 complete wall exceeds the 512 row despite shorter
+  Exec and Commit: the difference remains outside those measured phases;
+  do not assign it to warm cache or infer a noise distribution. Pack
+  count/reference and WRITE publication scaling retain the source-bound
+  explanation and open questions in the previous section. The v3
+  repeated-100 attempt at iteration 011 remains **INCOMPLETE**, not a
+  previously passing row repaired or replaced at unchanged identity.
+- #248 gate: full bytes/cleanup and both independent verifiers PASS; the
+  new four WRITE samples are complete v4 but `row_status=INCOMPLETE`
+  because the complete `LFS_C1_EDIT_LOAD` observation is absent. A missing
+  C1 edit log is **not** automatically zero on the whole-file streaming
+  route. Clean/one-edit SDK performance controls retain individual
+  **NOT_RUN** blockers: there is no public same-Workspace live-journal pin
+  for the mandatory sequential SDK lifecycle. The public Workspace
+  quick-control stage does not satisfy that fixture. Baseline matched
+  control and the exact three-sequential-Exec/full mutations selections
+  remain NOT_RUN. O_DIRECT is a request, not a VM/backend/device/
+  host-cache guarantee; container phase cgroup fields remain unavailable.
+- Reproduction: from source `52878a584`, run `checkpoint5_273.py oracle
+  --repo "$PWD" --output .../iter-012/oracle`, `prepare --arm candidate
+  --repo "$PWD" --oracle .../iter-012/oracle/oracle.json --output
+  .../iter-012/prepared-candidate`, then `run --prepared
+  .../iter-012/prepared-candidate/prepared.json --selection
+  issue273-<pattern>-<count>-10m-v1 --output .../iter-012/<pattern>-<count>`
+  *only on a new changed identity*, never resample this frozen attempt.
+  The nine raw receipts, #248 attempt, both NOT_RUN blockers, six stage
+  receipts, stdout/stderr, complete binary/image/product/harness/workload
+  seals, phase resource counts and a **267-file** SHA manifest are retained
+  under `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-012/`.
+  No numeric control/candidate speed comparison or checkpoint-5 completion
+  is qualified. Further work must resolve explicit zero C1 provenance
+  without altering the frozen baseline product, obtain a supported public
+  retained pin/ruling, complete unmatched selections, and account for the
+  remaining generic hot-turnover/physical publication amplification and
+  private cache/cgroup domains. Do not rerun the unchanged rows to select
+  a more favorable wall.
