@@ -443,7 +443,7 @@ def main():
                       commit_deadline_seconds=25 if args.case in ('active_separated4096', 'active_quick_controls') else 10,
                       not_run=['checkpoint 5 and matched performance arms', 'concurrent SDK Exec admission', 'hard RSS/cgroup bound'])
         if args.case == 'active_transfer_refusal':
-            report['memory_budget_bytes'] = 2_550_000
+            report['memory_budget_bytes'] = 2_650_000
             report['not_run'].append('known failed Workspace clean close and 8 MiB product-profile support')
         if args.case == 'active_cleanup_failure':
             report['commit_deadline_seconds'] = None

@@ -1085,7 +1085,7 @@ mod linux {
         // Refusal-only control, NOT the unchanged 8 MiB / 8,192 workload.
         // The lower test Budget preserves room for 512 ordinary WRITE ACKs
         // and SaveFile but refuses a later charged C5 index candidate.
-        const REFUSAL_BUDGET: usize = 2_550_000;
+        const REFUSAL_BUDGET: usize = 2_650_000;
         let f = Fixture::fresh_with_refusal_budget(Gate::None, REFUSAL_BUDGET);
         let (created, handle) = f
             .workspace
