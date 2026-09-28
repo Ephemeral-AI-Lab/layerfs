@@ -761,6 +761,17 @@ impl Workspace {
             status.active_index_fetches = selected.store.index_fetches;
             status.active_pack_page_writes = selected.store.pack_page_writes;
             status.active_index_page_writes = selected.store.index_page_writes;
+            status.active_page_encode_ns = selected.store.page_encode_ns;
+            status.active_page_create_identity_ns = selected.store.page_create_identity_ns;
+            status.active_page_preallocate_ns = selected.store.page_preallocate_ns;
+            status.active_page_direct_write_ns = selected.store.page_direct_write_ns;
+            status.active_page_readback_io_ns = selected.store.page_readback_io_ns;
+            status.active_page_readback_auth_ns = selected.store.page_readback_auth_ns;
+            status.active_page_release_ns = selected.store.page_release_ns;
+            status.active_fit_merge_ns = selected.store.fit_merge_ns;
+            status.active_actual_merge_ns = selected.store.actual_merge_ns;
+            status.active_node_encode_ns = selected.store.node_encode_ns;
+            status.active_cache_decode_ns = selected.store.cache_decode_ns;
             status.active_directory_page_writes = selected.store.directory_page_writes;
             status.active_index_seeks = selected.store.index_seeks;
             status.active_index_node_visits = selected.store.index_node_visits;

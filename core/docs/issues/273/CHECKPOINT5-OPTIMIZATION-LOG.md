@@ -48,3 +48,61 @@
   No latency/admission claim. Next shared causes: Commit's pack-source access
   thrashing and WRITE's inner publication cost; retained controls also require
   a live pinned private journal in the same Workspace. None is yet fixed.
+
+## Iteration 002 — captured packed-source locality (functional causal counts)
+
+- Algorithm source `cc9ce918c077e319d5848f3e67ff64d56a60f5bd`;
+  expanded *test-only* tier coverage `51c1838a334e285d489e0987205e2405c2621102`.
+  No benchmark performance arm sampled. Worktree-local retained artifacts and
+  raw public-route receipts live under
+  `benchmark-results/fs-bench-pro/issue273/checkpoint5-optimization/iter-002/`.
+  `RESULTS.json` records source, exact test-binary SHA, fixture/image identities,
+  workload, bounds, formulas and every status. Functional route receipts declare
+  `performance_claim=false` and `cache_claim=null`.
+- Mechanism: file-offset replacement order thrashes the one-pack source
+  reader over chronological tiny packs. Committed algorithm gathers only required
+  Packed references within 256 references **and** 32 KiB of replacement bytes,
+  precharged with 256 index entries; sorts each fixed window by captured G1
+  logical pack; reads and validates each required record/slot exactly; scatters
+  into bounded memory, then emits in file-offset order. Base/Zero/Payload
+  stream separately. The reader still caches one page; budget remains 8 MiB.
+  Descriptor/extent O(E_f) vectors remain fully charged, not constant RAM.
+- One *functional/count* public-stage test per tier, on a fresh independent
+  8,194-byte file and 100/512/4,097 distinct dispersed single-byte writes:
+
+  | Tier | Old one-page source model | Window distinct-pack model | Actual pack loads | Locator seeks; index reads | Windows | Decoded records | Window fill time | Public Commit wall | Complete functional route wall |
+  | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+  | 100 | 14 | 2 | 2 | 2; 4 | 1 | 100 | 0.645 ms | 26.614 ms | 1.180 s |
+  | 512 | 430 | 14 | 14 | 14; 28 | 2 | 1,024 | 3.934 ms | NOT_RECORDED | 4.480 s |
+  | 4,097 | 4,097 | 560 | 560 | 560; 1,680 | 17 | 44,296 | 188.404 ms | 352.563 ms | 12.006 s |
+
+  The models sort this stage fixture's `(104729 + i*2654435761) % 8194`
+  positions, assign one chronological pack per 80 writes, then count
+  output-order pack transitions versus distinct packs in consecutive
+  256-reference windows. The observed counts come from production source
+  telemetry and phase-local backing fetches, not a baseline performance arm.
+  The registered 10 MiB schedule has different predicted counts (41/512/4,097
+  before; 2/14/827 for these fixed windows); it has **not** been measured.
+  Full-byte oracle, exact clean-close refund and controlled ext4 private
+  allocation PASS in all three functional selections. The 512 route uses the
+  earlier `cc9ce918c` test binary; 100 and 4,097 use the test-only expansion.
+- Verification: host workspace release tests PASS; workspace all-target clippy,
+  fmt and product boundary PASS; aarch64 release zigbuild PASS using the
+  installed Zig tool on PATH; the exact `active_backing-f325d5782a2161dc`
+  on an owned ext4 Docker volume with `TMPDIR=/work`,
+  `LAYERFS_ACTIVE_TEST_ROOT=/work` and `--test-threads=1` passed 32/32. Public
+  stage routes `active_source_grouping`, `_100`, `_4097` PASS, including
+  full bytes and clean-close. Their service/container volumes were removed by
+  the route. Exact selection commands and checksums are retained in iter-002.
+- Production LOC for `cc9ce918c`: Core 67,158 -> 67,378 (+220);
+  reference 65,417 -> 65,417; combined 132,575 -> 132,795 (+220).
+  Test-only `51c1838a3`: Core 67,378 -> 67,378; reference 65,417 -> 65,417;
+  combined 132,795 -> 132,795 (delta +0). Method for both:
+  `python3 tools/production_loc.py --json --root <exact first-parent/staged/committed snapshot>`.
+- Qualifications: private O_DIRECT requests plus this ext4 proof do not prove
+  cold metadata/VM/backend/host cache. There is no matched performance sample,
+  source-index cache bound diagnostic across all cases, phase RSS or cgroup
+  reset, independent benchmark oracle or all registered selections. No numeric
+  speed ratio. NEXT: split WRITE's dominant publication region into actual
+  physical, merge/codec, retirement and temp-input costs; use that split to
+  remove demonstrably avoidable work, not authentication or quota custody.

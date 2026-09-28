@@ -715,3 +715,17 @@ Source counters report complete flag, window/reference/distinct-pack counts,
 actual page loads/hits, locator lookups and index reads/seeks, decoded records
 and bytes, and source read/copy time for each SaveFile under the production
 complexity diagnostic. Their diagnostic overhead is inside the observed phase.
+
+### Checkpoint-5 publication-cause telemetry (prospective diagnostic)
+
+A cumulative production counter group within PageStore accounts for page
+framing/encoding, physical create/identity, allocation/accounting, direct
+write, direct readback, authentication/byte comparison, and retired-page
+release/unlink. The hot fit merge, actual selected merge, node encoding and
+validated cache decode carry separate timers. Every phase sample subtracts its
+own pre-WRITE counters; these subsets do **not** purport to sum to complete
+Exec (FUSE temp input, other CPU/metadata work and timer overhead remain).
+Counters run in the actual product, including their overhead in the measured
+phase, on both successful and failed paths. Physical publication is still
+immutable per selected incarnation; no readback or authentication is removed.
+No format or worker limit is changed by observing these causes.

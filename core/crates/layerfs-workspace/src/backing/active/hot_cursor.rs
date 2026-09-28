@@ -5,7 +5,7 @@ use super::{
     index::Selection,
     keyed::{Node, Target, HOT_SLOTS, MAX_LEVEL},
     page::{Page, PageRef, PAGE_BYTES},
-    pages::{Counter, PageStore},
+    pages::{Cause, Counter, PageStore},
     records::{dirty_key, inode_key, HotInode},
 };
 use crate::{backing::budget::Charge, WorkspaceError};
@@ -39,7 +39,9 @@ impl Cached {
         let bytes =
             PAGE_BYTES + body.len() * 2 + stored.records() as usize * 64 + size_of::<Self>();
         let charge = store.budget().reserve(bytes)?;
+        let decode_time = store.stamp(Cause::CacheDecode);
         let node = Node::decode(stored, store.incarnation(), page, kind)?;
+        drop(decode_time);
         Ok(Arc::new(Self {
             page,
             node,

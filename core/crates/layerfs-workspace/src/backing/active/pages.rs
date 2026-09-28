@@ -15,9 +15,37 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
     },
+    time::Instant,
 };
 
 const ENTRY_BYTES: usize = 128;
+
+#[derive(Clone, Copy)]
+pub(super) enum Cause {
+    Encode,
+    CreateIdentity,
+    Preallocate,
+    DirectWrite,
+    ReadbackIo,
+    ReadbackAuth,
+    Release,
+    FitMerge,
+    ActualMerge,
+    NodeEncode,
+    CacheDecode,
+}
+
+pub(super) struct Stamp<'a> {
+    counter: &'a AtomicU64,
+    began: Instant,
+}
+
+impl Drop for Stamp<'_> {
+    fn drop(&mut self) {
+        self.counter
+            .fetch_add(self.began.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+}
 
 struct Entry {
     identity: Option<(u64, u64)>,
@@ -54,6 +82,17 @@ pub struct StoreStatus {
     pub index_fetches: u64,
     pub pack_page_writes: u64,
     pub index_page_writes: u64,
+    pub page_encode_ns: u64,
+    pub page_create_identity_ns: u64,
+    pub page_preallocate_ns: u64,
+    pub page_direct_write_ns: u64,
+    pub page_readback_io_ns: u64,
+    pub page_readback_auth_ns: u64,
+    pub page_release_ns: u64,
+    pub fit_merge_ns: u64,
+    pub actual_merge_ns: u64,
+    pub node_encode_ns: u64,
+    pub cache_decode_ns: u64,
     pub directory_page_writes: u64,
     pub index_seeks: u64,
     pub index_node_visits: u64,
@@ -93,6 +132,7 @@ pub struct PageStore {
     pack_page_writes: AtomicU64,
     index_page_writes: AtomicU64,
     counters: [AtomicU64; 10],
+    cause_ns: [AtomicU64; 11],
     split_minimum: [AtomicU64; 2],
     _charge: Charge,
 }
@@ -200,6 +240,7 @@ impl PageStore {
             pack_page_writes: AtomicU64::new(0),
             index_page_writes: AtomicU64::new(0),
             counters: std::array::from_fn(|_| AtomicU64::new(0)),
+            cause_ns: std::array::from_fn(|_| AtomicU64::new(0)),
             split_minimum: std::array::from_fn(|_| AtomicU64::new(u64::MAX)),
             _charge: budget.reserve(1024)?,
         }))
@@ -287,6 +328,13 @@ impl PageStore {
         self.create_from(kind, generation, revision, records, body, None)
     }
 
+    pub(super) fn stamp(&self, phase: Cause) -> Stamp<'_> {
+        Stamp {
+            counter: &self.cause_ns[phase as usize],
+            began: Instant::now(),
+        }
+    }
+
     pub(super) fn create_from(
         &self,
         kind: Kind,
@@ -310,6 +358,7 @@ impl PageStore {
             state.next = state.next.checked_add(1).ok_or(WorkspaceError::Capacity)?;
             PageRef { id, epoch: 1 }
         };
+        let encode = self.stamp(Cause::Encode);
         let page = Page::new(
             kind,
             self.directory.incarnation,
@@ -319,6 +368,7 @@ impl PageStore {
             records,
             body,
         )?;
+        drop(encode);
         let directory = self.directory.file()?;
         if let Some(reservation) = reservation {
             if !std::ptr::eq(self, Arc::as_ptr(&reservation.store)) || reservation.remaining == 0 {
@@ -358,6 +408,7 @@ impl PageStore {
             );
         }
         let filename = name(kind, reference);
+        let identity_time = self.stamp(Cause::CreateIdentity);
         let file = match segments::create(&directory, &filename) {
             Ok(file) => file,
             Err(error) => {
@@ -389,6 +440,8 @@ impl PageStore {
             .get_mut(&reference)
             .ok_or(WorkspaceError::Io)?
             .identity = Some(file_identity);
+        drop(identity_time);
+        let preallocation_time = self.stamp(Cause::Preallocate);
         let allocation = segments::allocate(&file, PAGE_BYTES as u64);
         let observed = segments::allocated(&file);
         let allocated = match observed {
@@ -442,9 +495,11 @@ impl PageStore {
                 &io::Error::other("active page allocation size mismatch"),
             ));
         }
+        drop(preallocation_time);
         let mut lease = self.host.payloads.window(1, 3)?;
         let window = lease.window.as_mut().ok_or(WorkspaceError::Io)?;
         window.0[..PAGE_BYTES].copy_from_slice(&page.bytes);
+        let write_time = self.stamp(Cause::DirectWrite);
         if let Err(error) = segments::write(&file, window, 0, PAGE_BYTES) {
             self.stop();
             return Err(failure(
@@ -455,7 +510,9 @@ impl PageStore {
                 &error,
             ));
         }
+        drop(write_time);
         window.0[..PAGE_BYTES].fill(0);
+        let readback_time = self.stamp(Cause::ReadbackIo);
         if let Err(error) = segments::read(&file, window, 0, PAGE_BYTES) {
             self.stop();
             return Err(failure(
@@ -466,6 +523,8 @@ impl PageStore {
                 &error,
             ));
         }
+        drop(readback_time);
+        let authenticate_time = self.stamp(Cause::ReadbackAuth);
         let mut verified = Page {
             bytes: [0; PAGE_BYTES],
         };
@@ -493,6 +552,7 @@ impl PageStore {
                 &io::Error::new(io::ErrorKind::InvalidData, "active page readback changed"),
             ));
         }
+        drop(authenticate_time);
         self.state
             .lock()
             .map_err(|_| WorkspaceError::Io)?
@@ -561,6 +621,7 @@ impl PageStore {
     }
 
     pub fn release(&self, reference: PageRef) -> Result<u64, WorkspaceError> {
+        let _release_time = self.stamp(Cause::Release);
         let (kind, expected, charged, reserved, unlinked) = {
             let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let entry = state
@@ -670,6 +731,20 @@ impl PageStore {
             index_fetches: self.index_fetches.load(Ordering::Relaxed),
             pack_page_writes: self.pack_page_writes.load(Ordering::Relaxed),
             index_page_writes: self.index_page_writes.load(Ordering::Relaxed),
+            page_encode_ns: self.cause_ns[Cause::Encode as usize].load(Ordering::Relaxed),
+            page_create_identity_ns: self.cause_ns[Cause::CreateIdentity as usize]
+                .load(Ordering::Relaxed),
+            page_preallocate_ns: self.cause_ns[Cause::Preallocate as usize].load(Ordering::Relaxed),
+            page_direct_write_ns: self.cause_ns[Cause::DirectWrite as usize]
+                .load(Ordering::Relaxed),
+            page_readback_io_ns: self.cause_ns[Cause::ReadbackIo as usize].load(Ordering::Relaxed),
+            page_readback_auth_ns: self.cause_ns[Cause::ReadbackAuth as usize]
+                .load(Ordering::Relaxed),
+            page_release_ns: self.cause_ns[Cause::Release as usize].load(Ordering::Relaxed),
+            fit_merge_ns: self.cause_ns[Cause::FitMerge as usize].load(Ordering::Relaxed),
+            actual_merge_ns: self.cause_ns[Cause::ActualMerge as usize].load(Ordering::Relaxed),
+            node_encode_ns: self.cause_ns[Cause::NodeEncode as usize].load(Ordering::Relaxed),
+            cache_decode_ns: self.cause_ns[Cause::CacheDecode as usize].load(Ordering::Relaxed),
             directory_page_writes: self.counters[Counter::DirectoryWrite as usize]
                 .load(Ordering::Relaxed),
             index_seeks: self.counters[Counter::Seek as usize].load(Ordering::Relaxed),

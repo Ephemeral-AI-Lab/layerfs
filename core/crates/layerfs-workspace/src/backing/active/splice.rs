@@ -13,7 +13,7 @@ use super::{
         Cell, Child, Node, Target, HOT_SLOTS, MAX_KEY, MAX_LEVEL, MAX_VALUE, TAG_HOT, TARGET_BYTES,
     },
     page::{Kind, PageRef, BODY_BYTES},
-    pages::{Counter, PageReservation, PageStore},
+    pages::{Cause, Counter, PageReservation, PageStore},
 };
 use crate::{backing::budget::Charge, WorkspaceError};
 use std::{collections::BTreeMap, sync::Arc};
@@ -379,7 +379,9 @@ impl Mutation {
                 }
             }
         }
+        let encode_time = store.stamp(Cause::NodeEncode);
         let body = node.encode()?;
+        drop(encode_time);
         self.reserve(1, body.len())?;
         let (reference, stored) = store.create_from(
             node.kind(),
@@ -610,7 +612,9 @@ impl Mutation {
             let Node::Leaf(cells) = &node.node else {
                 return Err(WorkspaceError::Io);
             };
+            let merge_time = store.stamp(Cause::ActualMerge);
             let merged = Self::merge(cells.clone(), updates)?;
+            drop(merge_time);
             if merged.len() == cells.len()
                 && merged
                     .iter()

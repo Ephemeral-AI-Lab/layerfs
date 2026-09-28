@@ -936,6 +936,101 @@ mod linux {
     }
     #[test]
     #[ignore = "requires stage_route.py and a live native service"]
+    fn stage_active_page_profile() {
+        // Diagnostic-only public append WRITE plus full-byte/charge proof;
+        // production cumulative counters are differenced at the phase bounds.
+        let f = Fixture::new_fresh(Gate::None);
+        let (file, handle) = f
+            .workspace
+            .create_file(
+                f.workspace.root().serial,
+                b"publication",
+                FileCreateOptions {
+                    mode: 0o644,
+                    umask: 0,
+                    exclusive: true,
+                    open: FileOpenOptions {
+                        access: FileAccess::ReadWrite,
+                        ..FileOpenOptions::default()
+                    },
+                },
+                deadline(),
+            )
+            .unwrap();
+        let mut expected = vec![b'A'; 8194];
+        f.workspace
+            .write_file(handle, 0, &f.own(&expected), deadline())
+            .unwrap();
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let file = f.lookup(b"publication");
+        let handle = f
+            .workspace
+            .open_file(
+                file.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
+            .unwrap();
+        let before = f.workspace.backing_status().unwrap();
+        let begun = Instant::now();
+        for i in 0..4097usize {
+            let byte = b'B' + (i % 24) as u8;
+            f.workspace
+                .write_file(handle, expected.len() as u64, &f.own(&[byte]), deadline())
+                .unwrap();
+            expected.push(byte);
+        }
+        let exec_ns = begun.elapsed().as_nanos();
+        let after = f.workspace.backing_status().unwrap();
+        let diff = |b: u64, a: u64| a.checked_sub(b).unwrap();
+        let packs = diff(
+            before.active_pack_page_writes,
+            after.active_pack_page_writes,
+        );
+        let indexes = diff(
+            before.active_index_page_writes,
+            after.active_index_page_writes,
+        );
+        assert_eq!(packs, 4097);
+        println!("PAGE_CAUSE case=append4097 exec_ns={exec_ns} pack_writes={packs} index_writes={indexes} fit_merge_ns={} actual_merge_ns={} node_encode_ns={} cache_decode_ns={} page_encode_ns={} create_identity_ns={} preallocate_ns={} direct_write_ns={} readback_io_ns={} readback_auth_ns={} release_ns={} backing_bytes_before={} backing_bytes_after={} cache_claim=none",
+            diff(before.active_fit_merge_ns, after.active_fit_merge_ns),
+            diff(before.active_actual_merge_ns, after.active_actual_merge_ns),
+            diff(before.active_node_encode_ns, after.active_node_encode_ns),
+            diff(before.active_cache_decode_ns, after.active_cache_decode_ns),
+            diff(before.active_page_encode_ns, after.active_page_encode_ns),
+            diff(before.active_page_create_identity_ns, after.active_page_create_identity_ns),
+            diff(before.active_page_preallocate_ns, after.active_page_preallocate_ns),
+            diff(before.active_page_direct_write_ns, after.active_page_direct_write_ns),
+            diff(before.active_page_readback_io_ns, after.active_page_readback_io_ns),
+            diff(before.active_page_readback_auth_ns, after.active_page_readback_auth_ns),
+            diff(before.active_page_release_ns, after.active_page_release_ns),
+            before.allocated_bytes, after.allocated_bytes);
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(file.serial, 1, ReferenceScope::Local);
+        f.workspace.commit(deadline()).unwrap();
+        let Response::History(result) = f.branch() else {
+            panic!("branch result")
+        };
+        let HistoryResult::BranchSnapshot(branch) = *result else {
+            panic!("branch snapshot")
+        };
+        let saved = attr(f.native.attributes(branch.effective_root, b"publication"));
+        assert_eq!(f.native.bytes(saved.1, 0, expected.len()), expected);
+        check("active-page-profile-4097-full-byte-oracle");
+        f.workspace.close_clean().unwrap();
+        let private =
+            std::path::Path::new(&std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap()).to_path_buf();
+        assert_eq!(physical_private_files(&private), (0, 0));
+        check("active-page-profile-4097-clean-close-refund");
+    }
+    #[test]
+    #[ignore = "requires stage_route.py and a live native service"]
     fn stage_active_cleanup_failure() {
         let f = Fixture::new(Gate::None);
         let file = f.lookup(b"data.bin");

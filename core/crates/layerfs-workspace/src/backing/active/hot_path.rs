@@ -7,7 +7,7 @@ use super::{
     keyed::{Node, TAG_COLD},
     pack::PackedSlot,
     page::{PageRef, BODY_BYTES},
-    pages::PageReservation,
+    pages::{Cause, PageReservation},
     records::{dirty_key, inode_key, HotInode},
     splice::{Mutation, Update},
 };
@@ -323,7 +323,9 @@ impl Index {
             else {
                 return Err(WorkspaceError::Io);
             };
+            let fit_time = self.store.stamp(Cause::FitMerge);
             split |= Node::Leaf(Mutation::merge(cells.clone(), updates)?).body_len() > BODY_BYTES;
+            drop(fit_time);
             mask |= 1 << slot;
             for (slot, _, _) in &paths[slot].ancestors {
                 mask |= 1 << slot;

@@ -1,0 +1,2 @@
+LFS_ACTIVE_SOURCE v=1 complete=true windows=0 references=0 distinct_packs=0 fill_ns=0 pack_loads=0 pack_hits=0 locator_lookups=0 index_reads=0 index_seeks=0 locator_ns=0 pack_ns=0 decoded_records=0 decoded_bytes=0 copied_bytes=0 ref_limit=256 byte_limit=32768
+LFS_ACTIVE_SOURCE v=1 complete=true windows=1 references=100 distinct_packs=2 fill_ns=645125 pack_loads=2 pack_hits=98 locator_lookups=2 index_reads=4 index_seeks=2 locator_ns=443916 pack_ns=172708 decoded_records=100 decoded_bytes=4900 copied_bytes=100 ref_limit=256 byte_limit=32768
