@@ -548,9 +548,6 @@ impl WorkspaceHost {
                     node_index,
                     node_index_charge,
                     overlay: None,
-                    active_origins: crate::filesystem::active_view::ActiveOrigins::empty(
-                        &self.inner.budget,
-                    )?,
                     completion: None,
                     submission: None,
                     generation: 1,

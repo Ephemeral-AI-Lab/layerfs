@@ -283,7 +283,6 @@ impl Workspace {
                         base: [0; 32],
                         root: root.cloned(),
                         active: None,
-                        origins: None,
                         directory_path: None,
                     },
                     attr.serial,

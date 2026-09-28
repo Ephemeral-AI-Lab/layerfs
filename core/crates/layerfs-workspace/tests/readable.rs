@@ -77,19 +77,71 @@ impl Fixture {
                     _ => Err(Code::PathNotFound.into()),
                 },
                 Operation::Inspect {
+                    query: Inspect::ChildAttributes { parent, name },
+                    ..
+                } => match (*parent, name.as_slice()) {
+                    (7, b"file" | b"alias") => Ok(attr(8, 1, 5)),
+                    (7, b"link") => Ok(attr(9, 3, 4)),
+                    (7, b"folder") if directory => Ok(attr(10, 2, 0)),
+                    (10, b"child") if directory => Ok(attr(11, 1, 5)),
+                    _ => Err(Code::PathNotFound.into()),
+                },
+                Operation::Inspect {
+                    query: Inspect::InodeAttributes { serial },
+                    ..
+                } => match *serial {
+                    7 => Ok(attr(7, 2, 0)),
+                    8 => Ok(attr(8, 1, 5)),
+                    9 => Ok(attr(9, 3, 4)),
+                    10 if directory => Ok(attr(10, 2, 0)),
+                    11 if directory => Ok(attr(11, 1, 5)),
+                    _ => Err(Code::NotFound.into()),
+                },
+                Operation::Inspect {
                     query: Inspect::Readlink { path },
                     ..
                 } if path == b"link" => Ok(Response::Link(b"file".to_vec())),
                 Operation::Inspect {
-                    query:
-                        Inspect::List {
-                            path,
-                            after,
-                            entries,
-                            ..
-                        },
+                    query: Inspect::InodeReadlink { serial },
+                    ..
+                } if *serial == 9 => Ok(Response::Link(b"file".to_vec())),
+                Operation::Inspect {
+                    query: Inspect::List { .. } | Inspect::InodeList { .. },
                     ..
                 } => {
+                    let (path, after, entries): (&[u8], &[u8], u16) = match &request.operation {
+                        Operation::Inspect {
+                            query:
+                                Inspect::List {
+                                    path,
+                                    after,
+                                    entries,
+                                    ..
+                                },
+                            ..
+                        } => (path, after, *entries),
+                        Operation::Inspect {
+                            query:
+                                Inspect::InodeList {
+                                    serial,
+                                    after,
+                                    entries,
+                                    ..
+                                },
+                            ..
+                        } => (
+                            if *serial == 7 {
+                                b""
+                            } else if *serial == 10 {
+                                b"folder"
+                            } else {
+                                return Err(Code::NotFound.into());
+                            },
+                            after,
+                            *entries,
+                        ),
+                        _ => unreachable!(),
+                    };
                     let mut names: Vec<_> = if path == b"folder" && directory {
                         vec![(b"child".to_vec(), 11)]
                     } else if path.is_empty() {
@@ -105,9 +157,9 @@ impl Fixture {
                         names.push((b"folder".to_vec(), 10));
                         names.sort();
                     }
-                    names.retain(|(name, _)| name > after);
-                    let more = names.len() > usize::from(*entries);
-                    names.truncate(usize::from(*entries));
+                    names.retain(|(name, _)| name.as_slice() > after);
+                    let more = names.len() > usize::from(entries);
+                    names.truncate(usize::from(entries));
                     let continuation = if more {
                         names.last().map(|(name, _)| name.clone())
                     } else {
@@ -1123,7 +1175,21 @@ fn full_cookie_table_still_replays_existing_positions() {
             Ok(attr(index + 8, 1, 5))
         }
         Operation::Inspect {
-            query: Inspect::List { after, entries, .. },
+            query: Inspect::ChildAttributes { parent: 7, name },
+            ..
+        } => {
+            let index: u64 = std::str::from_utf8(name).unwrap().parse().unwrap();
+            Ok(attr(index + 8, 1, 5))
+        }
+        Operation::Inspect {
+            query:
+                Inspect::List { after, entries, .. }
+                | Inspect::InodeList {
+                    serial: 7,
+                    after,
+                    entries,
+                    ..
+                },
             ..
         } => {
             let start = if after.is_empty() {

@@ -131,8 +131,12 @@ impl Workspace {
             && source_record.is_none()
             && moved.attr.size > 0
         {
-            let target =
-                self.readlink_canonical(&mut operation, moved.base, old_path.clone(), deadline)?;
+            let target = self.readlink_inode_canonical(
+                &mut operation,
+                moved.base,
+                moved.attr.serial,
+                deadline,
+            )?;
             if target.len() as u64 != moved.attr.size {
                 return Err(WorkspaceError::Io);
             }
@@ -245,23 +249,6 @@ impl Workspace {
             )?;
             state = self.state()?;
         }
-        // Every resident node inside the moved subtree keeps its original
-        // canonical path in the pinned views' origins, so an inherited child
-        // resolved through the moved directory still falls back to the base
-        // record at the path that base knows it by.
-        let next_origins = if moved.attr.kind == NodeKind::Directory {
-            let mut origins = state.active_origins.clone();
-            let prefix = [old_path.as_slice(), b"/"].concat();
-            for node in &state.nodes {
-                let within = node.path() == old_path.as_slice() || node.path().starts_with(&prefix);
-                if within {
-                    origins = origins.moved(node.attr.serial, node.path(), &self.host.budget)?;
-                }
-            }
-            Some(origins)
-        } else {
-            None
-        };
         let next = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
         let (seconds, nanos) = now()?;
         let mut updates = vec![
@@ -427,9 +414,6 @@ impl Workspace {
             }
         }
         state.revision = published;
-        if let Some(origins) = next_origins {
-            state.active_origins = origins;
-        }
         state.dirty_inodes += new_dirty;
         state.dirty_directories += newly_dirty_parents;
         state.directory_names += new_rows;

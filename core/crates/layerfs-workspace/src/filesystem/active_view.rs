@@ -8,57 +8,11 @@ use crate::{
     backing::active::{
         inode_key, namespace_key, ActiveSnapshot, HotInode, NamespaceRecord, ScanPage,
     },
-    backing::budget::{Budget, Charge},
     runtime::state::{OperationGuard, State},
     *,
 };
 use layerfs_bridge::contract::{Inspect, Response};
-use std::{collections::BTreeMap, sync::Arc, time::Instant};
-
-/// Original canonical paths for moved inherited directories. Each pinned view
-/// retains the map from its own publication revision, including directory handles.
-pub(crate) struct ActiveOrigins {
-    paths: BTreeMap<u64, Vec<u8>>,
-    _charge: Charge,
-}
-
-impl ActiveOrigins {
-    pub(crate) fn empty(budget: &Arc<Budget>) -> Result<Arc<Self>, WorkspaceError> {
-        Ok(Arc::new(Self {
-            paths: BTreeMap::new(),
-            _charge: budget.reserve(0)?,
-        }))
-    }
-
-    pub(crate) fn path<'a>(&'a self, serial: u64, current: &'a [u8]) -> &'a [u8] {
-        self.paths.get(&serial).map_or(current, Vec::as_slice)
-    }
-
-    pub(crate) fn moved(
-        self: &Arc<Self>,
-        serial: u64,
-        current: &[u8],
-        budget: &Arc<Budget>,
-    ) -> Result<Arc<Self>, WorkspaceError> {
-        if self.paths.contains_key(&serial) {
-            return Ok(self.clone());
-        }
-        let bytes = self
-            .paths
-            .values()
-            .map(|path| path.len() + 96)
-            .sum::<usize>()
-            + current.len()
-            + 96;
-        let charge = budget.reserve(bytes)?;
-        let mut paths = self.paths.clone();
-        paths.insert(serial, current.to_vec());
-        Ok(Arc::new(Self {
-            paths,
-            _charge: charge,
-        }))
-    }
-}
+use std::{sync::Arc, time::Instant};
 
 struct ActiveNames<'a> {
     snapshot: &'a ActiveSnapshot,
@@ -142,7 +96,6 @@ impl Workspace {
                 base: state.base,
                 root: None,
                 active: Some(Arc::new(active.pin_view()?)),
-                origins: Some(state.active_origins.clone()),
                 directory_path: None,
             })
         } else {
@@ -150,7 +103,6 @@ impl Workspace {
                 base: state.base,
                 root: state.overlay.clone(),
                 active: None,
-                origins: None,
                 directory_path: None,
             })
         }
@@ -169,9 +121,10 @@ impl Workspace {
             return Err(WorkspaceError::Io);
         }
         let active = view.active.as_ref().ok_or(WorkspaceError::Io)?;
-        let origin = view.origins.as_ref().ok_or(WorkspaceError::Io)?;
-        let canonical_path = origin.path(parent, path);
-        let child = child_path(canonical_path, name)?;
+        // The base is keyed by immutable inode identity. A moved directory has
+        // no canonical path at its new name, but its serial still owns children.
+        // Keep local path validation for resident-node bookkeeping only.
+        child_path(path, name)?;
         if let Some(value) = active.get(&namespace_key(parent, name)?)? {
             let binding = NamespaceRecord::parse(&value)?;
             if binding.tombstone {
@@ -214,7 +167,10 @@ impl Workspace {
         let response = self.inspect_view(
             operation,
             view.base,
-            Inspect::Attributes { path: child },
+            Inspect::ChildAttributes {
+                parent,
+                name: name.to_vec(),
+            },
             deadline,
         )?;
         let (original, content, metadata) =
@@ -249,11 +205,6 @@ impl Workspace {
         }
         let active = view.active.as_ref().ok_or(WorkspaceError::Io)?;
         let (serial, path) = directory;
-        let path = view
-            .origins
-            .as_ref()
-            .ok_or(WorkspaceError::Io)?
-            .path(serial, path);
         let mut names = crate::backing::metadata_index::vector(limit)?;
         let mut active_names = ActiveNames::new(active, serial, after)?;
         let mut local = active_names.next()?;
@@ -273,8 +224,8 @@ impl Workspace {
                     let response = self.inspect_view(
                         operation,
                         base,
-                        Inspect::List {
-                            path: path.to_vec(),
+                        Inspect::InodeList {
+                            serial,
                             after: after_name.clone(),
                             entries: 128,
                             bytes: 16384,

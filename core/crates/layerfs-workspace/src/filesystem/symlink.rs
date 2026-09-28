@@ -105,7 +105,7 @@ impl Workspace {
                 }
                 bytes
             } else {
-                self.readlink_canonical(&mut operation, base, path, deadline)?
+                self.readlink_inode_canonical(&mut operation, base, serial, deadline)?
             }
         } else if let Some(inode) = self.overlay_inode(serial, root.as_ref(), deadline)? {
             self.symlink_target(root.as_ref().ok_or(WorkspaceError::Io)?, inode, deadline)?
@@ -130,12 +130,29 @@ impl Workspace {
         path: Vec<u8>,
         deadline: Instant,
     ) -> Result<Vec<u8>, WorkspaceError> {
+        self.readlink_inspect(operation, base, Inspect::Readlink { path }, deadline)
+    }
+
+    pub(super) fn readlink_inode_canonical(
+        &self,
+        operation: &mut crate::runtime::state::OperationGuard,
+        base: [u8; 32],
+        serial: u64,
+        deadline: Instant,
+    ) -> Result<Vec<u8>, WorkspaceError> {
+        self.readlink_inspect(operation, base, Inspect::InodeReadlink { serial }, deadline)
+    }
+
+    fn readlink_inspect(
+        &self,
+        operation: &mut crate::runtime::state::OperationGuard,
+        base: [u8; 32],
+        query: Inspect,
+        deadline: Instant,
+    ) -> Result<Vec<u8>, WorkspaceError> {
         operation.remote()?;
         let response = self.call(
-            Operation::Inspect {
-                root: base,
-                query: Inspect::Readlink { path },
-            },
+            Operation::Inspect { root: base, query },
             0,
             &mut std::io::sink(),
             deadline,

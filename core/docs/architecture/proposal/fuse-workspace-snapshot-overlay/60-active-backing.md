@@ -191,12 +191,19 @@ publication.
 The inode header's selected regular-file link count occupies bytes `44..48`
 under the checkpoint-2 amendment. Link, unlink and destination replacement
 change it with their namespace rows, so lookup remains correct after the
-resident Node is forgotten. A charged immutable origin-path map in each view
-retains canonical lookup paths for inherited directories moved locally. It is
-scoped to the Workspace incarnation and pinned with directory views; the
-active index remains the single namespace publication authority. A handle
-opened before an inherited directory move keeps the original canonical path;
-a later handle selects the moved directory's charged origin map.
+resident Node is forgotten. A later partial-union amendment in the same source commit (first parent
+`1a0a48d66`) changes canonical fallback for an active selected view from
+path-based queries to `Inspect::ChildAttributes { parent, name }` and
+`Inspect::InodeList { serial, ... }`. Selected inherited symlink targets
+use `Inspect::InodeReadlink { serial }`; the charged original-path map is
+removed because the immutable canonical base resolves the identity by serial.
+The active index remains the namespace publication authority and an old
+handle retains its pinned revision. This does **not** remove the resident
+Node's fixed 4,096-byte path, `child_path` checks, directory-handle path or
+`preflight_rename_paths`' inherited-descendant walk: a growing move whose
+materialized descendant exceeds 4,096 bytes still refuses. The identity
+queries repair the fallback but do **not** prove #264's deep-path union.
+This amendment is source description, not a merged or release-qualified result.
 
 The former mutable `RootOwner` publication functions in create, remove,
 rename, file write and directory attribute paths have been deleted. Old

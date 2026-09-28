@@ -17,7 +17,6 @@ pub(crate) struct View {
     pub base: Root,
     pub root: Option<Arc<RootOwner>>,
     pub active: Option<Arc<crate::backing::active::ActiveSnapshot>>,
-    pub origins: Option<Arc<super::active_view::ActiveOrigins>>,
     pub directory_path: Option<Arc<PinnedDirectoryPath>>,
 }
 pub(crate) struct PinnedDirectoryPath {

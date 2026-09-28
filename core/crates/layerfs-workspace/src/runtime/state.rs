@@ -48,7 +48,6 @@ pub(crate) struct State {
     pub node_index: BTreeMap<u64, usize>,
     pub node_index_charge: Charge,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
-    pub active_origins: Arc<crate::filesystem::active_view::ActiveOrigins>,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,

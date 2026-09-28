@@ -430,7 +430,7 @@ impl Workspace {
             }
             Ok(bytes)
         } else if entry.canonical {
-            self.readlink_canonical(&mut operation, pinned_base, entry.path, deadline)
+            self.readlink_inode_canonical(&mut operation, pinned_base, link, deadline)
         } else {
             Err(WorkspaceError::NotFound)
         }
