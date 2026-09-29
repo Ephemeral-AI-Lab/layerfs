@@ -16,6 +16,9 @@
 -- this build no longer requires, and it is refused rather than read.
 -- Older schemas are rejected, never migrated. Duplicate locators and bytes are
 -- permitted.
+-- New Stores use 2-KiB SQLite pages. Existing schema-10 Stores keep their
+-- original page size; the reader does not reinterpret their bytes.
+PRAGMA page_size = 2048;
 PRAGMA application_id = 1279677261;
 PRAGMA user_version = 10;
 

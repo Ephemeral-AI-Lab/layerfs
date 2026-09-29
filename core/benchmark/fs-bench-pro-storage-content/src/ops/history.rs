@@ -2164,10 +2164,10 @@ fn history_phase<T>(
 fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
     if super::history_retained::enabled() {
-        let profile = if super::history_retained::version() == "v2" {
-            "c1-c2-c5-retained-history-v2"
-        } else {
-            "c1-c2-c5-retained-history-v1"
+        let profile = match super::history_retained::version() {
+            "v3" => "c1-c2-c5-retained-history-v3",
+            "v2" => "c1-c2-c5-retained-history-v2",
+            _ => "c1-c2-c5-retained-history-v1",
         };
         context.trace.write(Kind::Run, "history_compound_profile", profile, "", "prospectively registered compound operation")?;
     }

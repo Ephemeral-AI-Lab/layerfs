@@ -43,7 +43,17 @@ class Case:
 
     @property
     def pin_root(self):
-        return ROOT / f"core/docs/issues/286/oracles/history-reference-{self.version}"
+        reference = "v2" if self.version == "v3" else self.version
+        return ROOT / f"core/docs/issues/286/oracles/history-reference-{reference}"
+
+
+# Independent corrected older-Core component producer. The original v0.1.6
+# FUSE-importer pins remain in v1/v2 and in each v3 receipt as diagnostics.
+V3_CANONICAL = {
+    "history-stride10": (380_559_460, 51_689),
+    "history-stride3": (589_480_854, 73_447),
+    "history-stride1": (871_337_620, 104_618),
+}
 
 
 # Limits frozen from the independent stride10 baseline, with the owner's
@@ -62,8 +72,14 @@ CASES = {case.id: case for case in (
          64_024_576, 170_000_000_000, 20_000_000_000),
     Case("history-retention-stride-1-total-storage-v2", "history-stride1", 157,
          83_947_520, 170_000_000_000, 30_000_000_000),
+    Case("history-retention-stride-10-total-storage-v3", "history-stride10", 17,
+         49_344_512, 60_000_000_000, 10_000_000_000),
+    Case("history-retention-stride-3-total-storage-v3", "history-stride3", 53,
+         64_024_576, 170_000_000_000, 20_000_000_000),
+    Case("history-retention-stride-1-total-storage-v3", "history-stride1", 157,
+         83_947_520, 170_000_000_000, 30_000_000_000),
 )}
-SELECTED = tuple(name for name in CASES if name.endswith("-v2"))[:2]
+SELECTED = tuple(name for name in CASES if name.endswith("-v3"))[:2]
 
 
 def identity(common):
@@ -143,17 +159,23 @@ def case_run(out, case, common, identities, binary):
     native = folder / "native"  # The existing driver creates this fresh directory.
     command = [binary["path"], "--case", case.backend_id, "--corpus", str(corpus.DEFAULT_ROOT),
                "--out", str(native)]
+    applicable = (V3_CANONICAL[case.backend_id] if case.version == "v3" else
+                  (expected["canonical_bytes"], expected["canonical_objects"]) if case.version == "v1" else
+                  expected["canonical_required"])
     record = {"schema": f"core-history-retention-receipt-{case.version}", "family": "history_retention",
               "case": case.id, "historical_backend_id": case.backend_id, "profile": case.profile,
               "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d",
               "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
               "identity": identities, "binary": binary, "corpus": corpus.identity(),
-              "root_ledger": expected, "env": method_env, "sample_count": 0,
+              "root_ledger": expected, "canonical_pin": {"applicable": applicable,
+                  "historical_v016": expected.get("canonical_required"),
+                  "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md" if case.version == "v3" else None},
+              "env": method_env, "sample_count": 0,
               "construction_workers": 1, "setup": "InProcess", "clone_method": None,
               "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
               "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
               "reused_proof_identities": [], "numeric_time_eligibility": "INELIGIBLE",
-              "storage_gate": (storage.GATE if case.version == "v1" else "g1.o6-total-retained-below-v016-v2"),
+              "storage_gate": (storage.GATE if case.version == "v1" else f"g1.o6-total-retained-below-v016-{case.version}"),
               "admission_eligible": False,
               "competing_work": common.competing_work()}
     common.write_json(folder / "declaration.json", record)
@@ -166,7 +188,7 @@ def case_run(out, case, common, identities, binary):
     record["storage"] = storage.collect(native, case.ceiling_bytes, case.states, version=case.version)
     canonical = record["storage"]["owners"].get("C2", {})
     fields = ("canonical_bytes", "canonical_objects")
-    required = (expected["canonical_bytes"], expected["canonical_objects"]) if case.version == "v1" else expected["canonical_required"]
+    required = applicable
     record["canonical_status"] = ("INCOMPLETE" if any(type(canonical.get(field)) is not int for field in fields)
         else "PASS" if all(canonical[field] == pin for field, pin in zip(fields, required)) else "FAIL")
     roots = trace_module.read(native / "trace.jsonl").values("counter") if (native / "trace.jsonl").is_file() else {}
@@ -230,7 +252,8 @@ def run(selection, out, common):
                 (out / name).mkdir()
                 common.write_json(out / name / "receipt.json", {"case": name,
                     "status": "NOT_RUN", "reason": "explicit run-only tier or unselected case", "sample_count": 0})
-    common.write_json(out / "run.json", {"schema": "core-history-retention-run-v2",
+    run_version = CASES[selected[0]].version
+    common.write_json(out / "run.json", {"schema": f"core-history-retention-run-{run_version}",
         "selection": selected, "identity": identities,
         "profiles": sorted({CASES[name].profile for name in selected})})
     (out / "report.txt").write_text(report(out))

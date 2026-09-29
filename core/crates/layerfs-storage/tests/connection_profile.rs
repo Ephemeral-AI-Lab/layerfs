@@ -109,7 +109,7 @@ fn a_save_reports_the_cache_profile_of_its_own_connection() {
     .expect("save with a profile reading");
 
     // The page size is the database's own, and the engine reports it.
-    assert_eq!(profile.page_size, 4_096, "the store's page size");
+    assert_eq!(profile.page_size, 2_048, "the new store's page size");
     // The cache setting is the engine's own answer, whichever profile is
     // declared: it is never zero, and SQLite's signed form is negative or a
     // positive page count.

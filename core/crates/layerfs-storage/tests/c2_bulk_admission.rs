@@ -55,7 +55,7 @@ fn several_groups_share_a_bounded_pack_write_and_reopen() {
         connection
             .query_row("PRAGMA page_size", [], |row| row.get::<_, i64>(0))
             .unwrap(),
-        4096
+        2048
     );
     drop(connection);
     let reopened = open_store(&path);

@@ -12,15 +12,15 @@ use layerfs_history::{
 
 /// Explicit opt-in; historical C2-only operations retain their original behavior.
 pub fn enabled() -> bool {
-    matches!(std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref(), Ok("1" | "2"))
+    matches!(std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref(), Ok("1" | "2" | "3"))
 }
 
 /// The explicitly selected compound workload identity; absent means legacy v1.
 pub fn version() -> &'static str {
-    if std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() == Ok("2") {
-        "v2"
-    } else {
-        "v1"
+    match std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() {
+        Ok("3") => "v3",
+        Ok("2") => "v2",
+        _ => "v1",
     }
 }
 
@@ -57,7 +57,8 @@ pub fn record_counters(
 }
 
 /// Compound O3 replaces the unrelated 217-row golden-table lookup.
-/// Missing counters are incomplete; old stride3/stride1 constants stay strict.
+/// Missing counters are incomplete; v1/v2 retain the old strict constants,
+/// while v3 pins the independent same-producer reference.
 pub fn counter_gates(
     row: crate::workload::history::Row,
     values: &[(String, i128)],
@@ -67,9 +68,11 @@ pub fn counter_gates(
         workload::history::Row,
     };
     let (bytes, objects) = match row {
-        Row::Stride10 if version() == "v2" => (380_559_460, 51_689),
+        Row::Stride10 if version() != "v1" => (380_559_460, 51_689),
         Row::Stride10 => (380_921_328, 52_032),
+        Row::Stride3 if version() == "v3" => (589_480_854, 73_447),
         Row::Stride3 => (589_423_458, 73_476),
+        Row::Stride1 if version() == "v3" => (871_337_620, 104_618),
         Row::Stride1 => (871_588_115, 104_705),
     };
     let expected = [
@@ -101,7 +104,7 @@ pub fn counter_gates(
 fn config() -> HistoryCatalogConfig {
     HistoryCatalogConfig {
         binding_key: format!("layerfs/issue286/retained-history/{}", version()).into_bytes(),
-        incarnation: if version() == "v2" { 2 } else { 1 },
+        incarnation: match version() { "v3" => 3, "v2" => 2, _ => 1 },
         cursor_key: [0x28; 32],
     }
 }
@@ -305,8 +308,11 @@ pub fn storage_gate(directory: &Path, row: crate::workload::history::Row) -> cra
         Row::Stride3 => 64_024_576,
         Row::Stride1 => 83_947_520,
     };
-    let id = if version() == "v2" { "g1.o6-total-retained-below-v016-v2" }
-             else { "g1.o6-total-retained-below-v016-v1" };
+    let id = match version() {
+        "v3" => "g1.o6-total-retained-below-v016-v3",
+        "v2" => "g1.o6-total-retained-below-v016-v2",
+        _ => "g1.o6-total-retained-below-v016-v1",
+    };
     let limit = format!("exclusive C2+C5 allocated bytes < {ceiling}");
     let mut total = 0u64;
     for owner in ["sample.sqlite", "history.sqlite"] {
@@ -364,7 +370,7 @@ pub fn root_pin_gate(row: crate::workload::history::Row, roots: &[ObjectId]) -> 
         }
         let text = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
         let mut lines = text.lines();
-        let header = if version() == "v2" {
+        let header = if version() != "v1" {
             "layerfs-history-root-pins-v2\t6b22835dd57d76ea53bd44561a68f50e0aab756f"
         } else {
             "layerfs-history-root-pins-v1\t2f07f1f37af3e06a92a00880c68882b3c91923ef"

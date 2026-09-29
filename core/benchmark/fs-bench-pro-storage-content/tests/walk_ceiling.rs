@@ -1,11 +1,8 @@
 //! The walk ceiling, and the batched route a tier above it takes.
 //!
-//! `MAXIMUM_WALK_ENTRIES` is charged **once per whole-tree walk**. A
-//! `build_filesystem` states its own bindings and the single reachability walk
-//! charges every one of them, so one build is refused above the ceiling; the
-//! product's own `limits.rs` doc says a tree larger than that "is reached by
-//! several operations that each stay under the ceiling". These tests pin the
-//! exact accepted/refused boundary through the public API, and they hold the
+//! The older 4,096-binding whole-build refusal no longer applies to a fresh
+//! tree: the current product charges actual effective-cycle visits against the
+//! caller's ordering budget. These tests check the public boundary and hold the
 //! batched route to the two properties the driver depends on:
 //!
 //! * every batch stays at or under the ceiling, and
@@ -31,8 +28,7 @@ use layerfs_content::filesystem::{
 };
 use layerfs_content::DiscardingConsumer;
 
-/// The product's own `MAXIMUM_WALK_ENTRIES`, restated so a change to it fails
-/// here rather than silently moving the tiers' shape.
+/// Historical batch width; no longer a global build ceiling.
 const CEILING: usize = 4_096;
 
 fn scope() -> layerfs_content::InodeScope {
@@ -115,7 +111,7 @@ fn root_listing(store: &TreeStore, root: FilesystemRootId) -> Vec<(String, u64)>
 }
 
 #[test]
-fn a_single_build_of_exactly_the_ceiling_is_accepted() {
+fn a_single_build_at_the_historical_batch_width_is_accepted() {
     // 1 directory binding + 4,095 file bindings = 4,096 stated bindings.
     let prepared = recipe(4_095, 1);
     assert_eq!(prepared.bindings(), CEILING);
@@ -124,28 +120,25 @@ fn a_single_build_of_exactly_the_ceiling_is_accepted() {
     let empty = TreeStore::new();
     assert!(
         run_batch(batch, None, &empty, &mut store, "accept").is_ok(),
-        "4,096 bindings must be accepted"
+        "4,096 fresh bindings must be accepted"
     );
 }
 
 #[test]
-fn a_single_build_of_the_ceiling_plus_one_is_refused_by_the_walk() {
+fn a_fresh_build_above_the_old_ceiling_is_accepted() {
     let prepared = recipe(4_096, 1);
     assert_eq!(prepared.bindings(), CEILING + 1);
     let mut store = TreeStore::new();
     let empty = TreeStore::new();
-    let error = run_batch(
+    let root = run_batch(
         &prepared.batches(CEILING + 1).expect("batches")[0],
         None,
         &empty,
         &mut store,
         "refuse",
     )
-    .expect_err("4,097 bindings must be refused");
-    assert!(
-        error.contains("cycle check work limit"),
-        "the refusal must be the walk ceiling, got {error}"
-    );
+    .expect("fresh 4,097 bindings do not require an effective-cycle walk");
+    assert!(!root_listing(&store, root).is_empty());
 }
 
 #[test]
@@ -155,7 +148,7 @@ fn every_batch_stays_under_the_ceiling_and_states_new_files_only() {
     let batches = prepared.batches(CEILING).expect("batches");
     assert!(
         batches.len() > 1,
-        "a tree above the ceiling needs more than one operation"
+        "the harness batches a tree above its declared width"
     );
     for (index, batch) in batches.iter().enumerate() {
         assert!(
