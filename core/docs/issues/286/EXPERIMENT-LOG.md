@@ -385,3 +385,11 @@ R040 issue publication: [#286 comment5900857750](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-init-100000-v4-r041 | explicit release SDK Init100,000 files, one sample; first fixture preparation outside timer | `fc7ed1a30`, product `60c7af879` | **Functional PASS**, runner `UNREGISTERED_DIAGNOSTIC`: SDK6.043s, complete command6.063s<15s, separate verifier1.712s<9.5s; all101001 paths and73 selected files/200286236 B, known root and cleanup PASS; numeric INELIGIBLE, no cold2.7s claim. Fixture preparation14.542s outside timer. | [Round report](experiments/20260930-init-100000-v4-r041.md) | Publish after commit; explicit10,000 next |
+
+## Explicit owner-requested SDK Init tier 20260930-init-10000-v4-r042
+
+R041 issue publication: [#286 comment5900890397](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900890397), explicit100,000 functional report commit `0a8bac6fb` (production delta+0). The remaining10,000 case runs once under the same product, Init harness and release binary seals as r040/r041.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-init-10000-v4-r042 | explicit release SDK Init10,000 files, one sample; first fixture preparation outside timer | `0a8bac6fb`, product `60c7af879` | **Functional PASS**, runner `UNREGISTERED_DIAGNOSTIC`: SDK1.591s, complete command1.610s<15s, separate verifier0.653s<9.5s; all10101 paths and72 selected files/101928859 B, known root and cleanup PASS; numeric INELIGIBLE. Together with r040/r041, all four owner-requested tiers have one functional result. | [Round report](experiments/20260930-init-10000-v4-r042.md) | Publish after commit; Family3 matrix next |

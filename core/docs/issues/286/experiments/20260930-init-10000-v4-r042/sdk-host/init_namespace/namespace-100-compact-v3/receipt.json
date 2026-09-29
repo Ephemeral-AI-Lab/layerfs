@@ -1,0 +1,10 @@
+{
+  "build_profile": "release",
+  "cache_contract": "source-cache-uncontrolled-v1",
+  "case": "namespace-100-compact-v3",
+  "functional_status": "NOT_RUN",
+  "reason": "not selected",
+  "sample_count": 0,
+  "status": "NOT_RUN",
+  "verification_scope": "complete paths/kinds; sampled file metadata/content"
+}

@@ -1,0 +1,17 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8/benchmark_init",
+      "sha256": "06a031846776ad00716d4a90c5a1166ccc25eccda55b19e68a1e5a45e079c0e8"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/7c9fe69fd4a7977a78bf9b9f9b0169eba7fefddba5ca6ce55ccc4243dd74bab3/verify_namespace",
+      "sha256": "7c9fe69fd4a7977a78bf9b9f9b0169eba7fefddba5ca6ce55ccc4243dd74bab3"
+    }
+  },
+  "build_profile": "release",
+  "command": null,
+  "mode": "exact-binary-reuse",
+  "status": "PASS",
+  "wall_ns": 0
+}
