@@ -1,0 +1,10 @@
+case	status	command_ns	verifier_ns	allocated_bytes	storage_gate
+history-retention-stride-10-total-storage-v1	NOT_RUN	None	None	None	None
+history-retention-stride-3-total-storage-v1	NOT_RUN	None	None	None	None
+history-retention-stride-1-total-storage-v1	NOT_RUN	None	None	None	None
+history-retention-stride-10-total-storage-v2	NOT_RUN	None	None	None	None
+history-retention-stride-3-total-storage-v2	NOT_RUN	None	None	None	None
+history-retention-stride-1-total-storage-v2	NOT_RUN	None	None	None	None
+history-retention-stride-10-total-storage-v3	PASS	42841496083	2902709792	48279552	PASS
+history-retention-stride-3-total-storage-v3	PASS	74208246708	8309844708	59899904	PASS
+history-retention-stride-1-total-storage-v3	NOT_RUN	None	None	None	None

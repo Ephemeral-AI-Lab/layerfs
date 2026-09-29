@@ -297,3 +297,11 @@ R029 issue publication: [#286 comment5899332158](https://github.com/Ephemeral-AI
 | Round | Family / selection | Source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-preallocation-diagnostic-r030 | 157-state original C2 allocation-order probe with external watcher; **no candidate sample** | `62ed81588`, level9 binary SHA `8f52b440...` | 73 successful small `F_PREALLOCATE` calls; child166.738s, independent verifier20.733s, final C2+C5 diagnostic allocation78839808 B with bytes SHA-identical to r021, no product gate verdict; official r021 storage FAIL139264 B unchanged | [Diagnostic report](experiments/20260930-history-preallocation-diagnostic-r030.md) | Publish after commit; link in next real round |
+
+## Selected round 20260930-history-v3-r031
+
+R030 issue publication: [#286 comment5899556402](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5899556402), diagnostic report commit `aa1734552` (production delta+0). Product commit `aed28dda1` adds safe, platform-gated, bounded pre-pack reservation paid inside the C2 save (+104 Core production LOC); the benchmark workspace's separate lock was updated at `8b7149420` (production delta+0). Original limits, workload and pins remain unchanged.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v3-r031 | compound v3 stride10/17 then stride3/53, one changed-source sample each | `8b7149420`, product source `aed28dda1` | **PASS/PASS**: strict allocated48279552<49344512 and59899904<64024576 B; complete tree/selected content/independent O3+roots/C5/cleanup PASS, driver42.841/74.208s, verifier2.903/8.310s within original limits; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r031.md) | Publish after commit; link in next real round |
