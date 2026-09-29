@@ -173,3 +173,11 @@ R010 issue publication: [#286 comment5895866838](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v2-r011 | compound history stride1/157 states, one changed-harness candidate | `c130dab26` | **TIMEOUT/INCOMPLETE** at fixed170s: C2 save157 active with290 object rows, C5 156 Layers, no verifier; partial canonical INCOMPLETE now correctly classified, storage INCOMPLETE; at-run partial C2+C5 allocated84520960 B but cannot decide full-chain gate; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r011.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride1-v2-r012
+
+R011 issue publication: [#286 comment5896046260](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5896046260), report commit `38b557f45` (production delta+0). macOS Git SHA-1 acceleration source `6ab692386` has production delta+0.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v2-r012 | compound history stride1/157 states, one changed-harness candidate | `6ab692386` | **FAIL**: complete driver167.807s<170s and all157 C2/C5 states persisted; strict allocated84520960 >=83947520 B (+573440), canonical871337620 B/104618 vs immutable871588115/104705 FAIL; verifier TIMEOUT30s, full O4 INCOMPLETE; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r012.md) | Publish after commit; link in next round |

@@ -1,0 +1,7 @@
+{
+  "exit_code": null,
+  "timed_out": true,
+  "wall_ns": 30017816250,
+  "binary_sha256": "c204261a4b2bfb113f16157945c011ed48e9447acea9c95d12d5d21253f48192",
+  "kind": "count-driven per-state verifier diagnostic, original 30 s bound, r012 copied owners; no admission gate"
+}
