@@ -1,4 +1,6 @@
-//! SHA-1 and the Git blob identity — the second hand-rolled digest in the harness.
+//! SHA-1 and the Git blob identity. The portable scalar digest stays as the
+//! independent reference; macOS blob OIDs use the same system digest through a
+//! checked CommonCrypto call, with no change to the Git header or identity.
 //!
 //! The retained-history corpus names every changed blob by its **Git object id**:
 //! `inputs/<sha>/blobs/<oid>` and the `oid` column of `manifest.tsv`. A blob that
@@ -155,10 +157,68 @@ pub fn sha1(bytes: &[u8]) -> [u8; 20] {
 /// second buffer — which matters because the corpus's largest blob is 1,241,221 B
 /// and the reader hashes every blob it serves.
 pub fn blob_oid(bytes: &[u8]) -> [u8; 20] {
-    let mut hasher = Sha1::new();
-    hasher.update(format!("blob {}\0", bytes.len()).as_bytes());
-    hasher.update(bytes);
-    hasher.finish()
+    let header = format!("blob {}\0", bytes.len());
+    #[cfg(target_os = "macos")]
+    {
+        return macos_blob_oid(header.as_bytes(), bytes);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mut hasher = Sha1::new();
+        hasher.update(header.as_bytes());
+        hasher.update(bytes);
+        hasher.finish()
+    }
+}
+
+/// System SHA-1 on macOS, without copying a blob into a second buffer.
+/// The public CommonCrypto context layout is from `CommonDigest.h`; failures
+/// refuse the harness rather than accepting an unchecked Git identity.
+#[cfg(target_os = "macos")]
+fn macos_blob_oid(header: &[u8], bytes: &[u8]) -> [u8; 20] {
+    #[repr(C)]
+    struct Context {
+        words: [u32; 5],
+        counts: [u32; 2],
+        data: [u32; 16],
+        count: i32,
+    }
+    unsafe extern "C" {
+        fn CC_SHA1_Init(context: *mut Context) -> i32;
+        fn CC_SHA1_Update(context: *mut Context, data: *const std::ffi::c_void, len: u32) -> i32;
+        fn CC_SHA1_Final(digest: *mut u8, context: *mut Context) -> i32;
+    }
+    let mut context = std::mem::MaybeUninit::<Context>::uninit();
+    let mut digest = [0_u8; 20];
+    // SAFETY: Context has the public CommonCrypto ABI layout. Init writes it
+    // before Update/Final read it; every supplied slice pointer stays live for
+    // the synchronous call and each chunk length fits CC_LONG (u32).
+    unsafe {
+        assert_eq!(
+            CC_SHA1_Init(context.as_mut_ptr()),
+            1,
+            "CommonCrypto SHA-1 init"
+        );
+        let context = context.as_mut_ptr();
+        assert_eq!(
+            CC_SHA1_Update(context, header.as_ptr().cast(), header.len() as u32),
+            1,
+            "CommonCrypto SHA-1 header"
+        );
+        for chunk in bytes.chunks(u32::MAX as usize) {
+            assert_eq!(
+                CC_SHA1_Update(context, chunk.as_ptr().cast(), chunk.len() as u32),
+                1,
+                "CommonCrypto SHA-1 bytes"
+            );
+        }
+        assert_eq!(
+            CC_SHA1_Final(digest.as_mut_ptr(), context),
+            1,
+            "CommonCrypto SHA-1 final"
+        );
+    }
+    digest
 }
 
 /// Lowercase hex of a 20-byte object id.
@@ -193,7 +253,10 @@ mod tests {
     /// The three vectors FIPS 180-1 publishes, plus the empty string.
     #[test]
     fn sha1_matches_the_published_vectors() {
-        assert_eq!(hex_oid(&sha1(b"")), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+        assert_eq!(
+            hex_oid(&sha1(b"")),
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+        );
         assert_eq!(
             hex_oid(&sha1(b"abc")),
             "a9993e364706816aba3e25717850c26c9cd0d89d"
@@ -247,6 +310,17 @@ mod tests {
             "ce013625030ba8dba906f756967f9e9ca394464a"
         );
         assert_ne!(blob_oid(b"abc"), sha1(b"abc"));
+    }
+
+    #[test]
+    fn blob_oid_matches_scalar_across_blocks_and_large_payloads() {
+        for length in [0, 1, 55, 56, 63, 64, 65, 129, 32_768, 1_241_221] {
+            let bytes: Vec<u8> = (0..length).map(|index| (index % 251) as u8).collect();
+            let mut scalar = Sha1::new();
+            scalar.update(format!("blob {}\0", bytes.len()).as_bytes());
+            scalar.update(&bytes);
+            assert_eq!(blob_oid(&bytes), scalar.finish(), "length {length}");
+        }
     }
 
     #[test]
