@@ -303,7 +303,15 @@ mod linux {
         let data = f.lookup(b"data.bin");
         let handle = f
             .workspace
-            .open(data.serial, ReferenceScope::Local)
+            .open_file(
+                data.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
             .unwrap();
         f.edit(b"data.bin", 10, 14, b"GGGG");
         let stage = f.workspace.stage(deadline()).unwrap();
@@ -331,7 +339,11 @@ mod linux {
             f.workspace.commit_staged(&stage, deadline()),
             Err(WorkspaceError::Busy)
         ));
-        f.edit(b"data.bin", 10, 18, b"Z");
+        // A generic tail copy needs remote Base reads, which the occupied
+        // single RPC slot refuses. An ordinary local WRITE can still progress.
+        f.workspace
+            .write_file(handle, 10, &f.own(b"Z"), deadline())
+            .unwrap();
         assert!(matches!(
             f.workspace.read(handle, 8, 6, deadline()),
             Err(WorkspaceError::Busy)
@@ -340,8 +352,12 @@ mod linux {
         f.native.release_commit();
         let report = pending.join().unwrap().unwrap();
         committed(&f, &stage, &report);
-        assert_eq!(f.read(handle, 8, 6), [8, 9, b'Z', 14, 15, 16]);
+        assert_eq!(f.read(handle, 8, 6), [8, 9, b'Z', b'L', b'I', b'V']);
         assert_eq!(old.as_ref(), b"GLIVEING");
+        // Complete the same final deletion through ordinary reads/writes once
+        // the remote slot is available, without a retired range-edit bridge.
+        f.edit(b"data.bin", 11, 18, b"");
+        assert_eq!(f.read(handle, 8, 6), [8, 9, b'Z', 14, 15, 16]);
         let before = f.native.observations.lock().unwrap().operations.len();
         let (next, _) = commit(&f);
         let observed = f.native.observations.lock().unwrap();
