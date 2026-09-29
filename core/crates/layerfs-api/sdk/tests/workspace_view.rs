@@ -456,3 +456,233 @@ fn view_lease_uncertain_release_does_not_retry_or_claim_completion() {
     drop(cleanup);
     println!("VIEW_LEASE_RELEASE_LOSS checked_release=Unknown remote_token=Denied g1=exact g2=exact no_retry=true unmount=Completed");
 }
+
+/// One external authenticated host-Service relay gates the Commit ciphertext
+/// only after a read-only check finds the canonical branch head published.
+/// The test process, not the daemon, applies/restores the Linux file-size fault.
+fn c5_control(endpoint: &str, command: &str) -> String {
+    use std::io::{Read, Write};
+    let mut socket = std::net::TcpStream::connect(endpoint).unwrap();
+    socket.write_all(format!("{command}\n").as_bytes()).unwrap();
+    socket.shutdown(std::net::Shutdown::Write).unwrap();
+    let mut result = String::new();
+    socket.read_to_string(&mut result).unwrap();
+    result
+}
+
+struct C5Limit(String);
+impl C5Limit {
+    fn apply(name: &str, helper: &str) -> Self {
+        let docker = |args: &[&str]| {
+            let result = std::process::Command::new("docker")
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(result.status.success(), "docker {args:?}: {result:?}");
+            String::from_utf8(result.stdout).unwrap()
+        };
+        let names = docker(&[
+            "ps",
+            "--filter",
+            "label=io.layerfs.owner=agent-sdk",
+            "--filter",
+            &format!("label=io.layerfs.sandbox-name={name}"),
+            "--format",
+            "{{.ID}}",
+        ]);
+        assert_eq!(names.lines().count(), 1, "only the owned daemon is faulted");
+        let container = names.trim().to_owned();
+        // Docker cp refuses read-only rootfs; stream the owned helper into
+        // the mounted volume instead (the tmpfs is noexec in this profile).
+        use std::io::Write;
+        let mut copy = std::process::Command::new("docker")
+            .args([
+                "exec",
+                "-i",
+                "--privileged",
+                &container,
+                "/bin/sh",
+                "-c",
+                "cat > /layerfs/.c5-limit-test && chmod 500 /layerfs/.c5-limit-test",
+            ])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        copy.stdin
+            .take()
+            .unwrap()
+            .write_all(&std::fs::read(helper).unwrap())
+            .unwrap();
+        assert!(
+            copy.wait().unwrap().success(),
+            "install owned Linux fault helper"
+        );
+        let profile = docker(&[
+            "exec",
+            "--privileged",
+            &container,
+            "/layerfs/.c5-limit-test",
+            "1",
+            "2048",
+        ]);
+        assert!(profile.contains("new=2048"), "{profile}");
+        Self(container)
+    }
+}
+impl Drop for C5Limit {
+    fn drop(&mut self) {
+        let result = std::process::Command::new("docker")
+            .args([
+                "exec",
+                "--privileged",
+                &self.0,
+                "/layerfs/.c5-limit-test",
+                "1",
+                "max",
+            ])
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "restore file limit: {result:?}");
+        let removed = std::process::Command::new("docker")
+            .args(["exec", &self.0, "/bin/rm", "-f", "/layerfs/.c5-limit-test"])
+            .output()
+            .unwrap();
+        assert!(
+            removed.status.success(),
+            "remove external helper: {removed:?}"
+        );
+    }
+}
+
+#[test]
+fn view_lease_known_c1_local_c5_failure() {
+    use layerfs_bridge::contract::{
+        CommitOutcomeWire, WorkspaceCommitFailureDisposition, WorkspaceCommitPhase,
+    };
+    let (Ok(image), Ok(control), Ok(host_ip), Ok(helper)) = (
+        std::env::var("LAYERFS_TEST_IMAGE"),
+        std::env::var("LAYERFS_C5_CONTROL"),
+        std::env::var("LAYERFS_C5_HOST_IP"),
+        std::env::var("LAYERFS_C5_HELPER"),
+    ) else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-view-c5-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("note"), b"base").unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"view-c5".to_vec(),
+        incarnation: 1,
+        cursor_key: [41; 32],
+        history: HistoryMode::Create,
+        service_host: host_ip,
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    let endpoint = server.listen().unwrap();
+    assert_eq!(
+        c5_control(&control, &format!("BIND {}", endpoint.port())),
+        "BOUND\n"
+    );
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let workspaces = WorkspaceApi::new(&owner);
+    let project = projects.init("view-c5", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "view-c5").unwrap();
+    let name = format!("view-c5-{}", std::process::id());
+    let sandbox = sandboxes.create(&image, &name).unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    workspaces.exec(&mount.id, "printf g1-note > note").unwrap();
+    let lease = workspaces.pin_view(&mount.id).unwrap();
+    let entry = workspaces
+        .view_lookup(&lease, lease.root(), b"note")
+        .unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &entry, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    let pinned = (lease.generation(), lease.revision());
+    assert_eq!(
+        c5_control(
+            &control,
+            &format!("ARM {}", root.join("history.sqlite").display())
+        ),
+        "ARMED\n"
+    );
+    std::thread::scope(|scope| {
+        let committing = scope.spawn(|| workspaces.commit(&mount.id));
+        let gated = c5_control(&control, "WAIT");
+        let head = gated.strip_prefix("GATED ").unwrap().trim_end().to_owned();
+        let limit = C5Limit::apply(&name, &helper);
+        assert_eq!(c5_control(&control, "GO"), "RELEASED\n");
+        let result = committing.join().unwrap();
+        drop(limit);
+        let Err(WorkspaceError::Commit(failure)) = result else {
+            panic!("expected known canonical/local physical failure: {result:?}")
+        };
+        assert_eq!(
+            failure.disposition,
+            WorkspaceCommitFailureDisposition::KnownCommitLocalFailure
+        );
+        assert_eq!(failure.phase, WorkspaceCommitPhase::Reconcile);
+        assert!(failure.installed_revision.is_none());
+        assert_eq!(failure.cause.code, Code::Io);
+        assert!(!failure.cause.unknown);
+        let Some(CommitOutcomeWire::Committed(committed)) = &failure.known_outcome else {
+            panic!("must preserve a known canonical Commit: {failure:?}")
+        };
+        let actual_head = committed
+            .commit
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert_eq!(
+            actual_head, head,
+            "relay gate must match SDK's known C1 Commit"
+        );
+        assert_eq!(failure.observed_outcome, failure.known_outcome);
+        eprintln!("VIEW_LEASE_C5_COMMIT {failure:?}");
+    });
+    let status = workspaces.view_status(&lease).unwrap();
+    assert_eq!((status.generation, status.revision), pinned);
+    assert_eq!(status.held_leases, 1);
+    assert_eq!(
+        workspaces.view_read(&lease, &entry, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    // A failed local installation must never be disguised as a successful
+    // clean close. Cleanup is owner-scoped even when a stopped C5 refuses it.
+    let release = workspaces.release_view(&lease);
+    eprintln!("VIEW_LEASE_C5_RELEASE {release:?}");
+    let unmount = workspaces.unmount(&mount.id);
+    eprintln!("VIEW_LEASE_C5_UNMOUNT {unmount:?}");
+    let mut logs = Vec::new();
+    let (removed, capture) = sandboxes.delete_with_logs(sandbox, &mut logs);
+    assert!(removed.is_ok(), "remove owned stopped daemon: {removed:?}");
+    assert!(
+        capture.error.is_none() && !capture.truncated,
+        "daemon stderr capture: {capture:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&logs).contains("sandbox shutdown retained: Busy"),
+        "C5 physical fault must not be mislabeled clean close: {}",
+        String::from_utf8_lossy(&logs)
+    );
+    cleanup.sandboxes.clear();
+    drop(cleanup);
+    println!("VIEW_LEASE_C5 canonical=Committed phase=Reconcile disposition=KnownCommitLocalFailure pinned_g1=exact held=1");
+}
