@@ -300,6 +300,9 @@ impl MutationOwner {
             }
             self.advance_pack_if_moved()
         })?;
+        scope
+            .child("storage.finish.page_reclaim")
+            .run(|_| write::reclaim_one_free_page(&self.connection))?;
         let started = Instant::now();
         scope
             .child("storage.finish.sqlite_commit")

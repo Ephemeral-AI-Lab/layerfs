@@ -108,6 +108,12 @@ pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<S
         return Err(StorageError::Integrity("Store is not empty"));
     }
     connection.execute_batch(SCHEMA_SQL)?;
+    let auto_vacuum: i64 = connection.query_row("PRAGMA auto_vacuum", [], |row| row.get(0))?;
+    if auto_vacuum != 2 {
+        return Err(StorageError::Integrity(
+            "new Store incremental-vacuum profile",
+        ));
+    }
     connection.execute(
         "INSERT INTO store_policy \
          (id, format_profile, small_file_threshold_bytes, whole_file_delta_max_depth, \
