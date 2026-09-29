@@ -313,3 +313,11 @@ R031 issue publication: [#286 comment5899787801](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v3-r032 | compound v3 stride1/157, one explicit sample | `1bbffd2f6`, product source `aed28dda1` | **PASS**: strict allocated78839808<83947520 B (margin5107712); all904143 paths/76726 selected content states/157 independent roots/O3/C5/cleanup PASS, driver164.904s<170s and verifier20.882s<30s; C2/C5 SHA-identical to r021; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r032.md) | Publish after commit; link in next real round |
+
+## Earlier-family regression attempt 20260930-init-regression-r033
+
+R032 issue publication: [#286 comment5899894816](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5899894816), stride1 PASS report commit `cdf146ee9` (production delta+0). The frozen order requires one family-1 regression check before advancing to family3.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-init-regression-r033 | default Init 100 then1,000 requested; build failed before either sample | `cdf146ee9` | **BUILD FAIL** `E0004`: service mapper lacks new `StorageError::Io(_)`; build2.998s<30s; 100/1000 and explicit10,000/100,000 all NOT_RUN, no command/verifier/cache/cleanup verdict; family2 candidate PASS receipts unchanged, checkpoint pending | [Round report](experiments/20260930-init-regression-r033.md) | Publish after commit; link in next real round |

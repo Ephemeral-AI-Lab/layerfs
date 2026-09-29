@@ -1,0 +1,37 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 542,
+      "sha256": "6e60bde7e9832c63f27c44c14a4d22d77f825686f6fc66d39ee724cb2674b13a"
+    },
+    "build.log": {
+      "bytes": 1341,
+      "sha256": "654dfb1e3abb0118590ff735a8a4bd05fc1e0d563ca7f1a59013b11c2eac0361"
+    },
+    "report.txt": {
+      "bytes": 641,
+      "sha256": "88b62732f42af8b6b1a2770b46e7004b7fa8587cc4c4092c15f3e1035640d8f2"
+    },
+    "run.json": {
+      "bytes": 1009,
+      "sha256": "8bb7b43c0de2022fca2f6e49e398c30dab733dbc7b2adf8eaaee750721fba780"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "bytes": 300,
+      "sha256": "b35f753ef66b80cb1f94082646cf37cd467a095596c5e9fd33f03dd26127832e"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "bytes": 301,
+      "sha256": "8f487dbd9cc835662cc33c99349eba3151869e9f16fb5afc3f2e3368973a7990"
+    },
+    "sdk-host/init_namespace/namespace-10000/receipt.json": {
+      "bytes": 352,
+      "sha256": "d503f885f4b8b0f89f2855ce3c872eb9f50f1470631e18b13cd7fd2621ed6af8"
+    },
+    "sdk-host/init_namespace/namespace-100000/receipt.json": {
+      "bytes": 353,
+      "sha256": "bb92522ca52293511e1d11657de669a049e25a1525d0d595acef0f4d59bc5cb9"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

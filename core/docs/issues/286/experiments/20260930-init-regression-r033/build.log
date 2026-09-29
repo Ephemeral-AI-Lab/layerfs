@@ -1,0 +1,27 @@
+   Compiling layerfs-history v0.1.6 (/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/crates/layerfs-history)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/crates/layerfs-storage)
+   Compiling layerfs-server v0.1.6 (/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/crates/layerfs-server)
+error[E0004]: non-exhaustive patterns: `StorageError::Io(_)` not covered
+  --> crates/layerfs-server/src/service/error.rs:22:11
+   |
+22 |     match e {
+   |           ^ pattern `StorageError::Io(_)` not covered
+   |
+note: `StorageError` defined here
+  --> /Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/crates/layerfs-storage/src/error.rs:14:1
+   |
+14 | pub enum StorageError {
+   | ^^^^^^^^^^^^^^^^^^^^^
+...
+20 |     Io(std::io::Error),
+   |     -- not covered
+   = note: the matched value is of type `StorageError`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+44 ~         S::Aborted => Code::InvalidInput.into(),
+45 ~         StorageError::Io(_) => todo!(),
+   |
+
+For more information about this error, try `rustc --explain E0004`.
+error: could not compile `layerfs-server` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
