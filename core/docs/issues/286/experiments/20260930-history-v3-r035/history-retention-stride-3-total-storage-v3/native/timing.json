@@ -1,0 +1,1597 @@
+{
+  "name": "history",
+  "elapsed_ns": 76938441916,
+  "children": [
+    {
+      "name": "history.state.1",
+      "elapsed_ns": 87364958,
+      "children": [
+        {"name": "content", "elapsed_ns": 6373291, "children": []},
+        {"name": "store.create", "elapsed_ns": 4459625, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1979708, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 69520500,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 64678541, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4840416,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4614542, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 16875, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 55708, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 26000, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5583, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 60833, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 4292, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 51209, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.2",
+      "elapsed_ns": 168911500,
+      "children": [
+        {"name": "content", "elapsed_ns": 10479708, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 639625, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 13550625,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 6085750, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 7463958,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 7189500, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20417, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 459, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 76875, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29791, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6125, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 74959, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 11042, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 50375, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.3",
+      "elapsed_ns": 193574708,
+      "children": [
+        {"name": "content", "elapsed_ns": 15042458, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 600584, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 21288959,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 14557583, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6730333,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 6496459, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 16417, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 59166, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 25417, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5333, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 73375, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 14458, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 34458, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.4",
+      "elapsed_ns": 264828000,
+      "children": [
+        {"name": "content", "elapsed_ns": 19000834, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 769334, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 39653125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 32338000, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 7313958,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 7049500, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 17625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 334, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 69708, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 28333, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5708, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 93667, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 22208, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22167, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.5",
+      "elapsed_ns": 304548959,
+      "children": [
+        {"name": "content", "elapsed_ns": 23984750, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 623417, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 90332541,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 80726334, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 9605042,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 9349500, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 13417, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 417, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 71750, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 27417, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5208, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 73459, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 33500, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 24958, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.6",
+      "elapsed_ns": 358831875,
+      "children": [
+        {"name": "content", "elapsed_ns": 24782666, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 785375, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 105777792,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 97095875, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 8680625,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 8385500, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11083, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 333, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 76916, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 27459, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5959, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 62750, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 36250, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 69334, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.7",
+      "elapsed_ns": 499188667,
+      "children": [
+        {"name": "content", "elapsed_ns": 32208458, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 712250, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 40383875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 30051083, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10331875,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 9964250, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20542, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75584, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 27667, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5791, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 132084, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 77875, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22250, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.8",
+      "elapsed_ns": 464892000,
+      "children": [
+        {"name": "content", "elapsed_ns": 33495375, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 624375, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 45015250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 33037959, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 11975833,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 11530333, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 24166, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 417, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 83458, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 28375, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5792, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 149166, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 61333, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 86667, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.9",
+      "elapsed_ns": 310433791,
+      "children": [
+        {"name": "content", "elapsed_ns": 26681458, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1546959, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 86348875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 82133292, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4214167,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4001084, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 10708, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 57667, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 25334, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5458, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 39000, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 47750, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22125, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.10",
+      "elapsed_ns": 342422042,
+      "children": [
+        {"name": "content", "elapsed_ns": 20913917, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 790500, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 66983292,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 62235375, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4746958,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4463250, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11458, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 67542, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 28833, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5791, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 59417, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 75667, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 29500, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.11",
+      "elapsed_ns": 309974958,
+      "children": [
+        {"name": "content", "elapsed_ns": 41807833, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 735250, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 67582125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 65590709, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 1990000,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 1717208, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11500, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 459, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75833, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29500, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6000, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 51875, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 58375, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 35375, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.12",
+      "elapsed_ns": 617668792,
+      "children": [
+        {"name": "content", "elapsed_ns": 41762666, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 776084, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 122038459,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 116160833, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5876416,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5548250, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11750, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 60875, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 28333, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5709, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 129583, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 65208, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22125, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.13",
+      "elapsed_ns": 469191416,
+      "children": [
+        {"name": "content", "elapsed_ns": 32554042, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 669584, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 209559125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 207664291, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 1893250,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 1529083, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20667, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 66167, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29500, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5542, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 132625, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 76917, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 28500, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.14",
+      "elapsed_ns": 455948958,
+      "children": [
+        {"name": "content", "elapsed_ns": 29516125, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 706500, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 61895458,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 57553500, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4340916,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3948041, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 26000, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 67291, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29250, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5417, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 145417, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 81459, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 33708, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.15",
+      "elapsed_ns": 424083000,
+      "children": [
+        {"name": "content", "elapsed_ns": 29727917, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 763667, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 137859750,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 130390334, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 7468083,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 7145167, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 17541, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 71000, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 27125, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5458, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 78500, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 90125, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 27708, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.16",
+      "elapsed_ns": 874545000,
+      "children": [
+        {"name": "content", "elapsed_ns": 64075000, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 763250, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 87906875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 83419334, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4486417,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4204583, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19000, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 458, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 59542, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 28500, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5584, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 38375, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 102916, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22792, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.17",
+      "elapsed_ns": 472155375,
+      "children": [
+        {"name": "content", "elapsed_ns": 34259833, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 861083, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 204993084,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 203182125, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 1809166,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 1486875, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 12917, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 417, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 61208, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29667, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5500, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 65625, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 109875, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 30958, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.18",
+      "elapsed_ns": 985302750,
+      "children": [
+        {"name": "content", "elapsed_ns": 60120375, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 693542, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 151417875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 147006166, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4410584,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3915291, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 28292, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 334, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 64750, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30584, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5583, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 122125, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 209541, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 29333, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.19",
+      "elapsed_ns": 673733958,
+      "children": [
+        {"name": "content", "elapsed_ns": 38865667, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 693542, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 146144208,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 142392084, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3750667,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3335292, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11791, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 417, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 78709, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30916, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5875, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 102792, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 142959, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 36875, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.20",
+      "elapsed_ns": 678475959,
+      "children": [
+        {"name": "content", "elapsed_ns": 36786000, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 825875, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 105552291,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 99885458, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5665917,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5255166, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19709, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 76458, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30000, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6250, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 106459, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 145500, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 21708, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.21",
+      "elapsed_ns": 705557250,
+      "children": [
+        {"name": "content", "elapsed_ns": 37036500, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 819125, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 131260542,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 127540041, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3719458,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3338500, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 17625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 58000, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29209, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5708, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 95791, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 148583, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 21917, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.22",
+      "elapsed_ns": 290046875,
+      "children": [
+        {"name": "content", "elapsed_ns": 17701167, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 778584, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 63505125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 53048542, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10455459,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 9971125, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20875, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 125, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 70750, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 58917, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 14625, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 131625, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 158000, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23250, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.23",
+      "elapsed_ns": 887244084,
+      "children": [
+        {"name": "content", "elapsed_ns": 50710042, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 794709, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 131738750,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 120934084, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10803458,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 10265584, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 24541, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 333, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 98083, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 34875, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6875, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 143416, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 202291, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22750, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.24",
+      "elapsed_ns": 802377291,
+      "children": [
+        {"name": "content", "elapsed_ns": 41729875, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 667458, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 204399625,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 194396334, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10002208,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 9387167, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 12209, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 3500, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 86958, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 36167, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5917, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 187208, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 255333, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22542, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.25",
+      "elapsed_ns": 523912834,
+      "children": [
+        {"name": "content", "elapsed_ns": 24215333, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 700125, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 169508417,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 164707500, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4799500,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4349292, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19708, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 208, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75791, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30583, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5709, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 106375, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 185042, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22417, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.26",
+      "elapsed_ns": 633888375,
+      "children": [
+        {"name": "content", "elapsed_ns": 58678500, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 714583, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 104501792,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 93859667, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10640917,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 10183292, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 17042, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 625, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 78625, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 31417, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6000, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 88542, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 208000, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22500, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.27",
+      "elapsed_ns": 759340125,
+      "children": [
+        {"name": "content", "elapsed_ns": 76763250, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 826333, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 94565250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 88535708, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6028333,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5628792, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 18500, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 541, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 71250, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30125, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5959, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 54917, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 190334, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23000, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.28",
+      "elapsed_ns": 366636375,
+      "children": [
+        {"name": "content", "elapsed_ns": 17399792, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 976542, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 68741250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 60037625, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 8702417,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 8257916, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 22167, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 291, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 65833, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30208, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6208, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 105708, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 177291, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 31667, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.29",
+      "elapsed_ns": 1353508666,
+      "children": [
+        {"name": "content", "elapsed_ns": 78069625, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 866625, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 311466041,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 309076000, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 2389000,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 1905250, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19000, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 416, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 90708, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 41667, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 7708, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 88458, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 209125, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22084, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.30",
+      "elapsed_ns": 564978042,
+      "children": [
+        {"name": "content", "elapsed_ns": 27796708, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 772167, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 208765333,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 202956875, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5807083,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5292875, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75041, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29208, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5833, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 147375, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 208208, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23083, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.31",
+      "elapsed_ns": 898752000,
+      "children": [
+        {"name": "content", "elapsed_ns": 45440833, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 781250, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 75943125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 71877417, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4064458,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3553208, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19708, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 82250, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30250, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5542, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 135209, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 211125, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22167, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.32",
+      "elapsed_ns": 839801500,
+      "children": [
+        {"name": "content", "elapsed_ns": 58014959, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 822458, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 190534875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 185600458, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4933333,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4490125, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 12625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 208, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 71667, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29542, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6000, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 83958, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 213125, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22084, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.33",
+      "elapsed_ns": 1729858375,
+      "children": [
+        {"name": "content", "elapsed_ns": 92533375, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 840209, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 185875875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 182832375, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3042250,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 2466917, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 291, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 77292, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29792, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6000, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 171292, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 243709, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22833, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.34",
+      "elapsed_ns": 988294750,
+      "children": [
+        {"name": "content", "elapsed_ns": 47671375, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 2082917, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 32569708,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 28894875, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3673333,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 2994709, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19667, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 91375, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30667, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6041, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 198917, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 304375, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22708, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.35",
+      "elapsed_ns": 1579890542,
+      "children": [
+        {"name": "content", "elapsed_ns": 80593917, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1337417, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 241272083,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 236170917, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5099708,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4514125, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20250, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 83209, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 31542, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6208, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 126458, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 284750, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 27250, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.36",
+      "elapsed_ns": 955066708,
+      "children": [
+        {"name": "content", "elapsed_ns": 87808250, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 750708, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 116702250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 106373500, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 10327417,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 9814666, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 22625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 71375, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 32000, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6542, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 71167, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 281000, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22708, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.37",
+      "elapsed_ns": 1228420208,
+      "children": [
+        {"name": "content", "elapsed_ns": 92237833, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 814916, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 142673458,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 137203750, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5468250,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 4926250, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 33375, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 291, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 70667, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 31166, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6750, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 95333, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 277292, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22833, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.38",
+      "elapsed_ns": 2856097333,
+      "children": [
+        {"name": "content", "elapsed_ns": 180922583, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 917875, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 227439250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 220533750, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6904000,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 6228292, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 84334, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30333, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6125, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 160625, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 346541, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23458, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.39",
+      "elapsed_ns": 1017912500,
+      "children": [
+        {"name": "content", "elapsed_ns": 49293750, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 858041, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 33573625,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 25090584, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 8481459,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 7801416, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 21583, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 458, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 85125, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30834, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6208, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 174083, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 326583, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 29375, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.40",
+      "elapsed_ns": 1293946916,
+      "children": [
+        {"name": "content", "elapsed_ns": 64412459, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 914791, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 328978041,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 322085334, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6891292,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 6333458, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19917, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 60917, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29708, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5666, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 43667, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 369292, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23208, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.41",
+      "elapsed_ns": 835541916,
+      "children": [
+        {"name": "content", "elapsed_ns": 38355042, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 840666, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 194578708,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 190759542, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3817417,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3184333, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 22792, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 84000, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 32792, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6500, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 114291, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 343625, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 24125, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.42",
+      "elapsed_ns": 2830536500,
+      "children": [
+        {"name": "content", "elapsed_ns": 144519584, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 838500, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 238812250,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 235836500, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 2974542,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 2271208, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 18458, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 334, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75292, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30458, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5792, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 125000, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 419917, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23792, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.43",
+      "elapsed_ns": 1002173750,
+      "children": [
+        {"name": "content", "elapsed_ns": 46749792, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1004917, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 294459291,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 288621417, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 5836042,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5149916, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 18666, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 291, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 82458, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30792, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6208, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 129250, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 391500, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22750, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.44",
+      "elapsed_ns": 988674125,
+      "children": [
+        {"name": "content", "elapsed_ns": 43848542, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 848542, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 275576750,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 271261375, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4314041,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3646625, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 15125, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 375, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 82084, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29917, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5958, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 93958, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 413625, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22000, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.45",
+      "elapsed_ns": 2305016584,
+      "children": [
+        {"name": "content", "elapsed_ns": 119038250, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 878541, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 281664417,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 277872667, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3790292,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3116459, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 11458, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 70333, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30042, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6000, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 85500, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 443167, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22958, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.46",
+      "elapsed_ns": 1225534666,
+      "children": [
+        {"name": "content", "elapsed_ns": 72496042, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 970000, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 243971125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 239732916, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 4236917,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 3560875, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 14833, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 74500, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 31083, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6333, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 71375, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 452042, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 21583, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.47",
+      "elapsed_ns": 3408958875,
+      "children": [
+        {"name": "content", "elapsed_ns": 163571209, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 869167, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 275219625,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 272023833, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3194208,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 2387834, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 22708, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 74459, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30291, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6292, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 161333, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 483333, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 23042, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.48",
+      "elapsed_ns": 1505815667,
+      "children": [
+        {"name": "content", "elapsed_ns": 81394458, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 955500, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 312879875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 306491542, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6386917,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5660375, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 31958, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 61125, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29000, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5792, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 92708, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 479000, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22250, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.49",
+      "elapsed_ns": 2010179417,
+      "children": [
+        {"name": "content", "elapsed_ns": 98833958, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1021083, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 290657625,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 284287917, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6368291,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5601292, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19833, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 333, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 73333, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30750, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6166, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 105542, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 503333, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22958, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.50",
+      "elapsed_ns": 795302417,
+      "children": [
+        {"name": "content", "elapsed_ns": 32343750, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 2596334, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 276044667,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 268499208, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 7544041,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 6705959, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 17083, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 292, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 68917, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29750, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5542, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 92333, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 596750, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22875, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.51",
+      "elapsed_ns": 2092061416,
+      "children": [
+        {"name": "content", "elapsed_ns": 103986584, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1043000, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 215863875,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 212633708, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 3228959,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 2373875, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 20625, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 209, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 72541, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 30417, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 6166, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 183250, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 515666, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 22542, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.52",
+      "elapsed_ns": 2652069125,
+      "children": [
+        {"name": "content", "elapsed_ns": 135532500, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 1032167, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 232427125,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 224546875, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 7878667,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 7009041, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 19459, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 250, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 75458, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29458, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5750, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 127833, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 581459, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 25584, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "history.state.53",
+      "elapsed_ns": 1099912375,
+      "children": [
+        {"name": "content", "elapsed_ns": 48388541, "children": []},
+        {"name": "storage.begin", "elapsed_ns": 984834, "children": []},
+        {
+          "name": "storage.finish",
+          "elapsed_ns": 128963917,
+          "children": [
+            {"name": "storage.finish.drain", "elapsed_ns": 122749875, "children": []},
+            {
+              "name": "storage.finish.owner",
+              "elapsed_ns": 6212708,
+              "children": [
+                {"name": "storage.finish.pack_seal", "elapsed_ns": 5205041, "children": []},
+                {"name": "storage.finish.transaction_begin", "elapsed_ns": 24500, "children": []},
+                {"name": "storage.finish.candidate_flush", "elapsed_ns": 291, "children": []},
+                {"name": "storage.finish.tail_close", "elapsed_ns": 78792, "children": []},
+                {"name": "storage.finish.ownership_publish", "elapsed_ns": 29833, "children": []},
+                {"name": "storage.finish.ordinal_watermark", "elapsed_ns": 5917, "children": []},
+                {"name": "storage.finish.sqlite_commit", "elapsed_ns": 227917, "children": []},
+                {"name": "storage.finish.pool_clone", "elapsed_ns": 604500, "children": []},
+                {"name": "storage.finish.candidates_clone", "elapsed_ns": 30542, "children": []}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -329,3 +329,11 @@ R033 issue publication: [#286 comment5900006238](https://github.com/Ephemeral-AI
 | Round | Family / selection | Source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-linux-reservation-correction-r034 | platform semantic verification; **no benchmark sample** | source in this commit | Default cross link INCOMPLETE (missing system `libsqlite3.so`); locked published bundled-SQLite arm64 build PASS, isolated Linux container public-save test PASS1/1; Mac test PASS1/1; current-source family2/Init gates NOT_RUN | [Correction report](experiments/20260930-linux-reservation-correction-r034.md) | Publish after commit; link in next real round |
+
+## Selected round 20260930-history-v3-r035
+
+R034 issue publication: [#286 comment5900153081](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900153081), Linux correction commit `d6f736edc` (+5 Core production LOC). The frozen history profile and strict original-owner gates remain unchanged; source and compilation seals are newly pinned.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v3-r035 | compound v3 stride10/17 then stride3/53, one corrected-source sample each | `d6f736edc` | **PASS/PASS**: strict allocated48279552<49344512 and59899904<64024576 B; complete trees/selected content/independent roots/O3/C5/cleanup PASS; driver44.176/77.213s, verifier2.959/8.520s within unchanged limits; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r035.md) | Publish after commit; link in next real round |
