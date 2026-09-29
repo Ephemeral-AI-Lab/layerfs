@@ -127,6 +127,20 @@ pub fn append_pack(
     write_in_place(connection, pack_id, write)
 }
 
+/// Remove only the unused append reservation when this save closes its tail.
+/// The same unpublished owner predicate protects the in-place append path.
+pub fn close_pack_tail(connection: &Connection, pack_id: i64, used: usize) -> StorageResult<()> {
+    let used = i64::try_from(used).map_err(|_| StorageError::Integrity("pack length"))?;
+    let affected = connection.execute(
+        "UPDATE object_packs SET data = substr(data, 1, ?2) WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL) AND length(data) >= ?2",
+        rusqlite::params![pack_id, used],
+    )?;
+    if affected != 1 {
+        return Err(StorageError::Integrity("pack tail close cardinality"));
+    }
+    Ok(())
+}
+
 /// Writes one increment into an existing pack BLOB, in place.
 ///
 /// Three writes at most - the bodies at the pack's previous assembled length, the

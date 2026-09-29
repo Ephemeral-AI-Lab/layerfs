@@ -25,6 +25,10 @@ class HistoryStorage(unittest.TestCase):
             self.assertEqual(hashlib.sha256(file.read_bytes()).hexdigest(),
                              pins["cases"][case.backend_id]["roots_sha256"])
             self.assertEqual(len(file.read_text().splitlines()) - 1, case.states)
+            expected = pins["cases"][case.backend_id]
+            required = ([expected["canonical_bytes"], expected["canonical_objects"]]
+                        if case.version == "v1" else expected["canonical_required"])
+            self.assertEqual(len(required), 2)
 
     def test_strict_gate_and_missing_owners(self):
         for ceiling in (49_344_512, 64_024_576, 83_947_520):

@@ -959,6 +959,16 @@ mod directory_transition_tests {
         assert_ne!(chain.known(b"a"), Some(old_directory));
         assert_ne!(chain.known(&path), Some(old_file));
     }
+
+    #[test]
+    fn stored_length_widths_match_public_content_framing() {
+        let policy = ConstructionPolicy::frozen_default();
+        let whole = layerfs_content::file::encode_whole_file(&policy.capacities(), b"abc").unwrap();
+        let symlink = layerfs_content::filesystem::SymlinkTarget::new(b"abc".to_vec())
+            .unwrap().encode().unwrap();
+        assert_eq!(whole.len(), 3 + 23);
+        assert_eq!(symlink.len(), 3 + 27);
+    }
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -1097,6 +1107,34 @@ struct VerifyTally {
     sampled: u64,
 }
 
+/// Closed C2's persisted role/length ledger, checked for identity consistency.
+/// Whole-file and symlink canonical widths determine their logical lengths;
+/// selected content is still authenticated and hashed through public C1/C2.
+fn stored_root_metadata(path: &Path) -> Result<BTreeMap<ObjectId, (u8, u64)>, OpError> {
+    let database = rusqlite::Connection::open_with_flags(path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| OpError::Io(format!("metadata Store: {error}")))?;
+    let mut query = database.prepare("SELECT object_id, MIN(object_role), MAX(object_role), MIN(canonical_length), MAX(canonical_length) FROM objects GROUP BY object_id")
+        .map_err(|error| OpError::Io(format!("metadata query: {error}")))?;
+    let rows = query.query_map([], |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, i64>(1)?,
+        row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, i64>(4)?)))
+        .map_err(|error| OpError::Io(format!("metadata rows: {error}")))?;
+    let mut metadata = BTreeMap::new();
+    for row in rows {
+        let (bytes, first_role, last_role, shortest, longest) =
+            row.map_err(|error| OpError::Io(format!("metadata row: {error}")))?;
+        if first_role != last_role || shortest != longest || shortest <= 0 {
+            return Err(OpError::Io("inconsistent persisted object metadata".into()));
+        }
+        let id = ObjectId::from_bytes(&bytes)
+            .map_err(|error| OpError::Product(format!("metadata identity: {error:?}")))?;
+        let role = u8::try_from(first_role).map_err(|_| OpError::Io("metadata role".into()))?;
+        let length = u64::try_from(shortest).map_err(|_| OpError::Io("metadata length".into()))?;
+        metadata.insert(id, (role, length));
+    }
+    Ok(metadata)
+}
+
 impl VerifyTally {
     fn add(&mut self, other: &VerifyTally) {
         self.declared = self.declared.saturating_add(other.declared);
@@ -1136,6 +1174,7 @@ impl VerifyTally {
 struct Sampler<'a> {
     reader: &'a dyn layerfs_content::object::AuthenticatedObjects,
     oracle: &'a crate::workload::history::Oracle,
+    stored_lengths: Option<&'a BTreeMap<ObjectId, (u8, u64)>>,
     tally: VerifyTally,
     /// The first few disagreements verbatim, so a receipt that fails says what
     /// differed rather than only how many.
@@ -1157,6 +1196,7 @@ impl<'a> Sampler<'a> {
         Self {
             reader,
             oracle,
+            stored_lengths: None,
             tally: VerifyTally {
                 declared: oracle.len() as u64,
                 ..VerifyTally::default()
@@ -1175,32 +1215,73 @@ impl<'a> Sampler<'a> {
     }
 
     fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
+        let diagnostic_start = std::time::Instant::now();
         let mut read = FilesystemRead::new(self.reader, root)
             .map_err(|error| OpError::Product(format!("{error:?}")))?;
         let root_serial = read.root().root_inode().serial();
-        let mut pending = vec![(Vec::<u8>::new(), root_serial)];
+        let root_value = read.resolve_inode(root_serial)
+            .map_err(|error| OpError::Product(format!("{error:?}")))?.value;
+        if root_value.kind != InodeKind::Directory {
+            return Err(OpError::Io("retained root is not a directory".into()));
+        }
+        let mut pending = vec![(Vec::<u8>::new(), root_value.content_root)];
+        let mut directory_work = layerfs_content::filesystem::directory::DirectoryReadWork::default();
         let mut seen = BTreeSet::new();
         let files: Vec<_> = self.oracle.iter().filter(|(_, e)| !e.is_directory()).collect();
         let selected: BTreeSet<Vec<u8>> = files.iter().enumerate()
             .filter(|(index, _)| index % 10 == 0 || index + 1 == files.len())
             .map(|(_, (path, _))| (*path).clone()).collect();
-        while let Some((path, serial)) = pending.pop() {
-            let mut after = None;
-            loop {
-                let page = read.list_inode(serial, after.as_ref(), 128, 16_384)
-                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                let serials: Vec<_> = page.entries.iter().map(|(_, serial)| *serial).collect();
+        let mut file_entries = Vec::new();
+        while !pending.is_empty() {
+            let mut children = Vec::new();
+            let breadth = std::mem::take(&mut pending);
+            for batch in breadth.chunks(128) {
+                let ids: Vec<_> = batch.iter().map(|(_, root)| *root).collect();
+                let pages = self.reader.read_canonical_batch(&ids)
+                    .map_err(|error| OpError::Product(format!("directory root batch: {error:?}")))?;
+                if pages.len() != batch.len() {
+                    return Err(OpError::Io("directory root batch cardinality".into()));
+                }
+                for ((path, directory_root), bytes) in batch.iter().zip(pages) {
+                    let page = layerfs_content::filesystem::directory::decode_directory_page(&bytes)
+                        .map_err(|error| OpError::Product(format!("directory page: {error:?}")))?;
+                    let entries = match page {
+                        layerfs_content::filesystem::directory::DirectoryPage::Leaf { entries } => entries,
+                        layerfs_content::filesystem::directory::DirectoryPage::Branch { .. } => {
+                            let mut entries = Vec::new();
+                            let mut after = None;
+                            loop {
+                                let page = layerfs_content::filesystem::directory::list_after(
+                                    self.reader, layerfs_content::filesystem::DirectoryRoot(*directory_root),
+                                    after.as_ref(), 512, 65_536, &mut directory_work)
+                                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                                entries.extend(page.entries);
+                                after = page.continuation;
+                                if after.is_none() { break; }
+                            }
+                            entries
+                        }
+                    };
+                    for (name, serial) in entries {
+                        let mut child = path.clone();
+                        if !child.is_empty() { child.push(b'/'); }
+                        child.extend_from_slice(name.as_str().as_bytes());
+                        children.push((child, serial));
+                    }
+                }
+            }
+            // One C1 inode lookup wave covers a whole breadth of listed names.
+            // The old per-directory lookup repeated the same table navigation.
+            for chunk in children.chunks(512) {
+                let serials: Vec<_> = chunk.iter().map(|(_, serial)| *serial).collect();
                 let values = read.lookup_inodes(&serials)
                     .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                for ((name, serial), value) in page.entries.into_iter().zip(values) {
-                    let mut child = path.clone();
-                    if !child.is_empty() { child.push(b'/'); }
-                    child.extend_from_slice(name.as_str().as_bytes());
+                for ((child, _), value) in chunk.iter().zip(values) {
                     if !seen.insert(child.clone()) || seen.len() > self.oracle.len() {
                         return Err(OpError::Io("duplicate, extra or cyclic retained path".into()));
                     }
-                    let expected = self.oracle.get(&child)
-                        .ok_or_else(|| OpError::Io(format!("unexpected retained path: {}", String::from_utf8_lossy(&child))))?;
+                    let expected = self.oracle.get(child)
+                        .ok_or_else(|| OpError::Io(format!("unexpected retained path: {}", String::from_utf8_lossy(child))))?;
                     let value = value.ok_or_else(|| OpError::Io("listed inode missing".into()))?;
                     let kind = kind_of(expected.mode);
                     if value.kind != kind {
@@ -1208,44 +1289,116 @@ impl<'a> Sampler<'a> {
                     }
                     self.tally.compared += 1;
                     if kind == InodeKind::Directory {
-                        pending.push((child, serial));
-                        continue;
-                    }
-                    let length = match self.lengths.get(&value.content_root).copied() {
-                        Some(length) => length,
-                        None => {
-                            let length = if kind == InodeKind::Symlink {
-                                let canonical = self.reader.read_canonical(value.content_root)
-                                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
-                                layerfs_content::filesystem::SymlinkTarget::decode(&canonical)
-                                    .map_err(|error| OpError::Product(format!("{error:?}")))?.as_bytes().len() as u64
-                            } else {
-                                Timing::disabled("history.verify.length", |scope| {
-                                    layerfs_content::file::FileView::open(self.reader, value.content_root, scope.child("file"))
-                                }).0.map_err(|error| OpError::Product(format!("{error:?}")))?.logical_len()
-                            };
-                            self.lengths.insert(value.content_root, length);
-                            length
-                        }
-                    };
-                    if length != expected.size {
-                        return Err(OpError::Io("retained file size disagrees with corpus".into()));
-                    }
-                    if selected.contains(&child) {
-                        self.tally.sampled += 1;
-                        let (digest, bytes) = self.digest_of(value.content_root,
-                            &String::from_utf8_lossy(&child), kind)?;
-                        if Some(digest) != expected.digest || bytes != expected.size {
-                            return Err(OpError::Io("retained sampled bytes disagree with corpus".into()));
-                        }
+                        pending.push((child.clone(), value.content_root));
+                    } else {
+                        file_entries.push((child.clone(), value.content_root, kind, expected.size,
+                            expected.digest, selected.contains(child)));
                     }
                 }
-                after = page.continuation;
-                if after.is_none() { break; }
             }
         }
         if seen.len() != self.oracle.len() {
             return Err(OpError::Io("missing retained paths".into()));
+        }
+        let walk_ns = diagnostic_start.elapsed().as_nanos();
+        // Classify distinct file roots in bounded Store waves. Each wave's
+        // declared logical bytes plus framing stay below 16 MiB, leaving ample
+        // room under the Store's 32 MiB canonical-byte bound. The previous
+        // per-root FileView issued one Store wave per distinct file root.
+        let selected_roots: BTreeSet<ObjectId> = file_entries.iter()
+            .filter(|(_, _, _, _, _, selected)| *selected)
+            .map(|(_, id, _, _, _, _)| *id).collect();
+        let metadata = self.stored_lengths
+            .ok_or_else(|| OpError::Io("compound stored-length ledger absent".into()))?;
+        for (_, id, kind, _, _, _) in &file_entries {
+            if self.lengths.contains_key(id) { continue; }
+            let (role, canonical) = metadata.get(id)
+                .ok_or_else(|| OpError::Io(format!("file root {id} absent from C2 metadata")))?;
+            let overhead = match (*kind, *role) {
+                (InodeKind::RegularFile, 1) => Some(23),
+                (InodeKind::Symlink, 13) => Some(27),
+                (InodeKind::RegularFile, 5) => None,
+                _ => return Err(OpError::Io(format!("file root {id} has wrong stored role {role}"))),
+            };
+            if let Some(overhead) = overhead {
+                let length = canonical.checked_sub(overhead)
+                    .ok_or_else(|| OpError::Io("stored file length underflow".into()))?;
+                self.lengths.insert(*id, length);
+            }
+        }
+        let missing: BTreeMap<ObjectId, (InodeKind, u64)> = file_entries.iter()
+            .filter(|(_, id, _, _, _, _)| !self.lengths.contains_key(id)
+                || (selected_roots.contains(id) && !self.digests.contains_key(id)))
+            .map(|(_, id, kind, size, _, _)| (*id, (*kind, *size)))
+            .collect();
+        let pending: Vec<_> = missing.into_iter().collect();
+        let mut offset = 0;
+        while offset < pending.len() {
+            let mut end = offset;
+            let mut estimated = 0u64;
+            while end < pending.len() && end - offset < 512 {
+                let next = pending[end].1.1.saturating_add(128);
+                if end > offset && estimated.saturating_add(next) > 16 * 1024 * 1024 {
+                    break;
+                }
+                estimated = estimated.saturating_add(next);
+                end += 1;
+            }
+            let chunk = &pending[offset..end];
+            let ids: Vec<_> = chunk.iter().map(|(id, _)| *id).collect();
+            let canonical = self.reader.read_canonical_batch(&ids)
+                .map_err(|error| OpError::Product(format!("file length batch: {error:?}")))?;
+            if canonical.len() != chunk.len() {
+                return Err(OpError::Io("file length batch cardinality".into()));
+            }
+            for ((id, (kind, _)), bytes) in chunk.iter().zip(canonical) {
+                let selected = selected_roots.contains(id) && !self.digests.contains_key(id);
+                let (length, digest) = if *kind == InodeKind::Symlink {
+                    let target = layerfs_content::filesystem::SymlinkTarget::decode(&bytes)
+                        .map_err(|error| OpError::Product(format!("symlink length: {error:?}")))?;
+                    (target.as_bytes().len() as u64,
+                        selected.then(|| crate::workload::digest::sha256(target.as_bytes())))
+                } else {
+                    let length = layerfs_content::file::classify(&bytes)
+                        .map_err(|error| OpError::Product(format!("file length: {error:?}")))?
+                        .logical_len();
+                    let digest = if selected {
+                        layerfs_content::file::whole_file_payload(&bytes)
+                            .map_err(|error| OpError::Product(format!("whole-file bytes: {error:?}")))?
+                            .map(crate::workload::digest::sha256)
+                    } else { None };
+                    (length, digest)
+                };
+                if self.lengths.get(id).is_some_and(|stored| *stored != length) {
+                    return Err(OpError::Io(format!("stored and public file length disagree: {id}")));
+                }
+                self.lengths.insert(*id, length);
+                if let Some(digest) = digest {
+                    self.digests.insert(*id, (digest, length));
+                    self.tally.files_read += 1;
+                    self.tally.file_bytes += length;
+                    if *kind == InodeKind::Symlink { self.tally.symlinks_read += 1; }
+                }
+            }
+            offset = end;
+        }
+        let lengths_ns = diagnostic_start.elapsed().as_nanos() - walk_ns;
+        for (path, id, kind, expected_size, expected_digest, sampled) in file_entries {
+            if self.lengths.get(&id) != Some(&expected_size) {
+                return Err(OpError::Io(format!("retained file size disagrees with corpus: {}",
+                    String::from_utf8_lossy(&path))));
+            }
+            if sampled {
+                self.tally.sampled += 1;
+                let (digest, bytes) = self.digest_of(id, &String::from_utf8_lossy(&path), kind)?;
+                if Some(digest) != expected_digest || bytes != expected_size {
+                    return Err(OpError::Io("retained sampled bytes disagree with corpus".into()));
+                }
+            }
+        }
+        if std::env::var("LAYERFS_HISTORY_VERIFY_PROGRESS").as_deref() == Ok("1") {
+            eprintln!("verify parts: walk={walk_ns} lengths={lengths_ns} digest={}",
+                diagnostic_start.elapsed().as_nanos() - walk_ns - lengths_ns);
         }
         Ok(self.tally)
     }
@@ -1520,6 +1673,11 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     let corpus_root = corpus_root(context)?;
     let trace_path = context.output.join("trace.jsonl");
     let mut gates: Vec<Gate> = Vec::new();
+    if super::history_retained::enabled() {
+        context.trace.write(Kind::Run, "history_verify_method",
+            "complete-listed-tree+c2-stored-lengths+selected-public-digests-v2b", "",
+            "all paths and kinds from public C1; exact logical sizes from checked C2 widths or public FileState; selected bytes authenticated")?;
+    }
 
     // The identity the verification is *of*. A verifier that ran against a
     // different corpus than the one the measured phase read would be verifying a
@@ -1558,6 +1716,12 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             ))
         }
     };
+    let stored_metadata = if super::history_retained::enabled() {
+        match stored_root_metadata(&store_path) {
+            Ok(metadata) => Some(metadata),
+            Err(error) => return Ok(unmeasured(&error, gates)),
+        }
+    } else { None };
 
     // Each state's oracle, parsed **once**. It is read here, before a single
     // Store read, so the row's declared unit — one content-bearing path-state —
@@ -1604,6 +1768,7 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             let started = std::time::Instant::now();
             let mut sampler = Sampler::new(&provider, oracle, budget);
             let tally = if super::history_retained::enabled() {
+                sampler.stored_lengths = stored_metadata.as_ref();
                 sampler.digests = std::mem::take(&mut digests);
                 sampler.lengths = std::mem::take(&mut lengths);
                 let tally = sampler.run_complete(FilesystemRootId(*root))?;
@@ -1623,6 +1788,10 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             }
             total.add(&tally);
             per_state_ns.push((*ordinal, started.elapsed().as_nanos() as u64));
+            if std::env::var("LAYERFS_HISTORY_VERIFY_PROGRESS").as_deref() == Ok("1") {
+                eprintln!("verify state {ordinal}: {} paths, {} ns",
+                    tally.compared, per_state_ns.last().expect("just pushed").1);
+            }
         }
         Ok((
             total,
@@ -1754,15 +1923,21 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         },
         "compound: every tree and selected content object matches; legacy: every selected path matches",
     ));
+    let compound = super::history_retained::enabled();
     gates.push(gates::require(
         GateClass::Custody,
         "g6.verify-sample-declared",
-        total.compared > 0,
-        &format!(
-            "{} sampled of {} declared path-states, at most {budget} per state",
-            total.compared, total.declared
-        ),
-        "the phase read back at least one path of every state it was asked to verify",
+        if compound { total.compared == total.declared && total.sampled > 0 }
+        else { total.compared > 0 },
+        &if compound {
+            format!("{} of {} listed paths; {} selected content path-states",
+                total.compared, total.declared, total.sampled)
+        } else {
+            format!("{} sampled of {} declared path-states, at most {budget} per state",
+                total.compared, total.declared)
+        },
+        if compound { "complete listed tree and nonempty deterministic content selection" }
+        else { "the phase read back at least one path of every state it was asked to verify" },
     ));
 
     Ok(OpOutcome {

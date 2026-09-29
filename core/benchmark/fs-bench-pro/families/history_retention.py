@@ -139,6 +139,8 @@ def case_run(out, case, common, identities, binary):
                "--out", str(native)]
     record = {"schema": f"core-history-retention-receipt-{case.version}", "family": "history_retention",
               "case": case.id, "historical_backend_id": case.backend_id, "profile": case.profile,
+              "verifier_method": ("complete-listed-tree+c2-stored-lengths+selected-public-digests-v2b"
+                  if case.version == "v2" else "complete-listed-tree+selected-public-digests-v1"),
               "identity": identities, "binary": binary, "corpus": corpus.identity(),
               "root_ledger": expected, "env": method_env, "sample_count": 0,
               "construction_workers": 1, "setup": "InProcess", "clone_method": None,
@@ -157,8 +159,9 @@ def case_run(out, case, common, identities, binary):
     record["storage"] = storage.collect(native, case.ceiling_bytes, case.states, version=case.version)
     canonical = record["storage"]["owners"].get("C2", {})
     fields = ("canonical_bytes", "canonical_objects")
+    required = (expected["canonical_bytes"], expected["canonical_objects"]) if case.version == "v1" else expected["canonical_required"]
     record["canonical_status"] = ("INCOMPLETE" if any(type(canonical.get(field)) is not int for field in fields)
-        else "PASS" if all(canonical[field] == expected[field] for field in fields) else "FAIL")
+        else "PASS" if all(canonical[field] == pin for field, pin in zip(fields, required)) else "FAIL")
     roots = trace_module.read(native / "trace.jsonl").values("counter") if (native / "trace.jsonl").is_file() else {}
     complete = sum(key.startswith("history.state.") and key.endswith(".root") for key in roots) == case.states
     if complete and not performance["timed_out"]:

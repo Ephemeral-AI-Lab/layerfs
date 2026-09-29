@@ -265,6 +265,21 @@ impl MutationOwner {
         });
         SaveProfile::charge(&mut self.profile.sql_ns, started);
         flushed?;
+        // Pooled groups need a full BLOB reservation while this save may append.
+        // At publication no append remains, so release its unused tail inside
+        // the same measured transaction before the pack becomes visible.
+        let started = Instant::now();
+        scope.child("storage.finish.tail_close").run(|_| {
+            if let Some((pack_id, used)) =
+                self.placement[PackLane::PooledMetadata.index()].close_tail()
+            {
+                if used < PackLane::PooledMetadata.pack_limit() {
+                    write::close_pack_tail(&self.connection, pack_id, used)?;
+                }
+            }
+            Ok::<(), StorageError>(())
+        })?;
+        SaveProfile::charge(&mut self.profile.sql_ns, started);
         // Multi-writer: the same transaction releases this save's slot by
         // publishing it, and advances the pack allocation watermark so no other
         // writer can hand out a pack id this save already used. Either the save's

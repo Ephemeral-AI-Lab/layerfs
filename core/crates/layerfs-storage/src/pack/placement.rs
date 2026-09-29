@@ -96,6 +96,11 @@ impl LanePlacement {
         Self { open: None }
     }
 
+    /// Release the final open tail after its save has no more groups to append.
+    pub fn close_tail(&mut self) -> Option<(i64, usize)> {
+        self.open.take().map(|pack| (pack.pack_id, pack.assembled))
+    }
+
     /// Bytes retained by this lane's open tail during placement.
     ///
     /// The open state already carries the assembled length of its groups, so this
