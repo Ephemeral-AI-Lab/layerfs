@@ -1,0 +1,18 @@
+# #286 round 20260930-history-stride1-v3-r021
+
+> **Status: FAIL only on the unchanged strict allocated-storage gate.** Independent O3/roots, all listed tree/selected content, C5 custody, command/verifier budgets and cleanup pass; family 2 remains incomplete.
+
+The explicit stride1 case sampled once at the same clean source/binary as r020: commit `e17f1b43c8aa5bde93effbeb650290722ce55332`, tree `1bef1b337f31e8e11a02e62b57e3bdeb8b76720f`, compilation seal `85236cc34e6c0771d95426fbc0e411c2454f8367ba145be1094696b40f3e236a`, harness seal `b75a1d8971706d2b0a5db41acac4d8fcf39d8d0942630ede3c0ba3180d3ff625` and exact reused release binary SHA256 `e40d103c292f8f9e9aa990fed22af75b2c441bd7fdda4e388ef3822b0e9655b6` (build wall0). Command: `LAYERFS_CONSTRUCTION_WORKERS=1 python3 core/benchmark/fs-bench-pro/runner.py run --case history-retention-stride-1-total-storage-v3 --out benchmark-results/fs-bench-pro/issue286-history-stride1-v3-r021`. InProcess setup, fixed corpus/SHA ledger, one sample, separately sealed independent root vector and empty-start verifier-only authenticated-page memo remain declared. Numeric time is **INELIGIBLE** due uncontrolled source-cache residency; no warm row was substituted.
+
+| Gate | At-run observation / original limit | Result |
+| --- | --- | --- |
+| Complete driver | **165,294,498,541 ns /170,000,000,000 ns** | PASS absolute budget |
+| Independent verifier | **20,611,531,375 ns /30,000,000,000 ns** | PASS wall budget |
+| Full semantic oracle | **904,143/904,143** listed path/kind/size states, **76,726** selected public content-digest path-states | PASS |
+| Independent O3/root/C5 | **871,337,620 B/104,618 objects**, **157/157** sealed roots, public C5 reopen all157 Layers/156 Commits | PASS |
+| Exclusive at-run C2+C5 allocation | **84,086,784 B /<83,947,520 B** | **FAIL**, excess139,264 B |
+| Cleanup/integrity | closed exclusive owners, required C2/C5 schema, quick/foreign-key/sidecar checks | PASS |
+
+C2/C5 allocated **83,890,176/196,608 B**, apparent **75,712,512/180,224 B**. C2 has1,686 packs/11,690 groups,66,732,147 B bodies,940,176 B framing, zero unused pack capacity and31 freelist pages at2 KiB. `signatures_save` is absent, `packs_save` remains, and C5's new page size is1 KiB. Relative to r019's prior source, original-owner C2+C5 allocation fell159,744 B, while more pooled splits raised pack framing53,560 B; this is the measured net, not the sum of copied-file estimates. The original v0.1.6 O3 pin remains the historical FUSE-method comparator under the [prospective applicability ruling](../HISTORY-O3-APPLICABILITY-RULING-20260930.md); v1/v2 failures stay FAIL. R020's two selected PASS rows are separate and do not convert this miss into a family checkpoint. Further work requires a bounded physical representation improvement that saves nonzero persisted bytes within the remaining4.705s driver headroom; the next diagnostic uses r021's already closed Store, with no new candidate sample.
+
+[Exact receipt, native trace, separate verifier, C5 file and SHA-indexed raw evidence](20260930-history-stride1-v3-r021/evidence-index.json) are published. The large original C2 Store stays local at its indexed path with SHA256 `ef1fba79a76add4c781c9bbcf1c5219a9548d3cb03b4483a8d84ded9059ca781`. No Init or family3–7 case ran; #285 remains draft and #286 open. This report-only commit records production LOC reference65,417→65,417 (+0), Core70,109→70,109 (+0), combined135,526→135,526 (+0), using `tools/production_loc.py --json --root <snapshot>` on exact first-parent/staged/committed Git archives (counter SHA256 `c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`).
