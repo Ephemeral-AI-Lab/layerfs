@@ -1,0 +1,150 @@
+{
+  "admission_eligible": false,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/ff630f055784e90a6783a4050ef948b58e5d152debb876bbb9531ff30cfb1a28/fs-bench-storage-content",
+    "sha256": "ff630f055784e90a6783a4050ef948b58e5d152debb876bbb9531ff30cfb1a28"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "case": "history-retention-stride-1-total-storage-v2",
+  "clone_method": null,
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "2",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride1",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "3cbee8f7d5ec67d91bfa110b1b592ca9bb4a8e9b61f94e777a227ed539a7a821",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "747e2dd9feda5037ad15adc1f1dccc4bb094354877f560cdb48797fe2533e660",
+    "product_seal": "a4e71998ca24a93fa0cca4db369f063d63af0bc42cb93c0fe7cf530d0463a92f",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "6afbfb7b0a6bb325089c278229d3829026f71552",
+    "source_dirty": false,
+    "source_tree": "6ce8f95a5f844ae2d1228b552b06b81e570afa47"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "profile": "c1-c2-c5-retained-history-v2",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_observed_reference": "not an uninterrupted arm",
+    "canonical_required": [
+      871588115,
+      104705
+    ],
+    "reference": {
+      "kind": "154 closed committed reference saves plus three resumed diagnostic saves; resume chain gate FAIL 3/157 retained",
+      "prefix_command": {
+        "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+        "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+        "watchdog_s": 170
+      },
+      "prefix_result": {
+        "exit_code": null,
+        "timed_out": true,
+        "wall_ns": 170013063583
+      },
+      "prefix_root_count": 154,
+      "prefix_store_sha256": "c699c74792a1e574b9aa22063bac58bb99c3eaf4f1cb37b9e76067a6fa8dadce",
+      "suffix_command": {
+        "binary_sha256": "0567b01c777c01231e6d728594190644ef799bcdf194460dddffcf58e56e9871",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-resume154-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_REFERENCE_RESUME": "154",
+          "LAYERFS_HISTORY_REFERENCE_ROOT": "fc532f9d7270c09b1167cfd3fd80f47844f8cb3d1db05dff47b35ea79f222777",
+          "LAYERFS_HISTORY_REFERENCE_STORE": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case/sample.sqlite",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+        "source_tree": "b6bbb682f5f8973d4998f30b5786eac4148ccfef",
+        "watchdog_s": 170
+      },
+      "suffix_result": {
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 65575202458
+      },
+      "suffix_root_count": 3,
+      "suffix_store_sha256": "8baddf9fd0ef7f6b3375082fc85ef4a6f3dadf8af39775fc49553fcdd18e68de",
+      "suffix_trace_sha256": "500131654899cca8d8209c3e02f278238059f2076566ccff38ce443985b30fed"
+    },
+    "roots_sha256": "bc1392af7ac11f2a50b444f927b32b27b3de2f33e1e2acfc3221e369c587adb9",
+    "states": 157
+  },
+  "sample_count": 0,
+  "schema": "core-history-retention-receipt-v2",
+  "setup": "InProcess",
+  "storage_gate": "g1.o6-total-retained-below-v016-v2",
+  "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
+  "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d"
+}
