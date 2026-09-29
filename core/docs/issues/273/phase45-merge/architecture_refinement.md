@@ -12,6 +12,12 @@ read-only investigations traced namespace, Workspace ownership, and content/
 transport separately. The comparisons use the code at each named pin; an
 ancestor's algorithm is not automatically the current algorithm.
 
+The [private backing/live Commit workflow](private_backing_workflow.md) and
+[FUSE workflow](fuse_workflow.md) expand current operation and lifecycle details
+at documentation basis `5b23b3753b5a2621dd67dd14b40f07b7a924f536`, with the
+same product pin. Their follow-up review clarifies the primary versus secondary
+metadata admission in section 5.3; no new runtime result is claimed.
+
 Reading order: [comparison scope](#1-comparison-scope-and-how-to-read-the-costs),
 [component workflow](#2-component-ownership-and-the-complete-public-workflow),
 [namespace](#3-main-lane-namespace-workflows),
@@ -730,28 +736,39 @@ and [approved prospective decision](../SAVEFILE-V2-PROSPECTIVE-20260929.md).
 ```text
 Commit thread                                  concurrent FUSE thread
 -------------                                  ----------------------
-Workspace remote permit                        admitted/cached local operation?
+shared Host primary remote permit              local selected metadata/WRITE
        |                                                |
-daemon authenticated-client mutex              +--------+------------------+
-       |                                       |                           |
-held through complete SaveFile call             v                           v
-       |                                 local metadata/WRITE        needs Service
-Service StoreProvider -> local Base reads       |                     Inspect/ReadFile
-       |                                  local gate/publication           |
-Service SaveHandoff -> C2 work                    |                   remote slot occupied
-       |                                        v                           |
-checked result                             G2 can progress                  v
-       |                                                                   Busy
-release mutex / permit
+daemon authenticated-client mutex               local gate/publication
+       |                                                |
+held through complete SaveFile call              G2 can progress
+       |
+Service StoreProvider -> local Base reads        needs Service Base BYTES?
+Service SaveHandoff -> C2 work                      primary occupied -> Busy
+       |
+checked result                                  needs Inspect / ReserveInodes?
+       |                                           try primary; if occupied AND
+release mutex / primary                            in_flight>0, one secondary
+                                                    metadata admission possible
+                                                          |
+                                                    SAME transport mutex
+                                                    may wait, then check original
+                                                    absolute deadline / revision
 ```
 
-Processes are not frozen or drained. Local progress is real, but operations
-requiring the occupied upstream slot can return Busy. State/publication gates
-also have actual work and contention; no diagram promises every callback
-progresses during every Commit.
+Processes are not frozen or drained. Local progress is real, but ReadFile bytes
+require the primary remote slot and can return Busy while it is occupied.
+Read-only Inspect and serial reservation can take one conditional secondary
+metadata admission; both still use the same daemon authenticated-session mutex.
+The mutex acquisition is not deadline-preemptive. The original absolute deadline
+is checked after acquisition, so a metadata call can wait and expire before
+BEGIN, or fail its revision recheck. Secondary admission is not a second bulk
+connection or worker. State/publication gates also have actual work and
+contention; no diagram promises every callback progresses during every Commit.
 
 Source: [daemon transport mutex](../../../../crates/layerfs-daemon/src/run.rs#L98),
 [Workspace remote admission](../../../../crates/layerfs-workspace/src/runtime/state.rs#L752),
+[metadata admission](../../../../crates/layerfs-workspace/src/runtime/state.rs#L704),
+[Inspect selection](../../../../crates/layerfs-workspace/src/runtime/host.rs#L650),
 and [retained local successor proofs](../PREMERGE-FUNCTIONAL-COMPLETION-20260929.md).
 
 
