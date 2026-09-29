@@ -192,10 +192,14 @@ fn view_lease_pins_g1_reads_old_bytes_across_commit_and_refuses_stale_use() {
     ));
     let mut unregistered = lease.clone();
     unregistered.token[1] ^= 1;
-    assert!(matches!(
-        workspaces.view_status(&unregistered),
-        Err(WorkspaceError::Failure(failure)) if failure.code == Code::Denied
-    ));
+    // Print the typed outcome, never the token. A previous live assertion
+    // failed without capturing the actual code; that attempt remains FAIL.
+    let refusal = workspaces.view_status(&unregistered);
+    eprintln!("VIEW_LEASE_TOKEN_DIAGNOSTIC case=unregistered expected=Denied actual={refusal:?}");
+    assert!(
+        matches!(&refusal, Err(WorkspaceError::Failure(failure)) if failure.code == Code::Denied),
+        "unregistered token must be Denied, observed {refusal:?}"
+    );
 
     // The checked release: Completed, and the lease token is dead afterwards.
     assert_eq!(
