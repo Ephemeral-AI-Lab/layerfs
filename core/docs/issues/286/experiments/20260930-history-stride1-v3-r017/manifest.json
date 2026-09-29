@@ -1,0 +1,97 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 597,
+      "sha256": "edae9456d5261ba8a7cc231d6a997487c7a5670e18098031db8ada776a98dfc4"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-1-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "d439cadad6f88f06016360ce2b473228200be650830e1b069b66918476e8ed62"
+    },
+    "history-retention-stride-1-total-storage-v3/declaration.json": {
+      "bytes": 7920,
+      "sha256": "c3af047a5456e1c628f93af200e78e5386e6dc753fbe2dfa876ead937fe70c33"
+    },
+    "history-retention-stride-1-total-storage-v3/native/history.sqlite": {
+      "bytes": 233472,
+      "sha256": "236bba4200d5184f0db3e605dc4ee9df5c7d5a5d593f40353a4da0887f18541a"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-perf.json": {
+      "bytes": 393,
+      "sha256": "a3d4bf3a32f1a4b525e0939f919202da813c552761f18b42f4e900006c736b1b"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-verify.json": {
+      "bytes": 334,
+      "sha256": "9442b91e659a37b68262b2cb5395ee2d2b92bd7fb6de7c9d9b22e051b16eb83a"
+    },
+    "history-retention-stride-1-total-storage-v3/native/sample.sqlite": {
+      "bytes": 75956224,
+      "sha256": "f4176d3563329a4522505eb6a7eddf83dbcc1be65073a827a5f8f1ad6c8283cf"
+    },
+    "history-retention-stride-1-total-storage-v3/native/timing.json": {
+      "bytes": 100833,
+      "sha256": "ff601945f10ceca9d1cd490ab72d3953b3b2c7c608b3c0c9ac68291b0069c2e4"
+    },
+    "history-retention-stride-1-total-storage-v3/native/trace.jsonl": {
+      "bytes": 2927555,
+      "sha256": "6f0fa8b9f887f95ce889fe1bb1df7a47bee15780f73863c40009f6fa55e5448c"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stdout": {
+      "bytes": 49,
+      "sha256": "b41e90c96cfac7790531c35dff73d280b751585d2d0b30cf50c80f5fadf7aa01"
+    },
+    "history-retention-stride-1-total-storage-v3/receipt.json": {
+      "bytes": 623394,
+      "sha256": "65b93e549909f2642f2c8f74414cb63c58ad89da7c8de4449447122da60f103b"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stdout": {
+      "bytes": 49,
+      "sha256": "5aae672b5a37fcaa49ae54fbb8c3f88ee21053f2d6e3003a295ad247826b4fe8"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "bytes": 162,
+      "sha256": "7b99471d6be87fc8f9ea1b82f2ef86a27b427df9e3876c254a61a80ff95cf9c9"
+    },
+    "history-retention-stride-10-total-storage-v2/receipt.json": {
+      "bytes": 162,
+      "sha256": "243b67b789d827afcaccd623f4b721b11caf90d4eff69d760fa866f39c757282"
+    },
+    "history-retention-stride-10-total-storage-v3/receipt.json": {
+      "bytes": 162,
+      "sha256": "91e479a18226a667b39e8fc4d9666f6f0904a6820c7e23a51caeeeed0423b73f"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "history-retention-stride-3-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "50275a531de8aafc8bf0ae3e703efa94ebdae130b3e7692295c9e9737c0e4145"
+    },
+    "history-retention-stride-3-total-storage-v3/receipt.json": {
+      "bytes": 161,
+      "sha256": "5a0a021bc14672a52d952374c88affc3f77dfc978fe4b6c767fb18fd0eff0f0b"
+    },
+    "report.txt": {
+      "bytes": 731,
+      "sha256": "7d8aa4a61675d3cbbccd373a4f596cbabdf5ef6fb5073fa9e395d822d23b3d45"
+    },
+    "run.json": {
+      "bytes": 1025,
+      "sha256": "1b42af3b0c006a53db61b66197448fa12ddd8bc6c355aeaa41a3fd9ca8c84f2b"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

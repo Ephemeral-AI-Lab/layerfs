@@ -205,3 +205,12 @@ R014 issue publication: [#286 comment5896898795](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v2-r015 | compound history stride1/157 states, one changed-source candidate | `484b99c66` | **FAIL**: driver166.564s<170s, verifier19.548s<30s, all904143 listed paths/76726 selected content states/157 roots/C5 PASS; C2 Store SHA and allocated C2+C584418560 B identical to r014, still +471040 B strict FAIL; immutable O3 observed871337620 B/104618 vs871588115/104705 FAIL; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r015.md) | Publish after commit; link in next real round |
+
+## Collected rounds 20260930-history-v3-r016 and stride1-v3-r017
+
+R015 issue publication: [#286 comment5897087620](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5897087620), report commit `2ca9ec818` (production delta+0). [The prospective O3 method-applicability ruling](HISTORY-O3-APPLICABILITY-RULING-20260930.md) and v3 registry were committed at `2280f580f` before either new invocation; original v1/v2 pins, FAIL statuses and strict physical ceilings remain.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v3-r016 | compound v3 stride10/17 then stride3/53 states, one sample per selected case | `2280f580f` | **PASS/PASS**: strict allocated46718976<49344512 and58368000<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS; driver44.084/75.000s, verifier3.021/8.421s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r016.md) | Publish after commit; link in next real round |
+| 20260930-history-stride1-v3-r017 | compound v3 stride1/157, one explicit changed-profile sample at same source | `2280f580f` | **FAIL storage only**: strict allocated84377600>=83947520 B (+430080); all904143 listed paths/76726 selected content states/157 independent O3+roots/C5/cleanup PASS, driver165.224s<170s, verifier20.577s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r017.md) | Publish after commit; link in next real round |
