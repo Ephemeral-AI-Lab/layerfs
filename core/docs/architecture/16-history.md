@@ -60,6 +60,13 @@ Implementation specification and its pre-publication audit:
   source is a new build identity; the earlier one-shot prototype timings do not
   automatically measure it.
 - **Scope:** the replacement product under `core/` only.
+- **#286 C5 physical page treatment:** this document's current source requests
+  1-KiB SQLite pages for newly created catalogs. Existing schema-1 catalogs at
+  their original page size still open; table/record grammar, authority and
+  durability are unchanged. The r019 original C5 file used4-KiB pages and
+  allocated282,624 B; offline copied-file page-layout probes are diagnostics,
+  not candidate storage evidence. A new original-owner receipt decides the
+  combined C2+C5 strict gate.
 - **Method:** source reads plus the crate's own external tests. No benchmark,
   performance or release claim is made here. Anything not established from source
   is recorded as *not implemented* rather than guessed.

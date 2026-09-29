@@ -8,6 +8,11 @@ use support::*;
 fn genesis_is_atomic_and_unique() {
     let temp = Temp::new("genesis");
     let catalog = create(&temp.join("catalog.sqlite"));
+    let page_size: i64 = rusqlite::Connection::open(temp.join("catalog.sqlite"))
+        .unwrap()
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(page_size, 1024);
     let identity = stack(0x01);
     let record = catalog
         .initialize_layerstack(&StackInitialization {

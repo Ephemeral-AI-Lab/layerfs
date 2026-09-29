@@ -1193,7 +1193,7 @@ fn pooled_groups_in_separate_flushes_reuse_the_open_pack() {
     assert_eq!(header.group_count, 3);
     assert_eq!(
         u32::from_le_bytes(data[8..12].try_into().unwrap()),
-        layerfs_storage::pack::layout::VERSION_POOLED_HALF
+        layerfs_storage::pack::layout::VERSION_POOLED_TIGHT
     );
     assert!(data.len() < layerfs_storage::policy::POOLED_PACK_LIMIT);
     let (read, _) = read_objects(&reopened, &ids).expect("reopened pooled leaves");

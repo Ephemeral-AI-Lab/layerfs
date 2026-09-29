@@ -108,10 +108,10 @@ pub const GROUP_LIMIT: usize = 65_536;
 pub const GROUP_TARGET: usize = 48 * 1024;
 /// Largest assembled pack BLOB for the ordinary and native lanes.
 pub const PACK_LIMIT: usize = 256 * 1024;
-/// New pooled packs retain at most half the ordinary pack's append capacity.
-pub const POOLED_PACK_LIMIT: usize = 128 * 1024;
-/// Read bound of the short-lived v21 pooled framing.
-pub const POOLED_V21_PACK_LIMIT: usize = 64 * 1024;
+/// New pooled packs retain at most one quarter of the ordinary pack's capacity.
+pub const POOLED_PACK_LIMIT: usize = 64 * 1024;
+/// Read bound of the v22 pooled framing.
+pub const POOLED_V22_PACK_LIMIT: usize = 128 * 1024;
 /// Largest group count in one pack.
 pub const GROUP_COUNT_LIMIT: usize = 256;
 /// Largest record count in one group.

@@ -2,6 +2,8 @@
 -- scope-wide inode allocation. Seven application tables; no foreign key crosses
 -- into the C2 content database. C2 schema 7 is unchanged and is never migrated,
 -- repaired or promoted from here; incompatible catalogs fail at open.
+-- New catalogs use 1-KiB pages; existing schema-1 catalogs keep their page size.
+PRAGMA page_size = 1024;
 PRAGMA application_id = 1279677256;
 PRAGMA user_version = 1;
 

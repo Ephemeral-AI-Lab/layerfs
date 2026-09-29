@@ -87,6 +87,8 @@ CREATE TABLE objects (
 
 -- Disposable hints remain a bounded ring. An overwritten hint may reduce later
 -- compression opportunities; it can never make private content eligible.
+-- The slot key serves normal reads. Failed-save cleanup scans at most this
+-- 8,192-row ring, so a second save_id index does not earn its persistent bytes.
 CREATE TABLE content_signatures (
     slot INTEGER PRIMARY KEY CHECK (slot BETWEEN 0 AND 8191),
     stamp INTEGER NOT NULL CHECK (stamp > 0),
@@ -94,4 +96,3 @@ CREATE TABLE content_signatures (
     signature BLOB NOT NULL CHECK (length(signature) = 32),
     save_id INTEGER NOT NULL REFERENCES saves(save_id)
 ) STRICT;
-CREATE INDEX signatures_save ON content_signatures(save_id, slot);

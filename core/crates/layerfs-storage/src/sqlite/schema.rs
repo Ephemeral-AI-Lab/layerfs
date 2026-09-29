@@ -96,7 +96,10 @@ const REQUIRED_TABLES: [(&str, &[&str]); 6] = [
 /// query, on the definite-failure path, and the `(object_id, save_id)` primary key
 /// still answers it. A schema-9 Store is refused by [`SCHEMA_VERSION`], not by this
 /// list, so dropping the name here is what keeps the two declarations agreeing.
-const REQUIRED_INDEXES: [&str; 2] = ["packs_save", "signatures_save"];
+/// `signatures_save` is absent in new Stores: its only reader is failed-save
+/// cleanup, and that table is itself capped at 8,192 slots. Old schema-10 Stores
+/// carrying the extra index remain valid; normal candidate lookups use `slot`.
+const REQUIRED_INDEXES: [&str; 1] = ["packs_save"];
 
 /// Creates a fresh Store with `policy` and returns the stored policy.
 pub fn create(connection: &Connection, policy: StoragePolicy) -> StorageResult<StoragePolicy> {

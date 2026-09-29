@@ -57,6 +57,17 @@ fn several_groups_share_a_bounded_pack_write_and_reopen() {
             .unwrap(),
         2048
     );
+    let extra_signature_index: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name='signatures_save'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        extra_signature_index, 0,
+        "the bounded hint ring needs no cleanup index"
+    );
     drop(connection);
     let reopened = open_store(&path);
     let (actual, _) = read_objects(&reopened, &ids).unwrap();

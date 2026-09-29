@@ -124,14 +124,14 @@ fn pooled_pack_versions_keep_their_own_size_bounds() {
         128 * 1024,
     );
     assert_eq!(parse_header(&old).unwrap().lane, PackLane::PooledMetadata);
-    let current = pack_of(PackLane::PooledMetadata, VERSION_POOLED_HALF, 1, 4);
+    let current = pack_of(PackLane::PooledMetadata, VERSION_POOLED_TIGHT, 1, 4);
     assert_eq!(
         parse_header(&current).unwrap().lane,
         PackLane::PooledMetadata
     );
     let oversized = pack_of(
         PackLane::PooledMetadata,
-        VERSION_POOLED_HALF,
+        VERSION_POOLED_TIGHT,
         1,
         PackLane::PooledMetadata.pack_limit(),
     );
@@ -139,7 +139,7 @@ fn pooled_pack_versions_keep_their_own_size_bounds() {
         parse_header(&oversized),
         Err(StorageError::Integrity("pack length"))
     ));
-    let old_tight = pack_of(PackLane::PooledMetadata, VERSION_POOLED_TIGHT, 1, 64 * 1024);
+    let old_tight = pack_of(PackLane::PooledMetadata, VERSION_POOLED_HALF, 1, 128 * 1024);
     assert!(matches!(
         parse_header(&old_tight),
         Err(StorageError::Integrity("pack length"))
@@ -147,7 +147,7 @@ fn pooled_pack_versions_keep_their_own_size_bounds() {
 }
 
 #[test]
-fn new_pooled_placement_splits_before_the_half_pack_bound() {
+fn new_pooled_placement_splits_before_the_quarter_pack_bound() {
     use layerfs_storage::pack::{EncodedGroup, GroupCodec, LanePlacement};
     let group = EncodedGroup {
         bytes: vec![7; 16 * 1024],
@@ -160,11 +160,13 @@ fn new_pooled_placement_splits_before_the_half_pack_bound() {
     let writes = placement
         .select_many(PackLane::PooledMetadata, vec![group; 8], &mut next)
         .unwrap();
-    assert_eq!(writes.len(), 2);
-    assert_eq!(writes[0].group_count, 7);
+    assert_eq!(writes.len(), 3);
+    assert_eq!(writes[0].group_count, 3);
     assert_eq!(writes[0].capacity, writes[0].used);
-    assert_eq!(writes[1].group_count, 1);
-    assert_eq!(writes[1].capacity, 128 * 1024);
+    assert_eq!(writes[1].group_count, 3);
+    assert_eq!(writes[1].capacity, writes[1].used);
+    assert_eq!(writes[2].group_count, 2);
+    assert_eq!(writes[2].capacity, 64 * 1024);
 }
 
 #[test]
@@ -286,7 +288,7 @@ fn declared_pack_and_group_bounds_are_enforced_on_the_bytes() {
 fn the_lane_table_names_one_limit_per_lane() {
     assert_eq!(PackLane::Singleton.pack_limit(), 16 * 1024 * 1024 + 4_096);
     assert_eq!(PackLane::Ordinary.pack_limit(), 256 * 1024);
-    assert_eq!(PackLane::PooledMetadata.pack_limit(), 128 * 1024);
+    assert_eq!(PackLane::PooledMetadata.pack_limit(), 64 * 1024);
     assert_eq!(PackLane::Singleton.group_count_limit(), 1);
     assert_eq!(PackLane::PooledMetadata.body_limit(), 16 * 1024);
     for lane in PackLane::ALL {
@@ -411,7 +413,7 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
         "a pooled value group is stored in the pooled lane"
     );
     assert_eq!(
-        VERSION_POOLED_HALF,
+        VERSION_POOLED_TIGHT,
         PackLane::PooledMetadata.version(),
         "the pooled lane's framing version"
     );
