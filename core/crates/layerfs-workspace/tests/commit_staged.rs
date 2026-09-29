@@ -759,7 +759,15 @@ mod linux {
         f.edit(b"data.bin", 10, 14, b"GGGG");
         let handle = f
             .workspace
-            .open(data.serial, ReferenceScope::Local)
+            .open_file(
+                data.serial,
+                FileOpenOptions {
+                    access: FileAccess::ReadWrite,
+                    ..FileOpenOptions::default()
+                },
+                ReferenceScope::Local,
+                deadline(),
+            )
             .unwrap();
         let old_reply = f.workspace.read(handle, 10, 4, deadline()).unwrap();
         let stage = f.workspace.stage(deadline()).unwrap();
@@ -783,10 +791,17 @@ mod linux {
         );
         assert!(failure.installed_revision.is_none());
         let failed_charge = f.workspace.backing_status().unwrap();
-        assert!(failed_charge.accounting_complete && failed_charge.admission_stopped);
+        assert!(failed_charge.accounting_complete);
         assert_eq!(
             failed_charge.allocated_bytes + failed_charge.reserved_bytes,
             before_charge.allocated_bytes + before_charge.reserved_bytes
+        );
+        // BackingStatus.admission_stopped is the shared payload-host flag;
+        // exercise the stopped active publisher through its real WRITE path.
+        assert_eq!(
+            f.workspace
+                .write_file(handle, 10, &f.own(b"NOPE"), deadline()),
+            Err(WorkspaceError::Busy)
         );
         let actual = snapshot(&f);
         assert_eq!(actual.effective_root, stage.stage().candidate_root);
@@ -795,7 +810,6 @@ mod linux {
         let calls = count_commits(&f);
         let report = f.workspace.commit_staged(&stage, deadline()).unwrap();
         committed(&f, &stage, &report);
-        assert!(!f.workspace.backing_status().unwrap().admission_stopped);
         assert_eq!(count_commits(&f), calls);
         assert_eq!(
             f.native.bytes(
