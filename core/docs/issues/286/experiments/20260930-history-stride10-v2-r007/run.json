@@ -1,0 +1,23 @@
+{
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "081e466851aa6cea6c8303999640e13773b0e4b257313dda42348c1d9b4e7426",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "add72186ffdc6d9f62229e15f8fd42be3353056cbc60632dbc3c503b7af78c3e",
+    "product_seal": "6cd3e044b57596f51edfadaa4732f40100c5cada74f370e979eaad167fdb217d",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "e4a56f3276b17b02f16dacb36580ebf367744908",
+    "source_dirty": false,
+    "source_tree": "304ecf0a5ed5dec904b23387a2414d220bc86aed"
+  },
+  "profiles": [
+    "c1-c2-c5-retained-history-v2"
+  ],
+  "schema": "core-history-retention-run-v2",
+  "selection": [
+    "history-retention-stride-10-total-storage-v2"
+  ]
+}
