@@ -1,0 +1,76 @@
+{
+  "admission_eligible": false,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/76fb537e4ef35f3489626eef39887eb3562148a55fa030a8e16a577ee1c515f7/fs-bench-storage-content",
+    "sha256": "76fb537e4ef35f3489626eef39887eb3562148a55fa030a8e16a577ee1c515f7"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "case": "history-retention-stride-10-total-storage-v1",
+  "clone_method": null,
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "1",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride10",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "c392b9c773a550c7038724535847d84bf883a02c2c19b6d3e58cdb5dc40f14eb",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "ce5caf1a4f90a3c0ce5077dda7cbb1494c4ad86aa5b6fffe5902b0b9c547ebf2",
+    "product_seal": "53172da181cecd9088cba9f143c51d7f02e36436548d312079773ccac0210107",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "d4245911f801402d706577b2fa632279d304d4ac",
+    "source_dirty": false,
+    "source_tree": "c52b1317a7548108f2ec173eef07ef0d03ddb485"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "profile": "c1-c2-c5-retained-history-v1",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_bytes": 380921328,
+    "canonical_objects": 52032,
+    "generation": "one new sealed-reference acquisition",
+    "reference_trace_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/trace.jsonl",
+    "reference_trace_sha256": "5593dcea14af7da5755f29de49d55c7ad399ada04ed295ce879fe0709c9affe4",
+    "roots_sha256": "5f0c0b9a44ac520a282b9fd3314f0b1992b5ac45b5286783c603aa0ddb884e4e",
+    "states": 17
+  },
+  "sample_count": 0,
+  "schema": "core-history-retention-receipt-v1",
+  "setup": "InProcess",
+  "storage_gate": "g1.o6-total-retained-below-v016-v1"
+}

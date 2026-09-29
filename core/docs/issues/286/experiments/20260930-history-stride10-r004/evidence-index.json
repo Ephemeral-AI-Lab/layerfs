@@ -1,0 +1,167 @@
+{
+  "schema": "issue286-round-raw-index-v1",
+  "files": [
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/build.json",
+      "sha256": "63e77ff17655f9afcc460a05cffd88b9d51ae5f40c8e43566b1187689c37bd76",
+      "bytes": 875,
+      "published_path": "build.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/build.log",
+      "sha256": "2e1674c0a9e8102fb49cd7864069d5ead3b0a66673988dad2181380104005a52",
+      "bytes": 1113,
+      "published_path": "build.log.gz",
+      "wrapper_sha256": "eaf83d2fcc16aacd4b0860e8e0222471709f593cd79a36cf47365b2b38175001",
+      "representation": "deterministic gzip; decompression reproduces raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-1-total-storage-v1/receipt.json",
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61",
+      "bytes": 161,
+      "published_path": "history-retention-stride-1-total-storage-v1/receipt.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/declaration.json",
+      "sha256": "12294ef75824b92d5161175e0127c7a5f781230e8bd52c2e6ce74ffc8e644406",
+      "bytes": 4042,
+      "published_path": "history-retention-stride-10-total-storage-v1/declaration.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/history.sqlite",
+      "sha256": "a3f8680be0f60a4c242ab47b781c143d3bac47c77e236dec71706af401f25a46",
+      "bytes": 86016,
+      "published_path": null,
+      "at_run_allocated_bytes": 86016
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/phases-perf.json",
+      "sha256": "70d57768219f6c9419c50c5d0bd185d9a74f9e55d1f133abcf485478316d98b4",
+      "bytes": 387,
+      "published_path": "history-retention-stride-10-total-storage-v1/native/phases-perf.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/phases-verify.json",
+      "sha256": "cd746847aa0ef8e9902e44da729f95d8a844315052ef88e44a74e3346c34f881",
+      "bytes": 330,
+      "published_path": "history-retention-stride-10-total-storage-v1/native/phases-verify.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/sample.sqlite",
+      "sha256": "4f96a484b59fc395716f9056270d326aab6306fa9c3a6eecc6452580394f93e9",
+      "bytes": 53059584,
+      "published_path": null,
+      "at_run_allocated_bytes": 53104640
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/timing.json",
+      "sha256": "49151282b4043336f0e1a8ea1de9e51cffbe0532c5a98395ced684ada0f80a0e",
+      "bytes": 23675,
+      "published_path": "history-retention-stride-10-total-storage-v1/native/timing.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/native/trace.jsonl",
+      "sha256": "5e44a171b236651555c08ccd15291dec30d69e538bac811dccf1ee0a9663eedd",
+      "bytes": 329879,
+      "published_path": "history-retention-stride-10-total-storage-v1/native/trace.jsonl"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/perf.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "published_path": "history-retention-stride-10-total-storage-v1/perf.stderr.gz",
+      "wrapper_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "representation": "deterministic gzip; decompression reproduces raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/perf.stdout",
+      "sha256": "9f29cbe099d0f3f8562372c96b7f992112c55344b8487be97fc9570ea1365c39",
+      "bytes": 49,
+      "published_path": "history-retention-stride-10-total-storage-v1/perf.stdout.gz",
+      "wrapper_sha256": "9ba527669a0f76e81908a073f228802969623193078c0a3b69b770ab4150e748",
+      "representation": "deterministic gzip; decompression reproduces raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/receipt.json",
+      "sha256": "53dd690239c0d7deb79f3e5cb67cebce1f2e6cae2138d073a3db1c298370e836",
+      "bytes": 79225,
+      "published_path": "history-retention-stride-10-total-storage-v1/receipt.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/verify.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "published_path": "history-retention-stride-10-total-storage-v1/verify.stderr.gz",
+      "wrapper_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "representation": "deterministic gzip; decompression reproduces raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-10-total-storage-v1/verify.stdout",
+      "sha256": "c2684d92af01d09c1e69936e2f65eb935cdd7f48c97c99fbe5f94aaf326a4fda",
+      "bytes": 49,
+      "published_path": "history-retention-stride-10-total-storage-v1/verify.stdout.gz",
+      "wrapper_sha256": "61f0177d43a14a176448cd4fa219fc6cc7abf85d7482e3bfbc3ca2c05367e549",
+      "representation": "deterministic gzip; decompression reproduces raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/history-retention-stride-3-total-storage-v1/receipt.json",
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6",
+      "bytes": 161,
+      "published_path": "history-retention-stride-3-total-storage-v1/receipt.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/manifest.json",
+      "sha256": "80b95ebabbbc26cc9c400c319642de2bdf0f8bdeb7be8ac9726826b219d79f93",
+      "bytes": 3126,
+      "published_path": "manifest.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/report.txt",
+      "sha256": "570659cfee1a9a065239343ebeee52bdfe389ed7bebb8b17ec705fd5b04781c6",
+      "bytes": 294,
+      "published_path": "report.txt"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride10-r004/run.json",
+      "sha256": "cf3066a14ac68c268f4e8226d41ffb9951e81644082616a0d37b9abb8822acf1",
+      "bytes": 1015,
+      "published_path": "run.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/command.json",
+      "published_path": "diagnostic-command.json",
+      "bytes": 657,
+      "sha256": "a7884661dc02831e3c7d8d244f71ccb350c414f67de8ed7494c1a96dfca9d695"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/corpus-directory-deltas.json",
+      "published_path": "diagnostic-corpus-directory-deltas.json",
+      "bytes": 5594,
+      "sha256": "91006e22636bc325c1f71422c4de36754485b5be6ba06379aebe9235e8fd8200"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/corpus-directory-only-deltas.json",
+      "published_path": "diagnostic-corpus-directory-only-deltas.json",
+      "bytes": 3042,
+      "sha256": "ee74e6ccf50791fba8515f3188cb6a3c3e36e3cb1d274bc4f038f28f2aa5e497"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/result.json",
+      "published_path": "diagnostic-result.json",
+      "bytes": 729,
+      "sha256": "c7fa7f435da5bb6891bbaac68c6b0acb584f5a0dad50cd10f25b72263e0c58c4"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/stderr.log",
+      "published_path": "diagnostic-stderr.log.gz",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-invocations/history-stride10-r004/stdout.log",
+      "published_path": "diagnostic-stdout.log.gz",
+      "bytes": 119,
+      "sha256": "0f773701ddf0429c1bcc399775d5eb88b5950b7b88f6a2becf1a7b49ee779d6b"
+    }
+  ]
+}

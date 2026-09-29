@@ -1,0 +1,125 @@
+{
+  "schema": "issue286-directory-cause-diagnostic-v1",
+  "basis": "fixed corpus oracle; no benchmark sample or performance time",
+  "rows": [
+    {
+      "ordinal": 1,
+      "directories": 83,
+      "removed_directory_count": 0,
+      "added_directory_count": 83,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 2,
+      "directories": 268,
+      "removed_directory_count": 44,
+      "added_directory_count": 229,
+      "packages_agent_removed": true
+    },
+    {
+      "ordinal": 3,
+      "directories": 395,
+      "removed_directory_count": 0,
+      "added_directory_count": 127,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 4,
+      "directories": 492,
+      "removed_directory_count": 11,
+      "added_directory_count": 108,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 5,
+      "directories": 675,
+      "removed_directory_count": 45,
+      "added_directory_count": 228,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 6,
+      "directories": 746,
+      "removed_directory_count": 20,
+      "added_directory_count": 91,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 7,
+      "directories": 844,
+      "removed_directory_count": 10,
+      "added_directory_count": 108,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 8,
+      "directories": 883,
+      "removed_directory_count": 20,
+      "added_directory_count": 59,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 9,
+      "directories": 974,
+      "removed_directory_count": 2,
+      "added_directory_count": 93,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 10,
+      "directories": 1011,
+      "removed_directory_count": 0,
+      "added_directory_count": 37,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 11,
+      "directories": 1080,
+      "removed_directory_count": 43,
+      "added_directory_count": 112,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 12,
+      "directories": 1164,
+      "removed_directory_count": 112,
+      "added_directory_count": 196,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 13,
+      "directories": 1165,
+      "removed_directory_count": 63,
+      "added_directory_count": 64,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 14,
+      "directories": 1257,
+      "removed_directory_count": 239,
+      "added_directory_count": 331,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 15,
+      "directories": 1408,
+      "removed_directory_count": 294,
+      "added_directory_count": 445,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 16,
+      "directories": 1459,
+      "removed_directory_count": 35,
+      "added_directory_count": 86,
+      "packages_agent_removed": false
+    },
+    {
+      "ordinal": 17,
+      "directories": 1509,
+      "removed_directory_count": 1,
+      "added_directory_count": 51,
+      "packages_agent_removed": false
+    }
+  ]
+}

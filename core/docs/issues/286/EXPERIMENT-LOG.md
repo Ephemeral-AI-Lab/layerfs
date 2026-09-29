@@ -109,3 +109,11 @@ Reference/implementation r002 issue publication: [#286 comment5894032481](https:
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride10-r003 | compound history stride10/17 states, one candidate invocation | `509668ea6` | FAIL: C2 dependency encoded-work refusal after6 states; storage parser refuses v17; correctness/storage/cleanup INCOMPLETE, verifier NOT_RUN, time INELIGIBLE | [Round report](experiments/20260930-history-stride10-r003.md) | Published after commit; link appended in next actual round |
+
+## Collected round 20260930-history-stride10-r004
+
+R003 issue publication: [#286 comment5894176598](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5894176598), report commit `8baf47e45` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride10-r004 | compound history stride10/17 states, one changed-source candidate | `d4245911f` | FAIL: strict storage53190656 >=49344512 B; extra directory state2 breaks full tree; roots/canonical/C5/cleanup PASS, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride10-r004.md) | Published after commit; link appended in next actual round |

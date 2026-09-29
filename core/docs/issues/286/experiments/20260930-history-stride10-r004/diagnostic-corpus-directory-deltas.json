@@ -1,0 +1,159 @@
+{
+  "source_manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "method": "fixed corpus oracles, read-only; selected stride10 order, path set differences; no product sample",
+  "rows": [
+    {
+      "ordinal": 1,
+      "files_and_directories": 359,
+      "packages_agent_declared": true,
+      "removed_since_previous": 0,
+      "added_since_previous": 359,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "9ff51404fe3ea33de4b70d33c2f3241780ab866768d59b15c183b5211c327f02"
+    },
+    {
+      "ordinal": 2,
+      "files_and_directories": 1143,
+      "packages_agent_declared": false,
+      "removed_since_previous": 200,
+      "added_since_previous": 984,
+      "packages_agent_removed_now": true,
+      "oracle_sha256": "9c1682c781a51b6a74fb7c336a67ac16cd707954f9aded8ad38a1bd263f0666e"
+    },
+    {
+      "ordinal": 3,
+      "files_and_directories": 1701,
+      "packages_agent_declared": false,
+      "removed_since_previous": 9,
+      "added_since_previous": 567,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "0c55c136f2627032221577c77df341da1377aaf20f7aa96436a812fc4e3ee153"
+    },
+    {
+      "ordinal": 4,
+      "files_and_directories": 2148,
+      "packages_agent_declared": false,
+      "removed_since_previous": 50,
+      "added_since_previous": 497,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "ba6b9a8b0c593e0afc154d6de708469440924853d1e824c880cf96358382fbb6"
+    },
+    {
+      "ordinal": 5,
+      "files_and_directories": 3437,
+      "packages_agent_declared": false,
+      "removed_since_previous": 427,
+      "added_since_previous": 1716,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "3023a6414027ab7f030bd871ad30de5c2bffd75d2d34610981640f431fab1eff"
+    },
+    {
+      "ordinal": 6,
+      "files_and_directories": 4208,
+      "packages_agent_declared": false,
+      "removed_since_previous": 151,
+      "added_since_previous": 922,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "6fec687e0a8a482423d8243e7441c2b9c9e08d38813440e45694a27e6ba6fcb7"
+    },
+    {
+      "ordinal": 7,
+      "files_and_directories": 5383,
+      "packages_agent_declared": false,
+      "removed_since_previous": 281,
+      "added_since_previous": 1456,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "7c9299bf3b5f309c23c980595e03425ddc5aa9fbef6c5ecf1d0c70aa90e309df"
+    },
+    {
+      "ordinal": 8,
+      "files_and_directories": 5678,
+      "packages_agent_declared": false,
+      "removed_since_previous": 103,
+      "added_since_previous": 398,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "c01612eca1208c6a121a90912bb4f5b294c47ddd92feba19fccd93cc2524e52a"
+    },
+    {
+      "ordinal": 9,
+      "files_and_directories": 6369,
+      "packages_agent_declared": false,
+      "removed_since_previous": 31,
+      "added_since_previous": 722,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "1a7afd722b70aa344208689f6d22d665b8ad648242c78e82cf1bcdb31e027c7d"
+    },
+    {
+      "ordinal": 10,
+      "files_and_directories": 6750,
+      "packages_agent_declared": false,
+      "removed_since_previous": 15,
+      "added_since_previous": 396,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "bdddeeca702b7acffe95b1930943230621ad642fa9cdd232dbe07e1035caf8c0"
+    },
+    {
+      "ordinal": 11,
+      "files_and_directories": 7435,
+      "packages_agent_declared": false,
+      "removed_since_previous": 420,
+      "added_since_previous": 1105,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "1da3847eb66d3d7beeda844e6fcb62e25cf1bc352a8b82251930695780ec6c3d"
+    },
+    {
+      "ordinal": 12,
+      "files_and_directories": 7992,
+      "packages_agent_declared": false,
+      "removed_since_previous": 671,
+      "added_since_previous": 1228,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "0fd9775afc6decbba7ebf9d2ecd5335dd0b6f41958b2103259301c9648d3bcaa"
+    },
+    {
+      "ordinal": 13,
+      "files_and_directories": 8297,
+      "packages_agent_declared": false,
+      "removed_since_previous": 591,
+      "added_since_previous": 896,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "52342c50e5af66663ebef55dec7db1ca0cce0acbd52bdbaf0570bb1236afd81c"
+    },
+    {
+      "ordinal": 14,
+      "files_and_directories": 9137,
+      "packages_agent_declared": false,
+      "removed_since_previous": 1256,
+      "added_since_previous": 2096,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "8f4ac3d9e0f2becfa329c0c4660e4b1127cafdfb694f4f0cedb96feab4585828"
+    },
+    {
+      "ordinal": 15,
+      "files_and_directories": 10123,
+      "packages_agent_declared": false,
+      "removed_since_previous": 1464,
+      "added_since_previous": 2450,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "ac36de82ab04ad941a3641ce10c4b2c5e8a6cd292b34cae7d441d9d9960fc49e"
+    },
+    {
+      "ordinal": 16,
+      "files_and_directories": 10393,
+      "packages_agent_declared": false,
+      "removed_since_previous": 581,
+      "added_since_previous": 851,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "c4c11b0cc3f5164cfee32423f7cb904f61bae256e2f8564a595514f6201c2bed"
+    },
+    {
+      "ordinal": 17,
+      "files_and_directories": 10924,
+      "packages_agent_declared": false,
+      "removed_since_previous": 1539,
+      "added_since_previous": 2070,
+      "packages_agent_removed_now": false,
+      "oracle_sha256": "10e705a338baa86a1656c4b462aa27e9a3f6381d74b4f0fd31bd82c80d295e3c"
+    }
+  ]
+}
