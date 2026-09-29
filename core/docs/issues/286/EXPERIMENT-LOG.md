@@ -149,3 +149,11 @@ R007 issue publication: [#286 comment5895564116](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride10-v2-r008 | compound history stride10/17 states, one changed-source candidate | `34c3d3e53` | **PASS**: C2+C5 allocated47882240 B <49344512 B; complete101477 path-state tree/size,8631 selected content states,17 independent roots/O3/C5/cleanup PASS; verifier4.466s<10s, complete driver44.854s<60s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride10-v2-r008.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride3-v2-r009
+
+R008 issue publication: [#286 comment5895668329](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5895668329), report commit `2a2453535` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride3-v2-r009 | compound history stride3/53 states, first v2 candidate | `2a2453535` (product seal equal r008) | **FAIL O3**: observed589480854 B/73447 objects vs immutable589423458 B/73476; allocated60477440 B <64024576 B PASS, complete306861-path tree/size+26052 selected content states PASS,53 independent roots/C5/cleanup PASS; verifier16.559s<20s, driver77.536s<170s, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride3-v2-r009.md) | Publish after commit; link in next round |
