@@ -2257,7 +2257,25 @@ mod linux {
             panic!("missing snapshot")
         };
         let original = attr(f.native.attributes(snapshot.effective_root, b"data.bin"));
-        f.edit(b"data.bin", 100, 100, b"");
+        // A zero-byte active WRITE is a no-op, not a metadata publication.
+        // Use the public metadata-only operation to exercise this stage lane.
+        let mtime = (
+            data.mtime_seconds.checked_add(1).unwrap(),
+            data.mtime_nanoseconds,
+        );
+        let updated = f
+            .workspace
+            .set_attributes(
+                data.serial,
+                PortableAttributes {
+                    size: None,
+                    mode: None,
+                    mtime: Some(mtime),
+                },
+                deadline(),
+            )
+            .unwrap();
+        assert_eq!((updated.mtime_seconds, updated.mtime_nanoseconds), mtime);
         let captured = f.workspace.getattr(data.serial).unwrap();
         let selector = f.workspace.stage(deadline()).unwrap();
         let saved = attr(
