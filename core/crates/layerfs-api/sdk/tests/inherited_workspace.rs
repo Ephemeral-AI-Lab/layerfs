@@ -855,11 +855,10 @@ fn growing_rename_refuses_private_budget_before_publication() {
 
 #[test]
 fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
-    // The active rename publishes one index revision and one physical page;
-    // unlike the retired RootOwner mutation route, it holds no completion
-    // escrow. Commit constructs separately owned canonical roots, whose slots
-    // and reservations remain live until the checked clean close. Pin the
-    // one-attempt publication and exact final refund at the real owner boundary.
+    // Dirty publication precharges the existing completion reserve. Commit
+    // spends that fund on active C5 pages and refunds its unused credit; checked
+    // close releases the resulting physical pages. Keep each owner observable.
+    const COMPLETION_RESERVE: u64 = 208 * 4096;
     let f = Fixture::new();
     let root = f.workspace.root().serial;
     let packages = f.lookup(root, b"packages");
@@ -892,18 +891,35 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
         "the sealed candidate refunds its slots exactly once: {before:?} -> {sealed:?}"
     );
     assert_eq!(
-        sealed.reserved_bytes, before.reserved_bytes,
-        "the active publication holds no RootOwner completion escrow"
+        sealed.reserved_bytes,
+        before.reserved_bytes + COMPLETION_RESERVE,
+        "the first dirty publication precharges exactly one completion fund"
     );
     assert!(
         sealed.accounting_complete,
         "a sealed root owns no pending cleanup"
     );
-    f.commit();
+    let committed = f.commit();
+    assert_eq!(
+        f.content_bytes(committed, b"packages/new/subtree/child/grand.txt"),
+        b"grand-base"
+    );
+    assert_eq!(
+        f.content_bytes(f.genesis, b"packages/old/subtree/child/grand.txt"),
+        b"grand-base"
+    );
     let completed = f.workspace.metadata_status().unwrap();
     assert!(
-        completed.roots > before.roots && completed.reserved_bytes > before.reserved_bytes,
-        "Commit now owns canonical root reservations until clean close: {completed:?}"
+        completed.roots > before.roots,
+        "Commit retains its separately owned canonical roots: {completed:?}"
+    );
+    assert_eq!(
+        completed.reserved_slots, before.reserved_slots,
+        "active reconciliation leaves no unused legacy slot reservation"
+    );
+    assert_eq!(
+        completed.reserved_bytes, before.reserved_bytes,
+        "successful Commit returns all unspent completion credit"
     );
     assert!(completed.accounting_complete);
     // The moved directory carries both lookup references it acquired (once
@@ -931,12 +947,22 @@ fn a_successful_directory_rename_seals_once_and_refunds_exactly() {
         "verified close releases canonical physical pages"
     );
     assert!(released.accounting_complete);
+    let released_backing = f.workspace.backing_status().unwrap();
+    assert_eq!(
+        released_backing.allocated_bytes,
+        before_active.allocated_bytes
+    );
+    assert_eq!(
+        released_backing.reserved_bytes,
+        before_active.reserved_bytes
+    );
     println!(
-        "RENAME_SEAL once=PASS refund_slots={}->{}->{} reserve={} ->{}->{} cleanup=PASS",
+        "RENAME_SEAL once=PASS refund_slots={}->{}->{} reserve={}->{}->{}->{} cleanup=PASS",
         before.reserved_slots,
         completed.reserved_slots,
         released.reserved_slots,
         before.reserved_bytes,
+        sealed.reserved_bytes,
         completed.reserved_bytes,
         released.reserved_bytes
     );
