@@ -194,6 +194,15 @@ exploratory performance-only default below; see
    not collapse it to one. **A performance drop against v0.1.5 is expected** for the
    single-worker cases and is absorbed by the bounded acceptance rule, never by adding
    workers back.
+9. **Reject lopsided storage-for-speed trades.** Never accept about a **50% speed
+   loss** merely to recover about **5% allocated storage** or to eliminate a
+   similarly small storage overage. A roughly **5% storage benefit for a 5%
+   speed cost** can be acceptable when both axes are measured under declared,
+   comparable conditions and correctness and command budgets still pass.
+   Show the raw byte and time deltas before choosing the treatment. If an
+   already-frozen storage gate would force a worse trade, preserve its FAIL and
+   freeze a new owner-approved tolerance/profile before another sample; never
+   relabel or overwrite the old receipt.
 
 ## 4. Code, build and docs
 

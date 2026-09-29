@@ -393,3 +393,7 @@ R041 issue publication: [#286 comment5900890397](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-init-10000-v4-r042 | explicit release SDK Init10,000 files, one sample; first fixture preparation outside timer | `0a8bac6fb`, product `60c7af879` | **Functional PASS**, runner `UNREGISTERED_DIAGNOSTIC`: SDK1.591s, complete command1.610s<15s, separate verifier0.653s<9.5s; all10101 paths and72 selected files/101928859 B, known root and cleanup PASS; numeric INELIGIBLE. Together with r040/r041, all four owner-requested tiers have one functional result. | [Round report](experiments/20260930-init-10000-v4-r042.md) | Publish after commit; Family3 matrix next |
+
+## Owner pause checkpoint after r042 (2026-09-30)
+
+The owner explicitly paused Phase B after the four-tier Family1 observation and requested an issue checkpoint. Families1–2 retain their scoped functional PASS receipts at the low-cost-codec product source; numeric latency is INELIGIBLE under uncontrolled source cache, and explicit10,000/100,000 Init tiers retain `UNREGISTERED_DIAGNOSTIC`. Families3–7 remain NOT_RUN. No Family3 measurement or product change begins until the owner resumes this work. The repository-wide agent rule now rejects spending about50% speed to recover about5% storage; the original strict history failures stay immutable, and the prospectively frozen v4 tolerance applies only to new v4 rows.
