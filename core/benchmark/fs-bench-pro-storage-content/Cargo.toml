@@ -36,6 +36,7 @@ path = "src/main.rs"
 # before any receipt is written (owner decision D3, mandatory mitigation).
 layerfs-content = { path = "../../crates/layerfs-content" }
 layerfs-storage = { path = "../../crates/layerfs-storage" }
+layerfs-history = { path = "../../crates/layerfs-history" }
 layerfs-telemetry = { path = "../../crates/layerfs-telemetry" }
 # The locator-shape diagnostic (`tests/locator_btree_shape.rs`) drives the engine
 # directly. The pin and the feature set are the product's own

@@ -1,0 +1,223 @@
+{
+  "schema": "issue286-reference-round-evidence-v1",
+  "files": [
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/build-r001/build.log",
+      "bytes": 1751,
+      "sha256": "ca00e55f611f38544f72829490c0b11283195fdbb77f9ebbaae5dbb052027369",
+      "published_path": "build-r001/build.log.gz",
+      "wrapper_sha256": "436dded8bb83cc25ccea93871a28b5f241d7bd8116a63ce3be3f61f9f0548b20",
+      "wrapper_bytes": 677,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/build-r001/command.json",
+      "bytes": 811,
+      "sha256": "e69ea1f82090b80a20d9f5617ebb28305507f600398a96aba38dc2702c21a9b0",
+      "published_path": "build-r001/command.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/build-r001/result.json",
+      "bytes": 877,
+      "sha256": "dd0e75548f2868f4698f1a9d53cc419f8ba88fd7b2be5dca8946de86c4ed684a",
+      "published_path": "build-r001/result.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/phases-perf.json",
+      "bytes": 387,
+      "sha256": "8fb5b881904ee1b5b196d732e1da336db57ff4034a715d79924de68ea6691445",
+      "published_path": "stride10-r001/case/phases-perf.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/sample.sqlite",
+      "bytes": 51867648,
+      "sha256": "7ea2fe6ccf13bc5aee7ba59bddef2d60d61d50d6b90329ee1488b1f096228358",
+      "published_path": null,
+      "at_run_allocated_bytes": 51900416,
+      "user_version": 7,
+      "canonical_objects": 52032,
+      "canonical_bytes": 380921328
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/timing.json",
+      "bytes": 5647,
+      "sha256": "da4662bf8b0d9ef996b99173803a16f4d12e86ec133cd205e7dc29f9f03c7f1e",
+      "published_path": "stride10-r001/case/timing.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/trace.jsonl",
+      "bytes": 319445,
+      "sha256": "5593dcea14af7da5755f29de49d55c7ad399ada04ed295ce879fe0709c9affe4",
+      "published_path": "stride10-r001/case/trace.jsonl"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/command.json",
+      "bytes": 1041,
+      "sha256": "a26ce5468afd6a60039441a14609350400605d24bdca94ce22f3cceeefa73e0d",
+      "published_path": "stride10-r001/command.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/result.json",
+      "bytes": 1107,
+      "sha256": "ee9132bd81eafd04cea77447a8b5ef5bda7f48c31472315d6d48ab2df5fe7e77",
+      "published_path": "stride10-r001/result.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_path": "stride10-r001/stderr.log.gz",
+      "wrapper_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "wrapper_bytes": 20,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/stdout.log",
+      "bytes": 49,
+      "sha256": "68bd8a9937f2d7ff384087872154122c6530bf9b2c6465a3b9b83def71942009",
+      "published_path": "stride10-r001/stdout.log.gz",
+      "wrapper_sha256": "b4083760b0f1af2ae7201e167eb813a706d6fae3be6f58e17e85fd6d40a01e48",
+      "wrapper_bytes": 66,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case/phases-perf.json",
+      "bytes": 388,
+      "sha256": "f45a33202826400a233f3267504700a693ef084f7500d91086fdb7a1c997cd8d",
+      "published_path": "stride3-r001/case/phases-perf.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case/sample.sqlite",
+      "bytes": 65675264,
+      "sha256": "d0aaff8a7a360469136a3a9d1c47548dc712f36ae5dba30542e1947877fa445d",
+      "published_path": null,
+      "at_run_allocated_bytes": 65679360,
+      "user_version": 7,
+      "canonical_objects": 72560,
+      "canonical_bytes": 589916570
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case/timing.json",
+      "bytes": 17288,
+      "sha256": "53b2a63d46843d59698dccb10b4ccd5efe1b351f2ca7d9ef163a0e34621f5523",
+      "published_path": "stride3-r001/case/timing.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case/trace.jsonl",
+      "bytes": 960413,
+      "sha256": "c8b3eeeed8b572f84c409839562dace3584b5bf68f0d6624e05ca3a51bf69992",
+      "published_path": "stride3-r001/case/trace.jsonl"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/command.json",
+      "bytes": 1039,
+      "sha256": "b93662d04e1ea19921842d56d3ec4464c3018b8ef9a740e02c55c6155d26635b",
+      "published_path": "stride3-r001/command.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/result.json",
+      "bytes": 1105,
+      "sha256": "579a1df6cf109b8be05c9d93ec2fb8c4a8cca8952e4092eaf0a42618f0a402f8",
+      "published_path": "stride3-r001/result.json"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_path": "stride3-r001/stderr.log.gz",
+      "wrapper_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "wrapper_bytes": 20,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/stdout.log",
+      "bytes": 48,
+      "sha256": "7096e111b36c192a5d3a2c1789d2f6c88d142d6fd1bbb69c5276047178d2e0e0",
+      "published_path": "stride3-r001/stdout.log.gz",
+      "wrapper_sha256": "8ed12356db2d0896d712e8dc25ea3e7e3dd3888e932b3d089801a01274b40cc7",
+      "wrapper_bytes": 65,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-oracle-build-01/build.log",
+      "published_path": "construction-checks/history-oracle-build-01/build.log.gz",
+      "bytes": 990,
+      "sha256": "d33cd75422e79a9838cd7159296e14b042de596024272494b01ba77a67b15b74",
+      "wrapper_sha256": "b82c8adf774b441bdec8f681bdb2439f710e7554b3672bceb82fa55655b83c19",
+      "wrapper_bytes": 495,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-oracle-build-01/result.json",
+      "published_path": "construction-checks/history-oracle-build-01/result.json",
+      "bytes": 289,
+      "sha256": "b626209ec0c9304a6f98c4bf7a08c38c3c0977f13f477a4bd2174c15e699ff2e"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-pin-build-01/build.log",
+      "published_path": "construction-checks/history-pin-build-01/build.log.gz",
+      "bytes": 990,
+      "sha256": "7d6931e3bdc301558af2f9132d0be89c0e0bfa93527ab09460c804595a191d85",
+      "wrapper_sha256": "c56f46c8f6d1eba6e44d6274c74a79ad7033ebe6270e7adec07f445fc0038019",
+      "wrapper_bytes": 496,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-pin-build-01/result.json",
+      "published_path": "construction-checks/history-pin-build-01/result.json",
+      "bytes": 269,
+      "sha256": "71ea7ce8828b3d6957b3d9c00c8a92ecf1057436b42f31f5c673459a336d46a2"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-retained-01/output.log",
+      "published_path": "construction-checks/history-retained-01/output.log.gz",
+      "bytes": 3506,
+      "sha256": "1ad293e5c3145390b2f005ae6b9689724c543f6a6b2c0898600f48421114d173",
+      "wrapper_sha256": "cbbab08cbc4ced1e8be32ea3a368cacffebfb8f78c5ff8f2fd4960303c90e1ba",
+      "wrapper_bytes": 1143,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-retained-01/result.json",
+      "published_path": "construction-checks/history-retained-01/result.json",
+      "bytes": 336,
+      "sha256": "2bdb62af7b1bdc3c9abd5499a77ae796364fef32953d26029973477750939364"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-retained-02.log",
+      "published_path": "construction-checks/history-retained-02.log.gz",
+      "bytes": 1900,
+      "sha256": "e887c5f65fd1621e2538c32f5ef3290e2e29c8842bf065e14112e3251577cfb9",
+      "wrapper_sha256": "74576f49f4298c038ee35c141a6c71f911b5e6770134df95da4280a729f0f826",
+      "wrapper_bytes": 946,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-retained-03.log",
+      "published_path": "construction-checks/history-retained-03.log.gz",
+      "bytes": 1290,
+      "sha256": "773f819b68281010bf7b81e954aeebd059fcb946b03feb45ed1c5acf2cdda289",
+      "wrapper_sha256": "07d86ebbb5545642512ffd41a41487b7afe443498f75bfbecbeb9436db006b34",
+      "wrapper_bytes": 650,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    },
+    {
+      "local_path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-checks/history-retained-final-local-scratch.log",
+      "published_path": "construction-checks/history-retained-final-local-scratch.log.gz",
+      "bytes": 1290,
+      "sha256": "5f3f426510c396202947861fb967d8a0a1227932bdb715af556c1f7ccd753373",
+      "wrapper_sha256": "e99eda2e7b1e26a5f50ef13a3818f4a11dc9bb7684014e26e92aa91ef7ceadd5",
+      "wrapper_bytes": 650,
+      "representation": "gzip; decompressed bytes equal original raw SHA256"
+    }
+  ],
+  "retained_failed_construction_files": [
+    {
+      "local_path": "/var/folders/s4/xpkmz7wn6yq97w1ls_4f_dfc0000gn/T/layerfs-retained-check-55075-1790696678840925000/history.sqlite",
+      "sha256": "54500b2f252998bc17aac909a3ed5d6755abc7046522aafbb244adcf6ed396c5",
+      "bytes": 86016,
+      "disposition": "retained failed construction fixture; former global temp placement corrected before final check; not a corpus/product performance Store"
+    }
+  ],
+  "publication_note": "Exact raw logs retained unchanged at local_path; deterministic gzip publication avoids introducing raw trailing whitespace into source diff."
+}

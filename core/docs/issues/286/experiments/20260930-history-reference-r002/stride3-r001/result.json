@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/release/fs-bench-storage-content",
+    "--case",
+    "history-stride3",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case"
+  ],
+  "kind": "sealed-reference root-pin generation; no candidate performance claim",
+  "source_commit": "2f07f1f37af3e06a92a00880c68882b3c91923ef",
+  "source_tree": "faec3221657ebaf2ba055929fe60c16822ae0928",
+  "binary_sha256": "04a272c69e1e593475657baa836556473a074a231536fa6168bd8303aaae450f",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255"
+  },
+  "generation_watchdog_s": 170,
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 82025077000
+}

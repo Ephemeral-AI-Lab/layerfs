@@ -19,6 +19,7 @@ CORE = ROOT / "core"
 RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
+from families import history_retention as history  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -370,7 +371,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention"])
     run_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
@@ -379,15 +380,29 @@ def main():
         for case in init.CASES.values():
             print(f"{case.id}\t{case.files}\t{case.logical_bytes}\t"
                   f"{'SDK selected' if case.id in init.SELECTED else 'NOT_RUN ' + init.NOT_RUN_REASON}")
+        for case in history.CASES.values():
+            print(f"{case.id}\t{case.states} states\tallocated < {case.ceiling_bytes} B\t"
+                  f"{'selected' if case.id in history.SELECTED else 'explicit run-only'}")
     elif args.command == "run":
         selection = args.case or args.family
+        if selection in (*history.CASES, "history-retention"):
+            print(history.run(selection, args.out, sys.modules[__name__]))
+            return
         if selection not in (*init.CASES, "init_namespace"):
             parser.error("unknown or deferred SDK case")
         print(run(selection, args.out))
     elif args.command == "verify":
-        print(verify_run(owned(args.run, existing=True)))
+        path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") == "core-history-retention-run-v1":
+            print(history.verify(path, sys.modules[__name__]))
+        else:
+            print(verify_run(path))
     else:
-        print(report(owned(args.run, existing=True)), end="")
+        path = owned(args.run, existing=True)
+        if json.loads((path / "run.json").read_text()).get("schema") == "core-history-retention-run-v1":
+            print(history.report(path), end="")
+        else:
+            print(report(path), end="")
 
 
 if __name__ == "__main__":

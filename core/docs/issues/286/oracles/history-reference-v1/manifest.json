@@ -1,0 +1,37 @@
+{
+  "schema": "issue286-independent-history-roots-v1",
+  "reference_source": "2f07f1f37af3e06a92a00880c68882b3c91923ef",
+  "reference_tree": "faec3221657ebaf2ba055929fe60c16822ae0928",
+  "approval": "owner approved; 2026-09-29 owner delegates subsequent decisions to this construction agent",
+  "corpus_manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "cases": {
+    "history-stride10": {
+      "roots_sha256": "5f0c0b9a44ac520a282b9fd3314f0b1992b5ac45b5286783c603aa0ddb884e4e",
+      "states": 17,
+      "canonical_bytes": 380921328,
+      "canonical_objects": 52032,
+      "reference_trace_sha256": "5593dcea14af7da5755f29de49d55c7ad399ada04ed295ce879fe0709c9affe4",
+      "reference_trace_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride10-r001/case/trace.jsonl",
+      "generation": "one new sealed-reference acquisition"
+    },
+    "history-stride1": {
+      "roots_sha256": "c5fbf83cdd0ec65b0126458b10e83c55bcb56f2011ba15719e126d10e9d774f0",
+      "states": 157,
+      "canonical_bytes": 871588115,
+      "canonical_objects": 104705,
+      "reference_recorded_source": "8be0ae1a779a455145ea6c2b75e2154521536fad",
+      "reference_trace_sha256": "db8f7bfe34135bb5c3f4cb44a4c53446101029f4a53b08a476e818d6d420a26b",
+      "reference_trace_path": "docs/roadmap/0.1/0.1.7/evidence/stage-6-history-209-merged-20260920T225623Z/runs/merged-history-stride1/raw/trace.jsonl",
+      "generation": "retained source-pinned historical vector; C1/corpus/driver bytes equal sealed reference; old numeric status INELIGIBLE unchanged"
+    },
+    "history-stride3": {
+      "roots_sha256": "a417ae40278d0a81281260a5ffd295052bd3101593b8f7ddd5a3e0ddae4b8953",
+      "states": 53,
+      "canonical_bytes": 589423458,
+      "canonical_objects": 73476,
+      "reference_trace_sha256": "c8b3eeeed8b572f84c409839562dace3584b5bf68f0d6624e05ca3a51bf69992",
+      "reference_trace_path": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/stride3-r001/case/trace.jsonl",
+      "generation": "one new sealed-reference acquisition; canonical gate constants remain original v0.1.6 values"
+    }
+  }
+}

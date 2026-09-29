@@ -102,6 +102,7 @@ name = "fs-bench-pro-storage-content"
 version = "0.1.0"
 dependencies = [
  "layerfs-content",
+ "layerfs-history",
  "layerfs-storage",
  "layerfs-telemetry",
  "libsqlite3-sys",
@@ -173,6 +174,16 @@ dependencies = [
  "blake3",
  "layerfs-telemetry",
 ]
+
+[[package]]
+name = "layerfs-history"
+version = "0.1.6"
+dependencies = [
+ "blake3",
+ "layerfs-content",
+ "rusqlite",
+]
+
 
 [[package]]
 name = "layerfs-storage"

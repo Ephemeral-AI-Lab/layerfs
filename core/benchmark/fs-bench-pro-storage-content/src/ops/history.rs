@@ -1067,6 +1067,7 @@ struct Sampler<'a> {
     /// `content root -> (sha256, logical length)`, so one object read serves
     /// every path that names it.
     digests: BTreeMap<ObjectId, ([u8; 32], u64)>,
+    lengths: BTreeMap<ObjectId, u64>,
     /// How many paths this state's sample names.
     budget: usize,
 }
@@ -1086,6 +1087,7 @@ impl<'a> Sampler<'a> {
             },
             samples: Vec::new(),
             digests: BTreeMap::new(),
+            lengths: BTreeMap::new(),
             budget,
         }
     }
@@ -1094,6 +1096,81 @@ impl<'a> Sampler<'a> {
         if self.samples.len() < 4 {
             self.samples.push(message);
         }
+    }
+
+    fn run_complete(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
+        let mut read = FilesystemRead::new(self.reader, root)
+            .map_err(|error| OpError::Product(format!("{error:?}")))?;
+        let root_serial = read.root().root_inode().serial();
+        let mut pending = vec![(Vec::<u8>::new(), root_serial)];
+        let mut seen = BTreeSet::new();
+        let files: Vec<_> = self.oracle.iter().filter(|(_, e)| !e.is_directory()).collect();
+        let selected: BTreeSet<Vec<u8>> = files.iter().enumerate()
+            .filter(|(index, _)| index % 10 == 0 || index + 1 == files.len())
+            .map(|(_, (path, _))| (*path).clone()).collect();
+        while let Some((path, serial)) = pending.pop() {
+            let mut after = None;
+            loop {
+                let page = read.list_inode(serial, after.as_ref(), 128, 16_384)
+                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                let serials: Vec<_> = page.entries.iter().map(|(_, serial)| *serial).collect();
+                let values = read.lookup_inodes(&serials)
+                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                for ((name, serial), value) in page.entries.into_iter().zip(values) {
+                    let mut child = path.clone();
+                    if !child.is_empty() { child.push(b'/'); }
+                    child.extend_from_slice(name.as_str().as_bytes());
+                    if !seen.insert(child.clone()) || seen.len() > self.oracle.len() {
+                        return Err(OpError::Io("duplicate, extra or cyclic retained path".into()));
+                    }
+                    let expected = self.oracle.get(&child)
+                        .ok_or_else(|| OpError::Io(format!("unexpected retained path: {}", String::from_utf8_lossy(&child))))?;
+                    let value = value.ok_or_else(|| OpError::Io("listed inode missing".into()))?;
+                    let kind = kind_of(expected.mode);
+                    if value.kind != kind {
+                        return Err(OpError::Io("retained inode kind disagrees with corpus".into()));
+                    }
+                    self.tally.compared += 1;
+                    if kind == InodeKind::Directory {
+                        pending.push((child, serial));
+                        continue;
+                    }
+                    let length = match self.lengths.get(&value.content_root).copied() {
+                        Some(length) => length,
+                        None => {
+                            let length = if kind == InodeKind::Symlink {
+                                let canonical = self.reader.read_canonical(value.content_root)
+                                    .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                                layerfs_content::filesystem::SymlinkTarget::decode(&canonical)
+                                    .map_err(|error| OpError::Product(format!("{error:?}")))?.as_bytes().len() as u64
+                            } else {
+                                Timing::disabled("history.verify.length", |scope| {
+                                    layerfs_content::file::FileView::open(self.reader, value.content_root, scope.child("file"))
+                                }).0.map_err(|error| OpError::Product(format!("{error:?}")))?.logical_len()
+                            };
+                            self.lengths.insert(value.content_root, length);
+                            length
+                        }
+                    };
+                    if length != expected.size {
+                        return Err(OpError::Io("retained file size disagrees with corpus".into()));
+                    }
+                    if selected.contains(&child) {
+                        let (digest, bytes) = self.digest_of(value.content_root,
+                            &String::from_utf8_lossy(&child), kind)?;
+                        if Some(digest) != expected.digest || bytes != expected.size {
+                            return Err(OpError::Io("retained sampled bytes disagree with corpus".into()));
+                        }
+                    }
+                }
+                after = page.continuation;
+                if after.is_none() { break; }
+            }
+        }
+        if seen.len() != self.oracle.len() {
+            return Err(OpError::Io("missing retained paths".into()));
+        }
+        Ok(self.tally)
     }
 
     fn run(&mut self, root: FilesystemRootId) -> Result<VerifyTally, OpError> {
@@ -1339,6 +1416,7 @@ struct StateOutcome {
     filesystem: FilesystemUpdateCounters,
     filesystem_reads: ReadCounters,
     content_reads: ReadCounters,
+    retained: Option<super::history_retained::RetainedState>,
 }
 
 /// The driver.
@@ -1376,6 +1454,17 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         Ok(found) => found,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
+    if super::history_retained::enabled() {
+        let selected: Vec<ObjectId> = roots.iter().map(|(_, root)| *root).collect();
+        let checked = super::history_retained::verify(
+            &context.output.join("history.sqlite"), scope_of(row), &selected,
+        );
+        gates.push(gates::require(GateClass::Custody, "g6.c5-retained-roots",
+            checked.as_ref().is_ok_and(|count| *count == row.states()),
+            &format!("{checked:?}"), "all selected roots reopened through public C5"));
+        gates.push(super::history_retained::storage_gate(context.output, row));
+        gates.push(super::history_retained::root_pin_gate(row, &selected));
+    }
     gates.push(gates::require(
         GateClass::Custody,
         "g6.verify-state-count",
@@ -1432,10 +1521,19 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         let mut total = VerifyTally::default();
         let mut failures: Vec<String> = Vec::new();
         let mut per_state_ns: Vec<(usize, u64)> = Vec::new();
+        let mut digests = BTreeMap::new();
+        let mut lengths = BTreeMap::new();
         for (ordinal, root, oracle) in &oracles {
             let started = std::time::Instant::now();
             let mut sampler = Sampler::new(&provider, oracle, budget);
-            let tally = sampler.run(FilesystemRootId(*root))?;
+            let tally = if super::history_retained::enabled() {
+                sampler.digests = std::mem::take(&mut digests);
+                sampler.lengths = std::mem::take(&mut lengths);
+                let tally = sampler.run_complete(FilesystemRootId(*root))?;
+                digests = std::mem::take(&mut sampler.digests);
+                lengths = std::mem::take(&mut sampler.lengths);
+                tally
+            } else { sampler.run(FilesystemRootId(*root))? };
             if !tally.clean() {
                 failures.push(format!(
                     "state {ordinal}: {} sampled, {} mismatched, {} missing, {} unexpected; {}",
@@ -1721,6 +1819,8 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut chain = Chain::new();
     let mut store: Option<Store> = None;
     let mut previous_root: Option<FilesystemRootId> = None;
+    let mut retained: Option<super::history_retained::RetainedHistory> = None;
+    let history_path = context.output.join("history.sqlite");
 
     let mut directories: Vec<DirectoryUpdate> = Vec::new();
     let mut inodes: Vec<InodeUpdate> = Vec::new();
@@ -2229,6 +2329,19 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     let saved = operation
                         .finish(child.child("storage.finish"))
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
+                    let retained_state = if super::history_retained::enabled() {
+                        let state = if let Some(catalog) = retained.as_mut() {
+                            catalog.publish(ordinal, built.root.0)
+                        } else {
+                            let created = super::history_retained::RetainedHistory::create(
+                                &history_path, scope, built.root.0,
+                            ).map_err(|error| OpError::Product(format!("{error:?}")))?;
+                            let genesis = created.genesis();
+                            retained = Some(created);
+                            Ok(genesis)
+                        };
+                        Some(state.map_err(|error| OpError::Product(format!("{error:?}")))?)
+                    } else { None };
                     let save_ns = t_save.elapsed().as_nanos() as u64;
                     let mut state_save = SaveTotals::default();
                     state_save.add(&saved);
@@ -2259,6 +2372,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                         connection_opens: provider.inner.connection_opens(),
                         filesystem_reads: provider.counters(),
                         content_reads,
+                        retained: retained_state,
                         filesystem: built.counters,
                     })
                 })?;
@@ -2283,6 +2397,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
         _ => None,
     };
     drop(store);
+    drop(retained);
 
     // The product's own timing tree, byte-verbatim, written **once** for the whole
     // chain: one root and one named child per state. The published operation time
@@ -2304,6 +2419,16 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     phases::measured(children_ns, timing_bytes);
 
     for outcome in &outcomes {
+        if let Some(state) = outcome.retained {
+            context.trace.write(Kind::Counter,
+                &format!("history.state.{}.layer", outcome.ordinal),
+                &state.layer.to_string(), "identity", "public C5 retained Layer")?;
+            if let Some(commit) = state.commit {
+                context.trace.write(Kind::Counter,
+                    &format!("history.state.{}.commit", outcome.ordinal),
+                    &commit.to_string(), "identity", "public C5 retained Commit")?;
+            }
+        }
         context.trace.write(
             Kind::Counter,
             &format!("history.state.{}.root", outcome.ordinal),
@@ -2679,6 +2804,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     )?;
     let space = instruments::space(&store_path)
         .map_err(|error| OpError::Io(format!("{error}")))?;
+    if super::history_retained::enabled() {
+        gates.push(super::history_retained::storage_gate(context.output, row));
+    }
     context.trace.write_number(
         Kind::Resource,
         "space.allocated_bytes",

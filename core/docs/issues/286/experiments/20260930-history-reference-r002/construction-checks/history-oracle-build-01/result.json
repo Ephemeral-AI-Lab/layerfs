@@ -1,0 +1,16 @@
+{
+  "exit_code": 0,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked",
+    "--bin",
+    "fs-bench-storage-content"
+  ],
+  "wall_ns": 6904397458
+}

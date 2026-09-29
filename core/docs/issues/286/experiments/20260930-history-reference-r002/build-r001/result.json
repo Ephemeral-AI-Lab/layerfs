@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--locked",
+    "--bin",
+    "fs-bench-storage-content"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs",
+  "env": {
+    "CARGO_TARGET_DIR": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target",
+    "CARGO_BUILD_JOBS": "8",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "RUSTFLAGS": "--cfg aes_armv8 --cfg polyval_armv8 --cfg chacha20_force_neon -C target-feature=+aes,+sha2"
+  },
+  "kind": "independent sealed-reference oracle acquisition",
+  "budget_s": 170,
+  "source_commit": "2f07f1f37af3e06a92a00880c68882b3c91923ef",
+  "source_tree": "faec3221657ebaf2ba055929fe60c16822ae0928",
+  "exit_code": 0,
+  "timed_out": false,
+  "wall_ns": 14020630208
+}
