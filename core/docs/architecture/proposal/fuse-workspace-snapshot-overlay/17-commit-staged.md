@@ -8,6 +8,8 @@
 > original source identities and results.
 > Builder I/O overlap update: prior product source `f9de81520`; this change documents
 > the implementation committed with it. Earlier receipts keep their identities.
+> Funded active-page retry update: source parent `6a937d6e2eae5118b5877743e7423683072bff0b`;
+> implementation and this description change together. New-source proofs are pending.
 > This extends [Stage](16-stage-capture.md) through the existing C5 CommitStaged
 > route. Native SDK proofs below are not mounted-write or performance results.
 
@@ -40,6 +42,21 @@ When a failed local page allocation has complete accounting, retry first
 unlinks its identity-checked pending file, restores the candidate's slot credit
 and refreshes arena admission. An incomplete or uncertain allocation remains
 blocked; retry never guesses at ownership.
+The active completion path applies that same rule to its single failed,
+never-ready PageStore candidate. Only explicit local resume after validating
+the retained known C5 outcome can repair it. The active writer gate, healthy
+index and shared accounting precede an O(log pages) lookup of the recorded
+candidate; its funding Arc must equal the captured completion fund. The
+existing release path rechecks directory/file identity and physical blocks,
+unlinks that unpinned candidate and returns its actual charge to the same fund.
+Only that tracked failure clears PageStore admission. Unknown identity,
+incomplete accounting, another fund, ready/pinned data, index failure or
+failed cleanup keeps admission stopped. A physical fault still stops G2 until
+this explicit checked local repair; the canonical command is never re-issued.
+If fallocate charged fewer than the reserved 4096 bytes, only the observed
+physical bytes transfer to allocated; the remaining bytes stay reserved in
+the fund, including a zero-byte failed allocation. They never become ordinary
+headroom between failure and explicit recovery.
 Unknown outcomes, denied commits and consumed stages retain their custody wedge;
 there is no automatic retry, token substitution, implicit DiscardStage or restart
 recovery. The active remote permit is released

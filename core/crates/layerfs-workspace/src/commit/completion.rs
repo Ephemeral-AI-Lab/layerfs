@@ -364,9 +364,8 @@ impl Workspace {
         self.installed(submission, attempt, outcome, revision)
     }
     /// Repeats only the local install of a retained attempt whose outcome is
-    /// known: the command is not re-issued (its token is spent) and the progress
-    /// fund is already finished, so the recorded outcome is re-validated and
-    /// reconciliation is re-entered.
+    /// known: the command is not re-issued (its token is spent). The recorded
+    /// outcome and checked pending allocation custody precede local re-entry.
     fn resume_staged(
         &self,
         submission: &Submission,
@@ -383,6 +382,9 @@ impl Workspace {
         }
         attempt.phase(submission, CommitPhase::Reconcile)?;
         attempt.root.repair_pending_for_retry(deadline)?;
+        if let Some(active) = &self.inner.active {
+            active.repair_completion(&submission.fund, deadline)?;
+        }
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
         if self.inner.active.is_some() {
             submission.fund.finish()?;

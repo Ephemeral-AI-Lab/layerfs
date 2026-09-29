@@ -134,6 +134,14 @@ impl Drop for IndexSnapshot {
 }
 
 impl Index {
+    pub(super) fn ready_for_retry(&self) -> Result<(), WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.pending {
+            return Err(WorkspaceError::Busy);
+        }
+        Ok(())
+    }
+
     pub(super) fn hot_status(&self) -> Result<(usize, usize, usize, usize), WorkspaceError> {
         let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         Ok((

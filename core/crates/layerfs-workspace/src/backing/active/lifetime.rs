@@ -11,6 +11,19 @@ use crate::{
 use std::collections::BTreeMap;
 
 impl ActiveBacking {
+    pub(crate) fn repair_completion(
+        &self,
+        fund: &std::sync::Arc<ProgressFund>,
+        deadline: std::time::Instant,
+    ) -> Result<(), WorkspaceError> {
+        let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.stopped || state.closed {
+            return Err(WorkspaceError::Busy);
+        }
+        self.index.ready_for_retry()?;
+        self.store.repair_completion(fund, deadline)
+    }
+
     pub(super) fn reserve_retired_large(
         &self,
         state: &mut State,

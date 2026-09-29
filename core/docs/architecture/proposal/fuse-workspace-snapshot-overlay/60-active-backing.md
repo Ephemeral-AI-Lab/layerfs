@@ -589,3 +589,33 @@ replacement algorithm. No normalized-page removal is considered safe until
 a separately specified target/fence/epoch/old-pin equivalence and public
 failure-custody oracle exist. The generic split count and pinned controls
 are necessary observations, not such a replacement proof.
+
+## Checked completion retry after a physical allocation refusal
+
+Implemented with this amendment after source parent
+`6a937d6e2eae5118b5877743e7423683072bff0b`; covering clean-source proofs are
+pending. The original local-resume contract in `17-commit-staged.md` now also
+applies to the funded active PageStore. A first fully accounted allocation or
+write/readback failure records one never-ready page reference and stops
+admission. This is a constant-size locator, not a registry scan or new spool.
+An unrelated stop invalidates that locator. Create collisions, unknown
+identity/blocks, excess allocation and incomplete accounting cannot be repaired
+through it.
+
+Explicit retained CommitStaged resume validates the known canonical outcome,
+holds the active writer exclusion, checks index/shared custody and selects the
+failed page by its reference. It must be unready, unpinned, identity-known,
+fully accounted and owned by that exact captured funding Arc. Existing checked
+release verifies identity and `st_blocks`, unlinks it and recycles actual bytes
+into the unfinished completion fund. Only then can the tracked PageStore stop
+clear and the existing local C5 builder run again. No canonical replay, ready
+page refund, pin release, quota/deadline change or new recovery API is added.
+
+For funded pages with actual allocation below 4096 bytes, transfer only actual
+bytes from reserved to allocated and give the unused reserved credit back to
+the same fund. This closes the zero-allocation-refusal gap without exposing
+reserved completion credit as ordinary headroom. Failed/uncertain recovery
+retains ownership and the stopped result. The external native fault regression
+checks total charged bytes across failure, exact old/live/saved bytes, one
+canonical Commit and checked local recovery after restoring the original
+limit. The original failed receipt remains unchanged.

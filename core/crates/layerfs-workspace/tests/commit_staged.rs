@@ -764,6 +764,7 @@ mod linux {
         let old_reply = f.workspace.read(handle, 10, 4, deadline()).unwrap();
         let stage = f.workspace.stage(deadline()).unwrap();
         f.edit(b"data.bin", 10, 14, b"LIVE");
+        let before_charge = f.workspace.backing_status().unwrap();
         let restore = RestoreLimit;
         let result = f.workspace.commit_staged(&stage, deadline());
         drop(restore);
@@ -781,6 +782,12 @@ mod linux {
             Some(f.native.observations.lock().unwrap().commits[0].clone())
         );
         assert!(failure.installed_revision.is_none());
+        let failed_charge = f.workspace.backing_status().unwrap();
+        assert!(failed_charge.accounting_complete && failed_charge.admission_stopped);
+        assert_eq!(
+            failed_charge.allocated_bytes + failed_charge.reserved_bytes,
+            before_charge.allocated_bytes + before_charge.reserved_bytes
+        );
         let actual = snapshot(&f);
         assert_eq!(actual.effective_root, stage.stage().candidate_root);
         assert_eq!(f.workspace.getattr(data.serial).unwrap().size, data.size);
@@ -788,6 +795,7 @@ mod linux {
         let calls = count_commits(&f);
         let report = f.workspace.commit_staged(&stage, deadline()).unwrap();
         committed(&f, &stage, &report);
+        assert!(!f.workspace.backing_status().unwrap().admission_stopped);
         assert_eq!(count_commits(&f), calls);
         assert_eq!(
             f.native.bytes(

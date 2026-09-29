@@ -66,6 +66,7 @@ struct State {
     allocated: u64,
     stopped: bool,
     complete: bool,
+    retryable: Option<PageRef>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -286,6 +287,7 @@ impl PageStore {
                 allocated: 0,
                 stopped: false,
                 complete: true,
+                retryable: None,
             }),
             completion: Mutex::new(None),
             pack_fetches: AtomicU64::new(0),
@@ -352,7 +354,61 @@ impl PageStore {
     pub(super) fn stop(&self) {
         if let Ok(mut state) = self.state.lock() {
             state.stopped = true;
+            state.retryable = None;
         }
+    }
+
+    fn stop_pending(&self, reference: PageRef) {
+        if let Ok(mut state) = self.state.lock() {
+            if !state.stopped {
+                state.retryable = Some(reference);
+            }
+            state.stopped = true;
+        }
+    }
+
+    pub(super) fn repair_completion(
+        &self,
+        fund: &Arc<ProgressFund>,
+        deadline: std::time::Instant,
+    ) -> Result<(), WorkspaceError> {
+        crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+        let custody = self.host.payloads.status()?;
+        if !custody.accounting_complete || custody.admission_stopped {
+            return Err(WorkspaceError::Busy);
+        }
+        let reference = {
+            let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+            if !state.stopped {
+                return Ok(());
+            }
+            let reference = state.retryable.ok_or(WorkspaceError::Busy)?;
+            let entry = state.entries.get(&reference).ok_or(WorkspaceError::Busy)?;
+            if !state.complete
+                || entry.ready
+                || entry.pins != 0
+                || entry.identity.is_none()
+                || entry.reserved != 0
+                || entry.allocated > PAGE_BYTES as u64
+                || entry
+                    .fund
+                    .as_ref()
+                    .is_none_or(|owner| !Arc::ptr_eq(owner, fund))
+            {
+                return Err(WorkspaceError::Busy);
+            }
+            reference
+        };
+        // Only this never-published, fully accounted completion candidate is
+        // eligible. release verifies identity and st_blocks before returning credit.
+        self.release(reference)?;
+        let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+        if state.retryable != Some(reference) || !state.complete {
+            return Err(WorkspaceError::Busy);
+        }
+        state.retryable = None;
+        state.stopped = false;
+        Ok(())
     }
 
     pub fn create(
@@ -508,7 +564,12 @@ impl PageStore {
                 return Err(failure(BackingPhase::Allocate, reference, 0, false, &error));
             }
         };
-        if let Err(error) = self.host.transfer(allocated, PAGE_BYTES as u64) {
+        let transferred = if fund.is_some() && allocated <= PAGE_BYTES as u64 {
+            allocated
+        } else {
+            PAGE_BYTES as u64
+        };
+        if let Err(error) = self.host.transfer(allocated, transferred) {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             state.stopped = true;
             state.complete = false;
@@ -530,8 +591,18 @@ impl PageStore {
                 state.stopped = true;
             }
         }
+        if let Some(fund) = &fund {
+            if allocated < PAGE_BYTES as u64 {
+                if let Err(error) = fund.give(PAGE_BYTES as u64 - allocated) {
+                    let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
+                    state.stopped = true;
+                    state.complete = false;
+                    return Err(error);
+                }
+            }
+        }
         if let Err(error) = allocation {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Allocate,
                 reference,
@@ -541,7 +612,7 @@ impl PageStore {
             ));
         }
         if allocated != PAGE_BYTES as u64 {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Allocate,
                 reference,
@@ -556,7 +627,7 @@ impl PageStore {
         window.0[..PAGE_BYTES].copy_from_slice(&page.bytes);
         let write_time = self.stamp(Cause::DirectWrite);
         if let Err(error) = segments::write(&file, window, 0, PAGE_BYTES) {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Write,
                 reference,
@@ -569,7 +640,7 @@ impl PageStore {
         window.0[..PAGE_BYTES].fill(0);
         let readback_time = self.stamp(Cause::ReadbackIo);
         if let Err(error) = segments::read(&file, window, 0, PAGE_BYTES) {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Verify,
                 reference,
@@ -588,7 +659,7 @@ impl PageStore {
             .verify(kind, self.directory.incarnation, reference)
             .is_err()
         {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Verify,
                 reference,
@@ -598,7 +669,7 @@ impl PageStore {
             ));
         }
         if verified.bytes != page.bytes {
-            self.stop();
+            self.stop_pending(reference);
             return Err(failure(
                 BackingPhase::Verify,
                 reference,
