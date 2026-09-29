@@ -79,6 +79,11 @@ pub const SOURCE_TIP: &str = "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed";
 /// How many checkpoints the manifest carries.
 pub const CHECKPOINTS: usize = 157;
 
+/// Independently parsed oracle SHA/count pairs, sealed by the compilation input.
+/// Hashing the actual JSON remains mandatory on every open; re-counting its
+/// 904,143 path entries is validated acquisition work reused by identity.
+const ORACLE_COUNTS: &str = include_str!("history-oracle-counts-v1.tsv");
+
 /// Cumulative logical bytes of all 157 checkpoints.
 pub const TOTAL_LOGICAL_BYTES: u64 = 4_936_693_030;
 
@@ -627,7 +632,7 @@ impl Corpus {
             }
             let oracle_bytes = read(&oracle_path)?;
             let oracle_sha256 = hex(&sha256(&oracle_bytes));
-            let paths = oracle_len(&oracle_path, &oracle_bytes)?;
+            let paths = oracle_pin(full157_index, &oracle_sha256, &oracle_path)?;
             states.push(State {
                 ordinal: position + 1,
                 full157_index,
@@ -1128,21 +1133,21 @@ fn parse_tree(path: &Path) -> Result<BTreeMap<Vec<u8>, TreeEntry>, HistoryError>
     Ok(tree)
 }
 
-/// The oracle's entry count, without building it.
-///
-/// This is the definition of a state's path-states (erratum E1), and it is the one
-/// number `open` needs from a document that can be 2.2 MB with 10,924 members.
-/// Building the value tree to call `.len()` on it cost seconds of preparation for
-/// a count; the counting reader walks the same tokenizer and refuses the same
-/// malformed input. The oracle is parsed in full where it is *consumed*, by
-/// [`Corpus::oracle`], so nothing goes unchecked — it is checked where it is used.
-fn oracle_len(path: &Path, bytes: &[u8]) -> Result<u32, HistoryError> {
-    let text = std::str::from_utf8(bytes)
-        .map_err(|error| HistoryError::document(path, format!("not UTF-8: {error}")))?;
-    let count = json::count_object_members(text)
-        .map_err(|error| HistoryError::document(path, error.to_string()))?;
-    u32::try_from(count)
-        .map_err(|_| HistoryError::document(path, "more than u32::MAX path-states"))
+/// Uses a previously validated count only when the actual oracle's SHA matches.
+fn oracle_pin(index: u16, found: &str, path: &Path) -> Result<u32, HistoryError> {
+    let offset = index.checked_sub(1)
+        .ok_or_else(|| HistoryError::document(path, "oracle count pin index"))?;
+    let line = ORACLE_COUNTS.lines().nth(usize::from(offset))
+        .ok_or_else(|| HistoryError::document(path, "oracle count pin absent"))?;
+    let (expected, count) = line.split_once('\t')
+        .ok_or_else(|| HistoryError::document(path, "oracle count pin shape"))?;
+    if found != expected {
+        return Err(HistoryError::document(path, format!("oracle SHA mismatch: {found} != {expected}")));
+    }
+    let count = count.parse::<u32>()
+        .map_err(|error| HistoryError::document(path, format!("oracle count pin: {error}")))?;
+    if count == 0 { return Err(HistoryError::document(path, "empty oracle pin")); }
+    Ok(count)
 }
 
 /// Parses `oracles/<sha>.json`: `hex path -> [mode octal, size, sha256 | "-"]`.
@@ -1336,6 +1341,20 @@ fn decode_hex(text: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sealed_oracle_counts_cover_all_checkpoints_and_refuse_drift() {
+        let pins: Vec<_> = ORACLE_COUNTS.lines().collect();
+        assert_eq!(pins.len(), CHECKPOINTS);
+        let total: u64 = pins.iter().enumerate().map(|(index, line)| {
+            let (digest, _) = line.split_once('\t').unwrap();
+            assert_eq!(digest.len(), 64);
+            u64::from(oracle_pin((index + 1) as u16, digest, Path::new("oracle")).unwrap())
+        }).sum();
+        assert_eq!(total, 904_143);
+        assert!(oracle_pin(1, &"0".repeat(64), Path::new("oracle")).is_err());
+        assert!(oracle_pin(0, pins[0].split_once('\t').unwrap().0, Path::new("oracle")).is_err());
+    }
 
     #[test]
     fn the_three_selections_are_the_declared_indices() {

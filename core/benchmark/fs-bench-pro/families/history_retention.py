@@ -69,13 +69,14 @@ SELECTED = tuple(name for name in CASES if name.endswith("-v2"))[:2]
 def identity(common):
     value = common.identities()
     native = list(BACKEND.glob("src/**/*.rs"))
-    native += [BACKEND / "Cargo.toml", BACKEND / "Cargo.lock"]
+    oracle_counts = BACKEND / "src/workload/history-oracle-counts-v1.tsv"
+    native += [BACKEND / "Cargo.toml", BACKEND / "Cargo.lock", oracle_counts]
     native += list((ROOT / "core/crates").glob("**/src/**/*.rs"))
     native += list((ROOT / "core/crates").glob("**/sql/**/*.sql"))
     native += list((ROOT / "core/crates").glob("**/Cargo.toml"))
     native += [ROOT / "core/Cargo.toml", ROOT / "core/Cargo.lock", ROOT / ".cargo/config.toml"]
     value["compilation_seal"] = common.seal(native)
-    value["harness_seal"] = common.seal(list(HERE.glob("**/*.py")) + list(BACKEND.glob("src/**/*.rs")))
+    value["harness_seal"] = common.seal(list(HERE.glob("**/*.py")) + list(BACKEND.glob("src/**/*.rs")) + [oracle_counts])
     value["dependency_seal"] = common.seal([ROOT / "core/Cargo.lock", BACKEND / "Cargo.lock"])
     value["root_cargo_config_sha256"] = common.digest(ROOT / ".cargo/config.toml")
     return value
@@ -150,6 +151,7 @@ def case_run(out, case, common, identities, binary):
               "root_ledger": expected, "env": method_env, "sample_count": 0,
               "construction_workers": 1, "setup": "InProcess", "clone_method": None,
               "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+              "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
               "reused_proof_identities": [], "numeric_time_eligibility": "INELIGIBLE",
               "storage_gate": (storage.GATE if case.version == "v1" else "g1.o6-total-retained-below-v016-v2"),
               "admission_eligible": False,
@@ -169,6 +171,8 @@ def case_run(out, case, common, identities, binary):
         else "PASS" if all(canonical[field] == pin for field, pin in zip(fields, required)) else "FAIL")
     roots = trace_module.read(native / "trace.jsonl").values("counter") if (native / "trace.jsonl").is_file() else {}
     complete = sum(key.startswith("history.state.") and key.endswith(".root") for key in roots) == case.states
+    if not complete:
+        record["canonical_status"] = "INCOMPLETE"
     if complete and not performance["timed_out"]:
         verification = invoke(command + ["--phase", "verify"], folder, "verify",
                               case.verification_budget_ns, environment)
