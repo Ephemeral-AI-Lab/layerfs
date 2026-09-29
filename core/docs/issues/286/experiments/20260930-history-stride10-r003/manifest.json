@@ -1,0 +1,61 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 874,
+      "sha256": "83da6853aaa015d37fca209a16e10ba558f9913c16b9886ff3b266ae9b6a4d9e"
+    },
+    "build.log": {
+      "bytes": 838,
+      "sha256": "e621baf3f554d67d40a7029f4e591cf24c5314253b8af863a985ce7b7a004446"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-10-total-storage-v1/declaration.json": {
+      "bytes": 4042,
+      "sha256": "255723244022111579d11f19c5542813c66abe771469f695098d31bd2c8b7581"
+    },
+    "history-retention-stride-10-total-storage-v1/native/history.sqlite": {
+      "bytes": 86016,
+      "sha256": "75d67b99bc5700709e0ef3a5d7d1ec176db0135af6f3acd5ff85778b0ee04ded"
+    },
+    "history-retention-stride-10-total-storage-v1/native/phases-perf.json": {
+      "bytes": 344,
+      "sha256": "48e7db23ab1caf2589052b25fc97115e0530693646c4763425434f5b01048454"
+    },
+    "history-retention-stride-10-total-storage-v1/native/sample.sqlite": {
+      "bytes": 13189120,
+      "sha256": "f11a9388999182cc29e6ec47f4ee1c4218c4231ef32c5f80a64c56cc4543fc14"
+    },
+    "history-retention-stride-10-total-storage-v1/native/trace.jsonl": {
+      "bytes": 1899,
+      "sha256": "3013558c8bc5ef7208e0ae0ea32f85762501952e84363553109bfc907e193ad5"
+    },
+    "history-retention-stride-10-total-storage-v1/perf.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-10-total-storage-v1/perf.stdout": {
+      "bytes": 53,
+      "sha256": "ab6be831f48434cf698970c4506af0787e279e118ff87bee0dd7ed024d2a6c0f"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "bytes": 5754,
+      "sha256": "ccbf31bcb6257a4d202c31caf8f13167b2a72d583125a319959ace70b84c34c5"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "report.txt": {
+      "bytes": 290,
+      "sha256": "6ccd4a94066197d9d3f6e84a74f329365de46463e83b5b51c6b5c99ced916aca"
+    },
+    "run.json": {
+      "bytes": 1015,
+      "sha256": "e0c57bef57bb2638f9ddc25f676fc0b22c51b526e00fc4cfb6884ddceaeb7c1a"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

@@ -101,3 +101,11 @@ Init r001 issue publication: [#286 comment5893411789](https://github.com/Ephemer
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-reference-r002 | history reference acquisition10/3 + retained157 vector; compound harness/profile implementation | Independent reference `2f07f1f3`; candidate patch committed after acquisition | Root vectors complete; compound gates NOT_RUN; canonical stride3 mismatch preserved; narrow C5/threshold/registry/lock checks PASS | [Round report](experiments/20260930-history-reference-r002.md) | Published after commit; link appended in next actual round |
+
+## Collected round 20260930-history-stride10-r003
+
+Reference/implementation r002 issue publication: [#286 comment5894032481](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5894032481), code/report commit `509668ea6` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride10-r003 | compound history stride10/17 states, one candidate invocation | `509668ea6` | FAIL: C2 dependency encoded-work refusal after6 states; storage parser refuses v17; correctness/storage/cleanup INCOMPLETE, verifier NOT_RUN, time INELIGIBLE | [Round report](experiments/20260930-history-stride10-r003.md) | Published after commit; link appended in next actual round |

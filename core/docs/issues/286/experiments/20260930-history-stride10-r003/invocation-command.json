@@ -1,0 +1,20 @@
+{
+  "command": [
+    "python3",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--case",
+    "history-retention-stride-10-total-storage-v1",
+    "--out",
+    "benchmark-results/fs-bench-pro/issue286-history-stride10-r003"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs",
+  "source_commit": "509668ea6b9bcd9318eb901ed3473f99cb0ef30e",
+  "kind": "official compound history stride10 qualification",
+  "outer_supervision_budget_s": 175,
+  "env": {
+    "CARGO_BUILD_JOBS": "8",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "TMPDIR": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-tmp"
+  }
+}
