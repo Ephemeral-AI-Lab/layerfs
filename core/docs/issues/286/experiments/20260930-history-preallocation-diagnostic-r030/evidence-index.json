@@ -1,0 +1,90 @@
+{
+  "files": {
+    "declaration.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1175,
+      "published_copy": "declaration.json",
+      "sha256": "dd3807c92faa50c5e3f4687273c09bb8ab93c4682bdee38ed60dd4e8d91f1bf4"
+    },
+    "diagnostic.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "diagnostic.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "diagnostic.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 49,
+      "published_copy": "diagnostic.stdout.gz",
+      "sha256": "9f32d6c71eccf92780e41e2d0b71ff3bda13eb373bd729b256780b659f688175"
+    },
+    "diagnostic.verify.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "diagnostic.verify.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "diagnostic.verify.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 49,
+      "published_copy": "diagnostic.verify.stdout.gz",
+      "sha256": "f1a30efcfff64f56401edbd2da3b905d09a0df9feefa350ac74d40630788d4af"
+    },
+    "native/history.sqlite": {
+      "allocated_bytes": 196608,
+      "bytes": 180224,
+      "published_copy": "native/history.sqlite.gz",
+      "sha256": "8dcf12b01322afcaf9e1a758b05abbe68e1d3216c0a37eda9033090f9af93833"
+    },
+    "native/phases-perf.json": {
+      "allocated_bytes": 4096,
+      "bytes": 393,
+      "published_copy": "native/phases-perf.json",
+      "sha256": "9d5ad119b433512ad31a927067441a306ca75f724abc2ad6ec30ef3fbd9b7b9d"
+    },
+    "native/phases-verify.json": {
+      "allocated_bytes": 4096,
+      "bytes": 335,
+      "published_copy": "native/phases-verify.json",
+      "sha256": "8fefe73eb7b9df9f50ac45815760ea08e81f914524d80a1c961cb759f9ce9e78"
+    },
+    "native/sample.sqlite": {
+      "allocated_bytes": 78643200,
+      "bytes": 75712512,
+      "published_copy": null,
+      "sha256": "ef1fba79a76add4c781c9bbcf1c5219a9548d3cb03b4483a8d84ded9059ca781"
+    },
+    "native/timing.json": {
+      "allocated_bytes": 102400,
+      "bytes": 100752,
+      "published_copy": "native/timing.json",
+      "sha256": "203c3aed8e9a6e1f314e2dd6dfbd11db4fbed95640ea24fca677b8fe4bd38f15"
+    },
+    "native/trace.jsonl": {
+      "allocated_bytes": 2928640,
+      "bytes": 2927421,
+      "published_copy": "native/trace.jsonl.gz",
+      "sha256": "2c7c8ac382f4a4d52dfc7651d271f8355cc59c5dca3f990aaf75417fd94d7f89"
+    },
+    "preallocation.json": {
+      "allocated_bytes": 20480,
+      "bytes": 18379,
+      "published_copy": "preallocation.json",
+      "sha256": "288f7c381a2e1b2d0e16dfd7c47c32303550f8bc1ae67fee366d350758460681"
+    },
+    "status.json": {
+      "allocated_bytes": 4096,
+      "bytes": 310,
+      "published_copy": "status.json",
+      "sha256": "41d1fce7983221c7d1cece48cf341121cf0879a0903629ff4af92e803ed91bf0"
+    },
+    "verify.json": {
+      "allocated_bytes": 4096,
+      "bytes": 633,
+      "published_copy": "verify.json",
+      "sha256": "01da2bf477b674ea10eb08184fcada89f07b2318bb0c8557485d566a21513d6d"
+    }
+  },
+  "raw_root": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-preallocation-diagnostic-r030",
+  "schema": "issue286-diagnostic-evidence-index-v1"
+}

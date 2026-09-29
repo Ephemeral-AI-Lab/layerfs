@@ -1,0 +1,18 @@
+{
+  "budget_ns": 30000000000,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "--case",
+    "history-stride1",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-preallocation-diagnostic-r030/native",
+    "--phase",
+    "verify"
+  ],
+  "exit_code": 0,
+  "kind": "diagnostic independent verification; not admission",
+  "timed_out": false,
+  "wall_ns": 20733081667
+}

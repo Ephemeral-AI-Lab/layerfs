@@ -1,0 +1,16 @@
+{
+  "admission_status": "NOT_A_SAMPLE",
+  "exit_code": 0,
+  "final_history": {
+    "allocated": 196608,
+    "apparent": 180224
+  },
+  "final_store": {
+    "allocated": 78643200,
+    "apparent": 75712512
+  },
+  "preallocation_calls": 73,
+  "probe_error": null,
+  "timed_out": false,
+  "wall_ns": 166738218500
+}

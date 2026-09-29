@@ -1,0 +1,20 @@
+{
+  "binary": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+  "binary_sha256": "8f52b440238a548d117716759adc28794b580404b7421172ba85ceaf1bf1b661",
+  "cache_contract": "uncontrolled source cache; no time or storage admission",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/benchmark/fs-bench-pro-storage-content/target/release/fs-bench-storage-content",
+    "--case",
+    "history-stride1",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-preallocation-diagnostic-r030/native"
+  ],
+  "construction_workers": 1,
+  "kind": "count-driven physical preallocation diagnostic; never a gate sample",
+  "policy": "when st_blocks is below ceil((st_size+2MiB)/1MiB), F_PREALLOCATE from physical EOF by at most 4MiB; poll 25ms",
+  "root_pin_sha256": "bc1392af7ac11f2a50b444f927b32b27b3de2f33e1e2acfc3221e369c587adb9",
+  "source_commit": "62ed81588e5fd1fc890c3ed93ac87062687a9ada",
+  "timeout_s": 170
+}

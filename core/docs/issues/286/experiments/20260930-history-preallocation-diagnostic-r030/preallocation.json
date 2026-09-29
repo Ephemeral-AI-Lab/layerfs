@@ -1,0 +1,951 @@
+[
+  {
+    "after": {
+      "allocated": 3145728,
+      "apparent": 30720
+    },
+    "allocated_by_fcntl": 3112960,
+    "at_ns": 2237988291,
+    "before": {
+      "allocated": 32768,
+      "apparent": 30720
+    },
+    "requested": 3112960
+  },
+  {
+    "after": {
+      "allocated": 4194304,
+      "apparent": 1071104
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 2553897791,
+    "before": {
+      "allocated": 3145728,
+      "apparent": 1071104
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 5242880,
+      "apparent": 2099200
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 3147699375,
+    "before": {
+      "allocated": 4194304,
+      "apparent": 2099200
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 6291456,
+      "apparent": 3223552
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 4128918083,
+    "before": {
+      "allocated": 5242880,
+      "apparent": 3223552
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 7340032,
+      "apparent": 4382720
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 5057819875,
+    "before": {
+      "allocated": 6291456,
+      "apparent": 4382720
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 8388608,
+      "apparent": 5378048
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 6201423250,
+    "before": {
+      "allocated": 7340032,
+      "apparent": 5378048
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 9437184,
+      "apparent": 6348800
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 7887882291,
+    "before": {
+      "allocated": 8388608,
+      "apparent": 6348800
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 10485760,
+      "apparent": 7419904
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 10096414708,
+    "before": {
+      "allocated": 9437184,
+      "apparent": 7419904
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 11534336,
+      "apparent": 8589312
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 12517735166,
+    "before": {
+      "allocated": 10485760,
+      "apparent": 8589312
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 12582912,
+      "apparent": 9515008
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 13513326000,
+    "before": {
+      "allocated": 11534336,
+      "apparent": 9515008
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 13631488,
+      "apparent": 10551296
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 15913363250,
+    "before": {
+      "allocated": 12582912,
+      "apparent": 10551296
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 14680064,
+      "apparent": 11599872
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 17435640916,
+    "before": {
+      "allocated": 13631488,
+      "apparent": 11599872
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 15728640,
+      "apparent": 12638208
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 17782858250,
+    "before": {
+      "allocated": 14680064,
+      "apparent": 12638208
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 16777216,
+      "apparent": 13703168
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 20987587125,
+    "before": {
+      "allocated": 15728640,
+      "apparent": 13703168
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 17825792,
+      "apparent": 14694400
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 22104670291,
+    "before": {
+      "allocated": 16777216,
+      "apparent": 14694400
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 18874368,
+      "apparent": 15767552
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 23521022708,
+    "before": {
+      "allocated": 17825792,
+      "apparent": 15767552
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 19922944,
+      "apparent": 17104896
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 24874400875,
+    "before": {
+      "allocated": 18874368,
+      "apparent": 17104896
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 20971520,
+      "apparent": 17829888
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 25495671375,
+    "before": {
+      "allocated": 19922944,
+      "apparent": 17829888
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 22020096,
+      "apparent": 18886656
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 27041128500,
+    "before": {
+      "allocated": 20971520,
+      "apparent": 18886656
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 23068672,
+      "apparent": 19933184
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 30255997416,
+    "before": {
+      "allocated": 22020096,
+      "apparent": 19933184
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 24117248,
+      "apparent": 21116928
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 31911630625,
+    "before": {
+      "allocated": 23068672,
+      "apparent": 21116928
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 25165824,
+      "apparent": 22073344
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 33883300208,
+    "before": {
+      "allocated": 24117248,
+      "apparent": 22073344
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 26214400,
+      "apparent": 23150592
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 37716887291,
+    "before": {
+      "allocated": 25165824,
+      "apparent": 23150592
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 27262976,
+      "apparent": 24242176
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 40298192291,
+    "before": {
+      "allocated": 26214400,
+      "apparent": 24242176
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 28311552,
+      "apparent": 25270272
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 43644533916,
+    "before": {
+      "allocated": 27262976,
+      "apparent": 25270272
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 29360128,
+      "apparent": 26236928
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 47275247541,
+    "before": {
+      "allocated": 28311552,
+      "apparent": 26236928
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 30408704,
+      "apparent": 27316224
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 50453133708,
+    "before": {
+      "allocated": 29360128,
+      "apparent": 27316224
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 31457280,
+      "apparent": 28319744
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 51259137458,
+    "before": {
+      "allocated": 30408704,
+      "apparent": 28319744
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 32505856,
+      "apparent": 29458432
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 54455640708,
+    "before": {
+      "allocated": 31457280,
+      "apparent": 29458432
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 33554432,
+      "apparent": 30474240
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 56025351625,
+    "before": {
+      "allocated": 32505856,
+      "apparent": 30474240
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 34603008,
+      "apparent": 31465472
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 60690360083,
+    "before": {
+      "allocated": 33554432,
+      "apparent": 31465472
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 35651584,
+      "apparent": 32569344
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 63837500041,
+    "before": {
+      "allocated": 34603008,
+      "apparent": 32569344
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 36700160,
+      "apparent": 33583104
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 65949856250,
+    "before": {
+      "allocated": 35651584,
+      "apparent": 33583104
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 37748736,
+      "apparent": 34775040
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 71544988791,
+    "before": {
+      "allocated": 36700160,
+      "apparent": 34775040
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 38797312,
+      "apparent": 35751936
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 72225483833,
+    "before": {
+      "allocated": 37748736,
+      "apparent": 35751936
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 39845888,
+      "apparent": 36855808
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 74485807666,
+    "before": {
+      "allocated": 38797312,
+      "apparent": 36855808
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 40894464,
+      "apparent": 37783552
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 75642257333,
+    "before": {
+      "allocated": 39845888,
+      "apparent": 37783552
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 41943040,
+      "apparent": 38846464
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 77798177875,
+    "before": {
+      "allocated": 40894464,
+      "apparent": 38846464
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 42991616,
+      "apparent": 39927808
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 79580749208,
+    "before": {
+      "allocated": 41943040,
+      "apparent": 39927808
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 44040192,
+      "apparent": 40992768
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 82632506958,
+    "before": {
+      "allocated": 42991616,
+      "apparent": 40992768
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 45088768,
+      "apparent": 41992192
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 87025046666,
+    "before": {
+      "allocated": 44040192,
+      "apparent": 41992192
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 46137344,
+      "apparent": 43087872
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 90310894708,
+    "before": {
+      "allocated": 45088768,
+      "apparent": 43087872
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 47185920,
+      "apparent": 44093440
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 93257824291,
+    "before": {
+      "allocated": 46137344,
+      "apparent": 44093440
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 48234496,
+      "apparent": 45207552
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 95648619250,
+    "before": {
+      "allocated": 47185920,
+      "apparent": 45207552
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 49283072,
+      "apparent": 46196736
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 97407541416,
+    "before": {
+      "allocated": 48234496,
+      "apparent": 46196736
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 50331648,
+      "apparent": 47198208
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 102559722291,
+    "before": {
+      "allocated": 49283072,
+      "apparent": 47198208
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 51380224,
+      "apparent": 48277504
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 108010008166,
+    "before": {
+      "allocated": 50331648,
+      "apparent": 48277504
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 52428800,
+      "apparent": 49690624
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 109043109916,
+    "before": {
+      "allocated": 51380224,
+      "apparent": 49690624
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 53477376,
+      "apparent": 50458624
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 109477909541,
+    "before": {
+      "allocated": 52428800,
+      "apparent": 50458624
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 54525952,
+      "apparent": 51443712
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 110548337458,
+    "before": {
+      "allocated": 53477376,
+      "apparent": 51443712
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 55574528,
+      "apparent": 52434944
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 112619413541,
+    "before": {
+      "allocated": 54525952,
+      "apparent": 52434944
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 56623104,
+      "apparent": 53499904
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 115399832041,
+    "before": {
+      "allocated": 55574528,
+      "apparent": 53499904
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 57671680,
+      "apparent": 54568960
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 118623621583,
+    "before": {
+      "allocated": 56623104,
+      "apparent": 54568960
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 58720256,
+      "apparent": 55879680
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 120526297041,
+    "before": {
+      "allocated": 57671680,
+      "apparent": 55879680
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 59768832,
+      "apparent": 56799232
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 122238478125,
+    "before": {
+      "allocated": 58720256,
+      "apparent": 56799232
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 60817408,
+      "apparent": 57757696
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 123650808750,
+    "before": {
+      "allocated": 59768832,
+      "apparent": 57757696
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 61865984,
+      "apparent": 58929152
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 125130843083,
+    "before": {
+      "allocated": 60817408,
+      "apparent": 58929152
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 62914560,
+      "apparent": 59781120
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 130490142541,
+    "before": {
+      "allocated": 61865984,
+      "apparent": 59781120
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 63963136,
+      "apparent": 60880896
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 131269262041,
+    "before": {
+      "allocated": 62914560,
+      "apparent": 60880896
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 65011712,
+      "apparent": 62437376
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 132960265083,
+    "before": {
+      "allocated": 63963136,
+      "apparent": 62437376
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 66060288,
+      "apparent": 62955520
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 134104063666,
+    "before": {
+      "allocated": 65011712,
+      "apparent": 62955520
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 67108864,
+      "apparent": 64061440
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 136376603750,
+    "before": {
+      "allocated": 66060288,
+      "apparent": 64061440
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 68157440,
+      "apparent": 65148928
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 138887808333,
+    "before": {
+      "allocated": 67108864,
+      "apparent": 65148928
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 69206016,
+      "apparent": 66197504
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 140690127958,
+    "before": {
+      "allocated": 68157440,
+      "apparent": 66197504
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 70254592,
+      "apparent": 67190784
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 142480869708,
+    "before": {
+      "allocated": 69206016,
+      "apparent": 67190784
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 71303168,
+      "apparent": 68216832
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 144798824916,
+    "before": {
+      "allocated": 70254592,
+      "apparent": 68216832
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 72351744,
+      "apparent": 69316608
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 147254435541,
+    "before": {
+      "allocated": 71303168,
+      "apparent": 69316608
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 73400320,
+      "apparent": 70277120
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 148816163916,
+    "before": {
+      "allocated": 72351744,
+      "apparent": 70277120
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 74448896,
+      "apparent": 71467008
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 152242695208,
+    "before": {
+      "allocated": 73400320,
+      "apparent": 71467008
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 75497472,
+      "apparent": 72476672
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 153065814791,
+    "before": {
+      "allocated": 74448896,
+      "apparent": 72476672
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 76546048,
+      "apparent": 73543680
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 154390693875,
+    "before": {
+      "allocated": 75497472,
+      "apparent": 73543680
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 77594624,
+      "apparent": 74536960
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 165069539125,
+    "before": {
+      "allocated": 76546048,
+      "apparent": 74536960
+    },
+    "requested": 1048576
+  },
+  {
+    "after": {
+      "allocated": 78643200,
+      "apparent": 75503616
+    },
+    "allocated_by_fcntl": 1048576,
+    "at_ns": 166254672833,
+    "before": {
+      "allocated": 77594624,
+      "apparent": 75503616
+    },
+    "requested": 1048576
+  }
+]

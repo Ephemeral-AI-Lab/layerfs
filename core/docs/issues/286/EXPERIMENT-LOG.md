@@ -289,3 +289,11 @@ R028 issue publication: [#286 comment5899224558](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v3-r029 | compound v3 stride1/157, one explicit sample | `2d4f537a5`, product source `6fd7fce46` | **FAIL storage only**: strict allocated84090880>=83947520 B (+143360), 4096 B worse than level9 r021; all904143 paths/76726 selected content states/157 independent roots/O3/C5/cleanup PASS, driver163.758s<170s and verifier20.912s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r029.md) | Publish after commit; link in next real round |
+
+## Diagnostic round 20260930-history-preallocation-diagnostic-r030
+
+R029 issue publication: [#286 comment5899332158](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5899332158), failure report commit `5c6c2ffe6` (production delta+0). Product source `a49c0d2ed` reverted the incremental-vacuum treatment (-14 Core production LOC), leaving the exact earlier level9 product files. Diagnostic script source `62ed81588` changes production LOC by0.
+
+| Round | Family / selection | Source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-preallocation-diagnostic-r030 | 157-state original C2 allocation-order probe with external watcher; **no candidate sample** | `62ed81588`, level9 binary SHA `8f52b440...` | 73 successful small `F_PREALLOCATE` calls; child166.738s, independent verifier20.733s, final C2+C5 diagnostic allocation78839808 B with bytes SHA-identical to r021, no product gate verdict; official r021 storage FAIL139264 B unchanged | [Diagnostic report](experiments/20260930-history-preallocation-diagnostic-r030.md) | Publish after commit; link in next real round |
