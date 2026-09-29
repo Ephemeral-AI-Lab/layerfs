@@ -9,6 +9,10 @@ This folder starts the requested merge-planning record with the benchmark
 organization and retained baseline inventory. The main lane is #264 mounted
 namespace; the side lane is #273 active backing, file edits and Commit.
 
+- [Selective implementation and merge plan](IMPLEMENTATION-MERGE-PLAN-20260929.md):
+  corrected component-only construction base, reuse/adapt/exclude file map,
+  semantic conflict resolution, benchmark-driven iteration, baseline versus
+  expectations, complexity/memory analysis and issue-close criteria.
 - [Private backing and live Commit workflow](private_backing_workflow.md):
   attachment, metadata and payload records, ordinary mutations, physical
   verification/accounting, G1 capture and live G2 writes, internal SaveFile,
@@ -35,6 +39,12 @@ Their product source remains `11a864fc133844cae7a4247b1f243d84d5763b10`.
 The architecture report's upstream-admission diagram is clarified at that
 same basis: Base byte reads need the primary slot, while metadata consultation
 can have one conditional secondary admission behind the same transport mutex.
+
+The selective integration plan follows at documentation basis
+`d1192b7363e11f19641b2e0dba0c5d64f2011826`. It proposes construction on
+corrected component-only source `05eb5c14849f1b874383fd1600ba9288f103ad93`,
+preserving the namespace benefits while porting the side mechanisms. It does
+not request a direct donor branch merge or alter another owner's review head.
 
 No physical benchmark is run for this documentation task. The proposed family
 files are not created by this checkpoint. Existing runners, workloads, receipts

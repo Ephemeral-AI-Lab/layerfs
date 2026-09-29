@@ -166,3 +166,9 @@ charges, RSS and cache are separate domains. Resource refusal/custody remains
 a correctness proof while the owner defers additional memory qualification.
 Raw times with an unproved cache contract stay INELIGIBLE. There is no speedup
 denominator, merge approval, CI or aggregate preflight claim in this document.
+
+The later [selective implementation/merge plan](IMPLEMENTATION-MERGE-PLAN-20260929.md)
+defines corrected component-only source `05eb5c14849f1b874383fd1600ba9288f103ad93`
+as the proposed port control. That is a separate comparison from the frozen
+pre-#273 source above and the retained donor cohort. It sets evaluation points
+during construction without running or relabeling any baseline here.
