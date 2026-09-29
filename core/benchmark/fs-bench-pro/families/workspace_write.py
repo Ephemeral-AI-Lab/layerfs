@@ -1,9 +1,14 @@
-"""Frozen #286 public SDK/POSIX write matrix; execution follows family 2."""
+"""Frozen #286 public SDK/POSIX write matrix and one-attempt runner."""
 
 from dataclasses import dataclass
+import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import time
 
 
 HERE = Path(__file__).resolve().parents[1]
@@ -40,6 +45,9 @@ CASES = {case.id: case for case in (
     for pattern in PATTERNS for count in COUNTS
 )}
 SELECTED = tuple(CASES)
+BASE = "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8"
+WRITER_SHA256 = "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
+WRITER_SOURCE_SHA256 = "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
 
 
 def sha256(path):
@@ -94,3 +102,260 @@ def manifests():
         raise ValueError("old oracle manifest differs from frozen #271")
     return {"old": old, **{case.id: manifest(expected(case.pattern, case.writes))
                             for case in CASES.values()}}
+
+
+def save(path, value):
+    Path(path).write_text(json.dumps(value, sort_keys=True, indent=2) + "\n")
+
+
+def execute(command, folder, *, timeout=None, env=None):
+    started = time.monotonic_ns()
+    try:
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, timeout=timeout, env=env)
+        stdout, stderr, code, expired = result.stdout, result.stderr, result.returncode, False
+    except subprocess.TimeoutExpired as error:
+        stdout, stderr, code, expired = error.stdout or b"", error.stderr or b"", None, True
+    wall = time.monotonic_ns() - started
+    (folder.with_suffix(".stdout")).write_bytes(stdout)
+    (folder.with_suffix(".stderr")).write_bytes(stderr)
+    return {"command": command, "wall_ns": wall, "exit_code": code, "timeout": expired,
+            "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+            "stderr_sha256": hashlib.sha256(stderr).hexdigest()}, stdout, stderr
+
+
+def receipt_line(stdout):
+    lines = [line[8:] for line in stdout.splitlines() if line.startswith(b"RECEIPT\t")]
+    return json.loads(lines[0]) if len(lines) == 1 else None
+
+
+def build(out, runner, identity):
+    target = runner.target_path()
+    artifacts = {}
+    builds = (
+        ("sdk", ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
+                 "-p", "layerfs-sdk", "--example", "benchmark_shell"]),
+        ("verifier", ["cargo", "+1.85.1", "build", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
+                      "-p", "layerfs-server", "--example", "verify_checkpoint5"]),
+        ("daemon", ["cargo", "+1.85.1", "zigbuild", "--release", "--manifest-path", "core/Cargo.toml", "--locked",
+                    "--offline", "--target", "aarch64-unknown-linux-musl", "-p", "layerfs-daemon"]),
+    )
+    for name, command in builds:
+        result, _, _ = execute(command, out / f"build-{name}", env={**os.environ, "CARGO_TARGET_DIR": str(target)})
+        save(out / f"build-{name}.json", result)
+        if result["exit_code"] != 0:
+            raise RuntimeError(f"{name} locked release build failed")
+    sources = {
+        "benchmark_shell": target / "release/examples/benchmark_shell",
+        "verify_checkpoint5": target / "release/examples/verify_checkpoint5",
+        "layerfs-daemon": target / "aarch64-unknown-linux-musl/release/layerfs-daemon",
+    }
+    for name, source in sources.items():
+        digest = sha256(source)
+        archive = runner.RESULTS / "binary-archive" / digest / name
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        if not archive.exists():
+            shutil.copyfile(source, archive)
+            archive.chmod(0o555)
+        if sha256(archive) != digest:
+            raise ValueError(f"{name} archive seal mismatch")
+        artifacts[name] = {"path": str(archive), "sha256": digest}
+    context = out / "image-context"
+    (context / "bin").mkdir(parents=True)
+    prior = MASTER.parent / "image-context/bin/write-separated"
+    source = HERE / "writers/write-separated.c"
+    if sha256(source) != WRITER_SOURCE_SHA256 or sha256(prior) != WRITER_SHA256:
+        raise ValueError("sealed writer/source changed")
+    shutil.copyfile(prior, context / "bin/write-separated")
+    (context / "bin/write-separated").chmod(0o555)
+    shutil.copyfile(artifacts["layerfs-daemon"]["path"], context / "layerfs-daemon")
+    (context / "layerfs-daemon").chmod(0o555)
+    (context / "Dockerfile").write_text(
+        f"FROM {BASE}\nCOPY layerfs-daemon /layerfs-daemon\nCOPY bin /fixtures/bin\n"
+        'ENTRYPOINT ["/layerfs-daemon"]\n')
+    image, stdout, _ = execute(["docker", "build", "-q", str(context)], out / "image-build")
+    save(out / "image-build.json", image)
+    if image["exit_code"] != 0:
+        raise RuntimeError("current-daemon image build failed")
+    image_id = stdout.decode().strip()
+    if subprocess.check_output(["docker", "image", "inspect", image_id, "--format", "{{.Id}}"], text=True).strip() != image_id:
+        raise ValueError("image ID mismatch")
+    old = master()
+    oracle = manifests()
+    (out / "old.tsv").write_text(oracle.pop("old"))
+    for name, content in oracle.items():
+        (out / f"{name}.tsv").write_text(content)
+    cursor = json.loads(MASTER.read_text())["cursor_key"]
+    env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": cursor, "LAYERFS_CONSTRUCTION_WORKERS": "1"}
+    proof, stdout, _ = execute([artifacts["verify_checkpoint5"]["path"],
+        str(Path(old["path"]) / "verify.case"), str(Path(old["path"]) / "store.sqlite"),
+        str(Path(old["path"]) / "history.sqlite"), str(out / "old.tsv"), str(out / "old.tsv")],
+        out / "master-reproof", timeout=9, env=env)
+    save(out / "master-reproof.json", proof)
+    if proof["exit_code"] != 0 or json.loads(stdout).get("status") != "PASS":
+        raise RuntimeError("current verifier rejected sealed old master")
+    prepared = {"identity": identity, "artifacts": artifacts, "image_id": image_id,
+                "image_dockerfile_sha256": sha256(context / "Dockerfile"),
+                "writer_source_sha256": WRITER_SOURCE_SHA256, "writer_binary_sha256": WRITER_SHA256,
+                "master": old, "cursor_key": cursor, "master_reproof": proof,
+                "clone_method": "shutil.copyfile independent writable byte copy",
+                "cache_contract": "source/Exec-to-Commit cache uncontrolled; numeric latency INELIGIBLE",
+                "build_mode": "worktree-local locked release; sealed static writer reuse"}
+    save(out / "prepared.json", prepared)
+    return prepared
+
+
+def case_run(out, case, prepared):
+    from shell_package import case_spec, lft1
+
+    folder = out / case.id
+    folder.mkdir()
+    old = prepared["master"]
+    clone = {}
+    for name in ("store", "history"):
+        source = Path(old["path"]) / f"{name}.sqlite"
+        target = folder / f"{name}.sqlite"
+        if sha256(source) != old[f"{name}_sha256"]:
+            raise ValueError(f"master {name} seal changed")
+        shutil.copyfile(source, target)
+        target.chmod(0o644)
+        if sha256(target) != old[f"{name}_sha256"]:
+            raise ValueError(f"cloned {name} seal mismatch")
+        clone[name] = str(target)
+    fields = {key: old[key] for key in ("project_id", "genesis_layer", "genesis_root",
+                                           "genesis_root_serial", "branch_id", "old_commit")}
+    fields.update(scenario_id=case.id, command_hex=case.command.encode().hex(),
+                  expected_failure="0", write_pattern=case.pattern, pattern_count=str(case.writes),
+                  telemetry_run=str(int.from_bytes(os.urandom(16), "big") or 1))
+    case_spec(folder / "case.before", fields)
+    env = {**os.environ, "LAYERFS_HISTORY_CURSOR_KEY": prepared["cursor_key"],
+           "LAYERFS_CONSTRUCTION_WORKERS": "1"}
+    command = [prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
+               clone["store"], clone["history"], prepared["image_id"]]
+    performance, stdout, stderr = execute(command, folder / "driver",
+                                           timeout=case.command_budget_ns / 1e9, env=env)
+    driver = receipt_line(stdout)
+    verification = {"status": "NOT_RUN", "reason": "no confirmed new head"}
+    if driver and driver.get("head_commit"):
+        case_spec(folder / "case.verify", {**fields, "expected_head_commit": driver["head_commit"]})
+        check, checked, _ = execute([prepared["artifacts"]["verify_checkpoint5"]["path"],
+            str(folder / "case.verify"), clone["store"], clone["history"],
+            str(out / "old.tsv"), str(out / f"{case.id}.tsv")], folder / "verifier",
+            timeout=case.verifier_budget_ns / 1e9, env=env)
+        try:
+            child = json.loads(checked) if check["exit_code"] == 0 else None
+        except (ValueError, UnicodeDecodeError):
+            child = None
+        verification = {**check, "child": child,
+                        "status": "PASS" if child and child.get("status") == "PASS"
+                        and child.get("advanced") and child.get("pattern_runs") ==
+                        (case.writes if case.pattern == "dispersed" else 1) else "FAIL"}
+    counts = dict(item.split("=", 1) for item in driver.get("projection_counts", "").split(",")
+                  if "=" in item) if driver else {}
+    cleanup = bool(driver and driver.get("unmount_ok") and driver.get("sandbox_delete_ok")
+                   and b"sandbox shutdown retained" not in stderr)
+    route = bool(driver and driver.get("commit_called") and
+                 int(counts.get("write", -1)) == case.writes)
+    under_budget = performance["wall_ns"] <= case.command_budget_ns and not performance["timeout"]
+    functional = bool(performance["exit_code"] == 0 and under_budget and driver
+                      and driver.get("status") == "COMPLETE" and route and cleanup
+                      and verification["status"] == "PASS")
+    row = {"schema": "core-workspace-write-attempt-v1", "family_id": "workspace_write",
+           "scenario_id": case.id, "pattern": case.pattern, "writes": case.writes,
+           "source": prepared["identity"], "artifacts": prepared["artifacts"],
+           "image_id": prepared["image_id"], "master": old, "clone": clone,
+           "clone_method": prepared["clone_method"], "cache_contract": prepared["cache_contract"],
+           "operation_surface": "public WorkspaceApi mount/exec/commit; ordinary POSIX-FUSE writer",
+           "shell_command": case.command, "performance": performance,
+           "performance_budget_ns": case.command_budget_ns,
+           "performance_budget_status": "PASS" if under_budget else "FAIL",
+           "driver": driver, "callback_counts": counts, "route_status": "PASS" if route else "FAIL",
+           "lft1": lft1(stderr), "verification": verification,
+           "verification_budget_ns": case.verifier_budget_ns,
+           "old_manifest_sha256": sha256(out / "old.tsv"),
+           "new_manifest_sha256": sha256(out / f"{case.id}.tsv"),
+           "cleanup_status": "PASS" if cleanup else "UNKNOWN" if performance["timeout"] else "FAIL",
+           "functional_status": "PASS" if functional else "FAIL",
+           "numeric_latency_status": "INELIGIBLE", "sample_count": 1,
+           "row_status": "INELIGIBLE" if functional else "FAIL"}
+    save(folder / "receipt.json", row)
+    return row
+
+
+def run(selection, output, runner):
+    out = runner.owned(output)
+    identity = runner.identities()
+    if identity["source_dirty"]:
+        raise ValueError("commit the Family 3 runner before measurement")
+    out.mkdir(parents=True)
+    selected = SELECTED if selection == "workspace_write" else (selection,)
+    summary = {"schema": "core-workspace-write-run-v1", "selection": selection,
+               "selected": list(selected), "identity": identity, "rows": [], "status": "INCOMPLETE"}
+    lock_path = runner.RESULTS / ".run.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with lock_path.open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            prepared = build(out, runner, identity)
+            stop = None
+            for name in selected:
+                if stop:
+                    row = {"scenario_id": name, "sample_count": 0, "row_status": "NOT_RUN", "reason": stop}
+                    folder = out / name
+                    folder.mkdir()
+                    save(folder / "receipt.json", row)
+                else:
+                    try:
+                        row = case_run(out, CASES[name], prepared)
+                        if row["cleanup_status"] != "PASS":
+                            stop = "prior cleanup failed or unknown"
+                    except Exception as error:
+                        stop = f"case exception: {error!r}"
+                        folder = out / name
+                        folder.mkdir(exist_ok=True)
+                        attempted = (folder / "driver.stdout").exists()
+                        row = {"scenario_id": name, "sample_count": int(attempted),
+                               "row_status": "FAIL" if attempted else "NOT_RUN",
+                               "cleanup_status": "UNKNOWN" if attempted else "NOT_RUN", "reason": stop}
+                        save(folder / "receipt.json", row)
+                summary["rows"].append({"scenario_id": name, "row_status": row["row_status"]})
+            summary["status"] = ("FUNCTIONAL_PASS_NUMERIC_INELIGIBLE"
+                                 if all(row["row_status"] == "INELIGIBLE" for row in summary["rows"])
+                                 else "INCOMPLETE")
+    except Exception as error:
+        summary["error"] = repr(error)
+    for name in selected[len(summary["rows"]):]:
+        folder = out / name
+        folder.mkdir(exist_ok=True)
+        save(folder / "receipt.json", {"scenario_id": name, "sample_count": 0,
+                                       "row_status": "NOT_RUN", "reason": summary.get("error", "setup failed")})
+        summary["rows"].append({"scenario_id": name, "row_status": "NOT_RUN"})
+    save(out / "run.json", summary)
+    runner.manifest_run(out)
+    return out
+
+
+def verify(out, runner):
+    runner.verify_run_manifest(out)
+    summary = json.loads((out / "run.json").read_text())
+    for row in summary["rows"]:
+        receipt = json.loads((out / row["scenario_id"] / "receipt.json").read_text())
+        if receipt["row_status"] != row["row_status"]:
+            raise ValueError("Family 3 summary/receipt mismatch")
+    return "PASS"
+
+
+def report(out):
+    summary = json.loads((out / "run.json").read_text())
+    rows = ["case\tsamples\tcommand_s\tlimit_s\texec_s\tcommit_s\tverifier_s\tfunctional\tlatency\tcleanup"]
+    for row in summary["rows"]:
+        receipt = json.loads((out / row["scenario_id"] / "receipt.json").read_text())
+        driver = receipt.get("driver") or {}
+        perf = receipt.get("performance") or {}
+        check = receipt.get("verification") or {}
+        seconds = lambda value: f"{value / 1e9:.3f}" if isinstance(value, int) else "-"
+        rows.append("\t".join((row["scenario_id"], str(receipt.get("sample_count", 0)),
+            seconds(perf.get("wall_ns")), seconds(receipt.get("performance_budget_ns")),
+            seconds(driver.get("exec_ns")), seconds(driver.get("commit_ns")),
+            seconds(check.get("wall_ns")), receipt.get("functional_status", "NOT_RUN"),
+            receipt.get("numeric_latency_status", "NOT_RUN"), receipt.get("cleanup_status", "NOT_RUN"))))
+    return "\n".join(rows) + "\n"

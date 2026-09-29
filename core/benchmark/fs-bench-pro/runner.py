@@ -285,7 +285,7 @@ def manifest_run(run):
     write_json(run / "manifest.json", {"schema": "core-fs-bench-pro-manifest-v1", "files": items})
 
 
-def verify_run(run):
+def verify_run_manifest(run):
     recorded = json.loads((run / "manifest.json").read_text())
     actual = {str(path.relative_to(run)) for path in run.rglob("*") if path.is_file() and path.name != "manifest.json"}
     if actual != set(recorded["files"]):
@@ -294,6 +294,10 @@ def verify_run(run):
         path = run / name
         if not path.is_file() or path.stat().st_size != expected["bytes"] or digest(path) != expected["sha256"]:
             raise ValueError(f"retained evidence mismatch: {name}")
+
+
+def verify_run(run):
+    verify_run_manifest(run)
     for case in init.CASES.values():
         folder = run / "sdk-host" / "init_namespace" / case.id
         receipt = json.loads((folder / "receipt.json").read_text())
@@ -372,7 +376,7 @@ def main():
     run_parser = commands.add_parser("run")
     selector = run_parser.add_mutually_exclusive_group(required=True)
     selector.add_argument("--case")
-    selector.add_argument("--family", choices=["init_namespace", "history-retention"])
+    selector.add_argument("--family", choices=["init_namespace", "history-retention", "workspace_write"])
     run_parser.add_argument("--out", required=True)
     for name in ("verify", "report"):
         commands.add_parser(name).add_argument("--run", required=True)
@@ -387,11 +391,14 @@ def main():
         for case in write.CASES.values():
             print(f"{case.id}\t{case.writes} {case.pattern} writes\t"
                   f"command <= {case.command_budget_ns / 1e9:g} s; verifier <= 9 s\t"
-                  "NOT_RUN: history checkpoint pending")
+                  "selected")
     elif args.command == "run":
         selection = args.case or args.family
         if selection in (*history.CASES, "history-retention"):
             print(history.run(selection, args.out, sys.modules[__name__]))
+            return
+        if selection in (*write.CASES, "workspace_write"):
+            print(write.run(selection, args.out, sys.modules[__name__]))
             return
         if selection not in (*init.CASES, "init_namespace"):
             parser.error("unknown or deferred SDK case")
@@ -400,12 +407,16 @@ def main():
         path = owned(args.run, existing=True)
         if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.verify(path, sys.modules[__name__]))
+        elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
+            print(write.verify(path, sys.modules[__name__]))
         else:
             print(verify_run(path))
     else:
         path = owned(args.run, existing=True)
         if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.report(path), end="")
+        elif json.loads((path / "run.json").read_text()).get("schema") == "core-workspace-write-run-v1":
+            print(write.report(path), end="")
         else:
             print(report(path), end="")
 
