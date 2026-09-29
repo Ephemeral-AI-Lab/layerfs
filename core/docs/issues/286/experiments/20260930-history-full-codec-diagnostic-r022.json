@@ -1,0 +1,14 @@
+{
+  "schema": "issue286-r021-full-only-codec-diagnostic-v1",
+  "kind": "offline closed-Store count-driven diagnostic; not candidate sample or speed arm",
+  "source": "benchmark-results/fs-bench-pro/issue286-history-stride1-v3-r021/history-retention-stride-1-total-storage-v3/native/sample.sqlite",
+  "source_sha256": "ef1fba79a76add4c781c9bbcf1c5219a9548d3cb03b4483a8d84ded9059ca781",
+  "zstd_library": "/opt/homebrew/lib/libzstd.dylib 1.5.7",
+  "counts": {"full_frames": 6948},
+  "calibration": {"level9_exact": 6948},
+  "widths": {"raw": 62426725, "level9": 20480409, "level12": 20158069},
+  "cpu_process_ns_cache_uncontrolled": {"level9_ns": 1377153000, "level12_ns": 3233289000},
+  "projected_full_only_saving_bytes": 322340,
+  "projected_added_codec_cpu_ns": 1856136000,
+  "workspace_probe": {"wide_raw_bytes": 1048576, "level9_estimate_bytes": 13100056, "level12_estimate_bytes": 13100056, "product_bound_bytes": 16777216}
+}

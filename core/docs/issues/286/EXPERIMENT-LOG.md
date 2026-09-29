@@ -232,3 +232,11 @@ R018/r019 issue publication: [#286 comment5897803588](https://github.com/Ephemer
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v3-r020 | compound v3 stride10/17 then stride3/53, one sample each | `e17f1b43c` | **PASS/PASS**: strict allocated46469120<49344512 and58142720<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS; driver44.118/73.685s, verifier2.933/8.272s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r020.md) | Publish after commit; link in next real round |
 | 20260930-history-stride1-v3-r021 | compound v3 stride1/157 at same source, one explicit sample | `e17f1b43c` | **FAIL storage only**: strict allocated84086784>=83947520 B (+139264); all904143 listed paths/76726 selected content states/157 independent O3+roots/C5/cleanup PASS, driver165.294s<170s, verifier20.612s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r021.md) | Publish after commit; link in next real round |
+
+## Diagnostic round 20260930-history-full-codec-diagnostic-r022
+
+R020/r021 issue publication: [#286 comment5898183004](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5898183004), report commit `4d649eb98` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-full-codec-diagnostic-r022 | read-only original r021 Store, 6,948 whole-file FULL frames; **no candidate sample** | C2 original SHA `ef1fba79...`, source `e17f1b43c` | Calibrated level9 exact6948/6948; level12 prospective record-width saving322340 B and added codec process CPU1.856136s, both **diagnostic only**; current strict storage FAIL139264 B and family2 status unchanged | [Diagnostic report](experiments/20260930-history-full-codec-diagnostic-r022.md) | Publish after commit; link in next real round |
