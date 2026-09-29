@@ -1838,6 +1838,35 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut change_totals = ChangeMix::default();
 
     let count = corpus.states().len();
+    // Oracle acquisition only: resume a copied, closed partial reference Store
+    // after the fixed watchdog. This path never supplies a candidate speed row.
+    let resume_count: usize = std::env::var("LAYERFS_HISTORY_REFERENCE_RESUME")
+        .ok()
+        .map(|value| value.parse().map_err(|_| OpError::Io("invalid reference resume count".into())))
+        .transpose()?
+        .unwrap_or(0);
+    if resume_count > 0 {
+        let source = std::env::var("LAYERFS_HISTORY_REFERENCE_STORE")
+            .map_err(|_| OpError::Io("reference resume Store absent".into()))?;
+        std::fs::copy(source, &store_path)?;
+        if resume_count >= count || !store_path.is_file() {
+            return Err(OpError::Io("reference resume source missing or complete".into()));
+        }
+        let root: ObjectId = std::env::var("LAYERFS_HISTORY_REFERENCE_ROOT")
+            .map_err(|_| OpError::Io("reference resume root absent".into()))?
+            .parse()
+            .map_err(|_| OpError::Io("invalid reference resume root".into()))?;
+        previous_root = Some(FilesystemRootId(root));
+        for position in 0..resume_count {
+            let transition = corpus.transition(position).map_err(corpus_error)?;
+            let placeholder_roots: BTreeMap<Vec<u8>, ObjectId> = transition.changed.iter()
+                .filter(|entry| matches!(entry.kind, Change::Added | Change::Modified))
+                .map(|entry| (entry.path.clone(), ObjectId::for_bytes(&entry.path)))
+                .collect();
+            filesystem_input(&mut chain, &transition, &placeholder_roots, position == 0,
+                &mut directories, &mut inodes, &mut new_inodes)?;
+        }
+    }
     // Extra nodes fit stride10/stride3; stride1 remains the ordinary recording.
     let detailed = matches!(
         std::env::var("LAYERFS_HISTORY_PHASES").as_deref(),
@@ -1867,7 +1896,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let (result, report) = Timing::record("history", |root: &TimingScope<'_, Active>| {
         let mut corpus_read_ns: u64 = 0;
         let mut outcomes: Vec<StateOutcome> = Vec::with_capacity(count);
-        for position in 0..count {
+        for position in resume_count..count {
             // Untimed: the harness reads the corpus between the children.
             let t_corpus = std::time::Instant::now();
             let transition = corpus.transition(position).map_err(corpus_error)?;
@@ -2199,11 +2228,12 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                     // The Store is created inside state 1's child, so the fixed
                     // cost is visible and subtractable rather than buried.
                     if store.is_none() {
-                        let created = Store::create(
-                            &store_path,
-                            StoragePolicy::frozen_default(),
-                            child.child("store.create"),
-                        )
+                        let created = if resume_count == 0 {
+                            Store::create(&store_path, StoragePolicy::frozen_default(),
+                                child.child("store.create"))
+                        } else {
+                            Store::open(&store_path, child.child("store.create"))
+                        }
                         .map_err(|error| OpError::Product(format!("{error:?}")))?;
                         store = Some(created);
                     }
@@ -2820,4 +2850,3 @@ fn unmeasured(error: &OpError, mut gates: Vec<Gate>) -> OpOutcome {
     ));
     OpOutcome { gates, notes: Vec::new() }
 }
-
