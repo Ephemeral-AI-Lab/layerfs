@@ -99,6 +99,14 @@ impl Sessions {
                             id: session.next_id + 1,
                         });
                     }
+                    // An expired checked Hello has consumed the *same* SDK
+                    // call deadline. Do not make a fresh connection after the
+                    // window has closed or replace its definite Deadline with
+                    // an unrelated handshake I/O error.
+                    Err(failure) if Instant::now() >= deadline => {
+                        *retained = None;
+                        return Err(failure);
+                    }
                     // A restarted or unreachable daemon invalidates the socket.
                     _ => *retained = None,
                 }

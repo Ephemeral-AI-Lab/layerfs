@@ -152,7 +152,13 @@ impl Client {
                 let mut bytes = 0u64;
                 let mut frames = 0u64;
                 loop {
-                    let frame = receive.read().map_err(|_| delivery(r))?;
+                    let frame = receive.read().map_err(|failure| {
+                        if !r.operation.mutation() && failure.code == Code::Deadline {
+                            failure
+                        } else {
+                            delivery(r)
+                        }
+                    })?;
                     frames += 1;
                     if frame.id != r.id || frames > frame_budget(r.response_bytes) {
                         return Err(delivery(r));

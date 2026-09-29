@@ -111,7 +111,8 @@ fn caller_deadline_covers_connect_and_hello() {
         });
         let deadline = Instant::now() + Duration::from_millis(200);
         let connection = connect_until(address, 1, &[7; 32], &public, deadline).unwrap();
-        assert!(Client::new(connection).is_err());
+        let failure = Client::new(connection).err().unwrap();
+        assert_eq!(failure.code, Code::Deadline);
         assert!(Instant::now() >= deadline);
         done.send(()).unwrap();
     });

@@ -410,6 +410,19 @@ extension is based on that commit and frozen seal
 `e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`;
 its actual checks are recorded in [Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md).
 
+## Native deadline and held control-session custody (#273 follow-up)
+
+At product source following `8fc801a7cb9c2de296e3b10d006fcd5c618e037c`,
+a socket read that reaches its actual deadline maps to `Deadline`, rather than
+indistinguishable `Io`. The native client propagates this definite deadline on
+read-only replies only: a missing mutation reply still has unknown canonical
+outcome. The SDK's held control session will not attempt a fresh handshake after
+a checked Hello has already consumed the call's original deadline; it returns
+the original error, discarding that session. Before-deadline transport faults
+remain `Io`, not fabricated deadline results. None of these rules retry a view
+operation, shorten/extend the deadline, change canonical custody, or turn an
+unknown mutation into a known abort.
+
 ## Boundaries and public calls
 
 `layerfs-bridge::contract` owns the closed content/history operation union and typed results.
