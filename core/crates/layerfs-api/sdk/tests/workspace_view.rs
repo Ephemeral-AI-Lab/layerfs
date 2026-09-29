@@ -686,3 +686,240 @@ fn view_lease_known_c1_local_c5_failure() {
     drop(cleanup);
     println!("VIEW_LEASE_C5 canonical=Committed phase=Reconcile disposition=KnownCommitLocalFailure pinned_g1=exact held=1");
 }
+
+/// Standalone POSIX workload installed in the owned daemon's volume (not
+/// the Workspace FUSE mount); removed before deletion. No product hook.
+struct BudgetWriter(String);
+impl BudgetWriter {
+    fn install(name: &str, binary: &str) -> Self {
+        use std::io::Write;
+        let find = std::process::Command::new("docker")
+            .args([
+                "ps",
+                "--filter",
+                "label=io.layerfs.owner=agent-sdk",
+                "--filter",
+                &format!("label=io.layerfs.sandbox-name={name}"),
+                "--format",
+                "{{.ID}}",
+            ])
+            .output()
+            .unwrap();
+        assert!(find.status.success());
+        let ids = String::from_utf8(find.stdout).unwrap();
+        assert_eq!(ids.lines().count(), 1);
+        let container = ids.trim().to_owned();
+        let mut copy = std::process::Command::new("docker")
+            .args([
+                "exec",
+                "-i",
+                &container,
+                "/bin/sh",
+                "-c",
+                "cat > /layerfs/.budget-writer-test && chmod 500 /layerfs/.budget-writer-test",
+            ])
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        copy.stdin
+            .take()
+            .unwrap()
+            .write_all(&std::fs::read(binary).unwrap())
+            .unwrap();
+        assert!(copy.wait().unwrap().success());
+        Self(container)
+    }
+}
+impl Drop for BudgetWriter {
+    fn drop(&mut self) {
+        let removed = std::process::Command::new("docker")
+            .args([
+                "exec",
+                &self.0,
+                "/bin/rm",
+                "-f",
+                "/layerfs/.budget-writer-test",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            removed.status.success(),
+            "remove external workload: {removed:?}"
+        );
+    }
+}
+
+/// Actual public SDK response-budget pressure on the unchanged 16 MiB sandbox.
+/// Accepted POSIX writes, rather than a test-only Budget handle or a changed
+/// container limit, must occupy the Workspace before the large pinned read.
+#[test]
+fn view_lease_read_refuses_exhausted_response_budget_without_partial_entry() {
+    let (Ok(image), Ok(binary)) = (
+        std::env::var("LAYERFS_TEST_IMAGE"),
+        std::env::var("LAYERFS_BUDGET_WRITER"),
+    ) else {
+        return;
+    };
+    const BUDGET: u64 = 16 * 1024 * 1024;
+    const READ: usize = 128 * 1024;
+    let root = std::env::temp_dir().join(format!("layerfs-view-budget-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("large"), vec![b'Q'; READ]).unwrap();
+    // Prepared sparse 64 MiB base (the mounted writes still pay for all edits).
+    std::fs::File::create(source.join("work"))
+        .unwrap()
+        .set_len(64 * 1024 * 1024)
+        .unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"view-budget".to_vec(),
+        incarnation: 1,
+        cursor_key: [42; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let workspaces = WorkspaceApi::new(&owner);
+    let project = projects.init("view-budget", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "view-budget").unwrap();
+    let name = format!("view-budget-proof-{}", std::process::id());
+    let sandbox = sandboxes.create(&image, &name).unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    let lease = workspaces.pin_view(&mount.id).unwrap();
+    let large = workspaces
+        .view_lookup(&lease, lease.root(), b"large")
+        .unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &large, 0, 16).unwrap().bytes,
+        vec![b'Q'; 16]
+    );
+    let initial = workspaces
+        .status(&mount.id)
+        .unwrap()
+        .consumer_accounted_bytes;
+    eprintln!("VIEW_BUDGET start={initial} limit={BUDGET} response={READ}");
+    let writer = BudgetWriter::install(&name, &binary);
+    // Each Exec performs real pwrite calls through the mounted FUSE path.
+    // No direct backing access, changed limit or reserved test-only Budget.
+    let mut observed = initial;
+    let mut accepted = 0usize;
+    // Stop with ~1 MiB of Budget. One public pin of the resulting view
+    // exposes already-created entries; their charged registrations consume
+    // the remaining Budget without attempting a speculative further WRITE.
+    for batch in 0..20 {
+        if observed >= BUDGET - 1_100_000 {
+            break;
+        }
+        let spare = (BUDGET - 1_100_000).saturating_sub(observed);
+        let count = ((spare / 6000) as usize).clamp(1, 1024);
+        let command = format!("/layerfs/.budget-writer-test create {accepted} {count}");
+        let result = workspaces.exec(&mount.id, &command).unwrap();
+        let next = workspaces
+            .status(&mount.id)
+            .unwrap()
+            .consumer_accounted_bytes;
+        eprintln!("VIEW_BUDGET batch={batch} files={count} accepted_before={accepted} exit={:?} stderr={:?} used={next} remaining={}", result.exit_status, result.stderr, BUDGET.saturating_sub(next));
+        assert_eq!(
+            result.exit_status,
+            Some(0),
+            "ordinary names refused before response Budget"
+        );
+        accepted += count;
+        observed = next;
+    }
+    assert!(
+        accepted > 1500 && observed >= BUDGET - 1_100_000,
+        "public namespace must reach near-full Budget before pinning"
+    );
+    let second = workspaces.pin_view(&mount.id).unwrap();
+    let second_pinned = (second.generation(), second.revision());
+    for index in 0..accepted {
+        let byte = b'a' + (index % 25) as u8;
+        let name = format!("f{index:06}-{}", char::from(byte).to_string().repeat(180));
+        let issued_before = workspaces.view_status(&second).unwrap().entries;
+        let resolved = workspaces.view_lookup(&second, second.root(), name.as_bytes());
+        if matches!(&resolved, Err(WorkspaceError::Failure(f)) if f.code == Code::Capacity && !f.unknown)
+        {
+            assert_eq!(
+                workspaces.view_status(&second).unwrap().entries,
+                issued_before,
+                "failed entry registration must be atomic"
+            );
+            observed = workspaces
+                .status(&mount.id)
+                .unwrap()
+                .consumer_accounted_bytes;
+            eprintln!(
+                "VIEW_BUDGET_LOOKUP_CAPACITY index={index} used={observed} remaining={}",
+                BUDGET.saturating_sub(observed)
+            );
+            break;
+        }
+        assert!(
+            resolved.is_ok(),
+            "lookup failed before Budget refusal: {resolved:?}"
+        );
+        if index % 64 == 63 || index + 1 == accepted {
+            observed = workspaces
+                .status(&mount.id)
+                .unwrap()
+                .consumer_accounted_bytes;
+            eprintln!(
+                "VIEW_BUDGET entries={} used={} remaining={}",
+                index + 1,
+                observed,
+                BUDGET.saturating_sub(observed)
+            );
+            if observed > BUDGET - READ as u64 {
+                break;
+            }
+        }
+    }
+    assert!(
+        observed > BUDGET - 2 * READ as u64,
+        "real issued entries did not exhaust the fixed response-and-call headroom"
+    );
+    assert_eq!(
+        workspaces.view_status(&second).unwrap().generation,
+        second_pinned.0
+    );
+    let entries_before = workspaces.view_status(&lease).unwrap().entries;
+    let response = workspaces.view_read(&lease, &large, 0, READ);
+    eprintln!("VIEW_BUDGET_RESPONSE used={observed} outcome={response:?}");
+    assert!(
+        matches!(&response, Err(WorkspaceError::Failure(f)) if f.code == Code::Capacity && !f.unknown)
+    );
+    assert_eq!(
+        workspaces.view_status(&lease).unwrap().entries,
+        entries_before
+    );
+    assert_eq!(
+        workspaces.view_read(&lease, &large, 0, 1).unwrap().bytes,
+        b"Q"
+    );
+    workspaces.release_view(&second).unwrap();
+    workspaces.release_view(&lease).unwrap();
+    workspaces.unmount(&mount.id).unwrap();
+    drop(writer);
+    sandboxes.delete(sandbox).unwrap();
+    cleanup.sandboxes.clear();
+    drop(cleanup);
+    println!("VIEW_BUDGET fixed=16777216 response=131072 capacity_before_bytes=true no_partial_entry=true");
+}
