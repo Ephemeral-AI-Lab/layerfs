@@ -384,7 +384,10 @@ mod linux {
         assert_eq!(changes[0].0, original_root);
         assert_eq!(changes[0].1, data.size);
         assert!(changes[0].2 > 0);
-        assert_eq!(changes[0].3, 1);
+        // The insertion's first ordinary 64 KiB read mixes a local G byte
+        // with Base. Its surviving suffix takes the charged payload path;
+        // the later generic deletion retains one such frontier plus Z.
+        assert_eq!(changes[0].3, 64 * 1024 + 1);
         drop(observed);
         let saved = attr(
             f.native

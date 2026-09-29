@@ -183,7 +183,8 @@ mod linux {
         let saving = std::thread::spawn(move || ws.commit(deadline()));
         f.native.wait_commit();
         assert_eq!(f.workspace.status().unwrap().generation, 2);
-        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 26);
+        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 0);
+        assert!(f.workspace.backing_status().unwrap().reserved_bytes >= 208 * 4096);
         f.edit(b"data.bin", 10, 14, b"LIVE");
         assert_eq!(f.read(handle, 10, 4), b"LIVE");
         f.native.release_commit();
@@ -264,16 +265,24 @@ mod linux {
     #[ignore = "requires first file delivery hold and real composite command"]
     fn composite_successor() {
         let f = Fixture::new(Gate::Delivery);
+        let original_root = attr(
+            f.native
+                .attributes(snapshot(&f).effective_root, b"data.bin"),
+        )
+        .1;
         let (data, handle) = open(&f, b"data.bin");
         f.edit(b"data.bin", 10, 14, b"GGGG");
         let frozen = f.workspace.getattr(data.serial).unwrap();
         let ws = f.workspace.clone();
         let saving = std::thread::spawn(move || ws.commit(deadline()));
         f.native.wait_entered();
-        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 26);
-        f.edit(b"data.bin", 11, 13, b"LIVEIN");
-        assert_eq!(f.read(handle, 10, 8), b"GLIVEING");
-        let old = f.workspace.read(handle, 10, 8, deadline()).unwrap();
+        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 0);
+        assert!(f.workspace.backing_status().unwrap().reserved_bytes >= 208 * 4096 - 8192);
+        // Local WRITE progress remains possible during the held file RPC.
+        // The insertion's generic tail reads follow the known result.
+        f.edit(b"data.bin", 11, 12, b"L");
+        assert_eq!(f.read(handle, 10, 4), b"GLGG");
+        let captured_reply = f.workspace.read(handle, 10, 4, deadline()).unwrap();
         f.native.release();
         let first = saving.join().unwrap().unwrap();
         completed(&f, &first);
@@ -283,6 +292,10 @@ mod linux {
             (saved.3, saved.4),
             (frozen.mtime_seconds, frozen.mtime_nanoseconds)
         );
+        assert_eq!(captured_reply.as_ref(), b"GLGG");
+        f.edit(b"data.bin", 11, 13, b"LIVEIN");
+        let old = f.workspace.read(handle, 10, 8, deadline()).unwrap();
+        assert_eq!(old.as_ref(), b"GLIVEING");
         f.edit(b"data.bin", 10, 18, b"Z");
         let before = f.native.observations.lock().unwrap().operations.len();
         let second = commit(&f);
@@ -301,10 +314,10 @@ mod linux {
             })
             .collect();
         assert_eq!(edits.len(), 1);
-        assert_eq!(edits[0].0, saved.1);
+        assert_eq!(edits[0].0, original_root);
         assert_eq!(edits[0].1, data.size);
         assert!(edits[0].2 > 0);
-        assert_eq!(edits[0].3, 1);
+        assert_eq!(edits[0].3, 64 * 1024 + 1);
         drop(observed);
         assert_eq!(f.read(handle, 8, 6), [8, 9, b'Z', 14, 15, 16]);
         assert_eq!(old.as_ref(), b"GLIVEING");
