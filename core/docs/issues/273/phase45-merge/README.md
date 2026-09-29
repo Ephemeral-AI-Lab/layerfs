@@ -9,6 +9,10 @@ This folder starts the requested merge-planning record with the benchmark
 organization and retained baseline inventory. The main lane is #264 mounted
 namespace; the side lane is #273 active backing, file edits and Commit.
 
+- [Architecture refinement](architecture_refinement.md): detailed ASCII
+  workflows and source-derived before/after time, backing-space and resident
+  memory comparisons. It separates standalone namespace improvements from the
+  actual combined active implementation and records remaining costs/limits.
 - [Benchmark layout and verification plan](BENCHMARKS.md): proposed
   `core/benchmark/fs-bench-pro/families/` ownership, naming, migration map,
   registered selections and proposed extensions.
