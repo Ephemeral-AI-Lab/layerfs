@@ -1,0 +1,128 @@
+{
+  "admission_eligible": false,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/d0b04009e6a01cc00a8f02316cc561aba2d4ed877780b786b3d7dcfc41c2107f/fs-bench-storage-content",
+    "sha256": "d0b04009e6a01cc00a8f02316cc561aba2d4ed877780b786b3d7dcfc41c2107f"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "canonical_pin": {
+    "applicable": [
+      589480854,
+      73447
+    ],
+    "historical_v016": [
+      589423458,
+      73476
+    ],
+    "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md"
+  },
+  "case": "history-retention-stride-3-total-storage-v3",
+  "clone_method": null,
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "3",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride3",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "a8893fead9941fedad0606f13fe0a13a64de811f2933e0d0c4931455b0b8f82b",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "b75a1d8971706d2b0a5db41acac4d8fcf39d8d0942630ede3c0ba3180d3ff625",
+    "product_seal": "f8ba762e59aea7d9420ae1d72b24c87f5c02365074702632c5ef92b6555dc2bc",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "9b084cd27dc000f985fdee265cbf0ba2702562ab",
+    "source_dirty": false,
+    "source_tree": "948629156c4dd2fd5730e21012f5bd7b01da7f88"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "profile": "c1-c2-c5-retained-history-v3",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_observed_reference": [
+      589480854,
+      73447
+    ],
+    "canonical_required": [
+      589423458,
+      73476
+    ],
+    "reference": {
+      "command": {
+        "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride3",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride3-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+        "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+        "watchdog_s": 170
+      },
+      "kind": "one complete old-product reference command with corrected v2 producer",
+      "result": {
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 79090880625
+      },
+      "store_sha256": "f0ebce7934841629154be67320b8ada65dd0b185c433d81876949a1fee4585a3",
+      "trace_sha256": "8d77361e0a16e2f7d8b1a43d50245f65765077ebbfcad457aae6d575cc964fac"
+    },
+    "roots_sha256": "13d27a8839f0e3d7e844df97f69f65a8c44703f9abd98acbcebb1ed34656ee4b",
+    "states": 53
+  },
+  "sample_count": 0,
+  "schema": "core-history-retention-receipt-v3",
+  "setup": "InProcess",
+  "storage_gate": "g1.o6-total-retained-below-v016-v3",
+  "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
+  "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d"
+}

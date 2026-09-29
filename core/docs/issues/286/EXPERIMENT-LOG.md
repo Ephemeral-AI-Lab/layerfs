@@ -248,3 +248,12 @@ R022 issue publication: [#286 comment5898248569](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-codec-workspace-correction-r023 | host Zstandard context probe + focused pre-sample test; **no candidate sample** | source r022 wide-probe input corrected, r021 Store unchanged | R022 wide-policy context assertion **CORRECTED**: level12 needs25682968 B at1,000,000 B/dict hint, above fixed16MiB; default131071 B needs4711448 B and fits. R022's6948-frame width/CPU diagnostic unchanged; r021 strict storage FAIL remains. Source selects level12 only for declared default-width policy, level9 for wider policy. | [Correction report](experiments/20260930-history-codec-workspace-correction-r023.md) | Publish after commit; link in next real round |
+
+## Collected rounds 20260930-history-v3-r024 and stride1-v3-r025
+
+R023 issue publication: [#286 comment5898364695](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5898364695), correction commit `4702ab71f` (production delta+0). Product source `9b084cd27` selects level12 for default-width whole-file FULL winners only; all original thresholds and receipts remain unchanged.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v3-r024 | compound v3 stride10/17 then stride3/53, one changed-source sample each | `9b084cd27` | **PASS/PASS**: strict allocated46469120<49344512 and57556992<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS; driver45.489/75.550s, verifier2.945/8.272s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r024.md) | Publish after commit; link in next real round |
+| 20260930-history-stride1-v3-r025 | compound v3 stride1/157 at same source, one explicit sample | `9b084cd27` | **FAIL storage only**: strict allocated84758528>=83947520 B (+811008) despite pack bodies −322362 B vs r021; all904143 listed paths/76726 selected content states/157 independent O3+roots/C5/cleanup PASS, driver165.640s<170s, verifier20.458s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r025.md) | Publish after commit; link in next real round |
