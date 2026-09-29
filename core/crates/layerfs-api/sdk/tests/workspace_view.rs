@@ -360,3 +360,99 @@ fn view_lease_deadline_keeps_old_bytes_and_allows_checked_release() {
     drop(cleanup);
     println!("VIEW_LEASE_DEADLINE read=Deadline g1=exact g2=exact held=1 release=Completed unmount=Completed");
 }
+
+/// External route `workspace_view_release_route.py` supplies a byte-transparent
+/// control relay. It removes only the daemon's terminal checked-release reply,
+/// after it has arrived at the relay; it cannot fabricate a daemon outcome.
+#[test]
+fn view_lease_uncertain_release_does_not_retry_or_claim_completion() {
+    let (Ok(image), Ok(control)) = (
+        std::env::var("LAYERFS_TEST_IMAGE"),
+        std::env::var("LAYERFS_RELEASE_RELAY_CONTROL"),
+    ) else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-release-loss-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("note"), b"base").unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"release-loss".to_vec(),
+        incarnation: 1,
+        cursor_key: [40; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let workspaces = WorkspaceApi::new(&owner);
+    let project = projects.init("release-loss", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "release-loss").unwrap();
+    let sandbox = sandboxes
+        .create(&image, &format!("view-release-loss-{}", std::process::id()))
+        .unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    workspaces.exec(&mount.id, "printf g1-note > note").unwrap();
+    let lease = workspaces.pin_view(&mount.id).unwrap();
+    let note = workspaces
+        .view_lookup(&lease, lease.root(), b"note")
+        .unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &note, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    workspaces.commit(&mount.id).unwrap();
+    workspaces.exec(&mount.id, "printf g2-note > note").unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &note, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    assert_eq!(workspaces.view_status(&lease).unwrap().held_leases, 1);
+    // ARM is acknowledged only after the relay has selected the *current*
+    // authenticated SDK session; no timing sleep or changed product deadline.
+    use std::io::{Read, Write};
+    let mut command = std::net::TcpStream::connect(control).unwrap();
+    command.write_all(b"ARM\n").unwrap();
+    command.shutdown(std::net::Shutdown::Write).unwrap();
+    let mut acknowledged = String::new();
+    command.read_to_string(&mut acknowledged).unwrap();
+    assert_eq!(acknowledged, "ARMED\n");
+    let result = workspaces.release_view(&lease);
+    assert!(
+        matches!(&result, Err(WorkspaceError::Failure(f)) if f.code == Code::Unknown && f.unknown),
+        "a lost checked-release reply is never Completed: {result:?}"
+    );
+    // The relay proves it received and withheld a terminal encrypted result.
+    // A separate *read-only* query determines what the remote authority did;
+    // it is not a second attempt to release an uncertain token.
+    let observed = workspaces.view_status(&lease);
+    assert!(
+        matches!(&observed, Err(WorkspaceError::Failure(f)) if f.code == Code::Denied),
+        "remote token after withheld completed release: {observed:?}"
+    );
+    assert_eq!(
+        workspaces.exec(&mount.id, "cat note").unwrap().stdout,
+        b"g2-note"
+    );
+    workspaces.unmount(&mount.id).unwrap();
+    sandboxes.delete(sandbox).unwrap();
+    cleanup.sandboxes.clear();
+    drop(cleanup);
+    println!("VIEW_LEASE_RELEASE_LOSS checked_release=Unknown remote_token=Denied g1=exact g2=exact no_retry=true unmount=Completed");
+}
