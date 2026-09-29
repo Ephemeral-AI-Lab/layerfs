@@ -17,6 +17,7 @@ Read before touching measurement, benchmark or release work:
 - [`docs/general/benchmark_rules.md`](docs/general/benchmark_rules.md) — the measurement contract
 - [`benchmark/AGENTS.md`](benchmark/AGENTS.md) — benchmark-tree specifics and the v0.1.6 exception
 - [`benchmark/fs-bench-pro/QUICKSTART.md`](benchmark/fs-bench-pro/QUICKSTART.md) — build, reuse and run mechanics
+- [`benchmark_agent_report.md`](benchmark_agent_report.md) — required per-family tables and Server/daemon attribution for every benchmark run
 - [`docs/general/release-policy.md`](docs/general/release-policy.md), [`docs/general/documentation-policy.md`](docs/general/documentation-policy.md)
 
 ## 1. A warm cache must never credit a measured phase
@@ -162,7 +163,10 @@ exploratory performance-only default below; see
    (`docs/roadmap/0.1/0.1.6/evidence/issue151-experiment-ledger.md` and its
    successors) with exact numbers, limits, the arithmetic, the identities, the
    reproduction command, and every non-passing line. Report FAIL, INCOMPLETE and
-   unrun work as plainly as PASS.
+   unrun work as plainly as PASS. **Before every benchmark invocation, read
+   [`benchmark_agent_report.md`](benchmark_agent_report.md); after it, use the
+   applicable table in the round report and retain every registered case and
+   its actual verdict.** A template placeholder never substitutes for a receipt.
 7. **Fit the budgets.** Preparation is fast and reusable — prepared inputs are
    acquired once and reused with identity checks, and repeated setup before a
    sample is forbidden. A performance selection's **complete command** (product
