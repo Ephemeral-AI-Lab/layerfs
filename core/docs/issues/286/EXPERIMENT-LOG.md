@@ -361,3 +361,11 @@ R037 issue publication: [#286 comment5900732612](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v4-r038 | compound v4 stride10/17 then stride3/53, one sample each at corrected harness seal | `f9a8b1b62`, product `60c7af879` | **PASS/PASS**: C2+C5 allocated52473856<54278964 (+6.342%) and65142784<70427034 B (+1.747%); complete trees/selected content/independent roots/O3/C5/cleanup PASS; driver32.584/58.472s, verifier3.083/9.000s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v4-r038.md) | Publish after commit; next explicit stride1 at same product/harness/compilation seal |
+
+## Explicit round 20260930-history-stride1-v4-r039
+
+R038 issue publication: [#286 comment5900776546](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900776546), selected report commit `0455a7e3c` (production delta+0). Stride1 reused the exact r038 product, compilation, harness and binary seals with a fresh output path and its own single invocation.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v4-r039 | compound v4 stride1/157, one explicit sample | `0455a7e3c`, product `60c7af879` | **PASS**: C2+C5 allocated86179840<92342273 B (+2.659% over original strict target); all904143 path-states/76726 selected content path-states/157 independent roots/O3/C5/cleanup PASS; driver144.769s<170s, verifier21.370s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v4-r039.md) | Publish after commit; current-source Family1 regression next |
