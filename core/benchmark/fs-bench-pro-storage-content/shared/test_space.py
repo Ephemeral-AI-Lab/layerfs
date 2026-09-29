@@ -45,21 +45,23 @@ class CurrentPackTest(unittest.TestCase):
     def test_pooled_versions_have_distinct_pack_bounds(self):
         start = 24 + 16 * 256
         body = b"abcd"
-        for version in (12, 21):
+        for version in (12, 21, 22):
             used = start + len(body)
             pack = (b"LFPACK\0\0" + struct.pack("<IIII", version, 1, used, 0)
                     + struct.pack("<IIIB3x", start, 4, 4, 0)
                     + bytes(16 * 255) + body)
             self.assertEqual(space._pack_group_ranges(pack, "pooled"),
                              ("pooled-metadata", [(start, 4)]))
-        oversized = bytearray(pack)
-        oversized.extend(bytes(64 * 1024 - len(oversized) + 1))
-        struct.pack_into("<I", oversized, 16, len(oversized))
-        with self.assertRaises(space.Incomplete):
-            space._pack_bounds(bytes(oversized), "tight pooled too large")
-        struct.pack_into("<I", oversized, 8, 12)
-        self.assertEqual(space._pack_bounds(bytes(oversized), "old pooled")[0],
-                         "pooled-metadata")
+        for version, limit in ((21, 64 * 1024), (22, 128 * 1024)):
+            oversized = bytearray(pack)
+            oversized.extend(bytes(limit - len(oversized) + 1))
+            struct.pack_into("<I", oversized, 8, version)
+            struct.pack_into("<I", oversized, 16, len(oversized))
+            with self.assertRaises(space.Incomplete):
+                space._pack_bounds(bytes(oversized), "bounded pooled too large")
+            struct.pack_into("<I", oversized, 8, 12)
+            self.assertEqual(space._pack_bounds(bytes(oversized), "old pooled")[0],
+                             "pooled-metadata")
 
     def test_tight_ordinary_and_native_directories(self):
         body = b"abcd"

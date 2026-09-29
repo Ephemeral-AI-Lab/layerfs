@@ -34,7 +34,7 @@ use layerfs_content::ObjectRole;
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{
     GROUP_COUNT_LIMIT, GROUP_LIMIT, METADATA_GROUP_LIMIT, PACK_LIMIT, POOLED_PACK_LIMIT,
-    RECORD_COUNT_LIMIT, SINGLETON_PACK_LIMIT,
+    POOLED_V21_PACK_LIMIT, RECORD_COUNT_LIMIT, SINGLETON_PACK_LIMIT,
 };
 
 /// Pack magic shared by every implemented framing.
@@ -105,6 +105,8 @@ pub const VERSION_ORDINARY_TIGHT: u32 = 19;
 pub const VERSION_NATIVE_TIGHT: u32 = 20;
 /// Pooled metadata with a 64-KiB append bound; v12 keeps its old read bound.
 pub const VERSION_POOLED_TIGHT: u32 = 21;
+/// Pooled metadata with a 128-KiB append bound, selected from stride10/3 shape.
+pub const VERSION_POOLED_HALF: u32 = 22;
 /// Maximum groups the tight directories can describe.
 pub const TIGHT_GROUPS: usize = 16;
 /// Singleton framing that may carry a payload stored verbatim.
@@ -145,7 +147,7 @@ impl PackLane {
             Self::Ordinary => VERSION_ORDINARY_TIGHT,
             Self::Native => VERSION_NATIVE_TIGHT,
             Self::WholeFile => VERSION_WHOLE_FILE_TIGHT,
-            Self::PooledMetadata => VERSION_POOLED_TIGHT,
+            Self::PooledMetadata => VERSION_POOLED_HALF,
             Self::Singleton => VERSION_SINGLETON_STORED,
         }
     }
@@ -399,7 +401,9 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         | VERSION_WHOLE_FILE_STORED
         | VERSION_WHOLE_FILE_GROUPED
         | VERSION_WHOLE_FILE_TIGHT => PackLane::WholeFile,
-        VERSION_POOLED_METADATA | VERSION_POOLED_TIGHT => PackLane::PooledMetadata,
+        VERSION_POOLED_METADATA | VERSION_POOLED_TIGHT | VERSION_POOLED_HALF => {
+            PackLane::PooledMetadata
+        }
         VERSION_SINGLETON | VERSION_SINGLETON_STORED => PackLane::Singleton,
         _ => {
             return Err(StorageError::UnsupportedPolicy {
@@ -436,10 +440,10 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if used < body_offset + 1 {
         return Err(StorageError::Integrity("pack directory width"));
     }
-    let pack_limit = if version == VERSION_POOLED_METADATA {
-        PACK_LIMIT
-    } else {
-        lane.pack_limit()
+    let pack_limit = match version {
+        VERSION_POOLED_METADATA => PACK_LIMIT,
+        VERSION_POOLED_TIGHT => POOLED_V21_PACK_LIMIT,
+        _ => lane.pack_limit(),
     };
     if bytes.len() > pack_limit {
         return Err(StorageError::Integrity("pack length"));
