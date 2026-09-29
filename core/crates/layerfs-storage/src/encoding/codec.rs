@@ -17,9 +17,9 @@
 //! decompression, and decompression is exact-size into a validated destination.
 //!
 //! The parameter sequences, workspace sizes and frame policy are the measured
-//! ones of the retained-history profile: payload frames use level 3, a
+//! ones of the retained-history profile: payload frames use level 9, a
 //! role-specific window log, a content-size field, a checksum, no dictionary id
-//! and no workers; group bodies use level 1 with the window log capped at
+//! and no workers; group bodies use level 19 with the window log capped at
 //! sixteen. Contexts live in a caller-owned aligned region, so a codec call
 //! cannot grow an allocator-backed context and every allocation is charged
 //! before the call.
@@ -48,9 +48,8 @@ use crate::error::{StorageError, StorageResult};
 
 /// One aligned encode workspace shared by every role of one save.
 ///
-/// The retained 16 MiB bound was sized for the earlier payload-level-9 and
-/// group-level-19 profiles. Those historical estimates are conservative for
-/// the current profiles. The group-level change does not resize this arena:
+/// The retained 16 MiB bound was sized for payload level 9 and group level 19.
+/// The level change does not resize this arena:
 /// one save allocates it once and shares it across all codec calls. Every
 /// static-context request must still fit; failure is returned to the caller.
 pub const ENCODE_WORKSPACE_BYTES: usize = 16 * 1024 * 1024;
@@ -61,13 +60,12 @@ pub const GROUP_LIMIT: usize = 65_536;
 /// Largest accepted group body frame.
 pub const GROUP_FRAME_LIMIT: usize = GROUP_LIMIT + 1024;
 /// Compression level of whole-file and chunk payload records.
-const PAYLOAD_LEVEL: i32 = 3;
+const PAYLOAD_LEVEL: i32 = 9;
 /// Compression level shared by ordinary and pooled value-group bodies.
 ///
-/// This profile trades a larger encoded representation for less group-encoding
-/// work. Payload settings, frame integrity checks and workspace bounds are
+/// Payload settings, frame integrity checks and workspace bounds are
 /// independent of this level and remain unchanged.
-const GROUP_LEVEL: i32 = 1;
+const GROUP_LEVEL: i32 = 19;
 /// Largest window log of the ordinary group body codec.
 const GROUP_WINDOW_LOG_MAX: u32 = 16;
 

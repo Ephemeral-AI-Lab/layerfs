@@ -556,3 +556,7 @@ watermark, so it is re-read for every wave and a save that completed between two
 waves is visible to the second one; pooling it would turn an operation's later
 waves into a snapshot of its first. `opens` reports `1` on the wave that opened the
 session and `0` on the waves that reused it.
+
+### #286 measured-history physical-density profile (2026-09-30)
+
+The earlier #190 `GROUP_LEVEL=1` and payload-level-3 paragraphs above describe that dated source. For the current Phase B source, `encoding/codec.rs` selects **payload level 9** and **ordinary/pooled group level 19**, retaining the same pinned windows, checksums, no-worker rule, 16 MiB caller-owned encode arena, maximum frame/group/pack sizes and read compatibility. This changes encoded bytes and CPU work, not canonical content identities or the persistent pack grammar. The source-pinned #188d [codec sweep](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/W1-codec.md) found approximately 3.88 MiB of physical saving for levels3/1→9/19 on the original stride10 population at +7.589 CPU seconds; these are prior diagnostic estimates, not #286 candidate results. #286 measures the actual strict C2+C5 allocated bytes at the new source. A save also removes only its pooled pack's unused append reservation inside `storage.finish`, before publication and inside the timer; no post-sample VACUUM or offline shrinkage is credited.

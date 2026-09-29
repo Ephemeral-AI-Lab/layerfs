@@ -11,6 +11,8 @@ below, and adds the returned-read byte bound and bounded ordinal window. The
 older source-pinned sections remain historical descriptions; they do not qualify
 the pending implementation or a performance change.
 
+The 2026-09-30 #286 Phase B source uses payload level 9 and group level 19, and closes the final pooled append reservation within measured save finish. The level-3 language and earlier diagrams below describe their cited older source pins; [the #188d codec sweep](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/W1-codec.md) is the prior count-driven basis, while #286 receipts decide the current strict allocated C2+C5 gate. All frame grammars, declared workspace ceilings, checksums, no-worker rule and read compatibility remain.
+
 Part of the [replacement-core architecture](README.md) set. Source pin
 `ce2d738ff`; the placement running total added by #178 **P2-8** (2026-09-18) is
 marked in place and carries its own commit. Scope, method, measurement status and

@@ -123,6 +123,11 @@ def invoke(command, folder, label, budget_ns, environment):
             "budget_ns": budget_ns}
 
 
+def semantic_gates_pass(gates, resource_gate):
+    semantic = [gate for gate in gates if gate.identifier != resource_gate]
+    return bool(semantic) and all(gate.status == "PASS" for gate in semantic)
+
+
 def case_run(out, case, common, identities, binary):
     folder = out / case.id
     folder.mkdir()
@@ -168,13 +173,16 @@ def case_run(out, case, common, identities, binary):
         verification = invoke(command + ["--phase", "verify"], folder, "verify",
                               case.verification_budget_ns, environment)
         parsed = trace_module.read(native / "trace.jsonl")
+        gates = parsed.gates()
         record["native_gates"] = [{"id": gate.identifier, "status": gate.status,
-                                   "measured": gate.measured, "limit": gate.limit} for gate in parsed.gates()]
+                                   "measured": gate.measured, "limit": gate.limit,
+                                   "class": gate.gate_class} for gate in gates]
         record["observed_counters"] = parsed.counters()
         record["correctness_status"] = "PASS" if (
             verification["exit_code"] == 0 and not verification["timed_out"]
             and verification["wall_ns"] <= case.verification_budget_ns and not parsed.defects
-            and parsed.status() == "PASS" and record["canonical_status"] == "PASS"
+            and semantic_gates_pass(gates, record["storage_gate"])
+            and record["canonical_status"] == "PASS"
             and record["storage"].get("retained_counts_status") == "PASS") else "FAIL"
         record["verification"] = verification
     else:

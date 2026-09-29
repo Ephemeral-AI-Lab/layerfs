@@ -10,6 +10,19 @@ from families import history_retention as history
 
 
 class HistoryStorage(unittest.TestCase):
+    def test_native_semantics_do_not_inherit_the_resource_failure(self):
+        import gzip
+        archived = (history.ROOT / "core/docs/issues/286/experiments"
+                    / "20260930-history-stride10-v2-r007"
+                    / "history-retention-stride-10-total-storage-v2/native/trace.jsonl.gz")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "trace.jsonl"
+            path.write_bytes(gzip.decompress(archived.read_bytes()))
+            parsed = history.trace_module.read(path)
+        self.assertEqual(parsed.status(), "FAIL")
+        self.assertTrue(history.semantic_gates_pass(parsed.gates(),
+            "g1.o6-total-retained-below-v016-v2"))
+
     def test_registry_and_independent_ledgers(self):
         self.assertEqual([c.states for c in history.CASES.values()], [17, 53, 157] * 2)
         self.assertEqual([c.ceiling_bytes for c in history.CASES.values()],
