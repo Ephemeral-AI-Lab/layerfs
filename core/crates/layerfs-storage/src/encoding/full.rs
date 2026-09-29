@@ -96,21 +96,7 @@ pub fn encode_full(
     workspace: &mut CompressionWorkspace,
     profile: &mut SaveProfile,
 ) -> StorageResult<EncodedRecord> {
-    encode_representation(canonical, role, capacities, workspace, None, false, profile)
-}
-
-/// Encodes a selected whole-file FULL winner at the bounded stronger level.
-pub fn encode_full_winner(
-    canonical: &[u8],
-    role: ObjectRole,
-    capacities: &StorageCapacities,
-    workspace: &mut CompressionWorkspace,
-    profile: &mut SaveProfile,
-) -> StorageResult<EncodedRecord> {
-    if role != ObjectRole::WholeFile {
-        return Err(StorageError::Integrity("strong FULL role"));
-    }
-    encode_representation(canonical, role, capacities, workspace, None, true, profile)
+    encode_representation(canonical, role, capacities, workspace, None, profile)
 }
 
 /// Encodes a PREFIX record against one direct base payload.
@@ -129,7 +115,6 @@ pub fn encode_prefix(
         capacities,
         workspace,
         Some((base_id, base_raw)),
-        false,
         profile,
     )
 }
@@ -140,7 +125,6 @@ fn encode_representation(
     capacities: &StorageCapacities,
     workspace: &mut CompressionWorkspace,
     prefix: Option<(ObjectId, &[u8])>,
-    strong: bool,
     profile_state: &mut SaveProfile,
 ) -> StorageResult<EncodedRecord> {
     if canonical.is_empty() || canonical.len() > CANONICAL_LIMIT {
@@ -196,11 +180,7 @@ fn encode_representation(
                 Some((_, base_raw)) => workspace.compress_prefix(profile, raw, base_raw)?,
                 None => {
                     let started = std::time::Instant::now();
-                    let incompressible = if strong {
-                        workspace.full_winner_is_incompressible(profile, raw)?
-                    } else {
-                        workspace.payload_is_incompressible(profile, raw)?
-                    };
+                    let incompressible = workspace.payload_is_incompressible(profile, raw)?;
                     SaveProfile::charge(&mut profile_state.diag.probe_ns, started);
                     if incompressible {
                         // The codec found nothing in a bounded prefix of this
@@ -218,11 +198,7 @@ fn encode_representation(
                             base: None,
                         });
                     }
-                    let frame = if strong {
-                        workspace.compress_full_winner(profile, raw)?
-                    } else {
-                        workspace.compress(profile, raw)?
-                    };
+                    let frame = workspace.compress(profile, raw)?;
                     if frame.len() >= raw.len() {
                         // The codec ran and shrank nothing. The frame is released
                         // and the payload is stored at its own width: this costs

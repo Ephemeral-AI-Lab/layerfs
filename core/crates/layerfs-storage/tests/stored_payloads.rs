@@ -132,18 +132,6 @@ fn a_payload_the_codec_can_shrink_keeps_its_frame_and_its_own_tag() {
     let pack = pack_of_object(&path, root);
     let record = whole_file_record(&pack, 0, 0);
     assert_eq!(record[0], FULL_TAG);
-    let capacities =
-        layerfs_storage::StorageCapacities::from_policy(StoragePolicy::frozen_default()).unwrap();
-    let profile = layerfs_storage::encoding::CodecProfile::whole_file(&capacities);
-    let expected = layerfs_storage::encoding::CompressionWorkspace::new()
-        .unwrap()
-        .compress_full_winner(profile, &raw)
-        .unwrap();
-    assert_eq!(
-        &record[1..],
-        expected,
-        "the selected FULL uses its bounded stronger frame"
-    );
     assert!(
         record.len() < raw.len() + 1,
         "the frame is narrower than the payload it describes: {} against {}",

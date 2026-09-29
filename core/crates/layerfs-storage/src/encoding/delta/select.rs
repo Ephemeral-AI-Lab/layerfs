@@ -17,9 +17,7 @@ use crate::cas::SaveProfile;
 use crate::encoding::codec::{CompressionWorkspace, DecompressionWorkspace};
 use crate::encoding::delta::candidates::{signature, Candidates};
 use crate::encoding::delta::read::{ChainBases, ChainCounters, Resolver};
-use crate::encoding::full::{
-    encode_full, encode_full_winner, encode_prefix, raw_payload, EncodedRecord,
-};
+use crate::encoding::full::{encode_full, encode_prefix, raw_payload, EncodedRecord};
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::PackLane;
 use crate::policy::StorageCapacities;
@@ -306,22 +304,27 @@ pub fn select(
         // Reaching here is a caller error, not a representation to choose.
         return Err(StorageError::Integrity("pooled metadata leaf selection"));
     }
-    // Candidate discovery does not need a compressed FULL frame. Do it first so
-    // a no-candidate whole-file object pays only for its profile-selected FULL
-    // frame, while a real PREFIX trial still compares against level-9 FULL.
+    // The payload's own signature, computed at most once for this object: the
+    // caller may have computed it to ask the winner cache a question before this
+    // selection ran, and the cache is exactly what consumes it here.
     let prehashed = input.signature;
-    let lane = PackLane::for_role(role);
-    let raw = raw_payload(canonical, role)?;
+    let started = Instant::now();
+    let full = encode_full(canonical, role, input.capacities, encode, input.profile);
+    SaveProfile::charge(&mut input.profile.full_ns, started);
+    let full = full?;
+    note_stored(input.profile, &full);
+    input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
+    let lane = full.lane;
     let depth_cap = input.capacities.delta_depth_for_role(role);
     if depth_cap == 0 {
-        let full = selected_full(input, canonical, role, encode)?;
-        input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
         if lane == PackLane::WholeFile {
+            let raw = raw_payload(canonical, role)?;
             let sig = prehashed.unwrap_or_else(|| signature(raw));
             input.candidates.insert(id, sig);
         }
         return Ok(full);
     }
+    let raw = raw_payload(canonical, role)?;
     let candidate = match role {
         // The caller already knows the correspondence, so exactly the first
         // supplied candidate is considered - but only after the same eligibility
@@ -351,8 +354,6 @@ pub fn select(
     };
     let Some(base_id) = candidate else {
         input.counters.no_candidate = input.counters.no_candidate.saturating_add(1);
-        let full = selected_full(input, canonical, role, encode)?;
-        input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
         if lane == PackLane::WholeFile {
             let sig = prehashed.unwrap_or_else(|| signature(raw));
             input.candidates.insert(id, sig);
@@ -378,19 +379,12 @@ pub fn select(
         || encoded > input.capacities.chain_encoded_limit
     {
         input.counters.work_exceeded = input.counters.work_exceeded.saturating_add(1);
-        let full = selected_full(input, canonical, role, encode)?;
-        input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
         if lane == PackLane::WholeFile {
             let sig = prehashed.unwrap_or_else(|| signature(raw));
             input.candidates.insert(id, sig);
         }
         return Ok(full);
     }
-    let started = Instant::now();
-    let full = encode_full(canonical, role, input.capacities, encode, input.profile);
-    SaveProfile::charge(&mut input.profile.full_ns, started);
-    let full = full?;
-    input.counters.prepared_full = input.counters.prepared_full.saturating_add(1);
     let base_raw = raw_payload(&base, role)?;
     input.counters.trials = input.counters.trials.saturating_add(1);
     let started = Instant::now();
@@ -432,36 +426,11 @@ pub fn select(
         Ok(prefix)
     } else {
         input.counters.full_losses = input.counters.full_losses.saturating_add(1);
-        let full = if lane == PackLane::WholeFile {
-            selected_full(input, canonical, role, encode)?
-        } else {
-            note_stored(input.profile, &full);
-            full
-        };
         if lane == PackLane::WholeFile {
             input.candidates.insert(id, signature(raw));
         }
         Ok(full)
     }
-}
-
-/// Encodes the selected FULL representation and charges its actual codec work.
-fn selected_full(
-    input: &mut SelectInput<'_>,
-    canonical: &[u8],
-    role: ObjectRole,
-    encode: &mut CompressionWorkspace,
-) -> StorageResult<EncodedRecord> {
-    let started = Instant::now();
-    let record = if role == ObjectRole::WholeFile {
-        encode_full_winner(canonical, role, input.capacities, encode, input.profile)
-    } else {
-        encode_full(canonical, role, input.capacities, encode, input.profile)
-    };
-    SaveProfile::charge(&mut input.profile.full_ns, started);
-    let record = record?;
-    note_stored(input.profile, &record);
-    Ok(record)
 }
 
 /// Counts one record the encoder stored verbatim, read from its own tag.

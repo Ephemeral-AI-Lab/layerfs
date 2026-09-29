@@ -99,21 +99,6 @@ fn a_valid_frame_round_trips_through_both_decode_entry_points() {
 }
 
 #[test]
-fn the_wide_profile_keeps_the_shipped_level_within_the_existing_workspace() {
-    let capacities = capacities(1_048_576);
-    let profile = CodecProfile::whole_file(&capacities);
-    let raw = vec![b'A'; 1_000_000];
-    let mut encoder = CompressionWorkspace::new().unwrap();
-    let frame = encoder.compress_full_winner(profile, &raw).unwrap();
-    assert_eq!(
-        encoder.workspace_bytes(),
-        layerfs_storage::encoding::ENCODE_WORKSPACE_BYTES
-    );
-    assert_eq!(decode(profile, &frame, raw.len()).unwrap(), raw);
-    assert_eq!(frame, encode(profile, &raw));
-}
-
-#[test]
 fn a_declared_length_that_contradicts_the_frame_is_refused() {
     let capacities = capacities(131_072);
     let profile = CodecProfile::whole_file(&capacities);
