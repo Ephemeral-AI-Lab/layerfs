@@ -192,6 +192,13 @@ pub enum WorkspaceError {
     Stage(Arc<StageFailure>),
     Commit(Arc<CommitFailure>),
     Coherence(CoherenceFailure),
+    /// A verified private revision was accepted; retain its receipt even when
+    /// notification or post-publication cleanup fails.
+    Published {
+        receipt: MutationReceipt,
+        published_handle: Option<HandleId>,
+        cause: Box<WorkspaceError>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

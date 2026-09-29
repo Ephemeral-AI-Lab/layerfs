@@ -41,6 +41,11 @@ document in the same commit**; advancing the source pin without a content change
 is allowed only when the change touches none of those, and must be said rather
 than done silently.
 
+The selective #284 Workspace integration is described in
+[17 — Component namespace and active Workspace authority](17-workspace-active-components.md),
+with its own source pins and implementation/evaluation boundary. It does not
+advance the older chapters' pins or promote historical measurements.
+
 ## Why these papers exist
 
 The only architecture study in this release,

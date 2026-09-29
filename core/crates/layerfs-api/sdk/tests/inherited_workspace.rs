@@ -84,6 +84,8 @@ struct Fixture {
     server: Arc<Server>,
     genesis: Root,
     gate: Arc<CommitGate>,
+    fault: Arc<AtomicU64>,
+    canonical_calls: Arc<AtomicU64>,
     _temp: Temp,
 }
 impl Fixture {
@@ -101,9 +103,13 @@ impl Fixture {
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir);
         let path = root.canonicalize().unwrap().join(format!(
-            "layerfs-inherited-workspace-{}-{}",
+            "layerfs-inherited-workspace-{}-{}-{}",
             std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
+            NEXT.fetch_add(1, Ordering::Relaxed),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         fs::create_dir(&path).unwrap();
         let temp = Temp(path.clone());
@@ -154,6 +160,10 @@ impl Fixture {
             .fork(&project, [54; 16], "main")
             .unwrap();
         let gate = Arc::new(CommitGate::default());
+        let fault = Arc::new(AtomicU64::new(0));
+        let canonical_calls = Arc::new(AtomicU64::new(0));
+        let delivery_fault = fault.clone();
+        let delivery_calls = canonical_calls.clone();
         let delivery_server = server.clone();
         let delivery_gate = gate.clone();
         let delivery = Arc::new(
@@ -161,6 +171,24 @@ impl Fixture {
                   input: &mut dyn Source,
                   output: &mut dyn io::Write,
                   end: Instant| {
+                if delivery_fault.load(Ordering::Acquire) == 1
+                    && matches!(
+                        request.operation,
+                        Operation::ConstructPortableMetadata { .. }
+                            | Operation::UpdatePortableMetadata { .. }
+                    )
+                {
+                    return Err(Code::Denied.into());
+                }
+                let canonical = matches!(
+                    request.operation,
+                    Operation::HistoryCommand(
+                        HistoryCommand::Commit(_) | HistoryCommand::CommitStaged { .. }
+                    )
+                );
+                if canonical {
+                    delivery_calls.fetch_add(1, Ordering::AcqRel);
+                }
                 let mut reader = SourceReader {
                     source: input,
                     end,
@@ -170,6 +198,14 @@ impl Fixture {
                     .service()
                     .handle_until(&delivery_server.peer()?, request, &mut reader, output, end)
                     .0?;
+                if canonical && delivery_fault.load(Ordering::Acquire) == 3 {
+                    deny_fallocate_on_this_thread();
+                }
+                if canonical && delivery_fault.load(Ordering::Acquire) == 2 {
+                    let mut lost: Failure = Code::Unknown.into();
+                    lost.unknown = true;
+                    return Err(lost);
+                }
                 if delivery_gate.armed.load(Ordering::Acquire)
                     && matches!(
                         request.operation,
@@ -216,6 +252,8 @@ impl Fixture {
             server,
             genesis: project.root,
             gate,
+            fault,
+            canonical_calls,
             _temp: temp,
         }
     }
@@ -1074,4 +1112,744 @@ fn base_file_move_from_an_unmodified_root_keeps_its_identity() {
         f.content_bytes(root, b"packages/new/sibling.txt"),
         b"sibling-base"
     );
+}
+
+#[test]
+fn phase_a_selected_origins_overlap_zero_hardlinks_and_completion_credit() {
+    let f = Fixture::new();
+    let top = f.workspace.root().serial;
+    let packages = f.lookup(top, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let subtree = f.lookup(old.serial, b"subtree");
+    let child = f.lookup(subtree.serial, b"child");
+    let grand = f.lookup(child.serial, b"grand.txt");
+    let handle = f.open(grand.serial);
+    let write = |offset, bytes: &[u8]| {
+        let payload = f
+            .workspace
+            .own_payload(bytes.len() as u64, &mut &bytes[..], deadline())
+            .unwrap();
+        f.workspace
+            .write_file(handle, offset, &payload, deadline())
+            .unwrap();
+    };
+    write(1, b"AB");
+    assert_eq!(
+        f.workspace.backing_status().unwrap().reserved_bytes,
+        208 * 4096
+    );
+    let token = [73; 33];
+    let lease = f.workspace.pin_view(token, deadline()).unwrap();
+    let mut parent = lease.root.serial;
+    for name in [b"packages".as_slice(), b"old", b"subtree", b"child"] {
+        parent = f
+            .workspace
+            .view_lookup(&token, parent, name, deadline())
+            .unwrap()
+            .serial;
+    }
+    let selected = f
+        .workspace
+        .view_lookup(&token, parent, b"grand.txt", deadline())
+        .unwrap();
+    f.gate.arm();
+    let first = std::thread::scope(|scope| {
+        let saving = scope.spawn(|| f.commit());
+        f.gate.wait();
+        write(7, b"XY");
+        assert!(f.workspace.backing_status().unwrap().reserved_bytes >= 208 * 4096);
+        f.gate.release();
+        saving.join().unwrap()
+    });
+    assert_eq!(
+        f.content_bytes(first, b"packages/old/subtree/child/grand.txt"),
+        b"gABnd-base"
+    );
+    assert_eq!(
+        f.workspace
+            .read(handle, 0, 10, deadline())
+            .unwrap()
+            .as_ref(),
+        b"gABnd-bXYe"
+    );
+    assert_eq!(
+        f.workspace
+            .view_read(&token, selected.serial, 0, 10, deadline())
+            .unwrap()
+            .bytes,
+        b"gABnd-base"
+    );
+    assert_eq!(
+        f.workspace.backing_status().unwrap().reserved_bytes,
+        208 * 4096
+    );
+    write(2, b"12345");
+    f.workspace.set_len(grand.serial, 14, deadline()).unwrap();
+    f.workspace
+        .set_attributes(
+            grand.serial,
+            layerfs_workspace::PortableAttributes {
+                mode: Some(0o640),
+                mtime: Some((-7, 42)),
+                ..Default::default()
+            },
+            deadline(),
+        )
+        .unwrap();
+    let alias = f
+        .workspace
+        .link(child.serial, b"alias", grand.serial, deadline())
+        .unwrap();
+    assert_eq!(alias.serial, grand.serial);
+    assert_eq!(f.workspace.getattr(grand.serial).unwrap().references, 2);
+    f.workspace
+        .unlink(child.serial, b"grand.txt", deadline())
+        .unwrap();
+    let second = f.commit();
+    let mut expected = b"gA12345XYe".to_vec();
+    expected.resize(14, 0);
+    assert_eq!(
+        f.content_bytes(second, b"packages/old/subtree/child/alias"),
+        expected
+    );
+    assert_eq!(
+        f.workspace
+            .read(handle, 0, 20, deadline())
+            .unwrap()
+            .as_ref(),
+        expected
+    );
+    assert_eq!(f.workspace.backing_status().unwrap().reserved_bytes, 0);
+    assert!(matches!(
+        f.workspace.release_view(&token).unwrap(),
+        layerfs_workspace::ViewRelease::Completed
+    ));
+    f.workspace
+        .unlink(child.serial, b"alias", deadline())
+        .unwrap();
+    assert_eq!(
+        f.workspace
+            .read(handle, 0, 20, deadline())
+            .unwrap()
+            .as_ref(),
+        expected
+    );
+    f.commit();
+    assert_eq!(
+        f.workspace
+            .read(handle, 0, 20, deadline())
+            .unwrap()
+            .as_ref(),
+        expected
+    );
+    f.workspace.release(handle).unwrap();
+    for serial in [
+        packages.serial,
+        old.serial,
+        subtree.serial,
+        child.serial,
+        grand.serial,
+    ] {
+        f.workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+    assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
+    assert_eq!(f.workspace.backing_status().unwrap().reserved_bytes, 0);
+}
+
+#[test]
+fn phase_a_lease_admission_frozen_names_and_checked_release() {
+    let f = Fixture::new();
+    f.workspace
+        .set_attributes(
+            f.workspace.root().serial,
+            layerfs_workspace::PortableAttributes {
+                mode: Some(0o700),
+                mtime: Some((-9, 84)),
+                ..Default::default()
+            },
+            deadline(),
+        )
+        .unwrap();
+    let mut tokens = Vec::new();
+    for index in 1..=32 {
+        let token = [index; 33];
+        let info = f.workspace.pin_view(token, deadline()).unwrap();
+        assert_eq!(
+            (
+                info.root.mode,
+                info.root.mtime_seconds,
+                info.root.mtime_nanoseconds
+            ),
+            (0o700, -9, 84)
+        );
+        tokens.push(token);
+    }
+    assert!(matches!(
+        f.workspace.pin_view([99; 33], deadline()),
+        Err(WorkspaceError::Capacity)
+    ));
+    assert_eq!(f.workspace.held_view_leases().unwrap(), 32);
+    assert!(matches!(
+        f.workspace.close_clean(),
+        Err(WorkspaceError::Busy)
+    ));
+    let top = f.workspace.root().serial;
+    assert!(matches!(
+        f.workspace
+            .view_lookup(&[99; 33], top, b"packages", deadline()),
+        Err(WorkspaceError::Denied)
+    ));
+    assert!(matches!(
+        f.workspace
+            .view_lookup(&tokens[1], 999, b"child", deadline()),
+        Err(WorkspaceError::Denied)
+    ));
+    let held = f
+        .workspace
+        .view_lookup(&tokens[0], top, b"packages", deadline())
+        .unwrap();
+    let old = f
+        .workspace
+        .view_lookup(&tokens[0], held.serial, b"old", deadline())
+        .unwrap();
+    let subtree = f
+        .workspace
+        .view_lookup(&tokens[0], old.serial, b"subtree", deadline())
+        .unwrap();
+    let live_packages = f.lookup(top, b"packages");
+    let live_old = f.lookup(live_packages.serial, b"old");
+    let live_new = f.lookup(live_packages.serial, b"new");
+    f.workspace
+        .rename(
+            live_old.serial,
+            b"subtree",
+            live_new.serial,
+            b"moved",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    f.commit();
+    assert_eq!(
+        f.workspace
+            .view_lookup(&tokens[0], old.serial, b"subtree", deadline())
+            .unwrap()
+            .serial,
+        subtree.serial
+    );
+    assert_eq!(
+        f.workspace
+            .view_lookup(&tokens[0], subtree.serial, b"child", deadline())
+            .unwrap()
+            .kind,
+        NodeKind::Directory
+    );
+    // Clean Commit still has to admit its own completion credit while old
+    // selections remain held; it does not inherit G1's completed fund.
+    f.commit();
+    assert_eq!(f.workspace.backing_status().unwrap().reserved_bytes, 0);
+    for token in tokens {
+        assert!(matches!(
+            f.workspace.release_view(&token).unwrap(),
+            layerfs_workspace::ViewRelease::Completed
+        ));
+        assert!(matches!(
+            f.workspace.view_status(&token),
+            Err(WorkspaceError::Denied)
+        ));
+    }
+    for serial in [live_packages.serial, live_old.serial, live_new.serial] {
+        f.workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+    assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
+}
+
+#[test]
+fn phase_a_fresh_nonfile_removal_replacement_and_later_symlink_move() {
+    let f = Fixture::new();
+    let top = f.workspace.root().serial;
+    let doomed = f
+        .workspace
+        .mkdir(top, b"doomed", 0o755, 0, deadline())
+        .unwrap();
+    let frozen = f
+        .workspace
+        .opendir(doomed.serial, ReferenceScope::Local)
+        .unwrap();
+    f.workspace.rmdir(top, b"doomed", deadline()).unwrap();
+    let target = f
+        .workspace
+        .symlink(top, b"gone-link", b"opaque-target", deadline())
+        .unwrap();
+    f.workspace.unlink(top, b"gone-link", deadline()).unwrap();
+    let source = f
+        .workspace
+        .mkdir(top, b"from", 0o755, 0, deadline())
+        .unwrap();
+    let replaced = f.workspace.mkdir(top, b"to", 0o755, 0, deadline()).unwrap();
+    f.workspace
+        .rename(top, b"from", top, b"to", RenameFlags::default(), deadline())
+        .unwrap();
+    let root = f.commit();
+    assert_eq!(f.lookup(top, b"to").serial, source.serial);
+    for path in [b"doomed".as_slice(), b"gone-link", b"from"] {
+        assert_eq!(
+            f.inspect(
+                root,
+                Inspect::Attributes {
+                    path: path.to_vec()
+                }
+            )
+            .unwrap_err()
+            .code,
+            Code::PathNotFound
+        );
+    }
+    assert!(matches!(
+        f.workspace.mkdir(doomed.serial, b"x", 0o755, 0, deadline()),
+        Err(WorkspaceError::NotFound)
+    ));
+    f.workspace.releasedir(frozen).unwrap();
+    let link = f
+        .workspace
+        .symlink(top, b"link", b"opaque-target", deadline())
+        .unwrap();
+    f.commit();
+    f.workspace
+        .rename(
+            top,
+            b"link",
+            top,
+            b"moved-link",
+            RenameFlags::default(),
+            deadline(),
+        )
+        .unwrap();
+    let final_root = f.commit();
+    assert_eq!(
+        f.workspace
+            .readlink(link.serial, deadline())
+            .unwrap()
+            .as_ref(),
+        b"opaque-target"
+    );
+    assert_eq!(
+        f.inspect(
+            final_root,
+            Inspect::InodeReadlink {
+                serial: link.serial
+            }
+        )
+        .unwrap(),
+        Response::Link(b"opaque-target".to_vec())
+    );
+    for serial in [
+        doomed.serial,
+        target.serial,
+        source.serial,
+        replaced.serial,
+        link.serial,
+    ] {
+        f.workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+    assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
+}
+
+#[test]
+fn phase_a_exact_capability_refuses_before_dependent_inspection() {
+    let f = Fixture::new();
+    for version in [1, 3] {
+        let path = f._temp.0.join(format!("incompatible-{version}"));
+        fs::create_dir(&path).unwrap();
+        let metadata = fs::metadata(&path).unwrap();
+        let calls = Arc::new(AtomicU64::new(0));
+        let seen = calls.clone();
+        let host = WorkspaceHost::new(
+            WorkspaceConfig {
+                root: path.clone(),
+                max_count: 1,
+                memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+                disk_budget_bytes: Some(64 * 1024 * 1024),
+            },
+            Arc::new(move |request, _, _, _| {
+                assert!(matches!(request.operation, Operation::FileSaveCapabilities));
+                seen.fetch_add(1, Ordering::AcqRel);
+                Ok(Response::FileSaveCapabilities { version })
+            }),
+        )
+        .unwrap();
+        let result = host.attach(
+            AttachOptions {
+                id: "incompatible".into(),
+                incarnation: [version; 32],
+                store: f.server.store(),
+                base: Base::Branch([17; 17]),
+                access: WorkspaceAccess::LocalEdit,
+                owner_uid: metadata.uid(),
+                owner_gid: metadata.gid(),
+            },
+            deadline(),
+        );
+        assert!(matches!(result, Err(WorkspaceError::Unsupported)));
+        assert_eq!(calls.load(Ordering::Acquire), 1);
+        assert!(!path.join("private-backing/incompatible").exists());
+        assert!(!path.join("workspace/incompatible").exists());
+    }
+}
+
+#[test]
+fn phase_a_known_save_and_unknown_commit_keep_custody_without_replay() {
+    for fault in [1, 2] {
+        let f = Fixture::new();
+        let top = f.workspace.root().serial;
+        let packages = f.lookup(top, b"packages");
+        let old = f.lookup(packages.serial, b"old");
+        let subtree = f.lookup(old.serial, b"subtree");
+        let child = f.lookup(subtree.serial, b"child");
+        let grand = f.lookup(child.serial, b"grand.txt");
+        let handle = f.open(grand.serial);
+        let payload = f
+            .workspace
+            .own_payload(2, &mut b"AB".as_slice(), deadline())
+            .unwrap();
+        f.workspace
+            .write_file(handle, 1, &payload, deadline())
+            .unwrap();
+        f.fault.store(fault, Ordering::Release);
+        let error = f.workspace.commit(deadline()).unwrap_err();
+        match error {
+            WorkspaceError::Commit(failure) if fault == 2 => {
+                assert_eq!(
+                    failure.disposition,
+                    layerfs_workspace::CommitFailureDisposition::Unknown
+                );
+                assert!(failure.known_outcome.is_none());
+                assert!(failure.installed_revision.is_none());
+            }
+            WorkspaceError::Commit(commit) if fault == 1 => {
+                assert_eq!(
+                    commit.disposition,
+                    layerfs_workspace::CommitFailureDisposition::KnownBeforeCommit
+                );
+                let WorkspaceError::Stage(failure) = &commit.cause else {
+                    panic!("stage custody missing");
+                };
+                let known = failure
+                    .pending
+                    .as_ref()
+                    .expect("known file root survives denied metadata");
+                assert_eq!(known.serial, grand.serial);
+                assert!(known.metadata.is_none());
+                assert!(f.inspect(known.content, Inspect::File).is_ok());
+            }
+            other => panic!("unexpected failure custody: {other:?}"),
+        }
+        assert!(f.workspace.status().unwrap().submission.is_some());
+        assert!(matches!(
+            f.workspace.commit(deadline()),
+            Err(WorkspaceError::Busy)
+        ));
+        assert_eq!(
+            f.canonical_calls.load(Ordering::Acquire),
+            u64::from(fault == 2)
+        );
+        assert!(matches!(
+            f.workspace.close_clean(),
+            Err(WorkspaceError::Busy)
+        ));
+        assert_eq!(
+            f.workspace
+                .read(handle, 0, 10, deadline())
+                .unwrap()
+                .as_ref(),
+            b"gABnd-base"
+        );
+        let status = f.workspace.backing_status().unwrap();
+        assert!(
+            status.allocated_bytes > 0 && status.reserved_bytes > 0 && status.accounting_complete
+        );
+        println!("PHASE_A_RETAINED fault={fault} allocated={} reserved={} selector_retained=true canonical_calls={}", status.allocated_bytes, status.reserved_bytes, f.canonical_calls.load(Ordering::Acquire));
+        // This external proof leaves the failed owner's backing for inspection.
+        std::mem::forget(f);
+    }
+}
+
+fn deny_syscall_on_this_thread(number: u32) {
+    #[repr(C)]
+    struct Filter {
+        code: u16,
+        jt: u8,
+        jf: u8,
+        value: u32,
+    }
+    #[repr(C)]
+    struct Program {
+        len: u16,
+        filters: *const Filter,
+    }
+    unsafe extern "C" {
+        fn prctl(option: i32, ...) -> i32;
+    }
+    let filters = [
+        Filter {
+            code: 0x20,
+            jt: 0,
+            jf: 0,
+            value: 0,
+        },
+        Filter {
+            code: 0x15,
+            jt: 0,
+            jf: 1,
+            value: number,
+        },
+        Filter {
+            code: 0x06,
+            jt: 0,
+            jf: 0,
+            value: 0x0005_0005,
+        },
+        Filter {
+            code: 0x06,
+            jt: 0,
+            jf: 0,
+            value: 0x7fff_0000,
+        },
+    ];
+    let program = Program {
+        len: filters.len() as u16,
+        filters: filters.as_ptr(),
+    };
+    // External Linux fault applies only to this worker. The parent resumes
+    // locally through the same native selector, with no mutation replay.
+    unsafe {
+        assert_eq!(prctl(38, 1usize, 0usize, 0usize, 0usize), 0);
+        assert_eq!(prctl(22, 2usize, &program, 0usize, 0usize), 0);
+    }
+}
+
+#[test]
+fn phase_a_known_canonical_local_failure_resumes_same_selector_once() {
+    let f = Fixture::new();
+    let top = f.workspace.root().serial;
+    let packages = f.lookup(top, b"packages");
+    let old = f.lookup(packages.serial, b"old");
+    let subtree = f.lookup(old.serial, b"subtree");
+    let child = f.lookup(subtree.serial, b"child");
+    let grand = f.lookup(child.serial, b"grand.txt");
+    let handle = f.open(grand.serial);
+    let payload = f
+        .workspace
+        .own_payload(2, &mut b"AB".as_slice(), deadline())
+        .unwrap();
+    f.workspace
+        .write_file(handle, 1, &payload, deadline())
+        .unwrap();
+    drop(payload);
+    let stage = f.workspace.stage(deadline()).unwrap();
+    f.fault.store(3, Ordering::Release);
+    let error = std::thread::scope(|scope| {
+        scope
+            .spawn(|| f.workspace.commit_staged(&stage, deadline()))
+            .join()
+            .unwrap()
+    })
+    .unwrap_err();
+    let WorkspaceError::Commit(failure) = error else {
+        panic!("local C5 failure")
+    };
+    assert_eq!(
+        failure.disposition,
+        layerfs_workspace::CommitFailureDisposition::KnownCommitLocalFailure
+    );
+    assert!(failure.known_outcome.is_some());
+    assert!(failure.installed_revision.is_none());
+    assert!(f.workspace.status().unwrap().submission.is_some());
+    assert_eq!(f.canonical_calls.load(Ordering::Acquire), 1);
+    f.fault.store(0, Ordering::Release);
+    let complete = f.workspace.commit_staged(&stage, deadline()).unwrap();
+    assert_eq!(f.canonical_calls.load(Ordering::Acquire), 1);
+    let root = match complete.outcome {
+        CommitOutcomeWire::Committed(commit) => commit.root,
+        CommitOutcomeWire::UpToDate { root, .. } => root,
+    };
+    assert_eq!(
+        f.content_bytes(root, b"packages/old/subtree/child/grand.txt"),
+        b"gABnd-base"
+    );
+    assert_eq!(f.workspace.backing_status().unwrap().reserved_bytes, 0);
+    f.workspace.release(handle).unwrap();
+    for serial in [
+        packages.serial,
+        old.serial,
+        subtree.serial,
+        child.serial,
+        grand.serial,
+    ] {
+        f.workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    f.workspace.close_clean().unwrap();
+    assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
+}
+
+#[test]
+fn phase_a_large_payload_append_resize_and_backward_base_copy() {
+    let f = Fixture::new();
+    let top = f.workspace.root().serial;
+    let file = f
+        .workspace
+        .mknod(top, b"bytes", 0o640, 0, deadline())
+        .unwrap();
+    let handle = f.open(file.serial);
+    let mut expected: Vec<u8> = (0..512).map(|index| (index % 251) as u8).collect();
+    let payload = f
+        .workspace
+        .own_payload(512, &mut expected.as_slice(), deadline())
+        .unwrap();
+    f.workspace
+        .write_file(handle, 0, &payload, deadline())
+        .unwrap();
+    drop(payload);
+    let before = f.commit();
+    assert_eq!(f.content_bytes(before, b"bytes"), expected);
+    let token = [86; 33];
+    let lease = f.workspace.pin_view(token, deadline()).unwrap();
+    let selected = f
+        .workspace
+        .view_lookup(&token, lease.root.serial, b"bytes", deadline())
+        .unwrap();
+    let read = f
+        .workspace
+        .read(handle, 64, 32, deadline())
+        .unwrap()
+        .as_ref()
+        .to_vec();
+    let payload = f
+        .workspace
+        .own_payload(32, &mut read.as_slice(), deadline())
+        .unwrap();
+    f.workspace
+        .write_file(handle, 0, &payload, deadline())
+        .unwrap();
+    drop(payload);
+    expected[..32].copy_from_slice(&read);
+    let append = f
+        .workspace
+        .open_file(
+            file.serial,
+            FileOpenOptions {
+                access: FileAccess::ReadWrite,
+                append: true,
+                truncate: false,
+            },
+            ReferenceScope::Local,
+            deadline(),
+        )
+        .unwrap();
+    let payload = f
+        .workspace
+        .own_payload(3, &mut b"end".as_slice(), deadline())
+        .unwrap();
+    f.workspace
+        .write_file(append, u64::MAX, &payload, deadline())
+        .unwrap();
+    drop(payload);
+    expected.extend_from_slice(b"end");
+    assert_eq!(
+        f.workspace
+            .read(handle, 0, 600, deadline())
+            .unwrap()
+            .as_ref(),
+        expected
+    );
+    f.workspace.set_len(file.serial, 100, deadline()).unwrap();
+    expected.truncate(100);
+    f.workspace.set_len(file.serial, 110, deadline()).unwrap();
+    expected.resize(110, 0);
+    let bytes = b"0123456789abcdef";
+    let payload = f
+        .workspace
+        .own_payload(bytes.len() as u64, &mut bytes.as_slice(), deadline())
+        .unwrap();
+    f.workspace
+        .write_file(handle, 95, &payload, deadline())
+        .unwrap();
+    drop(payload);
+    expected.resize(111, 0);
+    expected[95..111].copy_from_slice(bytes);
+    let after = f.commit();
+    assert_eq!(f.content_bytes(after, b"bytes"), expected);
+    assert_eq!(
+        f.workspace
+            .view_read(&token, selected.serial, 0, 600, deadline())
+            .unwrap()
+            .bytes,
+        (0..512)
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>()
+    );
+    f.workspace.release_view(&token).unwrap();
+    f.workspace.release(append).unwrap();
+    f.workspace.release(handle).unwrap();
+    f.workspace
+        .forget(file.serial, u64::MAX, ReferenceScope::Local);
+    f.workspace.close_clean().unwrap();
+    assert_eq!(f.workspace.backing_status().unwrap().allocated_bytes, 0);
+}
+
+fn deny_fallocate_on_this_thread() {
+    #[cfg(target_arch = "aarch64")]
+    let number = 47;
+    #[cfg(target_arch = "x86_64")]
+    let number = 285;
+    deny_syscall_on_this_thread(number);
+}
+
+#[test]
+fn phase_a_namespace_cleanup_error_keeps_published_revision_and_identity() {
+    let f = Fixture::new();
+    let root = f.workspace.root().serial;
+    f.workspace
+        .mkdir(root, b"first", 0o755, 0, deadline())
+        .unwrap();
+    let before = f.workspace.status().unwrap().revision;
+    let error = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                #[cfg(target_arch = "aarch64")]
+                let number = 35;
+                #[cfg(target_arch = "x86_64")]
+                let number = 263;
+                deny_syscall_on_this_thread(number);
+                f.workspace.mkdir(root, b"accepted", 0o755, 0, deadline())
+            })
+            .join()
+            .unwrap()
+    })
+    .unwrap_err();
+    let WorkspaceError::Published {
+        receipt,
+        published_handle,
+        ..
+    } = error
+    else {
+        panic!("published cleanup custody: {error:?}")
+    };
+    assert!(published_handle.is_none());
+    assert_eq!(receipt.revision, before + 1);
+    assert_eq!(f.workspace.status().unwrap().revision, receipt.revision);
+    assert_eq!(
+        f.workspace.getattr(receipt.inode).unwrap().kind,
+        NodeKind::Directory
+    );
+    assert!(f.workspace.backing_status().unwrap().allocated_bytes > 0);
+    assert!(matches!(
+        f.workspace.close_clean(),
+        Err(WorkspaceError::Busy)
+    ));
+    println!("PHASE_A_PUBLISHED cleanup_failed=true accepted_revision={} identity={} owner_retained=true", receipt.revision, receipt.inode);
+    std::mem::forget(f);
 }

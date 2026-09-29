@@ -279,6 +279,22 @@ impl WorkspaceHost {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .map_err(|_| WorkspaceError::Busy)?;
             let _remote = Remote(&self.inner.remote);
+            if options.access == WorkspaceAccess::LocalEdit {
+                let capability = self.inner.call(
+                    options.store,
+                    Operation::FileSaveCapabilities,
+                    0,
+                    &mut std::io::sink(),
+                    deadline,
+                )?;
+                if capability
+                    != (Response::FileSaveCapabilities {
+                        version: layerfs_bridge::contract::SAVE_FILE_V2_VERSION,
+                    })
+                {
+                    return Err(WorkspaceError::Unsupported);
+                }
+            }
             let (base, expected_serial, branch_snapshot) = match &options.base {
                 Base::Root(root) => (*root, None, None),
                 Base::Branch(branch) | Base::BranchAt { branch, .. } => {
@@ -437,12 +453,27 @@ impl WorkspaceHost {
             } else {
                 None
             };
+            resources.active = if options.access == WorkspaceAccess::LocalEdit {
+                Some(crate::backing::active::ActiveBacking::new(
+                    directory.clone().ok_or(WorkspaceError::Unsupported)?,
+                    self.inner
+                        .metadata
+                        .as_ref()
+                        .cloned()
+                        .ok_or(WorkspaceError::Unsupported)?,
+                )?)
+            } else {
+                None
+            };
             let inner = Arc::new(Inner {
                 id: options.id.clone(),
                 incarnation: options.incarnation,
                 store: options.store,
                 access: options.access,
                 arena: resources.arena.clone(),
+                active: resources.active.clone(),
+                read_origin: Mutex::new(None),
+                view_leases: crate::runtime::view_leases::ViewLeases::new(&self.inner.budget)?,
                 root: attr,
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
@@ -455,8 +486,11 @@ impl WorkspaceHost {
                     nodes,
                     node_index,
                     node_index_charge,
+                    inherited_names: std::collections::BTreeMap::new(),
+                    is_active: resources.active.is_some(),
                     overlay: None,
                     completion: None,
+                    active_completion: RefCell::new(None),
                     submission: None,
                     generation: 1,
                     revision: 0,

@@ -1,5 +1,7 @@
 # FUSE, Workspace, snapshot overlay and Commit integration
 
+Current selective #284 implementation: [component namespace and active authority](../../17-workspace-active-components.md). This source-pinned description supersedes this packet's legacy mutation/aggregate-locator implementation descriptions for the integration tree; historical evidence and contracts keep their original pins.
+
 > **Status: Proposal; target LayerFS v0.1.7; not a released contract.**
 > Implementation planning baseline finalized 2026-09-21. The design is informed by reviewed main
 > `152b9c3a2e8ec2536a1d63601b681e1f7ef34455`; the v0.1.6 comparison uses release

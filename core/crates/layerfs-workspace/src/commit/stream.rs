@@ -40,6 +40,25 @@ use std::{
     time::Instant,
 };
 
+pub(crate) enum PreparedBody<'a> {
+    Legacy(PreparedStream<'a>),
+    Active(super::active::ActiveStream),
+}
+
+impl Source for PreparedBody<'_> {
+    fn read(
+        &mut self,
+        out: &mut [u8],
+        deadline: Instant,
+        cancel: &AtomicBool,
+    ) -> io::Result<usize> {
+        match self {
+            Self::Legacy(stream) => stream.read(out, deadline, cancel),
+            Self::Active(stream) => stream.read(out, deadline, cancel),
+        }
+    }
+}
+
 /// Bytes one chunk of the body carries before it is handed to the transport.
 const STREAM_CHUNK_BYTES: usize = 16 * 1024;
 

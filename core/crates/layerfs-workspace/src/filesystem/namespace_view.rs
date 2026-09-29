@@ -12,6 +12,23 @@ use std::{sync::Arc, time::Instant};
 pub(crate) struct View {
     pub base: Root,
     pub root: Option<Arc<RootOwner>>,
+    /// A read-only immutable selection; namespace reads never borrow later
+    /// live ancestry to authorize this snapshot.
+    pub active: Option<Arc<crate::backing::active::ActiveSnapshot>>,
+}
+impl View {
+    pub(crate) fn release_active(&mut self) -> Result<(), WorkspaceError> {
+        match self.active.take() {
+            Some(snapshot) => match Arc::try_unwrap(snapshot) {
+                Ok(exclusive) => exclusive.release(),
+                Err(shared) => {
+                    self.active = Some(shared);
+                    Err(WorkspaceError::Busy)
+                }
+            },
+            None => Ok(()),
+        }
+    }
 }
 pub(crate) struct Resolved {
     pub original: NodeAttributes,
@@ -75,6 +92,9 @@ impl Workspace {
         deadline: Instant,
     ) -> Result<Resolved, WorkspaceError> {
         check_name(name)?;
+        if view.active.is_some() {
+            return self.resolve_child_active(operation, view, parent, name, deadline);
+        }
         let mut base = Some(view.base);
         let mut binding = None;
         let mut local = None;
@@ -246,6 +266,9 @@ impl Workspace {
         limit: usize,
         deadline: Instant,
     ) -> Result<Vec<(Vec<u8>, u64)>, WorkspaceError> {
+        if view.active.is_some() {
+            return self.list_view_active(operation, view, serial, after, limit, deadline);
+        }
         let mut names = crate::backing::metadata_index::vector(limit)?;
         let mut base = Some(view.base);
         let mut delta = None;

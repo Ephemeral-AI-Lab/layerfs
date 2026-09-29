@@ -581,6 +581,11 @@ impl Filesystem for Adapter {
             .as_mut()
             .map_err(|error| *error)
             .and_then(|(permit, append)| {
+                if data.len() <= 128 {
+                    return permit
+                        .write_tiny_file(fh.0, offset, data, *append, deadline)
+                        .map_err(errno);
+                }
                 let payload = self
                     .workspace
                     .own_payload(data.len() as u64, &mut &data[..], deadline)
@@ -591,6 +596,9 @@ impl Filesystem for Adapter {
             });
         // The origin permit stays alive through the send attempt. fuser does not
         // expose checked reply delivery or a later kernel-completion acknowledgement.
+        if let Ok((origin, _)) = &mut permit {
+            origin.mark_reply_started();
+        }
         match result {
             Ok(receipt) => reply.written(receipt.accepted_bytes as u32),
             Err(error) => reply.error(error),

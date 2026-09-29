@@ -296,6 +296,52 @@ impl Workspace {
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
         let captured = submission.capture()?;
+        if captured.active.is_some() {
+            let result =
+                super::active_reconcile::reconcile(self, submission, attempt, outcome, deadline);
+            // A diagnostic snapshot *after* the failing call has unwound its
+            // scratch; the reservation's own line records the refusal instant.
+            if result.is_err()
+                && std::env::var_os("LFS_CAPACITY_DIAGNOSTIC").as_deref()
+                    == Some(std::ffi::OsStr::new("1"))
+            {
+                let budget = self.host.budget.used();
+                let charged = self.host.payloads.as_ref().and_then(|payloads| {
+                    payloads
+                        .state
+                        .lock()
+                        .ok()
+                        .map(|state| (state.allocated, state.reserved, payloads.quota))
+                });
+                let active = self.inner.active.as_ref();
+                let selected = active.and_then(|active| active.status().ok());
+                let active_revision = active.and_then(|active| active.generation_revision().ok());
+                let installed = attempt
+                    .status
+                    .lock()
+                    .ok()
+                    .and_then(|status| status.installed_revision);
+                let class = match result.as_ref().err() {
+                    Some(WorkspaceError::Capacity) => "capacity",
+                    Some(WorkspaceError::Backing(_)) => "backing",
+                    _ => "other",
+                };
+                // Bounded, single-line record; NA is missing, never zero.
+                eprintln!(
+                    "LFS_C5_FAILURE_CONTEXT v=1 known={} installed_revision={} class={} budget_used={} allocated={} reserved={} quota={} active_revision={} pages={} pins={}",
+                    attempt.known.get().is_some(),
+                    installed.map_or("NA".to_owned(), |n| n.to_string()),
+                    class, budget,
+                    charged.map_or("NA".to_owned(), |n| n.0.to_string()),
+                    charged.map_or("NA".to_owned(), |n| n.1.to_string()),
+                    charged.map_or("NA".to_owned(), |n| n.2.to_string()),
+                    active_revision.map_or("NA".to_owned(), |(_, n)| n.to_string()),
+                    selected.map_or("NA".to_owned(), |status| status.store.pages.to_string()),
+                    selected.map_or("NA".to_owned(), |status| status.store.pinned_pages.to_string()),
+                );
+            }
+            return result;
+        }
         let (head, canonical) = match outcome {
             CommitOutcomeWire::Committed(commit) => (Some(commit.commit), commit.root),
             CommitOutcomeWire::UpToDate { head, root } => (*head, *root),

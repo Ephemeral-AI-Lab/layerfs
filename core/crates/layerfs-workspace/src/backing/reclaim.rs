@@ -20,11 +20,19 @@ enum ReleasedRecord {
 
 impl PayloadHost {
     pub fn has_external_pins(&self, incarnation: [u8; 32]) -> Result<bool, WorkspaceError> {
+        self.has_external_pins_except(incarnation, |_| false)
+    }
+    pub(crate) fn has_external_pins_except(
+        &self,
+        incarnation: [u8; 32],
+        owned: impl Fn(&Arc<Record>) -> bool,
+    ) -> Result<bool, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         let mut examined = 0u64;
         let found = state.records.values().any(|record| {
             examined += 1;
-            record.directory.incarnation == incarnation && Arc::strong_count(record) > 1
+            record.directory.incarnation == incarnation
+                && Arc::strong_count(record) > 1 + usize::from(owned(record))
         });
         state.note_lookup(examined);
         Ok(found)

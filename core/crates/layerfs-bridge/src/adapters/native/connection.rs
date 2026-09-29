@@ -486,8 +486,9 @@ fn read_record_into(io: &mut Socket, limit: usize, out: &mut Vec<u8>) -> Result<
     Ok(())
 }
 
-// Distinguish a socket's actual read deadline from other I/O failures.
-// The client still retains unknown custody when a mutation reply is lost.
+// A socket's own elapsed read deadline is not an unspecified I/O failure.
+// Callers still decide mutation custody: client::delivery converts a missing
+// mutation reply to Unknown, regardless of the local transport error.
 fn record_read_error(error: io::Error) -> Failure {
     if error.kind() == io::ErrorKind::TimedOut {
         Code::Deadline.into()

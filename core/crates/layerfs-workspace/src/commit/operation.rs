@@ -17,7 +17,7 @@ impl Workspace {
         let _operation = self.begin(false, deadline)?;
         let mut first_remote = Some(self.begin(true, deadline)?);
         let submission = self.capture_submission(true, deadline)?;
-        let attempt = match CommitAttempt::reserve(self, &submission, None) {
+        let attempt = match CommitAttempt::reserve(self, &submission, None, deadline) {
             Ok(attempt) => attempt,
             Err(error) => return Err(submission.fail(error)),
         };

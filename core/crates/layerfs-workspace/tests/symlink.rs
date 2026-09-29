@@ -282,10 +282,7 @@ mod linux {
             .unwrap();
         // One fresh symlink identity per created link, and no typed row of any
         // other role: the rows themselves are the body this request declared.
-        assert_eq!(
-            p.totals.fresh,
-            created.iter().map(|(_, _, a)| a.serial).count() as u64
-        );
+        assert_eq!(p.totals.fresh, created.len() as u64);
         assert_eq!(p.totals.rooted_identities().unwrap(), p.totals.fresh);
         assert_eq!(p.totals.declarations, 0);
         drop(observed);

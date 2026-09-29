@@ -197,6 +197,10 @@ mod linux {
         file.read_exact_at(&mut out, 0).unwrap();
         out
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "external canonical oracle keeps identity and metadata expectations explicit"
+    )]
     fn saved_file(
         f: &Fixture,
         root: Root,

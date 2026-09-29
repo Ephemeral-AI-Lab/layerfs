@@ -188,8 +188,7 @@ mod linux {
         }
         let filesystem = fstatfs(&file).map_err(os_error)?;
         // ext2/3 share this magic; the supported deployment also verifies ext4.
-        if filesystem.filesystem_type() != EXT4_SUPER_MAGIC
-            || u64::try_from(filesystem.block_size()).ok() != Some(ALIGN as u64)
+        if filesystem.filesystem_type() != EXT4_SUPER_MAGIC || filesystem.block_size() != ALIGN as _
         {
             return Err(unsupported());
         }

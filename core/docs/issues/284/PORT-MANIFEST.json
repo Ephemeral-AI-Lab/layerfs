@@ -1,0 +1,941 @@
+{
+  "schema": "issue284-selective-port-manifest-v1",
+  "construction_parent": "1ab1501c9b44b1d3907bdfcba8b5020698525fb4",
+  "T0": "05eb5c14849f1b874383fd1600ba9288f103ad93",
+  "P0": "11a864fc133844cae7a4247b1f243d84d5763b10",
+  "design_source": "f9f9abb37332e23d1968a5ed204ff70e3e66d783",
+  "review_base": "6eb7553671d3000160ad023a57b335e52dd81a26",
+  "phase": "A implementation only; Phase B ON HOLD/NOT_RUN",
+  "seal_method": "SHA256 of sorted path + NUL + file SHA256 + LF rows; product=all core/crates src and sql; tests=tests and examples; compilation adds manifests, toolchain and profile",
+  "core_product_seal": "5afe905cdcaaa30283482b2dad8233b71696b9efa142a31168a088eaf3115fbd",
+  "test_example_seal": "824b82bc56951e8ed051803ed130bdf9b448770058a11d5ab8579b5c3fabd014",
+  "compilation_seal": "3c585598b3faaa3cb8bef84628c9a4a971b8d9c5680ff9148d3db0d109ca2672",
+  "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+  "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+  "daemon_binary_sha256": "d3a6af30079224673ec23cd6aa1648a8dcd62eb12193874dc8e472c61a105557",
+  "daemon_image_id": "sha256:c36ff06d4701b4de922bc571fb68c8c80ad8f80de04975f431cfd8084d1d24af",
+  "image_profile": "Cargo dev, aarch64 Linux, existing root FUSE deployment, Alpine pinned image, correctness only; NOT an Init/release/performance arm",
+  "image_base_digest": "sha256:ce64758a109eb420d874a118f87920e625e12d3634e03b4a5573fd9f6e5d3507",
+  "image_dockerfile_sha256": "8630a98ebc9f976d705811f1fab95e984ea96161cb20aedf958ba4076341ab04",
+  "linux_native_test_sqlite_archive_sha256": "7dad0c16c8621bed6a9aa8ecfc6f738febe24b48c9eb239a413af31883a7ca66",
+  "counter_sha256": "c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb",
+  "retained_t0": [
+    "runtime/ancestry.rs",
+    "NodeName and parent/attached/retained graph",
+    "component check_name",
+    "identity-relative reads and complete LocalEdit/ReadOnly ancestor collection",
+    "one rename publication with no post-publication cycle refusal"
+  ],
+  "excluded_p0": [
+    "NodePath",
+    "extended_path",
+    "child_path_active",
+    "PinnedDirectoryPath",
+    "rename_paths.rs",
+    "HeldEntry.path",
+    "inherited descendant enumeration",
+    "resident pathname rewriting",
+    "donor benchmark runners/registries/campaigns",
+    "donor Host Exec timing wrapper/aggregated status counters; Phase B must keep active a-* observations separate from legacy m-* observations"
+  ],
+  "unchanged": [
+    "reference crates/",
+    "core layerfs-storage product/schema",
+    "core layerfs-history product/schema",
+    "benchmark and core/benchmark trees",
+    "Cargo manifests and locked dependencies",
+    "worker/quota/deadline and ARMv8 profile",
+    "other owners and PR heads"
+  ],
+  "files": [
+    {
+      "path": "core/crates/layerfs-api/core/src/lib.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "bdb1081db2f4bd6ca1d498230a61d4ebd8ce13194b656730c208b3185e5bcf3a",
+      "p0_sha256": "2f145f986fe6b0395e560b6a85873e404ba2488bc6490a8dbb28b5a15f58324a",
+      "target_sha256": "2f145f986fe6b0395e560b6a85873e404ba2488bc6490a8dbb28b5a15f58324a"
+    },
+    {
+      "path": "core/crates/layerfs-api/core/src/workspace_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "48c1ffcc9ab0662eee12ff5ee515f1d2a901ce884ceee2459ead4f09c4b0593b",
+      "target_sha256": "48c1ffcc9ab0662eee12ff5ee515f1d2a901ce884ceee2459ead4f09c4b0593b"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/src/lib.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "f0ed3e6a9ff3137cb24f68fd9398026cbac9de96acd984c6aa96f45fce8e5e72",
+      "p0_sha256": "f17b0557d4157ff21cef4d081842628bff2b62c58394b79e76a1e223937e9901",
+      "target_sha256": "f17b0557d4157ff21cef4d081842628bff2b62c58394b79e76a1e223937e9901"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/src/workspace.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "b86713daa8bb452acbe1e96e8ffe84ebcaf03f602d46a65886c9c69f8ef1de83",
+      "p0_sha256": "08cff8dcae21dfbd06092ca10d7630c8a6b63562bc49a536cf833b08d34d1a74",
+      "target_sha256": "08cff8dcae21dfbd06092ca10d7630c8a6b63562bc49a536cf833b08d34d1a74"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/src/workspace_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "5ee8fe23d0d8d222bcaa59112a248de8ddc637ce55f54e103b00f64aea7b2a01",
+      "target_sha256": "5ee8fe23d0d8d222bcaa59112a248de8ddc637ce55f54e103b00f64aea7b2a01"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/tests/agent_route.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1d7448c3a55437712d4b1675f19f4b6486859d37b267aa3a48536bde24b7b3fd",
+      "p0_sha256": "1d7448c3a55437712d4b1675f19f4b6486859d37b267aa3a48536bde24b7b3fd",
+      "target_sha256": "b50cf67be9ac3be55e5a414a7e932936bec8cc0d5b4dec5328c30d6de95db9a7"
+    },
+    {
+      "path": "core/crates/layerfs-api/sdk/tests/inherited_workspace.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "15de3d25e23287b554019497099e90f09397df5791a698d41e5f8bb3d388e09d",
+      "p0_sha256": "1e185ee1a84c2693e768023bb4b6eb0e33a4fd7c5c273aa3daa9916b036342f3",
+      "target_sha256": "f6d9b2dd65c0df34f55f968c3b52fc20d1c303e2d7eda46311db32abfe821ab1"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/client.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "03b4e301ebd27afb983f9b9c68a79d0897ad8113fa57648f1cecb7215a485f4a",
+      "p0_sha256": "55778fe78c88824e4e39de2cbebf88049cb8a7938e3f2e13e5339f010b2087e2",
+      "target_sha256": "55778fe78c88824e4e39de2cbebf88049cb8a7938e3f2e13e5339f010b2087e2"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/connection.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "6aa946006dd643b2d084f850cc4e769cc7a3f583db0dda329f8950884b4aaff9",
+      "p0_sha256": "9834153e685d818a83658585ecd024ec92f0480a64f7afed7881eabec5c21978",
+      "target_sha256": "9834153e685d818a83658585ecd024ec92f0480a64f7afed7881eabec5c21978"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/metadata.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "3f9d1cb06f434ce030188ddcaf6dee4e7c95ed6a1e6f1ea2223611a1219b77d9",
+      "p0_sha256": "09e32e6e112c0a025e492914cabe47f6568a2a32613b2feb82b171f13cfccdc6",
+      "target_sha256": "09e32e6e112c0a025e492914cabe47f6568a2a32613b2feb82b171f13cfccdc6"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/mod.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "ab8e1a4a17976504a38f38b42fd563a404bb111e48c84145698fed6124d20edb",
+      "p0_sha256": "771c9055dc628e25728b25dbb38dbab24b973cd26e3abb8a4bfe1e2a992df734",
+      "target_sha256": "771c9055dc628e25728b25dbb38dbab24b973cd26e3abb8a4bfe1e2a992df734"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/response.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "5a946cbe30ae6bcd3ad7b602115845de48605b3b7f58be0431cf1bcb59b2c1c8",
+      "p0_sha256": "3454ab12c4af6ef693b9773c555554fbadcf582523e8753416662456d310bc52",
+      "target_sha256": "3454ab12c4af6ef693b9773c555554fbadcf582523e8753416662456d310bc52"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/adapters/native/protocol/workspace_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "92a3690b615529675de992a59ef284698b4d677be7a5e83ca6b99b0d165165af",
+      "target_sha256": "92a3690b615529675de992a59ef284698b4d677be7a5e83ca6b99b0d165165af"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/history.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1f496059e53e5fa3b3f6945c40e693d031a928b6cabb7e7e9e7165eaee8ac54c",
+      "p0_sha256": "b6ee1f56e8c84cfbc9577a059f964b253933eb39af6c163cbf70b3ac0eb27480",
+      "target_sha256": "b6ee1f56e8c84cfbc9577a059f964b253933eb39af6c163cbf70b3ac0eb27480"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/mod.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "d3347dbe70fcaafba11845e3981cfbbc1a0b0f662e4e9edc1f1ede3cfeac6ad9",
+      "p0_sha256": "632ea32a41d3cc6d9dfdc8b5b7c38db9ff6e7e11e9fd3c03b76772c4df2758e7",
+      "target_sha256": "632ea32a41d3cc6d9dfdc8b5b7c38db9ff6e7e11e9fd3c03b76772c4df2758e7"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/outcome.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "4fe7f51e5150cccef7f292a082282241b2cd2911e2e33dc92c3a40ca37a9c6a3",
+      "p0_sha256": "15bbf624beb37b8bcea87d7b1e5f580548dcbcfbe1a6504c9772e9605c0502c1",
+      "target_sha256": "15bbf624beb37b8bcea87d7b1e5f580548dcbcfbe1a6504c9772e9605c0502c1"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/request.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "4b21af4d412cf75816d6745a35e0335f6667453ce3044bf8cecd5ca2b3691c64",
+      "p0_sha256": "9a548e07e31104be5efbae922c8dbe6924f1d0e41968adce386a744fc92fa716",
+      "target_sha256": "9a548e07e31104be5efbae922c8dbe6924f1d0e41968adce386a744fc92fa716"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/workspace_request.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "9ac17532a9fb108095f551dac5ecbcbdd3d8d12a87354b2e852521eb5af371ca",
+      "p0_sha256": "9c94e7ee21747234954841b549f533cb065bc1ebe9ed90ed1e4b1b556105a6e5",
+      "target_sha256": "9c94e7ee21747234954841b549f533cb065bc1ebe9ed90ed1e4b1b556105a6e5"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/src/contract/workspace_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "262453dd4da8a147cb69cf8e37f5dd82830d3d09beedea4d30f6519aec0c781c",
+      "target_sha256": "262453dd4da8a147cb69cf8e37f5dd82830d3d09beedea4d30f6519aec0c781c"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/tests/file_save_v2.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "05eb5c14849f1b874383fd1600ba9288f103ad93",
+      "t0_sha256": null,
+      "p0_sha256": null,
+      "target_sha256": "527e6a250e0a9e7ea63b35c599e631943913b9b8692d9260250fcacd4b6a1835"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/tests/native_connections.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "8952ff91d53246fbf71c0324e9c338b7b265c19f121f7f942b611fa3a97833ee",
+      "p0_sha256": "daed6a975ecbfc5c6dc24942f11654b0e308d43114bded6b41b0590313a613d1",
+      "target_sha256": "587ffef61cf5223279a057c0c73d2f53db65fe1fe58491b5bf826dffd886b90c"
+    },
+    {
+      "path": "core/crates/layerfs-bridge/tests/workspace_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "222cb37139e648214e2c42d035e717954ae39d40f1e415df23c64f5ff2977aed",
+      "target_sha256": "222cb37139e648214e2c42d035e717954ae39d40f1e415df23c64f5ff2977aed"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/update.rs",
+      "decision": "REUSE P0",
+      "source_commit": "fbda0f0f1dbb6bb3ddd375694e3ea7edbab62ebd",
+      "t0_sha256": "0a9490874b659d1a38b13841d3074b4a282ce28dc86b758d823e6a64a9637d7d",
+      "p0_sha256": "630cd33b8ad2b4189477a3f9ee27f7c6c9fbc742722c2150557566d70d86dffb",
+      "target_sha256": "630cd33b8ad2b4189477a3f9ee27f7c6c9fbc742722c2150557566d70d86dffb"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "decision": "REUSE P0",
+      "source_commit": "fbda0f0f1dbb6bb3ddd375694e3ea7edbab62ebd",
+      "t0_sha256": "01f049b7bf5e78ad98e2822cacb945e7738ca9e217b22a4a1f55090597dca741",
+      "p0_sha256": "59601241d65a184b9362478a8cebd88fea9e83b5201640dd60569931f620a717",
+      "target_sha256": "59601241d65a184b9362478a8cebd88fea9e83b5201640dd60569931f620a717"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/cycles.rs",
+      "decision": "REUSE P0",
+      "source_commit": "fbda0f0f1dbb6bb3ddd375694e3ea7edbab62ebd",
+      "t0_sha256": null,
+      "p0_sha256": "7b1d03f808969437e051b23fe14463a88eb649adcabfa16596e3b965c5e54d5d",
+      "target_sha256": "7b1d03f808969437e051b23fe14463a88eb649adcabfa16596e3b965c5e54d5d"
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/filesystem_ordering.rs",
+      "decision": "REUSE P0",
+      "source_commit": "fbda0f0f1dbb6bb3ddd375694e3ea7edbab62ebd",
+      "t0_sha256": "33c60f6bb663a0845a3ebdf0523969cbf704751d6110da87c50c69e380c0001f",
+      "p0_sha256": "d097c350cecddd6aa9b5cd5e5337f9ffc791a798c446f9f32689bf976beeec08",
+      "target_sha256": "d097c350cecddd6aa9b5cd5e5337f9ffc791a798c446f9f32689bf976beeec08"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/control.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "62288e0322fa4042241a95cfc01d2962778a55e5ef0fbc6683470e87a955d4c9",
+      "p0_sha256": "657f8a9a9ece8c42845f5aefb6d7fbea3fcb7de9f17af619270bafa7ed9ec10a",
+      "target_sha256": "657f8a9a9ece8c42845f5aefb6d7fbea3fcb7de9f17af619270bafa7ed9ec10a"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/control_view.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "f2e4e41a64056099bf0a7e6adda34a5ca7eb3f4ae29f1d35ae6db6518a14772a",
+      "target_sha256": "f2e4e41a64056099bf0a7e6adda34a5ca7eb3f4ae29f1d35ae6db6518a14772a"
+    },
+    {
+      "path": "core/crates/layerfs-daemon/src/lib.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "e7690fcbc77f3073ce483c91cb09cdabb45ec8ba31ad3729c0bf2a830381c8ff",
+      "p0_sha256": "1503a7578b06d14febb4e1d1dd26484efb2e3653875df5195f3917ae06167887",
+      "target_sha256": "1503a7578b06d14febb4e1d1dd26484efb2e3653875df5195f3917ae06167887"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/adapter.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "b61cfa4bba5ca30f38f4384f76734545d0845da13de01c63fa1869b577de9950",
+      "p0_sha256": "56970c37ccb50f69f8db61d14c5668a83d1e4970e51792bdbc1345f69b02fc17",
+      "target_sha256": "e361037d9c87ac42dda651e06a708053b999bfa54a69a7e5038a3e1398380fa7"
+    },
+    {
+      "path": "core/crates/layerfs-fuse/src/replies.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "40b5a97117ae51aeddb27de8324b3117f787615a752746d45849486d72b6c29a",
+      "p0_sha256": "b2c91de4ffa5d674b084b4cf8bd31f0c862e3ea2f0787b4882c6a7b9515ed246",
+      "target_sha256": "b2c91de4ffa5d674b084b4cf8bd31f0c862e3ea2f0787b4882c6a7b9515ed246"
+    },
+    {
+      "path": "core/crates/layerfs-sandbox/src/session.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "82a5765bee016bb05e7b97eb32fe3b9be840976c4a67974c5e63aab2048748b3",
+      "p0_sha256": "655e8222bef73e9a7b5d0d9b2cadc4c38a2531761d2972c3e62e92128128c5f3",
+      "target_sha256": "daf34a6bda1551cb2a4fc82ac28a3bf1185d3c2fe4f0e80a976ef2667367cac4"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/handler.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "8badf34cae2851b2b5559a7b9ebeb77704547635fad0b7b13092dbd99ebb42f7",
+      "p0_sha256": "5ff24c8f39e0960b1c874011450cb01d15c7a59379d91e6801c0a5d9d0795d8f",
+      "target_sha256": "5ff24c8f39e0960b1c874011450cb01d15c7a59379d91e6801c0a5d9d0795d8f"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/content.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "91306d2cedc596f3ed4eddc75e012761fe75f0746291e68a18fd59087f565bc7",
+      "p0_sha256": "6273d2d0f523a72cd507c879251f85fe10b0f6ac116e3aa8c3845dcc7076fd0d",
+      "target_sha256": "40f2fdca393fbeb7a472cb968fb54caa00d514685bc530104d44119987a3f41d"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/file_stream.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "701e8e2fe0eaf1b052915e25f3c31084b51635f6805cd15ad43d03b6cedbcdd8",
+      "p0_sha256": "09a819c378bb3c468ef2c78b458b131a18221e8191e18e37a187497e4e94a9eb",
+      "target_sha256": "09a819c378bb3c468ef2c78b458b131a18221e8191e18e37a187497e4e94a9eb"
+    },
+    {
+      "path": "core/crates/layerfs-server/src/service/save/file_stream/origin_runs.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "8115b45d311be1a299899d42d40eab1b858c38e68a6368f823cec8611c18b7a7",
+      "target_sha256": "8115b45d311be1a299899d42d40eab1b858c38e68a6368f823cec8611c18b7a7"
+    },
+    {
+      "path": "core/crates/layerfs-server/tests/direct.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1d7b1ea920e872c93c578875071c587153f6714ab8a319ae1924e8e22355fdd0",
+      "p0_sha256": "7c32edfcf2728257ee319d723f1585af64fec22c5acb4a8a73cc0c0d5724a8af",
+      "target_sha256": "7c32edfcf2728257ee319d723f1585af64fec22c5acb4a8a73cc0c0d5724a8af"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/compaction.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "3e027eed937f2e12cb5e5e1620f7fa301bbbde79ecf9a12c63a4dc1eeeab29e5",
+      "target_sha256": "3e027eed937f2e12cb5e5e1620f7fa301bbbde79ecf9a12c63a4dc1eeeab29e5"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/extents.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "3c8607c014cf9e1c8ee8b62fd42c8aa5b766a7f69071f50214cf9d788dc57e08",
+      "target_sha256": "3c8607c014cf9e1c8ee8b62fd42c8aa5b766a7f69071f50214cf9d788dc57e08"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/generation.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "0f564f69af4311b58d1e1fa7b3241d4daa0afecfad4bf78df5cb7c0aa78faecd",
+      "target_sha256": "bbc59139542ee95d788ea0a1293b3958dda1959946aedb4f5ef27d850369bfa4"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/generation/read_origin.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "abfb8ad1aa7d7abc9b6267186ccc9f8f2c37d492719545f4c6e282650dd631a8",
+      "target_sha256": "abfb8ad1aa7d7abc9b6267186ccc9f8f2c37d492719545f4c6e282650dd631a8"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/hot_cursor.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "a01acc31d9dd51aea07ae0b9e5c6dbab63d85055c9212d9c6d6958d48a202cfc",
+      "target_sha256": "a01acc31d9dd51aea07ae0b9e5c6dbab63d85055c9212d9c6d6958d48a202cfc"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/hot_directory.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "962f1673fd7af0b12362cab3c328d028addcd47035b3de39f62fbd0f1eaecdfa",
+      "target_sha256": "962f1673fd7af0b12362cab3c328d028addcd47035b3de39f62fbd0f1eaecdfa"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/hot_path.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "8debcdcd8b8ca613f80c7e3ad1b87b20900ebb9e82e775a046d5199e4b406897",
+      "target_sha256": "8debcdcd8b8ca613f80c7e3ad1b87b20900ebb9e82e775a046d5199e4b406897"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/index.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "be34d7ce3089be377fc916ab15956d57f8d4e8b4d41459544fd950b47f424a57",
+      "target_sha256": "be34d7ce3089be377fc916ab15956d57f8d4e8b4d41459544fd950b47f424a57"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/keyed.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "3ab168cc88a27c0a8022bbc36fd0f2b37c35adcdd0cebf8771e847abf07e97d5",
+      "target_sha256": "3ab168cc88a27c0a8022bbc36fd0f2b37c35adcdd0cebf8771e847abf07e97d5"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/lifetime.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "5da42d1a303f591f22403ddec8a3ff25eab97ea1edc7083500ea865a1aacac26",
+      "target_sha256": "a01705733a41af0d66c1cd448ad6e34288983f9c906e28a311f2b4bec1deb170"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/mod.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "638b7c1bfa6e95161ae368f3bdb41b0c07c6784b10d6b6d52017189cf687250d",
+      "target_sha256": "638b7c1bfa6e95161ae368f3bdb41b0c07c6784b10d6b6d52017189cf687250d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/pack.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "9e430a6a31cdd51f0603d2c5906c2929f2a5340ab93a3c239f38e57a0cb7e7de",
+      "target_sha256": "9e430a6a31cdd51f0603d2c5906c2929f2a5340ab93a3c239f38e57a0cb7e7de"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/page.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "9810f5e305ea2e62e896f08e8f879960498e11e92821c764c0898627f58df9e8",
+      "target_sha256": "9810f5e305ea2e62e896f08e8f879960498e11e92821c764c0898627f58df9e8"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/pages.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "9745faf583e8475f10de7f5bd267783545108e7e9970ae48fa201cc019ae92dc",
+      "target_sha256": "9745faf583e8475f10de7f5bd267783545108e7e9970ae48fa201cc019ae92dc"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/reader.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "c13b8ba9b81024b67341dd9316f945f60c2416d028ec6c1a4dd4531f5e703dc1",
+      "target_sha256": "c13b8ba9b81024b67341dd9316f945f60c2416d028ec6c1a4dd4531f5e703dc1"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/reclaim.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "d6ff8bf53a294c467733a63112ee9a74a9aa8c1b53bb0a7f46ffd1a60bd37be1",
+      "target_sha256": "d6ff8bf53a294c467733a63112ee9a74a9aa8c1b53bb0a7f46ffd1a60bd37be1"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/records.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "064eb23ae8da299af6cd58e56eb701e16f4d8933c9176c7469909e3012cf949b",
+      "target_sha256": "064eb23ae8da299af6cd58e56eb701e16f4d8933c9176c7469909e3012cf949b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/resolve.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "8b4175ffd27dcf55dc7e87cda663a880b04b0777e36a6b2638510b7a7610946a",
+      "target_sha256": "8b4175ffd27dcf55dc7e87cda663a880b04b0777e36a6b2638510b7a7610946a"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/retirement.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "8a4a47b1ef83a64db9ea82178227890bf22d38b233b82c37713009e1565075fd",
+      "target_sha256": "8a4a47b1ef83a64db9ea82178227890bf22d38b233b82c37713009e1565075fd"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/active/splice.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "96875ce911f41ea2645cbfab8da4df9350f32cae06a26654cc3bd0649b62f8bf",
+      "target_sha256": "96875ce911f41ea2645cbfab8da4df9350f32cae06a26654cc3bd0649b62f8bf"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/budget.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "b3121a7f013d8aecb33828c6030afce667ca85d86dbf2bca5533822fba2804e7",
+      "p0_sha256": "b8657b9413bdc8f3bcd74849a84969d30cfeb8f2f61a122cce34c53b42aec123",
+      "target_sha256": "2ac56834e500c5d948c98fde1d3a8817c10c3beb55ca05e0fa089dd5cdcf6391"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/metadata.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "eec67b7689d0020db9fa7baf7be7b5b63a293cca79b55ff3ae251657ada59a70",
+      "p0_sha256": "d686c40cf9fd347ff1177fc70c64f731970ab02ecac306d3c681cf976a7b1182",
+      "target_sha256": "9cc3ea451aad5ad91469b66dc67fa044942eba9da36bc554112e76d03b15a8b3"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/mod.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "e7803ee068534be1a2e9d1be27ac600c569099980184a631c92dcbccd069ebf3",
+      "p0_sha256": "ead9f1be04f546e1ebbeb9f46ddd0060f6aa41f9a118637ea04d52dfc6f2b6de",
+      "target_sha256": "ead9f1be04f546e1ebbeb9f46ddd0060f6aa41f9a118637ea04d52dfc6f2b6de"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/reclaim.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "baaab71d855d15d0e19b4d63946fe501fea834364f9c969ce0609f41c1272afb",
+      "p0_sha256": "49f8f4e89f0dc5de1d1022948b92579381554a6f6821ecc76c5eb56c8cef230a",
+      "target_sha256": "e55e712c90ba1ccd95bca2f505c15b35b0babe1398b38effc4e737d5d7274913"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/backing/segments.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1c415b3eb55c213e5d973786577c6fc3039cc37382504760badf6fb5d67628b0",
+      "p0_sha256": "176dcac69438f13e840f525eacdcd93d1559d1786226f3384b0054fc41153627",
+      "target_sha256": "dd2286500231693d0498379f7825af3314cc902f65bdc0b27c122b74b24c735d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/active.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "bf97053cf468f7299b293393660e3ef85dbffedc880ba734db25dfb631af706b",
+      "target_sha256": "bf97053cf468f7299b293393660e3ef85dbffedc880ba734db25dfb631af706b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/active_reconcile.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "3e022a29f50f392ec7d632ab7312cf76ee94a0118737c3057cdb098b5ff16edb",
+      "target_sha256": "3e022a29f50f392ec7d632ab7312cf76ee94a0118737c3057cdb098b5ff16edb"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/active_source.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "a82cb763a6d9800965c3f441ed6c74d6b4afca86bb73f8ebaec5fc94bbb4599f",
+      "target_sha256": "a82cb763a6d9800965c3f441ed6c74d6b4afca86bb73f8ebaec5fc94bbb4599f"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/completion.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "afc6949111bae8dfa50b6a73d2990ec7058c8b6e0df1ed087c6def57432742f6",
+      "p0_sha256": "6ff0694c508dd60b155e6c37735ee03928d2e32f317fc0bf7b74ab281ce667b4",
+      "target_sha256": "6ff0694c508dd60b155e6c37735ee03928d2e32f317fc0bf7b74ab281ce667b4"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/mod.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "f8b286706ad0654cf03c5e8295523330ba8b9256c02c01d9f776888f82af9808",
+      "p0_sha256": "46eb44ff931734a53194b4aa41c7ca181bb926662cc795493275f62066d091d0",
+      "target_sha256": "bcd6b37e330649a8cc2397686d909b022b3190c88ad45ff493a408ab8bba2e45"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/operation.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "5c81d43ce714f568882364740faa34a1c5a8c0b3ca92cf633808a81e8f423647",
+      "p0_sha256": "4195a7f607a2f419324ef024fe745104a62fb88606c4704198e3fa8b1a869714",
+      "target_sha256": "4195a7f607a2f419324ef024fe745104a62fb88606c4704198e3fa8b1a869714"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/reconcile.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "cd8f509f2e286fbd596ae2753ae231d479baa669587024626ba38ed4db1046ed",
+      "p0_sha256": "d54bff93c37168625466682a7ef22981ee2cfae3377519d596e20f6816670f98",
+      "target_sha256": "d54bff93c37168625466682a7ef22981ee2cfae3377519d596e20f6816670f98"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/save.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1d598effe6217e1114c3e804c3b05b6b4ced14a333a71085718defa641bc5785",
+      "p0_sha256": "7aaef3f40041089ae40eefbcb568b8debab769c6db6ea0924c156e57084ea96e",
+      "target_sha256": "7aaef3f40041089ae40eefbcb568b8debab769c6db6ea0924c156e57084ea96e"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/commit/stream.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "d5c1ba5136121cd03f10bfbe0ef873e259ce78bbf804a9d83e920c5e9d4a5b46",
+      "p0_sha256": "460be18bc462ad9c686e92d5cbe34635585a2573356a6e65637434b552c02b14",
+      "target_sha256": "460be18bc462ad9c686e92d5cbe34635585a2573356a6e65637434b552c02b14"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_attributes.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "327b6daeb9a9f599171b3aaab73412ea085743d46ecd87f36b194b56c1456332",
+      "target_sha256": "fa97790330831e0415b0661bc54a98a44b4e8a8724a2bfa76b93d33a37170d53"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_create.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "a486bef68ce4773e33e49b271237506b14c5d1a1580221d2c38313e231ea2f4b",
+      "target_sha256": "27fcaef4799ce98376b93f2d6ed811787a4b8fe971f0c3cbfd6642416cb9b2d7"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_file.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "ef2ff5dbdd08da793214f89a5f5c628c479cccf653e091c9a203b18d5425bf35",
+      "target_sha256": "ef2ff5dbdd08da793214f89a5f5c628c479cccf653e091c9a203b18d5425bf35"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_names.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "1c304da7a228318d60cebd0925bf7600ab353b7de5b70252d8d1ca9f9cd31669",
+      "target_sha256": "1c304da7a228318d60cebd0925bf7600ab353b7de5b70252d8d1ca9f9cd31669"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_remove.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "802f3dcc25456ca3e597108f276d656edde9b2ef9d3da35d9465020e7b7647c6",
+      "target_sha256": "a548997e3929a37f87ddf5841c5e4c1ab7574ca7626172b52e40bb7f9e423243"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_rename.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "77ffce1d953ecd44cc0af0c7e52d3f0f872808b1c34a68b0a4a162c33ebb2556",
+      "target_sha256": "04e7fd05aeba63ba9f5f8925467cf72dc9ab86e9c4f6ec9685ef85edc9566764"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/active_view.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "e094545f2d58d523824fe3a27dc4eb8d23c4b002230bcc6ebf7b96cd1eccd2be",
+      "target_sha256": "c8d6af3c843d14e52eac472c942d17cc60fce81c3a4e688cc29a2d1401716bdb"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/create.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "bcbc4c4dedb28a6925819646b7267521553e6296227bd9212929c636ded8b5c1",
+      "p0_sha256": "9155042f25bc85d436c69c7461af22dd683f8d665d39593001c517fbfb335b40",
+      "target_sha256": "7472a67b8b2cbb08b969315dc3016130edd66a08f9adf5604f2038d72db0c7c3"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/mod.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "386b9fd84c6edb73a83001d915bb0972b1a2ea48a1e09441b21f2368e79e6fb7",
+      "p0_sha256": "2d2537f6c0517894c6126f630b83ef401fa8cf33d623eef80f6daeccabf48be9",
+      "target_sha256": "49e7cba9ef246fc1845eb0d8c36621c57e1db49249403bdfb9c1ccea6994e991"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/namespace.rs",
+      "decision": "ADAPT T0 OWNER; SELECTIVE P0 MECHANISMS",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "5fac0cc018e762b3ce9dbedadab7a05f61298decc2dd6cbf35574fd77835d64a",
+      "p0_sha256": "3d88d9fa4d530b2ab104bdba56b03eacc85b377572d3c632c4a08c1857790581",
+      "target_sha256": "a4d3e06b1d7fd9fb06b7b2bd97518a6b18f055527d0a4c6f5a32ae1755e8c92a"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/namespace_view.rs",
+      "decision": "ADAPT T0 OWNER; SELECTIVE P0 MECHANISMS",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "06e928c70eacce8a13840278472d35b0e7c001a6186c72f92751d607c3d0b106",
+      "p0_sha256": "279e2ae86839b665051b4892671360ea7ebe3bee0d4616fa99c7c95d81bdad4a",
+      "target_sha256": "79119eaf44a0e9977d3c91148692a15787c148735e1877ba4cd94b28a785e599"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/open.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "98b5bb0904e3be4b704337b3328e63cdcc3e931cc05dc170e533f990bbc9013a",
+      "p0_sha256": "2359fe96d3f66aa47d0d0af61568f82cb8fdd6278c665a74a57ba07935cfd66b",
+      "target_sha256": "ec0c1e44a913db3a251a4086a6a85c8b82bb61a38c26602bce09242568dd9480"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/original.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "1ed95840ae31f73bad64ec93f88c2bcd97fac19c89d61ade8c394e3a919ecc2f",
+      "p0_sha256": "183188d0782cbe427d00f528d5e885cd681d8c34601c88c480256b2f6487ec8a",
+      "target_sha256": "a830dc235973292471119bfee28d8f66269848d72b95913841742efbc9ccb335"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/read.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "5317508022b3f0a7b865b9ce8289cb6343661da4b582635aa8befbfc3861c31d",
+      "p0_sha256": "083c201a48e29352ab1b42d3f60369dd7f3713bce3c6fbf16ac81f7f6b82fe2a",
+      "target_sha256": "d61c9438f86ed33a9b0f797f3dcec7c630a8b0ebe5a2a14d33e37ed7250a3c1a"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/read_origin.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "467c2c806e2bbbdc14211c88a6f936ea20598d0f6bb9096199b0448f974399f6",
+      "target_sha256": "467c2c806e2bbbdc14211c88a6f936ea20598d0f6bb9096199b0448f974399f6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/remove.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "e89a25ff81c1c5c4126e3cd528e1ff5708d3fa67de884de2a366a1c8fd23090b",
+      "p0_sha256": "10c4b444fa7f55239540d9b5c45d0b7a900a744b49b703b7175ac4a1e599ca09",
+      "target_sha256": "3353764b1b273932bf868caad360bd364c455691671f29b7dff819386b6c1c25"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/rename.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "cbe863877578dd6bb2217f1198dfe28dd6139808550787b2ed34a5ed167b6c4e",
+      "p0_sha256": "9951421e55087574553a02b8b56cb4f33cce28d7864ddb421a91b6198964bc7f",
+      "target_sha256": "dc36a300bdc30fa054eb7e6c31c4bca51a1d73a2bc7efbc716d3b2a16c1b2212"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/rename_preflight.rs",
+      "decision": "EXCLUDED/RETIRED TARGET LEGACY MUTATION HELPER",
+      "source_commit": "05eb5c14849f1b874383fd1600ba9288f103ad93",
+      "t0_sha256": "7ac5ade0bbfde498de6b6e13b7b3aae8d0660c2c6bcf315cf2547f325938f786",
+      "p0_sha256": null,
+      "target_sha256": null
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/resize.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "81afac205a0e9115b38e888a915078bf156e38aa42814f061eeb3392a552c525",
+      "p0_sha256": "af184118b49085e26899630f0e71ee32419ea3b3eff0604912c7c14646d46ec9",
+      "target_sha256": "af184118b49085e26899630f0e71ee32419ea3b3eff0604912c7c14646d46ec9"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/symlink.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "78e8a1198991fda25419bf58d78084cfb28704e0ca741e355f2f89a2491ba110",
+      "p0_sha256": "2af8429f7fdaf9c0b9572a22853cb0cfea202a1c48a8393f3fe7352257627ce9",
+      "target_sha256": "572dff2b719910072da800f423ad2ada6f76ffcc069538cf82320aabb6bcc3f1"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/view_reads.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "2abc8e53f0e134bd466bc1d173208bb78d7e60d62b4168aa3e8f823c83dce49e",
+      "target_sha256": "cb50f882bc9eb7d65dc3d1ab7b40cf8f75dbe175387dcf1339f9089142052a63"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/filesystem/write.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "5c264fdcba70236157f52bc85d934d93e83820540cb991b0b4fd16d72f230e69",
+      "p0_sha256": "3c1a84e47c2bcefec7b94f16388c9f6855304ac49859600394d2ecbc22e10399",
+      "target_sha256": "cb0e79c6af31a3f4fcac50ba07ca16ebf851dc6c9fe9e7f47365e9980b1c9c5a"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/lib.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "c1e79bf18fb87c7ea37b68c8ea6597cccbb368c0a68ec9cf88838d3e4124803b",
+      "p0_sha256": "9a728dd013d9e48606fca4d955fbf60b6f2bdb45f25d3ad7d3cff977e8dcd69c",
+      "target_sha256": "0301918ccfbfcc83cf8a7fd1b34409bf6fc16607bfe655c2dec726a8f3380abd"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/directories.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "ef620684b496f709d11d2dcd5911ea74e93ffe501931c0ca3dc9ce9f42e59b3c",
+      "p0_sha256": "4b42ad77d7ac1410d94cbcab469fa3f0fb9c2e73f313e21c8ed32d4e5df1260b",
+      "target_sha256": "4b42ad77d7ac1410d94cbcab469fa3f0fb9c2e73f313e21c8ed32d4e5df1260b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/pieces.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "20710d2a16681510eba900195a0705abec741b0942c970c4209524cbe792df4a",
+      "p0_sha256": "d6d3022f7afc592754b0861258a270c5f03fa822a5611cf70dfda3c834dbb02e",
+      "target_sha256": "d6d3022f7afc592754b0861258a270c5f03fa822a5611cf70dfda3c834dbb02e"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/overlay/snapshot.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "14d061c9471d9f95d313aa6244ca2062a9738c9d5f0ec15446c48852c0e245e7",
+      "p0_sha256": "3ef3cdf6cf0035d99ee56161c1978801190616ea4ed7fddd6916a062ba29fcd6",
+      "target_sha256": "3ef3cdf6cf0035d99ee56161c1978801190616ea4ed7fddd6916a062ba29fcd6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/attachment.rs",
+      "decision": "REUSE P0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "f2778685795d562b2d8efcf90a7e038c41bbe2ee71e07f7550b59438a4ee8016",
+      "p0_sha256": "95b1c284450276fe3188beb6e98d1932c56d093a90006305c8a1134479f7d6d6",
+      "target_sha256": "95b1c284450276fe3188beb6e98d1932c56d093a90006305c8a1134479f7d6d6"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/coherence.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "3ddca9e6dd36b326a9071441d10ebe17eb9fc330f731f8563d98b19f2938b361",
+      "p0_sha256": "5cde0ba8a129de115315cd62baebd6c090240105b847cc1adbcdcaa46b98e072",
+      "target_sha256": "c8dd838da9f469079286716653d44c2e1ee57a33744618c3972430469b60de9b"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/host.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "9430e40527775b463ef2286a67908be8ad4d35b164b1f534fe3324c5315a75b5",
+      "p0_sha256": "3b06cb554c405f6fe81780be65f587fccc396de3559a2f82f69955180ea0c3d3",
+      "target_sha256": "97e89f6cfc43cf0fe2689b197b478486c4817838f71d8957a01e31d8aed44564"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/lifecycle.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "e2149f202f648f5bceb9154373513229ed332b06ea8d19f2596615e6e2c91cb7",
+      "p0_sha256": "00c8fb283c28bdf09d6bec84ca439493a11d568fcfc46c95abdd35092a64f2e0",
+      "target_sha256": "d552e40f45b4a5cc0983b5b4172e35ca3dbd0ee27d3bd218144d68f2e1f3c126"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/mod.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "c44e3d631316904933ee57545e2130b587438a462e7b3e1fd8c060376d9b4461",
+      "p0_sha256": "77fdcdaf67451990ee9c0679f0470d7897de6bdcc7cd98e2b512fbf418824633",
+      "target_sha256": "30b3e2b30fd6a745691abc8dab41670b358036a44b3dcdc6ab8c792189073b4d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/state.rs",
+      "decision": "ADAPT T0 OWNER; SELECTIVE P0 MECHANISMS",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "4541fc48d1db15ee1a9c973928a7d00ca121107dd18ca55fdf40847a1a8e6d5f",
+      "p0_sha256": "36351ab3e50573ef028cddb5d9a2ebb3588baae35e8f1b86f7e73edf621c4381",
+      "target_sha256": "daa2738b9baf1acaed08e70947917de10d608406eacf4aadaa43b6db113b0902"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/runtime/view_leases.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": null,
+      "p0_sha256": "b8de8c7fa4f3c54d617b2c6b4d2001427460bb67a4c1de0117537876748c7e50",
+      "target_sha256": "f51d11169a18d1c068398c87c4acecf9dfc9430989d597f839ce194b5b3a07ac"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/src/types.rs",
+      "decision": "ADAPT P0 MECHANISM TO T0",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "ad28dbaf53f7bf8f078bb9a87e9e890559ba8e8b5e0d76aab494a816963ebab4",
+      "p0_sha256": "6c614f6bc7b21356e39e151bfa87a725311a7b5c6e388bc846e03cab464b8400",
+      "target_sha256": "94d9bad84c1d1ece291aa0967a739336227b8b325ac86b4c6268de1e746e50e4"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/mounted_namespace.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "829405829b7dd00ee351a2f1758fffbbca064afe777dad9843f5790b51be9740",
+      "p0_sha256": "829405829b7dd00ee351a2f1758fffbbca064afe777dad9843f5790b51be9740",
+      "target_sha256": "d878658b3b55b37a4b8580ea51e1b10c6bd255c79dd12e1855ec7ab98139c94d"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/namespace.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "dba4b4f8a15a17257ae75cdd2fd31ca332c8a2b2c815bd524220824bfa27a285",
+      "p0_sha256": "dba4b4f8a15a17257ae75cdd2fd31ca332c8a2b2c815bd524220824bfa27a285",
+      "target_sha256": "7a05a5a264de0e5c4306c8a33f46ce9704062ca2e07f02f8289eccad36af11bb"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/pieces_sequence.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "07b38dd9596f515b1082d8f47d99e360e2c7a44a942de248629f2bf2e8fcab78",
+      "p0_sha256": "c4afb494b14466d27bd88c19c3771438103e5f97c07c928eca1cbb08247d5a65",
+      "target_sha256": "91071bb361863ee533f93189dcd5cf9aed244ff27197fc745616c3fa801f6984"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/readable.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "db02cbcf672b2b15ac82218a86c41cf40159ffec99a98d3e72ee1ae868577021",
+      "p0_sha256": "2277537eb2792ce5bdd035a65cd10665fde8848239580490e028315234b9f311",
+      "target_sha256": "37f2f9e3e514944751e6b9805dfb3e92e26e5d395933a5bc0daabf26fe5e1e42"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/support/native_workspace.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "a15f90cae1a15ce30754752140cdcaee2090f6491ccc4a140be5e2d6a57083fd",
+      "p0_sha256": "5ab03682e5d90c908000d2854707d897e168c9cea45fa230504d9d229f7d4fc8",
+      "target_sha256": "3876322c09064f500b3c780476fa872725a7205c21dff962dffe0774c99e4487"
+    },
+    {
+      "path": "core/crates/layerfs-workspace/tests/symlink.rs",
+      "decision": "ADAPT EXTERNAL FIXTURE/PROOF; PHASE A ONLY",
+      "source_commit": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "t0_sha256": "2f32a6950e65aa70c20bc3920425032be0b36a07d9b9c258604c9d14d00b05aa",
+      "p0_sha256": "fbf2013f2462746066aa7b9aa8008e94d1f28f529b5c96e777c5b85ad87e5261",
+      "target_sha256": "3a44014df66ed3ffce7296119eae2a09a5654e5b263aaf429f31513e02486acc"
+    }
+  ]
+}

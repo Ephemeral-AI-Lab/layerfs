@@ -1,6 +1,7 @@
 //! Private capture consumed by the production staging operation.
 use crate::{
     backing::{
+        active::ActiveSnapshot,
         metadata::{MetadataCharge, MetadataHost, ProgressFund, RootOwner, ESCROW},
         metadata_pages::PageRef,
     },
@@ -20,6 +21,7 @@ pub(crate) struct StageIdentity {
 }
 pub(crate) struct Captured {
     pub root: Arc<RootOwner>,
+    pub active: Option<Mutex<Option<Arc<ActiveSnapshot>>>>,
     pub context: Arc<crate::runtime::state::BranchContext>,
     pub generation: u64,
     pub revision: u64,
@@ -29,6 +31,7 @@ pub(crate) struct Captured {
     pub fresh_symlinks: usize,
     pub names: usize,
     pub name_bytes: usize,
+    pub declared: Vec<u64>,
 }
 pub(crate) type SavedInode = InodeSaveObservation;
 pub(crate) struct SubmissionState {
@@ -65,6 +68,7 @@ impl Submission {
     fn reserve(
         workspace: &Workspace,
         host: &Arc<MetadataHost>,
+        completion: Option<Arc<ProgressFund>>,
     ) -> Result<Arc<Self>, WorkspaceError> {
         workspace
             .host
@@ -78,7 +82,10 @@ impl Submission {
             stage: OnceLock::new(),
             _charge: host.memory(1024)?,
         });
-        let fund = ProgressFund::new(host)?;
+        let fund = match completion {
+            Some(fund) => fund,
+            None => ProgressFund::new(host)?,
+        };
         let results = host.result_roots(
             workspace
                 .inner
@@ -233,6 +240,33 @@ impl Submission {
             .map_or(Ok(PageRef::NULL), |root| root.root())
     }
 }
+impl Captured {
+    pub fn active_view(&self) -> Result<Arc<ActiveSnapshot>, WorkspaceError> {
+        self.active
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .as_ref()
+            .cloned()
+            .ok_or(WorkspaceError::Closed)
+    }
+
+    pub fn release_active(&self) -> Result<(), WorkspaceError> {
+        let active = self.active.as_ref().ok_or(WorkspaceError::Unsupported)?;
+        let mut held = active.lock().map_err(|_| WorkspaceError::Io)?;
+        let Some(snapshot) = held.take() else {
+            return Ok(());
+        };
+        match Arc::try_unwrap(snapshot) {
+            Ok(snapshot) => snapshot.release(),
+            Err(snapshot) => {
+                *held = Some(snapshot);
+                Err(WorkspaceError::Busy)
+            }
+        }
+    }
+}
 impl Workspace {
     pub(crate) fn capture_submission(
         &self,
@@ -241,6 +275,9 @@ impl Workspace {
     ) -> Result<Arc<Submission>, WorkspaceError> {
         if self.inner.access != WorkspaceAccess::LocalEdit {
             return Err(WorkspaceError::ReadOnly);
+        }
+        if self.inner.active.is_some() {
+            return self.capture_active_submission(allow_clean, deadline);
         }
         let initial_clean = {
             let state = self.state()?;
@@ -259,7 +296,7 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let submission = Submission::reserve(self, host)?;
+        let submission = Submission::reserve(self, host, None)?;
         let clean_root = match initial_clean
             .map(|generation| {
                 host.clean_capture_root(
@@ -343,6 +380,7 @@ impl Workspace {
                 .captured
                 .set(Captured {
                     root,
+                    active: None,
                     context,
                     generation,
                     revision,
@@ -352,6 +390,7 @@ impl Workspace {
                     fresh_symlinks,
                     names,
                     name_bytes,
+                    declared: Vec::new(),
                 })
                 .is_err()
             {
@@ -377,6 +416,155 @@ impl Workspace {
         if let Err(error) = result {
             if let Some(root) = &clean_root {
                 host.release_clean_capture_root(root)?;
+            }
+            host.remove_empty_result_roots(&submission.results)?;
+            return Err(error);
+        }
+        Ok(submission)
+    }
+
+    fn capture_active_submission(
+        &self,
+        allow_clean: bool,
+        deadline: Instant,
+    ) -> Result<Arc<Submission>, WorkspaceError> {
+        let active = self
+            .inner
+            .active
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let (generation, clean, completion) = {
+            let state = self.state()?;
+            self.available(&state)?;
+            if state.submission.is_some() {
+                return Err(WorkspaceError::Busy);
+            }
+            if state.dirty_inodes == 0 && !allow_clean {
+                return Err(WorkspaceError::InvalidInput);
+            }
+            {
+                let completion = state.active_completion.borrow().clone();
+                (state.generation, state.dirty_inodes == 0, completion)
+            }
+        };
+        self.maintain_backing(deadline)?;
+        let host = self
+            .host
+            .metadata
+            .as_ref()
+            .ok_or(WorkspaceError::Unsupported)?;
+        let submission = Submission::reserve(self, host, completion.clone())?;
+        let result = (|| -> Result<(), WorkspaceError> {
+            crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
+            let mut state = self.state()?;
+            self.available(&state)?;
+            if state.submission.is_some()
+                || state.generation != generation
+                || (state.dirty_inodes == 0) != clean
+            {
+                return Err(WorkspaceError::Busy);
+            }
+            let next = generation
+                .checked_add(1)
+                .filter(|generation| *generation <= i64::MAX as u64)
+                .ok_or(WorkspaceError::Capacity)?;
+            let revision = state.revision;
+            let next_revision = revision.checked_add(1).ok_or(WorkspaceError::Capacity)?;
+            if active.generation_revision()? != (generation, revision) {
+                return Err(WorkspaceError::Io);
+            }
+            let context = state.branch.clone().ok_or(WorkspaceError::Unsupported)?;
+            let count = state.dirty_inodes;
+            let directories = state.dirty_directories;
+            let fresh_files = state.fresh_files;
+            let fresh_symlinks = state.fresh_symlinks;
+            let names = state.directory_names;
+            let name_bytes = state.directory_bytes;
+            state.frontier_bytes(
+                &self.host,
+                count,
+                directories,
+                fresh_files,
+                fresh_symlinks,
+                names,
+                name_bytes,
+            )?;
+            if let Some(fund) = &completion {
+                if !fund.untouched(generation)?
+                    || !state
+                        .active_completion
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|live| Arc::ptr_eq(live, fund))
+                {
+                    return Err(WorkspaceError::Io);
+                }
+            } else {
+                if !clean {
+                    return Err(WorkspaceError::Io);
+                }
+                host.reserve(ESCROW)?;
+                if let Err(error) =
+                    submission
+                        .fund
+                        .install(crate::backing::metadata::CompletionReserve {
+                            generation,
+                            bytes: ESCROW,
+                        })
+                {
+                    host.release(0, ESCROW)?;
+                    return Err(error);
+                }
+            }
+            {
+                let mut status = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
+                status.status.generation = generation;
+                status.status.captured_revision = revision;
+                status.status.dirty_inodes = count;
+            }
+            let snapshot = active.capture()?;
+            debug_assert_eq!(snapshot.generation, generation);
+            submission
+                .captured
+                .set(Captured {
+                    root: submission.results[0].clone(),
+                    active: Some(Mutex::new(Some(Arc::new(snapshot)))),
+                    context,
+                    generation,
+                    revision,
+                    count,
+                    directories,
+                    fresh_files,
+                    fresh_symlinks,
+                    names,
+                    name_bytes,
+                    declared: state.declared.clone(),
+                })
+                .unwrap_or_else(|_| unreachable!("one capture per reserved submission"));
+            state.active_completion.borrow_mut().take();
+            state.generation = next;
+            state.revision = next_revision;
+            state.dirty_inodes = 0;
+            state.dirty_directories = 0;
+            state.fresh_files = 0;
+            state.fresh_symlinks = 0;
+            state.directory_names = 0;
+            state.directory_bytes = 0;
+            *state.frontier.borrow_mut() = None;
+            state.fresh.clear();
+            state
+                .fresh_charge
+                .borrow_mut()
+                .resize(0)
+                .expect("shrinking the fresh index charge cannot fail");
+            state.submission = Some(submission.clone());
+            Ok(())
+        })();
+        if let Err(error) = result {
+            if let Some(captured) = submission.captured.get() {
+                if captured.active.is_some() {
+                    captured.release_active()?;
+                }
             }
             host.remove_empty_result_roots(&submission.results)?;
             return Err(error);

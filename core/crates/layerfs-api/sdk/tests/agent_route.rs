@@ -853,3 +853,105 @@ fn sdk_exec_moves_inherited_directory_and_commits_complete_tree() {
     server.shutdown();
     assert!(cleanup.failures.is_empty());
 }
+
+#[test]
+fn sdk_exec_walks_270_components_and_checks_serials_after_commit() {
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!(
+        "layerfs-issue284-components-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"issue284-components".to_vec(),
+        incarnation: 1,
+        cursor_key: [84; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+        failures: Vec::new(),
+        diagnostics: None,
+    };
+    let project = ProjectApi::new(&server)
+        .init("components", &source)
+        .unwrap();
+    let branch = ProjectApi::new(&server)
+        .fork(&project, [84; 16], "main")
+        .unwrap();
+    let sandbox = create(&mut cleanup, &image, "issue284-components").unwrap();
+    let api = WorkspaceApi::new(&owner);
+    let mount = api.mount(sandbox, &project, branch.id, None).unwrap();
+    let result = api.exec(&mount.id, "i=0; while [ $i -lt 270 ]; do mkdir d || exit; exec 3<. || exit; cd /proc/self/fd/3/d || exit; i=$((i+1)); done; printf leaf > file; test \"$(cat file)\" = leaf").unwrap();
+    assert_eq!(result.exit_status, Some(0), "{:?}", result.stderr);
+    let outcome = api.commit(&mount.id).unwrap().outcome;
+    let canonical = match outcome {
+        CommitOutcomeWire::Committed(commit) => commit.root,
+        CommitOutcomeWire::UpToDate { root, .. } => root,
+    };
+    let inspect = |query| {
+        server
+            .service()
+            .handle(
+                &server.peer().unwrap(),
+                &Request {
+                    id: 85,
+                    generation: 1,
+                    store: server.store(),
+                    profile: 1,
+                    deadline_ms: 10000,
+                    response_bytes: 16384,
+                    operation: Operation::Inspect {
+                        root: canonical,
+                        query,
+                    },
+                },
+                &mut std::io::empty(),
+                &mut std::io::sink(),
+            )
+            .0
+            .unwrap()
+    };
+    let Response::Attributes {
+        serial: mut parent, ..
+    } = inspect(Inspect::Attributes { path: Vec::new() })
+    else {
+        panic!("root")
+    };
+    let lease = api.pin_view(&mount.id).unwrap();
+    let mut held = lease.root().clone();
+    let mut seen = std::collections::BTreeSet::from([parent]);
+    for _ in 0..270 {
+        let Response::Attributes { serial, kind, .. } = inspect(Inspect::ChildAttributes {
+            parent,
+            name: b"d".to_vec(),
+        }) else {
+            panic!("directory")
+        };
+        assert_eq!(kind, 2);
+        assert!(seen.insert(serial));
+        held = api.view_lookup(&lease, &held, b"d").unwrap();
+        assert_eq!(held.serial, serial);
+        parent = serial;
+    }
+    let file = api.view_lookup(&lease, &held, b"file").unwrap();
+    assert_eq!(api.view_read(&lease, &file, 0, 16).unwrap().bytes, b"leaf");
+    api.release_view(&lease).unwrap();
+    api.unmount(&mount.id).unwrap();
+    delete(&mut cleanup, sandbox);
+    assert!(cleanup.failures.is_empty());
+}

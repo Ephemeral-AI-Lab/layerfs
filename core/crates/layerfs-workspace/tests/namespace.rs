@@ -281,7 +281,7 @@ mod linux {
         let after = f.workspace.status().unwrap();
         assert_eq!(after.handles, before.handles);
         assert_eq!(after.nodes, before.nodes + 1);
-        assert_eq!(listed(&f, top).contains(&b"node".to_vec()), true);
+        assert!(listed(&f, top).contains(&b"node".to_vec()));
         // A duplicate name and an unsupported kind both refuse unchanged.
         assert_eq!(
             f.workspace.mknod(top, b"node", 0o644, 0, deadline()),
@@ -574,8 +574,8 @@ mod linux {
                 deadline(),
             )
             .unwrap();
-        assert_eq!(listed(&f, right.serial).contains(&b"inner".to_vec()), false);
-        assert_eq!(listed(&f, left.serial).contains(&b"inner".to_vec()), true);
+        assert!(!listed(&f, right.serial).contains(&b"inner".to_vec()));
+        assert!(listed(&f, left.serial).contains(&b"inner".to_vec()));
         let report = commit(&f);
         let head = committed_root(&report);
         missing(&f, head, b"left/a");
@@ -749,7 +749,7 @@ mod linux {
         assert_eq!(result, Ok(()));
         let after = f.workspace.status().unwrap();
         assert_eq!(after.revision, before.revision + 1);
-        assert_eq!(listed(&f, right.serial).contains(&b"b".to_vec()), true);
+        assert!(listed(&f, right.serial).contains(&b"b".to_vec()));
         let file = std::fs::read(f.workspace.mount_path().join("right/b")).unwrap();
         assert!(file.is_empty());
         mount.unmount(deadline()).unwrap();

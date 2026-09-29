@@ -216,12 +216,13 @@ impl Workspace {
             .handles
             .checked_add(1)
             .ok_or(WorkspaceError::Capacity)?;
+        let view = if directory {
+            Some(self.selected_view(state)?)
+        } else {
+            None
+        };
         state.next_handle = next;
         state.nodes[node].handles = references;
-        let view = directory.then(|| super::namespace_view::View {
-            base: state.base,
-            root: state.overlay.clone(),
-        });
         state.handles.push(Handle {
             id,
             serial,

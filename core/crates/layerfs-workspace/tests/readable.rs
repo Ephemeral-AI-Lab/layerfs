@@ -53,6 +53,30 @@ impl Fixture {
         let fail = fail_read.clone();
         let deliver: OperationDelivery = Arc::new(move |request, _, output, _| {
             let mut result = match &request.operation {
+                Operation::FileSaveCapabilities => {
+                    Ok(Response::FileSaveCapabilities { version: 2 })
+                }
+                Operation::Inspect {
+                    query: Inspect::ChildAttributes { parent: 7, name },
+                    ..
+                } => match name.as_slice() {
+                    b"file" | b"alias" => Ok(attr(8, 1, 5)),
+                    b"link" => Ok(attr(9, 3, 4)),
+                    _ => Err(Code::PathNotFound.into()),
+                },
+                Operation::Inspect {
+                    query: Inspect::InodeAttributes { serial },
+                    ..
+                } => match serial {
+                    7 => Ok(attr(7, 2, 0)),
+                    8 => Ok(attr(8, 1, 5)),
+                    9 => Ok(attr(9, 3, 4)),
+                    _ => Err(Code::NotFound.into()),
+                },
+                Operation::Inspect {
+                    query: Inspect::InodeReadlink { serial: 9 },
+                    ..
+                } => Ok(Response::Link(b"file".to_vec())),
                 Operation::Inspect {
                     query: Inspect::Attributes { path },
                     ..
@@ -67,7 +91,8 @@ impl Fixture {
                     ..
                 } if path == b"link" => Ok(Response::Link(b"file".to_vec())),
                 Operation::Inspect {
-                    query: Inspect::List { after, entries, .. },
+                    query:
+                        Inspect::List { after, entries, .. } | Inspect::InodeList { after, entries, .. },
                     ..
                 } => {
                     let mut names: Vec<_> = [
@@ -374,6 +399,10 @@ fn full_cookie_table_still_replays_existing_positions() {
             ..
         } if path.is_empty() => Ok(attr(7, 2, 0)),
         Operation::Inspect {
+            query: Inspect::ChildAttributes { name: path, .. },
+            ..
+        }
+        | Operation::Inspect {
             query: Inspect::Attributes { path },
             ..
         } => {
@@ -381,7 +410,7 @@ fn full_cookie_table_still_replays_existing_positions() {
             Ok(attr(index + 8, 1, 5))
         }
         Operation::Inspect {
-            query: Inspect::List { after, entries, .. },
+            query: Inspect::List { after, entries, .. } | Inspect::InodeList { after, entries, .. },
             ..
         } => {
             let start = if after.is_empty() {
@@ -593,4 +622,53 @@ fn failed_close_keeps_its_registry_count_until_cleanup_succeeds() {
         .unwrap()
         .close_clean()
         .unwrap();
+}
+
+#[test]
+fn readonly_component_chain_retains_all_270_forgotten_ancestors() {
+    let mut fixture = Fixture::new(1);
+    fixture.host = WorkspaceHost::new(
+        WorkspaceConfig {
+            root: fixture.path.clone(),
+            max_count: 1,
+            memory_budget_bytes: DEFAULT_MEMORY_BUDGET_BYTES,
+            disk_budget_bytes: None,
+        },
+        Arc::new(|request, _, _, _| match &request.operation {
+            Operation::Inspect {
+                query: Inspect::Attributes { path },
+                ..
+            } if path.is_empty() => Ok(attr(7, 2, 0)),
+            Operation::Inspect {
+                query: Inspect::ChildAttributes { parent, name },
+                ..
+            } if name == b"d" => Ok(attr(parent + 1, 2, 0)),
+            _ => Err(Code::Unsupported.into()),
+        }),
+    )
+    .unwrap();
+    let workspace = fixture.attach();
+    let mut parent = workspace.root().serial;
+    for _ in 0..270 {
+        parent = workspace
+            .lookup(parent, b"d", ReferenceScope::Local, deadline())
+            .unwrap()
+            .serial;
+    }
+    let handle = workspace.opendir(parent, ReferenceScope::Local).unwrap();
+    for serial in 8..=parent {
+        workspace.forget(serial, u64::MAX, ReferenceScope::Local);
+    }
+    assert_eq!(workspace.status().unwrap().nodes, 271);
+    assert_eq!(
+        workspace
+            .lookup(parent, b"d", ReferenceScope::Local, deadline())
+            .unwrap()
+            .serial,
+        parent + 1
+    );
+    workspace.forget(parent + 1, 1, ReferenceScope::Local);
+    workspace.releasedir(handle).unwrap();
+    assert_eq!(workspace.status().unwrap().nodes, 1);
+    workspace.close_clean().unwrap();
 }

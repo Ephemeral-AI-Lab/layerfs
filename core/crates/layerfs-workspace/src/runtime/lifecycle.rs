@@ -72,12 +72,13 @@ impl Workspace {
     }
     pub fn close_clean_until(&self, deadline: Instant) -> Result<(), WorkspaceError> {
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
-        let retired = {
+        let (retired, completion) = {
             let mut state = self.state()?;
             if state.closed {
                 return Err(WorkspaceError::Closed);
             }
-            if state.submission.is_some()
+            if self.inner.view_leases.held()? > 0
+                || state.submission.is_some()
                 || state.dirty_inodes > 0
                 || state.mounted
                 || state.active > 0
@@ -90,7 +91,11 @@ impl Workspace {
                 return Err(WorkspaceError::Busy);
             }
             if let Some(host) = &self.host.payloads {
-                if host.has_external_pins(self.inner.incarnation)? {
+                let external = match &self.inner.active {
+                    Some(active) => active.has_external_payload_pins()?,
+                    None => host.has_external_pins(self.inner.incarnation)?,
+                };
+                if external {
                     return Err(WorkspaceError::Busy);
                 }
             }
@@ -99,9 +104,23 @@ impl Workspace {
             // exactly like the generations a Commit retires. Closing releases it
             // before the arena is reclaimed; nothing runs after `stopping` is set,
             // so a refused teardown has no later operation to mislead.
-            state.overlay.take()
+            {
+                let completion = state.active_completion.borrow_mut().take();
+                (state.overlay.take(), completion)
+            }
         };
         drop(retired);
+        if let Some(fund) = completion {
+            fund.finish()?;
+        }
+        self.inner
+            .read_origin
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .take();
+        if let Some(active) = &self.inner.active {
+            active.close_clean()?;
+        }
         if let (Some(host), Some(arena)) = (&self.host.metadata, &self.inner.arena) {
             host.close(arena, deadline)?;
         }
@@ -124,6 +143,7 @@ impl Workspace {
         state.closed = true;
         state.nodes = Vec::new();
         state.node_index.clear();
+        state.inherited_names.clear();
         state.node_index_charge.resize(0)?;
         state.handles = Vec::new();
         state.cookies.clear();

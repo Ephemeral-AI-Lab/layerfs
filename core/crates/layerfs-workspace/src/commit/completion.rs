@@ -36,6 +36,7 @@ impl CommitAttempt {
         workspace: &Workspace,
         submission: &Submission,
         selector: Option<&StageSelector>,
+        deadline: Instant,
     ) -> Result<Arc<Self>, WorkspaceError> {
         let host = workspace
             .host
@@ -53,6 +54,14 @@ impl CommitAttempt {
             context.effective_root,
         )?;
         let root = host.reconciliation_root(&submission.capture()?.root.arena, &submission.fund)?;
+        if workspace.inner.active.is_some() {
+            let mut lease = host.payloads.window(1, 3)?;
+            root.seal(
+                crate::backing::metadata_pages::PageRef::NULL,
+                lease.window.as_mut().ok_or(WorkspaceError::Io)?,
+                deadline,
+            )?;
+        }
         Ok(Arc::new(Self {
             root,
             next: Mutex::new(Some(next)),
@@ -275,7 +284,7 @@ impl Workspace {
                 return Err(error);
             }
         };
-        let attempt = match CommitAttempt::reserve(self, &submission, Some(selector)) {
+        let attempt = match CommitAttempt::reserve(self, &submission, Some(selector), deadline) {
             Ok(attempt) => attempt,
             Err(error) => {
                 submission.commit_claimed.store(false, Ordering::Release);
@@ -345,14 +354,18 @@ impl Workspace {
         attempt.phase(submission, CommitPhase::Reconcile)?;
         // The candidate's 64 pages already belong to it. All later releases of
         // mixed successor/fund descendants must return to ordinary quota.
-        submission.fund.finish()?;
+        if self.inner.active.is_none() {
+            submission.fund.finish()?;
+        }
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
+        if self.inner.active.is_some() {
+            submission.fund.finish()?;
+        }
         self.installed(submission, attempt, outcome, revision)
     }
     /// Repeats only the local install of a retained attempt whose outcome is
-    /// known: the command is not re-issued (its token is spent) and the progress
-    /// fund is already finished, so the recorded outcome is re-validated and
-    /// reconciliation is re-entered.
+    /// known: the command is not re-issued (its token is spent). The recorded
+    /// outcome and checked pending allocation custody precede local re-entry.
     fn resume_staged(
         &self,
         submission: &Submission,
@@ -369,7 +382,13 @@ impl Workspace {
         }
         attempt.phase(submission, CommitPhase::Reconcile)?;
         attempt.root.repair_pending_for_retry(deadline)?;
+        if let Some(active) = &self.inner.active {
+            active.repair_completion(&submission.fund, deadline)?;
+        }
         let revision = self.reconcile_commit(submission, attempt, &outcome, deadline)?;
+        if self.inner.active.is_some() {
+            submission.fund.finish()?;
+        }
         self.installed(submission, attempt, outcome, revision)
     }
     /// Retires the retained submission once its successor is installed.

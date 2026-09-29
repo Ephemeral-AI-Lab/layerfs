@@ -79,54 +79,6 @@ pub(crate) fn check_access(attr: NodeAttributes, uid: u32, mask: u8) -> Result<(
     Ok(())
 }
 impl Workspace {
-    /// The one directory-delta decision every namespace mutation shares: whether
-    /// the maintained delta must be re-anchored on the current root, and whether
-    /// this generation's ledger already carries the exact dirty key.
-    ///
-    /// The record's own generation cannot answer the second question, because it
-    /// only advances at capture. The origin answers the first: a delta that is
-    /// already captured or empty keeps the entries it inherited.
-    pub(crate) fn directory_delta(
-        &self,
-        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
-        generation: u64,
-        serial: u64,
-        record: Option<&crate::overlay::directories::Directory>,
-        window: &mut crate::backing::segments::Window,
-        deadline: Instant,
-    ) -> Result<(bool, bool), WorkspaceError> {
-        let maintained = record.is_some_and(|directory| {
-            matches!(
-                directory.origin,
-                crate::overlay::directories::Origin::Captured(_)
-                    | crate::overlay::directories::Origin::Empty
-            )
-        });
-        let dirty = self.dirty_in_generation(root, generation, serial, window, deadline)?;
-        Ok((!maintained, dirty))
-    }
-    /// True when this generation's ledger already carries the exact dirty key
-    /// for `serial`. A directory with a maintained delta is not a new dirty
-    /// inode, and one without it is, whatever record it still holds.
-    pub(crate) fn dirty_in_generation(
-        &self,
-        root: Option<&std::sync::Arc<crate::backing::metadata::RootOwner>>,
-        generation: u64,
-        serial: u64,
-        window: &mut crate::backing::segments::Window,
-        deadline: Instant,
-    ) -> Result<bool, WorkspaceError> {
-        let Some(root) = root else { return Ok(false) };
-        Ok(root
-            .arena
-            .find(
-                root.root()?,
-                &crate::backing::metadata_pages::dirty_key(generation, serial),
-                window,
-                deadline,
-            )?
-            .is_some_and(|cell| cell.value() == [1]))
-    }
     pub fn lookup(
         &self,
         parent: u64,
@@ -137,7 +89,7 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (base, baseline, revision, root) = {
+        let (view, baseline, revision) = {
             let state = self.state()?;
             if scope == ReferenceScope::Projection && !state.mounted {
                 return Err(WorkspaceError::Busy);
@@ -150,14 +102,8 @@ impl Workspace {
                 return Err(WorkspaceError::NotFound);
             }
             check_access(parent.attr, self.inner.root.uid, 1)?;
-            (
-                state.base,
-                state.baseline,
-                state.revision,
-                state.overlay.clone(),
-            )
+            (self.selected_view(&state)?, state.baseline, state.revision)
         };
-        let view = super::namespace_view::View { base, root };
         let resolved = self.resolve_child(&mut operation, &view, parent, name, deadline)?;
         let mut state = self.state()?;
         if state.revision != revision || state.baseline != baseline {
@@ -183,6 +129,16 @@ impl Workspace {
             canonical,
             ..
         } = resolved;
+        let pending_name = if state.is_active
+            && canonical
+            && !state.inherited_names.contains_key(&(parent, name.to_vec()))
+        {
+            let charge = self.host.budget.reserve(96 + name.len())?;
+            Some((name.to_vec(), charge))
+        } else {
+            None
+        };
+        let is_active = state.is_active;
         if let Ok(node) = state.node_mut(attr.serial) {
             if node.attr.kind == NodeKind::Directory
                 && (!node.attached || node.parent != parent || node.name.bytes.as_ref() != name)
@@ -204,7 +160,11 @@ impl Workspace {
             // agree on the namespace link count. A Commit that republished the
             // identity canonically can change it (a link or a removal), and the
             // node then refreshes exactly as its original and roots do below.
-            if node.baseline == baseline && node.attr.references != original.references {
+            if canonical
+                && !is_active
+                && node.baseline == baseline
+                && node.attr.references != original.references
+            {
                 return Err(WorkspaceError::InvalidInput);
             }
             node.original = original;
@@ -225,6 +185,11 @@ impl Workspace {
             node.names = state.resolved_names(&attr);
             *node.references(scope) = 1;
             state.push_node(node);
+        }
+        if let Some((name, charge)) = pending_name {
+            state
+                .inherited_names
+                .insert((parent, name), (attr.serial, charge));
         }
         Ok(state.presented(attr))
     }

@@ -151,13 +151,17 @@ impl Native {
                 self.allow_fresh_files
                     || !matches!(
                         request.operation,
-                        Operation::SaveFile { base: None, .. } | Operation::ConstructSymlink { .. }
+                        Operation::SaveFile { base: None, .. }
+                            | Operation::SaveFileV2 { base: None, .. }
+                            | Operation::ConstructSymlink { .. }
                     ),
                 "unexpected construction route"
             );
             let first = matches!(
                 request.operation,
-                Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
+                Operation::SaveFile { .. }
+                    | Operation::SaveFileV2 { .. }
+                    | Operation::ConstructSymlink { .. }
             ) && !observations.entered;
             observations.operations.push(request.operation.clone());
             if first {
@@ -261,7 +265,9 @@ impl Native {
         };
         if matches!(
             request.operation,
-            Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
+            Operation::SaveFile { .. }
+                | Operation::SaveFileV2 { .. }
+                | Operation::ConstructSymlink { .. }
         ) {
             if let Ok(Response::Saved { root, .. }) = &response {
                 self.observations.lock().unwrap().saved_files.push(*root);
@@ -321,6 +327,7 @@ impl Native {
         let (endpoint, principal, private) = authority;
         let operation = match &request.operation {
             Operation::SaveFile { .. } => "SaveFile",
+            Operation::SaveFileV2 { .. } => "SaveFileV2",
             Operation::ConstructSymlink { .. } => "ConstructSymlink",
             Operation::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
             Operation::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
@@ -565,34 +572,38 @@ impl Fixture {
         let inserted = bytes.len() as u64;
         let next = file.size - removed + inserted;
         const CHUNK: u64 = 64 * 1024;
-        if inserted > removed {
-            let shift = inserted - removed;
-            self.workspace
-                .set_len(file.serial, next, deadline())
-                .unwrap();
-            let mut right = file.size;
-            while right > end {
-                let left = end.max(right.saturating_sub(CHUNK));
-                let chunk = self.read(handle, left, (right - left) as usize);
+        match inserted.cmp(&removed) {
+            std::cmp::Ordering::Greater => {
+                let shift = inserted - removed;
                 self.workspace
-                    .write_file(handle, left + shift, &self.own(&chunk), deadline())
+                    .set_len(file.serial, next, deadline())
                     .unwrap();
-                right = left;
+                let mut right = file.size;
+                while right > end {
+                    let left = end.max(right.saturating_sub(CHUNK));
+                    let chunk = self.read(handle, left, (right - left) as usize);
+                    self.workspace
+                        .write_file(handle, left + shift, &self.own(&chunk), deadline())
+                        .unwrap();
+                    right = left;
+                }
             }
-        } else if inserted < removed {
-            let shift = removed - inserted;
-            let mut left = end;
-            while left < file.size {
-                let right = file.size.min(left + CHUNK);
-                let chunk = self.read(handle, left, (right - left) as usize);
+            std::cmp::Ordering::Less => {
+                let shift = removed - inserted;
+                let mut left = end;
+                while left < file.size {
+                    let right = file.size.min(left + CHUNK);
+                    let chunk = self.read(handle, left, (right - left) as usize);
+                    self.workspace
+                        .write_file(handle, left - shift, &self.own(&chunk), deadline())
+                        .unwrap();
+                    left = right;
+                }
                 self.workspace
-                    .write_file(handle, left - shift, &self.own(&chunk), deadline())
+                    .set_len(file.serial, next, deadline())
                     .unwrap();
-                left = right;
             }
-            self.workspace
-                .set_len(file.serial, next, deadline())
-                .unwrap();
+            std::cmp::Ordering::Equal => {}
         }
         let mut receipt = None;
         for (index, chunk) in bytes.chunks(CHUNK as usize).enumerate() {
@@ -633,7 +644,11 @@ impl Fixture {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
+                .filter(|op| matches!(
+                    op,
+                    Operation::SaveFile { base: Some(_), .. }
+                        | Operation::SaveFileV2 { base: Some(_), .. }
+                ))
                 .count(),
             files
         );

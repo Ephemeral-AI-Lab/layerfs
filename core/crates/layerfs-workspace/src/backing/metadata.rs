@@ -631,6 +631,27 @@ impl ProgressFund {
             _charge: host.memory(256)?,
         }))
     }
+    /// Precharge the one generation's completion before its first dirty publication.
+    pub(crate) fn reserved(
+        host: &Arc<MetadataHost>,
+        generation: u64,
+    ) -> Result<Arc<Self>, WorkspaceError> {
+        let fund = Self::new(host)?;
+        host.reserve(ESCROW)?;
+        if let Err(error) = fund.install(CompletionReserve {
+            generation,
+            bytes: ESCROW,
+        }) {
+            host.release(0, ESCROW)?;
+            return Err(error);
+        }
+        Ok(fund)
+    }
+    pub(crate) fn untouched(&self, generation: u64) -> Result<bool, WorkspaceError> {
+        let owner = self.generation.lock().map_err(|_| WorkspaceError::Io)?;
+        let available = self.available.lock().map_err(|_| WorkspaceError::Io)?;
+        Ok(*owner == Some(generation) && available.bytes == ESCROW && !available.finished)
+    }
     pub fn install(&self, reserve: CompletionReserve) -> Result<(), WorkspaceError> {
         let mut generation = self.generation.lock().map_err(|_| WorkspaceError::Io)?;
         if generation.is_some() {

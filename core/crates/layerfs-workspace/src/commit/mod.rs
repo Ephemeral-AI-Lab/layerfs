@@ -4,6 +4,9 @@ mod source;
 mod stream;
 mod upload;
 
+pub(crate) mod active;
+mod active_reconcile;
+mod active_source;
 pub(crate) mod completion;
 mod reconcile;
 

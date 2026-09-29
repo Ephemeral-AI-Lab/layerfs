@@ -18,4 +18,6 @@ pub use request::*;
 pub use source::Source;
 mod workspace_commit;
 mod workspace_request;
+mod workspace_view;
 pub use workspace_commit::*;
+pub use workspace_view::*;

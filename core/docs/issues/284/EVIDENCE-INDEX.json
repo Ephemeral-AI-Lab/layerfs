@@ -1,0 +1,2168 @@
+{
+  "schema": "issue284-phase-a-evidence-v1",
+  "scope": "implementation correctness only; no Phase B benchmark receipt",
+  "raw_logs_local_only": true,
+  "source_manifest": "PORT-MANIFEST.json",
+  "native_execution_volume": "layerfs-issue284-phase-a-native-01",
+  "unknown_failed_custody": "Native metadata-denial, unknown canonical-result and published-unlink proofs intentionally retain their private files for inspection; no successful refund is claimed for them. Volume archive is worktree-local evidence, not a recovery format.",
+  "logs": [
+    {
+      "local_path": "core/target/issue284-phase-a/01-existing-check.log",
+      "sha256": "1196b6d97f842444529ac5d98a54f55a4a1fed717164ca0957ccbbf508f49715",
+      "bytes": 2284,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/02-integrated-check.log",
+      "sha256": "89b7f6b1fe0ee7b7a55ebfa50931b52ea0b7be92ff76215fd09f672afec5f148",
+      "bytes": 4888,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/03-wired-check.log",
+      "sha256": "92b8d0e90db6d52d99b3a1318b4abc3433afc8fdf14fee4cd39a1a91b182c47a",
+      "bytes": 727,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/04-linux-test-build.log",
+      "sha256": "4e12b711e88da662e42b9f73b48f4ca3caafea40197fc4614ae93b5f1eecbbad",
+      "bytes": 72367,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/05-linux-test-build.log",
+      "sha256": "f90542354d6b8923596ce96db82e972fbfdf5dc2c22ab1b32cd17e6afb557f34",
+      "bytes": 8396,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/06-linux-system-libs.log",
+      "sha256": "316f619a1ab5d820d75236e399d1722bcb622ae507d7a17495698d2f6e2a067b",
+      "bytes": 572,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/07-linux-test-build.log",
+      "sha256": "2b014cfe8bb7a81cbca0f810c694bf9e1ca892607fddc6afe5cc2cc0cdba35e0",
+      "bytes": 2995,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/08-readable.log",
+      "sha256": "6777d8ab4bedc45dd2e810163ee6622b352621bc87185ae2cea24d4b6f537d8f",
+      "bytes": 1280,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/09-linux-test-build.log",
+      "sha256": "235ec9f76a1540f99b624b20ad5cb2a6cf8f1cdcdce86563a10ce443b175b7ae",
+      "bytes": 7979,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/10-linux-test-build.log",
+      "sha256": "6612f5f146747bec9ceb070f863274c7abe3391b877e18ba24c712821a8cb3fb",
+      "bytes": 8042,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/11-native-small.log",
+      "sha256": "c721f271ae784791712f5ec17971ddabe124eca585c8f92642cb3b24f8e2c063",
+      "bytes": 308,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/12-linux-test-build.log",
+      "sha256": "52b8386f263ac20e6391b2a2dd2eff7ef86aab8c13fd8c0236f55240f93f0ba7",
+      "bytes": 521,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/13-linux-test-build.log",
+      "sha256": "159a7ba4b607dfb0704835d05da60d063c4ed69067365c4e43106c8cc29c3ff8",
+      "bytes": 8042,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/15-linux-test-build.log",
+      "sha256": "28f91a297c1bbb6dfd65924ab027ed15cfbc27817a6020432890e8147299ebfe",
+      "bytes": 331,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/16-native-small.log",
+      "sha256": "bc9bc39fe44d5258ff6a7b6891d081f5f6ac67149a0abc9869c4e1a812f37284",
+      "bytes": 265,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/17-linux-nonfile-build.log",
+      "sha256": "9a91b8afef147e8b4235698af9312300b1e578fa53d8c8817d309cfc199f5a1e",
+      "bytes": 331,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/18-nonfile-initial.log",
+      "sha256": "8591a4d901280cf56701774cacf303ca79c17f849d1555026a849072541e9254",
+      "bytes": 855,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/19-linux-nonfile-fix-build.log",
+      "sha256": "f2b335edfc9421f903159ad197c0c1219bb482b362ee9ecd6ba05641d27241cd",
+      "bytes": 468,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/20-nonfile-fixed.log",
+      "sha256": "36f5e55538bdd53b22cac373c65329d6028a728c577e294c3ce1d5108bf58855",
+      "bytes": 565,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/21-linux-custody-build.log",
+      "sha256": "3d6efd7c9812403bbb20bd66d3a1eeb0b2f27d2399597157ca8b3f7297912c52",
+      "bytes": 469,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/22-nonfile-custody-fixed.log",
+      "sha256": "cd0fac575a631acce4bf68469616b6d1ff22f2dcf04f95782184eb69cc70f5bd",
+      "bytes": 190,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/23-capability-failure.log",
+      "sha256": "576c915ae5bc9224e20f1a69d5d24b6e551670f21f8c753a13ba2ab69bf75198",
+      "bytes": 830,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 1,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/24-daemon-build.log",
+      "sha256": "54f7e1930c927c19c54757edd4259aacf4d78eb48bb458ac19937fabada36d46",
+      "bytes": 3455,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/25-daemon-wired-build.log",
+      "sha256": "de5e3901995792ef03529988c21aec3aeff2f61d36f248e94a21295930d7574b",
+      "bytes": 467,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/26-daemon-formatted-build.log",
+      "sha256": "3d2e153b420ab30b4bb61c062b83416e59ffe83e4c5e49f15dd9a9b2cde419df",
+      "bytes": 467,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/27-image-build.log",
+      "sha256": "4f79dc16128fe8a376d07d19dcb8583efcdecac186b9aed9c21da0328ec565a0",
+      "bytes": 1789,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/28-native-final-build.log",
+      "sha256": "a7fd196f0e637bd4107e6607c25c1d57c4e9eda4ed02667569f3ab114c198971",
+      "bytes": 469,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/29-custody-final.log",
+      "sha256": "5fdf787cdbec7fb02a920c5d38753999bb5ea53e36d1da426c1aaa56525a0ec7",
+      "bytes": 1100,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 1,
+          "failed": 2,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/30-sdk-fuse.log",
+      "sha256": "3ef04137125f96595100c094c6d550a86c8ec2a6fd0dcb6ac1bd76a5668855c3",
+      "bytes": 3282,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 3,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/31-native-build-final.log",
+      "sha256": "777122dc74d2b356562c801f9e7d475fe36adc9c8cf861df636c5ac204ba2ecb",
+      "bytes": 331,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/32-boundary.log",
+      "sha256": "45dbbc4b2446204190a2516ed6768c29e716895835b5f9e13cf66022ae13c10d",
+      "bytes": 76,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/33-local-resume.log",
+      "sha256": "8284aaabe32c7faf6faf66ca7053bb0348f3d0aa3c61aa5df902e4eec349d772",
+      "bytes": 190,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/34-image-startup-cause.log",
+      "sha256": "250e4d877b43c94d52a3dde1e7c01f52999c8f245fe2d774cb6f6eae76e5bb2c",
+      "bytes": 122,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/35-image-root-build.log",
+      "sha256": "845f1d5c2d527f2720af87b3f8e3a50d9c5d0202aaeece085bcb85e3767b617b",
+      "bytes": 1598,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/36-sdk-fuse-root.log",
+      "sha256": "00a4638b8d4fc27f8c6649fdaeea3cc553c28d93c500813d04e85325cda631fc",
+      "bytes": 1128,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/37-native-complete-build.log",
+      "sha256": "9eb9aee491139eed402e8b0b1af96637ac0de3744b31f32447d3d8b58a174e82",
+      "bytes": 331,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/38-native-phase_a_.log",
+      "sha256": "bfbde8f6d40897bc6e1b8f242d4aeab9a7f15ce13d8e10776bf362f3693251c3",
+      "bytes": 837,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/39-native-pinned_directory_retains_forgotten_ancestors_and_detached_parent_refuses_mutation.log",
+      "sha256": "c974bff7a863fa009134b8035fc77c321b439355215b8b106a1687cdccd2ae03",
+      "bytes": 207,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/40-native-base_directory_move_keeps_inherited_children_handles_and_commits.log",
+      "sha256": "a27fb8685287f2d631d9bb32b6d8c44cc29cfe39437d12c7d31cabdb12417988",
+      "bytes": 190,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/41-native-moved_canonical_symlink_reads_target_by_serial.log",
+      "sha256": "96d782e89cb31eb2ac249af0cb20b102c46f076d195d76192ede85fea2bd383b",
+      "bytes": 172,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/42-native-moved_directory_keeps_frozen_g1_and_later_g2_write.log",
+      "sha256": "8d1c26a62d4263a3d28606c76665fbbf50ad2e159a200abe577ca85df333dda8",
+      "bytes": 176,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/43-core-runtime-tests.log",
+      "sha256": "1a9baa7682e88a97dad893d34f17ebeb72c834a24a77f98de51a59a8e69fe39b",
+      "bytes": 21858,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/43-core-runtime-tests.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/44-tool-tests.log",
+      "sha256": "0490208e5a254f2f2e6e0f70f7a5ee55157accf27688d6887c0492cc0a5b37e0",
+      "bytes": 107,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/44-tool-tests.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/45-diff-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/46-core-canonical-tests.log",
+      "sha256": "770ae9c8157a3d996542ae7da5df85f638244141acd347f72af25cf464ebfd1d",
+      "bytes": 57787,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 21,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/46-core-canonical-tests.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/47-daemon-final-build.log",
+      "sha256": "2a94b882317c8a2b53ea85d01a02a898a7e92244a9299a071d35048bb7caa3d9",
+      "bytes": 467,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/48-sdk-host-tests.log",
+      "sha256": "03f39722b9498f7c9d8e56c734d5133251d0bc0f1d26c89e703cfceab90b2c66",
+      "bytes": 2128,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/48-sdk-host-tests.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/49-image-final-build.log",
+      "sha256": "dbfd632d6804e4d2f3d0e4b3df3b1d17fa924a83f49628c284c471048a4d4cc1",
+      "bytes": 1936,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/50-sdk-fuse-final.log",
+      "sha256": "8ff1dbd8f8bd3dac9a6c07d2e9a75d2a0138bab97caff111daf52c1587c68c2c",
+      "bytes": 1356,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/51-workspace-final-tests.log",
+      "sha256": "52a6c014770035aefda4edcb181ad1d8a6137cb9650268874288568088758442",
+      "bytes": 7082,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/52-native-frozen-build.log",
+      "sha256": "e2bf7cfe038ce8d66537e7446523ab1a0bb3a5d115b2f25ce02ddff24d3c7fc7",
+      "bytes": 523,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/53-check-examples.log",
+      "sha256": "ce452de84d35fe7c2b9e856c53836547e22e282b453c28f64d5ad46910b69112",
+      "bytes": 858,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/54-clippy-host.log",
+      "sha256": "7935e52c8c5efc12d029f2b76d6698f036ec59a0468fbef85c812c38bd8782a7",
+      "bytes": 1126,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/55-native-frozen.log",
+      "sha256": "49794f3ce207c964dd6ccc3f0b105d27827b3f8e074ccdd8abb118354f3267c4",
+      "bytes": 837,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/56-fmt-check.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/57-native-published-build.log",
+      "sha256": "db5b8996a23242f0b85c9dd2c0e74cc12abdffa8fdda80d9c3eeab240a0e071b",
+      "bytes": 331,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/58-published-cleanup.log",
+      "sha256": "7206b8d1e8af2d37982c1e65d79230f1ff858427c1785d02fa96e53769f44194",
+      "bytes": 732,
+      "classification": "retained failed diagnostic",
+      "test_summary": [
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/59-clippy-linux.log",
+      "sha256": "eeca2bb567f704ba9cc7f25e4662de88349596dab6f70314c7db87f021e7e760",
+      "bytes": 3365,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/60-published-fix-build.log",
+      "sha256": "2438916b53c3a1f601b2e1b9daf8582f338506647b6901cb6a2b7ae102440da1",
+      "bytes": 468,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/61-published-fixed.log",
+      "sha256": "e5c18fde0410c3c83825fcdcf04a4ad90e77cd1b0e47f16fd7ab999994e4b8c4",
+      "bytes": 285,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/62-clippy-linux-fixed.log",
+      "sha256": "2884066f0f5237db1628e88fc04123375a1b7263875cc42ab4b2b729bac6f15d",
+      "bytes": 4030,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/63-clippy-linux-final.log",
+      "sha256": "f525abce0837c4ffa68fc232e9a70036417708820f4cf3ff59510d45961c922b",
+      "bytes": 5575,
+      "classification": "retained failed diagnostic",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/64-daemon-frozen-build.log",
+      "sha256": "79812374c711c7a4bb215804f71fc20c2e213d6a14ae104fca60d7d7feff6af9",
+      "bytes": 467,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/65-owning-final-tests.log",
+      "sha256": "9f9324e83f1f506dc297c25161abf77f6f685bcde1ed0d9fc758ef794412c8c4",
+      "bytes": 9195,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/65-owning-final-tests.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/66-clippy-linux-final.log",
+      "sha256": "a983df45e8f1d83a18ac2cdfcf074a9f522412e674901fb6a28a962cfc05fe5c",
+      "bytes": 336,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/66-clippy-linux-final.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/67-image-frozen-build.log",
+      "sha256": "70eb009f5bc3b882bc3d548a64f3f6ba34dbc0bb09dfcb6af7c1543d0368366b",
+      "bytes": 1832,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/68-sdk-fuse-frozen.log",
+      "sha256": "a18f9c94890e815b86063a47857b9cded6c30c797ea535e8cc4bcae583af06fe",
+      "bytes": 1622,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/68-sdk-fuse-frozen.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/69-native-final-build.log",
+      "sha256": "18419211c8d2897089af5ad0f97ee232071aa2c996b2a8d680864bdc35f16c04",
+      "bytes": 468,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": null
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/70-clippy-host-final.log",
+      "sha256": "8c5b99c920f1faaec7cae7528adffeac6c5a4a4f49277d463f9d357c1b029382",
+      "bytes": 650,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/70-clippy-host-final.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/71-native-frozen-complete.log",
+      "sha256": "b6b138befeee55d95079b91b8abe92870cbc48b3b66c9cba7b43747731fa6072",
+      "bytes": 1009,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/71-native-frozen-complete.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/72-examples-final.log",
+      "sha256": "c19305a4cb469a8996152d981153ccc12c5d1d0cedb6cf1a4c2ed2ac7558c36d",
+      "bytes": 596,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/72-examples-final.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/73-fmt-final.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/73-fmt-final.log"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/74-boundary-final.log",
+      "sha256": "45dbbc4b2446204190a2516ed6768c29e716895835b5f9e13cf66022ae13c10d",
+      "bytes": 76,
+      "classification": "build/check/correctness diagnostic; inspect exact scope",
+      "test_summary": [],
+      "published_path": "evidence/74-boundary-final.log"
+    }
+  ]
+}

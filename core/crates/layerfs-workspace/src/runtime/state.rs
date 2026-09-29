@@ -31,6 +31,9 @@ pub(crate) struct Inner {
     pub store: u32,
     pub access: WorkspaceAccess,
     pub arena: Option<Arc<crate::backing::metadata::Arena>>,
+    pub active: Option<Arc<crate::backing::active::ActiveBacking>>,
+    pub read_origin: Mutex<Option<crate::filesystem::read_origin::ReadOrigin>>,
+    pub view_leases: crate::runtime::view_leases::ViewLeases,
     pub root: NodeAttributes,
     pub mount_path: PathBuf,
     pub directory: Option<Arc<crate::backing::directory::Directory>>,
@@ -45,8 +48,11 @@ pub(crate) struct State {
     pub nodes: Vec<Node>,
     pub node_index: BTreeMap<u64, usize>,
     pub node_index_charge: Charge,
+    pub inherited_names: BTreeMap<(u64, Vec<u8>), (u64, Charge)>,
+    pub is_active: bool,
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
+    pub active_completion: RefCell<Option<Arc<crate::backing::metadata::ProgressFund>>>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,
     pub revision: u64,
@@ -339,6 +345,12 @@ impl State {
             None => *held = Some(host.budget.reserve(total)?),
         }
         drop(held);
+        if self.is_active && dirty > 0 && self.active_completion.borrow().is_none() {
+            let metadata = host.metadata.as_ref().ok_or(WorkspaceError::Unsupported)?;
+            *self.active_completion.borrow_mut() = Some(
+                crate::backing::metadata::ProgressFund::reserved(metadata, self.generation)?,
+            );
+        }
         Ok(total)
     }
     /// Registers one regular identity this generation created. An identity that
@@ -445,6 +457,8 @@ impl State {
         for (index, node) in self.nodes.iter().enumerate() {
             self.node_index.insert(node.attr.serial, index);
         }
+        self.inherited_names
+            .retain(|_, (serial, _)| self.node_index.contains_key(serial));
         self.node_index_charge
             .resize(self.nodes.len() * 96)
             .expect("shrinking the node index charge cannot fail");

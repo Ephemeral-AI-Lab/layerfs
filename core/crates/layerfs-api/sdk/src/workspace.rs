@@ -8,7 +8,7 @@ use layerfs_bridge::contract::{
 use layerfs_sandbox::{ControlRoute, RouteError, SandboxOwner};
 
 pub struct WorkspaceApi<'a> {
-    owner: &'a SandboxOwner,
+    pub(crate) owner: &'a SandboxOwner,
 }
 impl<'a> WorkspaceApi<'a> {
     pub fn new(owner: &'a SandboxOwner) -> Self {
@@ -181,7 +181,7 @@ impl<'a> WorkspaceApi<'a> {
     }
 }
 
-fn route_error(error: RouteError) -> WorkspaceError {
+pub(crate) fn route_error(error: RouteError) -> WorkspaceError {
     match error {
         RouteError::Failure(failure) => WorkspaceError::Failure(failure),
         RouteError::Stale => WorkspaceError::Stale,

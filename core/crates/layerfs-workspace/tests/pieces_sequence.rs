@@ -143,6 +143,10 @@ impl Fixture {
     fn build(&self, pieces: &[Piece], length: u64) -> Result<PageRef, WorkspaceError> {
         self.with_window(|window| metadata_pieces::build(&self.store, pieces, length, window))
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "external splice oracle keeps all boundary facts explicit"
+    )]
     fn splice(
         &self,
         old: PageRef,
@@ -573,7 +577,7 @@ fn an_implicit_base_longer_than_one_extent_folds_into_split_parts() {
     // fold must split the retained prefix and tail the same way instead of
     // emitting one over-ceiling extent. The mounted route never edited a file
     // this large, so the shape was unreachable before the route harness.
-    let ceiling = u64::from(MAX_EXTENT);
+    let ceiling = MAX_EXTENT;
     let base = 3 * ceiling + 10;
     let first = f
         .splice(PageRef::NULL, 10, 14, base, 0, base, &[local(0, 4, 5, 6)])
@@ -768,7 +772,7 @@ fn a_shared_subtree_records_the_unknown_count_and_the_exact_total() {
     // three leaves under one branch: a splice in the middle shares the two
     // leaves it does not touch.
     let pieces: Vec<Piece> = (0..300)
-        .map(|index| local(index * 64, 64, index as u64 + 1, (index + 1) as u32))
+        .map(|index| local(index * 64, 64, index + 1, (index + 1) as u32))
         .collect();
     let length = 300 * 64;
     let root = f.build(&pieces, length).unwrap();

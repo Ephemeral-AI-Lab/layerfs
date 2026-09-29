@@ -143,6 +143,14 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             Encoder::bounded(CONSTRUCT_PORTABLE_METADATA_REQUEST_BYTES)
         }
         Operation::ConstructSymlink { .. } => Encoder::bounded(CONSTRUCT_SYMLINK_REQUEST_BYTES),
+        Operation::WorkspacePinView { .. } | Operation::WorkspaceViewLookup { .. } => {
+            Encoder::bounded(WORKSPACE_VIEW_REQUEST_BYTES)
+        }
+        Operation::WorkspaceViewList { .. }
+        | Operation::WorkspaceViewRead { .. }
+        | Operation::WorkspaceViewReadlink { .. }
+        | Operation::WorkspaceViewStatus { .. }
+        | Operation::WorkspaceReleaseView { .. } => Encoder::bounded(WORKSPACE_VIEW_REQUEST_BYTES),
         _ => Encoder::default(),
     };
     e.u64(r.generation)?;
@@ -292,6 +300,84 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.blob(workspace)?;
             e.put(incarnation)?;
             e.blob(command)?;
+        }
+        Operation::WorkspacePinView {
+            workspace,
+            incarnation,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+        }
+        Operation::WorkspaceViewLookup {
+            workspace,
+            incarnation,
+            view,
+            parent,
+            name,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(view)?;
+            e.u64(*parent)?;
+            e.blob(name)?;
+        }
+        Operation::WorkspaceViewList {
+            workspace,
+            incarnation,
+            view,
+            directory,
+            after,
+            entries,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(view)?;
+            e.u64(*directory)?;
+            e.u8(u8::from(after.is_some()))?;
+            if let Some(after) = after {
+                e.blob(after)?;
+            }
+            e.u16(*entries)?;
+        }
+        Operation::WorkspaceViewRead {
+            workspace,
+            incarnation,
+            view,
+            file,
+            offset,
+            bytes,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(view)?;
+            e.u64(*file)?;
+            e.u64(*offset)?;
+            e.u32(*bytes)?;
+        }
+        Operation::WorkspaceViewReadlink {
+            workspace,
+            incarnation,
+            view,
+            link,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(view)?;
+            e.u64(*link)?;
+        }
+        Operation::WorkspaceViewStatus {
+            workspace,
+            incarnation,
+            view,
+        }
+        | Operation::WorkspaceReleaseView {
+            workspace,
+            incarnation,
+            view,
+        } => {
+            e.blob(workspace)?;
+            e.put(incarnation)?;
+            e.blob(view)?;
         }
         Operation::UpdatePortableMetadata {
             base,
@@ -664,6 +750,19 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
     {
         return Err(Code::Capacity.into());
     }
+    if matches!(
+        opcode,
+        WORKSPACE_PIN_VIEW_OPCODE
+            | WORKSPACE_VIEW_LOOKUP_OPCODE
+            | WORKSPACE_VIEW_LIST_OPCODE
+            | WORKSPACE_VIEW_READ_OPCODE
+            | WORKSPACE_VIEW_READLINK_OPCODE
+            | WORKSPACE_VIEW_STATUS_OPCODE
+            | WORKSPACE_RELEASE_VIEW_OPCODE
+    ) && b.len() > WORKSPACE_VIEW_REQUEST_BYTES
+    {
+        return Err(Code::Capacity.into());
+    }
     let operation = match opcode {
         1 => Operation::ReadFile {
             root: d.root()?,
@@ -790,6 +889,53 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             workspace: d.blob(WORKSPACE_ID_BYTES)?,
             incarnation: d.root()?,
             command: d.blob(4096)?,
+        },
+        WORKSPACE_PIN_VIEW_OPCODE => Operation::WorkspacePinView {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+        },
+        WORKSPACE_VIEW_LOOKUP_OPCODE => Operation::WorkspaceViewLookup {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
+            parent: d.u64()?,
+            name: d.blob(VIEW_NAME_BYTES)?,
+        },
+        WORKSPACE_VIEW_LIST_OPCODE => Operation::WorkspaceViewList {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
+            directory: d.u64()?,
+            after: match d.u8()? {
+                0 => None,
+                1 => Some(d.blob(VIEW_NAME_BYTES)?),
+                _ => return Err(Code::InvalidInput.into()),
+            },
+            entries: d.u16()?,
+        },
+        WORKSPACE_VIEW_READ_OPCODE => Operation::WorkspaceViewRead {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
+            file: d.u64()?,
+            offset: d.u64()?,
+            bytes: d.u32()?,
+        },
+        WORKSPACE_VIEW_READLINK_OPCODE => Operation::WorkspaceViewReadlink {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
+            link: d.u64()?,
+        },
+        WORKSPACE_VIEW_STATUS_OPCODE => Operation::WorkspaceViewStatus {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
+        },
+        WORKSPACE_RELEASE_VIEW_OPCODE => Operation::WorkspaceReleaseView {
+            workspace: d.blob(WORKSPACE_ID_BYTES)?,
+            incarnation: d.root()?,
+            view: d.blob(VIEW_LEASE_TOKEN_BYTES)?,
         },
         UPDATE_PORTABLE_METADATA_OPCODE => Operation::UpdatePortableMetadata {
             base: d.root()?,

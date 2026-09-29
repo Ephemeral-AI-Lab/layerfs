@@ -1,7 +1,16 @@
 //! One projection binding, bounded reply exclusion, and checked mutation completion.
 use super::{lifecycle::MountLease, state::State};
 use crate::{backing::budget::Charge, *};
-use std::{alloc::Layout, io, mem::size_of, time::Instant};
+use std::{
+    alloc::Layout,
+    io,
+    mem::size_of,
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc, Condvar,
+    },
+    time::Instant,
+};
 
 const PROJECTION_REPLIES: usize = 2;
 
@@ -46,7 +55,10 @@ pub(crate) struct ProjectionState {
     pub delivery: Option<ProjectionInvalidation>,
     pub replies: usize,
     pub mutation_held: bool,
+    reply_started: bool,
     pub status: CoherenceStatus,
+    refusals_logged: AtomicU8,
+    released: Arc<Condvar>,
     callback_charge: Option<Charge>,
     _charge: Charge,
 }
@@ -55,19 +67,43 @@ impl ProjectionState {
         let bytes = size_of::<Self>()
             + (PROJECTION_REPLIES - 1) * size_of::<ProjectionReplyPermit>()
             + size_of::<ProjectionMutationPermit>()
+            + 3 * size_of::<usize>()
+            + size_of::<Condvar>()
             + 64;
         let charge = workspace.host.budget.reserve(bytes)?;
         Ok(Box::new(Self {
             delivery: None,
             replies: 0,
             mutation_held: false,
+            reply_started: false,
             status: CoherenceStatus::Unbound,
+            refusals_logged: AtomicU8::new(0),
+            released: Arc::new(Condvar::new()),
             callback_charge: None,
             _charge: charge,
         }))
     }
     pub fn in_flight(&self) -> bool {
         matches!(self.status, CoherenceStatus::Pending { .. })
+    }
+    fn log_refusal(&self, site: &str, revision: u64, deadline: Option<Instant>) {
+        if self
+            .refusals_logged
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                (n < 8).then_some(n + 1)
+            })
+            .is_ok()
+        {
+            eprintln!(
+                "LFS_PROJECTION_REFUSAL v=1 site={site} revision={revision} status={:?} delivery={} mutation_held={} reply_started={} replies={} remaining_ns={:?}",
+                self.status,
+                self.delivery.is_some(),
+                self.mutation_held,
+                self.reply_started,
+                self.replies,
+                deadline.map(|end| end.saturating_duration_since(Instant::now()).as_nanos()),
+            );
+        }
     }
 }
 
@@ -97,6 +133,18 @@ pub struct ProjectionMutationPermit {
     used: bool,
 }
 impl ProjectionMutationPermit {
+    /// Called immediately before the FUSE reply attempt. It marks only a
+    /// healthy prior WRITE as eligible for bounded successor admission wait.
+    pub fn mark_reply_started(&mut self) {
+        if let Ok(mut state) = self.workspace.state() {
+            if let Some(projection) = &mut state.projection {
+                if projection.mutation_held {
+                    projection.reply_started = true;
+                }
+            }
+        }
+    }
+
     /// Makes one attempt, using the earlier of this deadline and admission's
     /// deadline. Current kernel append flags are supplied per write; append
     /// requires the supplied offset to equal live EOF.
@@ -120,6 +168,29 @@ impl ProjectionMutationPermit {
             MutationOrigin::ProjectionWrite { append },
         )
     }
+    /// Same public projection/reply attempt, with a bounded charged copy of
+    /// kernel bytes instead of an immutable temporary-file acquisition.
+    pub fn write_tiny_file(
+        &mut self,
+        handle: HandleId,
+        offset: u64,
+        bytes: &[u8],
+        append: bool,
+        deadline: Instant,
+    ) -> Result<MutationReceipt, WorkspaceError> {
+        if self.used {
+            return Err(WorkspaceError::InvalidInput);
+        }
+        self.used = true;
+        self.workspace.write_tiny_file_from(
+            handle,
+            offset,
+            bytes,
+            deadline.min(self.deadline),
+            MutationOrigin::ProjectionWrite { append },
+        )
+    }
+
     /// Publishes a size-only SETATTR and returns its exact attributes. The kernel
     /// owns post-reply cache invalidation; this operation sends no notification.
     pub fn set_len(
@@ -341,6 +412,8 @@ impl Drop for ProjectionMutationPermit {
                     .checked_sub(1)
                     .expect("one release per admitted projection mutation");
                 projection.mutation_held = false;
+                projection.reply_started = false;
+                projection.released.notify_all();
             }
         }
     }
@@ -391,23 +464,37 @@ impl Workspace {
         }
         let deadline = Self::callback_deadline(deadline);
         let mut state = self.state()?;
-        self.available(&state)?;
-        if Instant::now() >= deadline {
-            return Err(WorkspaceError::Deadline);
+        loop {
+            self.available(&state)?;
+            let now = Instant::now();
+            if now >= deadline {
+                return Err(WorkspaceError::Deadline);
+            }
+            if !state.mounted {
+                return Err(WorkspaceError::Closed);
+            }
+            let revision = state.revision;
+            let projection = state.projection.as_mut().ok_or(WorkspaceError::Io)?;
+            if projection.status != CoherenceStatus::Ready || projection.delivery.is_none() {
+                projection.log_refusal("begin_projection_mutation", revision, Some(deadline));
+                return Err(WorkspaceError::Busy);
+            }
+            if projection.mutation_held && projection.reply_started && projection.replies == 1 {
+                let released = Arc::clone(&projection.released);
+                state = released
+                    .wait_timeout(state, deadline.duration_since(now))
+                    .map_err(|_| WorkspaceError::Io)?
+                    .0;
+                continue;
+            }
+            if projection.mutation_held || projection.replies != 0 {
+                projection.log_refusal("begin_projection_mutation", revision, Some(deadline));
+                return Err(WorkspaceError::Busy);
+            }
+            projection.mutation_held = true;
+            projection.replies = 1;
+            break;
         }
-        if !state.mounted {
-            return Err(WorkspaceError::Closed);
-        }
-        let projection = state.projection.as_mut().ok_or(WorkspaceError::Io)?;
-        if projection.status != CoherenceStatus::Ready
-            || projection.delivery.is_none()
-            || projection.mutation_held
-            || projection.replies != 0
-        {
-            return Err(WorkspaceError::Busy);
-        }
-        projection.mutation_held = true;
-        projection.replies = 1;
         Ok(ProjectionMutationPermit {
             workspace: self.clone(),
             deadline,
@@ -495,6 +582,7 @@ impl Workspace {
             || projection.replies > PROJECTION_REPLIES
             || (publication && projection.replies != 1)
         {
+            projection.log_refusal("check_projected_mutation", state.revision, None);
             return Err(WorkspaceError::Busy);
         }
         Ok(())

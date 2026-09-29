@@ -13,4 +13,5 @@ pub(crate) mod reader;
 pub(crate) mod reclaim;
 pub mod segments;
 
+pub mod active;
 mod metadata_build;

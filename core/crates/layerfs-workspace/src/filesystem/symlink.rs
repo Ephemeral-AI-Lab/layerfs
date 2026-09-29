@@ -41,36 +41,70 @@ impl Workspace {
         let deadline = Self::callback_deadline(deadline);
         let mut operation = self.begin(false, deadline)?;
         operation.local_io()?;
-        let (size, base, root) = {
+        let (size, base, root, active) = {
             let state = self.state()?;
             let node = state.node(serial)?;
             if node.attr.kind != NodeKind::Symlink {
                 return Err(WorkspaceError::WrongKind);
             }
-            (node.attr.size, state.base, state.overlay.clone())
+            let active = if self.inner.active.is_some() {
+                let backing = self
+                    .inner
+                    .active
+                    .as_ref()
+                    .ok_or(WorkspaceError::Unsupported)?;
+                Some((backing.clone(), backing.pin_view()?))
+            } else {
+                None
+            };
+            (node.attr.size, state.base, state.overlay.clone(), active)
         };
         if size > SYMLINK_TARGET_BYTES as u64 {
             return Err(WorkspaceError::Io);
         }
         let mut charge = self.host.budget.reserve(SYMLINK_TARGET_BYTES)?;
-        let bytes = if let Some(inode) = self.overlay_inode(serial, root.as_ref(), deadline)? {
+        let bytes = if let Some((backing, snapshot)) = &active {
+            if snapshot
+                .get(&crate::backing::active::inode_key(serial))?
+                .is_some()
+            {
+                let mut bytes = vec![0; size as usize];
+                let count = backing.read_file(
+                    serial,
+                    0,
+                    &mut bytes,
+                    Some(snapshot),
+                    |_, _, _| Err(WorkspaceError::Io),
+                    |payload, start, output| {
+                        let mut reader = payload.reader(start..start + output.len() as u64)?;
+                        let mut done = 0;
+                        while done < output.len() {
+                            let count = Source::read(
+                                &mut reader,
+                                &mut output[done..],
+                                deadline,
+                                &self.inner.stopping,
+                            )
+                            .map_err(|_| WorkspaceError::Io)?;
+                            if count == 0 {
+                                return Err(WorkspaceError::Io);
+                            }
+                            done += count;
+                        }
+                        Ok(())
+                    },
+                )?;
+                if count != bytes.len() {
+                    return Err(WorkspaceError::Io);
+                }
+                bytes
+            } else {
+                self.readlink_inode_canonical(&mut operation, base, serial, deadline)?
+            }
+        } else if let Some(inode) = self.overlay_inode(serial, root.as_ref(), deadline)? {
             self.symlink_target(root.as_ref().ok_or(WorkspaceError::Io)?, inode, deadline)?
         } else {
-            operation.remote()?;
-            let response = self.call(
-                Operation::Inspect {
-                    root: base,
-                    query: Inspect::InodeReadlink { serial },
-                },
-                0,
-                &mut std::io::sink(),
-                deadline,
-            );
-            operation.release_remote();
-            let Response::Link(bytes) = response? else {
-                return Err(WorkspaceError::InvalidInput);
-            };
-            bytes
+            self.readlink_inode_canonical(&mut operation, base, serial, deadline)?
         };
         if bytes.len() > SYMLINK_TARGET_BYTES || bytes.len() as u64 != size || bytes.contains(&0) {
             return Err(WorkspaceError::InvalidInput);
@@ -81,6 +115,37 @@ impl Workspace {
             _charge: charge,
             _operation: operation,
         })
+    }
+
+    pub(super) fn readlink_inode_canonical(
+        &self,
+        operation: &mut crate::runtime::state::OperationGuard,
+        base: [u8; 32],
+        serial: u64,
+        deadline: Instant,
+    ) -> Result<Vec<u8>, WorkspaceError> {
+        self.readlink_inspect(operation, base, Inspect::InodeReadlink { serial }, deadline)
+    }
+
+    fn readlink_inspect(
+        &self,
+        operation: &mut crate::runtime::state::OperationGuard,
+        base: [u8; 32],
+        query: Inspect,
+        deadline: Instant,
+    ) -> Result<Vec<u8>, WorkspaceError> {
+        operation.remote()?;
+        let response = self.call(
+            Operation::Inspect { root: base, query },
+            0,
+            &mut std::io::sink(),
+            deadline,
+        );
+        operation.release_remote();
+        match response? {
+            Response::Link(bytes) => Ok(bytes),
+            _ => Err(WorkspaceError::InvalidInput),
+        }
     }
 
     /// The caller holds its existing I/O allowance while materializing this bounded target.

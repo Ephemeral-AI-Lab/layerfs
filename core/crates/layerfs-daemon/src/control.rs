@@ -254,6 +254,40 @@ fn dispatch(
             incarnation,
             ..
         } => (workspace, incarnation, 128),
+        Operation::WorkspacePinView {
+            workspace,
+            incarnation,
+        }
+        | Operation::WorkspaceViewLookup {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewList {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewRead {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewReadlink {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceViewStatus {
+            workspace,
+            incarnation,
+            ..
+        }
+        | Operation::WorkspaceReleaseView {
+            workspace,
+            incarnation,
+            ..
+        } => (workspace, incarnation, crate::control_view::VIEW_AUTHORITY),
         _ => return Err(Code::Unsupported.into()),
     };
     authorized(grants, peer, operation)?;
@@ -404,6 +438,19 @@ fn dispatch(
         return scope
             .child("daemon.commit")
             .run(|_| crate::control_commit::commit(selected, workspace, native_deadline));
+    }
+    if operation == crate::control_view::VIEW_AUTHORITY {
+        let selected = slot.selected.as_ref().ok_or(Code::Denied)?;
+        let workspace = selected.workspace.as_ref().ok_or(Code::Busy)?;
+        let operation = request.operation.clone();
+        return scope.child("daemon.view").run(|_| {
+            crate::control_view::dispatch(
+                workspace,
+                requested_incarnation,
+                &operation,
+                native_deadline,
+            )
+        });
     }
     let outcome = if operation == 2 {
         match slot.mount.as_mut() {

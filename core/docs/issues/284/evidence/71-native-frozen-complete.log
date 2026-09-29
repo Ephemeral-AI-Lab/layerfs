@@ -1,0 +1,16 @@
+
+running 8 tests
+test phase_a_exact_capability_refuses_before_dependent_inspection ... ok
+test phase_a_fresh_nonfile_removal_replacement_and_later_symlink_move ... ok
+test phase_a_known_canonical_local_failure_resumes_same_selector_once ... ok
+test phase_a_known_save_and_unknown_commit_keep_custody_without_replay ... PHASE_A_RETAINED fault=1 allocated=16384 reserved=851968 selector_retained=true canonical_calls=0
+PHASE_A_RETAINED fault=2 allocated=24576 reserved=843776 selector_retained=true canonical_calls=1
+ok
+test phase_a_large_payload_append_resize_and_backward_base_copy ... ok
+test phase_a_lease_admission_frozen_names_and_checked_release ... ok
+test phase_a_namespace_cleanup_error_keeps_published_revision_and_identity ... PHASE_A_PUBLISHED cleanup_failed=true accepted_revision=2 identity=10 owner_retained=true
+ok
+test phase_a_selected_origins_overlap_zero_hardlinks_and_completion_credit ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.48s
+
