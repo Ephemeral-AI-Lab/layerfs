@@ -645,11 +645,11 @@ fn view_lease_known_c1_local_c5_failure() {
         let Some(CommitOutcomeWire::Committed(committed)) = &failure.known_outcome else {
             panic!("must preserve a known canonical Commit: {failure:?}")
         };
-        let actual_head = committed
-            .commit
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        use std::fmt::Write as _;
+        let mut actual_head = String::new();
+        for byte in committed.commit {
+            write!(&mut actual_head, "{byte:02x}").unwrap();
+        }
         assert_eq!(
             actual_head, head,
             "relay gate must match SDK's known C1 Commit"
