@@ -20,6 +20,7 @@ RESULTS = ROOT / "benchmark-results/fs-bench-pro"
 sys.path.insert(0, str(HERE))
 from families import init_namespace as init  # noqa: E402
 from families import history_retention as history  # noqa: E402
+from families import workspace_write as write  # noqa: E402
 
 CONTRACT_COMMIT = "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2"
 BUILD_PROFILE = "release"
@@ -383,6 +384,10 @@ def main():
         for case in history.CASES.values():
             print(f"{case.id}\t{case.states} states\tallocated < {case.ceiling_bytes} B\t"
                   f"{'selected' if case.id in history.SELECTED else 'explicit run-only'}")
+        for case in write.CASES.values():
+            print(f"{case.id}\t{case.writes} {case.pattern} writes\t"
+                  f"command <= {case.command_budget_ns / 1e9:g} s; verifier <= 9 s\t"
+                  "NOT_RUN: history checkpoint pending")
     elif args.command == "run":
         selection = args.case or args.family
         if selection in (*history.CASES, "history-retention"):

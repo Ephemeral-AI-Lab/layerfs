@@ -2227,6 +2227,13 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     let mut prior_unavailable: u64 = 0;
     let mut totals = SaveTotals::default();
     let mut change_totals = ChangeMix::default();
+    // Labelled allocation diagnostic only. It observes original owner files
+    // after each completed state save; these rows never decide a gate.
+    let block_probe = matches!(
+        std::env::var("LAYERFS_HISTORY_BLOCK_DIAGNOSTIC").as_deref(),
+        Ok("1")
+    );
+    let mut block_progress = Vec::new();
 
     let count = corpus.states().len();
     // Extra nodes fit stride10/stride3; stride1 remains the ordinary recording.
@@ -2757,6 +2764,13 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
                 peak_heap_bytes: peak_heap,
                 ..outcome
             });
+            if block_probe {
+                let c2 = instruments::space(&store_path)
+                    .map_err(|error| OpError::Io(format!("C2 block probe: {error}")))?;
+                let c5 = instruments::space(&history_path)
+                    .map_err(|error| OpError::Io(format!("C5 block probe: {error}")))?;
+                block_progress.push((ordinal, c2, c5));
+            }
         }
         Ok((outcomes, corpus_read_ns))
     });
@@ -2777,6 +2791,22 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     drop(retained);
     if super::history_retained::enabled() {
         super::history_retained::record_counters(&store_path, context.trace)?;
+    }
+    for (ordinal, c2, c5) in block_progress {
+        for (owner, space) in [("C2", c2), ("C5", c5)] {
+            for (metric, bytes) in [
+                ("allocated", space.allocated_bytes),
+                ("apparent", space.apparent_bytes),
+            ] {
+                context.trace.write_number(
+                    Kind::Resource,
+                    &format!("diagnostic.state.{ordinal}.{owner}.{metric}_bytes"),
+                    bytes as i128,
+                    "bytes",
+                    "original-owner stat after state save; diagnostic only, never a gate",
+                )?;
+            }
+        }
     }
 
     // The product's own timing tree, byte-verbatim, written **once** for the whole
