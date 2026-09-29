@@ -206,7 +206,14 @@ pub(super) fn reconcile(
             };
         }
         if current.kind != NodeKind::Directory {
-            current.base = row.content;
+            // Intervening G2 extents still address their own immutable Base.
+            // Only the matching captured inode receives the saved Base origin.
+            if current.kind != NodeKind::File
+                || current.base == [0; 32]
+                || current.revision == row.original.revision
+            {
+                current.base = row.content;
+            }
             current.metadata = row.metadata;
         }
         current.fresh =
@@ -219,7 +226,8 @@ pub(super) fn reconcile(
         );
     }
     let mut status = attempt.status.lock().map_err(|_| WorkspaceError::Io)?;
-    let publication = active.publish_reconcile_map(updates, updates_charge)?;
+    let publication =
+        active.publish_reconcile_map(updates, updates_charge, Some(&submission.fund))?;
     if publication.revision != revision {
         return Err(WorkspaceError::Io);
     }

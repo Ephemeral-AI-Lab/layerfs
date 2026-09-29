@@ -2027,6 +2027,40 @@ mod linux {
             .map(|i| (i % 251) as u8)
             .collect();
         assert_eq!(f.native.bytes(saved.1, offset, 512), distant);
+        // Independent bounded-window oracle for every byte of the original
+        // three-edit transformation, including the unaligned boundary runs.
+        let final_length = data.size - 202;
+        let mut at = 0;
+        while at < final_length {
+            let length = (final_length - at).min(128 * 1024) as usize;
+            let expected: Vec<_> = (at..at + length as u64)
+                .map(|position| {
+                    if (100..103).contains(&position) {
+                        b"abc"[(position - 100) as usize]
+                    } else if (200..205).contains(&position) {
+                        b"12345"[(position - 200) as usize]
+                    } else {
+                        let source = if position < 100 {
+                            position
+                        } else if position < 200 {
+                            position + 7
+                        } else if position < 500 {
+                            position + 2
+                        } else {
+                            position + 202
+                        };
+                        (source % 251) as u8
+                    }
+                })
+                .collect();
+            assert_eq!(
+                f.native.bytes(saved.1, at, length),
+                expected,
+                "saved C1 full oracle at {at}"
+            );
+            at += length as u64;
+        }
+        println!("STAGE_FULL_BYTE_ORACLE bytes={final_length} quota=67108864 local_replacement=8");
         assert_eq!(f.branch(), branch);
         f.counts(1);
         let observed = f.native.observations.lock().unwrap();
@@ -2034,7 +2068,7 @@ mod linux {
             .operations
             .iter()
             .find_map(|op| {
-                if let Operation::SaveFile {
+                if let Operation::SaveFileV2 {
                     base: Some(_),
                     replacement,
                     ..
@@ -2048,8 +2082,82 @@ mod linux {
             .unwrap();
         assert_eq!(replacement, 8);
         drop(observed);
+        let backing = f.workspace.backing_status().unwrap();
+        let physical = physical_private_files(
+            &std::path::PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap())
+                .join("private-backing"),
+        )
+        .0;
+        assert_eq!(physical, backing.allocated_bytes);
+        assert!(backing.accounting_complete);
+        assert!(backing.allocated_bytes + backing.reserved_bytes <= 64 * 1024 * 1024);
+        println!("STAGE_LOWERING_PHYSICAL blocks_bytes={physical} backing={backing:?}");
         check("normalized-splice-lowering-and-streamed-exact-input");
         stage_retained(&f, selector);
+    }
+
+    #[test]
+    #[ignore = "requires stage_route.py origin_g2 selection"]
+    fn stage_origin_g2() {
+        let f = Fixture::new(Gate::None);
+        let data = f.lookup(b"data.bin");
+        let handle = writable(&f, data.serial);
+        let old: Vec<_> = (0..data.size).map(|at| (at % 251) as u8).collect();
+        let copied = f.read(handle, 200000, 32768);
+        f.workspace
+            .write_file(handle, 50000, &f.own(&copied), deadline())
+            .unwrap();
+        let mut expected = old.clone();
+        expected[50000..82768].copy_from_slice(&old[200000..232768]);
+        let token = [1; 33];
+        let pin = f.workspace.pin_view(token, deadline()).unwrap();
+        let entry = f
+            .workspace
+            .view_lookup(&token, pin.root.serial, b"data.bin", deadline())
+            .unwrap();
+        let stage = f.workspace.stage(deadline()).unwrap();
+        f.workspace
+            .write_file(handle, 70000, &f.own(b"later"), deadline())
+            .unwrap();
+        let mut successor = expected.clone();
+        successor[70000..70005].copy_from_slice(b"later");
+        f.workspace.commit_staged(&stage, deadline()).unwrap();
+        assert_eq!(complete_read(&f, handle, data.size as usize), successor);
+        for (index, chunk) in expected.chunks(16384).enumerate() {
+            assert_eq!(
+                f.workspace
+                    .view_read(
+                        &token,
+                        entry.serial,
+                        (index * 16384) as u64,
+                        chunk.len(),
+                        deadline()
+                    )
+                    .unwrap()
+                    .bytes,
+                chunk
+            );
+        }
+        let committed = attr(
+            f.native
+                .attributes(stage.stage().candidate_root, b"data.bin"),
+        );
+        assert_eq!(f.native.bytes(committed.1, 0, expected.len()), expected);
+        let stage2 = f.workspace.stage(deadline()).unwrap();
+        let committed2 = attr(
+            f.native
+                .attributes(stage2.stage().candidate_root, b"data.bin"),
+        );
+        assert_eq!(f.native.bytes(committed2.1, 0, successor.len()), successor);
+        f.workspace.commit_staged(&stage2, deadline()).unwrap();
+        assert_eq!(
+            f.workspace.release_view(&token).unwrap(),
+            ViewRelease::Completed
+        );
+        f.workspace.release(handle).unwrap();
+        f.workspace.forget(data.serial, 1, ReferenceScope::Local);
+        f.workspace.close_clean_until(deadline()).unwrap();
+        check("reordered-base-g1-and-intervening-g2-full-bytes-and-clean-close");
     }
 
     #[test]
@@ -2296,7 +2404,7 @@ mod linux {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
+                .filter(|op| matches!(op, Operation::SaveFileV2 { base: Some(_), .. }))
                 .count(),
             0
         );
@@ -2341,6 +2449,10 @@ mod linux {
         let spare = f.own(&vec![0xcc; blocks as usize * 4096]);
         let full = f.workspace.backing_status().unwrap();
         assert!(full.quota_bytes - full.allocated_bytes - full.reserved_bytes <= 4096);
+        assert!(
+            before.reserved_bytes >= 208 * 4096,
+            "completion precharged before filling ordinary quota"
+        );
         let selector = f.workspace.stage(deadline()).unwrap();
         let after = f.workspace.backing_status().unwrap();
         assert!(after.allocated_bytes > full.allocated_bytes);
@@ -2349,6 +2461,13 @@ mod linux {
             after.allocated_bytes + after.reserved_bytes,
             full.allocated_bytes + full.reserved_bytes
         );
+        let physical = physical_private_files(
+            &std::path::PathBuf::from(std::env::var("LAYERFS_STAGE_TEST_ROOT").unwrap())
+                .join("private-backing"),
+        )
+        .0;
+        assert_eq!(physical, after.allocated_bytes);
+        assert!(after.accounting_complete);
         let saved = attr(
             f.native
                 .attributes(selector.stage().candidate_root, b"data.bin"),

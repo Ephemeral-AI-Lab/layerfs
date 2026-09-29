@@ -363,6 +363,22 @@ impl WorkspaceHost {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .map_err(|_| WorkspaceError::Busy)?;
             let _remote = Remote(&self.inner.remote);
+            if options.access == WorkspaceAccess::LocalEdit {
+                let capability = self.inner.call(
+                    options.store,
+                    Operation::FileSaveCapabilities,
+                    0,
+                    &mut std::io::sink(),
+                    deadline,
+                )?;
+                if capability
+                    != (Response::FileSaveCapabilities {
+                        version: layerfs_bridge::contract::SAVE_FILE_V2_VERSION,
+                    })
+                {
+                    return Err(WorkspaceError::Unsupported);
+                }
+            }
             let (base, expected_serial, branch_snapshot) = match &options.base {
                 Base::Root(root) => (*root, None, None),
                 Base::Branch(branch) | Base::BranchAt { branch, .. } => {
@@ -538,6 +554,7 @@ impl WorkspaceHost {
                 mount_path: path.clone().into_boxed_path().into_path_buf(),
                 directory: directory.clone(),
                 stopping: AtomicBool::new(false),
+                read_origin: Mutex::new(None),
                 view_leases: crate::runtime::view_leases::ViewLeases::new(&self.inner.budget)?,
                 _charge: charge,
                 state: Mutex::new(State {
@@ -551,6 +568,7 @@ impl WorkspaceHost {
                     overlay: None,
                     is_active: resources.active.is_some(),
                     completion: None,
+                    active_completion: RefCell::new(None),
                     submission: None,
                     generation: 1,
                     revision: 0,

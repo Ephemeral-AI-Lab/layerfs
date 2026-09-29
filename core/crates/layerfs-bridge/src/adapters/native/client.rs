@@ -603,9 +603,13 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }
-        (Operation::SaveFile { length, .. }, Response::Saved { length: actual, .. }) => {
-            length == actual && bytes == 0
+        (Operation::FileSaveCapabilities, Response::FileSaveCapabilities { version }) => {
+            *version == SAVE_FILE_V2_VERSION && bytes == 0
         }
+        (
+            Operation::SaveFile { length, .. } | Operation::SaveFileV2 { length, .. },
+            Response::Saved { length: actual, .. },
+        ) => length == actual && bytes == 0,
         (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
             target.len() as u64 == *length && bytes == 0
         }

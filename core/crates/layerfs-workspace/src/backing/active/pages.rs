@@ -3,7 +3,7 @@ use crate::{
     backing::{
         budget::Charge,
         directory::{identity, Directory},
-        metadata::MetadataHost,
+        metadata::{MetadataHost, ProgressFund},
         segments,
     },
     BackingFailure, BackingPhase, WorkspaceError,
@@ -56,6 +56,7 @@ struct Entry {
     pins: usize,
     unlinked: bool,
     birth: u64,
+    fund: Option<Arc<ProgressFund>>,
 }
 
 struct State {
@@ -131,6 +132,7 @@ pub struct PageStore {
     directory: Arc<Directory>,
     host: Arc<MetadataHost>,
     state: Mutex<State>,
+    completion: Mutex<Option<Arc<ProgressFund>>>,
     pack_fetches: AtomicU64,
     index_fetches: AtomicU64,
     pack_page_writes: AtomicU64,
@@ -149,14 +151,25 @@ pub struct PagePin {
 pub(super) struct PageReservation {
     store: Arc<PageStore>,
     remaining: usize,
+    fund: Option<Arc<ProgressFund>>,
 }
 
+pub(super) struct CompletionPages<'a>(&'a PageStore);
+impl Drop for CompletionPages<'_> {
+    fn drop(&mut self) {
+        match self.0.completion.lock() {
+            Ok(mut fund) => {
+                fund.take();
+            }
+            Err(_) => self.0.stop(),
+        }
+    }
+}
 impl Drop for PageReservation {
     fn drop(&mut self) {
         if self
             .store
-            .host
-            .release(0, (self.remaining * PAGE_BYTES) as u64)
+            .return_credit((self.remaining * PAGE_BYTES) as u64, self.fund.as_ref())
             .is_err()
         {
             self.store.stop();
@@ -205,6 +218,40 @@ fn failure(
 }
 
 impl PageStore {
+    pub(super) fn completion(
+        &self,
+        fund: &Arc<ProgressFund>,
+    ) -> Result<CompletionPages<'_>, WorkspaceError> {
+        let mut owner = self.completion.lock().map_err(|_| WorkspaceError::Io)?;
+        if owner.is_some() {
+            return Err(WorkspaceError::Busy);
+        }
+        *owner = Some(fund.clone());
+        Ok(CompletionPages(self))
+    }
+    fn reserve_credit(&self, bytes: u64) -> Result<Option<Arc<ProgressFund>>, WorkspaceError> {
+        let fund = self
+            .completion
+            .lock()
+            .map_err(|_| WorkspaceError::Io)?
+            .clone();
+        if let Some(fund) = &fund {
+            fund.take(bytes)?;
+        } else {
+            self.host.reserve(bytes)?;
+        }
+        Ok(fund)
+    }
+    fn return_credit(
+        &self,
+        bytes: u64,
+        fund: Option<&Arc<ProgressFund>>,
+    ) -> Result<(), WorkspaceError> {
+        match fund {
+            Some(fund) => fund.give(bytes),
+            None => self.host.release(0, bytes),
+        }
+    }
     pub(super) fn reserve_pages(
         self: &Arc<Self>,
         pages: usize,
@@ -212,10 +259,11 @@ impl PageStore {
         let bytes = pages
             .checked_mul(PAGE_BYTES)
             .ok_or(WorkspaceError::Capacity)?;
-        self.host.reserve(bytes as u64)?;
+        let fund = self.reserve_credit(bytes as u64)?;
         Ok(PageReservation {
             store: self.clone(),
             remaining: pages,
+            fund,
         })
     }
     pub fn new(
@@ -239,6 +287,7 @@ impl PageStore {
                 stopped: false,
                 complete: true,
             }),
+            completion: Mutex::new(None),
             pack_fetches: AtomicU64::new(0),
             index_fetches: AtomicU64::new(0),
             pack_page_writes: AtomicU64::new(0),
@@ -374,14 +423,15 @@ impl PageStore {
         )?;
         drop(encode);
         let directory = self.directory.file()?;
-        if let Some(reservation) = reservation {
+        let fund = if let Some(reservation) = reservation {
             if !std::ptr::eq(self, Arc::as_ptr(&reservation.store)) || reservation.remaining == 0 {
                 return Err(WorkspaceError::Capacity);
             }
             reservation.remaining -= 1;
+            reservation.fund.clone()
         } else {
-            self.host.reserve(PAGE_BYTES as u64)?;
-        }
+            self.reserve_credit(PAGE_BYTES as u64)?
+        };
         {
             let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let Some(bytes) = state
@@ -390,11 +440,11 @@ impl PageStore {
                 .checked_add(1)
                 .and_then(|entries| entries.checked_mul(ENTRY_BYTES))
             else {
-                self.host.release(0, PAGE_BYTES as u64)?;
+                self.return_credit(PAGE_BYTES as u64, fund.as_ref())?;
                 return Err(WorkspaceError::Capacity);
             };
             if let Err(error) = state.entry_charge.resize(bytes) {
-                self.host.release(0, PAGE_BYTES as u64)?;
+                self.return_credit(PAGE_BYTES as u64, fund.as_ref())?;
                 return Err(error);
             }
             state.entries.insert(
@@ -408,6 +458,7 @@ impl PageStore {
                     pins: 0,
                     unlinked: false,
                     birth: revision,
+                    fund: fund.clone(),
                 },
             );
         }
@@ -424,7 +475,7 @@ impl PageStore {
                 let bytes = state.entries.len() * ENTRY_BYTES;
                 state.entry_charge.resize(bytes)?;
                 drop(state);
-                self.host.release(0, PAGE_BYTES as u64)?;
+                self.return_credit(PAGE_BYTES as u64, fund.as_ref())?;
                 return Err(failure(BackingPhase::Create, reference, 0, true, &error));
             }
         };
@@ -626,7 +677,7 @@ impl PageStore {
 
     pub fn release(&self, reference: PageRef) -> Result<u64, WorkspaceError> {
         let _release_time = self.stamp(Cause::Release);
-        let (kind, expected, charged, reserved, unlinked) = {
+        let (kind, expected, charged, reserved, unlinked, fund) = {
             let state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
             let entry = state
                 .entries
@@ -641,6 +692,7 @@ impl PageStore {
                 entry.allocated,
                 entry.reserved,
                 entry.unlinked,
+                entry.fund.clone(),
             )
         };
         let mut charged = charged;
@@ -681,7 +733,11 @@ impl PageStore {
                 .ok_or(WorkspaceError::Io)?
                 .unlinked = true;
         }
-        self.host.release(charged, 0)?;
+        if let Some(fund) = &fund {
+            fund.recycle(charged)?;
+        } else {
+            self.host.release(charged, 0)?;
+        }
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         state.allocated = state
             .allocated

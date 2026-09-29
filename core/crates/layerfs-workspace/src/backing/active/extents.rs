@@ -346,6 +346,24 @@ impl ExtentPlan {
         Self::replace(index, inode, old_length, replacement)
     }
 
+    pub(super) fn read_origin(
+        index: &Index,
+        inode: u64,
+        old_length: u64,
+        offset: u64,
+        length: u64,
+        source: u64,
+    ) -> Result<Self, WorkspaceError> {
+        let end = offset
+            .checked_add(length)
+            .filter(|end| *end <= MAX_FILE)
+            .ok_or(WorkspaceError::Capacity)?;
+        let mut replacement = Extent::base(offset, end);
+        replacement.source_offset = source;
+        replacement.validate()?;
+        Self::replace(index, inode, old_length, replacement)
+    }
+
     fn replace(
         index: &Index,
         inode: u64,

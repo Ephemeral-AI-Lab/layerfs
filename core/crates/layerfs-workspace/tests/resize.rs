@@ -53,7 +53,7 @@ mod linux {
         f.native.observations.lock().unwrap().operations[from..]
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: Some(root),
                     base_length,
                     replacement,
@@ -81,7 +81,7 @@ mod linux {
             .iter()
             .all(|op| !matches!(
                 op,
-                Operation::SaveFile { base: Some(_), .. } | Operation::HistoryCommand(_)
+                Operation::SaveFileV2 { base: Some(_), .. } | Operation::HistoryCommand(_)
             )));
         assert!(matches!(
             f.workspace.read(handle, 120, 40, deadline()),
@@ -416,7 +416,7 @@ mod linux {
             .operations
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: Some(_),
                     replacement,
                     ..

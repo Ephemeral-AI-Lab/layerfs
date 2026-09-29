@@ -137,7 +137,18 @@ impl Workspace {
                 ..
             } => {
                 let at = if append { attr.size } else { offset };
-                if replacement.len() <= 128 {
+                if let Some(source) =
+                    self.read_origin_payload(original.serial, selected.base, replacement, deadline)?
+                {
+                    let result = active.publish_read_origin(
+                        original.serial,
+                        selected,
+                        at,
+                        replacement.len(),
+                        source,
+                    )?;
+                    (result.revision, result.cleanup_error, result.inode)
+                } else if replacement.len() <= 128 {
                     let mut reader = replacement.reader(0..replacement.len())?;
                     let mut small_charge = self.host.budget.reserve(replacement.len() as usize)?;
                     let mut bytes = Vec::with_capacity(replacement.len() as usize);
@@ -167,8 +178,21 @@ impl Workspace {
             }
             FileMutation::TinyWrite { offset, bytes, .. } => {
                 let at = if append { attr.size } else { offset };
-                let result = active.write_tiny_file(original.serial, selected, at, bytes)?;
-                (result.revision, result.cleanup_error, result.inode)
+                if let Some(source) =
+                    self.read_origin_bytes(original.serial, selected.base, bytes)?
+                {
+                    let result = active.publish_read_origin(
+                        original.serial,
+                        selected,
+                        at,
+                        bytes.len() as u64,
+                        source,
+                    )?;
+                    (result.revision, result.cleanup_error, result.inode)
+                } else {
+                    let result = active.write_tiny_file(original.serial, selected, at, bytes)?;
+                    (result.revision, result.cleanup_error, result.inode)
+                }
             }
         };
         let next = state

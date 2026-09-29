@@ -175,6 +175,59 @@ closes that owner before the arena and directory; clean close drains it before
 metadata and payload cleanup. Repeating the active owner's already-complete
 close is safe when a later cleanup phase failed and the Workspace retries.
 
+## Generic read origins and completion escrow amendment
+
+Source description in the same product commit; first parent `3318e5cd0`.
+Earlier sections retain their historical pins and results. New-source verification
+is pending; this amendment supplies no gate, numeric, merge or release PASS.
+
+Ordinary reads may retain one optional Host-charged `ReadOrigin`, bounded by
+`MAX_READ_BYTES`, for bytes actually returned from a contiguous immutable C1 Base
+span. The record binds the Workspace's incarnation through its owning Inner,
+inode, canonical content root and source offset. Ordinary WRITE compares every
+supplied byte against the record and rechecks the selected inode's Base root.
+Exact matches publish an internal Base extent with a distinct logical destination;
+nonmatches retain ordinary payload/pack publication. Mixed/local/zero reads do not
+invent an origin. Allocation failure disables this optional memo. No command text,
+fixture identity or edit API selects the route. Captured SaveFile uses the approved
+version-2 internal sequence; Service resolves reordered Base sources locally.
+
+A captured matching inode receives its saved Base root at C5 installation. An
+intervening G2 regular-file version with an existing immutable Base keeps that
+root because its extents still address it. Fresh G2 versions, which cannot have
+old canonical Base extents, may adopt the newly saved root. Portable metadata and
+Branch context retain their existing successor installation. Old pinned views
+keep their original inode root and physical selectors.
+
+The existing 208-page completion fund is charged before the first dirty active
+publication, through common frontier admission. It belongs to the live generation
+until capture transfers that same Arc to its Submission. A failed prepublication
+attempt retains this unused, charged owner for the generation; explicit clean close
+returns it. G2's first dirty publication reserves a separate fund. Capture verifies
+generation and untouched credit; it does not reacquire dirty completion space from
+ordinary free headroom. A clean capture without a live fund still reserves one.
+
+Active C5 seals its unused legacy reconciliation root before canonical Commit,
+returning that root's reservation and slot credits to the same fund, without freeing
+any physical/pinned data. Under the existing per-Workspace publication gate, active
+compaction and index allocation spend the captured fund. Page reservations and
+physical page registry entries retain the funding Arc. Verified `st_blocks*512`
+allocation converts shared reserved charge to allocated charge. Verified unlink
+recycles allocation into an unfinished fund, or refunds ordinary quota after that
+fund finishes. Failed/unknown identity, allocation, authentication or unlink keeps
+its existing explicit stopped/custody result. Completion credit finishes after
+successful active installation; a failed C5 retains its fund and page ownership.
+No processes are frozen, no data is reset, and no quota/deadline/worker count changes.
+The relocated `metadata/progress.rs` is the existing fund split from the near-limit
+metadata implementation, plus its charged generation admission checks.
+
+This is bounded credit, not an unlimited-frontier completion promise. If its
+existing bounds cannot admit a required operation, report the actual refusal and
+custody rather than increase a quota or hide a case. The unchanged 2 MiB Stage
+headroom and 4 MiB Commit headroom selections, full-byte lowering, G1/G2, physical
+fault/unknown custody and checked refunds must be proved at the frozen source.
+
+
 ## Checkpoint 2 public selection
 
 An attached LocalEdit Workspace selects one pinned active view for lookup and

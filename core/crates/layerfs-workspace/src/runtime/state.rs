@@ -40,6 +40,7 @@ pub(crate) struct Inner {
     pub directory: Option<Arc<crate::backing::directory::Directory>>,
     pub stopping: AtomicBool,
     pub state: Mutex<State>,
+    pub read_origin: Mutex<Option<crate::filesystem::read_origin::ReadOrigin>>,
     pub view_leases: crate::runtime::view_leases::ViewLeases,
     pub _charge: Charge,
 }
@@ -56,6 +57,7 @@ pub(crate) struct State {
     pub overlay: Option<Arc<crate::backing::metadata::RootOwner>>,
     pub is_active: bool,
     pub completion: Option<crate::backing::metadata::CompletionReserve>,
+    pub active_completion: RefCell<Option<Arc<crate::backing::metadata::ProgressFund>>>,
     pub submission: Option<Arc<crate::overlay::snapshot::Submission>>,
     pub generation: u64,
     pub revision: u64,
@@ -394,6 +396,12 @@ impl State {
             None => *held = Some(host.budget.reserve(total)?),
         }
         drop(held);
+        if self.is_active && dirty > 0 && self.active_completion.borrow().is_none() {
+            let metadata = host.metadata.as_ref().ok_or(WorkspaceError::Unsupported)?;
+            *self.active_completion.borrow_mut() = Some(
+                crate::backing::metadata::ProgressFund::reserved(metadata, self.generation)?,
+            );
+        }
         Ok(total)
     }
     /// Registers one regular identity this generation created. An identity that

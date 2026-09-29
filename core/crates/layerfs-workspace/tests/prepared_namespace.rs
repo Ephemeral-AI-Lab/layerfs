@@ -226,7 +226,7 @@ fn delivery(observed: Arc<Observed>, serials: Arc<Serials>) -> OperationDelivery
             // sequence, which for a fresh zero-length file holds no extent and no
             // replacement byte. The saved root is derived from the file so the
             // oracle can follow one name to its content.
-            Operation::SaveFile { length, .. } => {
+            Operation::SaveFileV2 { length, .. } => {
                 let cancel = AtomicBool::new(false);
                 let mut buffer = [0u8; 4096];
                 let mut body = 0u64;

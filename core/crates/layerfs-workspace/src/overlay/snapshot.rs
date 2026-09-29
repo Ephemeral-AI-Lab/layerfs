@@ -68,6 +68,7 @@ impl Submission {
     fn reserve(
         workspace: &Workspace,
         host: &Arc<MetadataHost>,
+        completion: Option<Arc<ProgressFund>>,
     ) -> Result<Arc<Self>, WorkspaceError> {
         workspace
             .host
@@ -81,7 +82,10 @@ impl Submission {
             stage: OnceLock::new(),
             _charge: host.memory(1024)?,
         });
-        let fund = ProgressFund::new(host)?;
+        let fund = match completion {
+            Some(fund) => fund,
+            None => ProgressFund::new(host)?,
+        };
         let results = host.result_roots(
             workspace
                 .inner
@@ -292,7 +296,7 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let submission = Submission::reserve(self, host)?;
+        let submission = Submission::reserve(self, host, None)?;
         let clean_root = match initial_clean
             .map(|generation| {
                 host.clean_capture_root(
@@ -429,7 +433,7 @@ impl Workspace {
             .active
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let (generation, clean) = {
+        let (generation, clean, completion) = {
             let state = self.state()?;
             self.available(&state)?;
             if state.submission.is_some() {
@@ -438,7 +442,10 @@ impl Workspace {
             if state.dirty_inodes == 0 && !allow_clean {
                 return Err(WorkspaceError::InvalidInput);
             }
-            (state.generation, state.dirty_inodes == 0)
+            {
+                let completion = state.active_completion.borrow().clone();
+                (state.generation, state.dirty_inodes == 0, completion)
+            }
         };
         self.maintain_backing(deadline)?;
         let host = self
@@ -446,7 +453,7 @@ impl Workspace {
             .metadata
             .as_ref()
             .ok_or(WorkspaceError::Unsupported)?;
-        let submission = Submission::reserve(self, host)?;
+        let submission = Submission::reserve(self, host, completion.clone())?;
         let result = (|| -> Result<(), WorkspaceError> {
             crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
             let mut state = self.state()?;
@@ -482,17 +489,32 @@ impl Workspace {
                 names,
                 name_bytes,
             )?;
-            host.reserve(ESCROW)?;
-            if let Err(error) =
-                submission
-                    .fund
-                    .install(crate::backing::metadata::CompletionReserve {
-                        generation,
-                        bytes: ESCROW,
-                    })
-            {
-                host.release(0, ESCROW)?;
-                return Err(error);
+            if let Some(fund) = &completion {
+                if !fund.untouched(generation)?
+                    || !state
+                        .active_completion
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|live| Arc::ptr_eq(live, fund))
+                {
+                    return Err(WorkspaceError::Io);
+                }
+            } else {
+                if !clean {
+                    return Err(WorkspaceError::Io);
+                }
+                host.reserve(ESCROW)?;
+                if let Err(error) =
+                    submission
+                        .fund
+                        .install(crate::backing::metadata::CompletionReserve {
+                            generation,
+                            bytes: ESCROW,
+                        })
+                {
+                    host.release(0, ESCROW)?;
+                    return Err(error);
+                }
             }
             {
                 let mut status = submission.state.lock().map_err(|_| WorkspaceError::Io)?;
@@ -519,6 +541,7 @@ impl Workspace {
                     declared: state.declared.clone(),
                 })
                 .unwrap_or_else(|_| unreachable!("one capture per reserved submission"));
+            state.active_completion.borrow_mut().take();
             state.generation = next;
             state.revision = next_revision;
             state.dirty_inodes = 0;

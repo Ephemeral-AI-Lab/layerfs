@@ -686,7 +686,7 @@ print('KERNEL_OPEN_EXISTING O_CREAT_path=kernel-selected-OPEN-or-CREATE explicit
         assert_eq!(bytes(&born_file, 4), b"born");
         let observed = f.native.observations.lock().unwrap();
         assert!(observed.operations[start..].iter().any(
-            |op| matches!(op, Operation::SaveFile { base: Some(root), .. } if *root == g_content)
+            |op| matches!(op, Operation::SaveFileV2 { base: Some(root), .. } if *root == g_content)
         ));
         assert!(observed.operations[start..].iter().any(
             |op| matches!(op, Operation::UpdatePortableMetadata { base, .. } if *base == g_metadata)
@@ -694,7 +694,7 @@ print('KERNEL_OPEN_EXISTING O_CREAT_path=kernel-selected-OPEN-or-CREATE explicit
         let constructed: Vec<_> = observed.operations[start..]
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: None, length, ..
                 } => Some(*length),
                 _ => None,

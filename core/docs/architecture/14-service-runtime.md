@@ -410,6 +410,20 @@ extension is based on that commit and frozen seal
 `e5589871b9e32f54fbccd458fccdc187302b99dc1f7873f51f65a039721df963`;
 its actual checks are recorded in [Round48](proposal/fuse-workspace-snapshot-overlay/48-mounted-symlink.md).
 
+## Internal file-save capability amendment (same commit; first parent `3318e5cd0`)
+
+Authenticated Store opcodes 28 (`FileSaveCapabilities`) and 29 (`SaveFileV2`) share
+the existing SaveFile permission bit. Capability observation is read-only and uses
+the Service's existing read admission; v2 construction uses its ordinary content
+save admission and checked abort/finish. Both use profile 1. Native encoding and
+response matching reject unrecognized operation/version/result combinations.
+Version 1 remains accepted under its original grammar. LocalEdit Workspace attach
+requires the typed version-2 capability before acknowledging attachment, so an older
+Service cannot receive provenance-reused writes it cannot save. The SDK's ordinary
+Exec path is unchanged. C1 Base replacement reads occur inside the Service using
+its StoreProvider and bounded C1 reader, never through daemon-recursive transport.
+
+
 ## Native deadline and held control-session custody (#273 follow-up)
 
 At product source following `8fc801a7cb9c2de296e3b10d006fcd5c618e037c`,

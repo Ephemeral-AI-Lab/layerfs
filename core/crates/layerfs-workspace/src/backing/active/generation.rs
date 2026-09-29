@@ -1,3 +1,5 @@
+mod read_origin;
+
 use super::{
     compaction,
     extents::{Extent, ExtentKind, ExtentPlan},

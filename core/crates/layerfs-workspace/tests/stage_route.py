@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / 'core/benchmark/fs-bench-pro-storage-content/share
 import isolation
 
 CASES = {
+    'origin_g2': ['reordered-base-g1-and-intervening-g2-full-bytes-and-clean-close'],
     'active_hot_publication': ['active-hot-publication-counts-and-alias-byte-oracle', 'active-hot-g1-g2-and-post-commit-continuation', 'active-hot-exact-blocks-and-clean-close'],
     'active_hot_continuity': ['active-mounted-process-g1-save-c5-and-g2-progress', 'active-mounted-same-process-handle-post-commit-and-refund'],
     'active_generation': ['active-g1-staged-bytes-and-g2-live-bytes', 'active-g1-g2-commits-and-final-bytes'],
@@ -81,6 +82,7 @@ CASES = {
     'metadata_denied': ['known-metadata-denial-retains-saved-file-G-and-D1'],
 }
 REQUIREMENTS = {
+    'origin_g2': ['H-01', 'H-02', 'B-26', 'B-28'],
     'active_hot_publication': ['S-02', 'S-03', 'S-17', 'B-26', 'B-28'],
     'active_hot_continuity': ['S-02', 'S-03', 'H-01', 'H-02'],
     'active_generation': ['S-02', 'S-03', 'H-01', 'H-02'],

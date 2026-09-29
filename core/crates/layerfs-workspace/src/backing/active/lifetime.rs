@@ -4,7 +4,10 @@ use super::{
     generation::{ActiveBacking, ActivePublication, State},
     reclaim,
 };
-use crate::{backing::budget::Charge, WorkspaceError};
+use crate::{
+    backing::{budget::Charge, metadata::ProgressFund},
+    WorkspaceError,
+};
 use std::collections::BTreeMap;
 
 impl ActiveBacking {
@@ -90,7 +93,7 @@ impl ActiveBacking {
         if updates.len() != expected {
             return Err(WorkspaceError::InvalidInput);
         }
-        self.publish_reconcile_map(updates, charge)
+        self.publish_reconcile_map(updates, charge, None)
     }
 
     /// Transfer C5's already charged patch; keys are moved into the sorted
@@ -99,11 +102,17 @@ impl ActiveBacking {
         &self,
         mut updates: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
         mut updates_charge: Charge,
+        completion: Option<&std::sync::Arc<ProgressFund>>,
     ) -> Result<ActivePublication, WorkspaceError> {
         let mut state = self.state.lock().map_err(|_| WorkspaceError::Io)?;
         if state.stopped || state.closed {
             return Err(WorkspaceError::Busy);
         }
+        // This per-Workspace writer gate excludes ordinary publications while
+        // compaction and index pages spend the captured completion fund.
+        let _completion = completion
+            .map(|fund| self.store.completion(fund))
+            .transpose()?;
         let (dead, _dead_charge) = reclaim::prune_dead(&self.index, &mut updates, None)?;
         let (dead_large, _dead_large_charge) = reclaim::prune_dead_payloads(&self.index, &updates)?;
         self.reserve_retired_large(&mut state, dead_large.len())?;

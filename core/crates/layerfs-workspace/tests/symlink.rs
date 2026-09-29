@@ -377,7 +377,7 @@ mod linux {
         assert_eq!(targets, vec![b"born".as_slice()]);
         assert!(observed.operations[start..]
             .iter()
-            .any(|op| matches!(op,Operation::SaveFile{base:Some(root),..}if *root==old.1)));
+            .any(|op| matches!(op,Operation::SaveFileV2{base:Some(root),..}if *root==old.1)));
         let p = observed.operations[start..]
             .iter()
             .find_map(|op| match op {

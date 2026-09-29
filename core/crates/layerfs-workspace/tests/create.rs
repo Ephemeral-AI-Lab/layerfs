@@ -324,7 +324,7 @@ mod linux {
         assert_eq!(
             count(&f, |op| matches!(
                 op,
-                Operation::SaveFile { base: None, .. }
+                Operation::SaveFileV2 { base: None, .. }
                     | Operation::ConstructPortableMetadata { .. }
             )),
             0
@@ -351,7 +351,7 @@ mod linux {
         let lengths: Vec<_> = observed.operations[..start]
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: None, length, ..
                 } => Some(*length),
                 _ => None,
@@ -367,12 +367,12 @@ mod linux {
         );
         assert!(!observed.operations[start..].iter().any(|op| matches!(
             op,
-            Operation::SaveFile { base: None, .. } | Operation::ConstructPortableMetadata { .. }
+            Operation::SaveFileV2 { base: None, .. } | Operation::ConstructPortableMetadata { .. }
         )));
         assert_eq!(
             observed.operations[start..]
                 .iter()
-                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
+                .filter(|op| matches!(op, Operation::SaveFileV2 { base: Some(_), .. }))
                 .count(),
             1
         );
@@ -550,7 +550,7 @@ mod linux {
         saved(&f, root(&two), b"born", b"born-data", born_live);
         let observed = f.native.observations.lock().unwrap();
         assert!(observed.operations[start..].iter().any(
-            |op| matches!(op, Operation::SaveFile { base: Some(root), .. } if *root == g_content)
+            |op| matches!(op, Operation::SaveFileV2 { base: Some(root), .. } if *root == g_content)
         ));
         assert!(observed.operations[start..].iter().any(
             |op| matches!(op, Operation::UpdatePortableMetadata { base, .. } if *base == g_metadata)
@@ -560,7 +560,7 @@ mod linux {
                 .iter()
                 .filter(|op| matches!(
                     op,
-                    Operation::SaveFile {
+                    Operation::SaveFileV2 {
                         base: None,
                         length: 9,
                         ..
@@ -734,7 +734,7 @@ mod linux {
             .operations
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: None, length, ..
                 } => Some(*length),
                 _ => None,

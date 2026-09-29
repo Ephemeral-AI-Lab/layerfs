@@ -217,7 +217,7 @@ mod linux {
         assert_eq!(
             ops.iter()
                 .filter_map(|op| match op {
-                    Operation::SaveFile {
+                    Operation::SaveFileV2 {
                         base: None, length, ..
                     } => Some(*length),
                     _ => None,
@@ -233,13 +233,13 @@ mod linux {
         );
         assert!(!ops
             .iter()
-            .any(|op| matches!(op, Operation::SaveFile { base: Some(_), .. })));
+            .any(|op| matches!(op, Operation::SaveFileV2 { base: Some(_), .. })));
     }
     fn one_edit(ops: &[Operation], content: Root, metadata: Root, length: u64, replacement: u64) {
         let rows: Vec<_> = ops
             .iter()
             .filter_map(|op| match op {
-                Operation::SaveFile {
+                Operation::SaveFileV2 {
                     base: Some(root),
                     base_length,
                     replacement,
@@ -260,7 +260,7 @@ mod linux {
         );
         assert!(!ops.iter().any(|op| matches!(
             op,
-            Operation::SaveFile { base: None, .. } | Operation::ConstructPortableMetadata { .. }
+            Operation::SaveFileV2 { base: None, .. } | Operation::ConstructPortableMetadata { .. }
         )));
         assert_eq!(prepared(ops).totals.fresh, 0);
     }

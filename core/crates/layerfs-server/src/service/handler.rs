@@ -272,8 +272,15 @@ pub(crate) fn dispatch(
                 scope,
             )
         }
+        Operation::FileSaveCapabilities => {
+            end_input(input)?;
+            Ok(Response::FileSaveCapabilities {
+                version: SAVE_FILE_V2_VERSION,
+            })
+        }
         // A known successful C2 finish is never changed into a claimed abort.
         Operation::SaveFile { .. }
+        | Operation::SaveFileV2 { .. }
         | Operation::ConstructSymlink { .. }
         | Operation::UpdatePortableMetadata { .. }
         | Operation::ConstructPortableMetadata { .. } => {

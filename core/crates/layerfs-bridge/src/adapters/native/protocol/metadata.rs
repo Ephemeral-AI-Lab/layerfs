@@ -171,6 +171,13 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             length,
             extents,
             replacement,
+        }
+        | Operation::SaveFileV2 {
+            base,
+            base_length,
+            length,
+            extents,
+            replacement,
         } => {
             e.u8(u8::from(base.is_some()))?;
             if let Some(root) = base {
@@ -266,7 +273,7 @@ pub fn encode_request_with_budget(r: &Request, remaining_ms: u32) -> Result<Vec<
             e.blob(workspace)?;
             e.put(incarnation)?;
         }
-        Operation::SandboxHello => {}
+        Operation::SandboxHello | Operation::FileSaveCapabilities => {}
         Operation::WorkspaceOpen {
             workspace,
             incarnation,
@@ -797,18 +804,33 @@ pub fn decode_request(id: u64, b: &[u8]) -> Result<Request, Failure> {
             };
             Operation::Inspect { root, query }
         }
-        SAVE_FILE_OPCODE => {
+        FILE_SAVE_CAPABILITIES_OPCODE => Operation::FileSaveCapabilities,
+        SAVE_FILE_OPCODE | SAVE_FILE_V2_OPCODE => {
             let base = match d.u8()? {
                 0 => None,
                 1 => Some(d.root()?),
                 _ => return Err(Code::InvalidInput.into()),
             };
-            Operation::SaveFile {
-                base,
-                base_length: d.u64()?,
-                length: d.u64()?,
-                extents: d.u64()?,
-                replacement: d.u64()?,
+            let base_length = d.u64()?;
+            let length = d.u64()?;
+            let extents = d.u64()?;
+            let replacement = d.u64()?;
+            if opcode == SAVE_FILE_OPCODE {
+                Operation::SaveFile {
+                    base,
+                    base_length,
+                    length,
+                    extents,
+                    replacement,
+                }
+            } else {
+                Operation::SaveFileV2 {
+                    base,
+                    base_length,
+                    length,
+                    extents,
+                    replacement,
+                }
             }
         }
         CONSTRUCT_SYMLINK_OPCODE => Operation::ConstructSymlink {

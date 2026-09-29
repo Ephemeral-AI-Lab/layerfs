@@ -16,6 +16,7 @@ mod open;
 mod original;
 pub mod projection_counters;
 mod read;
+pub(crate) mod read_origin;
 mod remove;
 pub(crate) mod rename;
 mod rename_paths;

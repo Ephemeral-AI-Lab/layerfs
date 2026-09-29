@@ -152,13 +152,14 @@ impl Native {
                 self.allow_fresh_files
                     || !matches!(
                         request.operation,
-                        Operation::SaveFile { base: None, .. } | Operation::ConstructSymlink { .. }
+                        Operation::SaveFileV2 { base: None, .. }
+                            | Operation::ConstructSymlink { .. }
                     ),
                 "unexpected construction route"
             );
             let first = matches!(
                 request.operation,
-                Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
+                Operation::SaveFileV2 { .. } | Operation::ConstructSymlink { .. }
             ) && !observations.entered;
             observations.operations.push(request.operation.clone());
             if first {
@@ -267,7 +268,7 @@ impl Native {
         };
         if matches!(
             request.operation,
-            Operation::SaveFile { .. } | Operation::ConstructSymlink { .. }
+            Operation::SaveFileV2 { .. } | Operation::ConstructSymlink { .. }
         ) {
             if let Ok(Response::Saved { root, .. }) = &response {
                 self.observations.lock().unwrap().saved_files.push(*root);
@@ -326,7 +327,7 @@ impl Native {
     ) -> Result<(Client, Result<Response, Failure>), Failure> {
         let (endpoint, principal, private) = authority;
         let operation = match &request.operation {
-            Operation::SaveFile { .. } => "SaveFile",
+            Operation::SaveFileV2 { .. } => "SaveFile",
             Operation::ConstructSymlink { .. } => "ConstructSymlink",
             Operation::ConstructPortableMetadata { .. } => "ConstructPortableMetadata",
             Operation::UpdatePortableMetadata { .. } => "UpdatePortableMetadata",
@@ -660,7 +661,7 @@ impl Fixture {
             observed
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::SaveFile { base: Some(_), .. }))
+                .filter(|op| matches!(op, Operation::SaveFileV2 { base: Some(_), .. }))
                 .count(),
             files
         );

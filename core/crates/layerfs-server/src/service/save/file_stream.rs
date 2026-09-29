@@ -11,6 +11,9 @@ use std::{
     time::Instant,
 };
 
+mod origin_runs;
+pub(crate) use origin_runs::ResolvedSource;
+
 const RECORD_BYTES: u64 = 24;
 const EDIT_BYTES: u64 = 32;
 const WINDOW_BYTES: usize = 64 * 1024;
@@ -98,6 +101,8 @@ pub(crate) struct FileInput {
     final_length: u64,
     bytes: Bytes,
     replacement: u64,
+    virtual_replacement: u64,
+    origins: Option<origin_runs::OriginRuns>,
     record_lookups: Cell<u64>,
     record_reads: Cell<u64>,
     replacement_reads: Cell<u64>,
@@ -120,6 +125,9 @@ impl Drop for FileInput {
 impl FileInput {
     pub(crate) fn cleanup(&mut self) -> Result<(), Failure> {
         self.edits.remove()?;
+        if let Some(origins) = &mut self.origins {
+            origins.cleanup()?;
+        }
         if let Bytes::File(file) = &mut self.bytes {
             file.remove()?;
         }
@@ -130,7 +138,7 @@ impl FileInput {
     }
 
     pub(crate) fn replacement_bytes(&self) -> u64 {
-        self.replacement
+        self.virtual_replacement
     }
 
     pub(crate) fn reader(&self) -> FileReader<'_> {
@@ -254,6 +262,7 @@ pub(crate) fn read(
     extents: u64,
     replacement: u64,
     deadline: Instant,
+    reordered: bool,
 ) -> Result<FileInput, Failure> {
     let mut diagnostic = ReadDiagnostic {
         request,
@@ -267,10 +276,21 @@ pub(crate) fn read(
         edit_spool_write_bytes: 0,
         edit_spool_write_ns: 0,
     };
+    if reordered {
+        let mut version = [0];
+        Exact::new(input, 1, deadline).read_exact(&mut version)?;
+        if version[0] != layerfs_bridge::contract::SAVE_FILE_V2_VERSION {
+            return Err(Code::Unsupported.into());
+        }
+    }
     if extents
         .checked_add(1)
         .and_then(|count| count.checked_mul(EDIT_BYTES))
-        .and_then(|records| extents.checked_mul(16)?.checked_add(records))
+        .and_then(|records| {
+            extents
+                .checked_mul(if reordered { 48 } else { 16 })?
+                .checked_add(records)
+        })
         .and_then(|records| records.checked_add(replacement))
         .is_none_or(|bytes| bytes > SPOOL_DISK_BYTES)
     {
@@ -278,6 +298,8 @@ pub(crate) fn read(
     }
     let mut edits = SpoolFile::create("runs")?;
     let mut zeros = SpoolFile::create("zeros")?;
+    let mut origins = reordered.then(origin_runs::OriginRuns::new).transpose()?;
+    let mut local_consumed = 0u64;
     let mut zero_count = 0u64;
     let mut count = 0u64;
     let mut position = 0u64;
@@ -329,9 +351,26 @@ pub(crate) fn read(
                 pending = 0;
                 run_start = consumed;
             }
+            0 if reordered
+                && has_base
+                && offset < base
+                && offset
+                    .checked_add(length)
+                    .is_some_and(|end| end <= base_length) =>
+            {
+                origins
+                    .as_mut()
+                    .ok_or(Code::InvalidInput)?
+                    .push(consumed, length, 0, offset)?;
+                pending = pending.checked_add(length).ok_or(Code::Capacity)?;
+                consumed = consumed.checked_add(length).ok_or(Code::Capacity)?;
+            }
             1 | 2 if offset == 0 => {
+                if let Some(origins) = &mut origins {
+                    origins.push(consumed, length, 1, local_consumed)?;
+                }
                 if kind == 2 {
-                    for word in [consumed, length] {
+                    for word in [local_consumed, length] {
                         zeros
                             .file
                             .write_all(&word.to_be_bytes())
@@ -341,6 +380,7 @@ pub(crate) fn read(
                 }
                 pending = pending.checked_add(length).ok_or(Code::Capacity)?;
                 consumed = consumed.checked_add(length).ok_or(Code::Capacity)?;
+                local_consumed = local_consumed.checked_add(length).ok_or(Code::Capacity)?;
             }
             _ => return Err(Code::InvalidInput.into()),
         }
@@ -349,7 +389,7 @@ pub(crate) fn read(
         }
         position += length;
     }
-    if position != final_length || consumed != replacement {
+    if position != final_length || local_consumed != replacement {
         return Err(Code::InvalidInput.into());
     }
     close(
@@ -425,6 +465,8 @@ pub(crate) fn read(
         final_length,
         bytes,
         replacement,
+        virtual_replacement: consumed,
+        origins,
         record_lookups: Cell::new(0),
         record_reads: Cell::new(0),
         replacement_reads: Cell::new(0),

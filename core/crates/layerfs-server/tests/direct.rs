@@ -63,7 +63,12 @@ fn request(id: u64, operation: Operation) -> Request {
         store: 1,
         profile: 1,
         deadline_ms: 10000,
-        response_bytes: if matches!(operation, Operation::SaveFile { .. }) {
+        response_bytes: if matches!(
+            operation,
+            Operation::SaveFile { .. }
+                | Operation::SaveFileV2 { .. }
+                | Operation::FileSaveCapabilities
+        ) {
             0
         } else {
             MAX_FILE
@@ -855,4 +860,147 @@ fn two_writers_overlap_and_capacity_is_reclaimed_after_reverse_completion() {
         };
         assert_eq!(a_root, b_root);
     });
+}
+
+#[test]
+fn versioned_save_resolves_backward_base_without_changing_v1_or_canonical_identity() {
+    let (_temp, service, peer) = fixture();
+    let call = |operation, body: Vec<u8>| {
+        service
+            .handle(
+                &peer,
+                &request(401, operation),
+                &mut Cursor::new(body),
+                &mut std::io::sink(),
+            )
+            .0
+    };
+    assert_eq!(
+        call(Operation::FileSaveCapabilities, vec![]).unwrap(),
+        Response::FileSaveCapabilities {
+            version: SAVE_FILE_V2_VERSION
+        }
+    );
+    let denied = VerifiedPeer::from_private(&[8; 32]).unwrap();
+    let refusal = service
+        .handle(
+            &denied,
+            &request(402, Operation::FileSaveCapabilities),
+            &mut std::io::empty(),
+            &mut std::io::sink(),
+        )
+        .0
+        .unwrap_err();
+    assert_eq!(refusal.code, Code::Denied);
+    let old: Vec<_> = (0..524288usize).map(|index| (index % 251) as u8).collect();
+    let Response::Saved { root: base, .. } = call(
+        file_save::fresh(old.len() as u64),
+        file_save::fresh_body(&old),
+    )
+    .unwrap() else {
+        panic!("base save")
+    };
+    let extents = [
+        (0, 0, 131072),
+        (0, 262144, 131072),
+        (1, 0, 3),
+        (0, 131072, 262144),
+    ];
+    let mut body = vec![SAVE_FILE_V2_VERSION];
+    body.extend(file_save::body(&extents, b"new"));
+    let operation = Operation::SaveFileV2 {
+        base: Some(base),
+        base_length: old.len() as u64,
+        length: 524291,
+        extents: extents.len() as u64,
+        replacement: 3,
+    };
+    let Response::Saved {
+        root: saved,
+        length,
+        ..
+    } = call(operation.clone(), body.clone()).unwrap()
+    else {
+        panic!("v2 save")
+    };
+    assert_eq!(length, 524291);
+    let mut expected = old[..131072].to_vec();
+    expected.extend_from_slice(&old[262144..393216]);
+    expected.extend_from_slice(b"new");
+    expected.extend_from_slice(&old[131072..393216]);
+    let mut output = Vec::new();
+    service
+        .handle(
+            &peer,
+            &request(
+                403,
+                Operation::ReadFile {
+                    root: saved,
+                    start: 0,
+                    end: length,
+                },
+            ),
+            &mut std::io::empty(),
+            &mut output,
+        )
+        .0
+        .unwrap();
+    assert_eq!(output, expected);
+    // The independent v1 control has actual literal replacement bytes, not a
+    // descriptor that asks v2 to reproduce its own answer.
+    let mut literal = b"new".to_vec();
+    literal.extend_from_slice(&old[131072..393216]);
+    let control = file_save::existing(base, old.len() as u64, length, 3, literal.len() as u64);
+    let Response::Saved {
+        root: reference, ..
+    } = call(
+        control,
+        file_save::body(
+            &[
+                (0, 0, 131072),
+                (0, 262144, 131072),
+                (1, 0, literal.len() as u64),
+            ],
+            &literal,
+        ),
+    )
+    .unwrap()
+    else {
+        panic!("literal control")
+    };
+    assert_eq!(
+        saved, reference,
+        "canonical ordered-edit identity unchanged"
+    );
+    let v1 = file_save::existing(base, old.len() as u64, length, extents.len() as u64, 3);
+    assert_eq!(
+        call(v1, body[1..].to_vec()).unwrap_err().code,
+        Code::InvalidInput
+    );
+    body[0] = 99;
+    assert_eq!(
+        call(operation.clone(), body.clone()).unwrap_err().code,
+        Code::Unsupported
+    );
+    body[0] = SAVE_FILE_V2_VERSION;
+    body.push(1);
+    assert_eq!(call(operation, body).unwrap_err().code, Code::InvalidInput);
+    let mut original = Vec::new();
+    service
+        .handle(
+            &peer,
+            &request(
+                404,
+                Operation::ReadFile {
+                    root: base,
+                    start: 0,
+                    end: old.len() as u64,
+                },
+            ),
+            &mut std::io::empty(),
+            &mut original,
+        )
+        .0
+        .unwrap();
+    assert_eq!(original, old);
 }

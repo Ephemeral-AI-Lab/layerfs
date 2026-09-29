@@ -262,7 +262,7 @@ mod linux {
         let changes: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| {
-                if let Operation::SaveFile {
+                if let Operation::SaveFileV2 {
                     base: Some(root),
                     replacement,
                     ..
@@ -336,7 +336,7 @@ mod linux {
         let changes: Vec<_> = observed.operations[before..]
             .iter()
             .filter_map(|op| {
-                if let Operation::SaveFile {
+                if let Operation::SaveFileV2 {
                     base: Some(root),
                     base_length,
                     extents,

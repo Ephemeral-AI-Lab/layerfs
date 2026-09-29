@@ -536,7 +536,7 @@ fn delivery(observed: Arc<Observed>, outcome: Outcome) -> OperationDelivery {
             // The transfer body: one descriptor per extent plus every
             // replacement byte, in frames. The fence parks the chosen pull so
             // the test can arm the barrier before that frame is served.
-            Operation::SaveFile { length, .. } => {
+            Operation::SaveFileV2 { length, .. } => {
                 let cancel = AtomicBool::new(false);
                 let mut buffer = [0u8; 4096];
                 loop {

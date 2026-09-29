@@ -1,6 +1,6 @@
 use crate::*;
 use layerfs_bridge::contract::{Inspect, Operation, Response};
-use std::{io::Cursor, time::Instant};
+use std::{cell::Cell, io::Cursor, time::Instant};
 
 impl Workspace {
     pub fn open(&self, serial: u64, scope: ReferenceScope) -> Result<HandleId, WorkspaceError> {
@@ -66,6 +66,7 @@ impl Workspace {
             .try_reserve_exact(length)
             .map_err(|_| WorkspaceError::Capacity)?;
         bytes.resize(length, 0);
+        let mut origin = None;
         if length > 0 {
             let active_inode = active
                 .as_ref()
@@ -76,12 +77,29 @@ impl Workspace {
             if active_inode {
                 let (backing, snapshot) = active.as_ref().ok_or(WorkspaceError::Io)?;
                 use layerfs_bridge::contract::Source;
+                let address = bytes.as_ptr() as usize;
+                let reached = Cell::new(0usize);
+                let selected = Cell::new(None::<(layerfs_bridge::contract::Root, u64)>);
+                let canonical = Cell::new(true);
                 let read = backing.read_file(
                     attr.serial,
                     offset,
                     &mut bytes,
                     Some(snapshot),
                     |root, start, output| {
+                        let position = (output.as_ptr() as usize).checked_sub(address);
+                        if position != Some(reached.get())
+                            || selected.get().is_some_and(|(prior, begin)| {
+                                prior != root
+                                    || begin.checked_add(reached.get() as u64) != Some(start)
+                            })
+                        {
+                            canonical.set(false);
+                        }
+                        if position == Some(0) {
+                            selected.set(Some((root, start)));
+                        }
+                        reached.set(reached.get().saturating_add(output.len()));
                         operation.remote()?;
                         let mut out = Cursor::new(output);
                         let end = start + out.get_ref().len() as u64;
@@ -102,6 +120,7 @@ impl Workspace {
                         Ok(())
                     },
                     |payload, start, output| {
+                        canonical.set(false);
                         let mut reader = payload.reader(start..start + output.len() as u64)?;
                         let mut done = 0;
                         while done < output.len() {
@@ -122,6 +141,9 @@ impl Workspace {
                 )?;
                 if read != length {
                     return Err(WorkspaceError::Io);
+                }
+                if canonical.get() && reached.get() == length {
+                    origin = selected.get();
                 }
             } else if let Some(inode) = self.overlay_inode(attr.serial, root.as_ref(), deadline)? {
                 self.read_overlay(
@@ -186,8 +208,12 @@ impl Workspace {
                 {
                     return Err(WorkspaceError::InvalidInput);
                 }
+                if active.is_some() {
+                    origin = Some((content, offset));
+                }
             }
         }
+        self.retain_read_origin(attr.serial, origin, &bytes);
         Ok(ReadReply {
             bytes,
             _charge: charge,

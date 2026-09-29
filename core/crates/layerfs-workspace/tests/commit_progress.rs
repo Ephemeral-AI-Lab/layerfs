@@ -154,7 +154,7 @@ fn delivery(observed: Arc<Observed>) -> OperationDelivery {
                     count: *count,
                 })))
             }
-            Operation::SaveFile { .. } => {
+            Operation::SaveFileV2 { .. } => {
                 let cancel = AtomicBool::new(false);
                 let mut buffer = [0u8; 4096];
                 loop {

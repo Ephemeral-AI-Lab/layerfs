@@ -31,6 +31,9 @@ pub const MAX_READ_OPERATIONS: usize = 2;
 /// Charged file-save body budget, independent of logical file length.
 pub const MAX_SAVE_STREAM_BYTES: u64 = MAX_FILE * 2;
 pub const SAVE_FILE_OPCODE: u8 = 20;
+pub const FILE_SAVE_CAPABILITIES_OPCODE: u8 = 28;
+pub const SAVE_FILE_V2_OPCODE: u8 = 29;
+pub const SAVE_FILE_V2_VERSION: u8 = 2;
 
 /// Persistent/handshaking/closing sessions a transport admits for one Store.
 ///
@@ -77,6 +80,17 @@ pub enum Operation {
     /// Frozen final Base/Local/Zero sequence. The body is `extents` 24-byte
     /// records (kind, origin offset, length), then all Local/Zero bytes.
     SaveFile {
+        base: Option<Root>,
+        base_length: u64,
+        length: u64,
+        extents: u64,
+        replacement: u64,
+    },
+    /// Authenticated read-only support check; shares SaveFile authorization.
+    FileSaveCapabilities,
+    /// Versioned sequence with Service-resolved backward or repeated Base runs.
+    /// The body starts with version 2, then v1-width records and Local/Zero bytes.
+    SaveFileV2 {
         base: Option<Root>,
         base_length: u64,
         length: u64,
@@ -272,6 +286,8 @@ impl Operation {
             Self::ReadFile { .. } => 1,
             Self::Inspect { .. } => 2,
             Self::SaveFile { .. } => SAVE_FILE_OPCODE,
+            Self::SaveFileV2 { .. } => SAVE_FILE_V2_OPCODE,
+            Self::FileSaveCapabilities => FILE_SAVE_CAPABILITIES_OPCODE,
             Self::ConstructSymlink { .. } => CONSTRUCT_SYMLINK_OPCODE,
             Self::HistoryQuery(_) => QUERY_OPCODE,
             Self::HistoryCommand(_) => COMMAND_OPCODE,
@@ -300,6 +316,8 @@ impl Operation {
             Self::ReadFile { .. } => "ReadFile",
             Self::Inspect { .. } => "Inspect",
             Self::SaveFile { .. } => "SaveFile",
+            Self::SaveFileV2 { .. } => "SaveFileV2",
+            Self::FileSaveCapabilities => "FileSaveCapabilities",
             Self::ConstructSymlink { .. } => "ConstructSymlink",
             Self::HistoryQuery(_) => "HistoryQuery",
             Self::HistoryCommand(_) => "HistoryCommand",
@@ -326,7 +344,8 @@ impl Operation {
     /// True for an operation that changes neither stored nor daemon lifecycle state.
     pub const fn read_only(&self) -> bool {
         match self {
-            Self::ReadFile { .. }
+            Self::FileSaveCapabilities
+            | Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::HistoryQuery(_)
             | Self::WorkspaceStatus { .. }
@@ -337,6 +356,7 @@ impl Operation {
             | Self::WorkspaceViewReadlink { .. }
             | Self::WorkspaceViewStatus { .. } => true,
             Self::SaveFile { .. }
+            | Self::SaveFileV2 { .. }
             | Self::ConstructSymlink { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -359,6 +379,7 @@ impl Operation {
     pub const fn content_mutation(&self) -> bool {
         match self {
             Self::SaveFile { .. }
+            | Self::SaveFileV2 { .. }
             | Self::ConstructSymlink { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -367,7 +388,8 @@ impl Operation {
                 | HistoryCommand::StageChanges(_)
                 | HistoryCommand::Commit(_),
             ) => true,
-            Self::ReadFile { .. }
+            Self::FileSaveCapabilities
+            | Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::WorkspaceStatus { .. }
             | Self::WorkspaceUnmount { .. }
@@ -409,7 +431,8 @@ impl Operation {
                 | HistoryCommand::DiscardStage { .. }
                 | HistoryCommand::ReserveInodes { .. },
             ) => true,
-            Self::ReadFile { .. }
+            Self::FileSaveCapabilities
+            | Self::ReadFile { .. }
             | Self::Inspect { .. }
             | Self::WorkspaceStatus { .. }
             | Self::WorkspaceUnmount { .. }
@@ -421,6 +444,7 @@ impl Operation {
             | Self::WorkspaceExec { .. }
             | Self::SandboxHello
             | Self::SaveFile { .. }
+            | Self::SaveFileV2 { .. }
             | Self::ConstructSymlink { .. }
             | Self::UpdatePortableMetadata { .. }
             | Self::ConstructPortableMetadata { .. }
@@ -451,10 +475,18 @@ impl Operation {
                 extents,
                 replacement,
                 ..
+            }
+            | Self::SaveFileV2 {
+                extents,
+                replacement,
+                ..
             } => {
                 let descriptors = extents.checked_mul(24).ok_or(Code::Capacity)?;
                 descriptors
                     .checked_add(*replacement)
+                    .and_then(|bytes| {
+                        bytes.checked_add(u64::from(matches!(self, Self::SaveFileV2 { .. })))
+                    })
                     .ok_or_else(|| Code::Capacity.into())
             }
             Self::HistoryCommand(HistoryCommand::Commit(changes))
@@ -496,7 +528,7 @@ impl Request {
             return Err(Code::Capacity.into());
         }
         let stream_limit = match &self.operation {
-            Operation::SaveFile { .. } => MAX_SAVE_STREAM_BYTES,
+            Operation::SaveFile { .. } | Operation::SaveFileV2 { .. } => MAX_SAVE_STREAM_BYTES,
             Operation::HistoryCommand(HistoryCommand::Commit(_))
             | Operation::HistoryCommand(HistoryCommand::StageChanges(_)) => {
                 MAX_PREPARED_STREAM_BYTES
@@ -510,6 +542,11 @@ impl Request {
             Operation::HistoryCommand(HistoryCommand::ImportNativeDirectory { .. }) => {
                 if self.response_bytes < u64::from(self.deadline_ms.div_ceil(1_000)) {
                     return Err(Code::Capacity.into());
+                }
+            }
+            Operation::FileSaveCapabilities => {
+                if self.response_bytes != 0 {
+                    return Err(invalid());
                 }
             }
             Operation::ConstructSymlink { target } => {
@@ -559,6 +596,13 @@ impl Request {
                 }
             }
             Operation::SaveFile {
+                base,
+                base_length,
+                length,
+                extents,
+                replacement,
+            }
+            | Operation::SaveFileV2 {
                 base,
                 base_length,
                 length,

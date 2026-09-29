@@ -57,6 +57,7 @@ struct ActiveUpload {
     descriptors: Vec<u8>,
     extents: Vec<Extent>,
     descriptor_at: usize,
+    version_sent: bool,
     extent_at: usize,
     offset: u64,
     replacement: u64,
@@ -119,6 +120,7 @@ impl ActiveUpload {
             descriptors,
             extents,
             descriptor_at: 0,
+            version_sent: false,
             extent_at: 0,
             offset: 0,
             replacement,
@@ -129,7 +131,9 @@ impl ActiveUpload {
     }
 
     fn complete(&self) -> bool {
-        self.descriptor_at == self.descriptors.len() && self.emitted == self.replacement
+        self.version_sent
+            && self.descriptor_at == self.descriptors.len()
+            && self.emitted == self.replacement
     }
 
     fn pull(
@@ -141,6 +145,11 @@ impl ActiveUpload {
         crate::backing::payload::clock(deadline).map_err(|_| WorkspaceError::Deadline)?;
         if cancel.load(Ordering::Acquire) {
             return Err(WorkspaceError::Busy);
+        }
+        if !self.version_sent && !out.is_empty() {
+            out[0] = layerfs_bridge::contract::SAVE_FILE_V2_VERSION;
+            self.version_sent = true;
+            return Ok(1);
         }
         if self.descriptor_at < self.descriptors.len() {
             let take = out.len().min(self.descriptors.len() - self.descriptor_at);
@@ -560,7 +569,7 @@ pub(super) fn prepare<'a>(
                     .map_or_else(|| workspace.begin(true, deadline), Ok)?;
                 let response = workspace.remote_call(
                     (workspace.inner.store, captured.generation),
-                    Operation::SaveFile {
+                    Operation::SaveFileV2 {
                         base: has_base.then_some(inode.base),
                         base_length,
                         length: inode.length,

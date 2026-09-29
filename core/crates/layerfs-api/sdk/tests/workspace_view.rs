@@ -923,3 +923,210 @@ fn view_lease_read_refuses_exhausted_response_budget_without_partial_entry() {
     drop(cleanup);
     println!("VIEW_BUDGET fixed=16777216 response=131072 capacity_before_bytes=true no_partial_entry=true");
 }
+
+#[test]
+fn generic_sdk_exec_reorders_base_then_commits_exact_old_and_new_pinned_bytes() {
+    use layerfs_bridge::contract::CommitOutcomeWire;
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-sdk-reorder-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    let old: Vec<_> = (0..524288usize).map(|index| (index % 251) as u8).collect();
+    std::fs::write(source.join("large"), &old).unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"sdk-reorder".to_vec(),
+        incarnation: 1,
+        cursor_key: [46; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let api = WorkspaceApi::new(&owner);
+    let project = projects.init("sdk-reorder", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "sdk-reorder").unwrap();
+    let sandbox = sandboxes.create(&image, "sdk-reorder-posix").unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = api.mount(sandbox, &project, branch.id, None).unwrap();
+    let original = api.pin_view(&mount.id).unwrap();
+    let original_file = api
+        .view_lookup(&original, original.root(), b"large")
+        .unwrap();
+    let command = "dd if=large of=/tmp/ordinary-copy bs=131072 skip=2 count=1 2>/dev/null && dd if=/tmp/ordinary-copy of=large bs=131072 seek=1 count=1 conv=notrunc 2>/dev/null && dd if=large of=/tmp/ordinary-copy bs=131072 skip=2 count=1 2>/dev/null && dd if=/tmp/ordinary-copy of=large bs=131072 seek=3 count=1 conv=notrunc 2>/dev/null && rm /tmp/ordinary-copy";
+    assert_eq!(api.exec(&mount.id, command).unwrap().exit_status, Some(0));
+    let counters = api.status(&mount.id).unwrap();
+    assert!(counters.projection_count("read").unwrap_or(0) > 0);
+    assert!(counters.projection_count("write").unwrap_or(0) > 0);
+    let mut expected = old.clone();
+    expected[131072..262144].copy_from_slice(&old[262144..393216]);
+    expected[393216..524288].copy_from_slice(&old[262144..393216]);
+    let selected = api.pin_view(&mount.id).unwrap();
+    let selected_file = api
+        .view_lookup(&selected, selected.root(), b"large")
+        .unwrap();
+    let first = api.commit(&mount.id).unwrap();
+    assert!(matches!(first.outcome, CommitOutcomeWire::Committed(_)));
+    // New canonical reads are independent of the captured extent uploader.
+    let canonical = api.pin_view(&mount.id).unwrap();
+    let canonical_file = api
+        .view_lookup(&canonical, canonical.root(), b"large")
+        .unwrap();
+    for (lease, file, bytes) in [
+        (&original, &original_file, &old),
+        (&selected, &selected_file, &expected),
+        (&canonical, &canonical_file, &expected),
+    ] {
+        for (index, chunk) in bytes.chunks(16384).enumerate() {
+            assert_eq!(
+                api.view_read(lease, file, (index * 16384) as u64, chunk.len())
+                    .unwrap()
+                    .bytes,
+                chunk
+            );
+        }
+    }
+    assert_eq!(
+        api.exec(
+            &mount.id,
+            "printf changed | dd of=large bs=1 seek=200000 conv=notrunc 2>/dev/null"
+        )
+        .unwrap()
+        .exit_status,
+        Some(0)
+    );
+    let mut successor = expected.clone();
+    successor[200000..200007].copy_from_slice(b"changed");
+    let second = api.commit(&mount.id).unwrap();
+    assert!(matches!(second.outcome, CommitOutcomeWire::Committed(_)));
+    assert_ne!(first.outcome, second.outcome);
+    let live = api.pin_view(&mount.id).unwrap();
+    let live_file = api.view_lookup(&live, live.root(), b"large").unwrap();
+    for (lease, file, bytes) in [
+        (&original, &original_file, &old),
+        (&selected, &selected_file, &expected),
+        (&canonical, &canonical_file, &expected),
+        (&live, &live_file, &successor),
+    ] {
+        for (index, chunk) in bytes.chunks(16384).enumerate() {
+            assert_eq!(
+                api.view_read(lease, file, (index * 16384) as u64, chunk.len())
+                    .unwrap()
+                    .bytes,
+                chunk
+            );
+        }
+    }
+    for lease in [&original, &selected, &canonical, &live] {
+        api.release_view(lease).unwrap();
+    }
+    api.unmount(&mount.id).unwrap();
+    let mut logs = Vec::new();
+    let (removed, captured) = sandboxes.delete_with_logs(sandbox, &mut logs);
+    assert!(removed.is_ok() && captured.error.is_none() && !captured.truncated);
+    assert!(
+        !String::from_utf8_lossy(&logs).contains("sandbox shutdown retained"),
+        "{}",
+        String::from_utf8_lossy(&logs)
+    );
+    cleanup.sandboxes.clear();
+    println!("SDK_EXEC_REORDER full_bytes=524288 old_new_pins=true known_commits=2 nonmatch=true canonical_read=true read_window=16384");
+}
+
+#[test]
+fn sdk_stopped_backing_refuses_new_pin_and_keeps_old_view_custody() {
+    let (Ok(image), Ok(helper)) = (
+        std::env::var("LAYERFS_TEST_IMAGE"),
+        std::env::var("LAYERFS_C5_HELPER"),
+    ) else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-sdk-stopping-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("note"), b"base").unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"sdk-stopping".to_vec(),
+        incarnation: 1,
+        cursor_key: [47; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root,
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let api = WorkspaceApi::new(&owner);
+    let project = projects.init("sdk-stopping", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "sdk-stopping").unwrap();
+    let name = format!("view-c5-stopping-{}", std::process::id());
+    let sandbox = sandboxes.create(&image, &name).unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = api.mount(sandbox, &project, branch.id, None).unwrap();
+    assert_eq!(
+        api.exec(&mount.id, "printf g1-note > note")
+            .unwrap()
+            .exit_status,
+        Some(0)
+    );
+    let lease = api.pin_view(&mount.id).unwrap();
+    let entry = api.view_lookup(&lease, lease.root(), b"note").unwrap();
+    let pinned = (lease.generation(), lease.revision());
+    let fault = C5Limit::apply(&name, &helper);
+    let write = api.exec(&mount.id, "printf refused > note").unwrap();
+    drop(fault);
+    assert_ne!(
+        write.exit_status,
+        Some(0),
+        "physical fault must refuse ordinary FUSE mutation"
+    );
+    let pin = api.pin_view(&mount.id);
+    eprintln!("SDK_STOPPING_NEW_PIN {pin:?}");
+    assert!(
+        matches!(&pin, Err(WorkspaceError::Failure(failure)) if failure.code == Code::Busy && !failure.unknown)
+    );
+    let status = api.view_status(&lease).unwrap();
+    assert_eq!((status.generation, status.revision), pinned);
+    assert_eq!(status.held_leases, 1);
+    assert_eq!(
+        api.view_read(&lease, &entry, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    api.release_view(&lease).unwrap();
+    api.unmount(&mount.id).unwrap();
+    let mut logs = Vec::new();
+    let (removed, captured) = sandboxes.delete_with_logs(sandbox, &mut logs);
+    assert!(removed.is_ok() && captured.error.is_none() && !captured.truncated);
+    assert!(
+        String::from_utf8_lossy(&logs).contains("sandbox shutdown retained: Busy"),
+        "stopped dirty custody must remain explicit: {}",
+        String::from_utf8_lossy(&logs)
+    );
+    cleanup.sandboxes.clear();
+    println!("SDK_STOPPING refused_pin=Busy acknowledged_old_bytes=true no_commit=true retained_dirty_close=Busy");
+}

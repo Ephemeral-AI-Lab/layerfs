@@ -16,6 +16,29 @@ canonical format or C1 partition rules; older sections keep their source pin.
 
 ---
 
+## Internal SaveFile v2 amendment (same commit; first parent `3318e5cd0`)
+
+The owner-approved internal capability check and sequence are implemented by
+Bridge opcodes 28/29. Version-1 SaveFile retains its opcode and forward-only
+validation. A v2 body has version byte 2 followed by the original fixed-width
+Base/Local/Zero descriptors and exactly the declared Local/Zero bytes. LocalEdit
+attachment requires an authenticated typed version-2 capability response under
+the existing SaveFile grant; ReadOnly attachment does not require it. Unknown
+versions and unsupported peers fail explicitly, before provenance-based WRITE
+reuse can be admitted. There is no public range-edit API, ioctl or command dispatch.
+
+The Service keeps forward Base runs as ordered C1 edit anchors. Backward or
+repeated Base runs become replacement-source records, read from the same immutable
+C1 root by `file_stream/origin_runs.rs` inside Service construction. The daemon
+upload performs no nested RPC. Run navigation is a one-record binary search; C1
+reads use at most 64 KiB per window. Only caller Local bytes and run metadata spool,
+never backward Base bytes or an entire final result. Checked admission is
+`80*extents + 32 + local_bytes <= 2*MAX_FILE`; file and stream limits are unchanged.
+The existing C1 edit constructor, provider, representation and canonical grammar
+are reused. The external v1 literal-replacement control verifies canonical root
+identity, separately from the independent full-byte oracle. Proofs remain pending.
+
+
 ## 3. File construction (C1)
 
 ### 3.1 The representation dispatch
