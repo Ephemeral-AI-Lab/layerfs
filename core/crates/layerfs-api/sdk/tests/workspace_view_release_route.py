@@ -139,9 +139,18 @@ class Relay:
                     def upload():
                         try:
                             while data := client.recv(65536):
+                                self.event('client_bytes', connection=number, bytes=len(data))
                                 service.sendall(data)
                         except OSError:
                             pass
+                        finally:
+                            # Propagate EOF, not just bytes. The daemon admits
+                            # one active control session; a stale half-open
+                            # relay otherwise blocks the next checked mount.
+                            try:
+                                service.shutdown(socket.SHUT_WR)
+                            except OSError:
+                                pass
                     thread = threading.Thread(target=upload, daemon=True)
                     thread.start()
                     # Noise handshake and subsequent native records all use a
@@ -161,6 +170,8 @@ class Relay:
                                 ordinal = self.after_arm
                             else:
                                 ordinal = 0
+                        self.event('server_record', connection=number, ciphertext_bytes=size,
+                                   after_arm_ordinal=ordinal)
                         if ordinal == 2:
                             digest = hashlib.sha256(header + ciphertext).hexdigest()
                             self.event('withheld_terminal_reply', connection=number,
@@ -230,7 +241,13 @@ def main():
            '-p', 'layerfs-sdk', '--test', 'workspace_view', '--', '--exact',
            'view_lease_uncertain_release_does_not_retry_or_claim_completion',
            '--nocapture', '--test-threads=1']
-    record = {'status': 'FAIL', 'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'],
+    dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT,
+                                    text=True).splitlines()
+    mode = 'diagnostic' if '-diagnostic-' in output.name else 'functional'
+    if mode != 'diagnostic':
+        assert not dirty, 'functional proof requires a clean source seal'
+    record = {'status': 'FAIL', 'mode': mode, 'source_dirty': dirty,
+              'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'],
                    cwd=ROOT, text=True).strip(), 'image_id': args.image,
               'driver_sha256': sha(SOURCE), 'wrapper_sha256': sha(WRAPPER),
               'test_source_sha256': sha(SOURCE.with_name('workspace_view.rs')),
@@ -246,9 +263,11 @@ def main():
             (output / 'test.stdout').write_bytes(error.stdout or b'')
             (output / 'test.stderr').write_bytes(error.stderr or b'')
             record['timeout'] = True
-        record['status'] = ('PASS' if record.get('test_exit') == 0 and relay.dropped == 1
-                            and b'VIEW_LEASE_RELEASE_LOSS' in (output / 'test.stdout').read_bytes()
-                            and not relay.issues else 'FAIL')
+        success = (record.get('test_exit') == 0 and relay.dropped == 1
+                   and b'VIEW_LEASE_RELEASE_LOSS' in (output / 'test.stdout').read_bytes()
+                   and not relay.issues)
+        record['status'] = ('DIAGNOSTIC_PASS' if success and mode == 'diagnostic'
+                            else 'PASS' if success else 'FAIL')
     finally:
         relay.stop()
         record.update(command_wall_seconds=time.monotonic() - started,
