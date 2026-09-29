@@ -1048,11 +1048,9 @@ fn generic_sdk_exec_reorders_base_then_commits_exact_old_and_new_pinned_bytes() 
 }
 
 #[test]
-fn sdk_stopped_backing_refuses_new_pin_and_keeps_old_view_custody() {
-    let (Ok(image), Ok(helper)) = (
-        std::env::var("LAYERFS_TEST_IMAGE"),
-        std::env::var("LAYERFS_C5_HELPER"),
-    ) else {
+fn sdk_stopping_refuses_view_calls_and_retains_pin_after_failed_detach() {
+    use std::process::Command;
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
         return;
     };
     let root = std::env::temp_dir().join(format!("layerfs-sdk-stopping-{}", std::process::id()));
@@ -1084,7 +1082,7 @@ fn sdk_stopped_backing_refuses_new_pin_and_keeps_old_view_custody() {
     let api = WorkspaceApi::new(&owner);
     let project = projects.init("sdk-stopping", &source).unwrap();
     let branch = projects.fork(&project, BRANCH, "sdk-stopping").unwrap();
-    let name = format!("view-c5-stopping-{}", std::process::id());
+    let name = format!("view-stopping-{}", std::process::id());
     let sandbox = sandboxes.create(&image, &name).unwrap();
     cleanup.sandboxes.push(sandbox);
     let mount = api.mount(sandbox, &project, branch.id, None).unwrap();
@@ -1094,39 +1092,63 @@ fn sdk_stopped_backing_refuses_new_pin_and_keeps_old_view_custody() {
             .exit_status,
         Some(0)
     );
+    api.commit(&mount.id).unwrap();
     let lease = api.pin_view(&mount.id).unwrap();
     let entry = api.view_lookup(&lease, lease.root(), b"note").unwrap();
     let pinned = (lease.generation(), lease.revision());
-    let fault = C5Limit::apply(&name, &helper);
-    let write = api.exec(&mount.id, "printf refused > note").unwrap();
-    drop(fault);
-    assert_ne!(
-        write.exit_status,
-        Some(0),
-        "physical fault must refuse ordinary FUSE mutation"
-    );
-    let pin = api.pin_view(&mount.id);
-    eprintln!("SDK_STOPPING_NEW_PIN {pin:?}");
-    assert!(
-        matches!(&pin, Err(WorkspaceError::Failure(failure)) if failure.code == Code::Busy && !failure.unknown)
-    );
-    let status = api.view_status(&lease).unwrap();
-    assert_eq!((status.generation, status.revision), pinned);
-    assert_eq!(status.held_leases, 1);
     assert_eq!(
         api.view_read(&lease, &entry, 0, 64).unwrap().bytes,
         b"g1-note"
     );
-    api.release_view(&lease).unwrap();
-    api.unmount(&mount.id).unwrap();
+    assert_eq!(api.view_status(&lease).unwrap().held_leases, 1);
+    let charged = api.status(&mount.id).unwrap().consumer_accounted_bytes;
+    let container = format!("layerfs-{sandbox}");
+    // A real path fault prevents provider detach after admission stops. Move
+    // the owned mount's parent, never its backing or any other sandbox's path.
+    let move_parent = |from: &str, to: &str| {
+        assert!(Command::new("docker")
+            .args(["exec", &container, "mv", from, to])
+            .status()
+            .unwrap()
+            .success());
+    };
+    move_parent("/layerfs/workspace", "/layerfs/workspace-detach");
+    let detach = api.unmount(&mount.id);
+    move_parent("/layerfs/workspace-detach", "/layerfs/workspace");
+    assert!(detach.is_err(), "provider detach must retain the mount");
+    let stopped = api.status(&mount.id).unwrap();
+    assert!(stopped.stopping && stopped.mounted);
+    assert!(stopped.consumer_accounted_bytes >= charged);
+    let pin = api.pin_view(&mount.id);
+    assert!(
+        matches!(&pin, Err(WorkspaceError::Failure(failure)) if failure.code == Code::Busy && !failure.unknown)
+    );
+    assert!(matches!(api.view_read(&lease, &entry, 0, 64),
+        Err(WorkspaceError::Failure(failure)) if failure.code == Code::Busy && !failure.unknown));
+    assert!(matches!(api.release_view(&lease),
+        Err(WorkspaceError::Failure(failure)) if failure.code == Code::Busy && !failure.unknown));
+    // A failed provider detach is terminal. External kernel cleanup does not
+    // complete the retained Workspace owner or refund its held lease.
+    assert!(Command::new("docker")
+        .args([
+            "exec",
+            &container,
+            "umount",
+            &format!("/layerfs/workspace/{}", mount.id.0)
+        ])
+        .status()
+        .unwrap()
+        .success());
+    assert!(api.status(&mount.id).unwrap().stopping);
+    assert_eq!((lease.generation(), lease.revision()), pinned);
     let mut logs = Vec::new();
     let (removed, captured) = sandboxes.delete_with_logs(sandbox, &mut logs);
     assert!(removed.is_ok() && captured.error.is_none() && !captured.truncated);
     assert!(
-        String::from_utf8_lossy(&logs).contains("sandbox shutdown retained: Busy"),
-        "stopped dirty custody must remain explicit: {}",
+        String::from_utf8_lossy(&logs).contains("sandbox shutdown retained: CleanupFailed"),
+        "terminal failed-detach custody must remain explicit: {}",
         String::from_utf8_lossy(&logs)
     );
     cleanup.sandboxes.clear();
-    println!("SDK_STOPPING refused_pin=Busy acknowledged_old_bytes=true no_commit=true retained_dirty_close=Busy");
+    println!("SDK_STOPPING observed_stopping=true refused_pin_read_release=Busy retained_old_pin=true terminal_detach=true cleanup_report=CleanupFailed refund_claim=false");
 }
