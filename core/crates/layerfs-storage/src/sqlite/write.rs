@@ -6,7 +6,7 @@
 //! write lock is an immediate failure, never a wait. A failed `COMMIT` leaves the
 //! persistence outcome unproven and is reported as such.
 //!
-//! **A pack row is written through incremental BLOB I/O.** A pack's directory
+//! **An appendable pack row is written through incremental BLOB I/O.** A pack's directory
 //! region is reserved by the format and its assembled length is declared in its
 //! own control area (`pack::layout`), so an append adds bytes without moving any
 //! byte already written. The alternative - binding the reassembled pack to
@@ -15,7 +15,8 @@
 //! holding a 256 KiB BLOB rebuilds and rewrites that BLOB, measured at ~72 us per
 //! statement on a 256 KiB row against ~11 us for a four-byte in-place BLOB write
 //! (`#219`). The declaration therefore rides in the BLOB, and the row is only
-//! ever *read* after it is created.
+//! ever *read* after it is created. A pack that closes on its first write instead
+//! binds its final bytes in one INSERT; it will never need an in-place append.
 
 use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
@@ -25,6 +26,7 @@ use layerfs_content::ObjectId;
 use crate::error::{StorageError, StorageResult};
 use crate::pack::layout::HEADER_LEN;
 use crate::pack::SelectedWrite;
+use crate::policy::PACK_LIMIT;
 use crate::sqlite::connection::ownership_error;
 
 /// Accumulated work inside the open transaction.
@@ -80,15 +82,46 @@ pub fn rollback(connection: &Connection) -> StorageResult<()> {
 
 /// Inserts a newly created pack row and writes its first content in place.
 ///
-/// The row is created zero-filled at the pack's capacity and then written through
-/// the BLOB handle, so the allocation and the content are one statement plus one
-/// set of in-place writes: the pack is never built as a whole in memory, and the
-/// pages the write does not touch are never dirtied.
+/// An appendable row is created zero-filled at capacity and then written through
+/// the BLOB handle. A newly closed pack of at most `PACK_LIMIT` bytes binds its
+/// final bytes in one INSERT; the oversized singleton stays on incremental I/O.
 pub fn insert_pack(
     connection: &Connection,
     pack_id: i64,
     write: &SelectedWrite,
-) -> StorageResult<()> {
+) -> StorageResult<usize> {
+    // A new pack that closes in this selection will never be appended. Insert
+    // its bounded assembled bytes once instead of inserting zeroblob and then
+    // dirtying its SQLite pages three more times through the BLOB handle.
+    // The larger singleton lane keeps incremental I/O, so this temporary pack
+    // never exceeds the existing ordinary PACK_LIMIT.
+    if write.capacity == write.used && write.used <= PACK_LIMIT {
+        let mut bytes = vec![0; write.used];
+        for (offset, part) in [
+            (0, write.control.as_slice()),
+            (write.directory_offset, write.directory.as_slice()),
+            (write.body_offset, write.bodies.as_slice()),
+        ] {
+            let end = offset
+                .checked_add(part.len())
+                .ok_or(StorageError::Integrity("pack write extent"))?;
+            bytes
+                .get_mut(offset..end)
+                .ok_or(StorageError::Integrity("pack write extent"))?
+                .copy_from_slice(part);
+        }
+        if write.body_offset.checked_add(write.bodies.len()) != Some(write.used) {
+            return Err(StorageError::Integrity("pack write extent"));
+        }
+        let affected = connection.execute(
+            "INSERT INTO object_packs (pack_id, data, save_id) VALUES (?1, ?2, (SELECT save_id FROM temp.layerfs_read_scope))",
+            rusqlite::params![pack_id, bytes],
+        )?;
+        if affected != 1 {
+            return Err(StorageError::Integrity("pack insert cardinality"));
+        }
+        return Ok(write.used);
+    }
     let capacity =
         i64::try_from(write.capacity).map_err(|_| StorageError::Integrity("pack capacity"))?;
     let affected = connection.execute(
@@ -98,7 +131,8 @@ pub fn insert_pack(
     if affected != 1 {
         return Err(StorageError::Integrity("pack insert cardinality"));
     }
-    write_in_place(connection, pack_id, write)
+    write_in_place(connection, pack_id, write)?;
+    Ok(write.bodies.len() + write.directory.len() + HEADER_LEN)
 }
 
 /// Appends to an existing pack row without rewriting it.
@@ -113,7 +147,7 @@ pub fn append_pack(
     connection: &Connection,
     pack_id: i64,
     write: &SelectedWrite,
-) -> StorageResult<()> {
+) -> StorageResult<usize> {
     let owned: Option<i64> = connection
         .query_row(
             "SELECT pack_id FROM object_packs WHERE pack_id = ?1 AND save_id = (SELECT save_id FROM temp.layerfs_read_scope) AND EXISTS (SELECT 1 FROM saves WHERE saves.save_id = object_packs.save_id AND publication IS NULL)",
@@ -124,7 +158,8 @@ pub fn append_pack(
     if owned != Some(pack_id) {
         return Err(StorageError::Integrity("pack update cardinality"));
     }
-    write_in_place(connection, pack_id, write)
+    write_in_place(connection, pack_id, write)?;
+    Ok(write.bodies.len() + write.directory.len() + HEADER_LEN)
 }
 
 /// Remove only the unused append reservation when this save closes its tail.

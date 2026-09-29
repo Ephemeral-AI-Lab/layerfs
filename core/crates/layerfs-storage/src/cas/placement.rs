@@ -12,7 +12,7 @@ use crate::cas::owner::{MutationOwner, SaveProfile};
 
 use crate::cas::dependencies::Availability;
 use crate::error::{StorageError, StorageResult};
-use crate::pack::layout::{EncodedGroup, PackLane, HEADER_LEN};
+use crate::pack::layout::{EncodedGroup, PackLane};
 use crate::pack::{build_group, SelectedWrite};
 use crate::policy::{BATCH_OBJECT_LIMIT, PACK_LIMIT};
 use crate::sqlite::write::{self, ObjectRow};
@@ -344,8 +344,7 @@ impl MutationOwner {
             write::append_pack(&self.connection, write.pack_id, write)
         };
         SaveProfile::charge(&mut self.profile.sql_ns, started);
-        written?;
-        let submitted = (write.bodies.len() + write.directory.len() + HEADER_LEN) as u64;
+        let submitted = written? as u64;
         self.counters.pack_bytes_written =
             self.counters.pack_bytes_written.saturating_add(submitted);
         if write.created {
@@ -365,10 +364,9 @@ impl MutationOwner {
             )?;
         }
         self.transaction.rows += 1;
-        // The bytes this write actually hands to the engine: its bodies, its
-        // directory entries and the control area. It used to be the assembled
-        // length of the whole pack, which is not a byte any transaction submitted.
-        self.transaction.bytes += (write.bodies.len() + write.directory.len() + HEADER_LEN) as u64;
+        // A closed one-INSERT pack hands over its full assembled bytes; an
+        // incremental write hands over only bodies, entries and control area.
+        self.transaction.bytes += submitted;
         SaveProfile::charge(&mut self.profile.diag.write_pack_total_ns, whole);
         Ok(())
     }

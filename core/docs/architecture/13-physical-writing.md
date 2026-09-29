@@ -368,9 +368,15 @@ pack BLOB
 └─ framed group bodies, starting after the fixed directory
 ```
 
+At this document's current source, a newly closed pack of at most256 KiB binds
+its complete bounded bytes in one INSERT. An appendable pooled pack and an
+oversized singleton still use the incremental path below. This avoids the
+zero-BLOB insertion followed by three page-dirtying writes for each of the
+closed packs, while the assembled bytes and reader format stay identical.
+
 `LanePlacement::select_many` returns one `SelectedWrite` for each pack
 receiving groups in that call. It carries only the new bodies, directory
-entries, control area and their fixed offsets. A newly created row uses
+entries, control area and their fixed offsets. A newly created appendable row uses
 `zeroblob(capacity)`; the SQLite writer then writes those three regions
 through an incremental BLOB handle. The payload lanes close each call's
 last pack at its exact used length. Pooled metadata may append to its one

@@ -101,6 +101,13 @@ fn a_full_lane_starts_a_new_pack_and_keeps_existing_locators() {
         "two placement flushes close two packs"
     );
     assert_eq!(first.pack_appends, 0);
+    let inserted_pack_bytes: i64 = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row("SELECT SUM(length(data)) FROM object_packs", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(first.pack_bytes_written, inserted_pack_bytes as u64);
     let before = locator_snapshot(&path);
 
     let mut second_batch = Vec::new();
