@@ -11,7 +11,7 @@ below, and adds the returned-read byte bound and bounded ordinal window. The
 older source-pinned sections remain historical descriptions; they do not qualify
 the pending implementation or a performance change.
 
-The 2026-09-30 #286 Phase B source uses payload level 9 and group level 19, and closes the final pooled append reservation within measured save finish. A later #286 source writes version18 whole-file packs with sixteen directory slots and keeps version17 readable at its original256-slot body offset; this is a physical-layout change with the same bounded grouped-record grammar. The level-3 language and earlier diagrams below describe their cited older source pins; [the #188d codec sweep](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/W1-codec.md) is the prior count-driven basis, while #286 receipts decide the current strict allocated C2+C5 gate. All frame grammars, declared workspace ceilings, checksums, no-worker rule and read compatibility remain.
+The 2026-09-30 #286 Phase B source uses payload level 9 and group level 19, and closes the final pooled append reservation within measured save finish. This document's current source writes sixteen-slot directories in version18 whole-file, version19 ordinary and version20 native packs; readers preserve the old 256-slot body offsets of versions17, 9 and 15. The pooled lane still reserves256 slots. This changes only physical layout and group capacity, not the bounded record grammar. The level-3 language and earlier diagrams below describe their cited older source pins; [the #188d codec sweep](../../../docs/roadmap/0.1/0.1.7/evidence/stage-6-history-188d-20260920T000000Z/W1-codec.md) is the prior count-driven basis, while #286 receipts decide the current strict allocated C2+C5 gate. All frame grammars, declared workspace ceilings, checksums, no-worker rule and read compatibility remain.
 
 Part of the [replacement-core architecture](README.md) set. Source pin
 `ce2d738ff`; the placement running total added by #178 **P2-8** (2026-09-18) is
@@ -342,8 +342,10 @@ fills, placement closes it and starts another. This uses the existing
 incremental BLOB writer; it does not assemble and rewrite a full pack
 on every append or add a second queue.
 
-The per-pack fixed directory is 4,096 B for Ordinary, Native and
-PooledMetadata, and 1,024 B for WholeFile. Closing payload rows removes
+At the #237 source pin, the per-pack fixed directory was 4,096 B for Ordinary, Native and
+PooledMetadata, and 1,024 B for WholeFile. The current versions use256 B
+for Ordinary/Native,64 B for WholeFile, and4,096 B for PooledMetadata.
+Closing payload rows removes
 unused *post-used BLOB capacity*. Reusing the pooled row avoids paying
 its fixed header and directory once per group. The one-shot
 [research receipt](https://github.com/Ephemeral-AI-Lab/layerfs/blob/e2c8e6937/core/docs/issues/237/pack-space-c3-result-20260924.md)
@@ -361,8 +363,8 @@ the [handoff](https://github.com/Ephemeral-AI-Lab/layerfs/blob/e2c8e6937/core/do
 ```text
 pack BLOB
 ├─ 24-B control area: magic, version, group count, declared used length
-├─ fixed directory: 4,096 B for ordinary/native/pooled;
-│                   1,024 B for whole-file
+├─ fixed directory: 256 B for ordinary/native, 64 B for whole-file;
+│                   4,096 B for pooled (older versions retain old offsets)
 └─ framed group bodies, starting after the fixed directory
 ```
 

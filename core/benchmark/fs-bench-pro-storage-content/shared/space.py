@@ -265,7 +265,7 @@ PACK_LANES: dict[int, str] = {
     7: "singleton",
     9: "ordinary", 10: "native", 11: "whole-file", 12: "pooled-metadata",
     13: "singleton", 14: "whole-file", 15: "native", 16: "singleton", 17: "whole-file",
-    18: "whole-file",
+    18: "whole-file", 19: "ordinary", 20: "native",
 }
 
 #: The starts-only directory lane. Versions 17/18 have checked internal record
@@ -332,7 +332,7 @@ def _pack_bounds(blob: bytes, where: str):
     if len(blob) < 24:
         raise Incomplete(f"{where}: truncated current control area")
     used, reserved = struct.unpack_from("<II", blob, 16)
-    slots = 1 if lane == "singleton" else 16 if version == 18 else 256
+    slots = 1 if lane == "singleton" else 16 if version in (18, 19, 20) else 256
     if count > slots:
         raise Incomplete(f"{where}: group count exceeds versioned directory")
     width = 4 if lane == "whole-file" else 16
@@ -926,7 +926,7 @@ def self_check() -> list[str]:
         failures.append("the executed pack SQL uses IFNULL: that is the same fabricated zero")
     if "SUM" not in PACK_SUM_SQL.upper():
         failures.append("the pack SQL does not sum anything, so it cannot measure pack bytes")
-    if set(PACK_LANES) != {1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}:
+    if set(PACK_LANES) != {1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}:
         failures.append("the framing version map omits a supported pack version")
     if PACK_LANES.get(4) != SINGLE_RECORD_LANE:
         failures.append(

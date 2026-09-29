@@ -42,6 +42,20 @@ class SelfCheckTest(unittest.TestCase):
 
 
 class CurrentPackTest(unittest.TestCase):
+    def test_tight_ordinary_and_native_directories(self):
+        body = b"abcd"
+        for version, lane in ((19, "ordinary"), (20, "native")):
+            start = 24 + 16 * 16
+            used = start + len(body)
+            pack = (b"LFPACK\0\0" + struct.pack("<IIII", version, 1, used, 0)
+                    + struct.pack("<IIIB3x", start, 4, 4, 0)
+                    + bytes(16 * 15) + body)
+            self.assertEqual(space._pack_group_ranges(pack, lane), (lane, [(start, 4)]))
+            invalid = bytearray(pack)
+            struct.pack_into("<I", invalid, 12, 17)
+            with self.assertRaises(space.Incomplete):
+                space._pack_group_ranges(bytes(invalid), "too many groups")
+
     def test_tight_grouped_whole_file_directory_keeps_record_offsets(self):
         records = [b"\x02abc", b"\x02defgh"]
         body = struct.pack("<III", 2, len(records[0]), sum(map(len, records))) + b"".join(records)

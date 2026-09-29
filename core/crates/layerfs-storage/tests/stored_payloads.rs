@@ -13,7 +13,7 @@ mod support;
 use layerfs_content::{ConstructionPolicy, FinalizedObject, ObjectRole};
 use layerfs_storage::encoding::delta::record::{parse, FULL_TAG, PREFIX_TAG, STORED_TAG};
 use layerfs_storage::pack::layout::{
-    group_view, parse_header, PackLane, VERSION_NATIVE, VERSION_NATIVE_STORED, VERSION_SINGLETON,
+    group_view, parse_header, PackLane, VERSION_NATIVE, VERSION_NATIVE_TIGHT, VERSION_SINGLETON,
     VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED,
     VERSION_WHOLE_FILE_TIGHT,
 };
@@ -177,7 +177,7 @@ fn every_chunk_of_a_chunked_file_is_stored_when_it_cannot_be_shrunk() {
         .expect("a chunk object");
     let pack = pack_of_object(&path, chunk);
     assert_eq!(parse_header(&pack).expect("header").lane, PackLane::Native);
-    assert_eq!(version(&pack), VERSION_NATIVE_STORED);
+    assert_eq!(version(&pack), VERSION_NATIVE_TIGHT);
     // Every record of the pack this locator names carries the stored tag.
     let header = parse_header(&pack).expect("header");
     for group in 0..header.group_count {

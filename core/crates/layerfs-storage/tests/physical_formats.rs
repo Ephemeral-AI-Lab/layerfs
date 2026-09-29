@@ -9,9 +9,9 @@ mod support;
 
 use layerfs_storage::pack::layout::{
     body_area_offset, group_view, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
-    VERSION_NATIVE_STORED, VERSION_ORDINARY, VERSION_POOLED_METADATA, VERSION_SINGLETON,
-    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED,
-    VERSION_WHOLE_FILE_STORED, VERSION_WHOLE_FILE_TIGHT,
+    VERSION_NATIVE_STORED, VERSION_NATIVE_TIGHT, VERSION_ORDINARY, VERSION_ORDINARY_TIGHT,
+    VERSION_POOLED_METADATA, VERSION_SINGLETON, VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE,
+    VERSION_WHOLE_FILE_GROUPED, VERSION_WHOLE_FILE_STORED, VERSION_WHOLE_FILE_TIGHT,
 };
 use layerfs_storage::StorageError;
 
@@ -24,10 +24,13 @@ use layerfs_storage::StorageError;
 /// produce a header alone: `parse_header` reads the declared length out of the
 /// bytes and refuses a pack whose bytes are not the ones it declares.
 fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
-    let length = if lane == PackLane::WholeFile && version != VERSION_WHOLE_FILE_TIGHT {
-        24 + 4 * layerfs_storage::policy::GROUP_COUNT_LIMIT + body
-    } else {
-        body_area_offset(lane) + body
+    let length = match (lane, version) {
+        (PackLane::WholeFile, VERSION_WHOLE_FILE_TIGHT)
+        | (PackLane::Ordinary, VERSION_ORDINARY_TIGHT)
+        | (PackLane::Native, VERSION_NATIVE_TIGHT) => body_area_offset(lane) + body,
+        (PackLane::WholeFile, _) => 24 + 4 * 256 + body,
+        (PackLane::Ordinary | PackLane::Native, _) => 24 + 16 * 256 + body,
+        _ => body_area_offset(lane) + body,
     };
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&PACK_MAGIC);
@@ -68,6 +71,50 @@ fn grouped_whole_file_versions_keep_their_own_body_offsets() {
 }
 
 #[test]
+fn ordinary_and_native_versions_keep_their_own_body_offsets() {
+    for (lane, old, tight) in [
+        (PackLane::Ordinary, VERSION_ORDINARY, VERSION_ORDINARY_TIGHT),
+        (
+            PackLane::Native,
+            VERSION_NATIVE_STORED,
+            VERSION_NATIVE_TIGHT,
+        ),
+    ] {
+        for (version, offset) in [(old, 24 + 16 * 256), (tight, 24 + 16 * 16)] {
+            let mut pack = pack_of(lane, version, 1, 4);
+            pack[24..40].copy_from_slice(&[
+                (offset & 255) as u8,
+                (offset >> 8) as u8,
+                0,
+                0,
+                4,
+                0,
+                0,
+                0,
+                4,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ]);
+            pack[offset..offset + 4].copy_from_slice(&[1, 2, 3, 4]);
+            let header = parse_header(&pack).unwrap();
+            assert_eq!(header.body_offset, offset);
+            let group = group_view(&pack, header, 0).unwrap();
+            assert_eq!(&pack[group.start..group.end], &[1, 2, 3, 4]);
+        }
+        let oversized = pack_of(lane, tight, 17, 4);
+        assert!(matches!(
+            parse_header(&oversized),
+            Err(StorageError::Integrity("pack group count"))
+        ));
+    }
+}
+
+#[test]
 fn every_implemented_framing_is_recognized_by_its_own_version() {
     // The three payload lanes each have two implemented versions: the one they
     // write, whose record grammar carries a stored tag, and the one they no longer
@@ -76,8 +123,10 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
     // rather than trial-decoded, which is what makes the pair meaningful.
     for (version, lane) in [
         (VERSION_ORDINARY, PackLane::Ordinary),
+        (VERSION_ORDINARY_TIGHT, PackLane::Ordinary),
         (VERSION_NATIVE, PackLane::Native),
         (VERSION_NATIVE_STORED, PackLane::Native),
+        (VERSION_NATIVE_TIGHT, PackLane::Native),
         (VERSION_WHOLE_FILE, PackLane::WholeFile),
         (VERSION_WHOLE_FILE_STORED, PackLane::WholeFile),
         (VERSION_WHOLE_FILE_GROUPED, PackLane::WholeFile),
@@ -296,7 +345,7 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
         "a pooled leaf record is stored in the ordinary lane"
     );
     assert_eq!(
-        VERSION_ORDINARY,
+        VERSION_ORDINARY_TIGHT,
         PackLane::Ordinary.version(),
         "the ordinary lane's framing version"
     );

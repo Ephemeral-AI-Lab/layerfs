@@ -57,6 +57,7 @@ pub const WHOLE_FILE_ENTRY_LEN: usize = 4;
 pub const WHOLE_FILE_COMPACT_DROP: usize = 8;
 
 /// Ordinary framing version: canonical objects in multi-record groups.
+/// Still read; new packs use [`VERSION_ORDINARY_TIGHT`].
 pub const VERSION_ORDINARY: u32 = 9;
 /// Native framing version: one chunk record per group entry.
 ///
@@ -97,8 +98,12 @@ pub const VERSION_WHOLE_FILE_GROUPED: u32 = 17;
 /// Same grouped records with sixteen reserved directory slots instead of 256.
 /// Existing version-17 packs keep their original body offset on read.
 pub const VERSION_WHOLE_FILE_TIGHT: u32 = 18;
-/// Maximum groups the tight whole-file directory can describe.
-pub const WHOLE_FILE_TIGHT_GROUPS: usize = 16;
+/// Ordinary groups with sixteen reserved directory slots instead of 256.
+pub const VERSION_ORDINARY_TIGHT: u32 = 19;
+/// Native groups with sixteen reserved directory slots instead of 256.
+pub const VERSION_NATIVE_TIGHT: u32 = 20;
+/// Maximum groups the tight directories can describe.
+pub const TIGHT_GROUPS: usize = 16;
 /// Singleton framing that may carry a payload stored verbatim.
 pub const VERSION_SINGLETON_STORED: u32 = 16;
 
@@ -134,8 +139,8 @@ impl PackLane {
     /// which is what keeps every pack this Store has already written readable.
     pub const fn version(self) -> u32 {
         match self {
-            Self::Ordinary => VERSION_ORDINARY,
-            Self::Native => VERSION_NATIVE_STORED,
+            Self::Ordinary => VERSION_ORDINARY_TIGHT,
+            Self::Native => VERSION_NATIVE_TIGHT,
             Self::WholeFile => VERSION_WHOLE_FILE_TIGHT,
             Self::PooledMetadata => VERSION_POOLED_METADATA,
             Self::Singleton => VERSION_SINGLETON_STORED,
@@ -204,8 +209,8 @@ impl PackLane {
     pub const fn group_count_limit(self) -> usize {
         match self {
             Self::Singleton => 1,
-            Self::WholeFile => WHOLE_FILE_TIGHT_GROUPS,
-            Self::Ordinary | Self::Native | Self::PooledMetadata => GROUP_COUNT_LIMIT,
+            Self::Ordinary | Self::Native | Self::WholeFile => TIGHT_GROUPS,
+            Self::PooledMetadata => GROUP_COUNT_LIMIT,
         }
     }
 }
@@ -384,8 +389,8 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
             .map_err(|_| StorageError::Integrity("pack version"))?,
     );
     let lane = match version {
-        VERSION_ORDINARY => PackLane::Ordinary,
-        VERSION_NATIVE | VERSION_NATIVE_STORED => PackLane::Native,
+        VERSION_ORDINARY | VERSION_ORDINARY_TIGHT => PackLane::Ordinary,
+        VERSION_NATIVE | VERSION_NATIVE_STORED | VERSION_NATIVE_TIGHT => PackLane::Native,
         VERSION_WHOLE_FILE
         | VERSION_WHOLE_FILE_STORED
         | VERSION_WHOLE_FILE_GROUPED
@@ -403,10 +408,10 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
             .try_into()
             .map_err(|_| StorageError::Integrity("pack group count"))?,
     ) as usize;
-    let slots = if lane == PackLane::WholeFile && version != VERSION_WHOLE_FILE_TIGHT {
-        GROUP_COUNT_LIMIT
-    } else {
-        lane.group_count_limit()
+    let slots = match version {
+        VERSION_ORDINARY_TIGHT | VERSION_NATIVE_TIGHT | VERSION_WHOLE_FILE_TIGHT => TIGHT_GROUPS,
+        VERSION_SINGLETON | VERSION_SINGLETON_STORED => 1,
+        _ => GROUP_COUNT_LIMIT,
     };
     let count_limit = if lane == PackLane::Singleton {
         GROUP_COUNT_LIMIT
@@ -433,7 +438,12 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if lane == PackLane::Singleton && group_count != 1 {
         return Err(StorageError::Integrity("singleton pack group count"));
     }
-    if lane == PackLane::Native && !matches!(version, VERSION_NATIVE | VERSION_NATIVE_STORED) {
+    if lane == PackLane::Native
+        && !matches!(
+            version,
+            VERSION_NATIVE | VERSION_NATIVE_STORED | VERSION_NATIVE_TIGHT
+        )
+    {
         return Err(StorageError::Integrity("native framing version"));
     }
     Ok(PackHeader {
