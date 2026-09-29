@@ -7,6 +7,7 @@ pub mod connection;
 pub mod lookup;
 pub mod ownership;
 pub mod pool;
+mod reservation;
 pub mod schema;
 pub mod write;
 

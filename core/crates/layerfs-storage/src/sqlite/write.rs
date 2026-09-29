@@ -90,6 +90,7 @@ pub fn insert_pack(
     pack_id: i64,
     write: &SelectedWrite,
 ) -> StorageResult<usize> {
+    super::reservation::before_pack_insert(connection, write.capacity)?;
     // A new pack that closes in this selection will never be appended. Insert
     // its bounded assembled bytes once instead of inserting zeroblob and then
     // dirtying its SQLite pages three more times through the BLOB handle.

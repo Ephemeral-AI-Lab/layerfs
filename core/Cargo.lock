@@ -583,6 +583,7 @@ dependencies = [
  "blake3",
  "layerfs-content",
  "layerfs-telemetry",
+ "nix",
  "rusqlite",
  "zstd-sys",
 ]

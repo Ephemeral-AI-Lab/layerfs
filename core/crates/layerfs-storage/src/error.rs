@@ -16,6 +16,8 @@ pub enum StorageError {
     Content(ContentError),
     /// The embedded engine reported a failure for one attempted statement.
     Engine(rusqlite::Error),
+    /// The host filesystem refused a physical Store reservation.
+    Io(std::io::Error),
     /// The requested object is not stored.
     ObjectMissing(ObjectId),
     /// The identity exists only in saves outside this reader's publication scope.
@@ -93,6 +95,7 @@ impl fmt::Display for StorageError {
         match self {
             Self::Content(error) => write!(formatter, "content: {error}"),
             Self::Engine(error) => write!(formatter, "engine: {error}"),
+            Self::Io(error) => write!(formatter, "physical Store I/O: {error}"),
             Self::ObjectMissing(id) => write!(formatter, "object {id} is not stored"),
             Self::Unpublished(id) => {
                 write!(formatter, "object {id} is not published to this reader")
