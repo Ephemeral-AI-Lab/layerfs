@@ -1,0 +1,14 @@
+{
+  "schema": "issue286-r023-codec-workspace-correction-v1",
+  "kind": "bounded host Zstandard context diagnostic; no candidate sample",
+  "library": "Homebrew libzstd 1.5.7",
+  "product_static_encode_bound_bytes": 16777216,
+  "correct_source_hint": "ZSTD_getCParams(level, raw_length, raw_length)",
+  "rows": [
+    {"level": 9, "raw_bytes": 131071, "workspace_bytes": 3662872},
+    {"level": 12, "raw_bytes": 131071, "workspace_bytes": 4711448},
+    {"level": 9, "raw_bytes": 1000000, "workspace_bytes": 13100056},
+    {"level": 12, "raw_bytes": 1000000, "workspace_bytes": 25682968}
+  ],
+  "supersedes": "Only r022 JSON workspace_probe and matching prose; r022 original frame/CPU diagnostic unchanged"
+}

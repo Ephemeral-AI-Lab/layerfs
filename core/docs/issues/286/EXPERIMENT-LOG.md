@@ -240,3 +240,11 @@ R020/r021 issue publication: [#286 comment5898183004](https://github.com/Ephemer
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-full-codec-diagnostic-r022 | read-only original r021 Store, 6,948 whole-file FULL frames; **no candidate sample** | C2 original SHA `ef1fba79...`, source `e17f1b43c` | Calibrated level9 exact6948/6948; level12 prospective record-width saving322340 B and added codec process CPU1.856136s, both **diagnostic only**; current strict storage FAIL139264 B and family2 status unchanged | [Diagnostic report](experiments/20260930-history-full-codec-diagnostic-r022.md) | Publish after commit; link in next real round |
+
+## Diagnostic correction 20260930-history-codec-workspace-correction-r023
+
+R022 issue publication: [#286 comment5898248569](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5898248569), diagnostic report commit `f785cc923` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-codec-workspace-correction-r023 | host Zstandard context probe + focused pre-sample test; **no candidate sample** | source r022 wide-probe input corrected, r021 Store unchanged | R022 wide-policy context assertion **CORRECTED**: level12 needs25682968 B at1,000,000 B/dict hint, above fixed16MiB; default131071 B needs4711448 B and fits. R022's6948-frame width/CPU diagnostic unchanged; r021 strict storage FAIL remains. Source selects level12 only for declared default-width policy, level9 for wider policy. | [Correction report](experiments/20260930-history-codec-workspace-correction-r023.md) | Publish after commit; link in next real round |
