@@ -257,3 +257,11 @@ R023 issue publication: [#286 comment5898364695](https://github.com/Ephemeral-AI
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v3-r024 | compound v3 stride10/17 then stride3/53, one changed-source sample each | `9b084cd27` | **PASS/PASS**: strict allocated46469120<49344512 and57556992<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS; driver45.489/75.550s, verifier2.945/8.272s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r024.md) | Publish after commit; link in next real round |
 | 20260930-history-stride1-v3-r025 | compound v3 stride1/157 at same source, one explicit sample | `9b084cd27` | **FAIL storage only**: strict allocated84758528>=83947520 B (+811008) despite pack bodies −322362 B vs r021; all904143 listed paths/76726 selected content states/157 independent O3+roots/C5/cleanup PASS, driver165.640s<170s, verifier20.458s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r025.md) | Publish after commit; link in next real round |
+
+## Diagnostic round 20260930-history-block-diagnostic-r026
+
+R024/r025 issue publication: [#286 comment5898567846](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5898567846), report commit `f5ec32d16` (production delta+0). Product source `338bfc21c` then restored the earlier level9 path after level12 increased original APFS allocation. Source `2aaaf8d8f` registered the nine family-3 matrix cells as NOT_RUN and added a labelled per-state block probe without changing production LOC.
+
+| Round | Family / selection | Declared source | Result / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-block-diagnostic-r026 | intended stride1/157 count-driven allocation probe; **no candidate sample** | `2aaaf8d8f`, but stale invoked binary SHA `d0b04009...` instead of built SHA `8f52b440...` | **INCOMPLETE diagnostic**: old binary emitted zero per-state probe counters; exit0, wall167.802s; no new correctness/storage/time verdict; r021/r025 FAIL unchanged | [Diagnostic report](experiments/20260930-history-block-diagnostic-r026.md) | Publish after commit; link in next real round |
