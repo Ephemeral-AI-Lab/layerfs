@@ -1,0 +1,51 @@
+{
+  "files": {
+    "declaration.json": {
+      "allocated_bytes": 4096,
+      "sha256": "1f4f44fcd4ef604d97c8d97dc079fc7d5c2ea3c0381c7a5d332d0c49ece34a0a",
+      "size_bytes": 1890
+    },
+    "diagnostic.stderr": {
+      "allocated_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "diagnostic.stdout": {
+      "allocated_bytes": 4096,
+      "sha256": "e0160d0b6bd86eaaab95aafa45ac6699202b043c33b1ff57bb78ca946127e43f",
+      "size_bytes": 49
+    },
+    "native/history.sqlite": {
+      "allocated_bytes": 196608,
+      "sha256": "8dcf12b01322afcaf9e1a758b05abbe68e1d3216c0a37eda9033090f9af93833",
+      "size_bytes": 180224
+    },
+    "native/phases-perf.json": {
+      "allocated_bytes": 4096,
+      "sha256": "8ee2e02c129bfdc4ccaed23a970813c4178d91b45eb897efaa72d812a2f232e3",
+      "size_bytes": 393
+    },
+    "native/sample.sqlite": {
+      "allocated_bytes": 83890176,
+      "sha256": "ef1fba79a76add4c781c9bbcf1c5219a9548d3cb03b4483a8d84ded9059ca781",
+      "size_bytes": 75712512
+    },
+    "native/timing.json": {
+      "allocated_bytes": 102400,
+      "sha256": "d0b0b5e72f93b7a080b0fb5e12ede30776a79fa7c1599c7819aa874d2e6b5f1d",
+      "size_bytes": 100749
+    },
+    "native/trace.jsonl": {
+      "allocated_bytes": 3035136,
+      "sha256": "01b1525c1aabfd8f3ffffed32cedff069313c8ea2669ecf72486002f9d0cbbed",
+      "size_bytes": 3031366
+    },
+    "status.json": {
+      "allocated_bytes": 4096,
+      "sha256": "d77353ba307904745da4079f1a8578f304800a386aad5485d9dff4a62577730b",
+      "size_bytes": 136
+    }
+  },
+  "raw_root": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-block-diagnostic-r027",
+  "schema": "issue286-diagnostic-evidence-index-v1"
+}

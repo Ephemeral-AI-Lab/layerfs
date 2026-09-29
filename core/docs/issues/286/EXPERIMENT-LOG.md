@@ -265,3 +265,11 @@ R024/r025 issue publication: [#286 comment5898567846](https://github.com/Ephemer
 | Round | Family / selection | Declared source | Result / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-block-diagnostic-r026 | intended stride1/157 count-driven allocation probe; **no candidate sample** | `2aaaf8d8f`, but stale invoked binary SHA `d0b04009...` instead of built SHA `8f52b440...` | **INCOMPLETE diagnostic**: old binary emitted zero per-state probe counters; exit0, wall167.802s; no new correctness/storage/time verdict; r021/r025 FAIL unchanged | [Diagnostic report](experiments/20260930-history-block-diagnostic-r026.md) | Publish after commit; link in next real round |
+
+## Diagnostic round 20260930-history-block-diagnostic-r027
+
+R026 issue publication: [#286 comment5898878612](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5898878612), report commit `5a8676624` (production delta+0). Corrected target-path resolution and SHA assertion before launch; source remains clean and product code is unchanged.
+
+| Round | Family / selection | Declared source | Result / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-block-diagnostic-r027 | stride1/157 original-owner C2/C5 block progression; **no candidate sample** | `5a8676624`, benchmark-target binary SHA `8f52b440...` | Complete 157 states ×4 probes, exit0, wall165.179s; C2 allocation jumps exactly16,777,216 B at state146 for217,088 B apparent growth, then stays fixed; final files byte-identical to r021, strict official r021 FAIL139264 B unchanged, numeric time INELIGIBLE | [Diagnostic report](experiments/20260930-history-block-diagnostic-r027.md) | Publish after commit; link in next real round |
