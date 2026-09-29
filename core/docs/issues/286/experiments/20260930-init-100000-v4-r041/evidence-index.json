@@ -1,0 +1,102 @@
+{
+  "files": {
+    "build.json": {
+      "allocated_bytes": 4096,
+      "bytes": 772,
+      "published_copy": "build.json",
+      "sha256": "141a4fba6b3ccf1ed4ee20d613c8ad60d7211fc22ebc842b6c3b0084b74b2d86"
+    },
+    "manifest.json": {
+      "allocated_bytes": 4096,
+      "bytes": 2567,
+      "published_copy": "manifest.json",
+      "sha256": "88026033c30b5b419e5a01dd577dd9519f10c281fdce899203bf94f5c78e9066"
+    },
+    "report.txt": {
+      "allocated_bytes": 4096,
+      "bytes": 659,
+      "published_copy": "report.txt",
+      "sha256": "87eb7bc551364918d34672c27cfe33cc961a65841bc9df1b110cddd809b40c84"
+    },
+    "run.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1006,
+      "published_copy": "run.json",
+      "sha256": "0a35a0e9e64bdb9d2f92b2f9fd93a3e31bba0019fcc9bc9082b9fe3b0283d911"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 308,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json",
+      "sha256": "d1562308397f0dd4c1de6c0d00c82830260979d655bce906f844b62f6581d615"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 309,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json",
+      "sha256": "5205e0820164ad269b22176b389c676f0aadaafb42c0dfcd0c4214bf1ba4e493"
+    },
+    "sdk-host/init_namespace/namespace-10000/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 352,
+      "published_copy": "sdk-host/init_namespace/namespace-10000/receipt.json",
+      "sha256": "d503f885f4b8b0f89f2855ce3c872eb9f50f1470631e18b13cd7fd2621ed6af8"
+    },
+    "sdk-host/init_namespace/namespace-100000/driver.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/driver.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-100000/driver.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 321,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/driver.stdout.gz",
+      "sha256": "7cfe8eb900732b8f655174e4402f3f06ae31a2c68195515439623e2f46425a3e"
+    },
+    "sdk-host/init_namespace/namespace-100000/history.sqlite": {
+      "allocated_bytes": 32768,
+      "bytes": 29696,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/history.sqlite.gz",
+      "sha256": "c989fe68b54b3bcefcbbb9a614990514cc2c6b3e7aa71250399e23dfb61db65a"
+    },
+    "sdk-host/init_namespace/namespace-100000/perf.jsonl": {
+      "allocated_bytes": 4096,
+      "bytes": 334,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/perf.jsonl.gz",
+      "sha256": "5094a7dbbcc0bebe64a48056add9f8a2a55b17ec8fbe0a9cb958eef94e3d5ef3"
+    },
+    "sdk-host/init_namespace/namespace-100000/receipt.json": {
+      "allocated_bytes": 8192,
+      "bytes": 7017,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/receipt.json",
+      "sha256": "0ac7d89bff179c49be7998427b97c5aab571544d94aecaa8c92fc90aeb53b870"
+    },
+    "sdk-host/init_namespace/namespace-100000/store.sqlite": {
+      "allocated_bytes": 517996544,
+      "bytes": 515342336,
+      "published_copy": null,
+      "sha256": "ab3389c3b22c19a15f9c312532233280b6b5b0bdaef396fce1c485a950ea880b"
+    },
+    "sdk-host/init_namespace/namespace-100000/verification.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1700,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/verification.json",
+      "sha256": "fec7c17c16e374ffd9a2a4fb222196edf7e8fb1f2a2f9f89d0620105ced5f0c0"
+    },
+    "sdk-host/init_namespace/namespace-100000/verifier.stderr": {
+      "allocated_bytes": 4096,
+      "bytes": 129,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/verifier.stderr.gz",
+      "sha256": "bd9c312560fddaac4362737cdb149be7381d9814349093c9f172da42c5007c72"
+    },
+    "sdk-host/init_namespace/namespace-100000/verifier.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 400,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/verifier.stdout.gz",
+      "sha256": "35a791a67ae4c3859944aa1e3cff285fa78cdc4f082e88faf51b6736980069e8"
+    }
+  },
+  "raw_root": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-init-100000-v4-r041",
+  "schema": "issue286-round-evidence-index-v1"
+}

@@ -377,3 +377,11 @@ R039 issue publication: [#286 comment5900830594](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-init-regression-v4-r040 | release SDK Init 100 then1,000 files, one sample each | `5e775aa09`, product `60c7af879` | **Functional PASS/PASS**: complete commands1.716/0.140s<15s, separate verifiers0.607/0.055s<9.5s, complete namespace/sampled bytes and cleanup PASS; raw SDK0.043/0.128s; numeric latency INELIGIBLE. Explicit10,000/100,000 NOT_RUN. Together with r038/r039 v4 history, Families1–2 scoped checkpoints pass. | [Round report](experiments/20260930-init-regression-v4-r040.md) | Publish after commit; Family3 matrix next |
+
+## Explicit owner-requested SDK Init tier 20260930-init-100000-v4-r041
+
+R040 issue publication: [#286 comment5900857750](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900857750), functional Init report commit `fc7ed1a30` (production delta+0). The owner requested all four Init tiers; r040's100/1,000 receipts are reused by exact product/harness/binary identity, and the contract runs100,000 before the remaining10,000 tier.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-init-100000-v4-r041 | explicit release SDK Init100,000 files, one sample; first fixture preparation outside timer | `fc7ed1a30`, product `60c7af879` | **Functional PASS**, runner `UNREGISTERED_DIAGNOSTIC`: SDK6.043s, complete command6.063s<15s, separate verifier1.712s<9.5s; all101001 paths and73 selected files/200286236 B, known root and cleanup PASS; numeric INELIGIBLE, no cold2.7s claim. Fixture preparation14.542s outside timer. | [Round report](experiments/20260930-init-100000-v4-r041.md) | Publish after commit; explicit10,000 next |
