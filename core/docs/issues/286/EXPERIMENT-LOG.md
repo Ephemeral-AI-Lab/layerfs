@@ -345,3 +345,11 @@ R035 issue publication: [#286 comment5900217058](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v3-r036 | compound v3 stride1/157, one explicit sample | `57c511a2c`, corrected product `d6f736edc` | **TIMEOUT/TARGET_MISS** 170.018s>170s; partial156 Layers/156 Branches/155 Commits, no complete root trace or verifier, partial allocated76742656 B is storage INCOMPLETE, semantic and cleanup INCOMPLETE, numeric time INELIGIBLE; no unchanged resample | [Round report](experiments/20260930-history-stride1-v3-r036.md) | Publish after commit; work stops pending explicit resume |
+
+## Selected round 20260930-history-v4-r037
+
+R036 issue publication: [#286 comment5900294298](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900294298), report commit `2e9b6809f` (production delta+0). The owner then authorized up to10% storage deviation; code/profile commit `60c7af879` restores payload3/group1 and freezes a separately versioned v4 gate before collection. The old strict receipts are unchanged.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v4-r037 | compound v4 stride10/17 then stride3/53, one sample each | `60c7af879` | **PASS/PASS**: C2+C5 allocated52473856<54278964 (+6.342% over original) and65142784<70427034 B (+1.747%); complete trees/selected content/independent roots/O3/C5/cleanup PASS, driver34.328/58.740s and verifier3.042/8.576s within unchanged bounds; numeric time INELIGIBLE. Generic verifier dispatch lacked v4 and is corrected after this sample. | [Round report](experiments/20260930-history-v4-r037.md) | Publish after commit; corrected harness seal requires a new selection before explicit stride1 |

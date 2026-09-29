@@ -398,13 +398,13 @@ def main():
         print(run(selection, args.out))
     elif args.command == "verify":
         path = owned(args.run, existing=True)
-        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3"):
+        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.verify(path, sys.modules[__name__]))
         else:
             print(verify_run(path))
     else:
         path = owned(args.run, existing=True)
-        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3"):
+        if json.loads((path / "run.json").read_text()).get("schema") in ("core-history-retention-run-v1", "core-history-retention-run-v2", "core-history-retention-run-v3", "core-history-retention-run-v4"):
             print(history.report(path), end="")
         else:
             print(report(path), end="")
