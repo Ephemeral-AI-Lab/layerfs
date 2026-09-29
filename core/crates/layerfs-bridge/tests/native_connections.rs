@@ -291,3 +291,84 @@ fn productive_upload_keeps_the_response_wait_alive() {
         assert_eq!(response.unwrap().bytes, [42]);
     });
 }
+
+#[test]
+fn missing_native_reply_preserves_read_deadline_but_not_release_custody() {
+    use layerfs_bridge::{
+        adapters::native::client::Client,
+        contract::{Code, Operation, Request, WORKSPACE_STATUS_PROFILE},
+    };
+    use std::{
+        sync::mpsc,
+        time::{Duration, Instant},
+    };
+
+    for mutation in [false, true] {
+        let listener = listen("127.0.0.1:0".parse().unwrap()).unwrap();
+        let address = listener.local_addr().unwrap();
+        let private = [7; 32];
+        let server = [9; 32];
+        let public = *VerifiedPeer::from_private(&server).unwrap().public_key();
+        let peer = *VerifiedPeer::from_private(&private).unwrap().public_key();
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        std::thread::scope(|threads| {
+            let worker = threads.spawn(move || {
+                let (socket, _) = listener.accept().unwrap();
+                let mut connection = accept(
+                    socket,
+                    &server,
+                    &[Peer {
+                        selector: 1,
+                        public: peer,
+                        expires_unix: u64::MAX,
+                    }],
+                )
+                .unwrap();
+                let hello = connection.receive.read().unwrap();
+                assert_eq!(hello.kind, Kind::Hello);
+                connection.send.write(&hello).unwrap();
+                let request = connection.receive.read().unwrap();
+                assert_eq!(request.kind, Kind::Begin);
+                // The operation reached the peer; this is a lost result, not
+                // just a failed initial Hello. Withhold the response only.
+                entered_tx.send(()).unwrap();
+                done_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            });
+            let mut client = Client::new(connect(address, 1, &private, &public).unwrap()).unwrap();
+            let request = Request {
+                id: 1,
+                generation: 0,
+                store: 0,
+                profile: WORKSPACE_STATUS_PROFILE,
+                deadline_ms: 5_000,
+                response_bytes: 0,
+                operation: if mutation {
+                    Operation::WorkspaceReleaseView {
+                        workspace: b"work".to_vec(),
+                        incarnation: [4; 32],
+                        view: vec![1; 33],
+                    }
+                } else {
+                    Operation::SandboxHello
+                },
+            };
+            let deadline = Instant::now() + Duration::from_millis(200);
+            let result = client.call_until(&request, &mut &[][..], &mut std::io::sink(), deadline);
+            entered_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+            let failure = result.err().unwrap();
+            assert_eq!(
+                failure.code,
+                if mutation {
+                    Code::Unknown
+                } else {
+                    Code::Deadline
+                }
+            );
+            assert_eq!(failure.unknown, mutation);
+            assert!(Instant::now() >= deadline);
+            done_tx.send(()).unwrap();
+            worker.join().unwrap();
+        });
+    }
+}
