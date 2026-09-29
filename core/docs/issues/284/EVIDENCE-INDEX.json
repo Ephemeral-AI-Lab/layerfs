@@ -866,7 +866,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/43-core-runtime-tests.log"
+      "published_path": "evidence/43-core-runtime-tests.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "440087e2d90b3155999f303542a07c19e27eb8580a18d3ba7e3ccd6bce80a970"
     },
     {
       "local_path": "core/target/issue284-phase-a/44-tool-tests.log",
@@ -874,7 +876,9 @@
       "bytes": 107,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/44-tool-tests.log"
+      "published_path": "evidence/44-tool-tests.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "d10b72427cae34781235c5511fbfbd020b7b247fd3a61495cee17496c49f579d"
     },
     {
       "local_path": "core/target/issue284-phase-a/45-diff-check.log",
@@ -1449,7 +1453,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/46-core-canonical-tests.log"
+      "published_path": "evidence/46-core-canonical-tests.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "aa8ddf5f71cae95af6e970a0aba99a810f99aeca289eac6912ef7398ed7e7b9b"
     },
     {
       "local_path": "core/target/issue284-phase-a/47-daemon-final-build.log",
@@ -1508,7 +1514,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/48-sdk-host-tests.log"
+      "published_path": "evidence/48-sdk-host-tests.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "1a9bae084d10a57d130541b73cce93913548c59c8fc434f42d43d2ffa2147740"
     },
     {
       "local_path": "core/target/issue284-phase-a/49-image-final-build.log",
@@ -2076,7 +2084,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/65-owning-final-tests.log"
+      "published_path": "evidence/65-owning-final-tests.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "68fa6d7ee4c3dd3c57af8bc9d1f7b1651ead9add121ab6b9f509e67712e7092a"
     },
     {
       "local_path": "core/target/issue284-phase-a/66-clippy-linux-final.log",
@@ -2084,7 +2094,9 @@
       "bytes": 336,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/66-clippy-linux-final.log"
+      "published_path": "evidence/66-clippy-linux-final.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "6b3127b2a6cfe05b1c41dd920faf86b1e9a77a79fc20fb7ac1a15daad9453e8a"
     },
     {
       "local_path": "core/target/issue284-phase-a/67-image-frozen-build.log",
@@ -2107,7 +2119,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/68-sdk-fuse-frozen.log"
+      "published_path": "evidence/68-sdk-fuse-frozen.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "043bd316c63931d493130cc2d9130bbd720c52d4479699ab08de8cc1b5ed8184"
     },
     {
       "local_path": "core/target/issue284-phase-a/69-native-final-build.log",
@@ -2123,7 +2137,9 @@
       "bytes": 650,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/70-clippy-host-final.log"
+      "published_path": "evidence/70-clippy-host-final.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "1ed58cc7faf7f93a84119fe9c7fba11b7592cb099ae8db62e91236ecf9447181"
     },
     {
       "local_path": "core/target/issue284-phase-a/71-native-frozen-complete.log",
@@ -2138,7 +2154,9 @@
           "ignored": 0
         }
       ],
-      "published_path": "evidence/71-native-frozen-complete.log"
+      "published_path": "evidence/71-native-frozen-complete.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "439ef157efb79c30446ff09e122adc7178678848cbb167d88e3f098d830607f5"
     },
     {
       "local_path": "core/target/issue284-phase-a/72-examples-final.log",
@@ -2146,7 +2164,9 @@
       "bytes": 596,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/72-examples-final.log"
+      "published_path": "evidence/72-examples-final.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "1578efaf535a80d705ab3bd1cbfb00031a3a49f3c796b35b5252c08db918b261"
     },
     {
       "local_path": "core/target/issue284-phase-a/73-fmt-final.log",
@@ -2154,7 +2174,9 @@
       "bytes": 0,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/73-fmt-final.log"
+      "published_path": "evidence/73-fmt-final.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
     },
     {
       "local_path": "core/target/issue284-phase-a/74-boundary-final.log",
@@ -2162,7 +2184,86 @@
       "bytes": 76,
       "classification": "build/check/correctness diagnostic; inspect exact scope",
       "test_summary": [],
-      "published_path": "evidence/74-boundary-final.log"
+      "published_path": "evidence/74-boundary-final.log.gz",
+      "publication_encoding": "gzip; decompressed bytes match original raw SHA256 exactly",
+      "published_artifact_sha256": "023b954b546d09ab56526dbf91ee7c81f41a75081c8f1bd3ef5629806153047d"
+    },
+    {
+      "local_path": "core/target/issue284-phase-a/76-server-final-tests.log",
+      "sha256": "8a9aba18fe4f872174c96c526aab302e2c055ae6a525a3e85be2468b30d08e1e",
+      "bytes": 36465,
+      "classification": "owning server correctness tests PASS; routine telemetry is not benchmark qualification",
+      "test_summary": [
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "status": "ok",
+          "passed": 28,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "published_path": "evidence/76-server-final-tests.log.gz",
+      "publication_encoding": "gzip; original raw bytes unchanged",
+      "published_artifact_sha256": "c6bcd021452ee9f6632a080463bcdb6ef5ac5c3c6c6ae1672261d4f34ff685fe"
     }
-  ]
+  ],
+  "publication_note": "Exact raw logs remain unchanged under core/target and in implementation commit 671f4a46f8f354cf764d3d1555529b73a5c939e0. Current publication wraps the same bytes in deterministic gzip to preserve raw EOF whitespace without introducing added-line whitespace errors. No observation or status was rewritten.",
+  "retained_custody_archive": {
+    "local_path": "core/target/issue284-phase-a/retained-native-custody.tar.gz",
+    "sha256": "c77f51044db2ab776b54dd8586fe56d8aeecfe0fac1479d0f6c31aa374c2cfd4",
+    "classification": "retained failure artifacts; no product recovery or checked-refund claim"
+  }
 }

@@ -1,9 +1,10 @@
 # Component namespace and active Workspace authority
 
 > **Status:** Research; source-backed implementation description, not a release
-> contract or performance qualification. Written against construction parent
-> `1ab1501c9b44b1d3907bdfcba8b5020698525fb4` plus the selective implementation
-> in this commit. Exact resulting source and file hashes are recorded in
+> contract or performance qualification. Written against implementation source
+> `671f4a46f8f354cf764d3d1555529b73a5c939e0`, tree
+> `ed5d82c664c9720a49d609cfbbb43d632adf890e`. This docs-only handoff advances
+> the earlier construction-parent pin to the implemented source. File hashes are recorded in
 > [the #284 manifest](../issues/284/PORT-MANIFEST.json) and final handoff.
 
 The construction foundation is T0 `05eb5c14849f1b874383fd1600ba9288f103ad93`.

@@ -1,6 +1,0 @@
-    Blocking waiting for file lock on build directory
-    Checking layerfs-workspace v0.1.6 (/Users/yifanxu/.codex/worktrees/phase45-active-integration/layerfs/core/crates/layerfs-workspace)
-    Checking layerfs-fuse v0.1.6 (/Users/yifanxu/.codex/worktrees/phase45-active-integration/layerfs/core/crates/layerfs-fuse)
-    Checking layerfs-sdk v0.1.6 (/Users/yifanxu/.codex/worktrees/phase45-active-integration/layerfs/core/crates/layerfs-api/sdk)
-    Checking layerfs-daemon v0.1.6 (/Users/yifanxu/.codex/worktrees/phase45-active-integration/layerfs/core/crates/layerfs-daemon)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.05s
