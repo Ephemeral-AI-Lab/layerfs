@@ -1635,3 +1635,61 @@ This entry changes only documentation. Production LOC by
 `python3 tools/production_loc.py --json --root <exact first-parent/staged/
 committed git archive snapshot>`: Core **68,031 -> 68,031 (+0)**,
 reference **65,417 -> 65,417 (+0)**, combined **133,448 -> 133,448 (+0)**.
+
+## 2026-09-29 owned pre-merge functional completion
+
+Product `11a864fc133844cae7a4247b1f243d84d5763b10`, test/harness checkpoint
+`a8528b9757de993eb8ee73b6d183ea8ee5badefa`, isolated owned branch
+`codex/issue273-finalize-owned`. The owner's continuation direction focuses
+on implementation/algorithm correctness and 3×3/8192, deferring additional
+memory work to #283. Numeric admission remains INELIGIBLE and the distinct
+frozen matched control remains NOT_RUN; no old receipt is promoted.
+
+The [source-pinned functional report](PREMERGE-FUNCTIONAL-COMPLETION-20260929.md)
+and [local evidence hash index](PREMERGE-FUNCTIONAL-EVIDENCE-20260929.json)
+record all new results, original/partial FAILs, identities, custody and limits.
+The new internal authenticated SaveFile v2 and attachment capability check,
+byte-verified generic read/write reuse, real completion reserve and checked
+same-fund pending-page local recovery are implemented. No retired Workspace
+range entrypoint, FUSE ioctl, command selector or public editing façade returns.
+
+At the final product: unchanged 64 MiB lowering checks all 67,108,662 bytes,
+8 replacement bytes and exact 180,224 physical/charged bytes within the original
+64 MiB quota / 10-second Stage / 60-second command; wall 29.478575 s. Registered
+2 MiB Stage headroom and 4 MiB Commit headroom pass. Explicit checked local
+recovery conserves total charge, preserves old/live/saved bytes and sends one
+canonical Commit. All seven SDK lease test functions ran live, including ordinary
+reordered/duplicated dd plus two known Commits and full 512 KiB old/new oracles,
+actual stopping, lost release, known C1/local C5 and fixed 16 MiB response Budget.
+
+One new candidate sample per unchanged registered 10 MiB matrix cell, locked
+release binaries and full independent verification: append complete commands
+1.524716 / 1.722133 / 6.019977 s, dispersed 1.034881 / 1.858093 / 10.673892 s,
+repeated 1.021502 / 1.532209 / 6.516553 s at 100 / 512 / 4097 writes, within
+15 / 15 / 25 s. All nine functional PASS / numeric INELIGIBLE with cleanup PASS.
+Pack loads are 2 / 7 / 52, 2 / 7 / 209 and 1 / 1 / 1, respectively. The separate
+8192 case passes full bytes and clean-close/refund at default 8 MiB Budget,
+23.649186 s complete, eight source windows / 824 loads / 7368 hits. #248's
+separated-4097 regression passes both verifiers, 5.917701 s, edit-load-zero;
+its numeric row remains INELIGIBLE. The 10240 Budget-refusal custody case passes.
+
+Reproduce through the existing `checkpoint5_273.py oracle/prepare/run` commands
+with this worktree's final release binaries and a fresh output; frozen selection,
+master/seal/image/binary identities and exact commands are in the local receipts.
+The native `stage_route.py`, `commit_staged_route.py`, `composite_route.py` and
+SDK fault-route commands are pinned there too. `core/target` stays local-only;
+this entry publishes no GitHub raw-artifact URL. See the report before rerunning:
+unchanged performance arms must not be sampled again.
+
+Final locked Core host tests, Clippy, examples, fmt, boundary scanner and self-tests
+pass; Linux active backing 32/32 and ownership 6/6 pass on owned ext4. Successful
+runtime cleanup passes; failed native volumes remain stopped/retained without
+a clean-close/refund claim. The historical 32 KiB SDK Io observation, unlogged
+token FAIL cause, #256 scale and #270 pure-move proof stay unresolved/deferred.
+No CI, preflight, release admission, speed ratio, issue closure or merge is claimed.
+
+Per-commit production LOC comparisons are in the report. Product additions are
+136087 → 136744 (+657) and 136744 → 136833 (+89); reference remains 65417,
+Core ends at 71416. Every intervening test/docs commit and this report/index/
+ledger commit records its exact first-parent/staged-tree unchanged comparison
+and +0, using `tools/production_loc.py` with unchanged exclusions.

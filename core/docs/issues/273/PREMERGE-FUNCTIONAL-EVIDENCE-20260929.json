@@ -1,0 +1,1033 @@
+{
+  "schema": "issue273-functional-source-index-v1",
+  "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+  "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+  "evidence_scope": "local-only gitignored evidence; published metadata does not publish raw artifacts",
+  "numeric_admission": "INELIGIBLE",
+  "control": "NOT_RUN",
+  "entries": [
+    {
+      "local_path": "core/target/issue273-v2-check-diagnostic-01/result.json",
+      "sha256": "1012a924c80fe4363db60b0747a3ccd14b0e16e4614c3d77cecbe8b4801714e7",
+      "source": "3318e5cd09a91b2e9a3bf62f03bc1ccafb2125dd"
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-headroom-01/result.json",
+      "sha256": "c941dbf78425a18cc6e17f11358b47e9669858ae91c4cf1eded4a9239b0849d1",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "headroom",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.1835379170370288
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-lost_result-01/result.json",
+      "sha256": "2c8e7389c1ad6a78dc5ea8bae269966f73676c84e73dfe643a31cefcfcb5808f",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "lost_result",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9689787920215167
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-mounted_successor-01/result.json",
+      "sha256": "76d6ced428db3f574a43e297a381742c79eb0140b9b49601300e7f4678c87642",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "mounted_successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9961203749990091
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-reconcile_failure-01/result.json",
+      "sha256": "d79a5f52364f022d89f2aa53293768d6201d26bd18f6ad3375e3fff242d31511",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "FAIL",
+      "case": "reconcile_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "AssertionError()",
+      "command_wall_seconds": 0.8078209580271505
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-repeated-01/result.json",
+      "sha256": "83cb94d5888ef7b9c26760f38753ca907a24d23ef8f8d501334473b215ad8b94",
+      "source": "74646ff872d3c85f6740a3de4274afbd28c6bf67",
+      "status": "PASS",
+      "case": "repeated",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0204693339765072
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-successor-01/result.json",
+      "sha256": "8437d73827aaab6a6059143a2752c656cb0afe85484623831baf1ea2813a32c0",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "FAIL",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "AssertionError()",
+      "command_wall_seconds": 0.7581421659560874
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-successor-02/result.json",
+      "sha256": "caadf7465a71ddfab46ad6bf7fbd0c4aa13e1b270c413b4c43fc7f64cd7e8ba2",
+      "source": "74646ff872d3c85f6740a3de4274afbd28c6bf67",
+      "status": "FAIL",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "AssertionError()",
+      "command_wall_seconds": 0.8930918329861015
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-successor-03/result.json",
+      "sha256": "2c202826b1059677eb79cddaf9ec2640a693f0d62418b3fe5a19e8a1fece8c8f",
+      "source": "ee3803c1f87862623555bb447704aed3bed086a6",
+      "status": "FAIL",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "AssertionError()",
+      "command_wall_seconds": 0.9987332500168122
+    },
+    {
+      "local_path": "core/target/issue273-v2-commit-successor-04/result.json",
+      "sha256": "223d1399d547a6302e1866613afe944d4610606a56c6fda769a1d1e0d0d77bad",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.127091540955007
+    },
+    {
+      "local_path": "core/target/issue273-v2-composite-clean_successor-01/result.json",
+      "sha256": "0bcfbde293564ab3aaff3fc551c3005776e80f552a916d1b32ba88e3e8c7d18c",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "clean_successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0676347910193726
+    },
+    {
+      "local_path": "core/target/issue273-v2-composite-successor-01/result.json",
+      "sha256": "362d045c99a71c3d063fcb5976af29a5eb67b8c228d74dc24a75818720803b53",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0560480839922093
+    },
+    {
+      "local_path": "core/target/issue273-v2-escrow-check-diagnostic-02/result.json",
+      "sha256": "02dd839e780b54688da852e4bf53cc0cc298d87ec6c86b56b5bd577ac622483c"
+    },
+    {
+      "local_path": "core/target/issue273-v2-escrow-product-loc-01/result.json",
+      "sha256": "a423ee0f0851cee1f8d48a8ca3f3873cfe4d8870d55b1710cf8e45e76401d903",
+      "source": "40f03ed7f68aacf3507c7b557959af521f437e36"
+    },
+    {
+      "local_path": "core/target/issue273-v2-failed-attempt-custody-01/result.json",
+      "sha256": "abd00ee01082b729ee2d3302160a4700087a766427d7164cc918185c82dbffff"
+    },
+    {
+      "local_path": "core/target/issue273-v2-failure-custody-followup-03/result.json",
+      "sha256": "b41f4eae0d8a476a6491712ba59f6d256e8f533ab875893798856957d46275a5"
+    },
+    {
+      "local_path": "core/target/issue273-v2-host-daemon-release-01/result.json",
+      "sha256": "bce813ea994c5e8b4aea7fbd409cb20d6c1c5c11d8415a5f083561fe7b937e1d",
+      "wall": 9.265992583008483
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-backing-01/result.json",
+      "sha256": "db1f972563360ef2aabb5e786c805bcb8674a00eef44e3ceaea77b4f8f4a2d7c",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-backing-ext4-02/result.json",
+      "sha256": "ae139515730a9d0adcab28f8e641c1ab1b210d077fd1a1751bcfb95e6230c47d",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-daemon-build-01/result.json",
+      "sha256": "877a41d7a206b3b7414726422c497b944661c772e3194cd54e7e3e554a3594d1",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "wall": 10.13460920896614
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-successor-build-02/result.json",
+      "sha256": "f1592cf0e07adaa41ce11dbf528a4f6ad8ff9a3675534faf5c5f15ce60bc18e4",
+      "source": "74646ff872d3c85f6740a3de4274afbd28c6bf67",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "wall": 10.777448375010863
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-successor-build-03/result.json",
+      "sha256": "81c7b0489288b0dc7a3cb8fe04510419dc1f58893742198d2319d42e0e451a15",
+      "source": "ee3803c1f87862623555bb447704aed3bed086a6",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "wall": 11.490892207948491
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-successor-composite-build-04/result.json",
+      "sha256": "2cabf6e4b640999f814c678302dee1b3fe59b9fe4eb3141910ceb8493d3205b1",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "wall": 14.200429083954077
+    },
+    {
+      "local_path": "core/target/issue273-v2-linux-tests-build-01/result.json",
+      "sha256": "63c5ef5ef76e68fe59fb63d37169b10e6d0b212fedd00b7d46f6b6ccc71d1188",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "wall": 164.5202383339638
+    },
+    {
+      "local_path": "core/target/issue273-v2-release-runtime-03/result.json",
+      "sha256": "9db6c3fc2c62ea8f8858d746c9d3211fb2bf2c8b9205e589bf29830820aa99ee",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d"
+    },
+    {
+      "local_path": "core/target/issue273-v2-runtime-builds-01/result.json",
+      "sha256": "8893b11e65abdfd639a37c460b9d3d3f86e49d302f35d4121d27be7cecfbc3f5",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "image": "sha256:c47ddd5fe55cf486b25cfca92fd563f8ee245c186687012ab6d30ad311deec67"
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-budget-01/result.json",
+      "sha256": "775832b576a98b3b6a2467960c875346b29617913e8c7fda02ca0a919a78986a",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "image_id": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall_seconds": 37.455298417015
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-deadline-01/result.json",
+      "sha256": "f94931eee30a53addfc45e6262360d04c55cf9d5a9c82efa944f8db79e863489",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "PASS",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall": 16.197511500038672
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-known-c5-01/result.json",
+      "sha256": "fef1b66664cb63f621f50268f1a352892ad602c3faad1ee773afe014be32e923",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "image_id": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall_seconds": 7.667713041999377
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-origin-01/result.json",
+      "sha256": "00e77d1f7a9f182c7bd9c027c5ede55a71c3f4985635b3e19e537efa7ce5a165",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "FAIL",
+      "image": "sha256:c47ddd5fe55cf486b25cfca92fd563f8ee245c186687012ab6d30ad311deec67",
+      "wall": 14.258576332998928
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-origin-executable-02/result.json",
+      "sha256": "8f25965df169caf5ed933bf2f4ac090811789c6ecaf1445770a228327b5e78fb",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "PASS",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall": 2.0233395000104792
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-pins-01/result.json",
+      "sha256": "1ad51a19dbacdcba25dd90dc2bcd91c1b1551e744880fbc9528bc302f6ee0eb5",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "PASS",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall": 6.192171791975852
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-release-loss-01/result.json",
+      "sha256": "58ecf23f7920a73d7ceaae3dd3c33d7dc131f1ae0b4306b51815cd452760d7ee",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "image_id": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "command_wall_seconds": 7.880225959001109
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-stopping-01/result.json",
+      "sha256": "535d7db04fa7d9108a761f1fc480a24076f4c91c7f6ccdbdbf18f18f7fdceb61",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "FAIL",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall": 8.735337374964729
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-stopping-clean-03/result.json",
+      "sha256": "01a02ab956d9a0d6138a01db9f98f3f8ae2146e7a8e712711c507cacf5026d74",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "product_source": "40f03ed7f68aacf3507c7b557959af521f437e36",
+      "status": "PASS",
+      "image": "sha256:1c3a6af10302cd426b54625bda47d00d824faed3788cdff4f90e0959626dc52d",
+      "wall": 10.612695250019897
+    },
+    {
+      "local_path": "core/target/issue273-v2-sdk-stopping-diagnostic-02/result.json",
+      "sha256": "2ab7fe64b0a121b4b6c4ac994504cc9d0eb1c863bbb5c2e418bcc16feda626fb",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "wall": 9.287819249962922
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_cleanup_failure-01/result.json",
+      "sha256": "1b1fabb26e594c6c45a8df30fcfdbdd46210a034b1c8d6cabfc1e484acbe1dec",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "active_cleanup_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9271910420502536
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_generic_profile_8192-01/result.json",
+      "sha256": "786fd9e0bacf1ddcb5fbf4b188ab2444920a302288d55c67ef08644cb4330c75",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "active_generic_profile_8192",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 23.067564708995633
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_hot_continuity-01/result.json",
+      "sha256": "5651783f7ae77662a5baf549eaa675da62309e11bd14e7970110cae1c827ef4d",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "active_hot_continuity",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0243977080099285
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_hot_publication-01/result.json",
+      "sha256": "9145513b62af09e3a6b57c3abf1c2e88e00bfad72477efb54ec46515f6805f33",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "status": "PASS",
+      "case": "active_hot_publication",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 3.746600915968884
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_payload_refund-01/result.json",
+      "sha256": "eb71473ae1ae14374ee54b2b2fa56539ac526997c1db245af30f79aaf2e935d8",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "active_payload_refund",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.8968076250166632
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-active_quota_refusal-01/result.json",
+      "sha256": "38c05d55a8996ba4d17b97d357b2841dc21cf6e575d1546b6d80bc8834de26d3",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "active_quota_refusal",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0657783329952508
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-completion_failure-01/result.json",
+      "sha256": "b41b728044dd5bacac2571f4918b824b5d314b0c69419643c8d9e7dffaeb3e34",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "completion_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.074883458961267
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-headroom-01/result.json",
+      "sha256": "bddd2e63d44e6dea776e9445a6667749ce829f261bc826f553b1a9be07225e25",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "status": "PASS",
+      "case": "headroom",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.394943208026234
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-lowering-01/result.json",
+      "sha256": "fb7dc01423e213fc51069acabd307085265b5bf847f9001a5112f1ee0aed4717",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "status": "FAIL",
+      "case": "lowering",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "TimeoutError('complete functional selection exceeded 60 seconds')",
+      "command_wall_seconds": 60.01702450000448
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-lowering-release-02/result.json",
+      "sha256": "00075488221623d980a12d28a3b142ad397f2b28e3fc16877c22ef08f4640c7f",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "status": "PASS",
+      "case": "lowering",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 31.852318749995902
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-metadata_denied-01/result.json",
+      "sha256": "86cfac0e9104b2d0e0f6dae557eed4fabc481490c3d1d262688af2b83aeb9f38",
+      "source": "8df36e336279b2485cda3518284364b9ed54b030",
+      "status": "PASS",
+      "case": "metadata_denied",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.8960061250254512
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-native_save-01/result.json",
+      "sha256": "05ec18ef57b60523ec423b6f0e1b0790a91bed51bcad98e76b38e3badca37be9",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "native_save",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.3622214579954743
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-origin_g2-01/result.json",
+      "sha256": "22a9525d917d48f3b0ab3434c5303928fe745b9056200749d2aa573a21922b5a",
+      "source": "30ebb4302acdf1b6608cf05b731114942339341d",
+      "status": "PASS",
+      "case": "origin_g2",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.251921416958794
+    },
+    {
+      "local_path": "core/target/issue273-v2-stage-unknown_save-01/result.json",
+      "sha256": "99d48bbaaae20cf9504452d7c7ab119be143d4c8e6082647747603bcdcef46b5",
+      "source": "6a937d6e2eae5118b5877743e7423683072bff0b",
+      "status": "PASS",
+      "case": "unknown_save",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.1879239170229994
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-cycles-01/result.json",
+      "sha256": "e79181c828e5ef69650d158452589a4dd8d83b63b5b7451d684ef12a7f534032",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "cycles",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.3150787499616854
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-frontier-01/result.json",
+      "sha256": "7f49f5db3368eed6cd8190620a4df37f8c95a7531d5c0a490caede7c0d492b1f",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "frontier",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 5.961549416999333
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-headroom-01/result.json",
+      "sha256": "c6f0f7fc0483ae0386f2f0cd4434f88b2ad12f1fb02e9b9c6f9087e39debac41",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "headroom",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0135480419849046
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-lost_result-01/result.json",
+      "sha256": "c76ad6b7bcd30844acdf9d582cb8991dcaec2b174e0b7e8ac001eb3b13cc4171",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "lost_result",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9589435000088997
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-mounted_successor-01/result.json",
+      "sha256": "5dad48bcaa92669340bf65246f06ec1a98a544d1e8e0855346fc10b47404cd91",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "mounted_successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0513842499931343
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-reconcile_failure-01/result.json",
+      "sha256": "44f11971b80fab8f2c3049c2168c296076a0c6726e7792653510d3d213217bf7",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "status": "FAIL",
+      "case": "reconcile_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "failure": "AssertionError()",
+      "command_wall_seconds": 2.6566817080019973
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-reconcile_failure-02/result.json",
+      "sha256": "7fa5652973b3863123124dcce7c14cc05013359aecfe4b7abf7d40063508329a",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "reconcile_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0531488329870626
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-repeated-01/result.json",
+      "sha256": "e6580b36f1507a776bc1140b588a21381146862040f1371c1491fe20443e62dc",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "repeated",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0988739579916
+    },
+    {
+      "local_path": "core/target/issue273-retry-commit-successor-01/result.json",
+      "sha256": "f0477305c4dd32a5f06c1226fbd474484b3183427fd4c16a7f2dc62593de3277",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0522295410046354
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-clean-01/result.json",
+      "sha256": "490691b1a42679b1ab9a288b644d6e87ab80064cc62d12c00b9bca78ae4168db",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "clean",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9939625409897417
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-clean_successor-01/result.json",
+      "sha256": "78715ec9afb3bc6fab6606f518f708297a2989f30d622c39e381b72ab5187128",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "clean_successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.005108957993798
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-denied-01/result.json",
+      "sha256": "80929c8df6dc0eeb286db176838f2c319e8d6ac8fef873196f81c5f02abdf283",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "denied",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9683367080288008
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-frontier-01/result.json",
+      "sha256": "e165cccae1a2c7f63f3e46f26b241575a00d095e35b405b16fecbbfb3aa8a6fb",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "frontier",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 4.932045417022891
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-lost_result-01/result.json",
+      "sha256": "64aa1a1bc60debd52a4e1d2d8954e8cc2e853935087f02918c41b13825f6ebfa",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "lost_result",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0009065830381587
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-reconcile_failure-01/result.json",
+      "sha256": "6e4f4fb4abbb768ad1bc593f8932afe9bfa72d51c80869aabec21fe3da2e45f4",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "reconcile_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.98269320797408
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-repeated-01/result.json",
+      "sha256": "bd2a488175fa53d16a44828c48fe52b9116fd1a30881f97294d31c8748d5f99d",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "repeated",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0947246249997988
+    },
+    {
+      "local_path": "core/target/issue273-retry-composite-successor-01/result.json",
+      "sha256": "93895d725f575cce83e0897969633beac5890585fd79432fd2e3cf7953d33ea9",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "successor",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.0947248329757713
+    },
+    {
+      "local_path": "core/target/issue273-retry-harness-pins-01/result.json",
+      "sha256": "1dfa612f742ab90aaa0a00b95cb29ea4470e1f5aa3a1a78b97c64a846ea34480",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10"
+    },
+    {
+      "local_path": "core/target/issue273-retry-host-final-checks-01/result.json",
+      "sha256": "cda0a10cf1bd5d9ae8cf3369c4f852078f8f92989fc376efd4eb7d2fb290c47b",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10"
+    },
+    {
+      "local_path": "core/target/issue273-retry-host-release-build-01/result.json",
+      "sha256": "97389060d65ddb0a858d1d6cc52060167344a3619f6c45cffcbb7576314d82a4",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "wall": 26.210413458000403
+    },
+    {
+      "local_path": "core/target/issue273-retry-host-tests-01/result.json",
+      "sha256": "42eecb14d72b857343dffba22a56f63d33250e5933cc52bc179942d97d9bd749",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "status": "PASS",
+      "wall": 78.55243687500479
+    },
+    {
+      "local_path": "core/target/issue273-retry-linux-backing-01/result.json",
+      "sha256": "70b22b0271ccea3d229be73bbc8fae40d265828a2f0c4f425815e6d53a6b2088",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4"
+    },
+    {
+      "local_path": "core/target/issue273-retry-linux-build-01/result.json",
+      "sha256": "c9acc4dfe340b3e0e1cd1f71d5593f9a014e58821738b04dccf09d5fdedc051a",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "wall": 112.8277336669853
+    },
+    {
+      "local_path": "core/target/issue273-retry-linux-daemon-image-01/result.json",
+      "sha256": "ebd101c6de49b3870b4b60aea2630b2668201e84a025c9e3038c1ff340ee2056",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "image": "sha256:3eef46e3a9fa228c2f755968ea4b7f858db18cb95c7be134d7be2deaea961f54"
+    },
+    {
+      "local_path": "core/target/issue273-retry-reconcile-test-build-02/result.json",
+      "sha256": "10c4edab33397779ce0d09df609ade3ff7d16380159c74223a108aa0540d30f0",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "wall": 11.388173958985135
+    },
+    {
+      "local_path": "core/target/issue273-retry-sdk-budget-01/result.json",
+      "sha256": "56191543b82a61dc16264eda7b30a40fd46e193580e0ea823df40f4fa3484287",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "image_id": "sha256:3eef46e3a9fa228c2f755968ea4b7f858db18cb95c7be134d7be2deaea961f54",
+      "wall_seconds": 33.28515083302045
+    },
+    {
+      "local_path": "core/target/issue273-retry-sdk-known-c5-01/result.json",
+      "sha256": "09136881566169de866f013fe9ccd8d47bb3a32ab358f2febbeec41d84ed4691",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "image_id": "sha256:3eef46e3a9fa228c2f755968ea4b7f858db18cb95c7be134d7be2deaea961f54",
+      "wall_seconds": 7.670945665973704
+    },
+    {
+      "local_path": "core/target/issue273-retry-sdk-live-four-01/result.json",
+      "sha256": "8ff9ac337fbcadc1570905ec2b05d0e7978bf35419c40b8b91fd9623d56cead5",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "product_source": "11a864fc133844cae7a4247b1f243d84d5763b10",
+      "status": "PASS",
+      "image": "sha256:3eef46e3a9fa228c2f755968ea4b7f858db18cb95c7be134d7be2deaea961f54",
+      "wall": 40.25586854101857
+    },
+    {
+      "local_path": "core/target/issue273-retry-sdk-release-loss-01/result.json",
+      "sha256": "bb2544cb5c2c510f6fb79f7d105e805d8f252228acaebb37114b6a47122f64c2",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "image_id": "sha256:3eef46e3a9fa228c2f755968ea4b7f858db18cb95c7be134d7be2deaea961f54",
+      "command_wall_seconds": 8.750042415980715
+    },
+    {
+      "local_path": "core/target/issue273-retry-source-tools-01/result.json",
+      "sha256": "6c4faa54103f0f4a22e1c304abba043c320a5939e1bc67b6dc6352e3bc6ff8aa",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10"
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_cleanup_failure-01/result.json",
+      "sha256": "b6617a3c1fc6e2a07c5fd83c73b5ca600efb81d440ee7b91563c978556a30177",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_cleanup_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.8590930830105208
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_generic_profile_8192-01/result.json",
+      "sha256": "c99e564510f4cf7c468f143dd47ce570fd195bf10d9bfa201df03bdedb3d1d31",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_generic_profile_8192",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 23.64918587502325
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_hot_continuity-01/result.json",
+      "sha256": "b32fb07966a982e3bad422b694f73e21f64fd6236fbff66ae1583e1ba2e8b00c",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_hot_continuity",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9902757920208387
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_hot_publication-01/result.json",
+      "sha256": "379b8e9116c097f21984cfc130c055e6dc679bc363f8003fcc58792ec1af9ff6",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_hot_publication",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 3.891434749995824
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_known_budget_g2-01/result.json",
+      "sha256": "ab03a82bba6d68954dc688d67bb2bc651c560933094102853ac8822be28dc4ab",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_known_budget_g2",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 44.68628191598691
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_known_c5_g2-01/result.json",
+      "sha256": "d02c8c6793cb897d1615ab40249ffcd871f1b9d556d2183082ca80bb6d161f0a",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_known_c5_g2",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9290498750051484
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_payload_refund-01/result.json",
+      "sha256": "99bb5e648b1acc895b59e41cfd67dfb7d6f8e559e5343987dabbca6a3072fcec",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_payload_refund",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9725351250381209
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-active_quota_refusal-01/result.json",
+      "sha256": "2b7480c595be4fce4f575b28c28789094e347cd3114ece7dfdf3d6aa69025b20",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "active_quota_refusal",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9164182500098832
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-completion_failure-01/result.json",
+      "sha256": "efa558cd3c5aa1b1d6e567d38e34a73e7a36f3f570ac8cc078c5ad71e83cecd2",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "completion_failure",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9142739579547197
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-frontier-01/result.json",
+      "sha256": "c78a91561fc9e8ba8876af21ebd9a714b11a974f466acfc7c2eb83c830e0ac67",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "frontier",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 3.97236408299068
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-headroom-01/result.json",
+      "sha256": "2a62d7c31a1d3d8843b2a1f28aad4143f5ab2d45ccaa1b15bea737a96da3d386",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "headroom",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.9677004999830388
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-lowering-01/result.json",
+      "sha256": "87d9cf36c81aaba337288099eb7498c40cc91d3f1d747797c9b2d2d153acf621",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "lowering",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 29.478574957989622
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-metadata_denied-01/result.json",
+      "sha256": "8c158605b8a9977dfe0872fc0013774dff2122a3851a3007b210f41b6109e479",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "metadata_denied",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 0.8987501669907942
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-native_save-01/result.json",
+      "sha256": "0fff6e9432c33508c925007a2c97f15ed14ac28943c59ef1ffbdcab5f2d2c621",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "native_save",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.3649344589794055
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-origin_g2-01/result.json",
+      "sha256": "e53411d5c2ff19a32f605660357b9670e10fb1355a655cfbb2c70d58383645f9",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "origin_g2",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.3166472080047242
+    },
+    {
+      "local_path": "core/target/issue273-retry-stage-unknown_save-01/result.json",
+      "sha256": "0a2a6566097d8b2abc1b4cb0be24117fb568f46f39807a38e7cf932c95ec239f",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa",
+      "status": "PASS",
+      "case": "unknown_save",
+      "image": "sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+      "command_wall_seconds": 1.2401681250194088
+    },
+    {
+      "local_path": "core/target/issue273-retry-stop-test-loc-01/result.json",
+      "sha256": "61a1f3bab1f8ea258fe186b2f06493ba6e02edf284293450a8028783464c519c",
+      "source": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue248-separated-4097-v1/receipt.json",
+      "sha256": "822d3a699bb111621a741123c26227f12fbbd19f0b189759b3b0a1696a51e1d7",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:a0c37a8ab6dbb47a9a4284d86bce14b503389b541088efa675542f2b0e2cc5d0",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-append-100-10m-v1/receipt.json",
+      "sha256": "c9e16fb5d54688d130f9a0722c3f39330b3d34396fceb287f40ec12abd54e90d",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:02672ed87001004db9c31de225375cef070976c3f634917afb392afccdd217e2",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-append-4097-10m-v1/receipt.json",
+      "sha256": "b22a3ed26aeaff8143095b36707d66af931bd97c3fb4e19f61f165046603c410",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:a0c37a8ab6dbb47a9a4284d86bce14b503389b541088efa675542f2b0e2cc5d0",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-append-512-10m-v1/receipt.json",
+      "sha256": "994567a4b7509d2283a3f8b75b520f945b9cfbb86b285311adeb0f0f2d773914",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:4df1014e0348d02ac728d66f0292a928ffc9fae4eca7d2cee4e1a7dd46523cb8",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-dispersed-100-10m-v1/receipt.json",
+      "sha256": "e3fc4116d8a91690eedaef58514b4ae0de4c5be51967af94df8414f33f3d709a",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:02672ed87001004db9c31de225375cef070976c3f634917afb392afccdd217e2",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-dispersed-4097-10m-v1/receipt.json",
+      "sha256": "d0cb6d0d4a486bff9ab055281338f32a3d20a5ad445d7ccf59156910085c99fa",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:a0c37a8ab6dbb47a9a4284d86bce14b503389b541088efa675542f2b0e2cc5d0",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-dispersed-512-10m-v1/receipt.json",
+      "sha256": "db8c9308b010c3fe63da5c8e13181cbfef516a552c4d512f14257da0f3a6f272",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:4df1014e0348d02ac728d66f0292a928ffc9fae4eca7d2cee4e1a7dd46523cb8",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-repeated-100-10m-v1/receipt.json",
+      "sha256": "48aa4603c46d9651df55a70a7be9cf6947995e0639a9567d0c8174d1f667b1b3",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:02672ed87001004db9c31de225375cef070976c3f634917afb392afccdd217e2",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-repeated-4097-10m-v1/receipt.json",
+      "sha256": "6deb20f8feac9552797324fce31f8178f8ac8ddab98aadaa892bd740ab8ceb68",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:a0c37a8ab6dbb47a9a4284d86bce14b503389b541088efa675542f2b0e2cc5d0",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-retry-matrix-02/candidate-issue273-repeated-512-10m-v1/receipt.json",
+      "sha256": "54cd75021ad915a692dfe94bee83a863446cddcb17dc1e3f64db16d041eda2a0",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:4df1014e0348d02ac728d66f0292a928ffc9fae4eca7d2cee4e1a7dd46523cb8",
+      "source_commit": "a8528b9757de993eb8ee73b6d183ea8ee5badefa"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue248-separated-4097-v1/receipt.json",
+      "sha256": "5386ecae4a3a13b9ca641a48dac1fefbc22e542e6ad2e922431a32321e00a6b2",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:b1a9a2f0006ff3484232394b363460004dbeb37a99e1d61b3a8e1ae11f820bbd",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-append-100-10m-v1/receipt.json",
+      "sha256": "10d79249437a0bcee9791936ba472f7594a3ec30ddf8cef27f044df203b085fe",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:2e476f30968f171a5c136c4de14d314039dc1fefad54dc126be29f812e8cb332",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-append-4097-10m-v1/receipt.json",
+      "sha256": "85bbf527b4012d81d6530fedf28c03331fef50bf456e03bf119f6471ef314a9c",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:b1a9a2f0006ff3484232394b363460004dbeb37a99e1d61b3a8e1ae11f820bbd",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-append-512-10m-v1/receipt.json",
+      "sha256": "7599d8e15a728c6f2f99b297f28922e98e17a08c2299aad534d9a14eebe77eea",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:90b8a4de3d42dfe44e9cc17290c65fed8ce420cabee4b59f0857206dc01775af",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-dispersed-100-10m-v1/receipt.json",
+      "sha256": "d1c4fe8615b574d2cbf54b58539c2c876a68a6b9cc27f1c20e6c242829cd85e0",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:2e476f30968f171a5c136c4de14d314039dc1fefad54dc126be29f812e8cb332",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-dispersed-4097-10m-v1/receipt.json",
+      "sha256": "7bd7171cc3f3d654eb04881f9eaf50b2e3a980c0f3e206a9e9c74c2b15447318",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:b1a9a2f0006ff3484232394b363460004dbeb37a99e1d61b3a8e1ae11f820bbd",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-dispersed-512-10m-v1/receipt.json",
+      "sha256": "a55c121efd266df440f8ddbe083c0f1f5b33b69ed25bf6dafc8934ef60d36e58",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:90b8a4de3d42dfe44e9cc17290c65fed8ce420cabee4b59f0857206dc01775af",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-repeated-100-10m-v1/receipt.json",
+      "sha256": "979645ed0af4dc4394fac4be82313b6ecd53f3d351c75d2380606875a1a64f3b",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:2e476f30968f171a5c136c4de14d314039dc1fefad54dc126be29f812e8cb332",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-repeated-4097-10m-v1/receipt.json",
+      "sha256": "12bac94343ded7c79338ae0292a02b44edecd472017ad03a76b4ae3156ce296c",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:b1a9a2f0006ff3484232394b363460004dbeb37a99e1d61b3a8e1ae11f820bbd",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-v2-matrix-01/candidate-issue273-repeated-512-10m-v1/receipt.json",
+      "sha256": "c54509aa10304691d5454aa8b788db8ecf00b5dd6281fbe674f2fde886a5ceee",
+      "row_status": "INELIGIBLE",
+      "functional_status": "PASS",
+      "verification_status": "PASS",
+      "cleanup_status": "PASS",
+      "image_id": "sha256:90b8a4de3d42dfe44e9cc17290c65fed8ce420cabee4b59f0857206dc01775af",
+      "source_commit": "8df36e336279b2485cda3518284364b9ed54b030"
+    },
+    {
+      "local_path": "core/target/issue273-completion-retry-product-loc-01/result.json",
+      "sha256": "8fbbef26a6e2983b254b6e5f4f65e903aab50b575f1d4bc24e47985640ac6cf3",
+      "source": "11a864fc133844cae7a4247b1f243d84d5763b10"
+    },
+    {
+      "local_path": "core/target/issue273-next-stage-lowering-01/result.json",
+      "sha256": "600737f01fca1a82ae92f49a009ee88b7bc8c7bc6a2deb69c797720f22587e67",
+      "historical": true
+    },
+    {
+      "local_path": "core/target/issue273-next-stage-headroom-01/result.json",
+      "sha256": "847c7e40964ddd6e41c2256c906b1117fc4579e2212542d0596047387aaca97c",
+      "historical": true
+    },
+    {
+      "local_path": "core/target/issue273-generic-experiment-unmerged.patch",
+      "sha256": "f7f4c5089ebf1a2d061899da6b9e16e58e0a75781468c4ad005d62fe7b0c1ec7",
+      "historical": true
+    }
+  ]
+}
