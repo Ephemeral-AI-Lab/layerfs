@@ -1,0 +1,150 @@
+{
+  "files": {
+    "build.json": {
+      "allocated_bytes": 4096,
+      "bytes": 597,
+      "published_copy": "build.json",
+      "sha256": "65099b09b07ebc8a178cf4ed5ae35a46aa1932624153d41cf4ed40abd6d4372e"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 161,
+      "published_copy": "history-retention-stride-1-total-storage-v1/receipt.json",
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-1-total-storage-v2/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 161,
+      "published_copy": "history-retention-stride-1-total-storage-v2/receipt.json",
+      "sha256": "d439cadad6f88f06016360ce2b473228200be650830e1b069b66918476e8ed62"
+    },
+    "history-retention-stride-1-total-storage-v3/declaration.json": {
+      "allocated_bytes": 8192,
+      "bytes": 7920,
+      "published_copy": "history-retention-stride-1-total-storage-v3/declaration.json",
+      "sha256": "559baa05f9f762ef7c06b685d89ab307984aa69f387288d39597c8d4efcc4a19"
+    },
+    "history-retention-stride-1-total-storage-v3/native/history.sqlite": {
+      "allocated_bytes": 196608,
+      "bytes": 180224,
+      "published_copy": "history-retention-stride-1-total-storage-v3/native/history.sqlite.gz",
+      "sha256": "8dcf12b01322afcaf9e1a758b05abbe68e1d3216c0a37eda9033090f9af93833"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-perf.json": {
+      "allocated_bytes": 4096,
+      "bytes": 392,
+      "published_copy": "history-retention-stride-1-total-storage-v3/native/phases-perf.json",
+      "sha256": "5abfd4932138ff81812907d7654c95a4e7e9a2b2e79a7f30375f332f38233107"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-verify.json": {
+      "allocated_bytes": 4096,
+      "bytes": 334,
+      "published_copy": "history-retention-stride-1-total-storage-v3/native/phases-verify.json",
+      "sha256": "707ca1ee432790e5fd3909fbe80ecc4d492155953925cfb1d116a444771691f9"
+    },
+    "history-retention-stride-1-total-storage-v3/native/sample.sqlite": {
+      "allocated_bytes": 83894272,
+      "bytes": 75896832,
+      "published_copy": null,
+      "sha256": "a9184fad1f482dbfa5016fe773364ef7a49df2c13cbb281e9f105d26b55a462c"
+    },
+    "history-retention-stride-1-total-storage-v3/native/timing.json": {
+      "allocated_bytes": 102400,
+      "bytes": 100507,
+      "published_copy": "history-retention-stride-1-total-storage-v3/native/timing.json",
+      "sha256": "e955bcc3c2475bb2efd6f5d0643758a87088b84fb1f7c241cbe2340a22606e37"
+    },
+    "history-retention-stride-1-total-storage-v3/native/trace.jsonl": {
+      "allocated_bytes": 3149824,
+      "bytes": 2927528,
+      "published_copy": "history-retention-stride-1-total-storage-v3/native/trace.jsonl.gz",
+      "sha256": "29ab0ead7e60dd7a24b4db6e88419f0662325865b86e22020bcd75f320188ab5"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "history-retention-stride-1-total-storage-v3/perf.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 49,
+      "published_copy": "history-retention-stride-1-total-storage-v3/perf.stdout.gz",
+      "sha256": "f4566893776147be37b642df96c1a8f39ddd68cf872448019498e5402ec2e03d"
+    },
+    "history-retention-stride-1-total-storage-v3/receipt.json": {
+      "allocated_bytes": 626688,
+      "bytes": 623338,
+      "published_copy": "history-retention-stride-1-total-storage-v3/receipt.json",
+      "sha256": "9fcc5e5ceec5c720b7dc174b0f635d05f2b802489033198469b9b5976a2ee991"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "history-retention-stride-1-total-storage-v3/verify.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 49,
+      "published_copy": "history-retention-stride-1-total-storage-v3/verify.stdout.gz",
+      "sha256": "c4f827ecc44e35304cd30eb6d9bd3dbd269be95fe66b2a7ba83835752df6a337"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 162,
+      "published_copy": "history-retention-stride-10-total-storage-v1/receipt.json",
+      "sha256": "7b99471d6be87fc8f9ea1b82f2ef86a27b427df9e3876c254a61a80ff95cf9c9"
+    },
+    "history-retention-stride-10-total-storage-v2/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 162,
+      "published_copy": "history-retention-stride-10-total-storage-v2/receipt.json",
+      "sha256": "243b67b789d827afcaccd623f4b721b11caf90d4eff69d760fa866f39c757282"
+    },
+    "history-retention-stride-10-total-storage-v3/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 162,
+      "published_copy": "history-retention-stride-10-total-storage-v3/receipt.json",
+      "sha256": "91e479a18226a667b39e8fc4d9666f6f0904a6820c7e23a51caeeeed0423b73f"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 161,
+      "published_copy": "history-retention-stride-3-total-storage-v1/receipt.json",
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "history-retention-stride-3-total-storage-v2/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 161,
+      "published_copy": "history-retention-stride-3-total-storage-v2/receipt.json",
+      "sha256": "50275a531de8aafc8bf0ae3e703efa94ebdae130b3e7692295c9e9737c0e4145"
+    },
+    "history-retention-stride-3-total-storage-v3/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 161,
+      "published_copy": "history-retention-stride-3-total-storage-v3/receipt.json",
+      "sha256": "5a0a021bc14672a52d952374c88affc3f77dfc978fe4b6c767fb18fd0eff0f0b"
+    },
+    "manifest.json": {
+      "allocated_bytes": 4096,
+      "bytes": 4047,
+      "published_copy": "manifest.json",
+      "sha256": "049abbb9cea6619de9e0e10623c1c77b164a09a01b57934962c8d7e8b39c9878"
+    },
+    "report.txt": {
+      "allocated_bytes": 4096,
+      "bytes": 731,
+      "published_copy": "report.txt",
+      "sha256": "bb07a5cdf2b9e429a0ef32d1cc98683a963c5f25f473957376df0d6ffafa9d7c"
+    },
+    "run.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1025,
+      "published_copy": "run.json",
+      "sha256": "4dff76b2f2f361fecc8eb1b7f665d7e33f38aaf36adc4ab4c4cca525f1e71ffe"
+    }
+  },
+  "raw_root": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride1-v3-r029",
+  "schema": "issue286-round-evidence-index-v1"
+}

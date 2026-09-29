@@ -1,0 +1,14 @@
+{
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/0c1bdfd60413ac59463337bdf6233fd86117061e0a637f1e006806115ccd7996/fs-bench-storage-content",
+    "sha256": "0c1bdfd60413ac59463337bdf6233fd86117061e0a637f1e006806115ccd7996"
+  },
+  "build_profile": "release",
+  "command": null,
+  "compilation_seal": "0764e2a1a2e31e217af1f1dfdb51394805c315ca0a1285ea3cdfacfdb1d19cc3",
+  "dependency_reuse": "same worktree's locked Cargo target",
+  "exit_code": 0,
+  "mode": "exact-binary-reuse",
+  "status": "PASS",
+  "wall_ns": 0
+}

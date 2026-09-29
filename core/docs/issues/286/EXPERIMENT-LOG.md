@@ -281,3 +281,11 @@ R027 issue publication: [#286 comment5899036121](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v3-r028 | compound v3 stride10/17 then stride3/53, one changed-source sample each | `6fd7fce46` | **PASS/PASS**: strict allocated46473216<49344512 and58146816<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS, driver44.438/72.975s, verifier2.838/8.063s within original limits; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r028.md) | Publish after commit; link in next real round |
+
+## Explicit round 20260930-history-stride1-v3-r029
+
+R028 issue publication: [#286 comment5899224558](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5899224558), selected report commit `2d4f537a5` (production delta+0). Stride1 reused the exact r028 product/harness compilation seal and binary, with its own fresh output and no resampling of a selected cell.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v3-r029 | compound v3 stride1/157, one explicit sample | `2d4f537a5`, product source `6fd7fce46` | **FAIL storage only**: strict allocated84090880>=83947520 B (+143360), 4096 B worse than level9 r021; all904143 paths/76726 selected content states/157 independent roots/O3/C5/cleanup PASS, driver163.758s<170s and verifier20.912s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v3-r029.md) | Publish after commit; link in next real round |
