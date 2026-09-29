@@ -1,0 +1,156 @@
+{
+  "files": {
+    "build.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1192,
+      "published_copy": "build.json",
+      "sha256": "472d2642be3f752a05ea94c8400cd0374197c2361c717cb85cf1e005b5ade054"
+    },
+    "build.log": {
+      "allocated_bytes": 4096,
+      "bytes": 425,
+      "published_copy": "build.log.gz",
+      "sha256": "659e224a2a2f19ef8f15b7a010c23892af73f03079f1de4d843dbece2f746632"
+    },
+    "manifest.json": {
+      "allocated_bytes": 8192,
+      "bytes": 4235,
+      "published_copy": "manifest.json",
+      "sha256": "e30f101de77cbf606837a29788dd316bad8491f805e38b3e663e8a09e7074299"
+    },
+    "report.txt": {
+      "allocated_bytes": 4096,
+      "bytes": 670,
+      "published_copy": "report.txt",
+      "sha256": "0135a8775647511420dfc108b5c6fee39c621de873d8bf4b21daf11172c7d9c2"
+    },
+    "run.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1010,
+      "published_copy": "run.json",
+      "sha256": "5d756461abc096ee49e6d1b30897555ad858e17e32621f62f35c7c0dedc2e4ab"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/driver.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/driver.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/driver.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 319,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/driver.stdout.gz",
+      "sha256": "206254e90d8c2c2908ef67582c6c6cdaddf3cfc7d191f2cc2affc99b305e6a38"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/history.sqlite": {
+      "allocated_bytes": 32768,
+      "bytes": 29696,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/history.sqlite.gz",
+      "sha256": "f1d0a4a4d04e5699cee4d625f8f92027d006e48346d1f3b8b005abefcfdca0cb"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/perf.jsonl": {
+      "allocated_bytes": 4096,
+      "bytes": 332,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/perf.jsonl.gz",
+      "sha256": "915f00085bdced36f4bc18e819ca23738dae64969146676e6939241f2212dd24"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json": {
+      "allocated_bytes": 8192,
+      "bytes": 7109,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/receipt.json",
+      "sha256": "aed77e50b2ac882290549bdb295636bdd855146a189c28c9d849de2fd4538d91"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/store.sqlite": {
+      "allocated_bytes": 7340032,
+      "bytes": 5171200,
+      "published_copy": null,
+      "sha256": "18ea7e3fce343fec4f9efc851ca683adaa909add30ff84497d7d9c1bab0322f2"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verification.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1709,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/verification.json",
+      "sha256": "385b39f48d0c1d84d0a98be5ace77e8299eee3136627eec82eaa910a4200adbc"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stderr": {
+      "allocated_bytes": 4096,
+      "bytes": 120,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stderr.gz",
+      "sha256": "d76aa0600bacac5be5dd103f3f51e98c13cad82e15cd068cb60eca2835ad6fa6"
+    },
+    "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 387,
+      "published_copy": "sdk-host/init_namespace/namespace-100-compact-v3/verifier.stdout.gz",
+      "sha256": "51dc0dd0a56b5dfb52800ee85105218a00ff5c7b7febcb0a646c7f98921a5032"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/driver.stderr": {
+      "allocated_bytes": 0,
+      "bytes": 0,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/driver.stderr.gz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/driver.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 320,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/driver.stdout.gz",
+      "sha256": "31d7a51844162ce456e9d66a8bff208148a733c184fd4eec66b477c283a35fd7"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/history.sqlite": {
+      "allocated_bytes": 32768,
+      "bytes": 29696,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/history.sqlite.gz",
+      "sha256": "3c2c5718eb692ce8accaac64f5519f859abd839b804a19c256734069dc1828b6"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/perf.jsonl": {
+      "allocated_bytes": 4096,
+      "bytes": 333,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/perf.jsonl.gz",
+      "sha256": "3697e024d9eb8a574edb3df1e507a112a4790504432de186c71e54246f72b8a4"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json": {
+      "allocated_bytes": 8192,
+      "bytes": 7131,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/receipt.json",
+      "sha256": "14fc2d5ac9f158ac64fc5a8662dd42e29897b33e3519970a74d18b075a5bf5d2"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/store.sqlite": {
+      "allocated_bytes": 23068672,
+      "bytes": 20475904,
+      "published_copy": null,
+      "sha256": "fcb575e415681f63894375617f832e7322a564e621423cfc39eb31e389b7dca5"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/verification.json": {
+      "allocated_bytes": 4096,
+      "bytes": 1718,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/verification.json",
+      "sha256": "61c56904c8e99dc5d39da3335a1b17c9edbcfb71d32de68eb99eb2a07178c7e9"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/verifier.stderr": {
+      "allocated_bytes": 4096,
+      "bytes": 123,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/verifier.stderr.gz",
+      "sha256": "a5d84a2491c400d84e9113a6a31366efcf23b1cb110c2056b3ee5f7d56b79add"
+    },
+    "sdk-host/init_namespace/namespace-1000-compact-v3/verifier.stdout": {
+      "allocated_bytes": 4096,
+      "bytes": 391,
+      "published_copy": "sdk-host/init_namespace/namespace-1000-compact-v3/verifier.stdout.gz",
+      "sha256": "407574f19d0442bbb51677d0c03c983125a748e2e5430324a200d053281e6f1e"
+    },
+    "sdk-host/init_namespace/namespace-10000/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 352,
+      "published_copy": "sdk-host/init_namespace/namespace-10000/receipt.json",
+      "sha256": "d503f885f4b8b0f89f2855ce3c872eb9f50f1470631e18b13cd7fd2621ed6af8"
+    },
+    "sdk-host/init_namespace/namespace-100000/receipt.json": {
+      "allocated_bytes": 4096,
+      "bytes": 353,
+      "published_copy": "sdk-host/init_namespace/namespace-100000/receipt.json",
+      "sha256": "bb92522ca52293511e1d11657de669a049e25a1525d0d595acef0f4d59bc5cb9"
+    }
+  },
+  "raw_root": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-init-regression-v4-r040",
+  "schema": "issue286-round-evidence-index-v1"
+}

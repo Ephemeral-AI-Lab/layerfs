@@ -369,3 +369,11 @@ R038 issue publication: [#286 comment5900776546](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v4-r039 | compound v4 stride1/157, one explicit sample | `0455a7e3c`, product `60c7af879` | **PASS**: C2+C5 allocated86179840<92342273 B (+2.659% over original strict target); all904143 path-states/76726 selected content path-states/157 independent roots/O3/C5/cleanup PASS; driver144.769s<170s, verifier21.370s<30s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v4-r039.md) | Publish after commit; current-source Family1 regression next |
+
+## Earlier-family regression round 20260930-init-regression-v4-r040
+
+R039 issue publication: [#286 comment5900830594](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900830594), explicit stride1 PASS report commit `5e775aa09` (production delta+0). With all three v4 history tiers at the same product/harness/binary seals, the required current-product-source Family1 default Init check became due.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-init-regression-v4-r040 | release SDK Init 100 then1,000 files, one sample each | `5e775aa09`, product `60c7af879` | **Functional PASS/PASS**: complete commands1.716/0.140s<15s, separate verifiers0.607/0.055s<9.5s, complete namespace/sampled bytes and cleanup PASS; raw SDK0.043/0.128s; numeric latency INELIGIBLE. Explicit10,000/100,000 NOT_RUN. Together with r038/r039 v4 history, Families1–2 scoped checkpoints pass. | [Round report](experiments/20260930-init-regression-v4-r040.md) | Publish after commit; Family3 matrix next |
