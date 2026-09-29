@@ -1,5 +1,10 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#286 typed storage I/O mapping (source in this commit):** A failed C2
+> physical reservation returns `StorageError::Io`; the shared service mapper
+> sends it as the existing wire `Code::Io`. The failure stays typed and known,
+> with no retry, fallback, new wire tag or inferred publication result.
+
 > **#284 Phase A internal SaveFile compatibility (source in this commit, selectively
 > adapted from `11a864fc133844cae7a4247b1f243d84d5763b10`):** Opcode 20 retains
 > its v1 sequence and forward Base semantics. Authenticated read-only opcode 28

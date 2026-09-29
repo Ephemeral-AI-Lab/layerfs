@@ -38,6 +38,7 @@ pub fn storage(e: S) -> Failure {
             f
         }
         S::Engine(_) => Code::Provider.into(),
+        S::Io(_) => Code::Io.into(),
         S::Collision(_) | S::VisibilityCeiling { .. } | S::Unpublished(_) | S::Integrity(_) => {
             Code::Integrity.into()
         }
