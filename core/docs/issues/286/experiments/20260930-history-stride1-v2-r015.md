@@ -1,0 +1,21 @@
+# #286 round 20260930-history-stride1-v2-r015
+
+> **Status: FAIL.** Complete semantic proof and C5 custody pass; the original strict physical storage gate and historical O3 pins still fail. The one-INSERT treatment produced a byte-identical C2 Store and exactly the same at-run allocated blocks as r014.
+
+One new sealed-source candidate used commit `484b99c669778d2d20bf1f2179e561e82a528b6f`, tree `e757043d6b65cde90add6ae23192ba6b7e79852a`, compilation seal `35a15e72895562f4034f6679060178de81a4ab3f945e404030279966f6342845`, harness seal `747e2dd9feda5037ad15adc1f1dccc4bb094354877f560cdb48797fe2533e660`, and locked release binary SHA256 `b6ef5d16d09d809923aa510bc433bd9277f30adfbd58236d5afda75b090dc9da`. The worktree was clean. `LAYERFS_CONSTRUCTION_WORKERS=1 python3 core/benchmark/fs-bench-pro/runner.py run --case history-retention-stride-1-total-storage-v2 --out benchmark-results/fs-bench-pro/issue286-history-stride1-v2-r015` was its one fresh-path sample, with InProcess setup and an incremental local build in8.177s. The original receipt lists background Docker processes, exact corpus/seal identities and the 157-row untimed SHA/count acquisition reuse; actual selected oracle files were rehashed. Cache residency is uncontrolled, so numeric time is **INELIGIBLE**. No unchanged arm was retried.
+
+| Gate | At-run observation / unchanged limit | Result |
+| --- | --- | --- |
+| Complete driver | **166,563,666,375 ns /170,000,000,000 ns** | PASS absolute budget; numeric time INELIGIBLE |
+| Separate verifier | **19,548,240,958 ns /30,000,000,000 ns** | PASS wall budget |
+| Full semantic oracle | **904,143/904,143** listed path/kind/size states, **76,726** selected public content-digest path-states | PASS |
+| Independent roots/C5 | **157/157** sealed roots, public reopen all157 Layers/156 Commits, required row counts and no live stages | PASS |
+| Exclusive at-run C2+C5 allocation | **84,418,560 B /<83,947,520 B** | **FAIL**, excess471,040 B |
+| Immutable original canonical O3 | **871,337,620 B/104,618 objects** vs **871,588,115 B/104,705** | **FAIL**, −250,495 B/−87 objects |
+| Cleanup/integrity | closed exclusive owners, schema/quick/foreign-key/sidecar checks | PASS |
+
+C2/C5 allocated **84,135,936/282,624 B**; apparent total **76,574,720 B**. C2 holds1,671 packs/11,690 groups,66,732,147 B bodies,878,376 B framing and zero unused pack capacity. Its original SHA256 `fe120641f72c8edf43a8d798dbe9c8a0184556cd6322a17a027d2e635640bccf` is **identical** to r014's independently measured C2 file. This changed insert path left every logical and physical output byte unchanged and did not remove the APFS `st_blocks` overage. Its write-call count is therefore not the physical gate's controlling mechanism on this workload. The labelled offline copied-Store VACUUM/page-size diagnostic remains diagnostic only; no copied file or post-run compaction can pass this row.
+
+The O3 disagreement matches the independently corrected older-Core reference and all complete v2 candidates; the old FUSE importer and the component fixed-corpus producer have different metadata/serial inputs. This round preserves both frozen pins and their failure. Next is a source-aware applicability ruling for that migration comparison plus count-driven analysis of nonzero persisted data/page layout before any further product treatment. Earlier r008 stride10 PASS, r009 stride3 O3 FAIL and all r010–r014 stride1 records retain their original status. Families3–7 remain NOT_RUN; PR #285 stays draft/unmerged and #286 open.
+
+[Original receipt, separate verifier, native trace/phases, C5 file and SHA-indexed raw evidence](20260930-history-stride1-v2-r015/evidence-index.json) are published; the large C2 original stays at the indexed local path. Source commit `484b99c66` records production LOC reference65,417→65,417 (+0), Core70,067→70,096 (+29), combined135,484→135,513 (+29). This report-only commit records reference65,417→65,417 (+0), Core70,096→70,096 (+0), combined135,513→135,513 (+0). Both use `tools/production_loc.py --json --root <snapshot>` on exact first-parent/staged/committed Git archives, including runtime SQL and excluding tests/harness/docs; counter SHA256 `c0fe7f36a0d4144bbd2b61c272c7579cc0d56ffe23f9588287ea30e793624adb`.
