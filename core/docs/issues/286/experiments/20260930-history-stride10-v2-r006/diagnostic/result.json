@@ -1,0 +1,17 @@
+{
+  "exit_code": null,
+  "timed_out": true,
+  "wall_ns": 10015309167,
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/c7126bbcab645f27fa25b0b40ad2b2b28fc9fd1edee9cb209bce12408ed2ab66/fs-bench-storage-content",
+    "--case",
+    "history-stride10",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-diagnostic-r006/native",
+    "--phase",
+    "verify"
+  ],
+  "kind": "diagnostic copy of r006 after collector KeyError; original receipt unchanged"
+}

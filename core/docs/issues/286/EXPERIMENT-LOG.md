@@ -125,3 +125,11 @@ R004 issue publication: [#286 comment5894696260](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v2-r005 | history v2 independent roots and corrected producer; no candidate sample | sealed old Core `6b22835dd` plus diagnostic resume `641f253da` | stride10/3 reference vectors complete; stride1 prefix timed out170.013s and was resumed in65.575s; continuation whole-chain gate FAIL3/157 by design; original stride3/1 O3 pins unchanged; compound candidate gates NOT_RUN | [Round report](experiments/20260930-history-v2-r005.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride10-v2-r006
+
+R005 issue publication: [#286 comment5894988524](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5894988524), method/reference commit `6c494130c` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride10-v2-r006 | compound history stride10/17 states, one v2 candidate invocation | `6c494130c` | INCOMPLETE collector `KeyError('canonical_bytes')` after complete performance; read-only actual C2+C5 allocated53182464 B **FAIL** strict <49344512; roots/O3 native PASS; copied separate verifier timed out at10s, complete semantic proof INCOMPLETE; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride10-v2-r006.md) | Publish after commit; link in next round |

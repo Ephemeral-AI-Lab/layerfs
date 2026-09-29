@@ -1,0 +1,20 @@
+{
+  "case": "history-retention-stride-10-total-storage-v2",
+  "error": "KeyError('canonical_bytes')",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "7ae50029d70b51a4eaabd9331b4fc1aea4f2c9820143f9f9c91c90fa1fe1b0a3",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "fbbb9b01833b142be2b46de87be892a75396a2bac7f40b15445c5c6a45c317f0",
+    "product_seal": "53172da181cecd9088cba9f143c51d7f02e36436548d312079773ccac0210107",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "6c494130caf96db1db604dd623ad0cee4fbd962a",
+    "source_dirty": false,
+    "source_tree": "c283d08e403191b467e8ad7de78c2fab08daf0d1"
+  },
+  "sample_count": 1,
+  "status": "INCOMPLETE"
+}
