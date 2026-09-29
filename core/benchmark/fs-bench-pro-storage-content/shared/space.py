@@ -265,7 +265,7 @@ PACK_LANES: dict[int, str] = {
     7: "singleton",
     9: "ordinary", 10: "native", 11: "whole-file", 12: "pooled-metadata",
     13: "singleton", 14: "whole-file", 15: "native", 16: "singleton", 17: "whole-file",
-    18: "whole-file", 19: "ordinary", 20: "native",
+    18: "whole-file", 19: "ordinary", 20: "native", 21: "pooled-metadata",
 }
 
 #: The starts-only directory lane. Versions 17/18 have checked internal record
@@ -338,6 +338,8 @@ def _pack_bounds(blob: bytes, where: str):
     width = 4 if lane == "whole-file" else 16
     if reserved or not 24 + width * slots < used <= len(blob):
         raise Incomplete(f"{where}: invalid declared pack length/control area")
+    if version == 21 and used > 64 * 1024:
+        raise Incomplete(f"{where}: tight pooled pack exceeds its bound")
     return lane, count, 24, slots, used
 
 
@@ -926,7 +928,7 @@ def self_check() -> list[str]:
         failures.append("the executed pack SQL uses IFNULL: that is the same fabricated zero")
     if "SUM" not in PACK_SUM_SQL.upper():
         failures.append("the pack SQL does not sum anything, so it cannot measure pack bytes")
-    if set(PACK_LANES) != {1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}:
+    if set(PACK_LANES) != {1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21}:
         failures.append("the framing version map omits a supported pack version")
     if PACK_LANES.get(4) != SINGLE_RECORD_LANE:
         failures.append(

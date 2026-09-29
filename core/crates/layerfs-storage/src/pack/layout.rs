@@ -33,8 +33,8 @@ use layerfs_content::ObjectRole;
 
 use crate::error::{StorageError, StorageResult};
 use crate::policy::{
-    GROUP_COUNT_LIMIT, GROUP_LIMIT, METADATA_GROUP_LIMIT, PACK_LIMIT, RECORD_COUNT_LIMIT,
-    SINGLETON_PACK_LIMIT,
+    GROUP_COUNT_LIMIT, GROUP_LIMIT, METADATA_GROUP_LIMIT, PACK_LIMIT, POOLED_PACK_LIMIT,
+    RECORD_COUNT_LIMIT, SINGLETON_PACK_LIMIT,
 };
 
 /// Pack magic shared by every implemented framing.
@@ -69,6 +69,7 @@ pub const VERSION_NATIVE: u32 = 10;
 /// Still read, and no longer written, for the same reason as [`VERSION_NATIVE`].
 pub const VERSION_WHOLE_FILE: u32 = 11;
 /// Pooled physical-metadata framing version.
+/// Still read with its original 256-KiB pack bound.
 pub const VERSION_POOLED_METADATA: u32 = 12;
 /// Singleton framing version: one oversized record in one pack.
 ///
@@ -102,6 +103,8 @@ pub const VERSION_WHOLE_FILE_TIGHT: u32 = 18;
 pub const VERSION_ORDINARY_TIGHT: u32 = 19;
 /// Native groups with sixteen reserved directory slots instead of 256.
 pub const VERSION_NATIVE_TIGHT: u32 = 20;
+/// Pooled metadata with a 64-KiB append bound; v12 keeps its old read bound.
+pub const VERSION_POOLED_TIGHT: u32 = 21;
 /// Maximum groups the tight directories can describe.
 pub const TIGHT_GROUPS: usize = 16;
 /// Singleton framing that may carry a payload stored verbatim.
@@ -142,7 +145,7 @@ impl PackLane {
             Self::Ordinary => VERSION_ORDINARY_TIGHT,
             Self::Native => VERSION_NATIVE_TIGHT,
             Self::WholeFile => VERSION_WHOLE_FILE_TIGHT,
-            Self::PooledMetadata => VERSION_POOLED_METADATA,
+            Self::PooledMetadata => VERSION_POOLED_TIGHT,
             Self::Singleton => VERSION_SINGLETON_STORED,
         }
     }
@@ -181,7 +184,8 @@ impl PackLane {
     pub const fn pack_limit(self) -> usize {
         match self {
             Self::Singleton => SINGLETON_PACK_LIMIT,
-            Self::Ordinary | Self::Native | Self::WholeFile | Self::PooledMetadata => PACK_LIMIT,
+            Self::PooledMetadata => POOLED_PACK_LIMIT,
+            Self::Ordinary | Self::Native | Self::WholeFile => PACK_LIMIT,
         }
     }
 
@@ -395,7 +399,7 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         | VERSION_WHOLE_FILE_STORED
         | VERSION_WHOLE_FILE_GROUPED
         | VERSION_WHOLE_FILE_TIGHT => PackLane::WholeFile,
-        VERSION_POOLED_METADATA => PackLane::PooledMetadata,
+        VERSION_POOLED_METADATA | VERSION_POOLED_TIGHT => PackLane::PooledMetadata,
         VERSION_SINGLETON | VERSION_SINGLETON_STORED => PackLane::Singleton,
         _ => {
             return Err(StorageError::UnsupportedPolicy {
@@ -432,7 +436,12 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if used < body_offset + 1 {
         return Err(StorageError::Integrity("pack directory width"));
     }
-    if bytes.len() > lane.pack_limit() {
+    let pack_limit = if version == VERSION_POOLED_METADATA {
+        PACK_LIMIT
+    } else {
+        lane.pack_limit()
+    };
+    if bytes.len() > pack_limit {
         return Err(StorageError::Integrity("pack length"));
     }
     if lane == PackLane::Singleton && group_count != 1 {

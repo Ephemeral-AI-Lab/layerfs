@@ -10,8 +10,9 @@ mod support;
 use layerfs_storage::pack::layout::{
     body_area_offset, group_view, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
     VERSION_NATIVE_STORED, VERSION_NATIVE_TIGHT, VERSION_ORDINARY, VERSION_ORDINARY_TIGHT,
-    VERSION_POOLED_METADATA, VERSION_SINGLETON, VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE,
-    VERSION_WHOLE_FILE_GROUPED, VERSION_WHOLE_FILE_STORED, VERSION_WHOLE_FILE_TIGHT,
+    VERSION_POOLED_METADATA, VERSION_POOLED_TIGHT, VERSION_SINGLETON, VERSION_SINGLETON_STORED,
+    VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED, VERSION_WHOLE_FILE_STORED,
+    VERSION_WHOLE_FILE_TIGHT,
 };
 use layerfs_storage::StorageError;
 
@@ -115,6 +116,32 @@ fn ordinary_and_native_versions_keep_their_own_body_offsets() {
 }
 
 #[test]
+fn pooled_pack_versions_keep_their_own_size_bounds() {
+    let old = pack_of(
+        PackLane::PooledMetadata,
+        VERSION_POOLED_METADATA,
+        1,
+        128 * 1024,
+    );
+    assert_eq!(parse_header(&old).unwrap().lane, PackLane::PooledMetadata);
+    let current = pack_of(PackLane::PooledMetadata, VERSION_POOLED_TIGHT, 1, 4);
+    assert_eq!(
+        parse_header(&current).unwrap().lane,
+        PackLane::PooledMetadata
+    );
+    let oversized = pack_of(
+        PackLane::PooledMetadata,
+        VERSION_POOLED_TIGHT,
+        1,
+        PackLane::PooledMetadata.pack_limit(),
+    );
+    assert!(matches!(
+        parse_header(&oversized),
+        Err(StorageError::Integrity("pack length"))
+    ));
+}
+
+#[test]
 fn every_implemented_framing_is_recognized_by_its_own_version() {
     // The three payload lanes each have two implemented versions: the one they
     // write, whose record grammar carries a stored tag, and the one they no longer
@@ -132,6 +159,7 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
         (VERSION_WHOLE_FILE_GROUPED, PackLane::WholeFile),
         (VERSION_WHOLE_FILE_TIGHT, PackLane::WholeFile),
         (VERSION_POOLED_METADATA, PackLane::PooledMetadata),
+        (VERSION_POOLED_TIGHT, PackLane::PooledMetadata),
         (VERSION_SINGLETON, PackLane::Singleton),
         (VERSION_SINGLETON_STORED, PackLane::Singleton),
     ] {
@@ -231,10 +259,11 @@ fn declared_pack_and_group_bounds_are_enforced_on_the_bytes() {
 fn the_lane_table_names_one_limit_per_lane() {
     assert_eq!(PackLane::Singleton.pack_limit(), 16 * 1024 * 1024 + 4_096);
     assert_eq!(PackLane::Ordinary.pack_limit(), 256 * 1024);
+    assert_eq!(PackLane::PooledMetadata.pack_limit(), 64 * 1024);
     assert_eq!(PackLane::Singleton.group_count_limit(), 1);
     assert_eq!(PackLane::PooledMetadata.body_limit(), 16 * 1024);
     for lane in PackLane::ALL {
-        if lane != PackLane::Singleton {
+        if !matches!(lane, PackLane::Singleton | PackLane::PooledMetadata) {
             assert_eq!(lane.pack_limit(), 256 * 1024, "{lane:?}");
         }
         assert!(lane.body_limit() <= lane.pack_limit(), "{lane:?}");
@@ -355,7 +384,7 @@ fn the_pooled_lane_assignment_and_the_v5_scope_are_the_shipped_ones() {
         "a pooled value group is stored in the pooled lane"
     );
     assert_eq!(
-        VERSION_POOLED_METADATA,
+        VERSION_POOLED_TIGHT,
         PackLane::PooledMetadata.version(),
         "the pooled lane's framing version"
     );
