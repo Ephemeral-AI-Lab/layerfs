@@ -18,6 +18,18 @@ Part of the [replacement-core architecture](README.md) set. Source pin
 
 ## 6. Storage (C2 — `layerfs-storage`)
 
+### #286 grouped whole-file dependency work (2026-09-30)
+
+This update describes the change against parent `8baf47e45` in the same
+implementation commit. Version17 whole-file groups contain independently framed
+records. `encoding::delta::read::record_width` charges the selected raw record,
+using the same validated `record_number` boundaries as canonical reconstruction;
+unrelated sibling records no longer consume that object's dependency budget.
+Compressed ordinary groups still charge their full decoded body. The256KiB
+encoded-work ceiling, canonical/depth bounds, pack/group validation, chronology,
+visibility and final identity authentication stay enforced. No format, policy,
+cache size, worker count or write behavior changes.
+
 ### #190 group compression profile (2026-09-20)
 
 This addition describes the working tree based on

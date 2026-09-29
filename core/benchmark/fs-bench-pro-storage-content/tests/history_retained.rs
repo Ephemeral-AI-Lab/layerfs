@@ -8,6 +8,30 @@ use layerfs_content::{filesystem::scope_for_seed, ObjectId};
 use std::path::PathBuf;
 
 #[test]
+fn compound_canonical_pins_never_accept_missing_or_drifted_counters() {
+    for (row, bytes, objects) in [
+        (Row::Stride10, 380_921_328, 52_032),
+        (Row::Stride3, 589_423_458, 73_476),
+        (Row::Stride1, 871_588_115, 104_705),
+    ] {
+        assert!(history_retained::counter_gates(row, &[])
+            .iter()
+            .all(|gate| gate.status == Status::Incomplete));
+        let mut values = vec![
+            ("history.canonical_bytes".into(), bytes),
+            ("history.canonical_objects".into(), objects),
+        ];
+        assert!(history_retained::counter_gates(row, &values)
+            .iter()
+            .all(|gate| gate.status == Status::Pass));
+        values[0].1 += 1;
+        assert!(history_retained::counter_gates(row, &values)
+            .iter()
+            .any(|gate| gate.status == Status::Fail));
+    }
+}
+
+#[test]
 fn retained_states_reopen_and_allocation_never_passes_missing_or_shared_owners() {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/retained-checks");
     std::fs::create_dir_all(&scratch).unwrap();

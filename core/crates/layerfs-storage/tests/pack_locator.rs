@@ -200,6 +200,50 @@ fn whole_file_records_share_a_group_and_keep_their_own_locators() {
 }
 
 #[test]
+fn grouped_whole_file_dependency_work_charges_only_the_selected_record() {
+    let dir = TempDir::new("compact-record-work");
+    let path = dir.store_path("compact-record-work");
+    let store = create_store(&path);
+    let payloads: Vec<_> = (0..8).map(|index| distinct_noise(index, 1_500)).collect();
+    let objects: Vec<_> = payloads.iter().map(|raw| whole_file(raw)).collect();
+    let ids: Vec<_> = objects.iter().map(|object| object.id()).collect();
+    let saved = save_objects(&store, objects);
+    assert_eq!(saved.profile.stored_records, 8);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for id in &ids {
+        let location = connection.query_row(
+            "SELECT canonical_length, pack_id, group_number, record_number FROM objects WHERE object_id = ?1",
+            [id.to_bytes().to_vec()], |row| Ok(layerfs_storage::sqlite::lookup::ObjectLocation {
+                object_id: *id, role: layerfs_content::ObjectRole::WholeFile,
+                canonical_length: row.get::<_, i64>(0)? as usize, pack_id: row.get(1)?,
+                group_number: row.get::<_, i64>(2)? as usize,
+                record_number: row.get::<_, i64>(3)? as usize,
+            }),
+        ).unwrap();
+        let pack: Vec<u8> = connection
+            .query_row(
+                "SELECT data FROM object_packs WHERE pack_id = ?1",
+                [location.pack_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let pack = support::truncate_pack(pack);
+        assert_eq!(
+            layerfs_storage::encoding::delta::read::record_width(&pack, &location).unwrap(),
+            1_501,
+            "one stored tag plus this record's 1500 bytes; sibling frames are separate work"
+        );
+    }
+    drop(connection);
+    drop(store);
+    let reopened = open_store(&path);
+    let (values, _) = read_objects(&reopened, &ids).unwrap();
+    for (value, payload) in values.iter().zip(&payloads) {
+        assert_eq!(*value, assembled_small_object(payload));
+    }
+}
+
+#[test]
 fn each_placement_flush_closes_an_exact_length_pack() {
     let dir = TempDir::new("append");
     let path = dir.store_path("append");

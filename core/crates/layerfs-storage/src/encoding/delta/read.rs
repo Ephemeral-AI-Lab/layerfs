@@ -519,7 +519,7 @@ pub fn locator_key(location: &ObjectLocation) -> (i64, usize, usize) {
     )
 }
 
-/// Stored width of the body a locator names, charged to the chain budget.
+/// Stored width of the record a locator names, charged to the chain budget.
 ///
 /// A compressed group is charged its full decoded body: the decoded bytes are
 /// what reconstruction actually materializes, and the compressed extent is
@@ -527,9 +527,6 @@ pub fn locator_key(location: &ObjectLocation) -> (i64, usize, usize) {
 pub fn record_width(pack: &[u8], location: &ObjectLocation) -> StorageResult<u64> {
     let header = crate::pack::layout::parse_header(pack)?;
     let view = crate::pack::layout::group_view(pack, header, location.group_number)?;
-    if matches!(header.lane, PackLane::WholeFile) {
-        return Ok(view.end.saturating_sub(view.start) as u64);
-    }
     match view.codec {
         crate::pack::layout::GroupCodec::Zstandard => Ok(view.decoded_length as u64),
         crate::pack::layout::GroupCodec::Raw => {

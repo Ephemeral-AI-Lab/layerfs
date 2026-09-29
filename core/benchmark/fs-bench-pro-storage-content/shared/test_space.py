@@ -41,6 +41,49 @@ class SelfCheckTest(unittest.TestCase):
         self.assertEqual(space.self_check(), [])
 
 
+class CurrentPackTest(unittest.TestCase):
+    def test_current_group_directory_refuses_gaps_flags_and_unknown_codecs(self):
+        start = 24 + 16 * 256
+        body = struct.pack("<II", 1, 2) + b"xy"
+        used = start + len(body)
+        pack = bytearray(b"LFPACK\0\0" + struct.pack("<IIII", 9, 1, used, 0))
+        pack += struct.pack("<IIIB3x", start, len(body), len(body), 0)
+        pack += bytes(16 * 255) + body
+        self.assertEqual(space._pack_group_ranges(bytes(pack), "ordinary"),
+                         ("ordinary", [(start, len(body))]))
+        for offset in (24, 36, 37):
+            bad = bytearray(pack)
+            bad[offset] ^= 0x40
+            with self.assertRaises(space.Incomplete):
+                space._pack_group_ranges(bytes(bad), "bad directory")
+
+    def test_reserved_grouped_records_and_spare_capacity(self):
+        records = [b"\x02abc", b"\x02defgh"]
+        body = struct.pack("<III", 2, len(records[0]), sum(map(len, records))) + b"".join(records)
+        start = 24 + 4 * 256
+        used = start + len(body)
+        pack = bytearray(b"LFPACK\0\0" + struct.pack("<IIII", 17, 1, used, 0))
+        pack += struct.pack("<I", start) + bytes(4 * 255) + body + bytes(64)
+        with tempfile.TemporaryDirectory() as directory:
+            path = make_store(directory, "current.sqlite", [
+                "CREATE TABLE object_packs (pack_id INTEGER, data BLOB)",
+                "CREATE TABLE objects (object_id BLOB, object_role INTEGER, pack_id INTEGER, group_number INTEGER, record_number INTEGER)",
+            ])
+            with sqlite3.connect(path) as db:
+                db.execute("INSERT INTO object_packs VALUES (?, ?)", (1, bytes(pack)))
+                db.executemany("INSERT INTO objects VALUES (?, 1, 1, 0, ?)", [(b"a", 0), (b"b", 1)])
+            reading = space.pack_directory(path)
+            self.assertEqual(reading.body_bytes, len(body))
+            self.assertEqual(reading.header_bytes, 24)
+            self.assertEqual(reading.directory_bytes, 4 * 256)
+            self.assertEqual(reading.unused_capacity_bytes, 64)
+            self.assertEqual(space.whole_file_records(path), {b"a": 4, b"b": 6})
+            damaged = bytearray(pack)
+            struct.pack_into("<I", damaged, 16, len(pack) + 1)
+            with self.assertRaises(space.Incomplete):
+                space._pack_group_ranges(bytes(damaged), "bad declared length")
+
+
 class FabricatedZeroTest(unittest.TestCase):
     def test_an_absent_object_packs_table_is_unknown_not_zero(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

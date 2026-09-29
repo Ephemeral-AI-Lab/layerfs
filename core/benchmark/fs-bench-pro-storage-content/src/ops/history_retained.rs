@@ -15,6 +15,79 @@ pub fn enabled() -> bool {
     std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() == Ok("1")
 }
 
+/// Publishes the complete canonical identity counters from the actual closed C2.
+pub fn record_counters(
+    path: &Path,
+    trace: &mut crate::support::trace::TraceWriter,
+) -> Result<(), super::OpError> {
+    use crate::support::trace::Kind;
+    let read = || -> Result<(i64, i64), rusqlite::Error> {
+        let db = rusqlite::Connection::open_with_flags(
+            path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        db.query_row("SELECT COUNT(*), SUM(n) FROM (SELECT object_id, MAX(canonical_length) n FROM objects GROUP BY object_id)",
+            [], |row| Ok((row.get(0)?, row.get(1)?)))
+    };
+    let (objects, bytes) = read().map_err(|error| super::OpError::Io(error.to_string()))?;
+    trace.write_number(
+        Kind::Counter,
+        "history.canonical_bytes",
+        i128::from(bytes),
+        "bytes",
+        "distinct at-run C2 identities",
+    )?;
+    trace.write_number(
+        Kind::Counter,
+        "history.canonical_objects",
+        i128::from(objects),
+        "objects",
+        "distinct at-run C2 identities",
+    )?;
+    Ok(())
+}
+
+/// Compound O3 replaces the unrelated 217-row golden-table lookup.
+/// Missing counters are incomplete; old stride3/stride1 constants stay strict.
+pub fn counter_gates(
+    row: crate::workload::history::Row,
+    values: &[(String, i128)],
+) -> Vec<crate::gates::Gate> {
+    use crate::{
+        gates::{self, Gate, GateClass},
+        workload::history::Row,
+    };
+    let (bytes, objects) = match row {
+        Row::Stride10 => (380_921_328, 52_032),
+        Row::Stride3 => (589_423_458, 73_476),
+        Row::Stride1 => (871_588_115, 104_705),
+    };
+    let expected = [
+        ("history.canonical_bytes", bytes),
+        ("history.canonical_objects", objects),
+    ];
+    expected
+        .iter()
+        .map(
+            |(key, expected)| match values.iter().find(|(name, _)| name == key) {
+                None => Gate::incomplete(
+                    GateClass::Correctness,
+                    "g1.o3-pinned-counters",
+                    key,
+                    "complete canonical identity pins",
+                ),
+                Some((_, value)) => gates::require(
+                    GateClass::Correctness,
+                    "g1.o3-pinned-counters",
+                    value == expected,
+                    &format!("{key}={value}"),
+                    &format!("{expected}"),
+                ),
+            },
+        )
+        .collect()
+}
+
 fn config() -> HistoryCatalogConfig {
     HistoryCatalogConfig {
         binding_key: b"layerfs/issue286/retained-history/v1".to_vec(),

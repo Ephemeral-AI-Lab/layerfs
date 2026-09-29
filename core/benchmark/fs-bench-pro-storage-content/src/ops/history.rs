@@ -1020,6 +1020,7 @@ struct VerifyTally {
     file_bytes: u64,
     /// Sampled symlink targets read back.
     symlinks_read: u64,
+    sampled: u64,
 }
 
 impl VerifyTally {
@@ -1032,6 +1033,7 @@ impl VerifyTally {
         self.files_read = self.files_read.saturating_add(other.files_read);
         self.file_bytes = self.file_bytes.saturating_add(other.file_bytes);
         self.symlinks_read = self.symlinks_read.saturating_add(other.symlinks_read);
+        self.sampled = self.sampled.saturating_add(other.sampled);
     }
 
     /// Whether this state's read-back is a pass.
@@ -1156,6 +1158,7 @@ impl<'a> Sampler<'a> {
                         return Err(OpError::Io("retained file size disagrees with corpus".into()));
                     }
                     if selected.contains(&child) {
+                        self.tally.sampled += 1;
                         let (digest, bytes) = self.digest_of(value.content_root,
                             &String::from_utf8_lossy(&child), kind)?;
                         if Some(digest) != expected.digest || bytes != expected.size {
@@ -1604,7 +1607,7 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             "verify.compared",
             total.compared as i128,
             "path-states",
-            "sampled paths this invocation resolved and compared",
+            "paths compared; complete namespace for the compound profile, legacy sampled paths otherwise",
         ),
         (
             "verify.mismatches",
@@ -1658,9 +1661,9 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     context.trace.write_number(
         Kind::Counter,
         "verify.sampled",
-        total.compared as i128,
+        if super::history_retained::enabled() { total.sampled } else { total.compared } as i128,
         "path-states",
-        "path-states this invocation actually read back",
+        "selected content path-states for compound history; legacy sampled path-states otherwise",
     )?;
 
     gates.push(gates::require(
@@ -1669,13 +1672,13 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         failures.is_empty(),
         &match failures.first() {
             None => format!(
-                "{} sampled paths across {} states read back: presence, kind, size and digest all match",
+                "{} compared paths across {} states read back; compound profile covers full paths/kinds/sizes plus declared sampled digests",
                 total.compared,
                 roots.len()
             ),
             Some(first) => format!("{} state(s) failed; first: {first}", failures.len()),
         },
-        "every sampled path of every state reads back and matches the corpus oracle",
+        "compound: every tree and selected content object matches; legacy: every selected path matches",
     ));
     gates.push(gates::require(
         GateClass::Custody,
@@ -1693,7 +1696,9 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         notes: vec![
             format!("verify_op: {}", row.id()),
             "verification_phase: separate unmeasured invocation".to_string(),
-            "verification_budget: charged to the 60 s verification budget".to_string(),
+            if super::history_retained::enabled() {
+                "verification_budget: independent compound per-tier10/20/30s; complete tree plus10% content/endpoints".to_string()
+            } else { "verification_budget: charged to the historical60s budget".to_string() },
             format!("store: {}", store_path.display()),
             format!("verify_sample_budget: {budget} paths per state"),
             "oracle: a declared sample of each state's paths, never a prefix".to_string(),
@@ -1794,6 +1799,9 @@ fn history_phase<T>(
 /// The measured chain.
 fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome, OpError> {
     context.create_output()?;
+    if super::history_retained::enabled() {
+        context.trace.write(Kind::Run, "history_compound_profile", "c1-c2-c5-retained-history-v1", "", "prospectively registered compound operation")?;
+    }
     let root = corpus_root(context)?;
     let mut corpus = Corpus::open(&root, row).map_err(corpus_error)?;
     let store_path = context.output.join("sample.sqlite");
@@ -2398,6 +2406,9 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     };
     drop(store);
     drop(retained);
+    if super::history_retained::enabled() {
+        super::history_retained::record_counters(&store_path, context.trace)?;
+    }
 
     // The product's own timing tree, byte-verbatim, written **once** for the whole
     // chain: one root and one named child per state. The published operation time

@@ -636,7 +636,10 @@ fn pinned_gates(
         .filter(|record| record.kind == "counter" && record.numeric)
         .filter_map(|record| record.value.parse::<i128>().ok().map(|value| (record.key.clone(), value)))
         .collect();
-    let mut gates = expected.counter_gates(case_id, &counters);
+    let mut gates = match HistoryRow::from_id(case_id) {
+        Some(row) if ops::history_retained::enabled() => ops::history_retained::counter_gates(row, &counters),
+        _ => expected.counter_gates(case_id, &counters),
+    };
     for record in records.iter().filter(|record| record.kind == "oracle") {
         let Some(name) = record.key.strip_prefix("identity.") else {
             continue;

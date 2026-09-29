@@ -263,6 +263,8 @@ PACK_LANES: dict[int, str] = {
     4: "whole-file",
     6: "pooled-metadata",
     7: "singleton",
+    9: "ordinary", 10: "native", 11: "whole-file", 12: "pooled-metadata",
+    13: "singleton", 14: "whole-file", 15: "native", 16: "singleton", 17: "whole-file",
 }
 
 #: The one lane whose directory is starts-only **and** which holds exactly one
@@ -296,6 +298,7 @@ class PackDirectory:
     directory_bytes: int
     body_bytes: int
     by_lane: dict[str, int]
+    unused_capacity_bytes: int = 0
 
     @property
     def framing_bytes(self) -> int:
@@ -313,7 +316,27 @@ class PackDirectory:
             "framing_bytes": self.framing_bytes,
             "body_bytes": self.body_bytes,
             "by_lane": dict(self.by_lane),
+            "unused_capacity_bytes": self.unused_capacity_bytes,
         }
+
+
+def _pack_bounds(blob: bytes, where: str):
+    if len(blob) < 16 or blob[:8] != PACK_MAGIC:
+        raise Incomplete(f"{where}: missing pack header/magic")
+    version, count = struct.unpack_from("<II", blob, 8)
+    lane = PACK_LANES.get(version)
+    if lane is None or not 1 <= count <= (1 if lane == "singleton" else 256):
+        raise Incomplete(f"{where}: unknown version or invalid group count")
+    if version < 9:
+        return lane, count, 16, count, len(blob)
+    if len(blob) < 24:
+        raise Incomplete(f"{where}: truncated current control area")
+    used, reserved = struct.unpack_from("<II", blob, 16)
+    slots = 1 if lane == "singleton" else 256
+    width = 4 if lane == "whole-file" else 16
+    if reserved or not 24 + width * slots < used <= len(blob):
+        raise Incomplete(f"{where}: invalid declared pack length/control area")
+    return lane, count, 24, slots, used
 
 
 def _pack_group_ranges(blob: bytes, where: str) -> tuple[str, list[tuple[int, int]]]:
@@ -323,19 +346,10 @@ def _pack_group_ranges(blob: bytes, where: str) -> tuple[str, list[tuple[int, in
     reading: a pack this module cannot parse is a pack whose bytes are unknown,
     and an unknown that reads as a number is the one value that must never appear.
     """
-    if len(blob) < PACK_HEADER_LEN:
-        raise Incomplete(f"{where}: pack is shorter than its own header")
-    if blob[:8] != PACK_MAGIC:
-        raise Incomplete(f"{where}: pack magic is not {PACK_MAGIC!r}")
-    version, count = struct.unpack_from("<II", blob, 8)
-    lane = PACK_LANES.get(version)
-    if lane is None:
-        raise Incomplete(
-            f"{where}: framing version {version} is not one of {sorted(PACK_LANES)}"
-        )
+    lane, count, header, slots, used = _pack_bounds(blob, where)
     ranges: list[tuple[int, int]] = []
     if lane == SINGLE_RECORD_LANE:
-        if PACK_HEADER_LEN + PACK_WHOLE_FILE_ENTRY_LEN * count > len(blob):
+        if header + PACK_WHOLE_FILE_ENTRY_LEN * count > used:
             raise Incomplete(f"{where}: whole-file directory claims {count} groups past the blob")
         # The compact directory stores each group's start as an **absolute** offset
         # into the pack, not a base-relative one: `assemble.rs` seeds the running
@@ -343,24 +357,34 @@ def _pack_group_ranges(blob: bytes, where: str) -> tuple[str, list[tuple[int, in
         # them as relative still yields correct lengths for every group but the
         # last, whose length comes out short by exactly the directory base - a
         # 183,584 B undercount on the `history-stride10` Store, and silent.
-        offsets = struct.unpack_from(f"<{count}I", blob, PACK_HEADER_LEN)
-        first = PACK_HEADER_LEN + PACK_WHOLE_FILE_ENTRY_LEN * count
+        offsets = struct.unpack_from(f"<{count}I", blob, header)
+        first = header + PACK_WHOLE_FILE_ENTRY_LEN * slots
         for index in range(count):
             start = offsets[index]
-            end = offsets[index + 1] if index + 1 < count else len(blob)
-            if start < first or start > end or end > len(blob):
+            end = offsets[index + 1] if index + 1 < count else used
+            if start < first or start >= end or end > used or (header == 24 and index == 0 and start != first):
                 raise Incomplete(f"{where}: whole-file group {index} runs outside the blob")
             ranges.append((start, end - start))
     else:
-        if PACK_HEADER_LEN + PACK_DIRECTORY_ENTRY_LEN * count > len(blob):
+        if header + PACK_DIRECTORY_ENTRY_LEN * count > used:
             raise Incomplete(f"{where}: directory claims {count} groups past the blob")
+        previous_end = header + PACK_DIRECTORY_ENTRY_LEN * slots
         for index in range(count):
-            start, encoded, _decoded, _codec = struct.unpack_from(
-                "<IIIB", blob, PACK_HEADER_LEN + PACK_DIRECTORY_ENTRY_LEN * index
+            start, encoded, decoded, codec = struct.unpack_from(
+                "<IIIB", blob, header + PACK_DIRECTORY_ENTRY_LEN * index
             )
-            if start + encoded > len(blob):
+            if start < header + PACK_DIRECTORY_ENTRY_LEN * slots or not encoded or start + encoded > used:
                 raise Incomplete(f"{where}: group {index} body runs past the blob")
+            if header == 24:
+                flags = blob[header + 16 * index + 13:header + 16 * index + 16]
+                if (start != previous_end or not decoded or flags != bytes(3)
+                    or codec not in (0, 1) or (codec == 0 and encoded != decoded)
+                    or (codec == 1 and (encoded > decoded or lane in ("native", "singleton")))):
+                    raise Incomplete(f"{where}: invalid current group directory/codec")
             ranges.append((start, encoded))
+            previous_end = start + encoded
+        if header == 24 and previous_end != used:
+            raise Incomplete(f"{where}: current group bodies do not cover declared length")
     return lane, ranges
 
 
@@ -389,13 +413,16 @@ def pack_directory(path: str | Path) -> PackDirectory:
     header_bytes = 0
     directory_bytes = 0
     by_lane: dict[str, int] = {}
+    spare_bytes = 0
     for pack_id, blob in _pack_blobs(path):
         lane, ranges = _pack_group_ranges(blob, f"pack {pack_id}")
         packs += 1
         groups += len(ranges)
         blob_bytes += len(blob)
-        header_bytes += PACK_HEADER_LEN
-        directory_bytes += len(blob) - PACK_HEADER_LEN - sum(length for _, length in ranges)
+        _, _, header, _, used = _pack_bounds(blob, f"pack {pack_id}")
+        header_bytes += header
+        directory_bytes += used - header - sum(length for _, length in ranges)
+        spare_bytes += len(blob) - used
         by_lane[lane] = by_lane.get(lane, 0) + sum(length for _, length in ranges)
     return PackDirectory(
         packs=packs,
@@ -403,8 +430,9 @@ def pack_directory(path: str | Path) -> PackDirectory:
         blob_bytes=blob_bytes,
         header_bytes=header_bytes,
         directory_bytes=directory_bytes,
-        body_bytes=blob_bytes - header_bytes - directory_bytes,
+        body_bytes=blob_bytes - header_bytes - directory_bytes - spare_bytes,
         by_lane=by_lane,
+        unused_capacity_bytes=spare_bytes,
     )
 
 
@@ -423,21 +451,41 @@ def whole_file_records(path: str | Path) -> dict[bytes, int]:
     """
     if not table_exists(path, "objects"):
         raise Incomplete("objects table is absent; per-object stored bytes are unknown")
-    sizes: dict[tuple[int, int], int] = {}
+    sizes: dict[tuple[int, int, int], int] = {}
+    grouped = False
     for pack_id, blob in _pack_blobs(path):
         lane, ranges = _pack_group_ranges(blob, f"pack {pack_id}")
         if lane != SINGLE_RECORD_LANE:
             continue
-        for index, (_start, length) in enumerate(ranges):
-            sizes[(pack_id, index)] = length
+        version = struct.unpack_from("<I", blob, 8)[0]
+        grouped |= version == 17
+        for index, (start, length) in enumerate(ranges):
+            if version != 17:
+                sizes[(pack_id, index, 0)] = length
+                continue
+            body = blob[start:start + length]
+            count = struct.unpack_from("<I", body)[0] if len(body) >= 4 else 0
+            if not 1 <= count <= 8191 or 4 + 4 * count >= len(body):
+                raise Incomplete("grouped whole-file record directory")
+            ends = struct.unpack_from(f"<{count}I", body, 4)
+            previous = 0
+            for record, end in enumerate(ends):
+                if not previous < end <= len(body) - 4 - 4 * count:
+                    raise Incomplete("grouped whole-file record boundary")
+                sizes[(pack_id, index, record)] = end - previous
+                previous = end
+            if previous != len(body) - 4 - 4 * count:
+                raise Incomplete("grouped whole-file trailing bytes")
     connection = sqlite3.connect(f"file:{Path(path)}?mode=ro", uri=True)
     try:
-        locators = list(connection.execute(WHOLE_FILE_LOCATORS_SQL))
+        query = ("SELECT object_id, pack_id, group_number, record_number FROM objects WHERE object_role = 1"
+                 if grouped else "SELECT object_id, pack_id, group_number, 0 FROM objects WHERE object_role = 1")
+        locators = list(connection.execute(query))
     finally:
         connection.close()
     out: dict[bytes, int] = {}
-    for object_id, pack_id, group_number in locators:
-        key = (int(pack_id), int(group_number))
+    for object_id, pack_id, group_number, record_number in locators:
+        key = (int(pack_id), int(group_number), int(record_number))
         if key not in sizes:
             raise Incomplete(
                 f"whole-file object has no group {key} in the pack directory; "

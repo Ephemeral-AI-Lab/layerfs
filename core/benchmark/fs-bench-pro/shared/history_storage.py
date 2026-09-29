@@ -87,8 +87,10 @@ def collect(directory, ceiling, states, attribution=CREATION, distinct_indexes=(
         result["total_retained_logical_database_bytes"] = sum(
             item["database_bytes"] for item in result["owners"].values() if "database_bytes" in item)
         result["status"] = evaluate(result["total_retained_allocated_bytes"], ceiling, attribution)
+        result["allocation_threshold_status"] = result["status"]
         if result["retained_counts_status"] == "FAIL":
             result["issues"].append("persisted C5 row counts disagree")
+            result["status"] = "INCOMPLETE"
     except (OSError, sqlite3.Error, ValueError, space.Incomplete) as error:
         result["issues"].append(str(error))
         if "nonexclusive" in str(error):
