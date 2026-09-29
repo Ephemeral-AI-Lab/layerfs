@@ -24,12 +24,13 @@ class HistoryStorage(unittest.TestCase):
             "g1.o6-total-retained-below-v016-v2"))
 
     def test_registry_and_independent_ledgers(self):
-        self.assertEqual([c.states for c in history.CASES.values()], [17, 53, 157] * 3)
+        self.assertEqual([c.states for c in history.CASES.values()], [17, 53, 157] * 4)
         self.assertEqual([c.ceiling_bytes for c in history.CASES.values()],
-                         [49_344_512, 64_024_576, 83_947_520] * 3)
+                         [49_344_512, 64_024_576, 83_947_520] * 3
+                         + [54_278_964, 70_427_034, 92_342_273])
         self.assertEqual([c.verification_budget_ns for c in history.CASES.values()],
-                         [10_000_000_000, 20_000_000_000, 30_000_000_000] * 3)
-        self.assertEqual(history.SELECTED, tuple(history.CASES)[6:8])
+                         [10_000_000_000, 20_000_000_000, 30_000_000_000] * 4)
+        self.assertEqual(history.SELECTED, tuple(history.CASES)[9:11])
         import hashlib
         import json
         for case in history.CASES.values():
@@ -39,7 +40,7 @@ class HistoryStorage(unittest.TestCase):
                              pins["cases"][case.backend_id]["roots_sha256"])
             self.assertEqual(len(file.read_text().splitlines()) - 1, case.states)
             expected = pins["cases"][case.backend_id]
-            required = (history.V3_CANONICAL[case.backend_id] if case.version == "v3" else
+            required = (history.V3_CANONICAL[case.backend_id] if case.version in ("v3", "v4") else
                         [expected["canonical_bytes"], expected["canonical_objects"]]
                         if case.version == "v1" else expected["canonical_required"])
             self.assertEqual(len(required), 2)
@@ -62,6 +63,17 @@ class HistoryStorage(unittest.TestCase):
             result = storage.collect(directory, 49_344_512, 17)
             self.assertEqual(result["status"], "INCOMPLETE")
             self.assertIsNone(result["total_retained_allocated_bytes"])
+
+    def test_new_tolerance_is_bounded_and_keeps_old_gate(self):
+        self.assertEqual(storage.gate("v3"), "g1.o6-total-retained-below-v016-v3")
+        self.assertEqual(storage.gate("v4"), "g1.o6-total-retained-within-110pct-v016-v4")
+        for original, ceiling in zip(
+            (49_344_512, 64_024_576, 83_947_520),
+            (54_278_964, 70_427_034, 92_342_273),
+        ):
+            self.assertEqual(ceiling, original * 11 // 10 + 1)
+            self.assertEqual(storage.evaluate(ceiling - 1, ceiling, storage.CREATION), "PASS")
+            self.assertEqual(storage.evaluate(ceiling, ceiling, storage.CREATION), "FAIL")
 
 
 if __name__ == "__main__":

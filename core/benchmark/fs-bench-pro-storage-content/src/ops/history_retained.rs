@@ -12,12 +12,13 @@ use layerfs_history::{
 
 /// Explicit opt-in; historical C2-only operations retain their original behavior.
 pub fn enabled() -> bool {
-    matches!(std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref(), Ok("1" | "2" | "3"))
+    matches!(std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref(), Ok("1" | "2" | "3" | "4"))
 }
 
 /// The explicitly selected compound workload identity; absent means legacy v1.
 pub fn version() -> &'static str {
     match std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() {
+        Ok("4") => "v4",
         Ok("3") => "v3",
         Ok("2") => "v2",
         _ => "v1",
@@ -70,9 +71,9 @@ pub fn counter_gates(
     let (bytes, objects) = match row {
         Row::Stride10 if version() != "v1" => (380_559_460, 51_689),
         Row::Stride10 => (380_921_328, 52_032),
-        Row::Stride3 if version() == "v3" => (589_480_854, 73_447),
+        Row::Stride3 if matches!(version(), "v3" | "v4") => (589_480_854, 73_447),
         Row::Stride3 => (589_423_458, 73_476),
-        Row::Stride1 if version() == "v3" => (871_337_620, 104_618),
+        Row::Stride1 if matches!(version(), "v3" | "v4") => (871_337_620, 104_618),
         Row::Stride1 => (871_588_115, 104_705),
     };
     let expected = [
@@ -102,9 +103,11 @@ pub fn counter_gates(
 }
 
 fn config() -> HistoryCatalogConfig {
+    // v4 changes the storage gate, not the retained-history workload identity.
+    let identity_version = if version() == "v4" { "v3" } else { version() };
     HistoryCatalogConfig {
-        binding_key: format!("layerfs/issue286/retained-history/{}", version()).into_bytes(),
-        incarnation: match version() { "v3" => 3, "v2" => 2, _ => 1 },
+        binding_key: format!("layerfs/issue286/retained-history/{identity_version}").into_bytes(),
+        incarnation: match identity_version { "v3" => 3, "v2" => 2, _ => 1 },
         cursor_key: [0x28; 32],
     }
 }
@@ -303,12 +306,16 @@ pub fn storage_gate(directory: &Path, row: crate::workload::history::Row) -> cra
     use crate::gates::{self, Gate, GateClass};
     use crate::workload::history::Row;
     use std::os::unix::fs::MetadataExt;
-    let ceiling = match row {
-        Row::Stride10 => 49_344_512,
-        Row::Stride3 => 64_024_576,
-        Row::Stride1 => 83_947_520,
+    let ceiling = match (version(), row) {
+        ("v4", Row::Stride10) => 54_278_964,
+        ("v4", Row::Stride3) => 70_427_034,
+        ("v4", Row::Stride1) => 92_342_273,
+        (_, Row::Stride10) => 49_344_512,
+        (_, Row::Stride3) => 64_024_576,
+        (_, Row::Stride1) => 83_947_520,
     };
     let id = match version() {
+        "v4" => "g1.o6-total-retained-within-110pct-v016-v4",
         "v3" => "g1.o6-total-retained-below-v016-v3",
         "v2" => "g1.o6-total-retained-below-v016-v2",
         _ => "g1.o6-total-retained-below-v016-v1",

@@ -14,6 +14,14 @@ C2_TABLES = {"store_policy", "saves", "object_packs", "metadata_value_groups", "
 C5_TABLES = {"history_meta", "layer_stacks", "layers", "commits", "branches", "workspace_stages", "scope_allocator"}
 
 
+def gate(version):
+    if version == "v1":
+        return GATE
+    if version == "v4":
+        return "g1.o6-total-retained-within-110pct-v016-v4"
+    return f"g1.o6-total-retained-below-v016-{version}"
+
+
 def evaluate(total, ceiling, attribution):
     if type(total) is not int or total < 0:
         return "INCOMPLETE"
@@ -57,7 +65,7 @@ def owner(path, expected_tables, version, application):
 
 def collect(directory, ceiling, states, attribution=CREATION, distinct_indexes=(), version="v1"):
     directory = Path(directory)
-    result = {"gate": GATE if version == "v1" else f"g1.o6-total-retained-below-v016-{version}",
+    result = {"gate": gate(version),
               "ceiling_bytes": ceiling, "strict": True,
               "allocation_attribution": attribution, "owners": {}, "issues": [],
               "total_retained_allocated_bytes": None, "status": "INCOMPLETE"}

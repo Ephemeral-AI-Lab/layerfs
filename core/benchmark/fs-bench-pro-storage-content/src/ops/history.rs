@@ -2165,6 +2165,7 @@ fn perf(_case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcome
     context.create_output()?;
     if super::history_retained::enabled() {
         let profile = match super::history_retained::version() {
+            "v4" => "c1-c2-c5-retained-history-v4",
             "v3" => "c1-c2-c5-retained-history-v3",
             "v2" => "c1-c2-c5-retained-history-v2",
             _ => "c1-c2-c5-retained-history-v1",

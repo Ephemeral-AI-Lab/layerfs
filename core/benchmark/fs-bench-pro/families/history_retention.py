@@ -43,7 +43,7 @@ class Case:
 
     @property
     def pin_root(self):
-        reference = "v2" if self.version == "v3" else self.version
+        reference = "v2" if self.version in ("v3", "v4") else self.version
         return ROOT / f"core/docs/issues/286/oracles/history-reference-{reference}"
 
 
@@ -78,8 +78,14 @@ CASES = {case.id: case for case in (
          64_024_576, 170_000_000_000, 20_000_000_000),
     Case("history-retention-stride-1-total-storage-v3", "history-stride1", 157,
          83_947_520, 170_000_000_000, 30_000_000_000),
+    Case("history-retention-stride-10-total-storage-v4", "history-stride10", 17,
+         54_278_964, 60_000_000_000, 10_000_000_000),
+    Case("history-retention-stride-3-total-storage-v4", "history-stride3", 53,
+         70_427_034, 170_000_000_000, 20_000_000_000),
+    Case("history-retention-stride-1-total-storage-v4", "history-stride1", 157,
+         92_342_273, 170_000_000_000, 30_000_000_000),
 )}
-SELECTED = tuple(name for name in CASES if name.endswith("-v3"))[:2]
+SELECTED = tuple(name for name in CASES if name.endswith("-v4"))[:2]
 
 
 def identity(common):
@@ -159,7 +165,7 @@ def case_run(out, case, common, identities, binary):
     native = folder / "native"  # The existing driver creates this fresh directory.
     command = [binary["path"], "--case", case.backend_id, "--corpus", str(corpus.DEFAULT_ROOT),
                "--out", str(native)]
-    applicable = (V3_CANONICAL[case.backend_id] if case.version == "v3" else
+    applicable = (V3_CANONICAL[case.backend_id] if case.version in ("v3", "v4") else
                   (expected["canonical_bytes"], expected["canonical_objects"]) if case.version == "v1" else
                   expected["canonical_required"])
     record = {"schema": f"core-history-retention-receipt-{case.version}", "family": "history_retention",
@@ -169,13 +175,13 @@ def case_run(out, case, common, identities, binary):
               "identity": identities, "binary": binary, "corpus": corpus.identity(),
               "root_ledger": expected, "canonical_pin": {"applicable": applicable,
                   "historical_v016": expected.get("canonical_required"),
-                  "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md" if case.version == "v3" else None},
+                  "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md" if case.version in ("v3", "v4") else None},
               "env": method_env, "sample_count": 0,
               "construction_workers": 1, "setup": "InProcess", "clone_method": None,
               "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
               "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
               "reused_proof_identities": [], "numeric_time_eligibility": "INELIGIBLE",
-              "storage_gate": (storage.GATE if case.version == "v1" else f"g1.o6-total-retained-below-v016-{case.version}"),
+              "storage_gate": storage.gate(case.version),
               "admission_eligible": False,
               "competing_work": common.competing_work()}
     common.write_json(folder / "declaration.json", record)
