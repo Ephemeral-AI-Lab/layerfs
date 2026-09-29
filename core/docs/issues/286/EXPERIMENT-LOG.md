@@ -353,3 +353,11 @@ R036 issue publication: [#286 comment5900294298](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v4-r037 | compound v4 stride10/17 then stride3/53, one sample each | `60c7af879` | **PASS/PASS**: C2+C5 allocated52473856<54278964 (+6.342% over original) and65142784<70427034 B (+1.747%); complete trees/selected content/independent roots/O3/C5/cleanup PASS, driver34.328/58.740s and verifier3.042/8.576s within unchanged bounds; numeric time INELIGIBLE. Generic verifier dispatch lacked v4 and is corrected after this sample. | [Round report](experiments/20260930-history-v4-r037.md) | Publish after commit; corrected harness seal requires a new selection before explicit stride1 |
+
+## Selected round 20260930-history-v4-r038
+
+R037 issue publication: [#286 comment5900732612](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900732612), report/dispatcher commit `f9a8b1b62` (production delta+0). This new selected invocation uses that corrected harness identity and the same low-cost codec product/compilation seal.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v4-r038 | compound v4 stride10/17 then stride3/53, one sample each at corrected harness seal | `f9a8b1b62`, product `60c7af879` | **PASS/PASS**: C2+C5 allocated52473856<54278964 (+6.342%) and65142784<70427034 B (+1.747%); complete trees/selected content/independent roots/O3/C5/cleanup PASS; driver32.584/58.472s, verifier3.083/9.000s under original bounds; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v4-r038.md) | Publish after commit; next explicit stride1 at same product/harness/compilation seal |

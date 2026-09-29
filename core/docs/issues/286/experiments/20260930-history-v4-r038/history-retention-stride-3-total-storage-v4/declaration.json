@@ -1,0 +1,128 @@
+{
+  "admission_eligible": false,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/65db587b41f1c6604f59da69d09f935ed7bfb5d7c1012331f562d5f559930849/fs-bench-storage-content",
+    "sha256": "65db587b41f1c6604f59da69d09f935ed7bfb5d7c1012331f562d5f559930849"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "canonical_pin": {
+    "applicable": [
+      589480854,
+      73447
+    ],
+    "historical_v016": [
+      589423458,
+      73476
+    ],
+    "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md"
+  },
+  "case": "history-retention-stride-3-total-storage-v4",
+  "clone_method": null,
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "4",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride3",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "compilation_seal": "00914f9020517febcec8a794b89f16e03ab8d05e8de5f40c5d89767608c4f72a",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "d0efae395844d32d1b4e283599d2b92cbae2e5589134f788c4ccce871443a888",
+    "dirty_paths": [],
+    "harness_seal": "18fb89a51c9b60824b8726e5f11616ba3e66ec8b8ac0507a5bd58b1bce0dd9da",
+    "product_seal": "1cd4c27ed28a1caebbed73d8343ac72db87c577c22ef236775a071f74631eeb0",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "f9a8b1b6202e9f0a873980e0a56cd81116a321aa",
+    "source_dirty": false,
+    "source_tree": "e6974ffb8046e9998bc009f2f675c1d65fa96419"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "profile": "c1-c2-c5-retained-history-v4",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_observed_reference": [
+      589480854,
+      73447
+    ],
+    "canonical_required": [
+      589423458,
+      73476
+    ],
+    "reference": {
+      "command": {
+        "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride3",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride3-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+        "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+        "watchdog_s": 170
+      },
+      "kind": "one complete old-product reference command with corrected v2 producer",
+      "result": {
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 79090880625
+      },
+      "store_sha256": "f0ebce7934841629154be67320b8ada65dd0b185c433d81876949a1fee4585a3",
+      "trace_sha256": "8d77361e0a16e2f7d8b1a43d50245f65765077ebbfcad457aae6d575cc964fac"
+    },
+    "roots_sha256": "13d27a8839f0e3d7e844df97f69f65a8c44703f9abd98acbcebb1ed34656ee4b",
+    "states": 53
+  },
+  "sample_count": 0,
+  "schema": "core-history-retention-receipt-v4",
+  "setup": "InProcess",
+  "storage_gate": "g1.o6-total-retained-within-110pct-v016-v4",
+  "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
+  "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d"
+}
