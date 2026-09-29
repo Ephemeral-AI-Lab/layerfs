@@ -1,0 +1,189 @@
+{
+  "cases": {
+    "history-stride1": {
+      "canonical_observed_reference": "not an uninterrupted arm",
+      "canonical_required": [
+        871588115,
+        104705
+      ],
+      "reference": {
+        "kind": "154 closed committed reference saves plus three resumed diagnostic saves; resume chain gate FAIL 3/157 retained",
+        "prefix_command": {
+          "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+            "--case",
+            "history-stride1",
+            "--corpus",
+            "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+            "--out",
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case"
+          ],
+          "env": {
+            "LAYERFS_CONSTRUCTION_WORKERS": "1",
+            "LAYERFS_HISTORY_ADVISORY": "1",
+            "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+            "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+            "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+            "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+            "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+          },
+          "kind": "independent v2 root-pin generation; no candidate speed claim",
+          "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+          "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+          "watchdog_s": 170
+        },
+        "prefix_result": {
+          "exit_code": null,
+          "timed_out": true,
+          "wall_ns": 170013063583
+        },
+        "prefix_root_count": 154,
+        "prefix_store_sha256": "c699c74792a1e574b9aa22063bac58bb99c3eaf4f1cb37b9e76067a6fa8dadce",
+        "suffix_command": {
+          "binary_sha256": "0567b01c777c01231e6d728594190644ef799bcdf194460dddffcf58e56e9871",
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+            "--case",
+            "history-stride1",
+            "--corpus",
+            "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+            "--out",
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-resume154-r001/case"
+          ],
+          "env": {
+            "LAYERFS_CONSTRUCTION_WORKERS": "1",
+            "LAYERFS_HISTORY_ADVISORY": "1",
+            "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+            "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+            "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+            "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+            "LAYERFS_HISTORY_REFERENCE_RESUME": "154",
+            "LAYERFS_HISTORY_REFERENCE_ROOT": "fc532f9d7270c09b1167cfd3fd80f47844f8cb3d1db05dff47b35ea79f222777",
+            "LAYERFS_HISTORY_REFERENCE_STORE": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case/sample.sqlite",
+            "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+          },
+          "kind": "independent v2 root-pin generation; no candidate speed claim",
+          "source_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+          "source_tree": "b6bbb682f5f8973d4998f30b5786eac4148ccfef",
+          "watchdog_s": 170
+        },
+        "suffix_result": {
+          "exit_code": 0,
+          "timed_out": false,
+          "wall_ns": 65575202458
+        },
+        "suffix_root_count": 3,
+        "suffix_store_sha256": "8baddf9fd0ef7f6b3375082fc85ef4a6f3dadf8af39775fc49553fcdd18e68de",
+        "suffix_trace_sha256": "500131654899cca8d8209c3e02f278238059f2076566ccff38ce443985b30fed"
+      },
+      "roots_sha256": "bc1392af7ac11f2a50b444f927b32b27b3de2f33e1e2acfc3221e369c587adb9",
+      "states": 157
+    },
+    "history-stride10": {
+      "canonical_observed_reference": [
+        380559460,
+        51689
+      ],
+      "canonical_required": [
+        380559460,
+        51689
+      ],
+      "reference": {
+        "command": {
+          "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+            "--case",
+            "history-stride10",
+            "--corpus",
+            "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+            "--out",
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride10-r001/case"
+          ],
+          "env": {
+            "LAYERFS_CONSTRUCTION_WORKERS": "1",
+            "LAYERFS_HISTORY_ADVISORY": "1",
+            "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+            "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+            "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+            "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+            "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+          },
+          "kind": "independent v2 root-pin generation; no candidate speed claim",
+          "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+          "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+          "watchdog_s": 170
+        },
+        "kind": "one complete old-product reference command with corrected v2 producer",
+        "result": {
+          "exit_code": 0,
+          "timed_out": false,
+          "wall_ns": 44805797542
+        },
+        "store_sha256": "4a19177a03269a9f0c3d2aeb446eba6f12572a6ef81773ff5d75e78787711d2b",
+        "trace_sha256": "78639f97d2989f419a1ab7e9d7314a9019dedd99baf111fd1cd4a2b5cd15a3e9"
+      },
+      "roots_sha256": "a8f58fcea25256d92fd8f169bfa3a8f0938040c95ee8df587a22814554ea3a6b",
+      "states": 17
+    },
+    "history-stride3": {
+      "canonical_observed_reference": [
+        589480854,
+        73447
+      ],
+      "canonical_required": [
+        589423458,
+        73476
+      ],
+      "reference": {
+        "command": {
+          "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+          "command": [
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+            "--case",
+            "history-stride3",
+            "--corpus",
+            "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+            "--out",
+            "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride3-r001/case"
+          ],
+          "env": {
+            "LAYERFS_CONSTRUCTION_WORKERS": "1",
+            "LAYERFS_HISTORY_ADVISORY": "1",
+            "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+            "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+            "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+            "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+            "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+          },
+          "kind": "independent v2 root-pin generation; no candidate speed claim",
+          "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+          "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+          "watchdog_s": 170
+        },
+        "kind": "one complete old-product reference command with corrected v2 producer",
+        "result": {
+          "exit_code": 0,
+          "timed_out": false,
+          "wall_ns": 79090880625
+        },
+        "store_sha256": "f0ebce7934841629154be67320b8ada65dd0b185c433d81876949a1fee4585a3",
+        "trace_sha256": "8d77361e0a16e2f7d8b1a43d50245f65765077ebbfcad457aae6d575cc964fac"
+      },
+      "roots_sha256": "13d27a8839f0e3d7e844df97f69f65a8c44703f9abd98acbcebb1ed34656ee4b",
+      "states": 53
+    }
+  },
+  "corpus_manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+  "method": "directory-unbind-and-serial-burn-v2",
+  "notes": [
+    "v1 ledgers and failed receipts remain unchanged",
+    "reference acquisition is not candidate performance or compound qualification",
+    "stride1 prefix command timed out at fixed 170 s; suffix resume diagnostic has a 3/157 chain FAIL and is used only for independently produced roots"
+  ],
+  "reference_producer_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+  "reference_product_base": "2f07f1f37af3e06a92a00880c68882b3c91923ef",
+  "reference_resume_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+  "schema": "issue286-independent-history-roots-v2"
+}

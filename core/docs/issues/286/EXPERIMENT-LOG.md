@@ -117,3 +117,11 @@ R003 issue publication: [#286 comment5894176598](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride10-r004 | compound history stride10/17 states, one changed-source candidate | `d4245911f` | FAIL: strict storage53190656 >=49344512 B; extra directory state2 breaks full tree; roots/canonical/C5/cleanup PASS, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride10-r004.md) | Published after commit; link appended in next actual round |
+
+## Engineering/reference round 20260930-history-v2-r005
+
+R004 issue publication: [#286 comment5894696260](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5894696260), report commit `597ed6ac2` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v2-r005 | history v2 independent roots and corrected producer; no candidate sample | sealed old Core `6b22835dd` plus diagnostic resume `641f253da` | stride10/3 reference vectors complete; stride1 prefix timed out170.013s and was resumed in65.575s; continuation whole-chain gate FAIL3/157 by design; original stride3/1 O3 pins unchanged; compound candidate gates NOT_RUN | [Round report](experiments/20260930-history-v2-r005.md) | Publish after commit; link in next round |

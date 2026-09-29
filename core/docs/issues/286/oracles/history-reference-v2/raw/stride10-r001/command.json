@@ -1,0 +1,25 @@
+{
+  "kind": "independent v2 root-pin generation; no candidate speed claim",
+  "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+  "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+  "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+    "--case",
+    "history-stride10",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride10-r001/case"
+  ],
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255"
+  },
+  "watchdog_s": 170
+}

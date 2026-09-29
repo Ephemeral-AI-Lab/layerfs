@@ -12,7 +12,16 @@ use layerfs_history::{
 
 /// Explicit opt-in; historical C2-only operations retain their original behavior.
 pub fn enabled() -> bool {
-    std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() == Ok("1")
+    matches!(std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref(), Ok("1" | "2"))
+}
+
+/// The explicitly selected compound workload identity; absent means legacy v1.
+pub fn version() -> &'static str {
+    if std::env::var("LAYERFS_HISTORY_RETAINED_CATALOG").as_deref() == Ok("2") {
+        "v2"
+    } else {
+        "v1"
+    }
 }
 
 /// Publishes the complete canonical identity counters from the actual closed C2.
@@ -58,6 +67,7 @@ pub fn counter_gates(
         workload::history::Row,
     };
     let (bytes, objects) = match row {
+        Row::Stride10 if version() == "v2" => (380_559_460, 51_689),
         Row::Stride10 => (380_921_328, 52_032),
         Row::Stride3 => (589_423_458, 73_476),
         Row::Stride1 => (871_588_115, 104_705),
@@ -90,8 +100,8 @@ pub fn counter_gates(
 
 fn config() -> HistoryCatalogConfig {
     HistoryCatalogConfig {
-        binding_key: b"layerfs/issue286/retained-history/v1".to_vec(),
-        incarnation: 1,
+        binding_key: format!("layerfs/issue286/retained-history/{}", version()).into_bytes(),
+        incarnation: if version() == "v2" { 2 } else { 1 },
         cursor_key: [0x28; 32],
     }
 }
@@ -295,7 +305,8 @@ pub fn storage_gate(directory: &Path, row: crate::workload::history::Row) -> cra
         Row::Stride3 => 64_024_576,
         Row::Stride1 => 83_947_520,
     };
-    let id = "g1.o6-total-retained-below-v016-v1";
+    let id = if version() == "v2" { "g1.o6-total-retained-below-v016-v2" }
+             else { "g1.o6-total-retained-below-v016-v1" };
     let limit = format!("exclusive C2+C5 allocated bytes < {ceiling}");
     let mut total = 0u64;
     for owner in ["sample.sqlite", "history.sqlite"] {
@@ -353,8 +364,12 @@ pub fn root_pin_gate(row: crate::workload::history::Row, roots: &[ObjectId]) -> 
         }
         let text = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
         let mut lines = text.lines();
-        if lines.next()
-            != Some("layerfs-history-root-pins-v1\t2f07f1f37af3e06a92a00880c68882b3c91923ef")
+        let header = if version() == "v2" {
+            "layerfs-history-root-pins-v2\t6b22835dd57d76ea53bd44561a68f50e0aab756f"
+        } else {
+            "layerfs-history-root-pins-v1\t2f07f1f37af3e06a92a00880c68882b3c91923ef"
+        };
+        if lines.next() != Some(header)
         {
             return Err("unregistered independent reference source".into());
         }

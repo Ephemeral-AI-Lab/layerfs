@@ -55,9 +55,10 @@ def owner(path, expected_tables, version, application):
     return result
 
 
-def collect(directory, ceiling, states, attribution=CREATION, distinct_indexes=()):
+def collect(directory, ceiling, states, attribution=CREATION, distinct_indexes=(), version="v1"):
     directory = Path(directory)
-    result = {"gate": GATE, "ceiling_bytes": ceiling, "strict": True,
+    result = {"gate": GATE if version == "v1" else "g1.o6-total-retained-below-v016-v2",
+              "ceiling_bytes": ceiling, "strict": True,
               "allocation_attribution": attribution, "owners": {}, "issues": [],
               "total_retained_allocated_bytes": None, "status": "INCOMPLETE"}
     try:

@@ -11,17 +11,17 @@ from families import history_retention as history
 
 class HistoryStorage(unittest.TestCase):
     def test_registry_and_independent_ledgers(self):
-        self.assertEqual([c.states for c in history.CASES.values()], [17, 53, 157])
+        self.assertEqual([c.states for c in history.CASES.values()], [17, 53, 157] * 2)
         self.assertEqual([c.ceiling_bytes for c in history.CASES.values()],
-                         [49_344_512, 64_024_576, 83_947_520])
+                         [49_344_512, 64_024_576, 83_947_520] * 2)
         self.assertEqual([c.verification_budget_ns for c in history.CASES.values()],
-                         [10_000_000_000, 20_000_000_000, 30_000_000_000])
-        self.assertEqual(history.SELECTED, tuple(history.CASES)[:2])
+                         [10_000_000_000, 20_000_000_000, 30_000_000_000] * 2)
+        self.assertEqual(history.SELECTED, tuple(history.CASES)[3:5])
         import hashlib
         import json
-        pins = json.loads((history.PIN_ROOT / "manifest.json").read_text())
         for case in history.CASES.values():
-            file = history.PIN_ROOT / f"{case.backend_id}.tsv"
+            pins = json.loads((case.pin_root / "manifest.json").read_text())
+            file = case.pin_root / f"{case.backend_id}.tsv"
             self.assertEqual(hashlib.sha256(file.read_bytes()).hexdigest(),
                              pins["cases"][case.backend_id]["roots_sha256"])
             self.assertEqual(len(file.read_text().splitlines()) - 1, case.states)

@@ -1,0 +1,28 @@
+{
+  "kind": "independent v2 root-pin generation; no candidate speed claim",
+  "source_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+  "source_tree": "b6bbb682f5f8973d4998f30b5786eac4148ccfef",
+  "binary_sha256": "0567b01c777c01231e6d728594190644ef799bcdf194460dddffcf58e56e9871",
+  "command": [
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+    "--case",
+    "history-stride1",
+    "--corpus",
+    "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "--out",
+    "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-resume154-r001/case"
+  ],
+  "env": {
+    "LAYERFS_HISTORY_REFERENCE_RESUME": "154",
+    "LAYERFS_HISTORY_REFERENCE_ROOT": "fc532f9d7270c09b1167cfd3fd80f47844f8cb3d1db05dff47b35ea79f222777",
+    "LAYERFS_HISTORY_REFERENCE_STORE": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case/sample.sqlite",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255"
+  },
+  "watchdog_s": 170
+}
