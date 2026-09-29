@@ -1,0 +1,97 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 597,
+      "sha256": "554fdc191a3d43344da124ef522009412924993251e491d831803ed691a3de9e"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-1-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "d439cadad6f88f06016360ce2b473228200be650830e1b069b66918476e8ed62"
+    },
+    "history-retention-stride-1-total-storage-v3/declaration.json": {
+      "bytes": 7920,
+      "sha256": "9459a7d39e50d01421e53bbf2b8a14966d4492ac300dff347a068f00880871fa"
+    },
+    "history-retention-stride-1-total-storage-v3/native/history.sqlite": {
+      "bytes": 180224,
+      "sha256": "8dcf12b01322afcaf9e1a758b05abbe68e1d3216c0a37eda9033090f9af93833"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-perf.json": {
+      "bytes": 392,
+      "sha256": "c562b0e2a6e6196685b68bbf599927ff93607115c8adaef77d2c3a283067efd5"
+    },
+    "history-retention-stride-1-total-storage-v3/native/phases-verify.json": {
+      "bytes": 335,
+      "sha256": "d8e5f25e52a459b587486a01f44fc9439576b751c0755b91c695bca479b1d151"
+    },
+    "history-retention-stride-1-total-storage-v3/native/sample.sqlite": {
+      "bytes": 75712512,
+      "sha256": "ef1fba79a76add4c781c9bbcf1c5219a9548d3cb03b4483a8d84ded9059ca781"
+    },
+    "history-retention-stride-1-total-storage-v3/native/timing.json": {
+      "bytes": 100768,
+      "sha256": "809afa8da5f9f3012972fa465928d249f8c0eb5a395093ac1da02e0cab089386"
+    },
+    "history-retention-stride-1-total-storage-v3/native/trace.jsonl": {
+      "bytes": 2927531,
+      "sha256": "cca952b014d1c70071a70651d6d69c968138becec76ae508672786bb5ae7b860"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/perf.stdout": {
+      "bytes": 49,
+      "sha256": "1d88861db3b05e6c3f1d1691945f027a24d3eb7a37744409c62e686a709d936b"
+    },
+    "history-retention-stride-1-total-storage-v3/receipt.json": {
+      "bytes": 623344,
+      "sha256": "af43b27fcc8113e7a2c66b7a356f0b82a8eb8c2622ea19a7ca495079984b3cb0"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v3/verify.stdout": {
+      "bytes": 49,
+      "sha256": "a655174960e6cb0b88a9bb123c48a87e38c328549f95e78ccc348a715a164d7f"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "bytes": 162,
+      "sha256": "7b99471d6be87fc8f9ea1b82f2ef86a27b427df9e3876c254a61a80ff95cf9c9"
+    },
+    "history-retention-stride-10-total-storage-v2/receipt.json": {
+      "bytes": 162,
+      "sha256": "243b67b789d827afcaccd623f4b721b11caf90d4eff69d760fa866f39c757282"
+    },
+    "history-retention-stride-10-total-storage-v3/receipt.json": {
+      "bytes": 162,
+      "sha256": "91e479a18226a667b39e8fc4d9666f6f0904a6820c7e23a51caeeeed0423b73f"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "history-retention-stride-3-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "50275a531de8aafc8bf0ae3e703efa94ebdae130b3e7692295c9e9737c0e4145"
+    },
+    "history-retention-stride-3-total-storage-v3/receipt.json": {
+      "bytes": 161,
+      "sha256": "5a0a021bc14672a52d952374c88affc3f77dfc978fe4b6c767fb18fd0eff0f0b"
+    },
+    "report.txt": {
+      "bytes": 731,
+      "sha256": "b0ddd5aeaa33a3fde8019e8b791c4d989e56339192c18796950643fe539a8a0f"
+    },
+    "run.json": {
+      "bytes": 1025,
+      "sha256": "49b0479d6761c9838c55670997db622866eb7b7400ae738c722910eaaf6657ee"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

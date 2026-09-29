@@ -1,0 +1,161 @@
+{
+  "admission_eligible": false,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/4cdaf99ea524cd2a3cb9205bdd8a8c633715ca2391e06cbaece8e74a160bda80/fs-bench-storage-content",
+    "sha256": "4cdaf99ea524cd2a3cb9205bdd8a8c633715ca2391e06cbaece8e74a160bda80"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "canonical_pin": {
+    "applicable": [
+      871337620,
+      104618
+    ],
+    "historical_v016": [
+      871588115,
+      104705
+    ],
+    "ruling": "core/docs/issues/286/HISTORY-O3-APPLICABILITY-RULING-20260930.md"
+  },
+  "case": "history-retention-stride-1-total-storage-v3",
+  "clone_method": null,
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "corpus_oracle_count_reuse": "committed 157-row SHA/count ledger; actual selected oracle bytes hashed each invocation",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "3",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride1",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "280312d131561dd0c88b02a11f60460653a6276362cf90a56e81710988a14b76",
+    "compilation_seal": "c31f1b666c8b3b41b85b19bff4884e2edee1e10752350ce47a086e4d24d29c52",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "d0efae395844d32d1b4e283599d2b92cbae2e5589134f788c4ccce871443a888",
+    "dirty_paths": [],
+    "harness_seal": "5956492473a737e8b136cbd116f6cc1f98f2454c9a636ce75d59e916c6385a6e",
+    "product_seal": "9c6e270560ac9db55e08adf1e95edd734cec1d3386a4acdccd2653e00b14a7b9",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "1bbffd2f647b6c0bead19c26a16bd4a64133cf2f",
+    "source_dirty": false,
+    "source_tree": "aac154c6566eb5e835325a2577587d4f821ef9ca"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "profile": "c1-c2-c5-retained-history-v3",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_observed_reference": "not an uninterrupted arm",
+    "canonical_required": [
+      871588115,
+      104705
+    ],
+    "reference": {
+      "kind": "154 closed committed reference saves plus three resumed diagnostic saves; resume chain gate FAIL 3/157 retained",
+      "prefix_command": {
+        "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+        "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+        "watchdog_s": 170
+      },
+      "prefix_result": {
+        "exit_code": null,
+        "timed_out": true,
+        "wall_ns": 170013063583
+      },
+      "prefix_root_count": 154,
+      "prefix_store_sha256": "c699c74792a1e574b9aa22063bac58bb99c3eaf4f1cb37b9e76067a6fa8dadce",
+      "suffix_command": {
+        "binary_sha256": "0567b01c777c01231e6d728594190644ef799bcdf194460dddffcf58e56e9871",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-resume154-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_REFERENCE_RESUME": "154",
+          "LAYERFS_HISTORY_REFERENCE_ROOT": "fc532f9d7270c09b1167cfd3fd80f47844f8cb3d1db05dff47b35ea79f222777",
+          "LAYERFS_HISTORY_REFERENCE_STORE": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case/sample.sqlite",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+        "source_tree": "b6bbb682f5f8973d4998f30b5786eac4148ccfef",
+        "watchdog_s": 170
+      },
+      "suffix_result": {
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 65575202458
+      },
+      "suffix_root_count": 3,
+      "suffix_store_sha256": "8baddf9fd0ef7f6b3375082fc85ef4a6f3dadf8af39775fc49553fcdd18e68de",
+      "suffix_trace_sha256": "500131654899cca8d8209c3e02f278238059f2076566ccff38ce443985b30fed"
+    },
+    "roots_sha256": "bc1392af7ac11f2a50b444f927b32b27b3de2f33e1e2acfc3221e369c587adb9",
+    "states": 157
+  },
+  "sample_count": 0,
+  "schema": "core-history-retention-receipt-v3",
+  "setup": "InProcess",
+  "storage_gate": "g1.o6-total-retained-below-v016-v3",
+  "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
+  "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d"
+}
