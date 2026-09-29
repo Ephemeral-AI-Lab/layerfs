@@ -232,3 +232,127 @@ fn view_lease_pins_g1_reads_old_bytes_across_commit_and_refuses_stale_use() {
         lease_root_serial, pinned.0, pinned.1
     );
 }
+
+/// Test-only external fault: pause exactly the sandbox this test created,
+/// discovered by its owner and unique name labels. Always resume it before
+/// SDK cleanup, including when the asserted deadline path panics.
+struct PausedSandbox(String);
+impl PausedSandbox {
+    fn new(name: &str) -> Self {
+        let output = std::process::Command::new("docker")
+            .args([
+                "ps",
+                "--filter",
+                "label=io.layerfs.owner=agent-sdk",
+                "--filter",
+                &format!("label=io.layerfs.sandbox-name={name}"),
+                "--format",
+                "{{.ID}}",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let ids = String::from_utf8(output.stdout).unwrap();
+        let id = ids.lines().next().unwrap();
+        assert_eq!(ids.lines().count(), 1, "pause only our unique sandbox");
+        let paused = std::process::Command::new("docker")
+            .args(["pause", id])
+            .output()
+            .unwrap();
+        assert!(paused.status.success(), "pause: {paused:?}");
+        Self(id.to_owned())
+    }
+}
+impl Drop for PausedSandbox {
+    fn drop(&mut self) {
+        let resumed = std::process::Command::new("docker")
+            .args(["unpause", &self.0])
+            .output()
+            .unwrap();
+        assert!(resumed.status.success(), "unpause: {resumed:?}");
+    }
+}
+
+#[test]
+fn view_lease_deadline_keeps_old_bytes_and_allows_checked_release() {
+    let Ok(image) = std::env::var("LAYERFS_TEST_IMAGE") else {
+        return;
+    };
+    let root = std::env::temp_dir().join(format!("layerfs-view-deadline-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let source = root.join("source");
+    std::fs::create_dir(&source).unwrap();
+    std::fs::write(source.join("note"), b"base").unwrap();
+    let server = Server::create(ServerConfig {
+        store_path: root.join("store.sqlite"),
+        history_path: root.join("history.sqlite"),
+        binding_key: b"view-deadline".to_vec(),
+        incarnation: 1,
+        cursor_key: [39; 32],
+        history: HistoryMode::Create,
+        service_host: "host.docker.internal".into(),
+        runtime: layerfs_telemetry::runtime::Runtime::disabled(),
+        telemetry_run: None,
+    })
+    .unwrap();
+    server.listen().unwrap();
+    let owner = server.owner().unwrap();
+    let mut cleanup = Cleanup {
+        root: root.clone(),
+        owner: &owner,
+        sandboxes: Vec::new(),
+    };
+    let projects = ProjectApi::new(&server);
+    let sandboxes = SandboxApi::new(&owner);
+    let workspaces = WorkspaceApi::new(&owner);
+    let project = projects.init("view-deadline", &source).unwrap();
+    let branch = projects.fork(&project, BRANCH, "deadline").unwrap();
+    let name = format!("view-deadline-{}", std::process::id());
+    let sandbox = sandboxes.create(&image, &name).unwrap();
+    cleanup.sandboxes.push(sandbox);
+    let mount = workspaces
+        .mount(sandbox, &project, branch.id, None)
+        .unwrap();
+    workspaces.exec(&mount.id, "printf g1-note > note").unwrap();
+    let lease = workspaces.pin_view(&mount.id).unwrap();
+    let note = workspaces
+        .view_lookup(&lease, lease.root(), b"note")
+        .unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &note, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    // No sleep, shortened deadline, fake clock, test hook or request retry:
+    // an external paused daemon cannot reply to the SDK's real 5s deadline.
+    let paused = PausedSandbox::new(&name);
+    let timed_out = workspaces.view_read(&lease, &note, 0, 64);
+    drop(paused);
+    assert!(
+        matches!(timed_out, Err(WorkspaceError::Failure(ref f)) if f.code == Code::Deadline),
+        "expected the original Deadline, got {timed_out:?}"
+    );
+    assert_eq!(workspaces.view_status(&lease).unwrap().held_leases, 1);
+    assert_eq!(
+        workspaces.view_read(&lease, &note, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    workspaces.commit(&mount.id).unwrap();
+    workspaces.exec(&mount.id, "printf g2-note > note").unwrap();
+    assert_eq!(
+        workspaces.view_read(&lease, &note, 0, 64).unwrap().bytes,
+        b"g1-note"
+    );
+    assert_eq!(
+        workspaces.exec(&mount.id, "cat note").unwrap().stdout,
+        b"g2-note"
+    );
+    assert_eq!(
+        workspaces.release_view(&lease),
+        Ok(layerfs_api_core::WorkspaceViewRelease::Completed)
+    );
+    workspaces.unmount(&mount.id).unwrap();
+    sandboxes.delete(sandbox).unwrap();
+    cleanup.sandboxes.clear();
+    drop(cleanup);
+    println!("VIEW_LEASE_DEADLINE read=Deadline g1=exact g2=exact held=1 release=Completed unmount=Completed");
+}
