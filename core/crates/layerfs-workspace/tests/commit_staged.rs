@@ -295,6 +295,11 @@ mod linux {
     #[ignore = "requires actual C5 commit reply gate; not an S-11 save proof"]
     fn commit_successor() {
         let f = Fixture::new(Gate::CommitReply);
+        let original_root = attr(
+            f.native
+                .attributes(snapshot(&f).effective_root, b"data.bin"),
+        )
+        .1;
         let data = f.lookup(b"data.bin");
         let handle = f
             .workspace
@@ -307,6 +312,7 @@ mod linux {
                 .attributes(stage.stage().candidate_root, b"data.bin"),
         )
         .1;
+        assert_eq!(f.native.bytes(saved_root, 10, 4), b"GGGG");
         f.edit(b"data.bin", 11, 13, b"LIVEIN");
         let old = f.workspace.read(handle, 10, 8, deadline()).unwrap();
         assert_eq!(old.as_ref(), b"GLIVEING");
@@ -314,7 +320,13 @@ mod linux {
         let selected = stage.clone();
         let pending = std::thread::spawn(move || ws.commit_staged(&selected, deadline()));
         f.native.wait_commit();
-        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 26);
+        // The unused legacy reconciliation root is sealed before Commit;
+        // its credit remains in the real captured/G2 completion funds.
+        assert_eq!(f.workspace.metadata_status().unwrap().reserved_slots, 0);
+        let backing = f.workspace.backing_status().unwrap();
+        assert!(backing.accounting_complete);
+        assert!(backing.reserved_bytes >= 2 * 208 * 4096 - 2 * 4096);
+        assert!(backing.allocated_bytes + backing.reserved_bytes <= backing.quota_bytes);
         assert!(matches!(
             f.workspace.commit_staged(&stage, deadline()),
             Err(WorkspaceError::Busy)
@@ -351,7 +363,9 @@ mod linux {
             })
             .collect();
         assert_eq!(changes.len(), 1);
-        assert_eq!(changes[0].0, saved_root);
+        // Intervening shifted G2 extents retain their actual immutable origin.
+        // Rebasing these source offsets to saved_root would change the bytes.
+        assert_eq!(changes[0].0, original_root);
         assert_eq!(changes[0].1, data.size);
         assert!(changes[0].2 > 0);
         assert_eq!(changes[0].3, 1);
