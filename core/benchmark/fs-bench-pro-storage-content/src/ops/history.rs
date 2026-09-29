@@ -717,6 +717,7 @@ fn emit_symlink_target(
 /// different operation than the one the claim describes.
 struct Chain {
     serial_of: BTreeMap<Vec<u8>, u64>,
+    live_directories: BTreeSet<Vec<u8>>,
     next_serial: u64,
 }
 
@@ -726,6 +727,7 @@ impl Chain {
         serial_of.insert(Vec::new(), ROOT_SERIAL);
         Self {
             serial_of,
+            live_directories: BTreeSet::new(),
             next_serial: FIRST_SERIAL,
         }
     }
@@ -799,6 +801,25 @@ fn filesystem_input(
     // Changed directory bindings, keyed by the directory path.
     let mut bindings: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Option<u64>>> = BTreeMap::new();
 
+    // Only the outermost disappeared directory needs an unbind: removing its
+    // parent entry removes the whole subtree. Burn every disappeared serial so
+    // a later path reuse cannot inherit the removed inode's identity.
+    let removed_directories: BTreeSet<Vec<u8>> = chain
+        .live_directories
+        .difference(&directories_now)
+        .cloned()
+        .collect();
+    for directory in &removed_directories {
+        if !removed_directories.contains(&parent_of(directory)) {
+            bindings
+                .entry(parent_of(directory))
+                .or_default()
+                .insert(name_of(directory).to_vec(), None);
+        }
+        chain.serial_of.remove(directory);
+    }
+    chain.live_directories = directories_now.clone();
+
     for directory in &directories_now {
         if chain.known(directory).is_none() {
             let serial = chain.serial(directory);
@@ -826,13 +847,13 @@ fn filesystem_input(
         let parent = parent_of(path);
         match changed.kind {
             Change::Removed => {
-                if let Some(serial) = chain.known(path) {
-                    let _ = serial;
+                chain.serial_of.remove(path);
+                if !removed_directories.contains(&parent) {
+                    bindings
+                        .entry(parent)
+                        .or_default()
+                        .insert(name_of(path).to_vec(), None);
                 }
-                bindings
-                    .entry(parent)
-                    .or_default()
-                    .insert(name_of(path).to_vec(), None);
             }
             Change::MetadataOnly => {
                 // The corpus makes no mode-only transition — verified on all 157
@@ -885,6 +906,59 @@ fn filesystem_input(
     new_inodes.sort_unstable();
     new_inodes.dedup();
     Ok(())
+}
+
+#[cfg(test)]
+mod directory_transition_tests {
+    use super::*;
+    use crate::workload::history::{BlobMap, ChangedPath, State, Transition, TreeEntry};
+
+    #[test]
+    fn removed_directory_unbinds_and_readded_path_gets_new_serial() {
+        let mut chain = Chain::new();
+        let mut directories = Vec::new();
+        let mut inodes = Vec::new();
+        let mut new_inodes = Vec::new();
+        let content = ObjectId::for_bytes(b"history-directory-test");
+        let state = State {
+            ordinal: 1,
+            full157_index: 1,
+            sha: String::new(),
+            tree: String::new(),
+            manifest_sha256: String::new(),
+            oracle_path: std::path::PathBuf::new(),
+            oracle_sha256: String::new(),
+            logical_bytes: 1,
+            paths: 2,
+        };
+        let entry = TreeEntry { mode: 0o100644, oid: [0; 20], size: 1 };
+        let path = b"a/b".to_vec();
+        let changed = |kind| ChangedPath { path: path.clone(), mode: entry.mode,
+            oid: entry.oid, size: entry.size, kind };
+        let make = |tree, changed| Transition { state: state.clone(), tree,
+            changed, blobs: BlobMap::new() };
+        let roots = BTreeMap::from([(path.clone(), content)]);
+        let add = make(BTreeMap::from([(path.clone(), entry)]), vec![changed(Change::Added)]);
+        filesystem_input(&mut chain, &add, &roots, true,
+            &mut directories, &mut inodes, &mut new_inodes).unwrap();
+        let old_directory = chain.known(b"a").unwrap();
+        let old_file = chain.known(&path).unwrap();
+
+        let remove = make(BTreeMap::new(), vec![changed(Change::Removed)]);
+        filesystem_input(&mut chain, &remove, &BTreeMap::new(), false,
+            &mut directories, &mut inodes, &mut new_inodes).unwrap();
+        assert_eq!(directories.len(), 1);
+        assert_eq!(directories[0].parent, ROOT_SERIAL);
+        assert_eq!(directories[0].changes.len(), 1);
+        assert_eq!(directories[0].changes[0].1, None);
+        assert!(chain.known(b"a").is_none());
+        assert!(chain.known(&path).is_none());
+
+        filesystem_input(&mut chain, &add, &roots, false,
+            &mut directories, &mut inodes, &mut new_inodes).unwrap();
+        assert_ne!(chain.known(b"a"), Some(old_directory));
+        assert_ne!(chain.known(&path), Some(old_file));
+    }
 }
 
 fn hex(bytes: &[u8]) -> String {
