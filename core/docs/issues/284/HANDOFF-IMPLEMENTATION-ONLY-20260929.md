@@ -1,11 +1,20 @@
 # #284 implementation-only handoff: active backing into Phase 4.5
 
-> **Status:** Dated planning checkpoint; not release evidence or a product contract.
+> **Status:** Archived; retained for historical evidence only.
 > Issued 2026-09-29 for [integration issue #284](https://github.com/Ephemeral-AI-Lab/layerfs/issues/284).
 > Construction source: `05eb5c14849f1b874383fd1600ba9288f103ad93`.
 > Side product donor: `11a864fc133844cae7a4247b1f243d84d5763b10`.
 > Frozen design documents: `f9f9abb37332e23d1968a5ed204ff70e3e66d783`.
-> Current assignment is Phase A implementation. Phase B evaluation is ON HOLD.
+> Phase A completed at product `671f4a46f8f354cf764d3d1555529b73a5c939e0`,
+> documented at `4a4447db1abcbfccea0bcf1c79b9cc1d80ac2f04`.
+> The owner subsequently assigned Phase B in [sub-issue #286](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286).
+> Use the [Phase B handoff](../286/HANDOFF-PHASE-B-20260929.md) next.
+
+This prompt records the completed implementation assignment. Its Phase B hold
+and instruction to stop after construction are historical. The new handoff
+supersedes them; the [Phase A report](PHASE-A-IMPLEMENTATION-REPORT.md) retains
+its original evidence and unrun selections. Do not restart Phase A from this
+prompt.
 
 ## Paste this prompt to the next implementation agent
 
