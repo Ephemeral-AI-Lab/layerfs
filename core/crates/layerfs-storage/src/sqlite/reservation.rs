@@ -96,7 +96,8 @@ fn reserve_unix(connection: &Connection, pack_capacity: u64) -> StorageResult<()
     }
     #[cfg(target_os = "linux")]
     {
-        // POSIX fallocate reserves this logical range without changing st_size.
+        // KEEP_SIZE is required: POSIX posix_fallocate would extend SQLite's
+        // logical file to the reservation end before our later size check.
         let offset = apparent
             .try_into()
             .map_err(|_| StorageError::Integrity("Store reservation offset"))?;
@@ -104,8 +105,13 @@ fn reserve_unix(connection: &Connection, pack_capacity: u64) -> StorageResult<()
             .saturating_sub(apparent)
             .try_into()
             .map_err(|_| StorageError::Integrity("Store reservation length"))?;
-        nix::fcntl::posix_fallocate(&file, offset, length)
-            .map_err(|error| StorageError::Io(std::io::Error::from_raw_os_error(error as i32)))?;
+        nix::fcntl::fallocate(
+            &file,
+            nix::fcntl::FallocateFlags::FALLOC_FL_KEEP_SIZE,
+            offset,
+            length,
+        )
+        .map_err(|error| StorageError::Io(std::io::Error::from_raw_os_error(error as i32)))?;
     }
     if file.metadata().map_err(StorageError::Io)?.len() != apparent {
         return Err(StorageError::Integrity(

@@ -321,3 +321,11 @@ R032 issue publication: [#286 comment5899894816](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-init-regression-r033 | default Init 100 then1,000 requested; build failed before either sample | `cdf146ee9` | **BUILD FAIL** `E0004`: service mapper lacks new `StorageError::Io(_)`; build2.998s<30s; 100/1000 and explicit10,000/100,000 all NOT_RUN, no command/verifier/cache/cleanup verdict; family2 candidate PASS receipts unchanged, checkpoint pending | [Round report](experiments/20260930-init-regression-r033.md) | Publish after commit; link in next real round |
+
+## Platform correction 20260930-linux-reservation-correction-r034
+
+R033 issue publication: [#286 comment5900006238](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900006238), build-failure report commit `d5a9fafe8` (production delta+0). Product commit `d4ca6122f` maps the new typed C2 I/O failure to wire `Code::Io` (+1 Core production LOC). A source review then identified that Linux `posix_fallocate` would grow SQLite EOF; r034 changes it to `fallocate(FALLOC_FL_KEEP_SIZE)` and verifies one public save in a locked arm64/musl bundled-SQLite diagnostic build.
+
+| Round | Family / selection | Source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-linux-reservation-correction-r034 | platform semantic verification; **no benchmark sample** | source in this commit | Default cross link INCOMPLETE (missing system `libsqlite3.so`); locked published bundled-SQLite arm64 build PASS, isolated Linux container public-save test PASS1/1; Mac test PASS1/1; current-source family2/Init gates NOT_RUN | [Correction report](experiments/20260930-linux-reservation-correction-r034.md) | Publish after commit; link in next real round |

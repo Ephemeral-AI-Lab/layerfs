@@ -1,10 +1,10 @@
 //! Public save keeps SQLite bytes intact while reserving bounded host blocks.
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod support;
 
-#[cfg(target_os = "macos")]
-mod macos {
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod unix {
 
     use std::os::unix::fs::MetadataExt;
 
