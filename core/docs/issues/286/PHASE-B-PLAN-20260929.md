@@ -80,6 +80,12 @@ fixture `core-sdk-init-fixture-v2`, seed1 and locked release binaries under
 `target/release/examples/`. The driver calls public `Client::init_project` once.
 No FUSE or component-only substitute supplies an Init row.
 
+> **Entrypoint-name correction, 2026-09-30:** The dated line above names a
+> nonexistent `Client` method. The actual source-pinned driver calls
+> `ProjectApi::new(&server).init(...)` once, after creating the host Server and
+> immediately inside the recorded SDK-call timer. Historical receipts keep
+> their original labels; future runner metadata uses `ProjectApi::init`.
+
 The current [Init contract](../../../benchmark/fs-bench-pro/AGENTS.md) declares
 15s complete command and 9.5s separate lite verification. Its verifier checks
 the full namespace/directory metadata and all bytes/metadata of its deterministic

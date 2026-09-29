@@ -146,7 +146,7 @@ def prepare(case: Case, prepared_root: Path):
 
 def public_import(binary, case: Case, source: Path, store: Path, history: Path,
                   private: str, cursor: str):
-    """One public SDK Init; the driver times only Client::init_project."""
+    """One public SDK Init; the driver times only ProjectApi::init."""
     command = [binary, str(source), str(store), str(history), case.id]
     started = time.monotonic_ns()
     try:

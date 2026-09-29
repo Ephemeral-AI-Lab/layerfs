@@ -9,7 +9,7 @@ or relabel them.
 `runner.py` is the sole `init_namespace` runner. `families/init_namespace.py`
 owns the case registry, sealed source preparation, and invocation of the
 compiled SDK driver. The driver makes one public
-`layerfs_sdk::Client::init_project` call; it does not construct C1/C2/C5 data
+`layerfs_sdk::ProjectApi::init` call; it does not construct C1/C2/C5 data
 itself. No daemon, FUSE, pathless Init, second benchmark runner, or alternate
 route may supply a new Init number. MCP and CLI remain outside this benchmark.
 
