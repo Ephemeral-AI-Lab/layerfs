@@ -337,3 +337,11 @@ R034 issue publication: [#286 comment5900153081](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-v3-r035 | compound v3 stride10/17 then stride3/53, one corrected-source sample each | `d6f736edc` | **PASS/PASS**: strict allocated48279552<49344512 and59899904<64024576 B; complete trees/selected content/independent roots/O3/C5/cleanup PASS; driver44.176/77.213s, verifier2.959/8.520s within unchanged limits; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r035.md) | Publish after commit; link in next real round |
+
+## Explicit round 20260930-history-stride1-v3-r036
+
+R035 issue publication: [#286 comment5900217058](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5900217058), selected PASS report commit `57c511a2c` (production delta+0). The explicit stride1 used the same binary/compilation/harness seals with a new output path and one attempted invocation.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v3-r036 | compound v3 stride1/157, one explicit sample | `57c511a2c`, corrected product `d6f736edc` | **TIMEOUT/TARGET_MISS** 170.018s>170s; partial156 Layers/156 Branches/155 Commits, no complete root trace or verifier, partial allocated76742656 B is storage INCOMPLETE, semantic and cleanup INCOMPLETE, numeric time INELIGIBLE; no unchanged resample | [Round report](experiments/20260930-history-stride1-v3-r036.md) | Publish after commit; work stops pending explicit resume |
