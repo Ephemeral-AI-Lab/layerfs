@@ -1,0 +1,28 @@
+{
+  "kind": "diagnostic byte-copy of incomplete r010 Store; no candidate gate and no claimed storage saving",
+  "source": {
+    "apparent_bytes": 77971456,
+    "allocated_bytes": 84238336,
+    "device": 16777233,
+    "inode": 854928833,
+    "links": 1
+  },
+  "copy_before_vacuum": {
+    "apparent_bytes": 77971456,
+    "allocated_bytes": 77971456,
+    "device": 16777233,
+    "inode": 854931341,
+    "links": 1
+  },
+  "page_count_before_vacuum": 19036,
+  "freelist_before_vacuum": 24,
+  "page_count_after_vacuum": 18860,
+  "freelist_after_vacuum": 0,
+  "copy_after_vacuum": {
+    "apparent_bytes": 77250560,
+    "allocated_bytes": 77250560,
+    "device": 16777233,
+    "inode": 854931341,
+    "links": 1
+  }
+}

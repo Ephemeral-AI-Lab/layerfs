@@ -165,3 +165,11 @@ R009 issue publication: [#286 comment5895738372](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v2-r010 | compound history stride1/157 states, first explicit v2 candidate | `c30be4b41` (product seal equal r008) | **TIMEOUT/INCOMPLETE**: fixed170s child stopped with C2 save157 still active (122 objects), C5 156 Layers, no independent verifier; partial C2+C5 allocated84520960 B is not a complete strict gate, partial O3 status incorrectly labelled FAIL by adapter; all completion/canonical/cleanup claims INCOMPLETE, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r010.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride1-v2-r011
+
+R010 issue publication: [#286 comment5895866838](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5895866838), report commit `06a158d98` (production delta+0). New SHA-bound oracle-count acquisition source `c130dab26` has production delta+0.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v2-r011 | compound history stride1/157 states, one changed-harness candidate | `c130dab26` | **TIMEOUT/INCOMPLETE** at fixed170s: C2 save157 active with290 object rows, C5 156 Layers, no verifier; partial canonical INCOMPLETE now correctly classified, storage INCOMPLETE; at-run partial C2+C5 allocated84520960 B but cannot decide full-chain gate; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r011.md) | Publish after commit; link in next round |
