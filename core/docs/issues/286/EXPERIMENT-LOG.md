@@ -181,3 +181,11 @@ R011 issue publication: [#286 comment5896046260](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride1-v2-r012 | compound history stride1/157 states, one changed-harness candidate | `6ab692386` | **FAIL**: complete driver167.807s<170s and all157 C2/C5 states persisted; strict allocated84520960 >=83947520 B (+573440), canonical871337620 B/104618 vs immutable871588115/104705 FAIL; verifier TIMEOUT30s, full O4 INCOMPLETE; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r012.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride1-v2-r013
+
+R012 issue publication: [#286 comment5896285256](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5896285256), report commit `f45599877` (production delta+0). Version18 physical layout + verifier-only page memo source `290ddb180` records Core/combined production+15.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v2-r013 | compound history stride1/157 states, one changed-source candidate | `290ddb180` | **FAIL**: complete driver165.411s<170s, verifier19.951s<30s, all904143 listed paths/76726 selected content states/157 roots/C5 PASS; actual C2+C5 allocated84475904 >=83947520 B (+528384) FAIL; immutable O3 observed871337620 B/104618 vs871588115/104705 FAIL; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r013.md) | Publish after commit; link in next round |

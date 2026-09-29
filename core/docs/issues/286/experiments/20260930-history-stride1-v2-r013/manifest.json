@@ -1,0 +1,89 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 875,
+      "sha256": "9aea073842253feee59c725af2b6a6f9eec0f2cf2df228896451ab98c2097b98"
+    },
+    "build.log": {
+      "bytes": 1113,
+      "sha256": "84489bdab0d5497863c498456dedf949c67148d88208b193c1b125ef0e87f701"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-1-total-storage-v2/declaration.json": {
+      "bytes": 7694,
+      "sha256": "e8cf1d03108d4ab654c912a55305be4a8d7a41feb49a534a9a3bbc3b9aaaab63"
+    },
+    "history-retention-stride-1-total-storage-v2/native/history.sqlite": {
+      "bytes": 233472,
+      "sha256": "c66870faa784935a42b578527fdf8065b36033eaeeb96ea06e142a413f0e84c9"
+    },
+    "history-retention-stride-1-total-storage-v2/native/phases-perf.json": {
+      "bytes": 392,
+      "sha256": "c1347085b637cca59b8fbb383b6cc8b6cd9726ea8b828aed54b92b523b147e82"
+    },
+    "history-retention-stride-1-total-storage-v2/native/phases-verify.json": {
+      "bytes": 335,
+      "sha256": "cd51cba46b099d2995d54d3ec6a132c0fd3710cdd513f6aa9b95386488a7147e"
+    },
+    "history-retention-stride-1-total-storage-v2/native/sample.sqlite": {
+      "bytes": 78315520,
+      "sha256": "33fe19ee0fbd593a0fd20ac0829b9225e98d47dbff8d41333a7838491d18e0a4"
+    },
+    "history-retention-stride-1-total-storage-v2/native/timing.json": {
+      "bytes": 100815,
+      "sha256": "bde58be8c170a6c3597f72d4c1fd85793c52fb000a26e82a3eea3f80969767be"
+    },
+    "history-retention-stride-1-total-storage-v2/native/trace.jsonl": {
+      "bytes": 2927542,
+      "sha256": "d984e7e4f0dab98e50ff820983d0635922a69d5c1e42379a71ade8658cd154d1"
+    },
+    "history-retention-stride-1-total-storage-v2/perf.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v2/perf.stdout": {
+      "bytes": 49,
+      "sha256": "36ab02d4a2462d0a4fc9404c56298321d7efd4aab0f256a994a1d02f74e91042"
+    },
+    "history-retention-stride-1-total-storage-v2/receipt.json": {
+      "bytes": 623163,
+      "sha256": "34814509b73481c61c5f3795d10bb992b866b6d55e33b4893318db331c09ed8a"
+    },
+    "history-retention-stride-1-total-storage-v2/verify.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v2/verify.stdout": {
+      "bytes": 49,
+      "sha256": "7d1d7d25c69ec41167131c2e2cea0f98e9f7cb8960e31cc481c9265432a9528e"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "bytes": 162,
+      "sha256": "7b99471d6be87fc8f9ea1b82f2ef86a27b427df9e3876c254a61a80ff95cf9c9"
+    },
+    "history-retention-stride-10-total-storage-v2/receipt.json": {
+      "bytes": 162,
+      "sha256": "243b67b789d827afcaccd623f4b721b11caf90d4eff69d760fa866f39c757282"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "history-retention-stride-3-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "50275a531de8aafc8bf0ae3e703efa94ebdae130b3e7692295c9e9737c0e4145"
+    },
+    "report.txt": {
+      "bytes": 514,
+      "sha256": "d74deafa9c3ae2050b1f8b3e91b4338e3f9b2ab25a88b23385923b8641c5f26a"
+    },
+    "run.json": {
+      "bytes": 1025,
+      "sha256": "474f95f978035451dfdbae4f9e9e3a836e150f273057c804f4d5da0aa4cd7c2c"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}

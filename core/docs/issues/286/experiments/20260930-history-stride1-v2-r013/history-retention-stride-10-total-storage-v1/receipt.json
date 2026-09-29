@@ -1,0 +1,6 @@
+{
+  "case": "history-retention-stride-10-total-storage-v1",
+  "reason": "explicit run-only tier or unselected case",
+  "sample_count": 0,
+  "status": "NOT_RUN"
+}

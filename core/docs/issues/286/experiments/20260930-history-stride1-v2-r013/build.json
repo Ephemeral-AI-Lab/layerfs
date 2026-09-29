@@ -1,0 +1,24 @@
+{
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/abe80f23f6b40ea9f8b2905105bd0b5c922e0536d98e760cc27fec7a5df54ba7/fs-bench-storage-content",
+    "sha256": "abe80f23f6b40ea9f8b2905105bd0b5c922e0536d98e760cc27fec7a5df54ba7"
+  },
+  "build_profile": "release",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/benchmark/fs-bench-pro-storage-content/Cargo.toml",
+    "--bin",
+    "fs-bench-storage-content"
+  ],
+  "compilation_seal": "1811630b93b8947819fa5b780b34786ed0f93355e257ab2d244eb95783cdecac",
+  "dependency_reuse": "same worktree's locked Cargo target",
+  "exit_code": 0,
+  "mode": "worktree-local-incremental",
+  "status": "PASS",
+  "wall_ns": 8119538625
+}
