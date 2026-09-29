@@ -273,3 +273,11 @@ R026 issue publication: [#286 comment5898878612](https://github.com/Ephemeral-AI
 | Round | Family / selection | Declared source | Result / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-block-diagnostic-r027 | stride1/157 original-owner C2/C5 block progression; **no candidate sample** | `5a8676624`, benchmark-target binary SHA `8f52b440...` | Complete 157 states ×4 probes, exit0, wall165.179s; C2 allocation jumps exactly16,777,216 B at state146 for217,088 B apparent growth, then stays fixed; final files byte-identical to r021, strict official r021 FAIL139264 B unchanged, numeric time INELIGIBLE | [Diagnostic report](experiments/20260930-history-block-diagnostic-r027.md) | Publish after commit; link in next real round |
+
+## Selected round 20260930-history-v3-r028
+
+R027 issue publication: [#286 comment5899036121](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5899036121), diagnostic report commit `4dfa55261` (production delta+0). Prospective product source `6fd7fce46` selects new-Store incremental auto-vacuum and reclaims at most one free page inside each save transaction (+14 Core production LOC); no gate or timeout changed.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-v3-r028 | compound v3 stride10/17 then stride3/53, one changed-source sample each | `6fd7fce46` | **PASS/PASS**: strict allocated46473216<49344512 and58146816<64024576 B; full tree/selected content/independent O3+roots/C5/cleanup PASS, driver44.438/72.975s, verifier2.838/8.063s within original limits; numeric time INELIGIBLE | [Round report](experiments/20260930-history-v3-r028.md) | Publish after commit; link in next real round |
