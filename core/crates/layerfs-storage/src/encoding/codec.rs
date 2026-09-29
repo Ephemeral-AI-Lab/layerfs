@@ -17,7 +17,8 @@
 //! decompression, and decompression is exact-size into a validated destination.
 //!
 //! The parameter sequences, workspace sizes and frame policy are the measured
-//! ones of the retained-history profile: payload frames use level 9, a
+//! ones of the retained-history profile: payload trials use level 9 and selected
+//! default-width whole-file FULL winners use level 12, a
 //! role-specific window log, a content-size field, a checksum, no dictionary id
 //! and no workers; group bodies use level 19 with the window log capped at
 //! sixteen. Contexts live in a caller-owned aligned region, so a codec call
@@ -48,7 +49,8 @@ use crate::error::{StorageError, StorageResult};
 
 /// One aligned encode workspace shared by every role of one save.
 ///
-/// The retained 16 MiB bound was sized for payload level 9 and group level 19.
+/// The retained 16 MiB bound covers level 12 at the default whole-file width,
+/// level 9 at every accepted width, and group level 19.
 /// The level change does not resize this arena:
 /// one save allocates it once and shares it across all codec calls. Every
 /// static-context request must still fit; failure is returned to the caller.
@@ -61,6 +63,8 @@ pub const GROUP_LIMIT: usize = 65_536;
 pub const GROUP_FRAME_LIMIT: usize = GROUP_LIMIT + 1024;
 /// Compression level of whole-file and chunk payload records.
 const PAYLOAD_LEVEL: i32 = 9;
+/// Selected whole-file FULL winners; PREFIX trials stay at level 9.
+const WHOLE_FILE_FULL_LEVEL: i32 = 12;
 /// Compression level shared by ordinary and pooled value-group bodies.
 ///
 /// Payload settings, frame integrity checks and workspace bounds are
@@ -225,6 +229,31 @@ impl CompressionWorkspace {
 
     /// Compresses `raw` under `profile`, returning the exact payload frame.
     pub fn compress(&mut self, profile: CodecProfile, raw: &[u8]) -> StorageResult<Vec<u8>> {
+        self.compress_level(profile, raw, PAYLOAD_LEVEL)
+    }
+
+    /// Compresses one selected whole-file FULL winner within the same workspace.
+    /// The default 128-KiB construction profile uses level 12; wider accepted
+    /// profiles keep level 9 because their level-12 context exceeds 16 MiB.
+    pub fn compress_full_winner(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+    ) -> StorageResult<Vec<u8>> {
+        let level = if profile.raw_limit() <= 131_071 {
+            WHOLE_FILE_FULL_LEVEL
+        } else {
+            PAYLOAD_LEVEL
+        };
+        self.compress_level(profile, raw, level)
+    }
+
+    fn compress_level(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+        level: i32,
+    ) -> StorageResult<Vec<u8>> {
         if raw.is_empty() || raw.len() > profile.raw_limit() {
             return Err(StorageError::CapacityExceeded {
                 what: "codec.raw_payload",
@@ -242,7 +271,7 @@ impl CompressionWorkspace {
                 ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
             ))?;
             for (parameter, value) in [
-                (ZSTD_cParameter::ZSTD_c_compressionLevel, PAYLOAD_LEVEL),
+                (ZSTD_cParameter::ZSTD_c_compressionLevel, level),
                 (ZSTD_cParameter::ZSTD_c_windowLog, profile.window_log()),
                 (ZSTD_cParameter::ZSTD_c_contentSizeFlag, 1),
                 (ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
@@ -252,7 +281,7 @@ impl CompressionWorkspace {
                 checked(ZSTD_CCtx_setParameter(context, parameter, value))?;
             }
             let estimate = checked(ZSTD_estimateCCtxSize_usingCParams(ZSTD_getCParams(
-                PAYLOAD_LEVEL,
+                level,
                 raw.len() as u64,
                 raw.len(),
             )))?;
@@ -302,13 +331,35 @@ impl CompressionWorkspace {
         profile: CodecProfile,
         raw: &[u8],
     ) -> StorageResult<bool> {
+        self.payload_is_incompressible_level(profile, raw, false)
+    }
+
+    /// Same bounded probe under the selected whole-file FULL level.
+    pub fn full_winner_is_incompressible(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+    ) -> StorageResult<bool> {
+        self.payload_is_incompressible_level(profile, raw, true)
+    }
+
+    fn payload_is_incompressible_level(
+        &mut self,
+        profile: CodecProfile,
+        raw: &[u8],
+        strong: bool,
+    ) -> StorageResult<bool> {
         if raw.len() <= STORED_PROBE_BYTES {
             return Ok(false);
         }
         let sample = raw
             .get(..STORED_PROBE_BYTES)
             .ok_or(StorageError::Integrity("stored-frame probe sample"))?;
-        let frame = self.compress(profile, sample)?;
+        let frame = if strong {
+            self.compress_full_winner(profile, sample)?
+        } else {
+            self.compress(profile, sample)?
+        };
         Ok(frame.len().saturating_mul(STORED_PROBE_SAVING_DEN)
             >= sample
                 .len()
