@@ -71,15 +71,6 @@ pub fn commit(connection: &Connection) -> StorageResult<()> {
         })
 }
 
-/// Reclaims at most one free SQLite page inside the save's write transaction.
-/// New Stores use incremental auto-vacuum; older schema-10 Stores without it
-/// remain compatible and the SQLite pragma makes no change to them. This
-/// bounded operation may shorten the original Store file without a copy.
-pub fn reclaim_one_free_page(connection: &Connection) -> StorageResult<()> {
-    connection.execute_batch("PRAGMA incremental_vacuum(1)")?;
-    Ok(())
-}
-
 /// Rolls the open transaction back; a failure leaves the outcome unproven.
 pub fn rollback(connection: &Connection) -> StorageResult<()> {
     connection

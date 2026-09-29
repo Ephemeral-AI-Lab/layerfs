@@ -18,11 +18,7 @@
 -- permitted.
 -- New Stores use 2-KiB SQLite pages. Existing schema-10 Stores keep their
 -- original page size; the reader does not reinterpret their bytes.
--- Incremental auto-vacuum permits one bounded free-page reclamation inside
--- each save transaction. Older schema-10 Stores with auto_vacuum=NONE remain
--- readable/writable; the pragma has no work there. No file copy is made.
 PRAGMA page_size = 2048;
-PRAGMA auto_vacuum = INCREMENTAL;
 PRAGMA application_id = 1279677261;
 PRAGMA user_version = 10;
 

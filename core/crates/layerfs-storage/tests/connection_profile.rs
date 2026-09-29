@@ -155,64 +155,6 @@ fn the_profile_reading_agrees_with_the_store_itself() {
         .query_row("PRAGMA cache_spill", [], |row| row.get(0))
         .expect("cache spill");
     assert_eq!(profile.page_size, page_size);
-    let auto_vacuum: i64 = independent
-        .query_row("PRAGMA auto_vacuum", [], |row| row.get(0))
-        .expect("auto-vacuum profile");
-    assert_eq!(
-        auto_vacuum, 2,
-        "new Stores reclaim at most one free page per save"
-    );
     assert_eq!(profile.cache_size, cache_size);
     assert_eq!(profile.cache_spill, cache_spill);
-}
-
-#[test]
-fn a_save_reclaims_one_free_page_without_a_database_copy() {
-    let dir = TempDir::new("incremental_reclaim");
-    let path = dir.store_path("incremental_reclaim");
-    let store = create_store(&path);
-    // Leave disposable free pages in the actual Store using a transient SQL
-    // table; the public save below must reclaim only a bounded amount.
-    let connection = rusqlite::Connection::open(&path).expect("external connection");
-    connection
-        .execute_batch(
-            "CREATE TABLE temporary_allocation(data BLOB); \
-             INSERT INTO temporary_allocation VALUES (zeroblob(100000)); \
-             DROP TABLE temporary_allocation;",
-        )
-        .expect("make free pages");
-    let before_free: i64 = connection
-        .query_row("PRAGMA freelist_count", [], |row| row.get(0))
-        .expect("free pages");
-    assert!(before_free > 1);
-    let before_size = std::fs::metadata(&path).expect("Store size").len();
-    drop(connection);
-
-    disabled(|scope| {
-        store
-            .begin_save(scope.child("storage.begin"))?
-            .finish(scope.child("storage.finish"))?;
-        Ok::<_, StorageError>(())
-    })
-    .expect("empty public save");
-
-    let connection = rusqlite::Connection::open(&path).expect("reopen Store");
-    let after_free: i64 = connection
-        .query_row("PRAGMA freelist_count", [], |row| row.get(0))
-        .expect("remaining free pages");
-    let after_size = std::fs::metadata(&path).expect("Store size").len();
-    assert!(
-        after_free < before_free,
-        "save consumes a bounded free page"
-    );
-    assert!(
-        after_size < before_size,
-        "SQLite truncates the original file"
-    );
-    assert_eq!(
-        connection
-            .query_row::<String, _, _>("PRAGMA quick_check", [], |row| row.get(0))
-            .expect("integrity"),
-        "ok"
-    );
 }
