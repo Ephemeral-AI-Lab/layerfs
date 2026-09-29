@@ -82,7 +82,7 @@ pub fn frame_group_bounded(records: &[Vec<u8>], limit: usize) -> StorageResult<V
 /// arithmetic `plan_lane` uses to decide that a single record still fits a normal
 /// pack at all.
 pub const WHOLE_FILE_GROUP_BODY_LIMIT: usize =
-    crate::policy::PACK_LIMIT - HEADER_LEN - 4 * crate::policy::GROUP_COUNT_LIMIT;
+    crate::policy::PACK_LIMIT - body_area_offset(PackLane::WholeFile);
 
 /// Frames `records` into one compact whole-file group body.
 ///

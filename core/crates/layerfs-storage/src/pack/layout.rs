@@ -94,6 +94,11 @@ pub const VERSION_WHOLE_FILE_STORED: u32 = 14;
 /// itself - the tag, an optional base identity and the frame - is unchanged, and
 /// so is this lane's starts-only directory.
 pub const VERSION_WHOLE_FILE_GROUPED: u32 = 17;
+/// Same grouped records with sixteen reserved directory slots instead of 256.
+/// Existing version-17 packs keep their original body offset on read.
+pub const VERSION_WHOLE_FILE_TIGHT: u32 = 18;
+/// Maximum groups the tight whole-file directory can describe.
+pub const WHOLE_FILE_TIGHT_GROUPS: usize = 16;
 /// Singleton framing that may carry a payload stored verbatim.
 pub const VERSION_SINGLETON_STORED: u32 = 16;
 
@@ -131,7 +136,7 @@ impl PackLane {
         match self {
             Self::Ordinary => VERSION_ORDINARY,
             Self::Native => VERSION_NATIVE_STORED,
-            Self::WholeFile => VERSION_WHOLE_FILE_GROUPED,
+            Self::WholeFile => VERSION_WHOLE_FILE_TIGHT,
             Self::PooledMetadata => VERSION_POOLED_METADATA,
             Self::Singleton => VERSION_SINGLETON_STORED,
         }
@@ -199,9 +204,8 @@ impl PackLane {
     pub const fn group_count_limit(self) -> usize {
         match self {
             Self::Singleton => 1,
-            Self::Ordinary | Self::Native | Self::WholeFile | Self::PooledMetadata => {
-                GROUP_COUNT_LIMIT
-            }
+            Self::WholeFile => WHOLE_FILE_TIGHT_GROUPS,
+            Self::Ordinary | Self::Native | Self::PooledMetadata => GROUP_COUNT_LIMIT,
         }
     }
 }
@@ -362,6 +366,8 @@ pub struct PackHeader {
     pub group_count: usize,
     /// Assembled length the control area declares, which equals `bytes.len()`.
     pub used: usize,
+    /// First group body's version-specific offset inside this pack.
+    pub body_offset: usize,
 }
 
 /// Reads and validates the pack header before any body is touched.
@@ -380,9 +386,10 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     let lane = match version {
         VERSION_ORDINARY => PackLane::Ordinary,
         VERSION_NATIVE | VERSION_NATIVE_STORED => PackLane::Native,
-        VERSION_WHOLE_FILE | VERSION_WHOLE_FILE_STORED | VERSION_WHOLE_FILE_GROUPED => {
-            PackLane::WholeFile
-        }
+        VERSION_WHOLE_FILE
+        | VERSION_WHOLE_FILE_STORED
+        | VERSION_WHOLE_FILE_GROUPED
+        | VERSION_WHOLE_FILE_TIGHT => PackLane::WholeFile,
         VERSION_POOLED_METADATA => PackLane::PooledMetadata,
         VERSION_SINGLETON | VERSION_SINGLETON_STORED => PackLane::Singleton,
         _ => {
@@ -396,7 +403,17 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
             .try_into()
             .map_err(|_| StorageError::Integrity("pack group count"))?,
     ) as usize;
-    if !(1..=GROUP_COUNT_LIMIT).contains(&group_count) {
+    let slots = if lane == PackLane::WholeFile && version != VERSION_WHOLE_FILE_TIGHT {
+        GROUP_COUNT_LIMIT
+    } else {
+        lane.group_count_limit()
+    };
+    let count_limit = if lane == PackLane::Singleton {
+        GROUP_COUNT_LIMIT
+    } else {
+        slots
+    };
+    if !(1..=count_limit).contains(&group_count) {
         return Err(StorageError::Integrity("pack group count"));
     }
     if header[20..24] != [0, 0, 0, 0] {
@@ -406,7 +423,8 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
     if used != bytes.len() {
         return Err(StorageError::Integrity("pack length"));
     }
-    if used < body_area_offset(lane) + 1 {
+    let body_offset = HEADER_LEN + directory_entry_len(lane) * slots;
+    if used < body_offset + 1 {
         return Err(StorageError::Integrity("pack directory width"));
     }
     if bytes.len() > lane.pack_limit() {
@@ -422,6 +440,7 @@ pub fn parse_header(bytes: &[u8]) -> StorageResult<PackHeader> {
         lane,
         group_count,
         used,
+        body_offset,
     })
 }
 
@@ -452,7 +471,7 @@ pub fn group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResu
 }
 
 fn ordinary_group_view(bytes: &[u8], header: PackHeader, group: usize) -> StorageResult<GroupView> {
-    let mut offset = body_area_offset(header.lane);
+    let mut offset = header.body_offset;
     let mut selected = None;
     for index in 0..header.group_count {
         let start = HEADER_LEN + DIRECTORY_ENTRY_LEN * index;
@@ -525,7 +544,7 @@ fn whole_file_group_view(
     if bytes.len() > header.lane.pack_limit() {
         return Err(StorageError::Integrity("compact pack length"));
     }
-    let mut start = body_area_offset(header.lane);
+    let mut start = header.body_offset;
     let mut selected = None;
     for index in 0..header.group_count {
         let entry = bytes

@@ -42,6 +42,30 @@ class SelfCheckTest(unittest.TestCase):
 
 
 class CurrentPackTest(unittest.TestCase):
+    def test_tight_grouped_whole_file_directory_keeps_record_offsets(self):
+        records = [b"\x02abc", b"\x02defgh"]
+        body = struct.pack("<III", 2, len(records[0]), sum(map(len, records))) + b"".join(records)
+        start = 24 + 4 * 16
+        used = start + len(body)
+        pack = (b"LFPACK\0\0" + struct.pack("<IIII", 18, 1, used, 0)
+                + struct.pack("<I", start) + bytes(4 * 15) + body)
+        with tempfile.TemporaryDirectory() as directory:
+            path = make_store(directory, "tight.sqlite", [
+                "CREATE TABLE object_packs (pack_id INTEGER, data BLOB)",
+                "CREATE TABLE objects (object_id BLOB, object_role INTEGER, pack_id INTEGER, group_number INTEGER, record_number INTEGER)",
+            ])
+            with sqlite3.connect(path) as db:
+                db.execute("INSERT INTO object_packs VALUES (?, ?)", (1, pack))
+                db.executemany("INSERT INTO objects VALUES (?, 1, 1, 0, ?)", [(b"a", 0), (b"b", 1)])
+            reading = space.pack_directory(path)
+            self.assertEqual(reading.directory_bytes, 64)
+            self.assertEqual(reading.body_bytes, len(body))
+            self.assertEqual(space.whole_file_records(path), {b"a": 4, b"b": 6})
+        invalid = bytearray(pack)
+        struct.pack_into("<I", invalid, 12, 17)
+        with self.assertRaises(space.Incomplete):
+            space._pack_group_ranges(bytes(invalid), "too many groups")
+
     def test_current_group_directory_refuses_gaps_flags_and_unknown_codecs(self):
         start = 24 + 16 * 256
         body = struct.pack("<II", 1, 2) + b"xy"

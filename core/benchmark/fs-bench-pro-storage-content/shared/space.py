@@ -265,12 +265,12 @@ PACK_LANES: dict[int, str] = {
     7: "singleton",
     9: "ordinary", 10: "native", 11: "whole-file", 12: "pooled-metadata",
     13: "singleton", 14: "whole-file", 15: "native", 16: "singleton", 17: "whole-file",
+    18: "whole-file",
 }
 
-#: The one lane whose directory is starts-only **and** which holds exactly one
-#: record per group. Per-object attribution is exact here and nowhere else; every
-#: other lane must be reported as an aggregate, because one group holds many
-#: records and a join of `objects` to a group's byte range multiply-counts them.
+#: The starts-only directory lane. Versions 17/18 have checked internal record
+#: offsets; older versions hold one record. Other lanes have no exact
+#: per-record stored-size attribution from their directory alone.
 SINGLE_RECORD_LANE = "whole-file"
 
 PACK_ROWS_SQL = "SELECT pack_id, data FROM object_packs"
@@ -332,7 +332,9 @@ def _pack_bounds(blob: bytes, where: str):
     if len(blob) < 24:
         raise Incomplete(f"{where}: truncated current control area")
     used, reserved = struct.unpack_from("<II", blob, 16)
-    slots = 1 if lane == "singleton" else 256
+    slots = 1 if lane == "singleton" else 16 if version == 18 else 256
+    if count > slots:
+        raise Incomplete(f"{where}: group count exceeds versioned directory")
     width = 4 if lane == "whole-file" else 16
     if reserved or not 24 + width * slots < used <= len(blob):
         raise Incomplete(f"{where}: invalid declared pack length/control area")
@@ -458,9 +460,9 @@ def whole_file_records(path: str | Path) -> dict[bytes, int]:
         if lane != SINGLE_RECORD_LANE:
             continue
         version = struct.unpack_from("<I", blob, 8)[0]
-        grouped |= version == 17
+        grouped |= version in (17, 18)
         for index, (start, length) in enumerate(ranges):
-            if version != 17:
+            if version not in (17, 18):
                 sizes[(pack_id, index, 0)] = length
                 continue
             body = blob[start:start + length]
@@ -924,15 +926,15 @@ def self_check() -> list[str]:
         failures.append("the executed pack SQL uses IFNULL: that is the same fabricated zero")
     if "SUM" not in PACK_SUM_SQL.upper():
         failures.append("the pack SQL does not sum anything, so it cannot measure pack bytes")
-    if set(PACK_LANES) != {1, 2, 4, 6, 7}:
-        failures.append("the framing version map is not the five implemented lanes")
+    if set(PACK_LANES) != {1, 2, 4, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}:
+        failures.append("the framing version map omits a supported pack version")
     if PACK_LANES.get(4) != SINGLE_RECORD_LANE:
         failures.append(
             "the starts-only 4-byte directory lane is not the single-record lane: "
             "per-object attribution there would multiply-count"
         )
-    if len({name for name in PACK_LANES.values()}) != len(PACK_LANES):
-        failures.append("two framing versions share a lane name")
+    if set(PACK_LANES.values()) != {"ordinary", "native", "whole-file", "pooled-metadata", "singleton"}:
+        failures.append("the framing map has a missing or foreign lane")
     return failures
 
 

@@ -145,8 +145,8 @@ def case_run(out, case, common, identities, binary):
                "--out", str(native)]
     record = {"schema": f"core-history-retention-receipt-{case.version}", "family": "history_retention",
               "case": case.id, "historical_backend_id": case.backend_id, "profile": case.profile,
-              "verifier_method": ("complete-listed-tree+c2-stored-lengths+selected-public-digests-v2b"
-                  if case.version == "v2" else "complete-listed-tree+selected-public-digests-v1"),
+              "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d",
+              "verification_identity_reuse": "verifier-only, empty-start, at-most-8MiB authenticated C1 page ObjectId memo; trace hit/read/peak counters",
               "identity": identities, "binary": binary, "corpus": corpus.identity(),
               "root_ledger": expected, "env": method_env, "sample_count": 0,
               "construction_workers": 1, "setup": "InProcess", "clone_method": None,

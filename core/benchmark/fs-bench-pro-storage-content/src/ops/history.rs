@@ -41,7 +41,8 @@
 pub mod reads;
 
 use reads::{ReadCounters, ReadWork};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use layerfs_content::filesystem::references::backing::FileBacking;
 use layerfs_content::filesystem::{
@@ -912,6 +913,7 @@ fn filesystem_input(
 mod directory_transition_tests {
     use super::*;
     use crate::workload::history::{BlobMap, ChangedPath, State, Transition, TreeEntry};
+    use layerfs_content::object::AuthenticatedObjects;
 
     #[test]
     fn removed_directory_unbinds_and_readded_path_gets_new_serial() {
@@ -968,6 +970,28 @@ mod directory_transition_tests {
             .unwrap().encode().unwrap();
         assert_eq!(whole.len(), 3 + 23);
         assert_eq!(symlink.len(), 3 + 27);
+    }
+
+    #[test]
+    fn verifier_page_reuse_is_identity_exact_and_bounded() {
+        struct Reader { calls: Cell<usize> }
+        impl layerfs_content::object::AuthenticatedObjects for Reader {
+            fn read_canonical_batch(&self, ids: &[ObjectId]) -> layerfs_content::ContentResult<Vec<Vec<u8>>> {
+                self.calls.set(self.calls.get() + ids.len());
+                Ok(ids.iter().map(|id| id.as_bytes()[0..4].to_vec()).collect())
+            }
+        }
+        let first = ObjectId::for_bytes(b"first page");
+        let second = ObjectId::for_bytes(b"second page");
+        let reader = Reader { calls: Cell::new(0) };
+        let roles = BTreeMap::from([(first, (7, 4)), (second, (7, 4))]);
+        let cached = VerifiedPages::new(&reader, &roles, 4);
+        let initial = cached.read_canonical_batch(&[first]).unwrap();
+        assert_eq!(cached.read_canonical_batch(&[first]).unwrap(), initial);
+        cached.read_canonical_batch(&[second]).unwrap();
+        cached.read_canonical_batch(&[first]).unwrap();
+        assert_eq!(reader.calls.get(), 3);
+        assert_eq!(cached.stats(), (1, 3, 4));
     }
 }
 
@@ -1105,6 +1129,84 @@ struct VerifyTally {
     /// Sampled symlink targets read back.
     symlinks_read: u64,
     sampled: u64,
+}
+
+/// Verifier-local reuse of authenticated immutable C1 tree pages only.
+/// It starts empty after the measured driver, never touches product cache policy,
+/// and retains at most eight MiB of canonical page bodies across state checks.
+struct VerifiedPages<'a> {
+    reader: &'a dyn layerfs_content::object::AuthenticatedObjects,
+    roles: &'a BTreeMap<ObjectId, (u8, u64)>,
+    cache: RefCell<VerifiedPageCache>,
+    hits: Cell<u64>,
+    misses: Cell<u64>,
+    limit: usize,
+}
+
+#[derive(Default)]
+struct VerifiedPageCache {
+    bodies: BTreeMap<ObjectId, Vec<u8>>,
+    order: VecDeque<ObjectId>,
+    bytes: usize,
+    peak: usize,
+}
+
+impl<'a> VerifiedPages<'a> {
+    fn new(reader: &'a dyn layerfs_content::object::AuthenticatedObjects,
+        roles: &'a BTreeMap<ObjectId, (u8, u64)>, limit: usize) -> Self {
+        Self { reader, roles, cache: RefCell::new(VerifiedPageCache::default()),
+            hits: Cell::new(0), misses: Cell::new(0), limit }
+    }
+
+    fn stats(&self) -> (u64, u64, usize) {
+        (self.hits.get(), self.misses.get(), self.cache.borrow().peak)
+    }
+}
+
+impl layerfs_content::object::AuthenticatedObjects for VerifiedPages<'_> {
+    fn read_canonical_batch(&self, ids: &[ObjectId]) -> layerfs_content::ContentResult<Vec<Vec<u8>>> {
+        let mut answers = vec![None; ids.len()];
+        let mut missing: BTreeMap<ObjectId, Vec<usize>> = BTreeMap::new();
+        {
+            let cache = self.cache.borrow();
+            for (index, id) in ids.iter().enumerate() {
+                if let Some(body) = cache.bodies.get(id) {
+                    answers[index] = Some(body.clone());
+                    self.hits.set(self.hits.get() + 1);
+                } else {
+                    missing.entry(*id).or_default().push(index);
+                }
+            }
+        }
+        if !missing.is_empty() {
+            let keys: Vec<_> = missing.keys().copied().collect();
+            let bodies = self.reader.read_canonical_batch(&keys)?;
+            if bodies.len() != keys.len() {
+                return Err(layerfs_content::ContentError::BatchCardinality {
+                    requested: keys.len(), returned: bodies.len(),
+                });
+            }
+            self.misses.set(self.misses.get() + keys.len() as u64);
+            let mut cache = self.cache.borrow_mut();
+            for (id, body) in keys.into_iter().zip(bodies) {
+                if self.roles.get(&id).is_some_and(|(role, _)| (6..=10).contains(role))
+                    && body.len() <= self.limit {
+                    while cache.bytes + body.len() > self.limit {
+                        let oldest = cache.order.pop_front().expect("nonempty cache");
+                        cache.bytes -= cache.bodies.remove(&oldest).expect("tracked body").len();
+                    }
+                    cache.bytes += body.len();
+                    cache.peak = cache.peak.max(cache.bytes);
+                    cache.order.push_back(id);
+                    cache.bodies.insert(id, body.clone());
+                }
+                for index in missing.remove(&id).expect("missing positions") {
+                    answers[index] = Some(body.clone());
+                }
+            }
+        }
+        Ok(answers.into_iter().map(|answer| answer.expect("filled response")).collect())
+    }
 }
 
 /// Closed C2's persisted role/length ledger, checked for identity consistency.
@@ -1675,8 +1777,8 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     let mut gates: Vec<Gate> = Vec::new();
     if super::history_retained::enabled() {
         context.trace.write(Kind::Run, "history_verify_method",
-            "complete-listed-tree+c2-stored-lengths+selected-public-digests-v2b", "",
-            "all paths and kinds from public C1; exact logical sizes from checked C2 widths or public FileState; selected bytes authenticated")?;
+            "complete-listed-tree+c2-stored-lengths+selected-public-digests+8MiB-verified-page-identity-v2d", "",
+            "all paths and kinds from public C1; exact sizes from checked C2 widths or public FileState; selected bytes authenticated; only immutable C1 pages memoized within verifier")?;
     }
 
     // The identity the verification is *of*. A verifier that ran against a
@@ -1759,6 +1861,8 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
     let (result, _) = Timing::disabled("history.verify", |scope: &TimingScope<'_, Active>| {
         let _ = scope;
         let provider = StoreProvider::new(&store);
+        let verified_pages = stored_metadata.as_ref().map(|metadata|
+            VerifiedPages::new(&provider, metadata, 8 * 1024 * 1024));
         let mut total = VerifyTally::default();
         let mut failures: Vec<String> = Vec::new();
         let mut per_state_ns: Vec<(usize, u64)> = Vec::new();
@@ -1766,7 +1870,9 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         let mut lengths = BTreeMap::new();
         for (ordinal, root, oracle) in &oracles {
             let started = std::time::Instant::now();
-            let mut sampler = Sampler::new(&provider, oracle, budget);
+            let reader: &dyn layerfs_content::object::AuthenticatedObjects =
+                match &verified_pages { Some(pages) => pages, None => &provider };
+            let mut sampler = Sampler::new(reader, oracle, budget);
             let tally = if super::history_retained::enabled() {
                 sampler.stored_lengths = stored_metadata.as_ref();
                 sampler.digests = std::mem::take(&mut digests);
@@ -1799,9 +1905,10 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
             per_state_ns,
             provider.connection_opens(),
             provider.group_decodes(),
+            verified_pages.as_ref().map(VerifiedPages::stats).unwrap_or((0, 0, 0)),
         ))
     });
-    let (total, failures, per_state_ns, connection_opens, group_decodes) = match result {
+    let (total, failures, per_state_ns, connection_opens, group_decodes, page_reuse) = match result {
         Ok(value) => value,
         Err(error) => return Ok(unmeasured(&error, gates)),
     };
@@ -1823,6 +1930,14 @@ fn verify(case: &Case, row: Row, context: &mut OpContext<'_>) -> Result<OpOutcom
         ),
     ] {
         context.trace.write_number(Kind::Resource, key, value, unit, basis)?;
+    }
+    for (key, value, unit) in [
+        ("verify.authenticated_page_reuses", page_reuse.0 as i128, "objects"),
+        ("verify.authenticated_page_reads", page_reuse.1 as i128, "objects"),
+        ("verify.authenticated_page_peak_bytes", page_reuse.2 as i128, "bytes"),
+    ] {
+        context.trace.write_number(Kind::Resource, key, value, unit,
+            "verifier-only ObjectId memo; 8 MiB canonical page limit, empty at invocation start")?;
     }
     for (ordinal, nanos) in &per_state_ns {
         context.trace.write_number(

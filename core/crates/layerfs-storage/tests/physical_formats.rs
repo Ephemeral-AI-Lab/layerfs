@@ -8,9 +8,10 @@
 mod support;
 
 use layerfs_storage::pack::layout::{
-    body_area_offset, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
+    body_area_offset, group_view, parse_header, PackLane, PACK_MAGIC, USED_OFFSET, VERSION_NATIVE,
     VERSION_NATIVE_STORED, VERSION_ORDINARY, VERSION_POOLED_METADATA, VERSION_SINGLETON,
-    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_STORED,
+    VERSION_SINGLETON_STORED, VERSION_WHOLE_FILE, VERSION_WHOLE_FILE_GROUPED,
+    VERSION_WHOLE_FILE_STORED, VERSION_WHOLE_FILE_TIGHT,
 };
 use layerfs_storage::StorageError;
 
@@ -23,7 +24,11 @@ use layerfs_storage::StorageError;
 /// produce a header alone: `parse_header` reads the declared length out of the
 /// bytes and refuses a pack whose bytes are not the ones it declares.
 fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
-    let length = body_area_offset(lane) + body;
+    let length = if lane == PackLane::WholeFile && version != VERSION_WHOLE_FILE_TIGHT {
+        24 + 4 * layerfs_storage::policy::GROUP_COUNT_LIMIT + body
+    } else {
+        body_area_offset(lane) + body
+    };
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&PACK_MAGIC);
     bytes.extend_from_slice(&version.to_le_bytes());
@@ -39,6 +44,30 @@ fn pack_of(lane: PackLane, version: u32, groups: u32, body: usize) -> Vec<u8> {
 }
 
 #[test]
+fn grouped_whole_file_versions_keep_their_own_body_offsets() {
+    for (version, offset) in [
+        (VERSION_WHOLE_FILE_GROUPED, 24 + 4 * 256),
+        (VERSION_WHOLE_FILE_TIGHT, 24 + 4 * 16),
+    ] {
+        let body = [1_u8, 2, 3, 4];
+        let used = offset + body.len();
+        let mut pack = Vec::new();
+        pack.extend_from_slice(&PACK_MAGIC);
+        pack.extend_from_slice(&version.to_le_bytes());
+        pack.extend_from_slice(&1_u32.to_le_bytes());
+        pack.extend_from_slice(&(used as u32).to_le_bytes());
+        pack.extend_from_slice(&[0; 4]);
+        pack.extend_from_slice(&(offset as u32).to_le_bytes());
+        pack.resize(offset, 0);
+        pack.extend_from_slice(&body);
+        let header = parse_header(&pack).unwrap();
+        assert_eq!(header.body_offset, offset);
+        let group = group_view(&pack, header, 0).unwrap();
+        assert_eq!(&pack[group.start..group.end], body);
+    }
+}
+
+#[test]
 fn every_implemented_framing_is_recognized_by_its_own_version() {
     // The three payload lanes each have two implemented versions: the one they
     // write, whose record grammar carries a stored tag, and the one they no longer
@@ -51,6 +80,8 @@ fn every_implemented_framing_is_recognized_by_its_own_version() {
         (VERSION_NATIVE_STORED, PackLane::Native),
         (VERSION_WHOLE_FILE, PackLane::WholeFile),
         (VERSION_WHOLE_FILE_STORED, PackLane::WholeFile),
+        (VERSION_WHOLE_FILE_GROUPED, PackLane::WholeFile),
+        (VERSION_WHOLE_FILE_TIGHT, PackLane::WholeFile),
         (VERSION_POOLED_METADATA, PackLane::PooledMetadata),
         (VERSION_SINGLETON, PackLane::Singleton),
         (VERSION_SINGLETON_STORED, PackLane::Singleton),
