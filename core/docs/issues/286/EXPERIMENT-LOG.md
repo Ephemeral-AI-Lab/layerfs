@@ -141,3 +141,11 @@ R006 issue publication: [#286 comment5895212384](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride10-v2-r007 | compound history stride10/17 states, one changed-source candidate | `e4a56f327` | FAIL: C2+C5 allocated51720192 >=49344512 B; full101477-path tree/size and8631 selected content path-states PASS, independent roots/O3/C5/cleanup PASS, verifier4.243s, time INELIGIBLE; adapter semantic label incorrectly FAIL because it includes resource gate | [Round report](experiments/20260930-history-stride10-v2-r007.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride10-v2-r008
+
+R007 issue publication: [#286 comment5895564116](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5895564116), report commit `de407e201` (production delta+0). Changed bounded codec/adapter source `34c3d3e53` records production delta+0.
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride10-v2-r008 | compound history stride10/17 states, one changed-source candidate | `34c3d3e53` | **PASS**: C2+C5 allocated47882240 B <49344512 B; complete101477 path-state tree/size,8631 selected content states,17 independent roots/O3/C5/cleanup PASS; verifier4.466s<10s, complete driver44.854s<60s; numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride10-v2-r008.md) | Publish after commit; link in next round |
