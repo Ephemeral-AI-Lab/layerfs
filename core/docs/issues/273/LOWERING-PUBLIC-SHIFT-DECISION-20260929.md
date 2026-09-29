@@ -3,7 +3,11 @@
 > **Status:** Dated planning checkpoint; not release evidence or a product contract.
 > Reviewed against `4809dcbd5d5ec80a1dae7709046b502aff80db0f`; no product source,
 > quota, fixture, oracle, deadline or receipt is modified by this proposal.
-> **Decision requested, not assumed.** The existing lowering FAIL remains FAIL.
+> **Superseded proposal — Option A is expressly rejected by the owner.**
+> The direct Workspace range-edit entrypoint and FUSE ioctl must remain absent;
+> they must never be restored. Optimize the generic read/write mutation route
+> used by `WorkspaceApi::exec` for arbitrary shell commands, not an edit carrier.
+> This page records the earlier research question, not current authority.
 
 ## The contract conflict, not an allocator workaround
 
@@ -44,9 +48,9 @@ capability, **not** public permission to add a test-only path. See
 [extent records](../../../crates/layerfs-workspace/src/backing/active/extents.rs)
 and the [existing public mutation dispatcher](../../../crates/layerfs-workspace/src/filesystem/active_file.rs).
 
-## Decision required from the owner before product changes
+## Superseded decision alternatives (retained for the audit)
 
-**Option A (proposed narrowly scoped #252 exception):** explicitly authorize
+**Option A (rejected; MUST NOT implement):** explicitly authorize
 one *generally supported*, public native Workspace operation for an unaligned,
 length-changing regular-file splice on a writable LocalEdit handle. It must
 be available to real clients, not keyed to a test or Stage. Proposed shape
@@ -66,11 +70,11 @@ dispose of the registered lowering gate as **FAIL / NOT_PROVED**. Existing
 fixed-offset writes alone are not such an operation. Do not relabel a test
 that checks only two small windows as a full-file proof.
 
-No option is approved as of this document. This proposal does not authorize
-implementation by treating the user's request for investigation as an
-implicit reversal of #252's deliberate owner decision.
+The owner's later instruction rejects Option A. It is never an authorized
+implementation route. The current generic write optimization and exact proof
+are documented separately; this older page must not be used to restore an API.
 
-## If A is approved: engineering contract and falsifiers
+## Historical unapproved A proposal (DO NOT IMPLEMENT)
 
 1. Check file kind, handle scope/rights, `start <= end <= selected EOF`,
    replacement ownership and maximum admitted input, new EOF overflow,
@@ -115,5 +119,5 @@ implicit reversal of #252's deliberate owner decision.
    Preserve every earlier FAIL with its own source, and rerun Stage once at
    each new frozen test/product identity only for an actual change.
 
-Until the owner rules on Option A/B, **lowering is FAIL / NOT_REPAIRED; no
-release, numeric admission or PR merge follows from this research.**
+This page grants no public range-edit permission, functional success, release,
+numeric admission or PR merge. Its original FAIL remains historical evidence.
