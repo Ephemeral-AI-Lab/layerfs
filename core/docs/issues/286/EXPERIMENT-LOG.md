@@ -157,3 +157,11 @@ R008 issue publication: [#286 comment5895668329](https://github.com/Ephemeral-AI
 | Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
 | --- | --- | --- | --- | --- | --- |
 | 20260930-history-stride3-v2-r009 | compound history stride3/53 states, first v2 candidate | `2a2453535` (product seal equal r008) | **FAIL O3**: observed589480854 B/73447 objects vs immutable589423458 B/73476; allocated60477440 B <64024576 B PASS, complete306861-path tree/size+26052 selected content states PASS,53 independent roots/C5/cleanup PASS; verifier16.559s<20s, driver77.536s<170s, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride3-v2-r009.md) | Publish after commit; link in next round |
+
+## Collected round 20260930-history-stride1-v2-r010
+
+R009 issue publication: [#286 comment5895738372](https://github.com/Ephemeral-AI-Lab/layerfs/issues/286#issuecomment-5895738372), report commit `c30be4b41` (production delta+0).
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260930-history-stride1-v2-r010 | compound history stride1/157 states, first explicit v2 candidate | `c30be4b41` (product seal equal r008) | **TIMEOUT/INCOMPLETE**: fixed170s child stopped with C2 save157 still active (122 objects), C5 156 Layers, no independent verifier; partial C2+C5 allocated84520960 B is not a complete strict gate, partial O3 status incorrectly labelled FAIL by adapter; all completion/canonical/cleanup claims INCOMPLETE, numeric time INELIGIBLE | [Round report](experiments/20260930-history-stride1-v2-r010.md) | Publish after commit; link in next round |

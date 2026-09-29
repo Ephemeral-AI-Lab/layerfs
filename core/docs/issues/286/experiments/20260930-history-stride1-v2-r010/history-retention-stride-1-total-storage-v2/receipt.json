@@ -1,0 +1,342 @@
+{
+  "admission_eligible": false,
+  "attempted_invocation_count": 1,
+  "binary": {
+    "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/b02afa16a07804a78f2f4d40142e69ba1c0a8d2fcc8836de1f5c882cf0889fcf/fs-bench-storage-content",
+    "sha256": "b02afa16a07804a78f2f4d40142e69ba1c0a8d2fcc8836de1f5c882cf0889fcf"
+  },
+  "cache_contract": "fresh-growing-store; untimed corpus reads; no cold time claim",
+  "canonical_status": "FAIL",
+  "case": "history-retention-stride-1-total-storage-v2",
+  "cleanup_status": "INCOMPLETE",
+  "clone_method": null,
+  "command_budget_status": "TARGET_MISS",
+  "competing_work": [
+    "538 /opt/homebrew/opt/docker-mac-net-connect/bin/docker-mac-net-connect",
+    "540 /Library/PrivilegedHelperTools/com.docker.vmnetd",
+    "5833 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5847 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5848 /Applications/Docker.app/Contents/MacOS/com.docker.backend",
+    "5890 /Applications/Docker.app/Contents/MacOS/com.docker.build",
+    "5894 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/MacOS/Docker Desktop",
+    "5899 /Applications/Docker.app/Contents/Resources/cli-plugins/docker-sandbox",
+    "5954 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "5955 /Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper.app/Contents/MacOS/Docker Desktop Helper",
+    "17226 /Applications/Docker.app/Contents/MacOS/com.docker.virtualization"
+  ],
+  "construction_workers": 1,
+  "corpus": {
+    "checkpoints": 157,
+    "manifest_sha256": "03f21acfb415907f521217e7a972ed512265c8d0c2da0f8034e2ff3014334271",
+    "reachable_commits": 15632,
+    "root": "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+    "source_tip": "b0a7d2ce3b4c19d7452e364b2d7acbfa87e707ed",
+    "total_logical_bytes": 4936693030,
+    "unique_blob_bytes": 891893320
+  },
+  "correctness_status": "INCOMPLETE",
+  "env": {
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "LAYERFS_HISTORY_ADVISORY": "1",
+    "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+    "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+    "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+    "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+    "LAYERFS_HISTORY_PHASES": "0",
+    "LAYERFS_HISTORY_RETAINED_CATALOG": "2",
+    "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+  },
+  "family": "history_retention",
+  "historical_backend_id": "history-stride1",
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "compilation_seal": "8950f5c213b4c1af14e9013c8a17e1b79d6d436289d1e678190a6285c01bd6f6",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dependency_seal": "576cfcbda6d8797d3f122b4d9d122648cf9a47290b35c63d9743c0424cca7aaf",
+    "dirty_paths": [],
+    "harness_seal": "516d6f6ec005d61c2f21d5b698e2c64245e6e3140f11cfaf3a64e55250cd7461",
+    "product_seal": "e8a308cad1fbbbb8b9e63182bcda8a2743de2b318c09d776b67171247efcd4a5",
+    "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+    "source_commit": "c30be4b41556ba56ca7d2cad205021707af51bfd",
+    "source_dirty": false,
+    "source_tree": "28120e852bf14fc1ee25a59154a326ab4d9167e2"
+  },
+  "numeric_time_eligibility": "INELIGIBLE",
+  "performance": {
+    "budget_ns": 170000000000,
+    "command": [
+      "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/b02afa16a07804a78f2f4d40142e69ba1c0a8d2fcc8836de1f5c882cf0889fcf/fs-bench-storage-content",
+      "--case",
+      "history-stride1",
+      "--corpus",
+      "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+      "--out",
+      "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/issue286-history-stride1-v2-r010/history-retention-stride-1-total-storage-v2/native"
+    ],
+    "exit_code": null,
+    "timed_out": true,
+    "wall_ns": 170023661042
+  },
+  "profile": "c1-c2-c5-retained-history-v2",
+  "reused_proof_identities": [],
+  "root_ledger": {
+    "canonical_observed_reference": "not an uninterrupted arm",
+    "canonical_required": [
+      871588115,
+      104705
+    ],
+    "reference": {
+      "kind": "154 closed committed reference saves plus three resumed diagnostic saves; resume chain gate FAIL 3/157 retained",
+      "prefix_command": {
+        "binary_sha256": "db76e41ed609690c013011697f0cf503577503ccef1954be21862fb2a5926671",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "6b22835dd57d76ea53bd44561a68f50e0aab756f",
+        "source_tree": "4eba1e59ec1e2e8dbf5f3247aacb5b2668389de8",
+        "watchdog_s": 170
+      },
+      "prefix_result": {
+        "exit_code": null,
+        "timed_out": true,
+        "wall_ns": 170013063583
+      },
+      "prefix_root_count": 154,
+      "prefix_store_sha256": "c699c74792a1e574b9aa22063bac58bb99c3eaf4f1cb37b9e76067a6fa8dadce",
+      "suffix_command": {
+        "binary_sha256": "0567b01c777c01231e6d728594190644ef799bcdf194460dddffcf58e56e9871",
+        "command": [
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/release/fs-bench-storage-content",
+          "--case",
+          "history-stride1",
+          "--corpus",
+          "/Users/yifanxu/Ephemeral-AI-Lab/deepseek-history-data",
+          "--out",
+          "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-resume154-r001/case"
+        ],
+        "env": {
+          "LAYERFS_CONSTRUCTION_WORKERS": "1",
+          "LAYERFS_HISTORY_ADVISORY": "1",
+          "LAYERFS_HISTORY_CHUNK_PREDECESSORS": "1",
+          "LAYERFS_HISTORY_DEPTH_LIMIT": "255",
+          "LAYERFS_HISTORY_FULL_PRODUCER": "0",
+          "LAYERFS_HISTORY_ORDERED_PREDECESSORS": "0",
+          "LAYERFS_HISTORY_REFERENCE_RESUME": "154",
+          "LAYERFS_HISTORY_REFERENCE_ROOT": "fc532f9d7270c09b1167cfd3fd80f47844f8cb3d1db05dff47b35ea79f222777",
+          "LAYERFS_HISTORY_REFERENCE_STORE": "/Users/yifanxu/.codex/worktrees/issue286-history-reference/layerfs/core/target/issue286-reference/v2/stride1-r001/case/sample.sqlite",
+          "LAYERFS_HISTORY_SIMILARITY_CANDIDATES": "0"
+        },
+        "kind": "independent v2 root-pin generation; no candidate speed claim",
+        "source_commit": "641f253da3f55972f48506c86c93e9f535001a31",
+        "source_tree": "b6bbb682f5f8973d4998f30b5786eac4148ccfef",
+        "watchdog_s": 170
+      },
+      "suffix_result": {
+        "exit_code": 0,
+        "timed_out": false,
+        "wall_ns": 65575202458
+      },
+      "suffix_root_count": 3,
+      "suffix_store_sha256": "8baddf9fd0ef7f6b3375082fc85ef4a6f3dadf8af39775fc49553fcdd18e68de",
+      "suffix_trace_sha256": "500131654899cca8d8209c3e02f278238059f2076566ccff38ce443985b30fed"
+    },
+    "roots_sha256": "bc1392af7ac11f2a50b444f927b32b27b3de2f33e1e2acfc3221e369c587adb9",
+    "states": 157
+  },
+  "sample_count": null,
+  "schema": "core-history-retention-receipt-v2",
+  "setup": "InProcess",
+  "status": "FAIL",
+  "storage": {
+    "allocation_attribution": "in-process-create-new-exclusive-v1",
+    "allocation_threshold_status": "FAIL",
+    "ceiling_bytes": 83947520,
+    "expected_C5_rows": {
+      "branches": 157,
+      "commits": 156,
+      "history_meta": 1,
+      "layer_stacks": 1,
+      "layers": 157,
+      "scope_allocator": 0,
+      "workspace_stages": 0
+    },
+    "gate": "g1.o6-total-retained-below-v016-v2",
+    "issues": [
+      "persisted C5 row counts disagree"
+    ],
+    "owners": {
+      "C2": {
+        "allocated_bytes": 84238336,
+        "apparent_bytes": 77971456,
+        "application_id": 1279677261,
+        "canonical_by_role": {
+          "chunk": {
+            "canonical_bytes": 65577308,
+            "objects": 3152
+          },
+          "directory-branch": {
+            "canonical_bytes": 106556,
+            "objects": 304
+          },
+          "directory-leaf": {
+            "canonical_bytes": 7311101,
+            "objects": 13413
+          },
+          "extent-leaf": {
+            "canonical_bytes": 324352,
+            "objects": 518
+          },
+          "file-state": {
+            "canonical_bytes": 54908,
+            "objects": 518
+          },
+          "filesystem-root": {
+            "canonical_bytes": 20124,
+            "objects": 156
+          },
+          "inode-branch": {
+            "canonical_bytes": 580952,
+            "objects": 248
+          },
+          "inode-leaf": {
+            "canonical_bytes": 53851426,
+            "objects": 10181
+          },
+          "symlink": {
+            "canonical_bytes": 442,
+            "objects": 7
+          },
+          "whole-file": {
+            "canonical_bytes": 731885071,
+            "objects": 74512
+          }
+        },
+        "canonical_bytes": 859712240,
+        "canonical_objects": 103009,
+        "database_bytes": 77971456,
+        "foreign_key_errors": [],
+        "freelist_count": 24,
+        "indexes": [
+          "packs_save",
+          "signatures_save",
+          "sqlite_autoindex_metadata_value_groups_1",
+          "sqlite_autoindex_saves_1",
+          "sqlite_autoindex_saves_2"
+        ],
+        "pack_bodies_bytes": 69507193,
+        "pack_directory": {
+          "blob_bytes": 69507193,
+          "body_bytes": 65747401,
+          "by_lane": {
+            "native": 7165570,
+            "ordinary": 4296676,
+            "pooled-metadata": 3939658,
+            "whole-file": 50345497
+          },
+          "directory_bytes": 3720192,
+          "framing_bytes": 3759792,
+          "groups": 11513,
+          "header_bytes": 39600,
+          "packs": 1650,
+          "unused_capacity_bytes": 0
+        },
+        "page_count": 19036,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "rows": {
+          "content_signatures": 7020,
+          "metadata_value_groups": 8988,
+          "object_packs": 1650,
+          "objects": 103009,
+          "saves": 157,
+          "store_policy": 1
+        },
+        "schema_version": 8,
+        "sidecars": [],
+        "tables": [
+          "content_signatures",
+          "metadata_value_groups",
+          "object_packs",
+          "objects",
+          "saves",
+          "sqlite_sequence",
+          "store_policy"
+        ],
+        "user_version": 10
+      },
+      "C5": {
+        "allocated_bytes": 282624,
+        "apparent_bytes": 233472,
+        "application_id": 1279677256,
+        "database_bytes": 233472,
+        "foreign_key_errors": [],
+        "freelist_count": 0,
+        "indexes": [
+          "branch_identity",
+          "branch_names",
+          "commit_identity",
+          "layer_identity",
+          "layer_stack_names",
+          "layers_child",
+          "layers_genesis",
+          "layers_source",
+          "stage_branches",
+          "stage_tokens"
+        ],
+        "page_count": 57,
+        "page_size": 4096,
+        "quick_check": "ok",
+        "rows": {
+          "branches": 156,
+          "commits": 155,
+          "history_meta": 1,
+          "layer_stacks": 1,
+          "layers": 156,
+          "scope_allocator": 0,
+          "workspace_stages": 0
+        },
+        "schema_version": 17,
+        "sidecars": [],
+        "tables": [
+          "branches",
+          "commits",
+          "history_meta",
+          "layer_stacks",
+          "layers",
+          "scope_allocator",
+          "workspace_stages"
+        ],
+        "user_version": 1
+      }
+    },
+    "retained_counts_status": "FAIL",
+    "status": "INCOMPLETE",
+    "strict": true,
+    "total_retained_allocated_bytes": 84520960,
+    "total_retained_apparent_bytes": 78204928,
+    "total_retained_logical_database_bytes": 78204928
+  },
+  "storage_gate": "g1.o6-total-retained-below-v016-v2",
+  "verification": {
+    "reason": "no complete driver outcome",
+    "status": "NOT_RUN"
+  },
+  "verifier_method": "complete-listed-tree+c2-stored-lengths+selected-public-digests-v2b"
+}

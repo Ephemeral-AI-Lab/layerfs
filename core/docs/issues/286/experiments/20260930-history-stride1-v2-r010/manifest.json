@@ -1,0 +1,65 @@
+{
+  "files": {
+    "build.json": {
+      "bytes": 597,
+      "sha256": "f5f3ab21a040ba137c59a50cb4f401d4f15a90c559d436fa0fcfcc6fe821544e"
+    },
+    "history-retention-stride-1-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "98d951b431559a5cd93b4964fc5386238fff20312a4213d0dad4c3494de68f61"
+    },
+    "history-retention-stride-1-total-storage-v2/declaration.json": {
+      "bytes": 7401,
+      "sha256": "c2b8a77e11c366bfac5b6dcf206d6658b3ee59a8da528215d9cf4a04efa8a3a4"
+    },
+    "history-retention-stride-1-total-storage-v2/native/history.sqlite": {
+      "bytes": 233472,
+      "sha256": "71f08c47087db3c3e880f3dc92af4643a6db35a49bf65733798d4b7f692acbfc"
+    },
+    "history-retention-stride-1-total-storage-v2/native/sample.sqlite": {
+      "bytes": 77971456,
+      "sha256": "7e80b3d08df15cd5128be2b4b97c38c6f94145a46cb77e70f59726c9b3a64e97"
+    },
+    "history-retention-stride-1-total-storage-v2/native/trace.jsonl": {
+      "bytes": 1642,
+      "sha256": "144c5488ff89f89a6eb1752482fef9d14ee0440cbc9ccd779f0bdec65e645f7e"
+    },
+    "history-retention-stride-1-total-storage-v2/perf.stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v2/perf.stdout": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "history-retention-stride-1-total-storage-v2/receipt.json": {
+      "bytes": 12990,
+      "sha256": "403a3c7388c39781a1aa4d93afa0d5c3bf550315a875b78ecbfebcd6875bad79"
+    },
+    "history-retention-stride-10-total-storage-v1/receipt.json": {
+      "bytes": 162,
+      "sha256": "7b99471d6be87fc8f9ea1b82f2ef86a27b427df9e3876c254a61a80ff95cf9c9"
+    },
+    "history-retention-stride-10-total-storage-v2/receipt.json": {
+      "bytes": 162,
+      "sha256": "243b67b789d827afcaccd623f4b721b11caf90d4eff69d760fa866f39c757282"
+    },
+    "history-retention-stride-3-total-storage-v1/receipt.json": {
+      "bytes": 161,
+      "sha256": "9be7b4a8248b83f1bee6a8b75c5ae442dfb2051a3cf081971e586bb3c0bbc1c6"
+    },
+    "history-retention-stride-3-total-storage-v2/receipt.json": {
+      "bytes": 161,
+      "sha256": "50275a531de8aafc8bf0ae3e703efa94ebdae130b3e7692295c9e9737c0e4145"
+    },
+    "report.txt": {
+      "bytes": 513,
+      "sha256": "be2a1b7311c8436a8dd2c7d67eb0e67a2da0104e9de742daecfbe0d14fa4d1aa"
+    },
+    "run.json": {
+      "bytes": 1025,
+      "sha256": "1c7e32bc1feccc1c2459e036db91793fcae3a790bd34a79a7fd9f2b3ca99e041"
+    }
+  },
+  "schema": "core-fs-bench-pro-manifest-v1"
+}
