@@ -61,6 +61,10 @@ impl From<std::io::Error> for Failure {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Response {
+    /// Maximum authenticated internal save version supported by this Service.
+    FileSaveCapabilities {
+        version: u8,
+    },
     Read {
         length: u64,
     },

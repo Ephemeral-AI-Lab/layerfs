@@ -475,15 +475,25 @@ fn handshake(
 /// Reads one length-prefixed record into a caller-owned buffer.
 fn read_record_into(io: &mut Socket, limit: usize, out: &mut Vec<u8>) -> Result<(), Failure> {
     let mut h = [0; 4];
-    io.read_exact(&mut h)?;
+    io.read_exact(&mut h).map_err(record_read_error)?;
     let n = u32::from_be_bytes(h) as usize;
     if n == 0 || n > limit {
         return Err(Code::Capacity.into());
     }
     out.clear();
     out.resize(n, 0);
-    io.read_exact(out)?;
+    io.read_exact(out).map_err(record_read_error)?;
     Ok(())
+}
+
+// Distinguish a socket's actual read deadline from other I/O failures.
+// The client still retains unknown custody when a mutation reply is lost.
+fn record_read_error(error: io::Error) -> Failure {
+    if error.kind() == io::ErrorKind::TimedOut {
+        Code::Deadline.into()
+    } else {
+        error.into()
+    }
 }
 fn read_record(io: &mut Socket, limit: usize) -> Result<Vec<u8>, Failure> {
     let mut h = [0; 4];

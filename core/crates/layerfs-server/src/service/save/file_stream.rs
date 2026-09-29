@@ -3,6 +3,7 @@ use crate::service::input::Exact;
 use layerfs_bridge::contract::{Code, Failure, MAX_FILE};
 use layerfs_content::{ContentError, ContentResult, Edit, EditSequence, EditSource};
 use std::{
+    cell::Cell,
     fs::{File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
@@ -10,10 +11,46 @@ use std::{
     time::Instant,
 };
 
+mod origin_runs;
+pub(crate) use origin_runs::ResolvedSource;
+
 const RECORD_BYTES: u64 = 24;
 const EDIT_BYTES: u64 = 32;
 const WINDOW_BYTES: usize = 64 * 1024;
 const SPOOL_DISK_BYTES: u64 = MAX_FILE * 2;
+
+struct ReadDiagnostic {
+    request: u64,
+    enabled: bool,
+    complete: bool,
+    declared_extents: u64,
+    descriptor_read_calls: u64,
+    parsed_extents: u64,
+    edits: u64,
+    edit_spool_write_calls: u64,
+    edit_spool_write_bytes: u64,
+    edit_spool_write_ns: u64,
+}
+
+impl Drop for ReadDiagnostic {
+    fn drop(&mut self) {
+        if self.enabled {
+            let record = format!(
+                "LFS_FILE_STREAM_CAUSE v=1 request={} scope=file_stream_read status={} declared_extents={} descriptor_read_calls={} parsed_extents={} edits={} edit_spool_write_calls={} edit_spool_write_bytes={} edit_spool_write_ns={}\n",
+                self.request,
+                if self.complete { "ok" } else { "error" },
+                self.declared_extents,
+                self.descriptor_read_calls,
+                self.parsed_extents,
+                self.edits,
+                self.edit_spool_write_calls,
+                self.edit_spool_write_bytes,
+                self.edit_spool_write_ns,
+            );
+            let _ = nix::unistd::write(std::io::stderr(), record.as_bytes());
+        }
+    }
+}
 
 struct SpoolFile {
     path: PathBuf,
@@ -64,11 +101,33 @@ pub(crate) struct FileInput {
     final_length: u64,
     bytes: Bytes,
     replacement: u64,
+    virtual_replacement: u64,
+    origins: Option<origin_runs::OriginRuns>,
+    record_lookups: Cell<u64>,
+    record_reads: Cell<u64>,
+    replacement_reads: Cell<u64>,
+    replacement_bytes_read: Cell<u64>,
+}
+
+impl Drop for FileInput {
+    fn drop(&mut self) {
+        if std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some() {
+            eprintln!(
+                "LFS_FILE_INPUT v=1 edits={} spool_resident={} record_lookups={} record_reads={} replacement_reads={} replacement_bytes_read={}",
+                self.edit_count, self.resident(), self.record_lookups.get(),
+                self.record_reads.get(), self.replacement_reads.get(),
+                self.replacement_bytes_read.get(),
+            );
+        }
+    }
 }
 
 impl FileInput {
     pub(crate) fn cleanup(&mut self) -> Result<(), Failure> {
         self.edits.remove()?;
+        if let Some(origins) = &mut self.origins {
+            origins.cleanup()?;
+        }
         if let Bytes::File(file) = &mut self.bytes {
             file.remove()?;
         }
@@ -79,7 +138,7 @@ impl FileInput {
     }
 
     pub(crate) fn replacement_bytes(&self) -> u64 {
-        self.replacement
+        self.virtual_replacement
     }
 
     pub(crate) fn reader(&self) -> FileReader<'_> {
@@ -87,6 +146,8 @@ impl FileInput {
     }
 
     fn record(&self, index: usize) -> ContentResult<(Edit, u64)> {
+        self.record_lookups
+            .set(self.record_lookups.get().saturating_add(1));
         if index >= self.edit_count {
             return Err(ContentError::InvalidEdit { what: "edit index" });
         }
@@ -98,6 +159,8 @@ impl FileInput {
             .map_err(|_| ContentError::Io)?;
         let mut b = [0; EDIT_BYTES as usize];
         file.read_exact(&mut b).map_err(|_| ContentError::Io)?;
+        self.record_reads
+            .set(self.record_reads.get().saturating_add(1));
         let word = |at: usize| u64::from_be_bytes(b[at..at + 8].try_into().unwrap());
         Ok((Edit::new(word(0), word(8), word(16)), word(24)))
     }
@@ -126,6 +189,13 @@ impl FileInput {
                     .map_err(|_| ContentError::Io)?;
             }
         }
+        self.replacement_reads
+            .set(self.replacement_reads.get().saturating_add(1));
+        self.replacement_bytes_read.set(
+            self.replacement_bytes_read
+                .get()
+                .saturating_add(take as u64),
+        );
         Ok(take)
     }
 }
@@ -179,19 +249,48 @@ impl Read for FileReader<'_> {
 }
 
 /// Parse, validate and spool the declared sequence before opening a C2 save.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "request identity accompanies this streaming parser"
+)]
 pub(crate) fn read(
     input: &mut dyn Read,
+    request: u64,
     has_base: bool,
     base_length: u64,
     final_length: u64,
     extents: u64,
     replacement: u64,
     deadline: Instant,
+    reordered: bool,
 ) -> Result<FileInput, Failure> {
+    let mut diagnostic = ReadDiagnostic {
+        request,
+        enabled: std::env::var_os("LAYERFS_COMPLEXITY_DIAGNOSTIC").is_some(),
+        complete: false,
+        declared_extents: extents,
+        descriptor_read_calls: 0,
+        parsed_extents: 0,
+        edits: 0,
+        edit_spool_write_calls: 0,
+        edit_spool_write_bytes: 0,
+        edit_spool_write_ns: 0,
+    };
+    if reordered {
+        let mut version = [0];
+        Exact::new(input, 1, deadline).read_exact(&mut version)?;
+        if version[0] != layerfs_bridge::contract::SAVE_FILE_V2_VERSION {
+            return Err(Code::Unsupported.into());
+        }
+    }
     if extents
         .checked_add(1)
         .and_then(|count| count.checked_mul(EDIT_BYTES))
-        .and_then(|records| extents.checked_mul(16)?.checked_add(records))
+        .and_then(|records| {
+            extents
+                .checked_mul(if reordered { 48 } else { 16 })?
+                .checked_add(records)
+        })
         .and_then(|records| records.checked_add(replacement))
         .is_none_or(|bytes| bytes > SPOOL_DISK_BYTES)
     {
@@ -199,6 +298,8 @@ pub(crate) fn read(
     }
     let mut edits = SpoolFile::create("runs")?;
     let mut zeros = SpoolFile::create("zeros")?;
+    let mut origins = reordered.then(origin_runs::OriginRuns::new).transpose()?;
+    let mut local_consumed = 0u64;
     let mut zero_count = 0u64;
     let mut count = 0u64;
     let mut position = 0u64;
@@ -214,6 +315,9 @@ pub(crate) fn read(
     );
     for _ in 0..extents {
         let mut b = [0u8; RECORD_BYTES as usize];
+        if diagnostic.enabled {
+            diagnostic.descriptor_read_calls += 1;
+        }
         descriptors.read_exact(&mut b)?;
         let word = |at: usize| u64::from_be_bytes(b[at..at + 8].try_into().unwrap());
         let kind = word(0);
@@ -235,6 +339,7 @@ pub(crate) fn read(
             {
                 close(
                     &mut edits.file,
+                    &mut diagnostic,
                     &mut count,
                     &mut delta,
                     base,
@@ -246,9 +351,26 @@ pub(crate) fn read(
                 pending = 0;
                 run_start = consumed;
             }
+            0 if reordered
+                && has_base
+                && offset < base
+                && offset
+                    .checked_add(length)
+                    .is_some_and(|end| end <= base_length) =>
+            {
+                origins
+                    .as_mut()
+                    .ok_or(Code::InvalidInput)?
+                    .push(consumed, length, 0, offset)?;
+                pending = pending.checked_add(length).ok_or(Code::Capacity)?;
+                consumed = consumed.checked_add(length).ok_or(Code::Capacity)?;
+            }
             1 | 2 if offset == 0 => {
+                if let Some(origins) = &mut origins {
+                    origins.push(consumed, length, 1, local_consumed)?;
+                }
                 if kind == 2 {
-                    for word in [consumed, length] {
+                    for word in [local_consumed, length] {
                         zeros
                             .file
                             .write_all(&word.to_be_bytes())
@@ -258,16 +380,21 @@ pub(crate) fn read(
                 }
                 pending = pending.checked_add(length).ok_or(Code::Capacity)?;
                 consumed = consumed.checked_add(length).ok_or(Code::Capacity)?;
+                local_consumed = local_consumed.checked_add(length).ok_or(Code::Capacity)?;
             }
             _ => return Err(Code::InvalidInput.into()),
         }
+        if diagnostic.enabled {
+            diagnostic.parsed_extents += 1;
+        }
         position += length;
     }
-    if position != final_length || consumed != replacement {
+    if position != final_length || local_consumed != replacement {
         return Err(Code::InvalidInput.into());
     }
     close(
         &mut edits.file,
+        &mut diagnostic,
         &mut count,
         &mut delta,
         base,
@@ -329,13 +456,21 @@ pub(crate) fn read(
         return Err(Code::InvalidInput.into());
     }
     zeros.remove()?;
+    let edit_count = usize::try_from(count).map_err(|_| Code::Capacity)?;
+    diagnostic.complete = true;
     Ok(FileInput {
         edits,
-        edit_count: usize::try_from(count).map_err(|_| Code::Capacity)?,
+        edit_count,
         base_length,
         final_length,
         bytes,
         replacement,
+        virtual_replacement: consumed,
+        origins,
+        record_lookups: Cell::new(0),
+        record_reads: Cell::new(0),
+        replacement_reads: Cell::new(0),
+        replacement_bytes_read: Cell::new(0),
     })
 }
 
@@ -380,8 +515,13 @@ fn check_zeros(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "diagnostic accompanies an existing edit record"
+)]
 fn close(
     file: &mut File,
+    diagnostic: &mut ReadDiagnostic,
     count: &mut u64,
     delta: &mut i128,
     base: u64,
@@ -395,9 +535,25 @@ fn close(
     let start = u64::try_from(i128::from(base) + *delta).map_err(|_| Code::InvalidInput)?;
     let stop = u64::try_from(i128::from(end) + *delta).map_err(|_| Code::InvalidInput)?;
     for word in [start, stop, replacement, byte_start] {
-        file.write_all(&word.to_be_bytes()).map_err(|_| Code::Io)?;
+        if diagnostic.enabled {
+            diagnostic.edit_spool_write_calls += 1;
+        }
+        let started = diagnostic.enabled.then(Instant::now);
+        let write = file.write_all(&word.to_be_bytes());
+        if let Some(started) = started {
+            diagnostic.edit_spool_write_ns = diagnostic
+                .edit_spool_write_ns
+                .saturating_add(started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        }
+        write.map_err(|_| Code::Io)?;
+        if diagnostic.enabled {
+            diagnostic.edit_spool_write_bytes += 8;
+        }
     }
     *count = count.checked_add(1).ok_or(Code::Capacity)?;
+    if diagnostic.enabled {
+        diagnostic.edits = *count;
+    }
     *delta += i128::from(replacement) - i128::from(end - base);
     Ok(())
 }

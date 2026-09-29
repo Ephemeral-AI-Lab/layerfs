@@ -99,6 +99,12 @@ impl Sessions {
                             id: session.next_id + 1,
                         });
                     }
+                    // Checked Hello consumed this SDK deadline: do not open a
+                    // fresh connection and mask the definite deadline error.
+                    Err(failure) if Instant::now() >= deadline => {
+                        *retained = None;
+                        return Err(failure);
+                    }
                     // A restarted or unreachable daemon invalidates the socket.
                     _ => *retained = None,
                 }

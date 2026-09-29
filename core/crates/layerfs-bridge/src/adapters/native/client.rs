@@ -152,7 +152,13 @@ impl Client {
                 let mut bytes = 0u64;
                 let mut frames = 0u64;
                 loop {
-                    let frame = receive.read().map_err(|_| delivery(r))?;
+                    let frame = receive.read().map_err(|failure| {
+                        if !r.operation.mutation() && failure.code == Code::Deadline {
+                            failure
+                        } else {
+                            delivery(r)
+                        }
+                    })?;
                     frames += 1;
                     if frame.id != r.id || frames > frame_budget(r.response_bytes) {
                         return Err(delivery(r));
@@ -509,9 +515,13 @@ fn matches_response(r: &Request, response: &Response, bytes: u64) -> bool {
         (Operation::ReadFile { start, end, .. }, Response::Read { length }) => {
             *length == end - start && *length == bytes
         }
-        (Operation::SaveFile { length, .. }, Response::Saved { length: actual, .. }) => {
-            length == actual && bytes == 0
+        (Operation::FileSaveCapabilities, Response::FileSaveCapabilities { version }) => {
+            *version == SAVE_FILE_V2_VERSION && bytes == 0
         }
+        (
+            Operation::SaveFile { length, .. } | Operation::SaveFileV2 { length, .. },
+            Response::Saved { length: actual, .. },
+        ) => length == actual && bytes == 0,
         (Operation::ConstructSymlink { target }, Response::Saved { length, .. }) => {
             target.len() as u64 == *length && bytes == 0
         }

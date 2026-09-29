@@ -28,18 +28,30 @@ pub fn mutate(
         length,
         extents,
         replacement,
+    }
+    | Operation::SaveFileV2 {
+        base,
+        base_length,
+        length,
+        extents,
+        replacement,
     } = &r.operation
     {
-        file_input = Some(file_stream::read(
-            input,
-            base.is_some(),
-            *base_length,
-            *length,
-            *extents,
-            *replacement,
-            deadline,
-        )?);
-        end_input(input)?;
+        file_input = Some(scope.child("service.pre_save_input").run(|_| {
+            let file = file_stream::read(
+                input,
+                r.id,
+                base.is_some(),
+                *base_length,
+                *length,
+                *extents,
+                *replacement,
+                deadline,
+                matches!(r.operation, Operation::SaveFileV2 { .. }),
+            )?;
+            end_input(input)?;
+            Ok::<_, Failure>(file)
+        })?);
     }
     if matches!(
         r.operation,
@@ -74,9 +86,16 @@ pub fn mutate(
                 .child("service.metadata")
                 .run(|_| metadata::save(&provider, r, &mut handoff, deadline))
         }
-        Operation::SaveFile { base, length, .. } => {
+        Operation::SaveFile { base, length, .. } | Operation::SaveFileV2 { base, length, .. } => {
             let file_input = file_input.as_ref().ok_or(Code::InvalidInput)?;
             let built = if let Some(root) = base {
+                let source = file_stream::ResolvedSource {
+                    input: file_input,
+                    provider: &provider,
+                    base: id(root),
+                    deadline,
+                    scope,
+                };
                 apply_edits(
                     policy,
                     &capacities,
@@ -84,7 +103,7 @@ pub fn mutate(
                     EditRequest {
                         root: id(root),
                         edits: file_input,
-                        source: file_input,
+                        source: &source,
                     },
                     &mut handoff,
                     scope.child("service.save_file"),
@@ -166,7 +185,10 @@ pub fn mutate(
                     outcome.chain.pooled.pack_fetches,
                     outcome.chain.pooled.pack_bytes,
                 );
-                if matches!(&r.operation, Operation::SaveFile { .. }) {
+                if matches!(
+                    &r.operation,
+                    Operation::SaveFile { .. } | Operation::SaveFileV2 { .. }
+                ) {
                     eprintln!(
                         "LFS_FINISH_SUBSTEP v=1 request={} scope=save-wide flush_batch_ns={} wave_ns={} offer_total_ns={} seal_total_ns={} write_pack_total_ns={} validate_ns={} collision_query_ns={} rows_ns={} members_ns={} insert_objects_ns={} sql_ns={} finish_drain_ns={} finish_batch_objects={} inserted={} reused={}",
                         r.id,

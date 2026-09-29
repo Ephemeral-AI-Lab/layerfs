@@ -1,5 +1,20 @@
 # Service, bridge, daemon and hosted telemetry
 
+> **#284 Phase A internal SaveFile compatibility (source in this commit, selectively
+> adapted from `11a864fc133844cae7a4247b1f243d84d5763b10`):** Opcode 20 retains
+> its v1 sequence and forward Base semantics. Authenticated read-only opcode 28
+> reports exactly typed capability `FileSaveCapabilities { version: 2 }`; save
+> opcode 29 carries version 2 in the body, with v1-width descriptors and
+> Service-local fixed-record Base origin resolution. The Service checks the
+> version before allocating/saving content and reads immutable Base bytes through
+> its authorized local provider rather than reentering the native session. The
+> 4 GiB logical/8 GiB body limits and 64 KiB read/replacement window stay in
+> force. Native read timeouts report Deadline for reads, but missing mutation
+> results remain Unknown; an expired Sandbox held-session Hello does not open a
+> new socket. This is an internal compatibility boundary, not public range I/O
+> or active Workspace attachment. The latter must check this exact capability
+> before admitting mutations depending on reordered Base reads.
+
 > **#264 Phase 4.5B, source in this commit after `6115dfcd2`:** Native Inspect
 > subtag 8 reads a canonical symlink by serial. Mounted namespace operations
 > use parent serial and one component; stale file reads and symlink targets use

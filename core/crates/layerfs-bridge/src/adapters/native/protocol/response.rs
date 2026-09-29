@@ -26,6 +26,10 @@ pub fn encode_response(r: &Response) -> Result<Vec<u8>, Failure> {
         _ => Encoder::default(),
     };
     match r {
+        Response::FileSaveCapabilities { version } => {
+            e.u8(29)?;
+            e.u8(*version)?;
+        }
         Response::Read { length } => {
             e.u8(1)?;
             e.u64(*length)?;
@@ -662,6 +666,7 @@ pub fn decode_response(b: &[u8]) -> Result<Response, Failure> {
             instance: d.root()?,
         }),
         21 => Response::WorkspaceExec(Box::new(take_exec(&mut d)?)),
+        29 => Response::FileSaveCapabilities { version: d.u8()? },
         _ => return Err(Code::Unsupported.into()),
     };
     d.finish()?;
