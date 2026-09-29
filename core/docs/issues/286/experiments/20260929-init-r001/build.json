@@ -1,0 +1,37 @@
+{
+  "binaries": {
+    "benchmark_init": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/cc0c7b54b1778bfa0bb30fcac5f88411c0a6f2d409b18137d48e1b05f0bf6bd8/benchmark_init",
+      "sha256": "cc0c7b54b1778bfa0bb30fcac5f88411c0a6f2d409b18137d48e1b05f0bf6bd8"
+    },
+    "verify_namespace": {
+      "path": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/benchmark-results/fs-bench-pro/binary-archive/a53af745613d844ff8405737e5a9aec293bac98e4b69a3bbeea586e66b3530ab/verify_namespace",
+      "sha256": "a53af745613d844ff8405737e5a9aec293bac98e4b69a3bbeea586e66b3530ab"
+    }
+  },
+  "budget_ns": 30000000000,
+  "build_profile": "release",
+  "command": [
+    "cargo",
+    "+1.85.1",
+    "build",
+    "--release",
+    "--manifest-path",
+    "core/Cargo.toml",
+    "--locked",
+    "-p",
+    "layerfs-sdk",
+    "-p",
+    "layerfs-server",
+    "--example",
+    "benchmark_init",
+    "--example",
+    "verify_namespace"
+  ],
+  "compiled_units": 87,
+  "exit_code": 0,
+  "mode": "first-use",
+  "status": "PASS",
+  "target": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target",
+  "wall_ns": 22037888417
+}

@@ -1,0 +1,25 @@
+{
+  "benchmark_registration": "REGISTERED_SDK_RELEASE_V5_LITE",
+  "blocked": null,
+  "build_profile": "release",
+  "cases": [
+    "namespace-100-compact-v3",
+    "namespace-1000-compact-v3"
+  ],
+  "family_cycle_budget_ns": 30000000000,
+  "family_cycle_wall_ns": 1858527458,
+  "identity": {
+    "build_profile": "release",
+    "cargo_lock_sha256": "4c3d4301fb96b05e9ebb7e359b11a18bc725be2921dcb8533aa60bdb2ea5c614",
+    "contract_commit": "6dfd0c7cbcbe9036f69b834e1704f2126f95c5a2",
+    "dirty_paths": [],
+    "harness_seal": "cb595b477fe9ceee594c448684b3f7fa129fbcbebde14b650fbc6521b749f438",
+    "product_seal": "9333b02e03ddb604b9013fcd3199d4f06b815234e338fe996088af1219147137",
+    "source_commit": "10d83af00fc1f4a0bc2ad845b6e3aadb7511db17",
+    "source_dirty": false,
+    "source_tree": "64bc0914e0baf13ba8938e5fb75e2a7b3d6d731c"
+  },
+  "schema": "core-fs-bench-pro-sdk-run-release-v5-lite",
+  "selection": "init_namespace",
+  "verification_scope": "complete paths/kinds; sampled file metadata/content"
+}

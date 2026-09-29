@@ -1,0 +1,14 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "cpu": "Apple M3 Max",
+  "root_cargo_config_sha256": "3a1863834c9fb76e20b1799459d1d90da5de7d347033171e025f3e2323dbe8c9",
+  "rustc": "rustc 1.85.1 (4eb161250 2025-03-15)\nbinary: rustc\ncommit-hash: 4eb161250e340c8f48f66e2b929ef4a5bed7c181\ncommit-date: 2025-03-15\nhost: aarch64-apple-darwin\nrelease: 1.85.1\nLLVM version: 19.1.7\n",
+  "image_id": null,
+  "topology": "host-only SDK/service/Store/history; no daemon/FUSE/container",
+  "construction_workers_env": 1,
+  "dependency_reuse": "worktree-local incremental Cargo; no foreign target",
+  "clone_method": null,
+  "setup": "fresh Init Store/history; prepared source acquired once per tier",
+  "reused_proof_identities": []
+}

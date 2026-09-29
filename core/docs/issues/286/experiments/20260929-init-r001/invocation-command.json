@@ -1,0 +1,19 @@
+{
+  "command": [
+    "python3",
+    "core/benchmark/fs-bench-pro/runner.py",
+    "run",
+    "--family",
+    "init_namespace",
+    "--out",
+    "benchmark-results/fs-bench-pro/issue286-init-r001"
+  ],
+  "cwd": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs",
+  "kind": "official-init-default-selection",
+  "outer_supervision_budget_s": 175,
+  "env": {
+    "CARGO_BUILD_JOBS": "8",
+    "LAYERFS_CONSTRUCTION_WORKERS": "1",
+    "TMPDIR": "/Users/yifanxu/.codex/worktrees/issue286-phase-b/layerfs/core/target/issue286-tmp"
+  }
+}

@@ -87,3 +87,9 @@ Production LOC <reference, Core, combined before/after/delta for each commit>
 Raw `core/target/` paths are local evidence only. Publish compact receipts or
 hash manifests with reproducible source/commands; never label those paths as
 published GitHub raw-evidence URLs. Preserve every attempt append-only.
+
+## Collected round 20260929-init-r001
+
+| Round | Family / selection | Measured source | Results / required gates | Report | Issue progress |
+| --- | --- | --- | --- | --- | --- |
+| 20260929-init-r001 | init_namespace: 100 then 1000 | `10d83af00` | Correctness, command/verifier budgets and cleanup PASS; numeric INELIGIBLE; 10000/100000 NOT_RUN | [Round report](experiments/20260929-init-r001.md) | Posted after report commit; append link in next actual round |
