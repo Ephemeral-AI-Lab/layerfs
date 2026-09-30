@@ -9,6 +9,52 @@ use layerfs_telemetry::{
 };
 use std::{collections::BTreeMap, fmt::Write as _, time::Instant};
 
+#[cfg(target_os = "macos")]
+#[repr(C)]
+#[derive(Default)]
+struct RusageV2 {
+    uuid: [u8; 16],
+    user_time: u64,
+    system_time: u64,
+    package_idle_wakeups: u64,
+    interrupt_wakeups: u64,
+    pageins: u64,
+    wired_size: u64,
+    resident_size: u64,
+    physical_footprint: u64,
+    process_start_abstime: u64,
+    process_exit_abstime: u64,
+    child_user_time: u64,
+    child_system_time: u64,
+    child_package_idle_wakeups: u64,
+    child_interrupt_wakeups: u64,
+    child_pageins: u64,
+    child_elapsed_abstime: u64,
+    disk_read_bytes: u64,
+    disk_write_bytes: u64,
+}
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut std::ffi::c_void) -> i32;
+}
+#[cfg(target_os = "macos")]
+fn disk_read_bytes() -> Option<u64> {
+    let mut usage = RusageV2::default();
+    // SAFETY: libproc writes the C-layout V2 structure supplied here.
+    (unsafe {
+        proc_pid_rusage(
+            std::process::id() as i32,
+            2,
+            std::ptr::from_mut(&mut usage).cast(),
+        )
+    } == 0)
+        .then_some(usage.disk_read_bytes)
+}
+#[cfg(not(target_os = "macos"))]
+fn disk_read_bytes() -> Option<u64> {
+    None
+}
+
 struct Case(BTreeMap<String, String>);
 impl Case {
     fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
@@ -53,6 +99,7 @@ fn key(text: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
     Ok(value.try_into().map_err(|_| "cursor key width")?)
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let disk_read_before = disk_read_bytes();
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 6 {
         return Err("mode case store history image required".into());
@@ -247,10 +294,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .join(",")
         })
         .unwrap_or_default();
-    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?}}}",
+    let disk_read_delta =
+        disk_read_before.and_then(|before| disk_read_bytes()?.checked_sub(before));
+    println!("RECEIPT\t{{\"schema\":\"issue243-shell-driver-v1\",\"status\":\"{status}\",\"detail\":{:?},\"mode\":{:?},\"scenario_id\":{:?},\"branch_id\":{:?},\"head_commit\":{:?},\"commit_called\":{commit_called},\"exec_ns\":{exec_ns},\"commit_ns\":{commit_ns},\"operation_ns\":{operation_ns},\"cleanup_ns\":{cleanup_ns},\"projection_counts\":{:?},\"unmount_ok\":{},\"sandbox_delete_ok\":{},\"daemon_log_attempted\":{},\"daemon_log_bytes\":{},\"daemon_log_truncated\":{},\"daemon_log_error\":{:?},\"host_disk_read_bytes\":{}}}",
         detail, args[1], case.get("scenario_id")?, hex(&branch), head_commit, counts,
         unmount.is_ok(), delete.is_ok(), capture.attempted, capture.bytes, capture.truncated,
-        format!("{:?}", capture.error));
+        format!("{:?}", capture.error), disk_read_delta.map_or("null".to_owned(), |bytes| bytes.to_string()));
     drop(owner);
     server.shutdown();
     if status != "COMPLETE" {

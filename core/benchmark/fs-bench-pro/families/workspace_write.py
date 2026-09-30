@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 
 
@@ -48,6 +49,15 @@ SELECTED = tuple(CASES)
 BASE = "alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8"
 WRITER_SHA256 = "f293d71f2a16aaeecb4de6c1c2cf5b74dfcb0e616204e591f83c3ef802a686d3"
 WRITER_SOURCE_SHA256 = "dc21c66ddb85be7c5d27c164b292cbf19a82f4e5a3352a8197050cfcae15d8f0"
+CACHE_CONTRACT = "darwin-zero-source-residency-linux-direct-backing-v1"
+MAX_LAUNCH_GAP_NS = 1_000_000_000
+DIRECT_IO_FILES = {
+    "core/crates/layerfs-workspace/src/backing/segments.rs": "dd2286500231693d0498379f7825af3314cc902f65bdc0b27c122b74b24c735d",
+    "core/crates/layerfs-fuse/src/adapter.rs": "e361037d9c87ac42dda651e06a708053b999bfa54a69a7e5038a3e1398380fa7",
+}
+RESIDENCY_HELPER = ROOT / "core/benchmark/fs-bench-pro-storage-content/shared/residency.py"
+sys.path.insert(0, str(RESIDENCY_HELPER.parent))
+import residency  # noqa: E402
 
 
 def sha256(path):
@@ -118,7 +128,7 @@ def execute(command, folder, *, timeout=None, env=None):
     wall = time.monotonic_ns() - started
     (folder.with_suffix(".stdout")).write_bytes(stdout)
     (folder.with_suffix(".stderr")).write_bytes(stderr)
-    return {"command": command, "wall_ns": wall, "exit_code": code, "timeout": expired,
+    return {"command": command, "started_ns": started, "wall_ns": wall, "exit_code": code, "timeout": expired,
             "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
             "stderr_sha256": hashlib.sha256(stderr).hexdigest()}, stdout, stderr
 
@@ -129,6 +139,16 @@ def receipt_line(stdout):
 
 
 def build(out, runner, identity):
+    if sys.platform != "darwin":
+        raise RuntimeError("this cold-source profile requires Darwin mincore/msync and libproc")
+    for name, expected in DIRECT_IO_FILES.items():
+        if sha256(ROOT / name) != expected:
+            raise ValueError(f"direct-I/O source identity changed: {name}")
+    failures = residency.self_check()
+    save(out / "cache-self-check.json", {"status": "PASS" if not failures else "FAIL",
+                                         "failures": failures, "helper_sha256": sha256(RESIDENCY_HELPER)})
+    if failures:
+        raise RuntimeError("host residency instrument self-check failed")
     target = runner.target_path()
     artifacts = {}
     builds = (
@@ -198,7 +218,10 @@ def build(out, runner, identity):
                 "writer_source_sha256": WRITER_SOURCE_SHA256, "writer_binary_sha256": WRITER_SHA256,
                 "master": old, "cursor_key": cursor, "master_reproof": proof,
                 "clone_method": "shutil.copyfile independent writable byte copy",
-                "cache_contract": "source/Exec-to-Commit cache uncontrolled; numeric latency INELIGIBLE",
+                "cache_contract": CACHE_CONTRACT,
+                "cold_helper_sha256": sha256(RESIDENCY_HELPER),
+                "direct_io_source_sha256": DIRECT_IO_FILES,
+                "device_read_threshold": "90% of cloned Store+history allocated bytes",
                 "build_mode": "worktree-local locked release; sealed static writer reuse"}
     save(out / "prepared.json", prepared)
     return prepared
@@ -231,8 +254,22 @@ def case_run(out, case, prepared):
            "LAYERFS_CONSTRUCTION_WORKERS": "1"}
     command = [prepared["artifacts"]["benchmark_shell"]["path"], "run", str(folder / "case.before"),
                clone["store"], clone["history"], prepared["image_id"]]
+    cold = {}
+    for name, path in clone.items():
+        with open(path, "rb") as source:
+            os.fsync(source.fileno())  # Closed setup copy, never Workspace backing.
+        report = residency.de_warm(path)
+        cold[name] = {**report.as_fields(),
+                      "allocated_bytes": Path(path).stat().st_blocks * 512}
+        save(folder / "cold-source.json", cold)
+    cold["final_residency"] = {name: residency.residency(path).as_fields()
+                                for name, path in clone.items()}
+    cold["finished_ns"] = time.monotonic_ns()
+    save(folder / "cold-source.json", cold)
     performance, stdout, stderr = execute(command, folder / "driver",
                                            timeout=case.command_budget_ns / 1e9, env=env)
+    cold["launch_gap_ns"] = performance["started_ns"] - cold["finished_ns"]
+    save(folder / "cold-source.json", cold)
     driver = receipt_line(stdout)
     verification = {"status": "NOT_RUN", "reason": "no confirmed new head"}
     if driver and driver.get("head_commit"):
@@ -256,6 +293,18 @@ def case_run(out, case, prepared):
     route = bool(driver and driver.get("commit_called") and
                  int(counts.get("write", -1)) == case.writes)
     under_budget = performance["wall_ns"] <= case.command_budget_ns and not performance["timeout"]
+    device_floor = (cold["store"]["allocated_bytes"] + cold["history"]["allocated_bytes"]) * 9 // 10
+    device_bytes = driver.get("host_disk_read_bytes") if driver else None
+    cache_reasons = []
+    if sha256(RESIDENCY_HELPER) != prepared["cold_helper_sha256"]:
+        cache_reasons.append("residency helper seal changed")
+    if any(value["resident_pages"] != 0 for value in cold["final_residency"].values()):
+        cache_reasons.append("source pages resident at launch")
+    if not 0 <= cold["launch_gap_ns"] <= MAX_LAUNCH_GAP_NS:
+        cache_reasons.append("source check stale at launch")
+    if not isinstance(device_bytes, int) or device_bytes < device_floor:
+        cache_reasons.append("host device-read attestation below frozen floor")
+    cache_eligible = not cache_reasons
     functional = bool(performance["exit_code"] == 0 and under_budget and driver
                       and driver.get("status") == "COMPLETE" and route and cleanup
                       and verification["status"] == "PASS")
@@ -264,6 +313,10 @@ def case_run(out, case, prepared):
            "source": prepared["identity"], "artifacts": prepared["artifacts"],
            "image_id": prepared["image_id"], "master": old, "clone": clone,
            "clone_method": prepared["clone_method"], "cache_contract": prepared["cache_contract"],
+           "cold_source": cold, "device_read_floor_bytes": device_floor,
+           "host_disk_read_bytes": device_bytes,
+           "cache_eligibility_reasons": cache_reasons,
+           "direct_io_source_sha256": prepared["direct_io_source_sha256"],
            "operation_surface": "public WorkspaceApi mount/exec/commit; ordinary POSIX-FUSE writer",
            "shell_command": case.command, "performance": performance,
            "performance_budget_ns": case.command_budget_ns,
@@ -275,8 +328,10 @@ def case_run(out, case, prepared):
            "new_manifest_sha256": sha256(out / f"{case.id}.tsv"),
            "cleanup_status": "PASS" if cleanup else "UNKNOWN" if performance["timeout"] else "FAIL",
            "functional_status": "PASS" if functional else "FAIL",
-           "numeric_latency_status": "INELIGIBLE", "sample_count": 1,
-           "row_status": "INELIGIBLE" if functional else "FAIL"}
+           "numeric_latency_status": ("PASS" if cache_eligible and under_budget else
+                                      "TARGET_MISS" if cache_eligible else "INELIGIBLE"),
+           "sample_count": 1,
+           "row_status": "PASS" if functional and cache_eligible else "INELIGIBLE" if functional else "FAIL"}
     save(folder / "receipt.json", row)
     return row
 
@@ -318,8 +373,9 @@ def run(selection, output, runner):
                                "cleanup_status": "UNKNOWN" if attempted else "NOT_RUN", "reason": stop}
                         save(folder / "receipt.json", row)
                 summary["rows"].append({"scenario_id": name, "row_status": row["row_status"]})
-            summary["status"] = ("FUNCTIONAL_PASS_NUMERIC_INELIGIBLE"
-                                 if all(row["row_status"] == "INELIGIBLE" for row in summary["rows"])
+            summary["status"] = ("PASS" if all(row["row_status"] == "PASS" for row in summary["rows"])
+                                 else "FUNCTIONAL_PASS_NUMERIC_INELIGIBLE"
+                                 if all(row["row_status"] in ("PASS", "INELIGIBLE") for row in summary["rows"])
                                  else "INCOMPLETE")
     except Exception as error:
         summary["error"] = repr(error)
