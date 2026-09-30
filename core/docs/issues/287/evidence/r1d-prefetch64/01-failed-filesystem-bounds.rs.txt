@@ -1447,10 +1447,6 @@ fn binding_lookups_are_batched_per_phase() {
         small_waves <= small_pages,
         "each wave reads at least one page: {small_waves} waves, {small_pages} pages"
     );
-    assert!(
-        large_waves <= large_pages,
-        "each large wave reads at least one page: {large_waves} waves, {large_pages} pages"
-    );
     assert_ne!(small_root, large_root, "two different trees, two roots");
 }
 

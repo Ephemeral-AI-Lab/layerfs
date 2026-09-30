@@ -1,0 +1,26 @@
+[
+  {
+    "file": "01-failed-validation-prefetch.rs.txt",
+    "original_path": "core/crates/layerfs-content/tests/validation_prefetch.rs",
+    "source_inventory": "01-content-contract-SOURCE.json",
+    "sha256": "6f7d1653f5afec662fce4c8cf5c13029a28821eeba519982e3e575a0a7bc728c",
+    "bytes": 21757,
+    "exact_match": true
+  },
+  {
+    "file": "01-failed-filesystem-bounds.rs.txt",
+    "original_path": "core/crates/layerfs-content/tests/filesystem_bounds.rs",
+    "source_inventory": "01-content-contract-SOURCE.json",
+    "sha256": "eacadf904a0e09b205dd9ab23d308e12cf6cf99ec3f5437d59611e2757470059",
+    "bytes": 56816,
+    "exact_match": true
+  },
+  {
+    "file": "03-failed-validation-prefetch.rs.txt",
+    "original_path": "core/crates/layerfs-storage/tests/validation_prefetch.rs",
+    "source_inventory": "03-real-store-contract-SOURCE.json",
+    "sha256": "a9b5be578b7e6a34394278f8dae8f020db07ffc979de616488b780439cf53c6a",
+    "bytes": 17575,
+    "exact_match": true
+  }
+]

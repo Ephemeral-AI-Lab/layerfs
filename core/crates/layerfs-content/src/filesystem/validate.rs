@@ -8,7 +8,7 @@
 //! identities are rechecked against the base they claim to be absent from, and
 //! every final count is derived from checked retained bindings.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::error::{ContentError, ContentResult};
 use crate::filesystem::directory::read::DirectoryReadWork;
@@ -21,16 +21,21 @@ use crate::filesystem::rows::{
 use crate::filesystem::state::{
     BindingClaimState, BindingClaims, ResidentClaims, StateScope, StateSelection, StateTable,
 };
-use crate::object::inode_leaf::{InodeKind, InodeValue};
+use crate::object::inode_leaf::InodeKind;
 use crate::object::{AuthenticatedObjects, ObjectId};
 
 mod aliases;
 mod binding;
 mod cycles;
 mod effective;
+mod facts;
+mod prefetch;
+
+pub use prefetch::ValidationPrefetchWork;
 
 use aliases::BindingSite;
 use binding::{selected, Bindings, Headers};
+use facts::ValidationState;
 
 /// Work one operation's validation performed.
 ///
@@ -63,6 +68,8 @@ pub struct ValidationWork {
     /// the base root once per operation and charges no counter at all, so it has
     /// no site here rather than a site of zero.
     pub inode_pages_by_site: ValidationReadSites,
+    /// Actual bounded initial-demand production and lookup attempts.
+    pub prefetch: ValidationPrefetchWork,
 }
 
 /// Where one validation's inode pages were read.
@@ -326,45 +333,14 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
     let allocation_before = work.inode_pages_read;
     check_new_identities(reader, input, topology, work)?;
     charge_site(work, allocation_before, |sites| &mut sites.allocation);
-    // Every serial this loop will demand is known before it runs: the parents it
-    // must classify and every child it binds. One grouped demand answers them all,
-    // and the loop below then reads the memo — the same verdicts in the same
-    // order, with one descent instead of one per binding.
+    // Count and finish the selected scalar source before the first prefetch grouped base
+    // demand. Replay it through one fixed raw64 producer; no demand union lives.
     let mut state = ValidationState::new(walk_limit(input));
     if let Some(table) = topology.table {
-        let mut demanded: Vec<u64> = Vec::new();
-        let mut rows = Headers::new(input)?;
-        let mut names = 0usize;
-        while let Some(header) = rows.next()? {
-            names = names.saturating_add(header.binding_count() as usize);
-            if names > declared {
-                return Err(ContentError::ObjectLimitExceeded {
-                    limit: declared,
-                    actual: names,
-                });
-            }
-            if header.parent() != input.root_serial() && !input.is_new(header.parent())? {
-                demanded.push(header.parent());
-            }
-            let mut bindings = Bindings::new(input, header)?;
-            while let Some((_, binding)) = bindings.next()? {
-                if let Some(child) = binding {
-                    if child != input.root_serial() {
-                        demanded.push(child);
-                    }
-                }
-            }
-        }
-        if demanded.len() > declared.saturating_mul(2) {
-            return Err(ContentError::ObjectLimitExceeded {
-                limit: declared.saturating_mul(2),
-                actual: demanded.len(),
-            });
-        }
-        drop(rows);
         let prefetch_before = work.inode_pages_read;
-        state.prefetch(reader, table, demanded, work)?;
+        let outcome = prefetch::read(reader, input, table, &mut state, declared, work);
         charge_site(work, prefetch_before, |sites| &mut sites.prefetch);
+        outcome?;
     }
     let bindings_before = work.inode_pages_read;
     let mut rows = Headers::new(input)?;
@@ -491,125 +467,6 @@ fn check_semantics<'a, S: BindingClaimState + ?Sized>(
     let checked = CheckedTopologyInput { input, topology };
     cycles::check_effective_cycles(reader, &checked, unreachable, work, &mut state)?;
     Ok(checked)
-}
-
-/// Memoizes authenticated base records and absence within a resource-sized
-/// window. Eviction changes physical reads, never the logical demand charge.
-struct ValidationState {
-    records: BTreeMap<u64, InodeValue>,
-    absent: BTreeSet<u64>,
-    limit: usize,
-}
-
-impl ValidationState {
-    fn new(limit: usize) -> Self {
-        Self {
-            records: BTreeMap::new(),
-            absent: BTreeSet::new(),
-            limit: limit.max(1),
-        }
-    }
-
-    fn make_room(&mut self) {
-        if self.records.len() + self.absent.len() >= self.limit {
-            self.records.clear();
-            self.absent.clear();
-        }
-    }
-
-    /// Reads every not-yet-known serial in one grouped demand.
-    ///
-    /// The batch pays the pages and waves it reads; the **demand** charge is paid
-    /// where the demand is made ([`Self::lookup_optional`]), so `inode_demands`
-    /// stays the number of logical demands rather than the batch size.
-    fn prefetch(
-        &mut self,
-        reader: &dyn AuthenticatedObjects,
-        table: InodeTable,
-        serials: impl IntoIterator<Item = u64>,
-        work: &mut ValidationWork,
-    ) -> ContentResult<()> {
-        let mut missing: Vec<u64> = serials
-            .into_iter()
-            .filter(|serial| !self.records.contains_key(serial))
-            .collect();
-        missing.sort_unstable();
-        missing.dedup();
-        if missing.is_empty() {
-            return Ok(());
-        }
-        let mut inode = InodeReadWork::default();
-        let found = lookup_many(reader, table, &missing, &mut inode)?;
-        work.read_waves = work.read_waves.saturating_add(inode.read_waves);
-        work.inode_pages_read = work.inode_pages_read.saturating_add(inode.pages_read);
-        for (serial, value) in missing.into_iter().zip(found) {
-            self.make_room();
-            match value {
-                Some(value) => {
-                    self.records.insert(serial, value);
-                }
-                // The grouped demand has already paid for this answer, in the same
-                // waves the found serials came back in; recording it is what stops
-                // the binding loop and the cycle walk buying it again.
-                None => {
-                    self.absent.insert(serial);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// One base record, answered from the memo when it is known.
-    fn lookup_optional(
-        &mut self,
-        reader: &dyn AuthenticatedObjects,
-        table: InodeTable,
-        serial: u64,
-        work: &mut ValidationWork,
-    ) -> ContentResult<Option<InodeValue>> {
-        if let Some(value) = self.records.get(&serial) {
-            // A memoized record was found by an earlier demand, so its charge is
-            // the same one `charge_inode` makes for a found serial: one demand.
-            work.objects_read = work.objects_read.saturating_add(1);
-            work.inode_demands = work.inode_demands.saturating_add(1);
-            return Ok(Some(*value));
-        }
-        if self.absent.contains(&serial) {
-            // The same charge a descent would have made for a serial the base does
-            // not hold (`lookup_many` charges one demand per serial answered at a
-            // leaf, absence included), so the physical read is what this removes
-            // and the accounting is what it keeps.
-            work.objects_read = work.objects_read.saturating_add(1);
-            work.inode_demands = work.inode_demands.saturating_add(1);
-            return Ok(None);
-        }
-        let mut inode = InodeReadWork::default();
-        let found = lookup_many(reader, table, &[serial], &mut inode)?;
-        charge_inode(work, inode);
-        let value = found.into_iter().next().flatten();
-        self.make_room();
-        match value {
-            Some(value) => {
-                self.records.insert(serial, value);
-            }
-            None => {
-                self.absent.insert(serial);
-            }
-        }
-        Ok(value)
-    }
-
-    /// One base record that must exist.
-    fn lookup_one(
-        &mut self,
-        reader: &dyn AuthenticatedObjects,
-        table: InodeTable,
-        serial: u64,
-        work: &mut ValidationWork,
-    ) -> ContentResult<InodeValue> {
-        self.lookup_optional(reader, table, serial, work)?
-            .ok_or(ContentError::InvalidRecord("missing base inode"))
-    }
 }
 
 /// Charges one inode lookup's work.

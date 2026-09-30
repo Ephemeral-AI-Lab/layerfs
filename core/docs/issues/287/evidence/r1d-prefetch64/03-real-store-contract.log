@@ -1,0 +1,35 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+   Compiling layerfs-storage v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-storage)
+warning: unused import: `FinalizedConsumer`
+  --> crates/layerfs-storage/tests/validation_prefetch.rs:28:56
+   |
+28 |     AuthenticatedObjects, ContentError, ContentResult, FinalizedConsumer, FinalizedObject, ObjectId,
+   |                                                        ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `layerfs-storage` (test "validation_prefetch") generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.60s
+     Running tests/validation_prefetch.rs (core/target/debug/deps/validation_prefetch-b8854057ee4e9a27)
+
+running 3 tests
+
+thread 'real_authenticated_malformed_leaf_preserves_partial_prefetch_pages_and_original_failure' panicked at crates/layerfs-storage/tests/validation_prefetch.rs:102:6:
+called `Result::unwrap()` on an `Err` value: Integrity("whole-file role with a foreign payload")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test real_authenticated_malformed_leaf_preserves_partial_prefetch_pages_and_original_failure ... FAILED
+test late_declared_name_refusal_precedes_all_initial_prefetch_reads ... ok
+prefetch64 count/System diagnostic aliases=1 absent=false memo_limit=1024: prefetch=ValidationPrefetchWork { examined_occurrences: 130, memo_hits: 0, local_duplicates: 0, submitted_serials: 130, lookup_calls: 3, max_pending: 64, max_missing: 64, max_answers: 64 }, sites=ValidationReadSites { allocation: 0, prefetch: 8, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, Store ordinary_decodes=1, pooled=PoolReadCounters { leaf_requests: 5, chain_edges: 0, physical_record_calls: 10, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 10, value_group_decodes: 2, pack_fetches: 2, pack_bytes: 8477 }, Rust_requested_snapshot=Snapshot { live: [0, 0, 1071925], peak: [10699, 0, 1114201], peak_total: 1119591, requested_total: 1443803, allocation_events: 1484, reallocations: 24, largest_request: 1048576, overflow: false }; fixtures/traces excluded, live memo/read/decode/status owners included; no native/global/RSS/speed claim
+prefetch64 count/System diagnostic aliases=8 absent=false memo_limit=1024: prefetch=ValidationPrefetchWork { examined_occurrences: 585, memo_hits: 28, local_duplicates: 427, submitted_serials: 130, lookup_calls: 10, max_pending: 64, max_missing: 15, max_answers: 15 }, sites=ValidationReadSites { allocation: 0, prefetch: 29, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, Store ordinary_decodes=1, pooled=PoolReadCounters { leaf_requests: 19, chain_edges: 0, physical_record_calls: 38, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 38, value_group_decodes: 2, pack_fetches: 2, pack_bytes: 9079 }, Rust_requested_snapshot=Snapshot { live: [0, 0, 1078897], peak: [10699, 0, 1122748], peak_total: 1132743, requested_total: 2208175, allocation_events: 7076, reallocations: 58, largest_request: 1048576, overflow: false }; fixtures/traces excluded, live memo/read/decode/status owners included; no native/global/RSS/speed claim
+prefetch64 count/System diagnostic aliases=1 absent=false memo_limit=1: prefetch=ValidationPrefetchWork { examined_occurrences: 130, memo_hits: 0, local_duplicates: 0, submitted_serials: 130, lookup_calls: 3, max_pending: 64, max_missing: 64, max_answers: 64 }, sites=ValidationReadSites { allocation: 0, prefetch: 8, bindings: 260, aliases: 0, cycles: 130, reachability: 0 }, Store ordinary_decodes=1, pooled=PoolReadCounters { leaf_requests: 200, chain_edges: 0, physical_record_calls: 400, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 400, value_group_decodes: 2, pack_fetches: 2, pack_bytes: 8477 }, Rust_requested_snapshot=Snapshot { live: [0, 0, 1071925], peak: [10699, 0, 1101774], peak_total: 1110580, requested_total: 12656570, allocation_events: 13357, reallocations: 673, largest_request: 1048576, overflow: false }; fixtures/traces excluded, live memo/read/decode/status owners included; no native/global/RSS/speed claim
+prefetch64 count/System diagnostic aliases=8 absent=true memo_limit=1024: prefetch=ValidationPrefetchWork { examined_occurrences: 1105, memo_hits: 520, local_duplicates: 447, submitted_serials: 138, lookup_calls: 18, max_pending: 64, max_missing: 16, max_answers: 16 }, sites=ValidationReadSites { allocation: 1, prefetch: 53, bindings: 0, aliases: 0, cycles: 0, reachability: 0 }, Store ordinary_decodes=1, pooled=PoolReadCounters { leaf_requests: 35, chain_edges: 0, physical_record_calls: 70, physical_group_decodes: 0, physical_group_decoded_bytes: 0, physical_group_cache_hits: 70, value_group_decodes: 2, pack_fetches: 2, pack_bytes: 9079 }, Rust_requested_snapshot=Snapshot { live: [0, 0, 1078897], peak: [10699, 0, 1122852], peak_total: 1133127, requested_total: 3078438, allocation_events: 13469, reallocations: 74, largest_request: 1048576, overflow: false }; fixtures/traces excluded, live memo/read/decode/status owners included; no native/global/RSS/speed claim
+test real_store_wide_duplicate_absence_and_memo_pressure_keep_exact_requests_and_roots ... ok
+
+failures:
+
+failures:
+    real_authenticated_malformed_leaf_preserves_partial_prefetch_pages_and_original_failure
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+error: test failed, to rerun pass `-p layerfs-storage --test validation_prefetch`

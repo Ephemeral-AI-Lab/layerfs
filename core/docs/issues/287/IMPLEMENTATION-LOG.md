@@ -1120,3 +1120,160 @@ checks pass in stated directprovider scope; allFAILs/gaps are retained.
 Stageonlyownedcode/tests/docs/evidence, confirmproductsubtrees after docs, commit
 thenrecountactualcommittedtree/normalpush/#287. FullR1/R2-R7/#288 remainopen.
 Next:R1d-prefetch64 exact producer/window/count/original-failure contract freeze.
+
+
+## R1d-binding-claims published; next bounded demand producer
+
+Actualad1d3514b08a000386a14109ed636ce2b5a6e251 firstparent/committed archive
+recountmatches141630→143585(+1955), reference65417unchanged/Core76213→78168.
+Normalpush/exactoriginbranchSHA and #287body/comment5920747051 confirmed. Product
+Git tree clean atpublication. FullR1 remainsPARTIALunchecked; R2-R7/#288native/
+physical/qualification gates unchanged. No otherissue/task message/merge/closure.
+NextR1d-prefetch64 contract must remove actual demanded/missing/answer union from
+common validation with fixed≤64 waves, preserve fullcount/source refusal before
+base-demand effects and originaltyped providerfailures, record concrete changed
+readlaw/independent canonical/semantic/allocation evidence. Existingmemo/alias/
+seen/frontier populations remain separated and open. Combinedsite52 authority
+is read-only subsequent proposal, no table/profile/tag allocated here.
+
+## R1d-prefetch64 prospective contract and ownership
+
+Parent: published `ad1d3514b08a000386a14109ed636ce2b5a6e251`; branch/worktree
+remain `codex/issue287-implementation` and the owned attached implementation
+worktree. SC-03/05/07/08. [Freeze](R1D-PREFETCH64-FREEZE.md) selects the complete
+validation demand producer, two fixed64 arrays, a separate scalar count/EOF pass
+and exact selected-source replay transcript. The old demand/missing unions are
+retired in the common path; decoded memo/graph authorities stay explicitly open.
+
+Source review preserved prior fresh-identity allocation-read precedence. A
+first-pass refusal prevents new prefetch reads, not reads already issued by the
+allocation check. Full64 replay waves can precede a late transcript mismatch;
+recorded work remains charged and no root is adopted. Logical request counts and
+actual Vec capacities/canonical/hash/memo/provider owners are separate. Original
+InodeReadWork only supplies recorded prefixes; unseen failing acquisitions and
+unparsed returned pages are unavailable.
+
+C1 worker owns validator/facts/prefetch and external content cases; Storage
+worker owns new external real-provider proof only. Root owns shared contracts,
+architecture, Cargo/checks/count/commit/push/#287; reviewer stays read-only. No
+worker Cargo, benchmark campaign, quota/worker/profile expansion or new wire/SQL
+tag is authorized by this slice. Exit gates are prospective and unrun.
+
+Next: freeze coherent source/tests, review fixed ownership and failure custody,
+then run the meaningful owning contract/provider checks. Full R1 remains open.
+
+## R1d-prefetch64 first C1 compilation refusal
+
+Source freeze declared by C1 owner with five owned files (validator, focused
+facts/prefetch modules, new external validation target and scoped old bounds
+assertion). Product physical lines549/132/199. The worker reported scoped
+Rust1.85.1 formatting exit0 and no Cargo invocation. Root's first selected
+owning locked C1 command is preserved in `evidence/r1d-prefetch64/01-*`.
+
+Outcome: FAIL101 during external test compilation, before any test body. Three
+E0716 errors came from temporary `[absent]`, `[fresh]` and `[existing]` arrays
+borrowed through retained FilesystemInput values. The old bounds case also had
+an unused large-wave variable after its prospectively declared wave-law change.
+The source input seal remained unchanged throughout this attempt. Correction
+ownership stays with C1: explicit lifetime-bearing local arrays and a meaningful
+large-wave/page relationship assertion, with no product/quota/provider change.
+Next: refreeze corrected external tests and run the covering command; no failed
+or passing observation is discarded or promoted.
+
+## R1d-prefetch64 C1 covering gate
+
+The exact external lifetime correction adds named local fresh-serial arrays;
+large-wave/page accounting is asserted rather than hidden. No product source
+change or quota/provider adjustment followed the compile refusal. Root's exact
+covering command `02-content-contract-correction` passed97 distinct primary
+cases (17 claims,11 scalar rows,8 scalar semantics,17 bounds,6 hardlinks,2 sealed
+reference,19 topology,6 updates,11 new prefetch). Content+Telemetry/manifests/
+lock/rootflags input seal `4fce7d2bda75952746e8430a131d90de2d45131fca595fdc26a71487e0678e00`
+was unchanged throughout. Raw argv/log/results/inventory are append-only.
+
+Actual130-raw-occurrence case submitted130 serials through3calls, max pending/
+missing/successful answers64, inode pages8/read waves6; complete no-op root
+remained equal. Positive+in-range absence reuse, low-memo logical/page accounting,
+star permutation, first-pass refusal, same-count serial/name/eligibility changes,
+late replay mismatch and original provider failure all passed. Earlier allocation
+work is preserved. Fixed two arrays use1024 element bytes, expected digest32 and
+this pinned BLAKE3 Hasher has1920 native Rust layout bytes; these are not total
+stack/heap/RSS/native admission. Existing500/1500 cases assert8/24calls and
+501/1501submitted and retained physical inequalities; their exact page totals
+are unreported, and passing bodies are not rerun to manufacture diagnostics.
+
+Next: actual StoreProvider external evidence and independent review, then scoped
+owning Clippy/examples/fmt/boundary checks. Remaining memo/graph/native/global/
+physical and R2–R7/#288 gates are unchanged and open.
+
+## R1d-prefetch64 actual Store gate: retained partial result
+
+The first frozen real-Store target `03-real-store-contract` executed3 primary
+cases:2PASS/1FAIL, overall101; allCore input seal was unchanged. The wide/alias/
+memo1/absence case covered4 declared parameter profiles and passed independent
+v1 final roots/emitted bytes, exact grouped requests, alias values and payload.
+The first-pass aggregate-name refusal passed. These passing bodies are retained
+and reused, not sampled again.
+
+The intended malformed-leaf case failed in fixture Save with
+`Integrity("whole-file role with a foreign payload")`; its intended prefetch
+provider-failure body never ran. This is a correct Store boundary refusal, not a
+C1 provider fault proof. External-only correction must select a reachable actual
+owned-provider failure without bypassing role validation or adding product hooks/
+fallbacks. The unused FinalizedConsumer import is a test-only lint correction.
+
+Observed successful4-case requested-System peaks were1119591/1132743/1110580/
+1133127bytes, largest request1048576 each, ledger overflowfalse; complete
+validation capture includes memo/decode/cursor/status Rust owners and excludes
+fixture/trace bookkeeping. Actual Store pack fetches2 and valuegroup decodes2
+each; lowmemo case had260binding/130cycle pages and accumulated requested
+bytes12656570 despite peak1110580. All exact counters/native distinctions are in
+raw output. These actual counts do not establish SQLite/zstd native heap, global
+engine/cache/RSS/OS residency or speed admission.
+
+Read-only C1 review found no blocker in admission/replay/fixed ownership/typed
+error custody. Reviewed production files remained unchanged through the test
+lifetime correction; exact source hashes are in `04-independent-review.json`.
+Next: demonstrate a reachable actual-provider failure and run only its covering
+body, then scoped owning checks and counted checkpoint. Full R1 remains open.
+
+## R1d-prefetch64 scoped exits and final counted source
+
+The corrected actual owned-Store digest corruption body passed in07, retaining
+original value-group identity ProviderFailure, recorded1inodepage/readwave and
+attempt64/call1/answers0 with failed claim custody/root denial/known cleanup.
+06 used a wrong exact filter and selected0bodies; root retains/excludes it and
+corrected the named invocation. Previously passing wide/refusal bodies were
+unchanged and reused. The original03 invalid-role fixture failure remains FAIL.
+Exact failed external sources for01/03 are recovered and independently validated
+against original path SHA256+byte counts in13; current source was not changed.
+
+05 Server composition passed15distinct primary (16reported minus1empty child),
+including real Stage/spool/claim cleanup, prior bytes/Stage, occupied-Save C5
+progress and scratch Unknown versus known/refused Save cleanup. Exact selected
+SQLite remains Apple3.51.0, native required32MiB guard stillunsupported. Final
+owning Clippy/alltargets, examplesbuild and wholeCorefmt passed0; productguard
+417/selftests9 passed. Unaffected C2/SDK/counter checks reused; full finalCore
+checks remainR7. AllCore final testinputseal6286901e412fec2880eb7a958807bba30bfa308e07791745a1d56cc28d9629e8
+was unchanged for07/08/09/10/11/12. Actual source/test freeze and raw evidence
+are linked in [delivery](R1D-PREFETCH64-DELIVERY.md).
+
+Total115distinct primary PASS: C197/Store3/Server15. No helper/reused body/zero
+filter invocation is doublecounted. Count/resource diagnostics do not establish
+global/native/physical/protected progress or speed; no benchmark/#288 campaign
+or issue update was run. FullR1/R2–R7 remain open and unenabled.
+
+Exact first-parent/staged source archives with unchanged counter/version/scope
+recount reference65417→65417(+0), Core78168→78339(+171), combined143585→143756(+171).
+Imports/decls/delegation and runtimeSQL count; tests/tools/docs/generated and
+legacy inline/test-only code excluded identically. Comparison preserves staged
+Core subtree72b716e34ceeef3e20a405d26be607b54ba6f3e6 and reference498dd1917812ae90efb8841f57e22bfc284e96fb.
+Onlyvalidate536→417, newfacts112 and prefetch178 production LOC change; memo
+extraction is relocation, reference retirement0. Physical549/132/199 under999.
+Doc/evidence additions preserve these exact product trees; committedarchive
+recount and publication confirmation remain required.
+
+Next: publish this checkpoint with exact counted source/#287 update, then freeze
+R1d-binding-sites complete combined typed site/monotone-base-fact/native owner
+contract and issuer-bound point access before implementation. No guessed tag or
+source authority may enable that path; seen/frontier remains a separate gate.

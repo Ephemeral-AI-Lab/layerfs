@@ -21,6 +21,14 @@ record actual direct-provider and canonical evidence, unchanged quotas and all
 retained native engine/physical/graph/rollout/#288 gates. Full R1 stays open;
 these implementation facts do not rewrite the research observations below.
 
+The subsequent R1d-prefetch64 slice replaces the whole validation demand/missing
+union with fixed64 source waves and exact selected-source replay. Its
+[owning contract](../../../issues/287/R1D-PREFETCH64-FREEZE.md) and
+[scoped delivery](../../../issues/287/R1D-PREFETCH64-DELIVERY.md) retains
+allocation-check precedence, typed errors, memo limits and all open graph/native/
+physical gates. Verification status belongs to the owning checklist and log;
+these changes do not promote historical performance evidence.
+
 The owner requests one deep implementation design combining bounded-memory
 live backing and Commit, targeted optimization/bug fixes, concurrent opaque
 commands and multiple Workspaces. Three subagents research Workspace,

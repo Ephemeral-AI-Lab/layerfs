@@ -1,16 +1,16 @@
 # Issue287 current implementation checklist
 
 > **Status: Current planning checklist; no release candidate exists.**
-> Current published checkpoint: `d3a10aadbb7506772552474478b14ef25947c899`
-> (R1d-binding-input scoped exits PASS; full R1 remains PARTIAL/open).
+> Current published checkpoint: `ad1d3514b08a000386a14109ed636ce2b5a6e251`
+> (R1d-binding-claims scoped exits PASS; full R1 remains PARTIAL/open).
 
 Assignment: #287 implementation only. Benchmark qualification is delegated/unrun
 under #288. [Frozen interfaces](R0-FROZEN-INTERFACES.md) supplement the research
 packet; [IMPLEMENTATION-LOG](IMPLEMENTATION-LOG.md) is append-only.
 
-Current milestone: **R1d-binding-claims complete paged validation authority**.
-R1d-binding-input commit/recount/normal push and #287 comment5919341427 confirmed;
-[current delivery](R1D-BINDING-INPUT-DELIVERY.md) records actual scoped proofs.
+Current milestone: **R1d-prefetch64 bounded validation demand producer**.
+R1d-binding-claims commit/recount/normal push and #287 comment5920747051 confirmed;
+[current delivery](R1D-BINDING-CLAIMS-DELIVERY.md) records actual scoped proofs.
 Graph authority/engine/physical remain open, native selected-provider refusal
 stays explicit. [Selected claim contract](R1D-BINDING-CLAIMS-FREEZE.md) freezes
 typed exclusive claims and known retirement before DirectoryRoots construction.
@@ -96,6 +96,14 @@ R1d-binding-claims current gates:
 - [x] Real phased C2 scope/declared refusal/SQLite/native16MiB accounting, exact failure/Unknown custody (direct Darwin provider scope; aggregate engine/physical progress remains open).
 - [x] Complete real direct Service non-file Stage, phase fence, prior Stage preservation and known Save cleanup.
 - [x] Independent byte/digest/semantic/provider/window/work proofs and scoped owning locked checks (168 distinct primary; exact failures/corrections retained).
+- [x] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update (ad1d3514b/comment5920747051).
+
+R1d-prefetch64 current gates:
+
+- [x] Exact published parent/source, actual demand/answer population, order/admission/failure contract and file ownership frozen.
+- [x] Complete scalar count/EOF admission before prefetch grouped reads; bounded64 demand/missing/result waves in the real common validator (earlier allocation reads preserved).
+- [x] Independent byte/root/semantic and actual request/allocation/read/site-count proofs, including duplicate/absence/cache pressure and original provider failure custody (115 distinct primary; global physical admission remains open).
+- [x] Scoped owning locked checks and explicit memo/alias/graph/native/physical/#288 gaps.
 - [ ] Exact staged/committed LOC, checkpoint commit/push/publication and #287 update.
 
 Named submilestones and dependencies:

@@ -1,5 +1,15 @@
 # Counters and receipts
 
+> **#287 R1d prefetch work:** Against published parent
+> `ad1d3514b08a000386a14109ed636ce2b5a6e251`, ordinary validation exposes
+> `ValidationWork.prefetch` with actual examined occurrences, memo hits, local
+> duplicates, submitted serials, lookup attempts and maximum pending/missing/
+> successful-answer lengths. Successful occurrence conservation is separate
+> from semantic demands and recorded inode page/read-wave work. Recorded prefixes
+> are charged on prefetch failure; unseen failing-batch acquisitions and unparsed
+> returned pages remain unavailable. These are count diagnostics, not speed or
+> physical memory admission. [Contract](../issues/287/R1D-PREFETCH64-FREEZE.md).
+
 > **Current-source correction:** the changes committed with this paragraph,
 > based on `7499d6d56`, replace the fixed validation-walk counter ceiling with
 > a resource-derived cumulative allowance and expose separate Workspace ledger
@@ -117,7 +127,7 @@ collect. Until now the set cited them ad hoc with no single inventory.
 | --- | --- | --- |
 | `SortedWork` | `filesystem/sorted/page.rs` | `pages_read`, `read_waves`, `pages_created`, `pages_reused`, `change_keys`, `untouched_subtrees`, `peak_scratch_bytes` |
 | `ObjectWork` | `filesystem/objects.rs` | `objects_read`, `read_waves`, `bytes_read`, `objects_emitted`, `bytes_emitted` |
-| `ValidationWork` | `filesystem/validate.rs` | `objects_read`, `read_waves`, `inode_demands`, `inode_pages_read`, `directory_pages_read`, `entries_examined` |
+| `ValidationWork` | `filesystem/validate.rs` | `objects_read`, `read_waves`, `inode_demands`, `inode_pages_read`, `directory_pages_read`, `entries_examined`, `prefetch` |
 | `ReferenceWork` | `filesystem/references/reduce.rs` | `rows_touched`, `rows_spilled`, `base_records_read`, `base_waves`, `final_values`, `final_removals`, `serials_scanned`, `peak_pending`, `runs` |
 | `MergeWork` | `filesystem/references/merge.rs` | `rows_written`, `rows_read`, `runs_created`, `merges`, `peak_level`, `peak_live_runs`, `peak_run_bytes` |
 | `ReleaseWork` | `filesystem/references/release.rs` | `pages`, `entries`, `base_records`, `released`, `traversed_directories`, `peak_depth` |

@@ -1,0 +1,50 @@
+{
+  "parent": "ad1d3514b08a000386a14109ed636ce2b5a6e251",
+  "method": "sorted relative UTF8 path + NUL + exact bytes + NUL",
+  "changed_source_test_sha256": "275253c97fd893f71693da1129d400ff75dfba62caafbd05b9cdfe39f2076a71",
+  "files": [
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "sha256": "7d0b047b031066c96593300c0ee8d8cee3e71969a9fb95020d1bb6a26766b308",
+      "bytes": 22314
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/facts.rs",
+      "sha256": "4abd6650389e33ee26ee261ee3dc4ab428e27b7ef5b1365d3a976528bad5ef15",
+      "bytes": 5049
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/prefetch.rs",
+      "sha256": "2668860896693eeb454fc52e72de0469b4f91be14da8577d4f86dd12eaa80ac8",
+      "bytes": 7393
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/filesystem_bounds.rs",
+      "sha256": "d8bbc08aa642026c67086d27f66406c9fbefd9f4d3d748e4edb819a697f02a8a",
+      "bytes": 56964
+    },
+    {
+      "path": "core/crates/layerfs-content/tests/validation_prefetch.rs",
+      "sha256": "f016920b8aea5ee12e3bc106c13b467512a9231203f2b65ae6e5ab816113e385",
+      "bytes": 21880
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/prefetch_counts.rs",
+      "sha256": "9b6fff2abda08d3981ea5ada3edc84201ea86469535da80f0a9fb3f1abd3b4b9",
+      "bytes": 5000
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/support/prefetch_namespace.rs",
+      "sha256": "794eb7b9f1c7fd548ec14b7d5fbf30c971cb89522a612e871ccabf30b4958bd6",
+      "bytes": 10769
+    },
+    {
+      "path": "core/crates/layerfs-storage/tests/validation_prefetch.rs",
+      "sha256": "b3273c6c5289ca08e46ea8e809585ece8239bb0d45d11b82699da8ea06f22a5d",
+      "bytes": 18585
+    }
+  ],
+  "all_core_test_inputs_sha256": "6286901e412fec2880eb7a958807bba30bfa308e07791745a1d56cc28d9629e8",
+  "core_crates_tree": "72b716e34ceeef3e20a405d26be607b54ba6f3e6",
+  "reference_crates_tree": "498dd1917812ae90efb8841f57e22bfc284e96fb"
+}

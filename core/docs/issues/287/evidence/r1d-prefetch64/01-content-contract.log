@@ -1,0 +1,62 @@
+   Compiling layerfs-content v0.1.6 (/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/crates/layerfs-content)
+error[E0716]: temporary value dropped while borrowed
+   --> crates/layerfs-content/tests/validation_prefetch.rs:187:54
+    |
+187 |     let operation = input(&session, &rows, &values, &[absent], resources());
+    |                                                      ^^^^^^^^              - temporary value is freed at the end of this statement
+    |                                                      |
+    |                                                      creates a temporary value which is freed while still in use
+188 |     let source = SliceBindingRows::new(&operation).unwrap();
+    |                                        ---------- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+187 ~     let binding = [absent];
+188 ~     let operation = input(&session, &rows, &values, &binding, resources());
+    |
+
+error[E0716]: temporary value dropped while borrowed
+   --> crates/layerfs-content/tests/validation_prefetch.rs:495:53
+    |
+495 |     let original = input(&session, &rows, &values, &[fresh], resources());
+    |                                                     ^^^^^^^              - temporary value is freed at the end of this statement
+    |                                                     |
+    |                                                     creates a temporary value which is freed while still in use
+496 |     let alternate = input(&session, &rows, &values, &[existing], resources());
+497 |     assert_ne!(reference_replay(&original), reference_replay(&alternate));
+    |                                 --------- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+495 ~     let binding = [fresh];
+496 ~     let original = input(&session, &rows, &values, &binding, resources());
+    |
+
+error[E0716]: temporary value dropped while borrowed
+   --> crates/layerfs-content/tests/validation_prefetch.rs:496:54
+    |
+496 |     let alternate = input(&session, &rows, &values, &[existing], resources());
+    |                                                      ^^^^^^^^^^              - temporary value is freed at the end of this statement
+    |                                                      |
+    |                                                      creates a temporary value which is freed while still in use
+497 |     assert_ne!(reference_replay(&original), reference_replay(&alternate));
+    |                                                              ---------- borrow later used here
+    |
+help: consider using a `let` binding to create a longer lived value
+    |
+496 ~     let binding = [existing];
+497 ~     let alternate = input(&session, &rows, &values, &binding, resources());
+    |
+
+For more information about this error, try `rustc --explain E0716`.
+error: could not compile `layerfs-content` (test "validation_prefetch") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: unused variable: `large_waves`
+    --> crates/layerfs-content/tests/filesystem_bounds.rs:1420:25
+     |
+1420 |     let (large_demands, large_waves, large_pages, large_root, large_prefetch) =
+     |                         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_large_waves`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: `layerfs-content` (test "filesystem_bounds") generated 1 warning

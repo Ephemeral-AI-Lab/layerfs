@@ -1,0 +1,32 @@
+{
+  "parent": "ad1d3514b08a000386a14109ed636ce2b5a6e251",
+  "reviewer": "current-thread /root/r0_resources",
+  "finding": "No blocking C1 source/contract finding; read-only review, no Cargo or edits",
+  "source_files": [
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate.rs",
+      "sha256": "7d0b047b031066c96593300c0ee8d8cee3e71969a9fb95020d1bb6a26766b308"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/facts.rs",
+      "sha256": "4abd6650389e33ee26ee261ee3dc4ab428e27b7ef5b1365d3a976528bad5ef15"
+    },
+    {
+      "path": "core/crates/layerfs-content/src/filesystem/validate/prefetch.rs",
+      "sha256": "2668860896693eeb454fc52e72de0469b4f91be14da8577d4f86dd12eaa80ac8"
+    }
+  ],
+  "scope": [
+    "first-pass count/EOF before prefetch; earlier allocator work preserved",
+    "exact full replay grammar and comparison before final tail; charged earlier waves on mismatch",
+    "two fixed64 arrays, positive/absence reuse and local compaction",
+    "recorded error prefix charged before original propagation and abandonment",
+    "logical64 vs rounded256 index capacities/pages/hasher/memo/provider/native/global gaps"
+  ],
+  "external_test_correction": "three named local arrays replace retained temporaries; product reviewed unchanged; root C1 covering97 primary passed",
+  "worker_formatter_declaration": {
+    "command": "rustfmt +1.85.1 --edition 2021 core/crates/layerfs-content/tests/validation_prefetch.rs core/crates/layerfs-content/tests/filesystem_bounds.rs",
+    "exit": 0,
+    "output": "empty, worker tool-result declaration; not independent Cargo proof"
+  }
+}

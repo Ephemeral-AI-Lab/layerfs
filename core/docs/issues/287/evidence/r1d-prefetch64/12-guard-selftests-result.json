@@ -1,0 +1,26 @@
+{
+  "parent": "ad1d3514b08a000386a14109ed636ce2b5a6e251",
+  "branch": "codex/issue287-implementation",
+  "worktree": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs",
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "core/tools",
+    "-p",
+    "test_check_product_boundary.py"
+  ],
+  "source_scope": "all",
+  "tested_inputs_before_sha256": "6286901e412fec2880eb7a958807bba30bfa308e07791745a1d56cc28d9629e8",
+  "seal_method": "sorted relative UTF8 path + NUL + exact filebytes + NUL",
+  "cargo_target_dir": "/Users/yifanxu/.codex/worktrees/issue287-implementation/layerfs/core/target",
+  "explicit_rustflags": null,
+  "started_utc": "2026-09-30T22:56:16.091208+00:00",
+  "scope": "implementation contract/provider/count/resource checks; no benchmark/speed/release admission",
+  "wall_seconds": 0.09397283299767878,
+  "exit": 0,
+  "tested_inputs_after_sha256": "6286901e412fec2880eb7a958807bba30bfa308e07791745a1d56cc28d9629e8",
+  "tested_inputs_unchanged": true
+}

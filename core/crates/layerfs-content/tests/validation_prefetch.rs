@@ -1,0 +1,599 @@
+//! Bounded initial-demand production, replay custody and ordinary semantic work.
+#[path = "support/claim_state.rs"]
+mod observed;
+mod support;
+
+use layerfs_content::filesystem::rows::{
+    BindingLookup, BindingRowSource, BindingRows, DirectoryCompletion, DirectoryHeader,
+    DirectoryHeaderSource, DirectoryRowSource, InodeRowSource, PreparedRows, RowSource,
+    SerialRowSource, SliceBindingRows,
+};
+use layerfs_content::filesystem::validate::{check_with_claims, ValidationWork};
+use layerfs_content::filesystem::{
+    update_filesystem_binding_rows_with_construction_state, DirectoryUpdate, FilesystemInput,
+    FilesystemPhases, FilesystemResources, FilesystemRootId, InodeScope, InodeUpdate, PathName,
+};
+use layerfs_content::object::inode_leaf::{InodeKind, InodeValue};
+use layerfs_content::{ContentError, ContentResult, ObjectId};
+use observed::{scopes, ObservedState};
+use std::cell::Cell;
+use std::collections::BTreeMap;
+use support::filesystem::{resources, synthetic, value, with_objects, Session};
+
+fn name(text: &str) -> PathName {
+    PathName::new(text).unwrap()
+}
+fn inode(kind: InodeKind) -> InodeValue {
+    value(
+        kind,
+        synthetic("prefetch/content"),
+        synthetic("prefetch/meta"),
+    )
+}
+fn paired() -> (Session, Vec<DirectoryUpdate>) {
+    let mut session = Session::new(1).unwrap();
+    let dirs: Vec<_> = (0..65).map(|_| session.allocate()).collect();
+    let files: Vec<_> = (0..65).map(|_| session.allocate()).collect();
+    let changed: Vec<_> = dirs
+        .iter()
+        .zip(&files)
+        .map(|(parent, child)| DirectoryUpdate {
+            parent: *parent,
+            changes: vec![(name("f"), Some(*child))],
+        })
+        .collect();
+    let mut base = vec![DirectoryUpdate {
+        parent: 1,
+        changes: dirs
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (name(&format!("d{i:04}")), Some(*s)))
+            .collect(),
+    }];
+    base.extend(changed.iter().cloned());
+    let mut values: Vec<_> = dirs
+        .iter()
+        .map(|s| InodeUpdate {
+            serial: *s,
+            value: inode(InodeKind::Directory),
+        })
+        .collect();
+    values.extend(files.iter().map(|s| InodeUpdate {
+        serial: *s,
+        value: inode(InodeKind::RegularFile),
+    }));
+    let mut fresh = dirs;
+    fresh.extend(files);
+    session.apply(&base, &values, &fresh).unwrap();
+    (session, changed)
+}
+fn input<'a>(
+    session: &Session,
+    rows: &'a [DirectoryUpdate],
+    values: &'a [InodeUpdate],
+    fresh: &'a [u64],
+    budget: FilesystemResources,
+) -> FilesystemInput<'a> {
+    FilesystemInput {
+        base: Some(FilesystemRootId(session.root)),
+        scope: session.scope,
+        root_serial: 1,
+        directories: rows,
+        inodes: values,
+        new_inodes: fresh,
+        resources: budget,
+    }
+}
+fn run(
+    input: &dyn layerfs_content::filesystem::rows::PreparedBindingRows,
+    session: &Session,
+    work: &mut ValidationWork,
+    state: &mut ObservedState,
+    selected: &layerfs_content::filesystem::state::ConstructionScopes,
+) -> ContentResult<()> {
+    check_with_claims(
+        &session.store,
+        input,
+        &BTreeMap::new(),
+        work,
+        state,
+        selected.claims(),
+    )
+    .map(|_| ())
+}
+fn conserved(work: &ValidationWork) {
+    let p = work.prefetch;
+    assert_eq!(
+        p.examined_occurrences,
+        p.memo_hits + p.local_duplicates + p.submitted_serials
+    );
+    assert!(p.max_pending <= 64 && p.max_missing <= 64 && p.max_answers <= 64);
+    let s = work.inode_pages_by_site;
+    assert_eq!(
+        work.inode_pages_read,
+        s.allocation + s.prefetch + s.bindings + s.aliases + s.cycles + s.reachability
+    );
+}
+
+#[test]
+fn parent_child_union130_is_three_raw_waves_and_real_noop_root_is_unchanged() {
+    let (mut session, rows) = paired();
+    let operation = input(&session, &rows, &[], &[], resources());
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 65);
+    let result = with_objects(&mut session.store, |objects| {
+        update_filesystem_binding_rows_with_construction_state(
+            objects,
+            &source,
+            None,
+            &mut state,
+            &selected,
+            &FilesystemPhases::disabled(),
+        )
+    })
+    .unwrap();
+    assert_eq!(
+        result.root.0, session.root,
+        "restating every existing binding leaves exact canonical root unchanged"
+    );
+    let work = result.counters.validation;
+    assert_eq!(work.prefetch.examined_occurrences, 130);
+    assert_eq!(work.prefetch.submitted_serials, 130);
+    assert_eq!(work.prefetch.lookup_calls, 3);
+    assert_eq!(work.prefetch.max_pending, 64);
+    assert_eq!(work.prefetch.max_missing, 64);
+    assert_eq!(work.prefetch.max_answers, 64);
+    assert_eq!(work.inode_demands, 195);
+    assert_eq!(work.inode_pages_by_site.bindings, 0);
+    assert_eq!(work.inode_pages_by_site.cycles, 0);
+    conserved(&work);
+    eprintln!("C1 count diagnostic only: {:?}; physical pages{}, waves{}, memo/shared provider outside fixedserialarrays",work.prefetch,work.inode_pages_read,work.read_waves);
+}
+
+#[test]
+fn positive_and_in_range_absence_are_reused_across_raw_waves() {
+    let mut session = Session::new(1).unwrap();
+    let absent = session.allocate();
+    let existing = session.allocate();
+    session
+        .apply(
+            &[DirectoryUpdate {
+                parent: 1,
+                changes: vec![(name("seed"), Some(existing))],
+            }],
+            &[InodeUpdate {
+                serial: existing,
+                value: inode(InodeKind::RegularFile),
+            }],
+            &[existing],
+        )
+        .unwrap();
+    let rows = [DirectoryUpdate {
+        parent: 1,
+        changes: (0..128)
+            .map(|i| {
+                (
+                    name(&format!("n{i:04}")),
+                    Some(if i % 2 == 0 { absent } else { existing }),
+                )
+            })
+            .collect(),
+    }];
+    let values = [InodeUpdate {
+        serial: absent,
+        value: inode(InodeKind::RegularFile),
+    }];
+    let fresh_serials = [absent];
+    let operation = input(&session, &rows, &values, &fresh_serials, resources());
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 1, 128);
+    let mut work = ValidationWork::default();
+    run(&source, &session, &mut work, &mut state, &selected).unwrap();
+    assert_eq!(work.prefetch.examined_occurrences, 128);
+    assert_eq!(work.prefetch.local_duplicates, 62);
+    assert_eq!(work.prefetch.memo_hits, 64);
+    assert_eq!(work.prefetch.submitted_serials, 2);
+    assert_eq!(work.prefetch.lookup_calls, 1);
+    assert_eq!(work.prefetch.max_missing, 2);
+    assert_eq!(work.prefetch.max_answers, 2);
+    assert_eq!(work.inode_demands, 257);
+    assert!(work.inode_pages_by_site.allocation > 0);
+    conserved(&work);
+}
+
+#[test]
+fn memo1_keeps_same_logical_verdict_and_charges_repeat_physical_reads() {
+    let (session, rows) = paired();
+    let operation = input(
+        &session,
+        &rows,
+        &[],
+        &[],
+        FilesystemResources {
+            ordering_bytes: 1040,
+            ..resources()
+        },
+    );
+    assert_eq!(operation.resources.maximum_touched_serials(), 65);
+    assert_eq!(operation.resources.ordering_bytes / 1024, 1);
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 65);
+    let mut work = ValidationWork::default();
+    run(&source, &session, &mut work, &mut state, &selected).unwrap();
+    assert_eq!(work.prefetch.examined_occurrences, 130);
+    assert_eq!(work.prefetch.submitted_serials, 130);
+    assert_eq!(work.prefetch.lookup_calls, 3);
+    assert_eq!(work.inode_demands, 195);
+    assert_eq!(work.inode_pages_by_site.bindings, 260);
+    assert_eq!(work.inode_pages_by_site.cycles, 130);
+    conserved(&work);
+}
+
+#[test]
+fn directory_star_permutation_preserves_independent_alias_and_cycle_visit_law() {
+    let (session, _) = paired();
+    let rows = [DirectoryUpdate {
+        parent: 1,
+        changes: (0..65)
+            .map(|i| (name(&format!("d{i:04}")), Some(2 + (i as u64 + 1) % 65)))
+            .collect(),
+    }];
+    let operation = input(&session, &rows, &[], &[], resources());
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 1, 65);
+    let mut work = ValidationWork::default();
+    run(&source, &session, &mut work, &mut state, &selected).unwrap();
+    assert_eq!(work.prefetch.examined_occurrences, 65);
+    assert_eq!(work.prefetch.lookup_calls, 2);
+    assert_eq!(work.prefetch.submitted_serials, 65);
+    assert_eq!(
+        work.entries_examined, 260,
+        "65 root edges+65 changed followers+65 file edges+65 effective cycle edges"
+    );
+    conserved(&work);
+}
+
+#[test]
+fn aggregate_names_refusal_precedes_every_initial_prefetch_lookup() {
+    let (session, mut rows) = paired();
+    rows[0].changes.push((name("g"), Some(67)));
+    let operation = input(
+        &session,
+        &rows,
+        &[],
+        &[],
+        FilesystemResources {
+            ordering_bytes: 1040,
+            ..resources()
+        },
+    );
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 66);
+    let mut work = ValidationWork::default();
+    assert_eq!(
+        run(&source, &session, &mut work, &mut state, &selected),
+        Err(ContentError::ObjectLimitExceeded {
+            limit: 65,
+            actual: 66
+        })
+    );
+    assert_eq!(work.prefetch.lookup_calls, 0);
+    assert_eq!(work.prefetch.examined_occurrences, 0);
+    assert_eq!(state.abandonments, 1);
+    assert!(state.batches.is_empty());
+}
+
+// A deliberately inconsistent external protocol source; no product test hooks.
+struct ReplayRows<'a> {
+    original: SliceBindingRows<'a>,
+    alternate: SliceBindingRows<'a>,
+    passes: Cell<u64>,
+    refuse_finish: bool,
+}
+impl<'a> ReplayRows<'a> {
+    fn new(original: &'a FilesystemInput<'a>, alternate: &'a FilesystemInput<'a>) -> Self {
+        Self {
+            original: SliceBindingRows::new(original).unwrap(),
+            alternate: SliceBindingRows::new(alternate).unwrap(),
+            passes: Cell::new(0),
+            refuse_finish: false,
+        }
+    }
+    fn current(&self) -> &SliceBindingRows<'a> {
+        if self.passes.get() == 4 {
+            &self.alternate
+        } else {
+            &self.original
+        }
+    }
+}
+impl RowSource for ReplayRows<'_> {
+    fn directory_rows(&self) -> usize {
+        self.original.directory_rows()
+    }
+    fn inode_rows(&self) -> usize {
+        self.original.inode_rows()
+    }
+    fn new_rows(&self) -> usize {
+        self.original.new_rows()
+    }
+    fn directories(&self) -> ContentResult<Box<dyn DirectoryRowSource + '_>> {
+        self.original.directories()
+    }
+    fn inodes(&self) -> ContentResult<Box<dyn InodeRowSource + '_>> {
+        self.original.inodes()
+    }
+    fn new_inodes(&self) -> ContentResult<Box<dyn SerialRowSource + '_>> {
+        self.original.new_inodes()
+    }
+    fn directory_for(&self, p: u64) -> ContentResult<Option<DirectoryUpdate>> {
+        self.current().directory_for(p)
+    }
+    fn value_for(&self, s: u64) -> ContentResult<Option<InodeValue>> {
+        self.original.value_for(s)
+    }
+    fn new_position(&self, s: u64) -> ContentResult<Option<usize>> {
+        self.current().new_position(s)
+    }
+}
+impl PreparedRows for ReplayRows<'_> {
+    fn base(&self) -> Option<FilesystemRootId> {
+        self.original.base()
+    }
+    fn scope(&self) -> InodeScope {
+        self.original.scope()
+    }
+    fn root_serial(&self) -> u64 {
+        self.original.root_serial()
+    }
+    fn resources(&self) -> FilesystemResources {
+        self.original.resources()
+    }
+}
+impl BindingRows for ReplayRows<'_> {
+    fn directory_headers(&self) -> ContentResult<Box<dyn DirectoryHeaderSource + '_>> {
+        self.passes.set(self.passes.get() + 1);
+        self.current().directory_headers()
+    }
+    fn directory_header(&self, p: u64) -> ContentResult<Option<DirectoryHeader>> {
+        self.current().directory_header(p)
+    }
+    fn bindings(&self, h: &DirectoryHeader) -> ContentResult<Box<dyn BindingRowSource + '_>> {
+        let inner = self.current().bindings(h)?;
+        if self.refuse_finish && self.passes.get() == 3 && h.parent() == 66 {
+            Ok(Box::new(RefuseCompletion { inner }))
+        } else {
+            Ok(inner)
+        }
+    }
+    fn binding_for(&self, p: u64, n: &[u8]) -> ContentResult<BindingLookup> {
+        self.current().binding_for(p, n)
+    }
+}
+struct RefuseCompletion<'a> {
+    inner: Box<dyn BindingRowSource + 'a>,
+}
+impl BindingRowSource for RefuseCompletion<'_> {
+    fn next_binding(&mut self) -> ContentResult<Option<(PathName, Option<u64>)>> {
+        self.inner.next_binding()
+    }
+    fn finish(&mut self) -> ContentResult<DirectoryCompletion> {
+        Err(ContentError::ProviderFailure {
+            what: "prefetch admission completion",
+        })
+    }
+}
+
+// Exact grammar spelled independently, for source-change expectations only.
+fn reference_replay(input: &FilesystemInput<'_>) -> [u8; 32] {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"layerfs/validation-prefetch-replay/v1\0");
+    bytes.extend_from_slice(input.scope.object().as_bytes());
+    bytes.extend_from_slice(&input.root_serial.to_be_bytes());
+    let mut count = 0u64;
+    let mut raw = 0u64;
+    for (ordinal, row) in input.directories.iter().enumerate() {
+        let eligible = row.parent != input.root_serial && !input.new_inodes.contains(&row.parent);
+        bytes.extend_from_slice(&row.parent.to_be_bytes());
+        bytes.extend_from_slice(&(ordinal as u64).to_be_bytes());
+        bytes.extend_from_slice(&(row.changes.len() as u32).to_be_bytes());
+        let names = row
+            .changes
+            .iter()
+            .map(|(name, _)| 10 + name.as_bytes().len() as u64)
+            .sum::<u64>();
+        bytes.extend_from_slice(&names.to_be_bytes());
+        bytes.push(u8::from(eligible));
+        raw += u64::from(eligible);
+        for (name, child) in &row.changes {
+            bytes.extend_from_slice(&(name.as_bytes().len() as u16).to_be_bytes());
+            bytes.extend_from_slice(name.as_bytes());
+            bytes.extend_from_slice(&child.unwrap_or(0).to_be_bytes());
+            count += 1;
+            raw += u64::from(child.is_some_and(|s| s != input.root_serial));
+        }
+        bytes.push(1);
+    }
+    bytes.extend_from_slice(&(input.directories.len() as u64).to_be_bytes());
+    bytes.extend_from_slice(&count.to_be_bytes());
+    bytes.extend_from_slice(&raw.to_be_bytes());
+    *blake3::hash(&bytes).as_bytes()
+}
+
+#[test]
+fn same_count_serial_and_name_substitutions_reject_before_tail_without_claim_mutation() {
+    let (session, rows) = paired();
+    for change_name in [true, false] {
+        let before = vec![rows[0].clone()];
+        let mut after = before.clone();
+        if change_name {
+            after[0].changes[0].0 = name("g");
+        } else {
+            after[0].changes[0].1 = Some(68);
+        }
+        let original = input(&session, &before, &[], &[], resources());
+        let alternate = input(&session, &after, &[], &[], resources());
+        assert_ne!(reference_replay(&original), reference_replay(&alternate));
+        let source = ReplayRows::new(&original, &alternate);
+        let selected = scopes();
+        let mut state = ObservedState::new(&selected, 1, 1);
+        let mut work = ValidationWork::default();
+        assert_eq!(
+            run(&source, &session, &mut work, &mut state, &selected),
+            Err(ContentError::InvalidRecord("prefetch source replay"))
+        );
+        assert_eq!(work.prefetch.examined_occurrences, 2);
+        assert_eq!(work.prefetch.lookup_calls, 0);
+        assert_eq!(work.prefetch.max_pending, 2);
+        assert_eq!(state.abandonments, 1);
+        assert!(state.batches.is_empty());
+    }
+}
+
+#[test]
+fn same_total_parent_eligibility_swap_rejects_and_retains_prior_allocator_work() {
+    let mut session = Session::new(1).unwrap();
+    let existing = session.allocate();
+    let fresh = session.allocate();
+    session
+        .apply(
+            &[
+                DirectoryUpdate {
+                    parent: 1,
+                    changes: vec![(name("d"), Some(existing))],
+                },
+                DirectoryUpdate {
+                    parent: existing,
+                    changes: Vec::new(),
+                },
+            ],
+            &[InodeUpdate {
+                serial: existing,
+                value: inode(InodeKind::Directory),
+            }],
+            &[existing],
+        )
+        .unwrap();
+    let rows = [
+        DirectoryUpdate {
+            parent: existing,
+            changes: Vec::new(),
+        },
+        DirectoryUpdate {
+            parent: fresh,
+            changes: Vec::new(),
+        },
+    ];
+    let values = [InodeUpdate {
+        serial: fresh,
+        value: inode(InodeKind::Directory),
+    }];
+    let original_fresh = [fresh];
+    let alternate_fresh = [existing];
+    let original = input(&session, &rows, &values, &original_fresh, resources());
+    let alternate = input(&session, &rows, &values, &alternate_fresh, resources());
+    assert_ne!(reference_replay(&original), reference_replay(&alternate));
+    let source = ReplayRows::new(&original, &alternate);
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 2, 0);
+    let mut work = ValidationWork::default();
+    assert_eq!(
+        run(&source, &session, &mut work, &mut state, &selected),
+        Err(ContentError::InvalidRecord("prefetch source replay"))
+    );
+    assert_eq!(work.prefetch.examined_occurrences, 1);
+    assert_eq!(work.prefetch.lookup_calls, 0);
+    assert!(
+        work.inode_pages_by_site.allocation > 0,
+        "allocator reads precede prefetch admission"
+    );
+    assert_eq!(state.abandonments, 1);
+}
+
+#[test]
+fn full_wave_work_is_retained_but_changed_replay_does_not_buy_tail() {
+    let (session, rows) = paired();
+    let mut after = rows.clone();
+    after[64].changes[0].0 = name("g");
+    let original = input(&session, &rows, &[], &[], resources());
+    let alternate = input(&session, &after, &[], &[], resources());
+    assert_ne!(reference_replay(&original), reference_replay(&alternate));
+    let source = ReplayRows::new(&original, &alternate);
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 65);
+    let mut work = ValidationWork::default();
+    assert_eq!(
+        run(&source, &session, &mut work, &mut state, &selected),
+        Err(ContentError::InvalidRecord("prefetch source replay"))
+    );
+    assert_eq!(work.prefetch.lookup_calls, 2);
+    assert_eq!(work.prefetch.submitted_serials, 128);
+    assert_eq!(work.prefetch.examined_occurrences, 130);
+    assert!(work.inode_pages_by_site.prefetch > 0);
+    assert_eq!(work.inode_pages_read, work.inode_pages_by_site.prefetch);
+    assert_eq!(state.abandonments, 1);
+    assert!(state.batches.is_empty());
+}
+
+#[test]
+fn admission_completion_failure_precedes_prefetch_and_preserves_original_error() {
+    let (session, rows) = paired();
+    let operation = input(&session, &rows, &[], &[], resources());
+    let mut source = ReplayRows::new(&operation, &operation);
+    source.refuse_finish = true;
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 65);
+    let mut work = ValidationWork::default();
+    assert_eq!(
+        run(&source, &session, &mut work, &mut state, &selected),
+        Err(ContentError::ProviderFailure {
+            what: "prefetch admission completion"
+        })
+    );
+    assert_eq!(work.prefetch.lookup_calls, 0);
+    assert_eq!(work.prefetch.examined_occurrences, 0);
+    assert_eq!(state.abandonments, 1);
+}
+
+#[test]
+fn authenticated_provider_failure_retains_recorded_root_prefix_and_attempt_counts() {
+    let (mut session, rows) = paired();
+    let table = session.value.inode_table();
+    let root = session.store.canonical(table).unwrap();
+    // Independent v1 branch grammar: envelope13/header31, first key8/child32.
+    assert_eq!(root[24], 1);
+    let first_leaf = ObjectId::from_bytes(&root[52..84]).unwrap();
+    let mut corrupted = session.store.canonical(first_leaf).unwrap().to_vec();
+    corrupted[0] ^= 1;
+    session.store.overwrite(first_leaf, corrupted);
+    let operation = input(&session, &rows, &[], &[], resources());
+    let source = SliceBindingRows::new(&operation).unwrap();
+    let selected = scopes();
+    let mut state = ObservedState::new(&selected, 65, 65);
+    let mut work = ValidationWork::default();
+    assert_eq!(
+        run(&source, &session, &mut work, &mut state, &selected),
+        Err(ContentError::IdentityMismatch)
+    );
+    assert_eq!(work.prefetch.lookup_calls, 1);
+    assert_eq!(work.prefetch.submitted_serials, 64);
+    assert_eq!(work.prefetch.max_answers, 0);
+    assert_eq!(work.read_waves, 1);
+    assert_eq!(work.inode_pages_read, 1);
+    assert_eq!(work.inode_pages_by_site.prefetch, 1);
+    assert_eq!(state.abandonments, 1);
+    assert!(state.batches.is_empty());
+    // The refused leaf batch may have provider work not represented by this
+    // recorded prefix. Attempt counts are not a provider partial-work oracle.
+}
+
+#[test]
+fn fixed_serial_arrays_and_replay_hasher_have_separate_owned_sizes() {
+    assert_eq!(std::mem::size_of::<[u64; 64]>() * 2, 1024);
+    eprintln!("fixed serial storage1024 stack bytes + expecteddigest32 + one pinned blake3Hasher{} native bytes; lookup outputs/decode/memo/provider/RSS separate",std::mem::size_of::<blake3::Hasher>());
+}

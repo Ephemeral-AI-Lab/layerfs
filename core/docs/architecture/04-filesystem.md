@@ -1,5 +1,18 @@
 # Filesystem trees
 
+> **#287 R1d bounded validation prefetch:** Source developed against published
+> parent `ad1d3514b08a000386a14109ed636ce2b5a6e251` replaces the complete
+> demand/missing populations with two fixed arrays of64 serials. An exact
+> count/EOF pass precedes prefetch reads; replay checks a fixed BLAKE3 transcript
+> of the selected headers, names, children, eligibility and completions before
+> the final tail lookup. Earlier fresh-identity checks retain their existing
+> order and reads. Source-ordered raw waves filter positive/absence memo facts,
+> sort/deduplicate locally and submit at most64 serials per lookup. Recorded
+> read work and attempted prefetch work survive failure without root adoption.
+> [Owning contract](../issues/287/R1D-PREFETCH64-FREEZE.md) distinguishes logical
+> windows from actual Vec capacity, canonical pages, memo and provider owners.
+> Full R1 graph/native/global/physical gates remain open.
+
 > **#287 R1d binding claims:** The source developed against parent
 > `d3a10aadbb7506772552474478b14ef25947c899` supplies a separate typed non-file
 > claim authority to the scalar validator. New construction returns topology
